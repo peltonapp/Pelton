@@ -23,20 +23,20 @@
     "@testing-library/svelte": "^5.4.2",
     "@testing-library/user-event": "^14.6.7",
     "@tsconfig/svelte": "^5.0.4",
-    "@vitest/coverage-v8": "^5.0.0",
-    "jsdom": "^27.4.0",
+    "@vitest/coverage-v8": "^5.0.1",
+    "jsdom": "^30.0.1",
     "svelte": "^5.57.0",
     "svelte-check": "^4.7.6",
     "svelte-preprocess": "^6.0.3",
     "tslib": "^2.8.1",
     "typescript": "^6.0.3",
-    "vite": "^8.2.2",
-    "vitest": "^5.0.0"
+    "vite": "^8.3.0",
+    "vitest": "^5.0.1"
   },
   "dependencies": {
-    "@codemirror/commands": "^6.11.0",
-    "@codemirror/state": "^6.7.4",
-    "@codemirror/view": "^6.43.11",
+    "@codemirror/commands": "^6.11.1",
+    "@codemirror/state": "^6.7.5",
+    "@codemirror/view": "^6.43.12",
     "@fontsource/familjen-grotesk": "^5.3.0",
     "@fontsource/noto-sans-arabic": "^5.3.0",
     "@fontsource/spline-sans-mono": "^5.3.0",
@@ -49,7 +49,7 @@
     "@tiptap/starter-kit": "^3.31.3",
     "codemirror": "^6.0.2",
     "flag-icons": "^7.5.0",
-    "marked": "^18.0.12",
+    "marked": "^18.0.13",
     "svelte-dnd-action": "^0.9.79"
   },
   "pnpm": {
