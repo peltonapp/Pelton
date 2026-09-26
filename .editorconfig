@@ -1,0 +1,50 @@
+# Declares the indentation this repo already uses, so an editor does not have
+# to guess. Nothing here changes an existing file: every rule was read off the
+# tree as it stands.
+#
+# Most editors apply this natively; a few need a plugin. See editorconfig.org.
+
+root = true
+
+[*]
+charset = utf-8
+end_of_line = lf
+insert_final_newline = true
+trim_trailing_whitespace = true
+indent_style = space
+indent_size = 2
+
+# gofmt owns Go, and it indents with tabs. Anything else here would fight it.
+[*.go]
+indent_style = tab
+
+# make requires a tab before a recipe line. A space silently breaks the rule.
+[Makefile]
+indent_style = tab
+
+[*.{js,mjs,cjs,ts,svelte,json,jsonc,css,html}]
+indent_style = space
+indent_size = 2
+
+[*.{yml,yaml}]
+indent_style = space
+indent_size = 2
+
+[*.sh]
+indent_style = space
+indent_size = 2
+
+# two trailing spaces are a hard line break in Markdown, so trimming them
+# changes how a page renders.
+[*.md]
+trim_trailing_whitespace = false
+
+# the installer shows this text verbatim in a Windows dialog, where a bare LF
+# runs the lines together. It is the one CRLF file in the tree.
+[build/windows/installer/disclaimer.txt]
+end_of_line = crlf
+
+# vendored or generated: left exactly as its producer wrote it.
+[frontend/wailsjs/**]
+trim_trailing_whitespace = false
+insert_final_newline = false
