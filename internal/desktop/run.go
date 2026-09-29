@@ -130,6 +130,14 @@ func Run(cfg Config) error {
 		},
 		Windows: &wailswindows.Options{
 			Theme: wailswindows.SystemDefault,
+			// Mica is the material a native Windows 11 window is made of, and
+			// the caption bar picks it up instead of staying a flat grey slab.
+			// wails only reads BackdropType when WindowIsTranslucent is set, and
+			// on Windows 10 that same flag means something else entirely (a
+			// blur-behind over the whole window), so it is only asked for where
+			// the backdrop actually exists.
+			WindowIsTranslucent: supportsMica(),
+			BackdropType:        wailswindows.Mica,
 		},
 		Bind: []interface{}{
 			app,
