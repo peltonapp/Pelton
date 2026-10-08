@@ -134,15 +134,10 @@ export function openComposeWith(accountId: number, mode: EditorMode, prefill: Ma
 // body and threading references come from the original message.
 export function openReply(detail: MessageDetail, mode: EditorMode, replyAll: boolean): number {
   const session = blankSession(detail.accountId, mode)
-  if (replyAll) {
-    session.to = detail.toAddresses
-    if (detail.ccAddresses) {
-      session.cc = detail.ccAddresses
-      session.showCc = true
-    }
-  } else {
-    // regular reply
-    session.to = detail.fromAddress
+  session.to = detail.fromAddress
+  if (replyAll && detail.ccAddresses) {
+    session.cc = detail.ccAddresses
+    session.showCc = true
   }
   session.subject = withPrefix(detail.subject, 'Re:')
   session.body = quoteBody(detail, mode)
