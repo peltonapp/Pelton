@@ -16,6 +16,7 @@ var ErrSpecialFolderNotFound = errors.New("imap: special-use folder not found")
 // Fallback folder names by which servers commonly expose Sent and Drafts when
 // they do not advertise the RFC 6154 special-use attribute.
 var (
+	// must be kept in sync with frontend/src/stores/compose.ts:openReply
 	sentFolderNames  = []string{"Sent", "Sent Items", "Sent Mail", "Gesendet"}
 	draftFolderNames = []string{"Drafts", "Draft", "Entwürfe"}
 )
