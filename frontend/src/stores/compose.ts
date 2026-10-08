@@ -134,7 +134,13 @@ export function openComposeWith(accountId: number, mode: EditorMode, prefill: Ma
 // body and threading references come from the original message.
 export function openReply(detail: MessageDetail, mode: EditorMode, replyAll: boolean): number {
   const session = blankSession(detail.accountId, mode)
-  session.to = detail.fromAddress
+  // must be kept in sync with internal/imap/append.go:sentFolderNames
+  if (replyAll && ["Sent", "Sent Items", "Sent Mail", "Gesendet"].includes(detail.folderName)) {
+    session.to = detail.toAddresses
+  } else {
+    // regular reply
+    session.to = detail.fromAddress
+  }
   if (replyAll && detail.ccAddresses) {
     session.cc = detail.ccAddresses
     session.showCc = true
