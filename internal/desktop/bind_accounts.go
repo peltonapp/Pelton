@@ -177,5 +177,5 @@ func (a *App) viewQuery(ctx context.Context, key string) (storage.MessageQuery, 
 	if key == viewFlagged {
 		require = storage.FlagFlagged
 	}
-	return storage.MessageQuery{FolderIDs: folderIDs, RequireFlags: require}, nil
+	return storage.MessageQuery{FolderIDs: folderIDs, RequireFlags: require, OneCopy: key == viewFlagged}, nil
 }

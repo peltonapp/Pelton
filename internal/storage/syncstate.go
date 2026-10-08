@@ -61,6 +61,28 @@ func (d *DB) MarkFlagsPending(ctx context.Context, id int64, flags Flag) error {
 	return requireOneRow(res, ErrMessageNotFound)
 }
 
+// MarkCopiesFlagPending sets or clears one flag bit on the other copies of a
+// message in the same account, the rows sharing its Message-ID, and marks the
+// ones it changes for the next sync to push. A message without a Message-ID has
+// no copies to find.
+func (d *DB) MarkCopiesFlagPending(ctx context.Context, accountID, exceptID int64, messageID string, flag Flag, on bool) error {
+	if messageID == "" {
+		return nil
+	}
+	set, differs := `flags = flags | ?`, `flags & ? = 0`
+	if !on {
+		set, differs = `flags = flags & ~?`, `flags & ? != 0`
+	}
+	_, err := d.sql.ExecContext(ctx,
+		`UPDATE messages SET `+set+`, pending_flags = 1
+WHERE account_id = ? AND message_id = ? AND id != ? AND pending_delete = 0 AND `+differs,
+		uint8(flag), accountID, messageID, exceptID, uint8(flag))
+	if err != nil {
+		return fmt.Errorf("storage: mark copies of message %d: %w", exceptID, err)
+	}
+	return nil
+}
+
 // ClearFlagsPending clears the pending flag marker after a successful push.
 func (d *DB) ClearFlagsPending(ctx context.Context, id int64) error {
 	res, err := d.sql.ExecContext(ctx,

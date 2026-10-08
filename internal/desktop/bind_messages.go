@@ -286,6 +286,13 @@ func (a *App) updateFlag(id int64, flag storage.Flag, on bool) error {
 	if err := a.store.MarkFlagsPending(a.ctx, id, flags); err != nil {
 		return err
 	}
+	// the Flagged view lists a message once however many folders hold it, so
+	// every copy has to follow, or unflagging one would leave another showing.
+	if flag == storage.FlagFlagged {
+		if err := a.store.MarkCopiesFlagPending(a.ctx, m.AccountID, id, m.MessageID, flag, on); err != nil {
+			return err
+		}
+	}
 	// read/flag changes move messages in and out of unread-only and flagged-only
 	// views, so refresh the view badges without waiting for the next sync.
 	goSafe("counting unread mail", a.refreshViewCounts)
