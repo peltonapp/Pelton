@@ -87,7 +87,7 @@ describe('MessageList search selection', () => {
     await screen.findByText('Normal message')
 
     const user = userEvent.setup()
-    await user.type(screen.getByRole('textbox'), 'needle')
+    await user.type(screen.getByPlaceholderText('Search mail'), 'needle')
     await waitFor(() => expect(api.search).toHaveBeenCalled())
     const resultRow = (await screen.findByText('Search result')).closest('[role="option"]')
     expect(resultRow).not.toBeNull()
