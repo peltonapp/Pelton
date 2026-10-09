@@ -297,7 +297,7 @@
         </span>
       {/each}
       <input
-        type="text"
+        type="search"
         bind:this={inputEl}
         placeholder={chips.length === 0 ? $t('messageList.search.placeholder') : ''}
         aria-label={$t('messageList.search.placeholder')}
@@ -499,7 +499,7 @@
     color: var(--text-primary);
   }
 
-  input[type='text'] {
+  input[type='search'] {
     flex: 1;
     min-width: 80px;
     border: none;
