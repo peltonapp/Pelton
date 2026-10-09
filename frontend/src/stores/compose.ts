@@ -64,6 +64,8 @@ export interface ComposeSession {
   // against the keys actually available, and the user can change it per
   // message.
   protection: string
+  // dirty means the user made unsaved changes and should be asked to save/discard
+  dirty: boolean
 }
 
 export const composeSessions = writable<ComposeSession[]>([])
@@ -91,6 +93,7 @@ function blankSession(accountId: number, mode: EditorMode): ComposeSession {
     minimized: false,
     signaturesApplied: false,
     protection: 'none',
+    dirty: false,
   }
 }
 
@@ -167,9 +170,18 @@ export function reopenSession(session: ComposeSession): number {
   return restored.id
 }
 
-// updateCompose merges a partial change into a session.
-export function updateCompose(id: number, patch: Partial<ComposeSession>): void {
-  composeSessions.update((list) => list.map((s) => (s.id === id ? { ...s, ...patch } : s)))
+// updateCompose merges a partial change into a session. if the change is one that
+// the user might want to save, we mark the session dirty so the user is prompted
+// on close.
+export function updateCompose(id: number, patch: Partial<ComposeSession>, dirty?: boolean): void {
+  if (typeof dirty !== 'undefined') {
+    // dirty can be set true by input received from the user, or set false by
+    // saving as draft
+    composeSessions.update((list) => list.map((s) => (s.id === id ? { ...s, ...patch, dirty: dirty } : s)))
+  } else {
+    // leave dirty flag unaffected
+    composeSessions.update((list) => list.map((s) => (s.id === id ? { ...s, ...patch } : s)))
+  }
 }
 
 // closeCompose removes a session. It drops whatever is in the pane, so callers

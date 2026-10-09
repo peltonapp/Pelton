@@ -367,16 +367,13 @@
   async function save(): Promise<void> {
     try {
       const id = await saveDraft(session.draftId, buildRequest(session))
-      updateCompose(session.id, { draftId: id })
+      updateCompose(session.id, { draftId: id }, false)
       toastSuccess($t('compose.toast.draftSaved'))
     } catch (err) {
       toastError(errorMessage(err))
     }
   }
 
-  // hasContent decides whether closing needs a save/discard prompt: any
-  // recipient, subject or body text counts, but a session that was only ever
-  // opened and never touched should close silently.
   // recipientList is every address currently typed in, which is what the
   // status is about.
   $: recipientList = [session.to, session.cc, session.bcc]
@@ -417,8 +414,19 @@
     }
   }
 
+  // hasContent decides whether closing needs a save/discard prompt: any
+  // recipient, subject or body text counts, but a session that was only ever
+  // opened and never touched or opened but then cleared should close silently.
   function hasContent(): boolean {
+    const to = document.querySelector<HTMLInputElement>(`#to-${session.id}`)
+    const cc = document.querySelector<HTMLInputElement>(`#cc-${session.id}`)
+    const bcc = document.querySelector<HTMLInputElement>(`#bcc-${session.id}`)
     return (
+      // .value recipients are before turning into pills
+      (to && to.value.trim().length > 0) ||
+      (cc && cc.value.trim().length > 0) ||
+      (bcc && bcc.value.trim().length > 0) ||
+      // session. recipients is after turning into pills
       session.to.trim().length > 0 ||
       session.cc.trim().length > 0 ||
       session.bcc.trim().length > 0 ||
@@ -435,7 +443,10 @@
   }
 
   function requestClose(): void {
-    if (hasContent()) {
+    // prompt to save/discard only if the session is dirty and has content.
+    // it might be dirty but without content if the user writes a few words and
+    // deletes them right afterwards.
+    if (session.dirty && hasContent()) {
       confirmClose = true
       return
     }
@@ -531,7 +542,7 @@
           id={`from-${session.id}`}
           value={String(session.accountId)}
           items={accounts.map((acc) => ({ value: String(acc.id), label: acc.email }))}
-          on:change={(e) => updateCompose(session.id, { accountId: Number(e.detail) })}
+          on:change={(e) => updateCompose(session.id, { accountId: Number(e.detail) }, true)}
         />
       </div>
     {/if}
@@ -545,7 +556,7 @@
           <svelte:component
             this={RichEditor}
             content={session.body}
-            on:change={(e) => updateCompose(session.id, { body: e.detail })}
+            on:change={(e) => updateCompose(session.id, { body: e.detail }, true)}
           />
         {:else}
           <div class="editor-loading">{$t('compose.editor.loading')}</div>
@@ -561,7 +572,7 @@
             content={session.body}
             placeholder={$t('compose.editor.placeholderMarkdown')}
             vimEnabled={$prefs.composeVimMode}
-            on:change={(e) => updateCompose(session.id, { body: e.detail })}
+            on:change={(e) => updateCompose(session.id, { body: e.detail }, true)}
           />
         {:else}
           <div class="editor-loading">{$t('compose.editor.loading')}</div>
@@ -574,7 +585,7 @@
           placeholder={$t('compose.editor.placeholderPlain')}
           vimEnabled={$prefs.composeVimMode}
           mono
-          on:change={(e) => updateCompose(session.id, { body: e.detail })}
+          on:change={(e) => updateCompose(session.id, { body: e.detail }, true)}
         />
       {:else}
         <div class="editor-loading">Loading editor…</div>
@@ -991,7 +1002,7 @@
   .confirm-backdrop {
     position: absolute;
     inset: 0;
-    z-index: 10;
+    z-index: 121;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -1037,10 +1048,13 @@
     font-size: var(--fz-label);
   }
 
+  .confirm-discard {
+    border-color: var(--danger, var(--border-default));
+  }
+
   .confirm-discard:hover {
     background: var(--danger-bg, var(--surface-hover));
     color: var(--danger, var(--text-primary));
-    border-color: var(--danger, var(--border-default));
   }
 
   .confirm-save:hover {
