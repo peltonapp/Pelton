@@ -71,6 +71,7 @@
   let suggestedApplied = false
   let preview = false
   let confirmClose = false
+  let editorGrabFocus = false
 
   // send-later dropdown state: caret toggles the menu, presets are built fresh
   // each time it opens so "tomorrow" is always relative to now. the menu is
@@ -218,6 +219,16 @@
   // on first open, insert the account's default header/footer once. drafts and
   // reopened messages have signaturesApplied already set, so they are skipped.
   onMount(async () => {
+    if (session.to.trim().length == 0) {
+      const input = document.querySelector<HTMLInputElement>(`#to-${session.id}`)
+      input?.focus()
+    } else if (session.subject.trim().length == 0) {
+      const input = document.querySelector<HTMLInputElement>(`#subject-${session.id}`)
+      input?.focus()
+    } else {
+      editorGrabFocus = true
+    }
+
     if (session.signaturesApplied) {
       return
     }
@@ -545,6 +556,7 @@
           <svelte:component
             this={RichEditor}
             content={session.body}
+            grabFocus={editorGrabFocus}
             on:change={(e) => updateCompose(session.id, { body: e.detail })}
           />
         {:else}
@@ -561,6 +573,7 @@
             content={session.body}
             placeholder={$t('compose.editor.placeholderMarkdown')}
             vimEnabled={$prefs.composeVimMode}
+            grabFocus={editorGrabFocus}
             on:change={(e) => updateCompose(session.id, { body: e.detail })}
           />
         {:else}
@@ -574,6 +587,7 @@
           placeholder={$t('compose.editor.placeholderPlain')}
           vimEnabled={$prefs.composeVimMode}
           mono
+          grabFocus={editorGrabFocus}
           on:change={(e) => updateCompose(session.id, { body: e.detail })}
         />
       {:else}
