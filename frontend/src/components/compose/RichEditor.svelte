@@ -22,6 +22,7 @@
 
   // the initial html to seed the editor with (a draft or reply body).
   export let content = ''
+  export let grabFocus = false
 
   const dispatch = createEventDispatcher<{ change: string }>()
 
@@ -33,6 +34,7 @@
 
   onMount(() => {
     editor = new Editor({
+      autofocus: grabFocus,
       element,
       extensions: [
         StarterKit.configure({ heading: { levels: [1, 2, 3] } }),

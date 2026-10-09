@@ -15,6 +15,7 @@
   export let vimEnabled = false
   // mono uses a monospace font (for the plaintext editor); markdown keeps the ui font.
   export let mono = false
+  export let grabFocus = false
 
   const dispatch = createEventDispatcher<{ change: string }>()
 
@@ -80,6 +81,9 @@
 
   onMount(() => {
     view = new EditorView({ state: makeState(content), parent: el })
+    if (grabFocus) {
+      view.focus()
+    }
   })
   onDestroy(() => {
     view?.destroy()
