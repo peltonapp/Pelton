@@ -19,7 +19,8 @@
       value={session.to}
       chipsEnabled={$prefs.composeChips}
       autocompleteEnabled={$prefs.composeAutocomplete}
-      on:change={(e) => updateCompose(session.id, { to: e.detail })}
+      on:change={(e) => updateCompose(session.id, { to: e.detail }, true)}
+      on:input={() => updateCompose(session.id, {}, true)}
     />
     <div class="reveal">
       {#if !session.showCc}
@@ -40,7 +41,8 @@
         value={session.cc}
         chipsEnabled={$prefs.composeChips}
         autocompleteEnabled={$prefs.composeAutocomplete}
-        on:change={(e) => updateCompose(session.id, { cc: e.detail })}
+        on:change={(e) => updateCompose(session.id, { cc: e.detail }, true)}
+        on:input={() => updateCompose(session.id, {}, true)}
       />
     </div>
   {/if}
@@ -54,7 +56,8 @@
         value={session.bcc}
         chipsEnabled={$prefs.composeChips}
         autocompleteEnabled={$prefs.composeAutocomplete}
-        on:change={(e) => updateCompose(session.id, { bcc: e.detail })}
+        on:change={(e) => updateCompose(session.id, { bcc: e.detail }, true)}
+        on:input={() => updateCompose(session.id, {}, true)}
       />
     </div>
   {/if}
@@ -65,7 +68,7 @@
       id={`subject-${session.id}`}
       type="text"
       value={session.subject}
-      on:input={(e) => updateCompose(session.id, { subject: e.currentTarget.value })}
+      on:input={(e) => updateCompose(session.id, { subject: e.currentTarget.value }, true)}
     />
   </div>
 </div>

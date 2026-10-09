@@ -61,7 +61,7 @@
       try {
         const contentBase64 = await readAsBase64(file, id)
         const att: ComposeAttachment = { filename: file.name, contentType: type, contentBase64, inline: false, contentId: '' }
-        updateCompose(session.id, { attachments: [...session.attachments, att] })
+        updateCompose(session.id, { attachments: [...session.attachments, att] }, true)
       } catch (err) {
         toastError(errorMessage(err))
       } finally {
@@ -74,7 +74,7 @@
   function remove(index: number): void {
     updateCompose(session.id, {
       attachments: session.attachments.filter((_, i) => i !== index),
-    })
+    }, true)
   }
 </script>
 

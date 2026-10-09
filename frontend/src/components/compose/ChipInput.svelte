@@ -16,7 +16,7 @@
   export let chipsEnabled = true
   export let autocompleteEnabled = true
 
-  const dispatch = createEventDispatcher<{ change: string }>()
+  const dispatch = createEventDispatcher<{ change: string, input: void }>()
 
   let draft = ''
 
@@ -36,6 +36,7 @@
   }
 
   function onInput(): void {
+    dispatch('input')
     const q = draft.trim()
     if (debounce) {
       clearTimeout(debounce)
