@@ -3,6 +3,7 @@ package desktop
 import (
 	"encoding/json"
 	"fmt"
+	"maps"
 	"os"
 	"path/filepath"
 	"slices"
@@ -114,9 +115,7 @@ func (a *App) SaveCustomTheme(req SaveThemeRequest) (ThemeInfoDTO, error) {
 			return ThemeInfoDTO{}, err
 		}
 		manifest = existing.pkg.Manifest
-		for f, content := range existing.pkg.Files {
-			files[f] = content
-		}
+		maps.Copy(files, existing.pkg.Files)
 		previousPath = existing.path
 	}
 	manifest.Name = name

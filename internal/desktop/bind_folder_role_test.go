@@ -150,3 +150,16 @@ func TestUnknownStoredOverrideIsIgnored(t *testing.T) {
 		t.Errorf("folderRole() = %q, want %q", got, roleNormal)
 	}
 }
+
+// A server that reports \Inbox must win over a path that is not literally INBOX,
+// so special-use detection covers providers that expose a renamed inbox.
+func TestInboxAttributeBeatsPathFallback(t *testing.T) {
+	f := storage.Folder{
+		Name:       "Mb_inbox",
+		IMAPPath:   "Mb_inbox",
+		Attributes: []string{`\Inbox`},
+	}
+	if got := folderRole(f); got != roleInbox {
+		t.Errorf("folderRole() = %q, want %q", got, roleInbox)
+	}
+}

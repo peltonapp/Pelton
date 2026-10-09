@@ -223,6 +223,7 @@ export function demoMessage(id: number): MessageDetail {
     charsetGuess: '',
     // the demo mail is not protected, so there is nothing to decrypt.
     pgpState: '',
+    bodyComplete: true,
     isHtml: true,
     hasRemoteContent: false,
     remoteAllowed: true,

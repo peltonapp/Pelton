@@ -360,3 +360,21 @@ func TestReportListsEachLinkOnce(t *testing.T) {
 		t.Errorf("Links = %v, want two distinct urls", got.Links)
 	}
 }
+
+func TestDomainOf(t *testing.T) {
+	tests := []struct{ addr, want string }{
+		{"me@Example.com", "example.com"},
+		{"<me@example.com>", "example.com"},
+		{"first@second@example.com", "example.com"},
+		{"@example.com", "example.com"},
+		{"me@example.com.", "example.com"},
+		{"me@", ""},
+		{"Example.COM", "example.com"},
+		{"", ""},
+	}
+	for _, tt := range tests {
+		if got := domainOf(tt.addr); got != tt.want {
+			t.Errorf("domainOf(%q) = %q, want %q", tt.addr, got, tt.want)
+		}
+	}
+}

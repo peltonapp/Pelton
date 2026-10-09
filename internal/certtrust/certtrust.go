@@ -193,7 +193,7 @@ func FormatPins(pins []string) string {
 // ParsePins reads the stored text form back into a list.
 func ParsePins(text string) []string {
 	var out []string
-	for _, line := range strings.Split(text, "\n") {
+	for line := range strings.SplitSeq(text, "\n") {
 		if fp := NormalizeFingerprint(line); fp != "" {
 			out = append(out, fp)
 		}

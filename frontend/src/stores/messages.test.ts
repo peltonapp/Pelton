@@ -7,7 +7,25 @@ import type { MessageSummary } from '../lib/types'
 // for one, not about the request it would make.
 vi.mock('./sidebarcounts', () => ({ refreshCountsSoon: vi.fn() }))
 
-import { messageList, neighbourInList, patchInList, removeFromList, restoreToList } from './messages'
+const api = vi.hoisted(() => ({
+  listFolderMessages: vi.fn(),
+}))
+
+vi.mock('../lib/api', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../lib/api')>()),
+  listFolderMessages: api.listFolderMessages,
+}))
+
+import {
+  messageList,
+  neighbourInList,
+  patchInList,
+  refreshListHead,
+  removeFromList,
+  restoreToList,
+  loadList,
+  PAGE_SIZE,
+} from './messages'
 import { refreshCountsSoon } from './sidebarcounts'
 
 const refreshed = vi.mocked(refreshCountsSoon)
@@ -56,8 +74,63 @@ function ids(): number[] {
 }
 
 beforeEach(() => {
+  api.listFolderMessages.mockReset()
   messageList.set(idle())
   refreshed.mockClear()
+})
+
+describe('refreshListHead', () => {
+  it('leaves a paged list alone when body sync announces existing rows', async () => {
+    const firstPage = Array.from({ length: PAGE_SIZE }, (_, i) => summary(i + 1))
+    const secondPage = [summary(51), summary(52)]
+    api.listFolderMessages.mockResolvedValue({
+      messages: firstPage,
+      total: 52,
+      hasOlder: false,
+    })
+
+    await loadList({ kind: 'folder', folderId: 1, accountId: 1, label: 'INBOX' })
+    messageList.set(
+      ready({
+        items: [...firstPage, ...secondPage],
+        total: 52,
+        searching: false,
+        hasOlder: false,
+        backfilling: false,
+      }),
+    )
+
+    await refreshListHead({ kind: 'folder', folderId: 1, accountId: 1, label: 'INBOX' })
+
+    expect(get(messageList).data!.items).toHaveLength(52)
+    expect(get(messageList).data!.items[0].id).toBe(1)
+    expect(get(messageList).data!.items.at(-1)?.id).toBe(52)
+    expect(api.listFolderMessages).toHaveBeenCalledTimes(2)
+  })
+
+  it('prepends stubs that arrived during body fill', async () => {
+    const existing = [summary(2), summary(3)]
+    api.listFolderMessages.mockResolvedValue({
+      messages: [summary(1), ...existing],
+      total: 3,
+      hasOlder: false,
+    })
+    await loadList({ kind: 'folder', folderId: 1, accountId: 1, label: 'INBOX' })
+    messageList.set(
+      ready({
+        items: existing,
+        total: 2,
+        searching: false,
+        hasOlder: false,
+        backfilling: false,
+      }),
+    )
+
+    await refreshListHead({ kind: 'folder', folderId: 1, accountId: 1, label: 'INBOX' })
+
+    expect(get(messageList).data!.items.map((m) => m.id)).toEqual([1, 2, 3])
+    expect(get(messageList).data!.total).toBe(3)
+  })
 })
 
 // #403: the sidebar used to wait for the next sync, so a folder kept its unread

@@ -18,6 +18,10 @@ func TestBareAddress(t *testing.T) {
 		{"\"Doe, Jane\" <jane@x.io>", "jane@x.io"},
 		{"", ""},
 		{"No Address Name", "no address name"},
+		{"<boss@corp.com>", "boss@corp.com"},
+		{"Boss <boss@corp.com", "boss <boss@corp.com"},
+		{"Boss <", "boss <"},
+		{"A <a@x.com> B <b@y.com>", "b@y.com"},
 	}
 	for _, tt := range tests {
 		if got := bareAddress(tt.in); got != tt.want {

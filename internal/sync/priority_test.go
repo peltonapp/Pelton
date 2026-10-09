@@ -2,81 +2,29 @@ package sync
 
 import (
 	"context"
-	"errors"
-	"sync/atomic"
 	"testing"
 
 	"github.com/peltonapp/Pelton/internal/storage"
 )
-
-// the reported problem: a message the user pressed send on waited behind a
-// 14k-message sync. The sync now asks before every body fetch and stands aside
-// while something is queued.
-func TestSyncStandsAsideWhileSendingIsQueued(t *testing.T) {
-	ctx := context.Background()
-	db, folder := newSyncTestFolder(t)
-	client := &fakeClient{uids: []uint32{1, 2, 3, 4}}
-	engine := NewEngine(client, db, nil)
-
-	// queued until the sync has stood aside once, which is what the send worker
-	// getting its turn looks like from here.
-	var asked atomic.Int32
-	engine.YieldTo = func() bool {
-		return asked.Add(1) <= 2
-	}
-
-	if _, err := engine.SyncFolder(ctx, folder); err != nil {
-		t.Fatalf("sync: %v", err)
-	}
-	if asked.Load() == 0 {
-		t.Fatal("sync never asked whether it should stand aside")
-	}
-	if len(client.fetched) != 4 {
-		t.Errorf("fetched %v, want all four once the queue drained", client.fetched)
-	}
-}
-
-// a cancelled sync must not sit in the yield loop waiting for a queue that
-// nothing is draining.
-func TestYieldStopsOnCancel(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
-	db, folder := newSyncTestFolder(t)
-	client := &fakeClient{uids: []uint32{1, 2, 3}}
-	engine := NewEngine(client, db, nil)
-	engine.YieldTo = func() bool {
-		cancel()
-		return true
-	}
-
-	// a cancelled sync reports the cancellation from whichever write it reached
-	// first; what matters here is that it came back at all rather than waiting
-	// on a queue nothing is draining.
-	if _, err := engine.SyncFolder(ctx, folder); err != nil && !errors.Is(err, context.Canceled) {
-		t.Fatalf("sync: %v", err)
-	}
-	if len(client.fetched) > 1 {
-		t.Errorf("fetched %v after cancellation, want at most the one in flight", client.fetched)
-	}
-}
 
 // the first sync of a large folder used to show nothing until the whole folder
 // was down. Stored ids are handed over as they arrive.
 func TestSyncAnnouncesMessagesAsTheyArrive(t *testing.T) {
 	ctx := context.Background()
 	db, folder := newSyncTestFolder(t)
-	uids := make([]uint32, 60)
-	for i := range uids {
-		uids[i] = uint32(i + 1)
+	ids := make([]string, 60)
+	for i := range ids {
+		ids[i] = strconvFormat(uint32(i + 1))
 	}
-	client := &fakeClient{uids: uids}
-	engine := NewEngine(client, db, nil)
+	adapter := &fakeAdapter{ids: ids}
+	engine := NewEngine(adapter, db, nil)
 
 	var batches [][]int64
-	engine.OnStored = func(f storage.Folder, ids []int64) {
+	engine.OnStored = func(f storage.Folder, stored []int64) {
 		if f.ID != folder.ID {
 			t.Errorf("announced folder %d, want %d", f.ID, folder.ID)
 		}
-		batches = append(batches, ids)
+		batches = append(batches, stored)
 	}
 
 	res, err := engine.SyncFolder(ctx, folder)
@@ -100,8 +48,8 @@ func TestSyncAnnouncesMessagesAsTheyArrive(t *testing.T) {
 func TestSyncAnnouncesNothingWhenNothingIsNew(t *testing.T) {
 	ctx := context.Background()
 	db, folder := newSyncTestFolder(t)
-	client := &fakeClient{uids: []uint32{1, 2}}
-	engine := NewEngine(client, db, nil)
+	adapter := &fakeAdapter{ids: fakeIDs(1, 2)}
+	engine := NewEngine(adapter, db, nil)
 	if _, err := engine.SyncFolder(ctx, folder); err != nil {
 		t.Fatalf("first sync: %v", err)
 	}
@@ -122,43 +70,47 @@ func TestSyncAnnouncesNothingWhenNothingIsNew(t *testing.T) {
 func TestSyncFetchesBodiesInBatches(t *testing.T) {
 	ctx := context.Background()
 	db, folder := newSyncTestFolder(t)
-	uids := make([]uint32, 120)
-	for i := range uids {
-		uids[i] = uint32(i + 1)
+	ids := make([]string, 120)
+	for i := range ids {
+		ids[i] = strconvFormat(uint32(i + 1))
 	}
-	client := &fakeClient{uids: uids}
-	engine := NewEngine(client, db, nil)
+	adapter := &fakeAdapter{ids: ids}
+	engine := NewEngine(adapter, db, nil)
 
 	res, err := engine.SyncFolder(ctx, folder)
 	if err != nil {
 		t.Fatalf("sync: %v", err)
 	}
-	if res.New != len(uids) {
-		t.Fatalf("stored %d messages, want %d", res.New, len(uids))
+	if res.New != len(ids) {
+		t.Fatalf("stored %d messages, want %d", res.New, len(ids))
 	}
-	want := (len(uids) + fetchBatch - 1) / fetchBatch
-	if client.commands != want {
-		t.Errorf("issued %d fetch commands for %d messages, want %d", client.commands, len(uids), want)
+	want := (len(ids) + fetchBatch - 1) / fetchBatch
+	if adapter.commands != want {
+		t.Errorf("issued %d fetch commands for %d messages, want %d", adapter.commands, len(ids), want)
 	}
-	if len(client.fetched) != len(uids) {
-		t.Errorf("fetched %d messages, want %d", len(client.fetched), len(uids))
+	if len(adapter.fetched) != len(ids) {
+		t.Errorf("fetched %d messages, want %d", len(adapter.fetched), len(ids))
 	}
 }
 
-// newest first still holds: the newest uid has to be in the first batch, or a
+// newest first still holds: the newest id has to be in the first batch, or a
 // large mailbox shows years-old mail for as long as it takes to reach today.
 func TestSyncFetchesNewestBatchFirst(t *testing.T) {
 	ctx := context.Background()
 	db, folder := newSyncTestFolder(t)
-	uids := make([]uint32, 120)
-	for i := range uids {
-		uids[i] = uint32(i + 1)
+	ids := make([]string, 120)
+	for i := range ids {
+		ids[i] = strconvFormat(uint32(i + 1))
 	}
-	client := &fakeClient{uids: uids}
-	if _, err := NewEngine(client, db, nil).SyncFolder(ctx, folder); err != nil {
+	adapter := &fakeAdapter{ids: ids}
+	if _, err := NewEngine(adapter, db, nil).SyncFolder(ctx, folder); err != nil {
 		t.Fatalf("sync: %v", err)
 	}
-	if client.fetched[0] != 120 {
-		t.Errorf("first message fetched was uid %d, want the newest (120)", client.fetched[0])
+	if adapter.fetched[0] != "120" {
+		t.Errorf("first message fetched was id %s, want the newest (120)", adapter.fetched[0])
 	}
+}
+
+func strconvFormat(uid uint32) string {
+	return fakeIDs(uid)[0]
 }

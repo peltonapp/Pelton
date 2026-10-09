@@ -39,6 +39,11 @@ func TestAddressOnly(t *testing.T) {
 		{`"Beck, Anna" <ANNA@Example.com>`, "anna@example.com"},
 		{"a@example.com, b@example.com", "a@example.com"},
 		{"", ""},
+		{"<anna@example.com>", "anna@example.com"},
+		{"Anna <", "anna <"},
+		{"Anna <anna@example.com", "anna <anna@example.com"},
+		{"A <a@x.com>, B <b@x.com>", "b@x.com"},
+		{"<a@x.com> <b@x.com>", "b@x.com"},
 	}
 	for _, tt := range tests {
 		if got := addressOnly(tt.in); got != tt.want {
@@ -53,6 +58,11 @@ func TestDisplayNameOf(t *testing.T) {
 		{"Anna Beck <anna@example.com>", "", "Anna Beck"},
 		{`"Beck, Anna" <anna@example.com>`, "", "Beck, Anna"},
 		{"anna@example.com", "", ""},
+		{"<anna@example.com>", "", ""},
+		{"Anna Beck <", "", "Anna Beck"},
+		{"A <a@x.com> B <b@x.com>", "", "A <a@x.com> B"},
+		{"  ", "", ""},
+		{"", "", ""},
 	}
 	for _, tt := range tests {
 		if got := displayNameOf(tt.address, tt.name); got != tt.want {

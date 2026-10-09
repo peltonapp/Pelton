@@ -2,10 +2,13 @@ package storage
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
 	"io"
+	"log/slog"
 	"os"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 )
@@ -25,6 +28,10 @@ const (
 	// maxDuplicateAttempts caps the dedupe counter so a pathological directory
 	// cannot loop forever.
 	maxDuplicateAttempts = 10000
+
+	// cacheStagingDirName holds attachment directories renamed aside before a
+	// cache-delete transaction so a rollback can restore them.
+	cacheStagingDirName = ".cache-staging"
 )
 
 // Attachment is attachment metadata. The bytes live on disk at DiskPath, which
@@ -94,6 +101,179 @@ func (d *DB) DeleteAttachmentFilesForAccount(accountID int64) error {
 		return fmt.Errorf("storage: remove attachment dir for account %d: %w", accountID, err)
 	}
 	return nil
+}
+
+// stagedPath is one attachment directory renamed into the staging tree, with
+// enough information to rename it back on rollback.
+type stagedPath struct {
+	live   string
+	staged string
+}
+
+// withStagedMessageDirs renames each message's attachment directory into a
+// staging tree, runs fn inside a transaction, restores the dirs on any failure,
+// and removes the staging tree after a successful commit.
+func (d *DB) withStagedMessageDirs(ctx context.Context, accountID int64, messageIDs []int64, fn func(tx *sql.Tx) error) error {
+	staged, stagingRoot, err := d.stageMessageDirs(accountID, messageIDs)
+	if err != nil {
+		return err
+	}
+	return d.commitStagedDelete(ctx, staged, stagingRoot, fn)
+}
+
+// TestingSetDeleteTxHook injects a callback that runs after staging and before
+// commit. Tests use it to force a rollback; production leaves it unset.
+func (d *DB) TestingSetDeleteTxHook(fn func(ctx context.Context) error) {
+	d.deleteTxHook = fn
+}
+
+// withStagedAccountCache renames the whole account attachment directory aside,
+// runs fn inside a transaction, restores on failure, and removes staging after
+// commit.
+func (d *DB) withStagedAccountCache(ctx context.Context, accountID int64, fn func(tx *sql.Tx) error) error {
+	live := filepath.Join(d.attachmentsDir, accountSegment(accountID))
+	if _, err := os.Stat(live); err != nil {
+		if os.IsNotExist(err) {
+			return d.commitStagedDelete(ctx, nil, "", fn)
+		}
+		return fmt.Errorf("storage: stat account attachment dir %d: %w", accountID, err)
+	}
+	stagingRoot, err := os.MkdirTemp(d.attachmentsDir, cacheStagingDirName+"-")
+	if err != nil {
+		return fmt.Errorf("storage: create cache staging dir: %w", err)
+	}
+	staged := filepath.Join(stagingRoot, accountSegment(accountID))
+	if err := os.Rename(live, staged); err != nil {
+		os.RemoveAll(stagingRoot)
+		return fmt.Errorf("storage: stage account attachment dir %d: %w", accountID, err)
+	}
+	return d.commitStagedDelete(ctx, []stagedPath{{live: live, staged: staged}}, stagingRoot, fn)
+}
+
+func (d *DB) stageMessageDirs(accountID int64, messageIDs []int64) ([]stagedPath, string, error) {
+	var toStage []int64
+	for _, id := range messageIDs {
+		live := filepath.Join(d.attachmentsDir, accountSegment(accountID), messageSegment(id))
+		if _, err := os.Stat(live); err != nil {
+			if os.IsNotExist(err) {
+				continue
+			}
+			return nil, "", fmt.Errorf("storage: stat attachment dir for message %d: %w", id, err)
+		}
+		toStage = append(toStage, id)
+	}
+	if len(toStage) == 0 {
+		return nil, "", nil
+	}
+	stagingRoot, err := os.MkdirTemp(d.attachmentsDir, cacheStagingDirName+"-")
+	if err != nil {
+		return nil, "", fmt.Errorf("storage: create cache staging dir: %w", err)
+	}
+	staged := make([]stagedPath, 0, len(toStage))
+	for _, id := range toStage {
+		live := filepath.Join(d.attachmentsDir, accountSegment(accountID), messageSegment(id))
+		dest := filepath.Join(stagingRoot, accountSegment(accountID), messageSegment(id))
+		if err := os.MkdirAll(filepath.Dir(dest), dirPerm); err != nil {
+			d.restoreStaged(staged)
+			os.RemoveAll(stagingRoot)
+			return nil, "", fmt.Errorf("storage: create staging path for message %d: %w", id, err)
+		}
+		if err := os.Rename(live, dest); err != nil {
+			d.restoreStaged(staged)
+			os.RemoveAll(stagingRoot)
+			return nil, "", fmt.Errorf("storage: stage attachment dir for message %d: %w", id, err)
+		}
+		staged = append(staged, stagedPath{live: live, staged: dest})
+	}
+	return staged, stagingRoot, nil
+}
+
+func (d *DB) commitStagedDelete(ctx context.Context, staged []stagedPath, stagingRoot string, fn func(tx *sql.Tx) error) error {
+	tx, err := d.sql.BeginTx(ctx, nil)
+	if err != nil {
+		d.restoreStaged(staged)
+		return fmt.Errorf("storage: begin staged delete: %w", err)
+	}
+	defer tx.Rollback()
+
+	if err := fn(tx); err != nil {
+		d.restoreStaged(staged)
+		return err
+	}
+	if d.deleteTxHook != nil {
+		if err := d.deleteTxHook(ctx); err != nil {
+			d.restoreStaged(staged)
+			return err
+		}
+	}
+	if err := tx.Commit(); err != nil {
+		d.restoreStaged(staged)
+		return fmt.Errorf("storage: commit staged delete: %w", err)
+	}
+	if stagingRoot != "" {
+		if err := os.RemoveAll(stagingRoot); err != nil {
+			// Best-effort: retain the path in the log for later cleanup.
+			slog.Warn("storage: remove cache staging dir", "path", stagingRoot, "err", err)
+		}
+	}
+	return nil
+}
+
+func (d *DB) restoreStaged(staged []stagedPath) {
+	for _, s := range slices.Backward(staged) {
+
+		_ = os.MkdirAll(filepath.Dir(s.live), dirPerm)
+		_ = os.Rename(s.staged, s.live)
+	}
+}
+
+// commitStagedReplace runs fn after message attachment dirs were renamed
+// aside. fn may write a new directory at the live path. On any failure the
+// new files are removed and the staged dirs are restored. After commit the
+// staging tree (the previous files) is deleted.
+func (d *DB) commitStagedReplace(ctx context.Context, accountID, messageID int64, staged []stagedPath, stagingRoot string, fn func(tx *sql.Tx) (written []string, err error)) error {
+	tx, err := d.sql.BeginTx(ctx, nil)
+	if err != nil {
+		d.restoreStaged(staged)
+		return fmt.Errorf("storage: begin staged replace: %w", err)
+	}
+	defer tx.Rollback()
+
+	written, err := fn(tx)
+	if err != nil {
+		d.abandonStagedReplace(accountID, messageID, written, staged)
+		return err
+	}
+	if d.deleteTxHook != nil {
+		if err := d.deleteTxHook(ctx); err != nil {
+			d.abandonStagedReplace(accountID, messageID, written, staged)
+			return err
+		}
+	}
+	if err := tx.Commit(); err != nil {
+		d.abandonStagedReplace(accountID, messageID, written, staged)
+		return fmt.Errorf("storage: commit staged replace: %w", err)
+	}
+	if stagingRoot != "" {
+		if err := os.RemoveAll(stagingRoot); err != nil {
+			slog.Warn("storage: remove cache staging dir", "path", stagingRoot, "err", err)
+		}
+	}
+	return nil
+}
+
+// abandonStagedReplace drops files written for a fill that did not commit
+// and moves the staged attachment directory back to its live path.
+func (d *DB) abandonStagedReplace(accountID, messageID int64, written []string, staged []stagedPath) {
+	d.removeAttachmentFiles(written)
+	if len(staged) == 0 {
+		return
+	}
+	// The live directory was recreated for the new files. It has to be gone
+	// before the staged directory can be renamed back onto that path.
+	live := filepath.Join(d.attachmentsDir, accountSegment(accountID), messageSegment(messageID))
+	_ = os.RemoveAll(live)
+	d.restoreStaged(staged)
 }
 
 // writeAttachmentFile writes content under
@@ -179,8 +359,8 @@ func messageSegment(messageID int64) string {
 func sanitizeFilename(name string) string {
 	// drop everything up to the last path separator from either os convention.
 	name = strings.ReplaceAll(name, "\\", "/")
-	if i := strings.LastIndex(name, "/"); i >= 0 {
-		name = name[i+1:]
+	if _, last, ok := strings.CutLast(name, "/"); ok {
+		name = last
 	}
 	name = strings.TrimSpace(name)
 	name = strings.Map(func(r rune) rune {

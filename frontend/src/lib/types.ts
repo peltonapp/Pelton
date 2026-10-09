@@ -44,6 +44,9 @@ export interface Account {
   // the user told the missing-password prompt to stop asking about this
   // account. It still cannot sync; the ui marks it instead of interrupting.
   passwordPromptDismissed: boolean
+  // this account's own parallel sync connection limit (1-5), or null/absent
+  // when it follows the global setting.
+  syncMaxParallel?: number | null
   // fingerprints of server certificates the user accepted for this mailbox,
   // formatted for reading, and the subjects of the CA it trusts (#446).
   trustedCerts: string[]
@@ -290,6 +293,9 @@ export interface MessageDetail extends MessageSummary {
   // when it was opened, so the pane can offer the right next step rather than
   // one generic error.
   pgpState: PGPState
+  // bodyComplete is false while the row is still a stub and the reading pane
+  // may be showing a preview before the full body arrives.
+  bodyComplete?: boolean
 }
 
 export type PGPState = '' | 'open' | 'locked' | 'nokey' | 'failed'
@@ -569,12 +575,18 @@ export interface UIPrefs {
   // closeAction is what the window's close button does: 'background' keeps
   // Pelton running and syncing with the window hidden, 'quit' exits.
   closeAction: CloseAction
-  // syncMessageLimit caps how many of a folder's newest messages the first sync
-  // fetches; older mail stays on the server until asked for. 0 means no limit.
+  // syncMessageLimit caps how many of a folder's newest message bodies the
+  // first sync fetches. 0 means no limit.
   syncMessageLimit: number
   // syncAutoBackfill fetches the next batch of older mail automatically on
   // reaching the end of the list. Off puts it behind a button instead.
   syncAutoBackfill: boolean
+  // syncMaxParallel is how many sync connections one mailbox may use at once
+  // (1–5): IMAP sync sessions. Sending and new-mail push do not count.
+  syncMaxParallel: number
+  // syncFullReconcileDays is how many days a folder may go without a full
+  // check against the server before startup re-checks it; 0 = manual Sync only.
+  syncFullReconcileDays: number
   // what the sidebar selects on launch: 'view:<key>' for a unified view,
   // 'folder:<id>' for one account folder, or 'last' to restore the previous
   // session. A target that no longer exists falls back to the unified inbox.

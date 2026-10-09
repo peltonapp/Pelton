@@ -15,6 +15,7 @@
   import Modal from '../common/Modal.svelte'
   import { checkAccountPassword, setAccountPassword } from '../../lib/api'
   import { errorMessage, toastError, toastInfo } from '../../stores/toast'
+  import { retrySync } from '../../stores/syncfailures'
   import { t } from '../../lib/i18n'
   import type { PasswordPromptResult } from '../../stores/passwordprompt'
   import { accountLabel } from '../../lib/format'
@@ -107,6 +108,9 @@
       return
     }
     await setAccountPassword(account.id, password)
+    // the mailbox could not sync without it, so it syncs now rather than on
+    // the next run.
+    void retrySync(account.id)
     password = ''
     refused = false
     onDone('saved')

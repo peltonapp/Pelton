@@ -3,14 +3,16 @@ package desktop
 import (
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 
 	"github.com/peltonapp/Pelton/internal/storage"
+	psync "github.com/peltonapp/Pelton/internal/sync"
 )
 
 // Mailbox management (#132): create, rename and delete folders from the
 // sidebar. Each one changes the server first and only then the local cache, so
-// a failed imap command leaves the cache untouched rather than describing a
+// a failed command leaves the cache untouched rather than describing a
 // mailbox that is not there.
 //
 // The local tree is updated directly rather than rediscovered, because the
@@ -67,10 +69,16 @@ func (a *App) CreateFolder(req CreateFolderRequest) (FolderDTO, error) {
 		return FolderDTO{}, errors.New("folder name cannot be empty")
 	}
 
+	account, err := a.store.GetAccount(a.ctx, req.AccountID)
+	if err != nil {
+		return FolderDTO{}, err
+	}
+
 	var (
-		parent *storage.Folder
-		delim  string
-		path   = name
+		parent   *storage.Folder
+		delim    string
+		parentID string
+		path     = name
 	)
 	if req.ParentID != 0 {
 		p, err := a.store.GetFolder(a.ctx, req.ParentID)
@@ -82,10 +90,14 @@ func (a *App) CreateFolder(req CreateFolderRequest) (FolderDTO, error) {
 		}
 		parent = p
 		delim = p.Delimiter
-		if delim == "" {
-			return FolderDTO{}, errors.New("this server has a flat mailbox list and cannot nest folders")
+		parentID = p.RemoteID
+		if parentID == "" {
+			parentID = p.IMAPPath
 		}
-		path = p.IMAPPath + delim + name
+		path, err = a.protocolFor(*account).folderPath(*p, name)
+		if err != nil {
+			return FolderDTO{}, err
+		}
 	} else {
 		delim = a.accountDelimiter(req.AccountID)
 	}
@@ -93,16 +105,26 @@ func (a *App) CreateFolder(req CreateFolderRequest) (FolderDTO, error) {
 		return FolderDTO{}, fmt.Errorf("a folder name cannot contain %q", delim)
 	}
 
-	if err := a.withAccountIMAP(req.AccountID, func(client mailClient) error {
-		return client.CreateFolder(path)
+	var created psync.Mailbox
+	if err := a.withAccountAdapter(req.AccountID, func(adapter psync.Adapter) error {
+		var err error
+		created, err = adapter.CreateMailbox(a.ctx, name, parentID)
+		return err
 	}); err != nil {
 		return FolderDTO{}, err
 	}
 
+	remoteID := created.RemoteID
+	if remoteID == "" {
+		remoteID = path
+	}
+	imapPath := a.protocolFor(*account).createdPath(path, remoteID)
+
 	folder := storage.Folder{
 		AccountID: req.AccountID,
 		Name:      name,
-		IMAPPath:  path,
+		IMAPPath:  imapPath,
+		RemoteID:  remoteID,
 		Delimiter: delim,
 	}
 	if parent != nil {
@@ -141,11 +163,27 @@ func (a *App) RenameFolder(id int64, name string) error {
 		return nil
 	}
 
+	account, err := a.store.GetAccount(a.ctx, folder.AccountID)
+	if err != nil {
+		return err
+	}
+
+	remoteID := folder.RemoteID
+	if remoteID == "" {
+		remoteID = folder.IMAPPath
+	}
 	newPath := renamedPath(folder.IMAPPath, name, delim)
-	if err := a.withAccountIMAP(folder.AccountID, func(client mailClient) error {
-		return client.RenameFolder(folder.IMAPPath, newPath)
+
+	if err := a.withAccountAdapter(folder.AccountID, func(adapter psync.Adapter) error {
+		return adapter.RenameMailbox(a.ctx, remoteID, name)
 	}); err != nil {
 		return err
+	}
+
+	// a driver whose remote id is not the path keeps the stored path; IMAP
+	// rewrites it.
+	if a.protocolFor(*account).renameKeepsPath(*folder, remoteID) {
+		return a.store.RenameFolder(a.ctx, id, name, folder.IMAPPath)
 	}
 
 	// the server moved the children along with the parent, so their stored paths
@@ -183,9 +221,13 @@ func (a *App) DeleteFolder(id int64) error {
 	if err != nil {
 		return err
 	}
-	if err := a.withAccountIMAP(folder.AccountID, func(client mailClient) error {
-		for i := len(targets) - 1; i >= 0; i-- {
-			if err := client.DeleteFolder(targets[i].IMAPPath); err != nil {
+	if err := a.withAccountAdapter(folder.AccountID, func(adapter psync.Adapter) error {
+		for _, target := range slices.Backward(targets) {
+			rid := target.RemoteID
+			if rid == "" {
+				rid = target.IMAPPath
+			}
+			if err := adapter.DeleteMailbox(a.ctx, rid); err != nil {
 				return err
 			}
 		}
@@ -194,11 +236,11 @@ func (a *App) DeleteFolder(id int64) error {
 		return err
 	}
 
-	for i := len(targets) - 1; i >= 0; i-- {
-		if _, err := a.store.PurgeFolderMessages(a.ctx, targets[i].AccountID, targets[i].ID); err != nil {
+	for _, target := range slices.Backward(targets) {
+		if _, err := a.store.PurgeFolderMessages(a.ctx, target.AccountID, target.ID); err != nil {
 			return err
 		}
-		if err := a.store.DeleteFolder(a.ctx, targets[i].ID); err != nil {
+		if err := a.store.DeleteFolder(a.ctx, target.ID); err != nil {
 			return err
 		}
 	}
@@ -242,8 +284,8 @@ func (a *App) EmptyTrash(folderID int64) (int, error) {
 
 	goSafe("counting unread mail", a.refreshViewCounts)
 	goSafe("emptying the trash", func() {
-		if err := a.withAccountIMAP(folder.AccountID, func(client mailClient) error {
-			return a.syncOneFolder(client, *folder)
+		if err := a.withAccountAdapter(folder.AccountID, func(adapter psync.Adapter) error {
+			return a.syncOneFolder(adapter, *folder)
 		}); err != nil {
 			a.log.Error("push emptied trash", "folder", folder.ID, "err", err)
 		}
@@ -287,8 +329,8 @@ func renamedPath(path, name, delim string) string {
 	if delim == "" {
 		return name
 	}
-	if i := strings.LastIndex(path, delim); i >= 0 {
-		return path[:i+len(delim)] + name
+	if parent, _, ok := strings.CutLast(path, delim); ok {
+		return parent + delim + name
 	}
 	return name
 }
@@ -304,31 +346,18 @@ func protectSpecialFolder(f storage.Folder) error {
 	return nil
 }
 
-// withAccountIMAP runs fn against a logged-in session for an account, taking the
+// withAccountAdapter runs fn against a sync adapter for an account, taking the
 // same lock sync uses so a folder operation never races a sync on the same
-// connection.
-func (a *App) withAccountIMAP(accountID int64, fn func(mailClient) error) error {
+// account.
+func (a *App) withAccountAdapter(accountID int64, fn func(psync.Adapter) error) error {
 	account, err := a.store.GetAccount(a.ctx, accountID)
 	if err != nil {
 		return err
 	}
-	cfg, err := a.resolveIMAP(*account)
-	if err != nil {
-		return err
-	}
 
-	syncMu.Lock()
-	defer syncMu.Unlock()
+	accountMu := a.accountLock(account.ID)
+	accountMu.Lock()
+	defer accountMu.Unlock()
 
-	client, err := a.connectIMAP(cfg)
-	if err != nil {
-		return err
-	}
-	defer client.Close()
-	if err := client.Login(); err != nil {
-		return err
-	}
-	defer client.Logout()
-
-	return fn(client)
+	return a.protocolFor(*account).withAdapter(account, fn)
 }

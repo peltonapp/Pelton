@@ -91,6 +91,8 @@
     setSyncProgressBar,
     setCloseAction,
     setSyncMessageLimit,
+    setSyncMaxParallel,
+    setSyncFullReconcileDays,
     setSyncAutoBackfill,
     setDefaultEditorMode,
     setComposeAutocomplete,
@@ -257,7 +259,9 @@
     { cat: 'power', label: $t('settingsPanel.toggle.verboseSync'), kw: 'sync status' },
     { cat: 'power', label: $t('settingsPanel.toggle.syncProgressBar'), kw: 'sync progress bar percent count' },
     { cat: 'power', label: $t('settingsPanel.label.closeAction'), kw: 'close button tray background quit exit' },
-    { cat: 'power', label: $t('settingsPanel.label.syncMessageLimit'), kw: 'sync limit messages older initial download' },
+    { cat: 'power', label: $t('settingsPanel.label.syncMaxParallel'), kw: 'parallel connections sync concurrent pool' },
+    { cat: 'power', label: $t('settingsPanel.label.syncFullReconcileDays'), kw: 'full check reconcile verify days sync' },
+    { cat: 'power', label: $t('settingsPanel.label.syncMessageLimit'), kw: 'sync limit messages older initial download bodies' },
     { cat: 'power', label: $t('settingsPanel.toggle.syncAutoBackfill'), kw: 'older mail backfill scroll load more' },
     { cat: 'power', label: $t('settingsPanel.toggle.offlineIndicator'), kw: 'offline' },
     { cat: 'power', label: $t('settingsPanel.toggle.flagColorSync'), kw: 'flag color sync' },
@@ -332,6 +336,30 @@
 
   function onSyncMessageLimit(event: CustomEvent<string>): void {
     setSyncMessageLimit(Number(event.detail))
+  }
+
+  // parallel sync connections per mailbox: 1–5, default 3.
+  $: syncParallelOptions = [
+    { key: '1', label: '1' },
+    { key: '2', label: '2' },
+    { key: '3', label: '3' },
+    { key: '4', label: '4' },
+    { key: '5', label: '5' },
+  ]
+  function onSyncMaxParallel(event: CustomEvent<string>): void {
+    setSyncMaxParallel(Number(event.detail))
+  }
+
+  $: syncFullReconcileOptions = [
+    { key: '1', label: '1' },
+    { key: '3', label: '3' },
+    { key: '7', label: '7' },
+    { key: '14', label: '14' },
+    { key: '30', label: '30' },
+    { key: '0', label: $t('settingsPanel.syncFullReconcile.manual') },
+  ]
+  function onSyncFullReconcileDays(event: CustomEvent<string>): void {
+    setSyncFullReconcileDays(Number(event.detail))
   }
 
   // what the window's close button does.
@@ -1570,6 +1598,15 @@
             {$t('settingsPanel.hint.syncProgressBarDetail')}
           </p>
           <StepSlider
+            label={$t('settingsPanel.label.syncMaxParallel')}
+            value={String($prefs.syncMaxParallel)}
+            options={syncParallelOptions}
+            on:change={onSyncMaxParallel}
+          />
+          <p class="hint">
+            {$t('settingsPanel.hint.syncMaxParallel')}
+          </p>
+          <StepSlider
             label={$t('settingsPanel.label.syncMessageLimit')}
             value={String($prefs.syncMessageLimit)}
             options={syncLimitOptions}
@@ -1577,6 +1614,15 @@
           />
           <p class="hint">
             {$t('settingsPanel.hint.syncMessageLimit')}
+          </p>
+          <StepSlider
+            label={$t('settingsPanel.label.syncFullReconcileDays')}
+            value={String($prefs.syncFullReconcileDays)}
+            options={syncFullReconcileOptions}
+            on:change={onSyncFullReconcileDays}
+          />
+          <p class="hint">
+            {$t('settingsPanel.hint.syncFullReconcileDays')}
           </p>
           <div class="toggle" title={$t('settingsPanel.hint.syncAutoBackfill')}>
             <span class="row-label">{$t('settingsPanel.toggle.syncAutoBackfill')}</span>

@@ -49,9 +49,9 @@ type PGPKeyDTO struct {
 	Expires string `json:"expires"`
 	// Expired is resolved here rather than in the frontend so the list does not
 	// depend on the renderer's clock.
-	Expired    bool   `json:"expired"`
-	HasPrivate bool   `json:"hasPrivate"`
-	Locked     bool   `json:"locked"`
+	Expired    bool `json:"expired"`
+	HasPrivate bool `json:"hasPrivate"`
+	Locked     bool `json:"locked"`
 	// Unlocked is true when this session already holds the passphrase.
 	Unlocked bool `json:"unlocked"`
 	// Remembered is true when the passphrase is in the OS keyring.

@@ -6,6 +6,7 @@
 // language, and only a speaker of that language notices. The same goes for a
 // translation that drops or renames a {placeholder}: it type-checks perfectly
 // and produces a broken sentence at runtime.
+// UI copy never uses an em-dash (AGENTS/no-slop.md); one in any catalog fails too.
 //
 // The catalogs are parsed rather than imported because CI runs node 20, which
 // cannot load TypeScript. They are flat Record<string, string> literals with no
@@ -68,6 +69,11 @@ if (reference.entries.size === 0) {
 for (const [locale, { entries, duplicates }] of catalogs) {
   for (const key of duplicates) {
     problems.push(`${locale}: '${key}' appears twice, so the later one silently wins`)
+  }
+  for (const [key, value] of entries) {
+    if (value.includes('—')) {
+      problems.push(`${locale}: '${key}' uses an em-dash; UI copy never does (AGENTS/no-slop.md)`)
+    }
   }
   if (locale === base) {
     continue

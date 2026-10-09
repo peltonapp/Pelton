@@ -89,6 +89,24 @@ Pick your provider:
     - Anything else, self-hosted, or a work server your IT team gave you settings for? Use
       [Generic IMAP/SMTP](imap-smtp.md).
 
+## Sync settings
+
+Two settings in **Settings > Sync & power** control how much Pelton
+downloads. **Messages to sync per folder** (default 100) is how many of the
+newest message bodies are kept per folder; **All** downloads every body,
+newest first. Older mail loads when you scroll, and opening a message that
+is not downloaded yet fetches it. **Parallel sync connections** (1 to 5,
+default 3) is how many connections one mailbox uses to sync; override it for
+a single mailbox in its editor. Sending never waits for these connections.
+Syncing after a restart only asks the server what changed since last time.
+**Full folder check every (days)** (default 7) re-checks each folder in full in
+the background when its last full check is older than that, which catches
+anything a quick sync missed; **Manual only** leaves it to the Sync button,
+which always runs it.
+
+Settings > Accounts shows a connection line under each mailbox:
+`IMAP · host:port`.
+
 ## Need help?
 
 See [Support](../support.md).

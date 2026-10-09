@@ -48,6 +48,7 @@ export namespace desktop {
 	    exportNameTemplate: string;
 	    pgpDefault: string;
 	    passwordPromptDismissed: boolean;
+	    syncMaxParallel?: number;
 	    trustedCerts: string[];
 	    caSubjects: string[];
 	    proxy: AccountProxyDTO;
@@ -77,6 +78,7 @@ export namespace desktop {
 	        this.exportNameTemplate = source["exportNameTemplate"];
 	        this.pgpDefault = source["pgpDefault"];
 	        this.passwordPromptDismissed = source["passwordPromptDismissed"];
+	        this.syncMaxParallel = source["syncMaxParallel"];
 	        this.trustedCerts = source["trustedCerts"];
 	        this.caSubjects = source["caSubjects"];
 	        this.proxy = this.convertValues(source["proxy"], AccountProxyDTO);
@@ -342,6 +344,7 @@ export namespace desktop {
 	export class ArchiveUndoDTO {
 	    messageId: string;
 	    originalFolderId: number;
+	    destFolderId: number;
 	    exportPath: string;
 	    exportError: string;
 	
@@ -353,6 +356,7 @@ export namespace desktop {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.messageId = source["messageId"];
 	        this.originalFolderId = source["originalFolderId"];
+	        this.destFolderId = source["destFolderId"];
 	        this.exportPath = source["exportPath"];
 	        this.exportError = source["exportError"];
 	    }
@@ -1318,6 +1322,7 @@ export namespace desktop {
 	    pgpState: string;
 	    unsubscribe?: UnsubscribeDTO;
 	    charsetGuess: string;
+	    bodyComplete: boolean;
 	
 	    static createFrom(source: any = {}) {
 	        return new MessageDetailDTO(source);
@@ -1360,6 +1365,7 @@ export namespace desktop {
 	        this.pgpState = source["pgpState"];
 	        this.unsubscribe = this.convertValues(source["unsubscribe"], UnsubscribeDTO);
 	        this.charsetGuess = source["charsetGuess"];
+	        this.bodyComplete = source["bodyComplete"];
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
@@ -2289,6 +2295,8 @@ export namespace desktop {
 	    closeAction: string;
 	    syncMessageLimit: number;
 	    syncAutoBackfill: boolean;
+	    syncMaxParallel: number;
+	    syncFullReconcileDays: number;
 	    startupSelection: string;
 	    logToFile: boolean;
 	    logLevel: string;
@@ -2378,6 +2386,8 @@ export namespace desktop {
 	        this.closeAction = source["closeAction"];
 	        this.syncMessageLimit = source["syncMessageLimit"];
 	        this.syncAutoBackfill = source["syncAutoBackfill"];
+	        this.syncMaxParallel = source["syncMaxParallel"];
+	        this.syncFullReconcileDays = source["syncFullReconcileDays"];
 	        this.startupSelection = source["startupSelection"];
 	        this.logToFile = source["logToFile"];
 	        this.logLevel = source["logLevel"];
@@ -2423,6 +2433,7 @@ export namespace desktop {
 	    exportSubfolders: string;
 	    exportNameTemplate: string;
 	    pgpDefault: string;
+	    syncMaxParallel?: number;
 	    proxy: AccountProxyDTO;
 	
 	    static createFrom(source: any = {}) {
@@ -2448,6 +2459,7 @@ export namespace desktop {
 	        this.exportSubfolders = source["exportSubfolders"];
 	        this.exportNameTemplate = source["exportNameTemplate"];
 	        this.pgpDefault = source["pgpDefault"];
+	        this.syncMaxParallel = source["syncMaxParallel"];
 	        this.proxy = this.convertValues(source["proxy"], AccountProxyDTO);
 	    }
 	

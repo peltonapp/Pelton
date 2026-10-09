@@ -51,6 +51,11 @@ type fakeIMAP struct {
 	// failMove makes MOVE fail, for the paths that have to leave the local cache
 	// alone when the server says no.
 	failMove error
+
+	// since is what SearchSince returns, and messages what FetchMessages serves
+	// by uid; a uid missing from messages is skipped like one the server lost.
+	since    []imap.UID
+	messages map[imap.UID]*pimap.Message
 }
 
 type movedMessage struct {
@@ -92,12 +97,27 @@ func (f *fakeIMAP) DeleteFolder(path string) error {
 	return nil
 }
 
-func (f *fakeIMAP) FetchMessage(imap.UID) (*pimap.Message, error) { return &pimap.Message{}, nil }
-func (f *fakeIMAP) FetchMessages([]imap.UID, func(imap.UID, *pimap.Message, error) error) error {
+func (f *fakeIMAP) FetchMessages(uids []imap.UID, fn func(imap.UID, *pimap.Message, error) error) error {
+	for _, uid := range uids {
+		msg, ok := f.messages[uid]
+		if !ok {
+			continue
+		}
+		if err := fn(uid, msg, nil); err != nil {
+			return err
+		}
+	}
 	return nil
 }
 func (f *fakeIMAP) FetchRawMessage(imap.UID) ([]byte, error)      { return nil, nil }
 func (f *fakeIMAP) FetchAllFlags() ([]pimap.MessageHeader, error) { return nil, nil }
+func (f *fakeIMAP) FetchFlagsChangedSince(uint64) ([]pimap.MessageHeader, error) {
+	return nil, nil
+}
+func (f *fakeIMAP) SearchAllUIDs() ([]imap.UID, error) { return nil, nil }
+func (f *fakeIMAP) FetchHeaders([]imap.UID, *imap.FetchOptions) ([]pimap.MessageHeader, error) {
+	return nil, nil
+}
 
 func (f *fakeIMAP) AddFlags(imap.UID, ...imap.Flag) error    { return nil }
 func (f *fakeIMAP) RemoveFlags(imap.UID, ...imap.Flag) error { return nil }
@@ -115,7 +135,7 @@ func (f *fakeIMAP) DeleteMessages(...imap.UID) error      { return nil }
 
 func (f *fakeIMAP) SearchByMessageID(string) ([]imap.UID, error) { return f.searchResult, nil }
 
-func (f *fakeIMAP) SearchSince(time.Time) ([]imap.UID, error) { return nil, nil }
+func (f *fakeIMAP) SearchSince(time.Time) ([]imap.UID, error) { return f.since, nil }
 
 func (f *fakeIMAP) SupportsIdle() bool                      { return false }
 func (f *fakeIMAP) IdleUntil(context.Context) (bool, error) { return false, nil }
@@ -164,6 +184,9 @@ func TestArchiveMessageMovesOnTheServerAndDropsTheRow(t *testing.T) {
 	if undo.OriginalFolderID != inbox.ID {
 		t.Errorf("undo points at folder %d, want the inbox %d", undo.OriginalFolderID, inbox.ID)
 	}
+	if undo.DestFolderID != archive.ID {
+		t.Errorf("undo DestFolderID = %d, want the archive %d", undo.DestFolderID, archive.ID)
+	}
 	if _, err := db.GetMessage(ctx, messageID); err == nil {
 		t.Error("the local row survived a successful archive")
 	}
@@ -185,15 +208,15 @@ func TestArchiveMessageKeepsTheRowWhenTheServerRefuses(t *testing.T) {
 	}
 }
 
-// Undo searches Archive by Message-ID because the move gave the message a new
-// uid, and moves whatever it finds back to the folder it came from.
+// Undo searches the folder the message went to by Message-ID because the move
+// gave it a new uid, and moves whatever it finds back to where it came from.
 func TestUnarchiveMessageMovesTheFoundUIDBack(t *testing.T) {
 	a, db, ctx := moveTestApp(t)
 	inbox, archive, _ := moveTestAccount(t, db, ctx, true)
 	client := &fakeIMAP{searchResult: []imap.UID{7}}
 	useFake(t, a, inbox.AccountID, client)
 
-	if err := a.UnarchiveMessage("<one@example.com>", inbox.ID); err != nil {
+	if err := a.UnarchiveMessage("<one@example.com>", archive.ID, inbox.ID); err != nil {
 		t.Fatalf("UnarchiveMessage: %v", err)
 	}
 
@@ -209,15 +232,64 @@ func TestUnarchiveMessageMovesTheFoundUIDBack(t *testing.T) {
 // that did not happen.
 func TestUnarchiveMessageFailsWhenTheServerHasNoMatch(t *testing.T) {
 	a, db, ctx := moveTestApp(t)
-	inbox, _, _ := moveTestAccount(t, db, ctx, true)
+	inbox, archive, _ := moveTestAccount(t, db, ctx, true)
 	client := &fakeIMAP{}
 	useFake(t, a, inbox.AccountID, client)
 
-	if err := a.UnarchiveMessage("<one@example.com>", inbox.ID); err == nil {
+	if err := a.UnarchiveMessage("<one@example.com>", archive.ID, inbox.ID); err == nil {
 		t.Fatal("UnarchiveMessage returned no error though the search found nothing")
 	}
 	if len(client.moved) != 0 {
 		t.Errorf("moved %+v though there was nothing to restore", client.moved)
+	}
+}
+
+// Undoing a move to an ordinary folder must search that folder, not Archive:
+// the message is not in Archive, so the old lookup could never find it.
+func TestUndoMoveSearchesTheDestinationFolder(t *testing.T) {
+	a, db, ctx := moveTestApp(t)
+	inbox, _, _ := moveTestAccount(t, db, ctx, false)
+	projects := &storage.Folder{AccountID: inbox.AccountID, Name: "Projects", IMAPPath: "Projects"}
+	if _, err := db.CreateFolder(ctx, projects); err != nil {
+		t.Fatal(err)
+	}
+	client := &fakeIMAP{searchResult: []imap.UID{7}}
+	useFake(t, a, inbox.AccountID, client)
+
+	if err := a.UnarchiveMessage("<one@example.com>", projects.ID, inbox.ID); err != nil {
+		t.Fatalf("UnarchiveMessage: %v", err)
+	}
+	if len(client.selected) != 1 || client.selected[0] != "Projects" {
+		t.Errorf("selected %v, want just Projects", client.selected)
+	}
+	if len(client.moved) != 1 || client.moved[0].uid != 7 || client.moved[0].dest != "INBOX" {
+		t.Errorf("moved %+v, want uid 7 to INBOX", client.moved)
+	}
+}
+
+// An account with no Archive folder can still move mail elsewhere, so it must
+// be able to undo that move.
+func TestUndoMoveWithoutArchiveFolder(t *testing.T) {
+	a, db, ctx := moveTestApp(t)
+	accountID, err := db.CreateAccount(ctx, &storage.Account{Email: "me@example.com"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	inbox := &storage.Folder{AccountID: accountID, Name: "INBOX", IMAPPath: "INBOX"}
+	projects := &storage.Folder{AccountID: accountID, Name: "Projects", IMAPPath: "Projects"}
+	for _, f := range []*storage.Folder{inbox, projects} {
+		if _, err := db.CreateFolder(ctx, f); err != nil {
+			t.Fatal(err)
+		}
+	}
+	client := &fakeIMAP{searchResult: []imap.UID{3}}
+	useFake(t, a, accountID, client)
+
+	if err := a.UnarchiveMessage("<one@example.com>", projects.ID, inbox.ID); err != nil {
+		t.Fatalf("UnarchiveMessage: %v", err)
+	}
+	if len(client.moved) != 1 || client.moved[0].dest != "INBOX" {
+		t.Errorf("moved %+v, want one move to INBOX", client.moved)
 	}
 }
 

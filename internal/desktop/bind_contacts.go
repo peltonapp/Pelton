@@ -14,11 +14,11 @@ import (
 	"path"
 	"strings"
 	"time"
+	"uuid"
 
 	pcarddav "github.com/peltonapp/Pelton/internal/carddav"
 	"github.com/peltonapp/Pelton/internal/credentials"
 	"github.com/peltonapp/Pelton/internal/storage"
-	"github.com/google/uuid"
 )
 
 // contactsTimeout bounds one address book request. Contact sync is small next
@@ -484,7 +484,7 @@ func contactPath(collection, uid string) string {
 // newContactUID is the identity a contact keeps for life, independent of where
 // it is stored.
 func newContactUID() string {
-	return uuid.NewString()
+	return uuid.NewV4().String()
 }
 
 func toStoredValues(values []pcarddav.Labelled) []storage.ContactValue {

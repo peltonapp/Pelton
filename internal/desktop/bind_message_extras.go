@@ -53,47 +53,27 @@ func (a *App) pushColorKeyword(id int64, color int) {
 		a.log.Error("color sync: load account", "id", id, "err", err)
 		return
 	}
-	cfg, err := a.resolveIMAP(*account)
-	if err != nil {
-		return // no credentials: color stays local until sync is possible
-	}
-
-	syncMu.Lock()
-	defer syncMu.Unlock()
-
-	client, err := a.connectIMAP(cfg)
-	if err != nil {
-		a.log.Error("color sync: connect", "err", err)
-		return
-	}
-	defer client.Close()
-	if err := client.Login(); err != nil {
-		a.log.Error("color sync: login", "err", err)
-		return
-	}
-	defer client.Logout()
-	if _, err := client.Select(folder.IMAPPath); err != nil {
-		a.log.Error("color sync: select", "folder", folder.IMAPPath, "err", err)
-		return
-	}
-
-	uid := imap.UID(m.UID)
-	if err := client.RemoveFlags(uid, colorKeywords...); err != nil {
-		a.log.Error("color sync: clear labels", "err", err)
-	}
-	if color >= 1 && color <= len(colorKeywords) {
-		if err := client.AddFlags(uid, colorKeywords[color-1]); err != nil {
-			a.log.Error("color sync: add label", "err", err)
-		}
-	}
+	a.protocolFor(*account).setColor(*m, *folder, *account, color)
 }
 
-// DownloadMessageOffline pins a message for offline availability. Sync already
-// caches the body; this records the deliberate keep signal that drives the
-// downloaded indicator.
+// DownloadMessageOffline keeps a message available offline. A message that so
+// far has only its list entry gets its body fetched first; pinning a row with
+// no body would show it as downloaded while there is nothing to read.
 func (a *App) DownloadMessageOffline(id int64) error {
 	if err := a.ready(); err != nil {
 		return err
+	}
+	m, err := a.store.GetMessage(a.ctx, id)
+	if err != nil {
+		return err
+	}
+	if !m.BodyComplete {
+		if err := a.fetchMessageBodyOnDemand(m); err != nil {
+			return offlineOrErr(err)
+		}
+		if err := a.bodyStored(id); err != nil {
+			return err
+		}
 	}
 	return a.store.SetOffline(a.ctx, id, true)
 }

@@ -156,9 +156,9 @@ func (a *App) checkPhishing(m storage.Message) PhishingDTO {
 // "Name <addr>" or just the address.
 func addressOnly(header string) string {
 	s := strings.TrimSpace(header)
-	if open := strings.LastIndex(s, "<"); open >= 0 {
-		if close := strings.Index(s[open:], ">"); close > 0 {
-			return strings.ToLower(strings.TrimSpace(s[open+1 : open+close]))
+	if _, rest, ok := strings.CutLast(s, "<"); ok {
+		if addr, _, ok := strings.Cut(rest, ">"); ok {
+			return strings.ToLower(strings.TrimSpace(addr))
 		}
 	}
 	// several addresses, which Reply-To is allowed to carry: the first is the
@@ -177,9 +177,9 @@ func displayNameOf(fromAddress, fromName string) string {
 		return name
 	}
 	s := strings.TrimSpace(fromAddress)
-	open := strings.LastIndex(s, "<")
-	if open <= 0 {
+	before, _, ok := strings.CutLast(s, "<")
+	if !ok || before == "" {
 		return ""
 	}
-	return strings.Trim(strings.TrimSpace(s[:open]), `"`)
+	return strings.Trim(strings.TrimSpace(before), `"`)
 }

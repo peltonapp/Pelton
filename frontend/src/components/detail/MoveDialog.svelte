@@ -77,7 +77,12 @@
       try {
         const undo = await moveMessage(target.id, folder.id)
         if (undo.messageId) {
-          undone.push({ summary: target, messageId: undo.messageId, originalFolderId: undo.originalFolderId })
+          undone.push({
+            summary: target,
+            messageId: undo.messageId,
+            fromFolderId: undo.destFolderId,
+            originalFolderId: undo.originalFolderId,
+          })
         }
       } catch (err) {
         failure = errorMessage(err)

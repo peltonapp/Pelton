@@ -1,6 +1,7 @@
 package desktop
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -201,5 +202,29 @@ func TestNoteSyncOutcomeRecordsAndClears(t *testing.T) {
 	states, _ = a.AccountSyncStates()
 	if len(states) != 1 || states[0].FailedAt != "" || states[0].Reason != "" {
 		t.Errorf("states = %+v, want the failure cleared", states)
+	}
+}
+
+// stop, switch and shutdown cancel a running sync on purpose; that must not be
+// recorded as the account failing, while a real network error still is.
+func TestNoteSyncOutcomeIgnoresIntentionalCancel(t *testing.T) {
+	a := newAccountTestApp(t)
+	id, err := a.store.CreateAccount(a.ctx, &storage.Account{Email: "me@example.test"})
+	if err != nil {
+		t.Fatalf("create account: %v", err)
+	}
+
+	a.noteSyncOutcome(id, fmt.Errorf("sync: %w", context.Canceled))
+	states, _ := a.AccountSyncStates()
+	for _, s := range states {
+		if s.FailedAt != "" {
+			t.Fatalf("cancel recorded as failure: %+v", s)
+		}
+	}
+
+	a.noteSyncOutcome(id, errors.New("dial tcp 1.2.3.4:993: connection refused"))
+	states, _ = a.AccountSyncStates()
+	if len(states) != 1 || states[0].FailedAt == "" || states[0].Reason != syncFailNetwork {
+		t.Fatalf("states = %+v, want a network failure", states)
 	}
 }

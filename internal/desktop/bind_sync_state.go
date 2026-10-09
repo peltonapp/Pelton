@@ -68,7 +68,7 @@ func (a *App) SyncAccountNow(accountID int64) error {
 	if err != nil {
 		return err
 	}
-	syncErr := a.syncAccount(*account)
+	syncErr := a.syncAccount(*account, true)
 	a.emitAccountSyncStates()
 	if syncErr != nil {
 		return offlineOrErr(syncErr)

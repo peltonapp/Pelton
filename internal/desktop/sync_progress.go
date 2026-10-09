@@ -6,6 +6,14 @@ import (
 	psync "github.com/peltonapp/Pelton/internal/sync"
 )
 
+// A phased initial sync reports stubs before bodies so the status bar can say
+// which phase is running (#313). Verify is the background full reconcile.
+const (
+	SyncPhaseStubs  = "stubs"
+	SyncPhaseBodies = "bodies"
+	SyncPhaseVerify = "verify"
+)
+
 // syncTally accumulates what a sync run is doing, so the status bar can show a
 // real progress bar rather than a spinner (#313).
 //
@@ -75,6 +83,14 @@ func (t *syncTally) counts() syncCounts {
 	return t.countsLocked()
 }
 
+// closing is counts() with the folder cleared, the event that tells the ui this
+// account's run is over.
+func (t *syncTally) closing() syncCounts {
+	c := t.counts()
+	c.Folder = ""
+	return c
+}
+
 func (t *syncTally) countsLocked() syncCounts {
 	c := syncCounts{
 		Folder:       t.folderName,
@@ -101,4 +117,6 @@ type syncCounts struct {
 	FolderTotal  int
 	FoldersDone  int
 	FoldersTotal int
+	// Phase is stubs, bodies, or empty when the run is not split (IMAP manual sync).
+	Phase string
 }

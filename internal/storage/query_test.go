@@ -17,7 +17,7 @@ func TestUnifiedPageMatchesNaive(t *testing.T) {
 	for _, name := range []string{"INBOX", "Sent", "Archive"} {
 		f, _ := db.EnsureLocalFolder(ctx, acc.ID, name)
 		ids = append(ids, f.ID)
-		for i := 0; i < 40; i++ {
+		for range 40 {
 			uid++
 			m := &Message{AccountID: acc.ID, FolderID: f.ID, UID: uid,
 				MessageID: fmt.Sprintf("<%d@x>", uid), Subject: fmt.Sprintf("s%d", uid),
@@ -82,7 +82,7 @@ func TestQueryMessageIDsMatchesTheFullPage(t *testing.T) {
 	for _, name := range []string{"INBOX", "Sent"} {
 		f, _ := db.EnsureLocalFolder(ctx, acc.ID, name)
 		folders = append(folders, f.ID)
-		for i := 0; i < 30; i++ {
+		for range 30 {
 			uid++
 			m := &Message{AccountID: acc.ID, FolderID: f.ID, UID: uid,
 				MessageID: fmt.Sprintf("<%d@x>", uid), Subject: fmt.Sprintf("s%d", uid),

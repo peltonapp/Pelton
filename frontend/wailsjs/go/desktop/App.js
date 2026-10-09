@@ -790,8 +790,8 @@ export function TrustSenderImages(arg1) {
   return window['go']['desktop']['App']['TrustSenderImages'](arg1);
 }
 
-export function UnarchiveMessage(arg1, arg2) {
-  return window['go']['desktop']['App']['UnarchiveMessage'](arg1, arg2);
+export function UnarchiveMessage(arg1, arg2, arg3) {
+  return window['go']['desktop']['App']['UnarchiveMessage'](arg1, arg2, arg3);
 }
 
 export function UndoDelete(arg1) {

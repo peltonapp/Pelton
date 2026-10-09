@@ -3,7 +3,7 @@ package desktop
 import (
 	"os"
 	"path/filepath"
-	"sort"
+	"slices"
 	"testing"
 )
 
@@ -94,9 +94,9 @@ func TestImportStartsEveryAccountItCreates(t *testing.T) {
 
 	ids := accountIDsByEmail(t, a)
 	want := []int64{ids["one@example.test"], ids["two@example.test"]}
-	sort.Slice(want, func(i, j int) bool { return want[i] < want[j] })
+	slices.Sort(want)
 	got := append([]int64(nil), *started...)
-	sort.Slice(got, func(i, j int) bool { return got[i] < got[j] })
+	slices.Sort(got)
 
 	if len(got) != len(want) {
 		t.Fatalf("started %v, want the %d imported accounts %v", got, len(want), want)

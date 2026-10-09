@@ -1,29 +1,42 @@
 // undoarchive.ts keeps a small stack of recently archived messages so a global
-// cmd+z can move the last archive back to where it came from. archive moves the
-// message on the server and drops the local row, so undo re-locates it in
-// Archive by its rfc Message-ID and moves it back. undo is impossible for a
-// message with no Message-ID (rare), which we surface rather than silently fail.
+// cmd+z can move the last archive or move back to where it came from. the action
+// moves the message on the server and drops the local row, so undo re-locates it
+// in the folder it went to by its rfc Message-ID, and moves it back. a message
+// with no Message-ID cannot be undone (rare), so it is not recorded.
 //
 // One entry is one action, not one message, so archiving a selection of eleven
 // is undone in one press.
 
 import { get, writable } from 'svelte/store'
 import type { MessageSummary } from '../lib/types'
-import { unarchiveMessage } from '../lib/api'
+import { unarchiveMessage, type ArchiveUndo } from '../lib/api'
 import { t } from '../lib/i18n'
 import { toastInfo, toastError, errorMessage } from './toast'
 
 interface ArchivedMessage {
   summary: MessageSummary
   messageId: string
+  // the folder the action put the message in.
+  fromFolderId: number
   originalFolderId: number
 }
 
 const archived = writable<ArchivedMessage[][]>([])
 
-// recordArchived remembers a just-archived message so it can be moved back.
-export function recordArchived(summary: MessageSummary, messageId: string, originalFolderId: number): void {
-  recordArchivedBatch([{ summary, messageId, originalFolderId }])
+// recordArchived remembers a just-archived message so it can be moved back. A
+// message with no Message-ID cannot be found again and is skipped.
+export function recordArchived(summary: MessageSummary, undo: ArchiveUndo): void {
+  if (!undo.messageId) {
+    return
+  }
+  recordArchivedBatch([
+    {
+      summary,
+      messageId: undo.messageId,
+      fromFolderId: undo.destFolderId,
+      originalFolderId: undo.originalFolderId,
+    },
+  ])
 }
 
 // recordArchivedBatch remembers a whole bulk archive or move as one undo step.
@@ -48,7 +61,7 @@ export function triggerUndoArchive(): boolean {
     let failure = ''
     for (const entry of last) {
       try {
-        await unarchiveMessage(entry.messageId, entry.originalFolderId)
+        await unarchiveMessage(entry.messageId, entry.fromFolderId, entry.originalFolderId)
       } catch (err) {
         failure = errorMessage(err)
       }

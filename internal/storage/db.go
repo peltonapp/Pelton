@@ -60,6 +60,10 @@ type DB struct {
 	// scope is the profile the store reads and writes profile-owned rows for.
 	// See profilescope.go.
 	scope scope
+	// deleteTxHook runs after a staged cache mutation (delete or stub body
+	// fill) has executed its statements, before commit. Tests set it to
+	// inject a failure; production leaves it nil.
+	deleteTxHook func(ctx context.Context) error
 }
 
 // ChannelNightly is the build channel of the automated dev-branch builds. It
@@ -85,10 +89,13 @@ func DefaultPathForChannel(channel string) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("storage: locate user config dir: %w", err)
 	}
-	return filepath.Join(dir, dataDirName(channel), dbFileName), nil
+	return filepath.Join(dir, DataDirName(channel), dbFileName), nil
 }
 
-func dataDirName(channel string) string {
+// DataDirName names the data directory of a build channel: Pelton, Pelton-dev
+// under PELTON_DEV, or Pelton-<channel>. The keyring service is named the same,
+// so each data directory has its own secrets as well as its own database.
+func DataDirName(channel string) string {
 	switch {
 	case os.Getenv("PELTON_DEV") != "":
 		return appDirName + "-dev"
@@ -264,6 +271,9 @@ func (d *DB) appliedMigrations(ctx context.Context) (map[int]bool, error) {
 }
 
 func (d *DB) applyMigration(ctx context.Context, m migration) error {
+	if strings.Contains(m.sql, "-- pelton:foreign-keys-off") {
+		return d.applyMigrationForeignKeysOff(ctx, m)
+	}
 	tx, err := d.sql.BeginTx(ctx, nil)
 	if err != nil {
 		return fmt.Errorf("storage: begin migration %d: %w", m.version, err)
@@ -273,6 +283,75 @@ func (d *DB) applyMigration(ctx context.Context, m migration) error {
 	if _, err := tx.ExecContext(ctx, m.sql); err != nil {
 		return fmt.Errorf("storage: run migration %d (%s): %w", m.version, m.name, err)
 	}
+	const insert = `INSERT INTO schema_migrations (id, applied_at) VALUES (?, ?)`
+	if _, err := tx.ExecContext(ctx, insert, m.version, nowText()); err != nil {
+		return fmt.Errorf("storage: record migration %d: %w", m.version, err)
+	}
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("storage: commit migration %d: %w", m.version, err)
+	}
+	return nil
+}
+
+// applyMigrationForeignKeysOff runs a migration that rebuilds a table with
+// foreign-key dependents. PRAGMA foreign_keys cannot change inside a
+// transaction, and the pool must not switch connections mid-migration, so the
+// work is pinned to one Conn with foreign keys off for the duration.
+func (d *DB) applyMigrationForeignKeysOff(ctx context.Context, m migration) (err error) {
+	conn, err := d.sql.Conn(ctx)
+	if err != nil {
+		return fmt.Errorf("storage: conn for migration %d: %w", m.version, err)
+	}
+	defer conn.Close()
+
+	if _, err := conn.ExecContext(ctx, `PRAGMA foreign_keys = OFF`); err != nil {
+		return fmt.Errorf("storage: disable foreign keys for migration %d: %w", m.version, err)
+	}
+	defer func() {
+		if _, onErr := conn.ExecContext(context.Background(), `PRAGMA foreign_keys = ON`); onErr != nil && err == nil {
+			err = fmt.Errorf("storage: re-enable foreign keys after migration %d: %w", m.version, onErr)
+			return
+		}
+		var on int
+		if qerr := conn.QueryRowContext(context.Background(), `PRAGMA foreign_keys`).Scan(&on); qerr != nil {
+			if err == nil {
+				err = fmt.Errorf("storage: verify foreign_keys after migration %d: %w", m.version, qerr)
+			}
+			return
+		}
+		if on != 1 && err == nil {
+			err = fmt.Errorf("storage: foreign keys not enabled after migration %d", m.version)
+		}
+	}()
+
+	tx, err := conn.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("storage: begin migration %d: %w", m.version, err)
+	}
+	defer tx.Rollback()
+
+	if _, err := tx.ExecContext(ctx, m.sql); err != nil {
+		return fmt.Errorf("storage: run migration %d (%s): %w", m.version, m.name, err)
+	}
+
+	rows, err := tx.QueryContext(ctx, `PRAGMA foreign_key_check`)
+	if err != nil {
+		return fmt.Errorf("storage: foreign_key_check after migration %d: %w", m.version, err)
+	}
+	defer rows.Close()
+	if rows.Next() {
+		var table string
+		var rowid int64
+		var parent string
+		var fkid int
+		_ = rows.Scan(&table, &rowid, &parent, &fkid)
+		return fmt.Errorf("storage: foreign key violation after migration %d: table=%s rowid=%d parent=%s",
+			m.version, table, rowid, parent)
+	}
+	if err := rows.Err(); err != nil {
+		return fmt.Errorf("storage: iterate foreign_key_check after migration %d: %w", m.version, err)
+	}
+
 	const insert = `INSERT INTO schema_migrations (id, applied_at) VALUES (?, ?)`
 	if _, err := tx.ExecContext(ctx, insert, m.version, nowText()); err != nil {
 		return fmt.Errorf("storage: record migration %d: %w", m.version, err)
@@ -310,14 +389,31 @@ func loadMigrations() ([]migration, error) {
 	sort.Slice(migrations, func(i, j int) bool {
 		return migrations[i].version < migrations[j].version
 	})
+	if err := checkUniqueVersions(migrations); err != nil {
+		return nil, err
+	}
 	return migrations, nil
+}
+
+// checkUniqueVersions fails when two migrations share a version number. The
+// applied set is keyed by version, so a duplicate would otherwise be skipped
+// silently on any database that already ran its twin. migrations must be
+// sorted by version.
+func checkUniqueVersions(migrations []migration) error {
+	for i := 1; i < len(migrations); i++ {
+		if migrations[i].version == migrations[i-1].version {
+			return fmt.Errorf("storage: duplicate migration version %d: %q and %q",
+				migrations[i].version, migrations[i-1].name, migrations[i].name)
+		}
+	}
+	return nil
 }
 
 // versionFromName parses the leading digits of a migration filename.
 func versionFromName(name string) (int, error) {
 	prefix := name
-	if i := strings.IndexByte(name, '_'); i >= 0 {
-		prefix = name[:i]
+	if before, _, ok := strings.Cut(name, "_"); ok {
+		prefix = before
 	}
 	version, err := strconv.Atoi(prefix)
 	if err != nil {

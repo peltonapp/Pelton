@@ -238,8 +238,8 @@ func hasOpaqueID(u *url.URL) bool {
 	for segment := range strings.SplitSeq(u.Path, "/") {
 		// the file extension is not part of the identifier, and keeping it would
 		// stop "abcdef0123456789.gif" from matching.
-		if dot := strings.LastIndexByte(segment, '.'); dot > 0 {
-			segment = segment[:dot]
+		if stem, _, ok := strings.CutLast(segment, "."); ok && stem != "" {
+			segment = stem
 		}
 		if opaqueIDPattern.MatchString(segment) {
 			return true

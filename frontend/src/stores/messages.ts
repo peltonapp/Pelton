@@ -93,6 +93,75 @@ async function fetchPage(sel: Selection, offset: number): Promise<Page> {
   return { items: page.messages ?? [], total: page.total, hasOlder: page.hasOlder }
 }
 
+// listIsPaginated is true once the user has loaded beyond the first page.
+export function listIsPaginated(): boolean {
+  const state = get(messageList)
+  if (state.status !== 'ready' || !state.data || state.data.searching) {
+    return false
+  }
+  return currentOffset > 0
+}
+
+// refreshListHead re-reads the first page and prepends rows that are not
+// already loaded. Body sync emits mail:new for ids already on screen; this
+// keeps scroll and the loaded window intact while still picking up new stubs.
+export async function refreshListHead(sel: Selection): Promise<void> {
+  if (currentSearch) {
+    return
+  }
+  if (!currentSelection || sel.kind !== currentSelection.kind) {
+    return
+  }
+  if (
+    sel.kind === 'view' &&
+    currentSelection.kind === 'view' &&
+    sel.view !== currentSelection.view
+  ) {
+    return
+  }
+  if (
+    sel.kind === 'savedView' &&
+    currentSelection.kind === 'savedView' &&
+    sel.viewId !== currentSelection.viewId
+  ) {
+    return
+  }
+  if (
+    sel.kind === 'folder' &&
+    currentSelection.kind === 'folder' &&
+    sel.folderId !== currentSelection.folderId
+  ) {
+    return
+  }
+  const state = get(messageList)
+  if (state.status !== 'ready' || !state.data || state.data.searching) {
+    return
+  }
+  const generation = loadGeneration
+  try {
+    const { items: head, total, hasOlder } = await fetchPage(sel, 0)
+    if (generation !== loadGeneration) {
+      return
+    }
+    messageList.update((s) => {
+      if (!s.data || generation !== loadGeneration) {
+        return s
+      }
+      const seen = new Set(s.data.items.map((m) => m.id))
+      const fresh = head.filter((m) => !seen.has(m.id))
+      if (fresh.length === 0 && total === s.data.total && hasOlder === s.data.hasOlder) {
+        return s
+      }
+      const items = [...fresh, ...s.data.items].sort((a, b) =>
+        a.date < b.date ? 1 : a.date > b.date ? -1 : 0,
+      )
+      return ready({ ...s.data, items, total, hasOlder })
+    })
+  } catch {
+    // a failed head refresh must not disturb the list the user is scrolling.
+  }
+}
+
 // loadList loads the first page for a selection, replacing the list.
 export async function loadList(sel: Selection): Promise<void> {
   currentSelection = sel

@@ -154,7 +154,7 @@ func (w *wireLog) String() string {
 // in order.
 func (w *wireLog) commands() []string {
 	var out []string
-	for _, line := range strings.Split(w.String(), "\n") {
+	for line := range strings.SplitSeq(w.String(), "\n") {
 		line = strings.TrimSpace(line)
 		// client lines are "<tag> COMMAND ..."; server lines start with * or +.
 		if line == "" || strings.HasPrefix(line, "*") || strings.HasPrefix(line, "+") {
@@ -172,12 +172,7 @@ func (w *wireLog) commands() []string {
 // hasBareExpunge reports whether an unscoped EXPUNGE was sent, which is the
 // command that takes another client's marked mail with it.
 func (w *wireLog) hasBareExpunge() bool {
-	for _, cmd := range w.commands() {
-		if cmd == "EXPUNGE" {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(w.commands(), "EXPUNGE")
 }
 
 // brokenSession makes a chosen command fail, to exercise the paths where the

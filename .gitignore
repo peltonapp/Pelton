@@ -8,6 +8,19 @@ frontend/dist
 # it (and installs) when it is missing, so a fresh clone is unaffected.
 frontend/package.json.md5
 
+# Local e2e TLS material (CA and server key). Trust ca.crt on the machine; never commit.
+e2e/certs/
+# Seed corpus index, timings, and Playwright output. Never commit.
+e2e/manifest.json
+e2e/report.md
+e2e/ui/node_modules/
+e2e/ui/test-results/
+e2e/ui/playwright-report/
+e2e/ui/blob-report/
+e2e/.wails.log
+e2e/.wails.pid
+e2e/.frontend-url
+
 # compiled binaries at repo root
 /Pelton
 /Pelton.exe
@@ -290,3 +303,6 @@ $RECYCLE.BIN/
 
 # zensical build output (docs.pelton.app)
 site/
+
+# Local design notes and plans (superpowers). Kept out of the repo.
+docs/superpowers/

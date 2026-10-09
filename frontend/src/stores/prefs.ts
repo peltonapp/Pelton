@@ -90,8 +90,10 @@ const defaults: UIPrefs = {
   verboseSync: false,
   syncProgressBar: true,
   closeAction: 'background',
-  syncMessageLimit: 50,
+  syncMessageLimit: 100,
   syncAutoBackfill: true,
+  syncMaxParallel: 3,
+  syncFullReconcileDays: 7,
   startupSelection: 'view:inbox',
   logToFile: false,
   logLevel: 'info',
@@ -537,12 +539,29 @@ export function setCloseAction(value: CloseAction): void {
   void setSetting(SettingKeys.closeAction, value)
 }
 
-// setSyncMessageLimit caps how many of a folder's newest messages a first sync
-// fetches. It only applies to folders that have not synced yet, so lowering it
-// never discards mail that is already cached.
+// setSyncMessageLimit caps how many of a folder's newest message bodies a first
+// sync fetches. It only applies to folders that have not synced yet, so
+// lowering it never discards mail that is already cached.
 export function setSyncMessageLimit(value: number): void {
   prefs.update((p) => ({ ...p, syncMessageLimit: value }))
   void setSetting(SettingKeys.syncMessageLimit, String(value))
+}
+
+// setSyncMaxParallel sets how many sync connections one mailbox may use at
+// once. Values outside 1–5 are clamped; the backend clamps again on write.
+export function setSyncMaxParallel(value: number): void {
+  const n = Math.min(5, Math.max(1, value))
+  prefs.update((p) => ({ ...p, syncMaxParallel: n }))
+  void setSetting(SettingKeys.syncMaxParallel, String(n))
+}
+
+// setSyncFullReconcileDays sets how many days a folder may go without a full
+// check before startup re-checks it in the background. 0 leaves it to manual
+// Sync. Values outside 0–365 are clamped; the backend clamps again on write.
+export function setSyncFullReconcileDays(value: number): void {
+  const n = Math.min(365, Math.max(0, value))
+  prefs.update((p) => ({ ...p, syncFullReconcileDays: n }))
+  void setSetting(SettingKeys.syncFullReconcileDays, String(n))
 }
 
 // setSyncAutoBackfill toggles fetching the next batch of older mail

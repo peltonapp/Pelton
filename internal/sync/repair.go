@@ -5,8 +5,6 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/emersion/go-imap/v2"
-
 	"github.com/peltonapp/Pelton/internal/storage"
 )
 
@@ -32,7 +30,7 @@ func (e *Engine) repairMangled(ctx context.Context, folder storage.Folder, res *
 		if err := ctx.Err(); err != nil {
 			return
 		}
-		if err := e.repairOne(ctx, m); err != nil {
+		if err := e.repairOne(ctx, folder, m); err != nil {
 			e.log.Error("refetch mangled message", "folder", folder.IMAPPath, "uid", m.UID, "err", err)
 			continue
 		}
@@ -41,16 +39,26 @@ func (e *Engine) repairMangled(ctx context.Context, folder storage.Folder, res *
 	}
 }
 
-func (e *Engine) repairOne(ctx context.Context, m storage.MangledMessage) error {
-	msg, err := e.client.FetchMessage(imap.UID(m.UID))
+func (e *Engine) repairOne(ctx context.Context, folder storage.Folder, m storage.MangledMessage) error {
+	stored, err := e.store.GetMessage(ctx, m.ID)
 	if err != nil {
-		// gone from the server, or unreadable: either way there is nothing to
-		// repair it from, so stop asking.
+		return err
+	}
+	remoteID := stored.RemoteID
+	if remoteID == "" {
+		return fmt.Errorf("sync: mangled message %d has empty remote id", m.ID)
+	}
+	fetched, err := e.adapter.Fetch(ctx, folder.RemoteID, []string{remoteID})
+	if err != nil || len(fetched) == 0 {
 		if clearErr := e.store.ClearRefetchMark(ctx, m.ID); clearErr != nil {
 			return errors.Join(err, clearErr)
 		}
-		return fmt.Errorf("sync: refetch message uid %d: %w", m.UID, err)
+		if err != nil {
+			return fmt.Errorf("sync: refetch message %q: %w", remoteID, err)
+		}
+		return fmt.Errorf("sync: refetch message %q: empty fetch", remoteID)
 	}
+	msg := fetched[0]
 	if err := e.store.RepairMessageText(ctx, m.ID, msg.Subject, msg.Text, msg.HTML, msg.CharsetGuess); err != nil {
 		return err
 	}

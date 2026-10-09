@@ -5,7 +5,8 @@
   // honest, always-visible window into background activity.
   import { onDestroy, onMount } from 'svelte'
   import { IconSend, IconAlertTriangle, IconRefresh, IconCheck, IconDownload, IconBatteryEco, IconX, IconBug, IconWifiOff } from '@tabler/icons-svelte'
-  import { outbox, syncing, lastSynced, syncFolder, syncServer, syncAccount, syncCounts } from '../../stores/outbox'
+  import { outbox, syncing, lastSynced, syncFolder, syncServer, syncAccount, syncCounts, syncPhase } from '../../stores/outbox'
+  import { buildSyncLabel } from '../../lib/syncstatus'
   import { online } from '../../stores/network'
   import { failedSyncs, showSyncFailure } from '../../stores/syncfailures'
   import { downloadProgress, attachmentProgress } from '../../stores/progress'
@@ -54,23 +55,15 @@
   // the sync line. Verbose names the mailbox, and the account and server behind
   // it, which is the difference between two identical "Syncing INBOX" lines and
   // knowing which mailbox is the slow one.
-  $: syncLabel = buildSyncLabel($prefs.verboseSync, $syncFolder, $syncAccount, $syncServer)
-
-  function buildSyncLabel(verbose: boolean, folder: string, account: string, server: string): string {
-    if (!verbose || folder === '') {
-      return $t('common.statusBar.syncing')
-    }
-    if (account !== '' && server !== '') {
-      return $t('common.statusBar.syncingMailboxFull')
-        .replace('{mailbox}', folder)
-        .replace('{account}', account)
-        .replace('{server}', server)
-    }
-    if (server !== '') {
-      return $t('common.statusBar.syncingMailboxOn').replace('{mailbox}', folder).replace('{server}', server)
-    }
-    return $t('common.statusBar.syncingMailbox').replace('{mailbox}', folder)
-  }
+  $: syncLabel = buildSyncLabel(
+    $prefs.verboseSync,
+    $syncPhase,
+    $syncFolder,
+    $syncAccount,
+    $syncServer,
+    $syncCounts,
+    $t,
+  )
 
   // a total of 0 means no folder has been reconciled yet, so there is nothing
   // honest to draw a proportion from and the bar sweeps instead.
@@ -254,7 +247,7 @@
           >
             <span class="bar-fill" style={determinate ? `width:${percent}%` : ''}></span>
           </span>
-          {#if determinate}
+          {#if determinate && $syncPhase !== 'bodies'}
             <span class="counts">{$syncCounts.done.toLocaleString()} / {$syncCounts.total.toLocaleString()}</span>
           {/if}
         {/if}
@@ -267,6 +260,13 @@
         <IconAlertTriangle size={13} stroke={1.8} />
         {failedLabel}
       </button>
+    {:else if $syncPhase === 'verify'}
+      <!-- the background folder check is not a sync the user waits on: no
+           spinner and no bar, just where it has got to. -->
+      <span class="sync">
+        <IconRefresh size={13} stroke={1.7} />
+        <span class="sync-text">{syncLabel}</span>
+      </span>
     {:else if $lastSynced}
       <span class="sync">
         <IconCheck size={13} stroke={1.7} />

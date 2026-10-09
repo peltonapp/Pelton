@@ -1,6 +1,6 @@
 # Pelton - email client (Wails + Svelte)
 
-.PHONY: build build-mac build-win build-linux build-nix dmg run run-nightly app-dev dev clean tidy deps licenses icon disclaimer sync-docs
+.PHONY: build build-mac build-win build-linux build-nix dmg run run-nightly app-dev dev clean tidy deps licenses icon disclaimer sync-docs e2e e2e-manual
 
 # version string injected into the binary. it prefers the latest git tag (with a
 # short commit suffix on untagged commits) and falls back to "dev". it is wired
@@ -13,6 +13,14 @@ LDFLAGS := -X main.version=$(VERSION)
 # whenever pkg-config finds it. empty on macOS and Windows, where there is no
 # webkitgtk.
 WEBKIT_TAGS := $(shell pkg-config --exists webkit2gtk-4.1 2>/dev/null && echo -tags webkit2_41)
+
+# wails adds -mmacosx-version-min=10.13 to the cgo flags unless they already set
+# one, but Info.plist enforces macOS 13 (and Go 1.27 needs it), so build the
+# cgo code for 13 on macOS.
+ifeq ($(shell uname),Darwin)
+export CGO_CFLAGS := $(strip $(CGO_CFLAGS) -mmacosx-version-min=13.0)
+export CGO_LDFLAGS := $(strip $(CGO_LDFLAGS) -mmacosx-version-min=13.0)
+endif
 
 # production build into build/bin
 build:
@@ -87,6 +95,17 @@ run-nightly: deps
 	PELTON_DEV=1 wails dev $(WEBKIT_TAGS) -ldflags "$(LDFLAGS) -X main.channel=nightly"
 
 dev: run
+
+# playwright suite against Stalwart in Docker. see e2e/README.md for the
+# prerequisites (Docker, trusted test CA, free ports).
+e2e:
+	e2e/run.sh
+
+# same Stalwart, accounts and (smaller) seed as e2e, then `make run` instead of
+# Playwright, so the mailboxes can be added and tried by hand. Quitting Pelton
+# tears Stalwart down and wipes Pelton-dev.
+e2e-manual:
+	e2e/manual.sh
 
 # alias kept for discoverability; identical to run.
 app-dev: run

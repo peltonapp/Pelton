@@ -18,3 +18,19 @@ func TestMessageRemoteKey(t *testing.T) {
 		t.Errorf("messageRemoteKey fallback = %q, want %q", got, "local:42")
 	}
 }
+
+func TestEmailDomain(t *testing.T) {
+	tests := []struct{ addr, want string }{
+		{"me@example.com", "example.com"},
+		{"first@second@example.com", "example.com"},
+		{"@example.com", "example.com"},
+		{"me@", ""},
+		{"example.com", ""},
+		{"", ""},
+	}
+	for _, tt := range tests {
+		if got := emailDomain(tt.addr); got != tt.want {
+			t.Errorf("emailDomain(%q) = %q, want %q", tt.addr, got, tt.want)
+		}
+	}
+}

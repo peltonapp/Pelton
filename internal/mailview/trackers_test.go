@@ -1,6 +1,7 @@
 package mailview
 
 import (
+	"net/url"
 	"slices"
 	"strings"
 	"testing"
@@ -304,5 +305,30 @@ func TestSanitizeKeepsSenderFontsOnlyWhenAllowed(t *testing.T) {
 	}
 	if !strings.Contains(stripped, "hello") || !strings.Contains(stripped, "code") {
 		t.Errorf("text was lost with the fonts:\n%s", stripped)
+	}
+}
+
+func TestHasOpaqueIDPathSegment(t *testing.T) {
+	id := "abcdef0123456789"
+	tests := []struct {
+		name string
+		path string
+		want bool
+	}{
+		{"bare id", "/" + id, true},
+		{"extension is dropped", "/" + id + ".gif", true},
+		{"only the last dot is dropped", "/" + id + ".tar.gif", false},
+		{"trailing dot is dropped", "/" + id + ".", true},
+		{"leading dot is kept", "/." + id, false},
+		{"no dot, too short", "/abc", false},
+		{"id in a later segment", "/a/b/" + id + ".png", true},
+		{"empty path", "", false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := hasOpaqueID(&url.URL{Path: tt.path}); got != tt.want {
+				t.Errorf("hasOpaqueID(%q) = %v, want %v", tt.path, got, tt.want)
+			}
+		})
 	}
 }

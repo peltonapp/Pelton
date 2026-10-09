@@ -4,7 +4,7 @@
   // for custom providers; oauth uses the per-user PKCE flow (the user supplies
   // their own client id). this component is code-split and only loaded when the
   // user opens it, so its cost is not paid at startup.
-  import { createEventDispatcher, onMount } from 'svelte'
+  import { createEventDispatcher, onDestroy, onMount } from 'svelte'
   import { get } from 'svelte/store'
   import InfoTip from '../common/InfoTip.svelte'
   import { IconX, IconArrowLeft, IconCheck, IconArrowRight, IconMailbox, IconPlus } from '@tabler/icons-svelte'
@@ -33,6 +33,11 @@
   // the user has already been past.
   export let offerImport = true
 
+  // when set, the wizard syncs everything as soon as the account is added and
+  // never shows the folder picker. Onboarding needs this: it closes the wizard
+  // the moment 'added' fires, so the picker could not be answered there.
+  export let skipFolderPicker = false
+
   type Step = 'start' | 'provider' | 'config' | 'oauth' | 'working' | 'folders' | 'done' | 'error'
   let step: Step = offerImport ? 'start' : 'provider'
 
@@ -57,6 +62,15 @@
 
   // the account draft being assembled across steps.
   let draft: AddAccountRequest = blankDraft()
+
+  // server fields the user edited by hand. Autodiscovery never fills these, even
+  // when it lands later or runs again, so it cannot undo a tested setup. Reset
+  // only when the provider changes.
+  type ServerField = 'imapHost' | 'imapPort' | 'imapTls' | 'smtpHost' | 'smtpPort' | 'smtpTls'
+  let touched = new Set<ServerField>()
+  function touch(...fields: ServerField[]): void {
+    for (const f of fields) touched.add(f)
+  }
 
   function blankDraft(): AddAccountRequest {
     return {
@@ -95,6 +109,7 @@
   const smtpPorts: Record<string, number> = { ssl: 465, starttls: 587 }
 
   function setTLS(mode: TLSMode): void {
+    touch('imapTls', 'imapPort')
     if (draft.imapPort === imapPorts[draft.imapTls]) {
       draft.imapPort = imapPorts[mode]
     }
@@ -102,6 +117,7 @@
   }
 
   function setSMTPTLS(mode: TLSMode): void {
+    touch('smtpTls', 'smtpPort')
     if (draft.smtpPort === smtpPorts[draft.smtpTls]) {
       draft.smtpPort = smtpPorts[mode]
     }
@@ -112,6 +128,7 @@
   function selectPreset(p: ProviderPreset): void {
     preset = p
     draft = blankDraft()
+    touched = new Set()
     if (p.imapHost) draft.imapHost = p.imapHost
     if (p.imapPort) draft.imapPort = p.imapPort
     if (p.imapTls) draft.imapTls = p.imapTls
@@ -155,23 +172,39 @@
     }
   })
 
+  // the newest discovery request; an older one that resolves later is stale.
+  let discoverySeq = 0
+
   // for custom providers, try autodiscovery once a full address is present.
+  // discovery is slow and can rerun on every blur, so the user may type the
+  // servers, or even test them, before it lands. Overwriting those would
+  // invalidate the passed test, so a result only fills fields never hand-edited.
   async function maybeDiscover(): Promise<void> {
     if (!preset?.custom || !draft.email.includes('@')) {
       return
     }
+    const seq = ++discoverySeq
+    const email = draft.email
     discoveredOAuth = ''
     try {
-      const d = await discoverConfig(draft.email)
+      const d = await discoverConfig(email)
+      if (seq !== discoverySeq || draft.email !== email) {
+        return
+      }
       discoveredOAuth = d.oauthProvider
-      draft.imapHost = d.imapHost
-      draft.imapPort = d.imapPort
-      draft.smtpHost = d.smtpHost
-      draft.smtpPort = d.smtpPort
+      // assign only real changes: any write to draft re-runs the block below
+      // that clears a passed test, even when the value is the same.
+      const fill = <K extends ServerField>(key: K, value: AddAccountRequest[K]): void => {
+        if (!touched.has(key) && draft[key] !== value) draft[key] = value
+      }
+      fill('imapHost', d.imapHost)
+      fill('imapPort', d.imapPort)
+      fill('smtpHost', d.smtpHost)
+      fill('smtpPort', d.smtpPort)
       // autoconfig states the security outright; empty means it said nothing
       // usable, so the current choice stands rather than being overwritten.
-      if (d.imapTls) draft.imapTls = d.imapTls as TLSMode
-      if (d.smtpTls) draft.smtpTls = d.smtpTls as TLSMode
+      if (d.imapTls) fill('imapTls', d.imapTls as TLSMode)
+      if (d.smtpTls) fill('smtpTls', d.smtpTls as TLSMode)
     } catch {
       // leave fields for manual entry; discovery is best effort.
     }
@@ -264,9 +297,28 @@
   // asked for and keeps the default behaviour unchanged.
   let unchecked = new Set<number>()
   let applying = false
+  // beginSync is reachable from several routes (buttons, teardown); the first
+  // sync must start exactly once whichever gets there first.
+  let syncStarted = false
+
+  // Leaving the folder step by any route the wizard does not control (Escape in
+  // the host window, window close) never confirmed a folder choice, so sync
+  // everything, the old default, rather than leave the saved account idle.
+  onDestroy(() => {
+    if (addedAccount && !syncStarted) {
+      syncStarted = true
+      void startAccountSync(addedAccount.id).catch((err) => toastError(errorMessage(err)))
+    }
+  })
 
   async function finish(account: Account): Promise<void> {
     addedAccount = account
+    if (skipFolderPicker) {
+      // start before announcing: the embedder may tear the wizard down on 'added'.
+      await beginSync()
+      dispatch('added', account)
+      return
+    }
     dispatch('added', account)
     try {
       folders = await listFolders(account.id)
@@ -303,6 +355,10 @@
       step = 'done'
       return
     }
+    if (syncStarted) {
+      return
+    }
+    syncStarted = true
     applying = true
     try {
       for (const id of unchecked) {
@@ -475,12 +531,12 @@
         {/if}
 
         <div class="servers">
-          <label class="field"><span>{$t('wizard.field.imapHost')}</span><input type="text" bind:value={draft.imapHost} /></label>
-          <label class="field narrow"><span>{$t('wizard.field.port')}</span><input type="number" bind:value={draft.imapPort} /></label>
+          <label class="field"><span>{$t('wizard.field.imapHost')}</span><input type="text" bind:value={draft.imapHost} on:input={() => touch('imapHost')} /></label>
+          <label class="field narrow"><span>{$t('wizard.field.port')}</span><input type="number" bind:value={draft.imapPort} on:input={() => touch('imapPort')} /></label>
         </div>
         <div class="servers">
-          <label class="field"><span>{$t('wizard.field.smtpHost')}</span><input type="text" bind:value={draft.smtpHost} /></label>
-          <label class="field narrow"><span>{$t('wizard.field.port')}</span><input type="number" bind:value={draft.smtpPort} /></label>
+          <label class="field"><span>{$t('wizard.field.smtpHost')}</span><input type="text" bind:value={draft.smtpHost} on:input={() => touch('smtpHost')} /></label>
+          <label class="field narrow"><span>{$t('wizard.field.port')}</span><input type="number" bind:value={draft.smtpPort} on:input={() => touch('smtpPort')} /></label>
         </div>
 
         <button type="button" class="disclosure" on:click={() => (showAdvanced = !showAdvanced)}>

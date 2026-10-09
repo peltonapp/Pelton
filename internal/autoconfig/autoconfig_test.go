@@ -115,6 +115,7 @@ func TestDomainOf(t *testing.T) {
 		{"me@example.com ", "example.com"},
 		{"first@second@example.com", "example.com"},
 		{"me@", ""},
+		{"@example.com", "example.com"},
 		{"example.com", ""},
 		{"", ""},
 	}

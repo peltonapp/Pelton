@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	goimap "github.com/emersion/go-imap/v2"
 	"github.com/peltonapp/Pelton/internal/autoconfig"
 	"github.com/peltonapp/Pelton/internal/certtrust"
 	"github.com/peltonapp/Pelton/internal/credentials"
@@ -15,7 +16,6 @@ import (
 	"github.com/peltonapp/Pelton/internal/oauth"
 	psmtp "github.com/peltonapp/Pelton/internal/smtp"
 	"github.com/peltonapp/Pelton/internal/storage"
-	goimap "github.com/emersion/go-imap/v2"
 	wailsruntime "github.com/wailsapp/wails/v2/pkg/runtime"
 )
 
@@ -303,25 +303,16 @@ func (a *App) createAccount(req AddAccountRequest, secret credentials.Secret) (A
 	return toAccountDTO(*account), nil
 }
 
-// StartAccountSync runs the first sync of an account and parks it on idle, in
-// the background. The wizard calls it after the folder choice, which is why
-// adding an account no longer starts syncing on its own. Calling it for an
-// account that is already syncing is harmless: syncAccount serializes on the
-// same lock every other sync uses.
+// StartAccountSync runs the first sync of an account and parks it on idle,
+// replacing any existing worker for that account.
 func (a *App) StartAccountSync(accountID int64) error {
 	if err := a.ready(); err != nil {
 		return err
 	}
-	account, err := a.store.GetAccount(a.ctx, accountID)
-	if err != nil {
+	if _, err := a.store.GetAccount(a.ctx, accountID); err != nil {
 		return err
 	}
-	goSafe("syncing a new mailbox", func() {
-		if err := a.syncAccount(*account); err != nil {
-			a.log.Error("initial sync after add", "account", account.Email, "err", err)
-		}
-		goSafe("waiting for new mail", func() { a.idleLoop(*account) })
-	})
+	a.startAccountWorker(accountID)
 	return nil
 }
 
@@ -329,25 +320,11 @@ func (a *App) StartAccountSync(accountID int64) error {
 // rows, preserving the hierarchy via the per-server delimiter so the sidebar
 // tree matches the server.
 func (a *App) discoverFolders(account storage.Account) error {
-	cfg, err := a.resolveIMAP(account)
-	if err != nil {
-		return err
-	}
-	client, err := a.connectIMAP(cfg)
-	if err != nil {
-		return err
-	}
-	defer client.Close()
-	if err := client.Login(); err != nil {
-		return err
-	}
-	defer client.Logout()
+	return a.discoverFoldersCtx(a.ctx, account)
+}
 
-	folders, err := client.ListFolders()
-	if err != nil {
-		return err
-	}
-	return a.createFolderTree(account.ID, folders)
+func (a *App) discoverFoldersCtx(ctx context.Context, account storage.Account) error {
+	return a.protocolFor(account).discoverFolders(ctx, account)
 }
 
 // ensureFolders discovers the folder tree over an already-connected client when
@@ -385,9 +362,9 @@ func (a *App) createFolderTree(accountID int64, folders []pimap.Folder) error {
 		name := f.Name
 		var parentID *int64
 		if delim != "" {
-			if idx := strings.LastIndex(f.Name, delim); idx >= 0 {
-				name = f.Name[idx+len(delim):]
-				if pid, ok := byPath[f.Name[:idx]]; ok {
+			if parent, last, ok := strings.CutLast(f.Name, delim); ok {
+				name = last
+				if pid, ok := byPath[parent]; ok {
 					parentID = &pid
 				}
 			}
@@ -397,6 +374,7 @@ func (a *App) createFolderTree(accountID int64, folders []pimap.Folder) error {
 			AccountID:  accountID,
 			Name:       name,
 			IMAPPath:   f.Name,
+			RemoteID:   f.Name,
 			Delimiter:  delim,
 			ParentID:   parentID,
 			Attributes: attrsToStrings(f.Attrs),

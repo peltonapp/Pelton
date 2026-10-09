@@ -215,3 +215,40 @@ func requestAuth(headers http.Header) (string, string, bool) {
 	req := &http.Request{Header: headers}
 	return req.BasicAuth()
 }
+
+func TestDiscoverTakesTheDomainAfterTheLastAt(t *testing.T) {
+	srv := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusMultiStatus)
+	}))
+	defer srv.Close()
+	host := strings.TrimPrefix(srv.URL, "https://")
+	want := srv.URL + "/.well-known/carddav"
+
+	tests := []struct {
+		name    string
+		address string
+		wantErr bool
+	}{
+		{"address", "me@" + host, false},
+		{"bare domain", host, false},
+		{"several at signs", "a@b@" + host, false},
+		{"leading at", "@" + host, false},
+		{"surrounding space", "me@" + host + " ", false},
+		{"at last", "me@", true},
+		{"empty", "", true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := Discover(context.Background(), srv.Client(), tt.address)
+			if tt.wantErr {
+				if err == nil {
+					t.Fatalf("Discover(%q) = %q, want an error", tt.address, got)
+				}
+				return
+			}
+			if err != nil || got != want {
+				t.Errorf("Discover(%q) = (%q, %v), want %q", tt.address, got, err, want)
+			}
+		})
+	}
+}

@@ -112,8 +112,8 @@ func Connect(ctx context.Context, cfg Config) (*Client, error) {
 // which is not a failure: the caller falls back to asking for a url.
 func Discover(ctx context.Context, client *http.Client, address string) (string, error) {
 	domain := address
-	if at := strings.LastIndex(address, "@"); at >= 0 {
-		domain = address[at+1:]
+	if _, after, ok := strings.CutLast(address, "@"); ok {
+		domain = after
 	}
 	domain = strings.TrimSpace(domain)
 	if domain == "" {

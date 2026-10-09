@@ -23,6 +23,12 @@ const (
 	// EventMailRepaired fires when a sync replaced the text of messages that
 	// were cached with an encoding nothing could read, so the list reloads.
 	EventMailRepaired = "mail:repaired"
+	// EventMailUpdated fires when a message row changes in place, such as a stub
+	// gaining its full body after a background fetch.
+	EventMailUpdated = "mail:updated"
+	// EventMailBodyFailed fires when the body of a message opened in the reading
+	// pane could not be fetched, after every retry, so the pane stops waiting.
+	EventMailBodyFailed = "mail:bodyFailed"
 	// EventSyncProgress fires as folders are synced so the ui can show progress.
 	EventSyncProgress = "sync:progress"
 	// EventSyncState fires when background sync starts or stops, with any error.
@@ -164,6 +170,20 @@ type SyncProgressEvent struct {
 	// the "mailbox 3 of 12" part of the line.
 	FoldersDone  int `json:"foldersDone"`
 	FoldersTotal int `json:"foldersTotal"`
+	// Phase is "stubs" or "bodies" during a phased initial campaign, "verify"
+	// during the background folder check, else empty.
+	Phase string `json:"phase"`
+}
+
+// MailUpdatedEvent is the payload for EventMailUpdated. The reading pane reloads
+// when the open message gains a body that was fetched in the background.
+type MailUpdatedEvent struct {
+	MessageID int64 `json:"messageId"`
+}
+
+// MailBodyFailedEvent is the payload for EventMailBodyFailed.
+type MailBodyFailedEvent struct {
+	MessageID int64 `json:"messageId"`
 }
 
 // SyncStateEvent is the payload for EventSyncState. Error is empty on success.
@@ -181,6 +201,14 @@ type AccountSyncStateEvent struct {
 // emit sends a runtime event if the context is set. It is a thin wrapper so call
 // sites stay terse and a nil context (before startup) is a safe no-op.
 func (a *App) emit(name string, payload any) {
+	if a.emitForTest != nil {
+		a.emitForTest(name, payload)
+	}
+	if a.syncProgressEmitForTest != nil && name == EventSyncProgress {
+		if ev, ok := payload.(SyncProgressEvent); ok {
+			a.syncProgressEmitForTest(ev)
+		}
+	}
 	if a.ctx == nil || !a.runtimeReady.Load() {
 		return
 	}

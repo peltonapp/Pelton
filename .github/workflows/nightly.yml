@@ -42,7 +42,7 @@ permissions:
   contents: write
 
 env:
-  GO_VERSION: "1.25"
+  GO_VERSION: "1.27.1"
   RETENTION_DAYS: "14"
 
 jobs:
@@ -180,6 +180,8 @@ jobs:
       - name: Build
         env:
           VERSION: ${{ needs.check.outputs.version }}
+          CGO_CFLAGS: -mmacosx-version-min=13.0
+          CGO_LDFLAGS: -mmacosx-version-min=13.0
         run: wails build -platform darwin/arm64 -ldflags "-X main.version=$VERSION -X main.channel=nightly"
 
       - name: Use the nightly icon

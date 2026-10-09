@@ -2,7 +2,9 @@ package storage
 
 import (
 	"context"
+	"errors"
 	"testing"
+	"time"
 )
 
 // newFolderTestAccount creates an account and the folders named by their imap
@@ -63,8 +65,75 @@ func TestRenameFolderSubtree(t *testing.T) {
 		byID[f.ID] = f
 	}
 	for original, expected := range want {
-		if got := byID[ids[original]].IMAPPath; got != expected {
-			t.Errorf("%q became %q, want %q", original, got, expected)
+		f := byID[ids[original]]
+		if f.IMAPPath != expected {
+			t.Errorf("%q became %q, want %q", original, f.IMAPPath, expected)
+		}
+		// an imap remote id is the path: left behind, sync and pushes would
+		// address a mailbox that no longer exists.
+		if f.RemoteID != expected {
+			t.Errorf("%q remote id %q, want %q", original, f.RemoteID, expected)
+		}
+	}
+}
+
+// substr counts characters, not bytes: a non-ASCII parent must not shift the
+// cut and mangle the children's paths and remote ids.
+func TestRenameFolderSubtreeNonASCII(t *testing.T) {
+	db := newTestDB(t)
+	ctx := context.Background()
+
+	accountID, ids := newFolderTestAccount(t, db, "/", "Ważne", "Ważne/Łódź", "Ważne/Łódź/Żółw")
+
+	if _, err := db.RenameFolderSubtree(ctx, accountID, "Ważne/", "Pilne/"); err != nil {
+		t.Fatalf("rename subtree: %v", err)
+	}
+	for original, want := range map[string]string{
+		"Ważne/Łódź":      "Pilne/Łódź",
+		"Ważne/Łódź/Żółw": "Pilne/Łódź/Żółw",
+	} {
+		f, err := db.GetFolder(ctx, ids[original])
+		if err != nil {
+			t.Fatalf("get folder: %v", err)
+		}
+		if f.IMAPPath != want || f.RemoteID != want {
+			t.Errorf("%q became path %q remote %q, want %q", original, f.IMAPPath, f.RemoteID, want)
+		}
+	}
+}
+
+// a remote id that is not the path is stable across renames, so only the path
+// moves.
+func TestRenameKeepsOpaqueRemoteID(t *testing.T) {
+	db := newTestDB(t)
+	ctx := context.Background()
+
+	accountID, err := db.CreateAccount(ctx, &Account{Email: "a@example.com"})
+	if err != nil {
+		t.Fatalf("create account: %v", err)
+	}
+	ids := map[string]int64{}
+	for path, rid := range map[string]string{"Work": "mb-1", "Work/2026": "mb-2"} {
+		f := Folder{AccountID: accountID, Name: path, IMAPPath: path, Delimiter: "/", RemoteID: rid}
+		if _, err := db.CreateFolder(ctx, &f); err != nil {
+			t.Fatalf("create folder %q: %v", path, err)
+		}
+		ids[path] = f.ID
+	}
+
+	if _, err := db.RenameFolderSubtree(ctx, accountID, "Work/", "Jobs/"); err != nil {
+		t.Fatalf("rename subtree: %v", err)
+	}
+	if err := db.RenameFolder(ctx, ids["Work"], "Jobs", "Jobs"); err != nil {
+		t.Fatalf("rename: %v", err)
+	}
+	for path, want := range map[string]string{"Work": "mb-1", "Work/2026": "mb-2"} {
+		f, err := db.GetFolder(ctx, ids[path])
+		if err != nil {
+			t.Fatalf("get folder: %v", err)
+		}
+		if f.RemoteID != want {
+			t.Errorf("%q remote id %q, want %q", path, f.RemoteID, want)
 		}
 	}
 }
@@ -138,8 +207,8 @@ func TestRenameFolder(t *testing.T) {
 	if err != nil {
 		t.Fatalf("get folder: %v", err)
 	}
-	if f.Name != "Work" || f.IMAPPath != "Work" {
-		t.Errorf("folder = %q at %q, want Work at Work", f.Name, f.IMAPPath)
+	if f.Name != "Work" || f.IMAPPath != "Work" || f.RemoteID != "Work" {
+		t.Errorf("folder = %q at %q (remote %q), want Work at Work", f.Name, f.IMAPPath, f.RemoteID)
 	}
 
 	if err := db.RenameFolder(ctx, 9999, "Nope", "Nope"); err == nil {
@@ -153,4 +222,45 @@ func paths(folders []Folder) []string {
 		out = append(out, f.IMAPPath)
 	}
 	return out
+}
+
+func TestFolderFullSyncAt(t *testing.T) {
+	db := newTestDB(t)
+	ctx := context.Background()
+	accountID, err := db.CreateAccount(ctx, &Account{Email: "a@example.com"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	f := Folder{AccountID: accountID, Name: "INBOX", IMAPPath: "INBOX"}
+	if _, err := db.CreateFolder(ctx, &f); err != nil {
+		t.Fatal(err)
+	}
+	got, err := db.GetFolder(ctx, f.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !got.LastFullSyncAt.IsZero() {
+		t.Fatalf("new folder LastFullSyncAt = %v, want zero (never)", got.LastFullSyncAt)
+	}
+	at := time.Date(2026, 10, 4, 12, 0, 0, 0, time.UTC)
+	if err := db.SetFolderFullSyncAt(ctx, f.ID, at); err != nil {
+		t.Fatal(err)
+	}
+	got, err = db.GetFolder(ctx, f.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !got.LastFullSyncAt.Equal(at) {
+		t.Fatalf("LastFullSyncAt = %v, want %v", got.LastFullSyncAt, at)
+	}
+	list, err := db.ListFolders(ctx, accountID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(list) != 1 || !list[0].LastFullSyncAt.Equal(at) {
+		t.Fatalf("ListFolders LastFullSyncAt = %v", list)
+	}
+	if err := db.SetFolderFullSyncAt(ctx, f.ID+999, at); !errors.Is(err, ErrFolderNotFound) {
+		t.Fatalf("missing folder err = %v, want ErrFolderNotFound", err)
+	}
 }

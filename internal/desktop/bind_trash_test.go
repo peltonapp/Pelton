@@ -42,8 +42,8 @@ func TestSyncEngineKnowsWhereTheTrashIs(t *testing.T) {
 	}
 
 	engine := a.newSyncEngine(nil, accountID)
-	if engine.TrashPath != "Trash" {
-		t.Errorf("TrashPath = %q, want %q", engine.TrashPath, "Trash")
+	if engine.TrashRemoteID != "Trash" {
+		t.Errorf("TrashRemoteID = %q, want %q", engine.TrashRemoteID, "Trash")
 	}
 	if engine.TrashFolderID != trash.ID {
 		t.Errorf("TrashFolderID = %d, want %d", engine.TrashFolderID, trash.ID)
@@ -64,8 +64,8 @@ func TestSyncEngineWithNoTrashFolder(t *testing.T) {
 	}
 
 	engine := a.newSyncEngine(nil, accountID)
-	if engine.TrashPath != "" {
-		t.Errorf("TrashPath = %q, want it empty", engine.TrashPath)
+	if engine.TrashRemoteID != "" {
+		t.Errorf("TrashRemoteID = %q, want it empty", engine.TrashRemoteID)
 	}
 }
 

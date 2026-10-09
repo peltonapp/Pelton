@@ -63,6 +63,10 @@ type Account struct {
 	// no server behind it. Sync, idle and the mailbox backup all skip it, and
 	// its Email is LocalAccountEmail rather than a real address.
 	Local bool
+	// SyncMaxParallel overrides the global parallel-sync setting for this
+	// account. Nil means use the global value. The caller clamps it to the
+	// allowed range before storing.
+	SyncMaxParallel *int
 	// TrustedCerts are SHA-256 fingerprints of server certificates the user
 	// accepted for this mailbox, and CAPEM extra root certificates they
 	// supplied. Both widen verification for the mailbox's imap and smtp
@@ -129,6 +133,7 @@ const accountColumns = `a.id, a.email, a.display_name, a.username, a.imap_host, 
        coalesce(o.position, 0), a.is_local,
        a.export_on_archive, a.export_dir, a.export_subfolders, a.export_name_template,
        a.pgp_default, a.password_prompt_dismissed, a.local_label, a.use_local_label,
+       a.sync_max_parallel,
        a.trusted_certs, a.ca_pem,
        a.proxy_mode, a.proxy_scheme, a.proxy_host, a.proxy_port, a.proxy_username,
        a.proxy_contacts_global, a.proxy_oauth_global`
@@ -275,6 +280,20 @@ WHERE id = ?`
 	return requireOneRow(res, ErrAccountNotFound)
 }
 
+// SetAccountSyncMaxParallel stores the account's parallel-sync override, or
+// clears it when n is nil so the account follows the global setting.
+func (d *DB) SetAccountSyncMaxParallel(ctx context.Context, id int64, n *int) error {
+	var v any
+	if n != nil {
+		v = *n
+	}
+	res, err := d.sql.ExecContext(ctx, `UPDATE accounts SET sync_max_parallel = ? WHERE id = ?`, v, id)
+	if err != nil {
+		return fmt.Errorf("storage: set account %d sync parallelism: %w", id, err)
+	}
+	return requireOneRow(res, ErrAccountNotFound)
+}
+
 // SetAccountPGPDefault stores how an account starts a new message: ” for
 // unprotected, 'sign' or 'auto'. Validating the value is the caller's job.
 func (d *DB) SetAccountPGPDefault(ctx context.Context, id int64, value string) error {
@@ -330,7 +349,7 @@ func joinLines(items []string) string {
 
 func splitLines(text string) []string {
 	var out []string
-	for _, line := range strings.Split(text, "\n") {
+	for line := range strings.SplitSeq(text, "\n") {
 		if line = strings.TrimSpace(line); line != "" {
 			out = append(out, line)
 		}
@@ -365,11 +384,14 @@ func scanAccount(row rowScanner) (*Account, error) {
 		trusted   string
 		contacts  int
 		oauth     int
+		// nullable column: NULL means no per-account override.
+		syncParallel sql.NullInt64
 	)
 	if err := row.Scan(&a.ID, &a.Email, &a.DisplayName, &a.Username, &a.IMAPHost, &a.IMAPPort,
 		&a.SMTPHost, &a.SMTPPort, &a.IMAPTLS, &a.SMTPTLS, &created, &a.Position, &local,
 		&exportOn, &a.ExportDir, &a.ExportSubfolders, &a.ExportNameTemplate,
 		&a.PGPDefault, &dismissed, &a.LocalLabel, &useLabel,
+		&syncParallel,
 		&trusted, &a.CAPEM,
 		&a.Proxy.Mode, &a.Proxy.Scheme, &a.Proxy.Host, &a.Proxy.Port, &a.Proxy.Username,
 		&contacts, &oauth); err != nil {
@@ -381,6 +403,10 @@ func scanAccount(row rowScanner) (*Account, error) {
 	a.ExportOnArchive = exportOn != 0
 	a.PasswordPromptDismissed = dismissed != 0
 	a.UseLocalLabel = useLabel != 0
+	if syncParallel.Valid {
+		n := int(syncParallel.Int64)
+		a.SyncMaxParallel = &n
+	}
 	t, err := parseTime(created)
 	if err != nil {
 		return nil, err

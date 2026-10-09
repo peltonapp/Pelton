@@ -18,17 +18,24 @@ type Mailbox struct {
 	UIDNext     imap.UID
 	// UIDValidity invalidates cached UIDs when it changes.
 	UIDValidity uint32
+	// HighestModSeq is the mailbox's CONDSTORE mod-sequence, or 0 when the
+	// server has no CONDSTORE or reports NOMODSEQ for this mailbox.
+	HighestModSeq uint64
 }
 
 // MessageHeader is the envelope-level summary used for listings.
 type MessageHeader struct {
-	SeqNum  uint32
-	UID     imap.UID
-	Subject string
-	From    string
-	To      string
-	Date    time.Time
-	Flags   []imap.Flag
+	SeqNum   uint32
+	UID      imap.UID
+	Subject  string
+	From     string
+	FromName string
+	To       string
+	Date     time.Time
+	Flags    []imap.Flag
+	// HasEnvelope is true when this header was filled from a FETCH ENVELOPE.
+	// A flags-only snapshot leaves it false.
+	HasEnvelope bool
 }
 
 // Message is a fully parsed message with extracted bodies and attachments.
@@ -73,10 +80,11 @@ type Message struct {
 type Attachment = rfc822.Attachment
 
 // Select opens a mailbox. IMAP selects one mailbox per connection, so this
-// must precede the fetch and flag methods.
+// must precede the fetch and flag methods. When the server offers CONDSTORE the
+// mailbox is selected with it, so HighestModSeq is filled.
 func (c *Client) Select(mailbox string) (*Mailbox, error) {
 	// go-imap encodes non-ASCII names as modified UTF-7 when needed
-	data, err := c.raw.Select(mailbox, nil).Wait()
+	data, err := c.raw.Select(mailbox, &imap.SelectOptions{CondStore: c.raw.Caps().Has(imap.CapCondStore)}).Wait()
 	if err != nil {
 		c.setSelectedMailbox(nil)
 		return nil, fmt.Errorf("imap: select %q: %w", mailbox, err)
@@ -86,6 +94,8 @@ func (c *Client) Select(mailbox string) (*Mailbox, error) {
 		NumMessages: data.NumMessages,
 		UIDNext:     data.UIDNext,
 		UIDValidity: data.UIDValidity,
+
+		HighestModSeq: data.HighestModSeq,
 	}
 	// recorded from the response we already hold rather than read back off the
 	// client afterwards, which is racy. See Client.selected.
@@ -288,15 +298,72 @@ func (c *Client) FetchAllFlags() ([]MessageHeader, error) {
 	return headers, nil
 }
 
+// FetchFlagsChangedSince returns UID and flags for every message in the
+// selected mailbox whose mod-sequence is above modSeq (RFC 7162 CHANGEDSINCE).
+// It needs a mailbox selected with CONDSTORE.
+func (c *Client) FetchFlagsChangedSince(modSeq uint64) ([]MessageHeader, error) {
+	mbox := c.selectedMailbox()
+	if mbox == nil {
+		return nil, fmt.Errorf("imap: no mailbox selected")
+	}
+	if mbox.NumMessages == 0 {
+		return nil, nil
+	}
+	seqSet := imap.SeqSet{}
+	seqSet.AddRange(1, mbox.NumMessages)
+	buffers, err := c.raw.Fetch(seqSet, &imap.FetchOptions{Flags: true, UID: true, ChangedSince: modSeq}).Collect()
+	if err != nil {
+		return nil, fmt.Errorf("imap: fetch flags changed since %d: %w", modSeq, err)
+	}
+	headers := make([]MessageHeader, 0, len(buffers))
+	for _, b := range buffers {
+		headers = append(headers, MessageHeader{UID: b.UID, Flags: b.Flags})
+	}
+	return headers, nil
+}
+
+// FetchHeaders fetches the requested items for uids in one UID FETCH. Callers
+// that only need list stubs pass ENVELOPE and UID, with no body section.
+func (c *Client) FetchHeaders(uids []imap.UID, options *imap.FetchOptions) ([]MessageHeader, error) {
+	if len(uids) == 0 {
+		return nil, nil
+	}
+	if c.selectedMailbox() == nil {
+		return nil, fmt.Errorf("imap: no mailbox selected")
+	}
+	if options == nil {
+		options = &imap.FetchOptions{Envelope: true, UID: true}
+	}
+	buffers, err := c.raw.Fetch(imap.UIDSetNum(uids...), options).Collect()
+	if err != nil {
+		return nil, fmt.Errorf("imap: fetch envelopes: %w", err)
+	}
+	headers := make([]MessageHeader, 0, len(buffers))
+	for _, b := range buffers {
+		headers = append(headers, headerFromBuffer(b))
+	}
+	return headers, nil
+}
+
 func headerFromBuffer(b *imapclient.FetchMessageBuffer) MessageHeader {
 	h := MessageHeader{SeqNum: b.SeqNum, UID: b.UID, Flags: b.Flags}
 	if b.Envelope != nil {
+		h.HasEnvelope = true
 		h.Subject, _ = charsetguess.Text(b.Envelope.Subject)
 		h.From = formatAddresses(b.Envelope.From)
+		h.FromName = envelopeName(b.Envelope.From)
 		h.To = formatAddresses(b.Envelope.To)
 		h.Date = b.Envelope.Date
 	}
 	return h
+}
+
+func envelopeName(addrs []imap.Address) string {
+	if len(addrs) == 0 {
+		return ""
+	}
+	name, _ := charsetguess.Text(addrs[0].Name)
+	return name
 }
 
 // parseBody extracts text, HTML and attachment metadata from a raw message.

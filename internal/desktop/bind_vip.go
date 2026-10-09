@@ -2,6 +2,7 @@ package desktop
 
 import (
 	"fmt"
+	"slices"
 	"strings"
 )
 
@@ -40,12 +41,7 @@ func (a *App) isVIP(fromAddress string) bool {
 	if addr == "" {
 		return false
 	}
-	for _, s := range a.vipSenders() {
-		if s == addr {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(a.vipSenders(), addr)
 }
 
 // ListVIPSenders returns the VIP addresses for the settings ui.
@@ -113,9 +109,9 @@ func (a *App) UnmarkSenderVIP(messageID int64) error {
 // never breaks the match.
 func bareAddress(s string) string {
 	s = strings.TrimSpace(s)
-	if lt := strings.LastIndex(s, "<"); lt >= 0 {
-		if gt := strings.Index(s[lt:], ">"); gt >= 0 {
-			s = s[lt+1 : lt+gt]
+	if _, rest, ok := strings.CutLast(s, "<"); ok {
+		if addr, _, ok := strings.Cut(rest, ">"); ok {
+			s = addr
 		}
 	}
 	return strings.ToLower(strings.TrimSpace(s))

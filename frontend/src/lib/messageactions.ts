@@ -74,6 +74,7 @@ export async function toggleSenderVIP(item: MessageSummary): Promise<void> {
 
 /** Downloads a message for offline reading, or drops the offline copy. */
 export async function setOffline(item: MessageSummary, offline: boolean): Promise<void> {
+  const previous = item.offline
   patchInList(item.id, { offline })
   try {
     if (offline) {
@@ -83,6 +84,8 @@ export async function setOffline(item: MessageSummary, offline: boolean): Promis
       await removeOffline(item.id)
     }
   } catch (err) {
+    // the optimistic flag would otherwise keep claiming a download that failed
+    patchInList(item.id, { offline: previous })
     toastError(errorMessage(err))
   }
 }
@@ -134,9 +137,7 @@ export async function archive(item: MessageSummary): Promise<void> {
   try {
     const undo = await archiveMessage(item.id)
     reportArchiveExport(undo)
-    if (undo.messageId) {
-      recordArchived(item, undo.messageId, undo.originalFolderId)
-    }
+    recordArchived(item, undo)
     removeFromList(item.id)
     if (get(openMessageId) === item.id) {
       openMessageId.set(null)
@@ -226,7 +227,12 @@ export async function bulkArchive(items: MessageSummary[]): Promise<void> {
       const undo = await archiveMessage(item.id)
       reportArchiveExport(undo)
       if (undo.messageId) {
-        undone.push({ summary: item, messageId: undo.messageId, originalFolderId: undo.originalFolderId })
+        undone.push({
+          summary: item,
+          messageId: undo.messageId,
+          fromFolderId: undo.destFolderId,
+          originalFolderId: undo.originalFolderId,
+        })
       }
       removeFromList(item.id)
       if (get(openMessageId) === item.id) {

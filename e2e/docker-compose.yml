@@ -1,0 +1,34 @@
+services:
+  stalwart:
+    image: stalwartlabs/stalwart:v0.16
+    environment:
+      STALWART_RECOVERY_ADMIN: admin:e2e-admin-pass
+      # Leave the public URL unset so each listener advertises its own origin.
+      # ProbeDomain only accepts https://127.0.0.1, while the seed uses
+      # http://127.0.0.1:18081. A single STALWART_PUBLIC_URL fails one of them.
+    ports:
+      - "127.0.0.1:18081:8080"
+      - "127.0.0.1:443:443"
+      - "127.0.0.1:993:993"
+      - "127.0.0.1:465:465"
+    volumes:
+      - stalwart-data:/var/lib/stalwart
+      - ./config.json:/etc/stalwart/config.json:ro
+      - ./certs:/certs:ro
+    healthcheck:
+      test: ["CMD-SHELL", "bash -c 'echo >/dev/tcp/127.0.0.1/8080'"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+      start_period: 5s
+  cli:
+    image: ghcr.io/stalwartlabs/cli:1.0.12
+    profiles: ["cli"]
+    network_mode: "service:stalwart"
+    environment:
+      STALWART_URL: http://127.0.0.1:8080
+      STALWART_USER: admin
+      STALWART_PASSWORD: e2e-admin-pass
+    entrypoint: ["stalwart-cli"]
+volumes:
+  stalwart-data:

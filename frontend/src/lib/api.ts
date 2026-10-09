@@ -152,6 +152,9 @@ export function updateAccount(req: {
   exportSubfolders: string
   exportNameTemplate: string
   pgpDefault: string
+  // null follows the global setting and clears a stored override, so it is
+  // required: leaving it out would reset the account to the default.
+  syncMaxParallel: number | null
   proxy: AccountProxy
 }): Promise<Account> {
   return App.UpdateAccount(new desktop.UpdateAccountRequest(req))
@@ -507,12 +510,14 @@ export function undoDelete(id: number): Promise<void> {
   return App.UndoDelete(id)
 }
 
-// ArchiveUndo is what undo-archive needs: the message's stable rfc Message-ID and
-// the folder it came from. messageId is empty when the message had no Message-ID
-// (undo not possible then).
+// ArchiveUndo is what undo needs to move a message back: its stable rfc
+// Message-ID (the move gave it a new uid) and the folders on either side.
+// messageId is empty when the message had no Message-ID (undo not possible then).
 export interface ArchiveUndo {
   messageId: string
   originalFolderId: number
+  // the folder the action put the message in, where undo looks for it.
+  destFolderId: number
   // the .eml copy the account's export-on-archive option wrote, '' when the
   // option is off. exportError explains why no copy was written when one was
   // expected: the archive itself still succeeded.
@@ -603,24 +608,24 @@ export function unsealDraft(id: number, passphrase: string): Promise<desktop.Dra
 // returning the info needed to undo it.
 export function archiveMessage(id: number): Promise<ArchiveUndo> {
   if (isDemoActive()) {
-    return Promise.resolve({ messageId: '', originalFolderId: 0, exportPath: '', exportError: '' })
+    return Promise.resolve({ messageId: '', originalFolderId: 0, destFolderId: 0, exportPath: '', exportError: '' })
   }
   return App.ArchiveMessage(id)
 }
 
-// unarchiveMessage moves an archived message back to its original folder,
-// locating it by rfc Message-ID.
-export function unarchiveMessage(messageId: string, originalFolderId: number): Promise<void> {
+// unarchiveMessage undoes an archive or move: it moves the message from
+// fromFolderId back to originalFolderId, locating it by rfc Message-ID.
+export function unarchiveMessage(messageId: string, fromFolderId: number, originalFolderId: number): Promise<void> {
   if (isDemoActive()) {
     return Promise.resolve()
   }
-  return App.UnarchiveMessage(messageId, originalFolderId)
+  return App.UnarchiveMessage(messageId, fromFolderId, originalFolderId)
 }
 
 // moveMessage moves a message to any folder of its account, returning undo info.
 export function moveMessage(id: number, destFolderId: number): Promise<ArchiveUndo> {
   if (isDemoActive()) {
-    return Promise.resolve({ messageId: '', originalFolderId: 0, exportPath: '', exportError: '' })
+    return Promise.resolve({ messageId: '', originalFolderId: 0, destFolderId: 0, exportPath: '', exportError: '' })
   }
   return App.MoveMessage(id, destFolderId)
 }
@@ -1340,6 +1345,8 @@ export const SettingKeys = {
   closeAction: 'close_button_action',
   syncMessageLimit: 'sync_message_limit',
   syncAutoBackfill: 'sync_auto_backfill',
+  syncMaxParallel: 'sync_max_parallel',
+  syncFullReconcileDays: 'sync_full_reconcile_days',
   startupSelection: 'startup_selection',
   lastSelection: 'last_selection',
   liabilityAccepted: 'liability_accepted',

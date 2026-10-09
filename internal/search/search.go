@@ -210,10 +210,7 @@ func (i *Index) Search(q Query) (Results, error) {
 	if limit <= 0 {
 		limit = defaultLimit
 	}
-	offset := q.Offset
-	if offset < 0 {
-		offset = 0
-	}
+	offset := max(q.Offset, 0)
 
 	req := bleve.NewSearchRequestOptions(i.build(q), limit, offset, false)
 	req.SortBy(sortOrder(q.Sort))
