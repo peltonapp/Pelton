@@ -213,6 +213,7 @@ func (a *App) TriggerSync() error {
 	synced := 0
 	netFailed := false
 	syncable := 0
+	var otherErr error
 	for _, account := range accounts {
 		if account.Local {
 			continue
@@ -224,6 +225,8 @@ func (a *App) TriggerSync() error {
 			}
 			if isNetworkError(err) {
 				netFailed = true
+			} else if otherErr == nil {
+				otherErr = err
 			}
 			a.log.Error("sync account", "account", account.Email, "err", err)
 			continue
@@ -245,6 +248,11 @@ func (a *App) TriggerSync() error {
 		// nothing synced and any account failed for the network, report offline.
 		if netFailed {
 			return errOffline
+		}
+		// nor must any other failure: a folder the server no longer has read as
+		// a missing password (#484).
+		if otherErr != nil {
+			return otherErr
 		}
 		return errNoCredentials
 	}
@@ -297,6 +305,12 @@ func (a *App) syncAccountOnce(account storage.Account) error {
 	// existing rows, so without this the sync would be a silent no-op forever.
 	if err := a.ensureFolders(client, account.ID); err != nil {
 		return err
+	}
+	// a failed refresh keeps the tree it had; the mail is still worth syncing.
+	if changed, err := a.refreshFolders(client, account.ID); err != nil {
+		a.log.Error("refresh folder list", "account", account.ID, "err", err)
+	} else if changed {
+		a.emit(EventFoldersChanged, nil)
 	}
 
 	return a.syncFolders(client, account.ID)

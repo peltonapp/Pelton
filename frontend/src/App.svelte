@@ -68,7 +68,7 @@
   import { liabilityAccepted } from './lib/liability'
   import { setDemoActive } from './lib/demo'
   import { recordArchived } from './stores/undoarchive'
-  import { onMailNew, onMailRepaired, onSyncState, onSyncProgress, onOutboxChanged, onMenu, onViewsChanged, onProfileChanged, onMailtoCompose, onAgentProposals, onOpenMessage, type Unsubscribe, type MailtoDraft } from './lib/events'
+  import { onMailNew, onMailRepaired, onSyncState, onSyncProgress, onOutboxChanged, onMenu, onViewsChanged, onFoldersChanged, onProfileChanged, onMailtoCompose, onAgentProposals, onOpenMessage, type Unsubscribe, type MailtoDraft } from './lib/events'
   import { loadViews, editingView, closeViewEditor, openViewEditor, views as savedViews } from './stores/views'
   import { selectSavedView } from './stores/selection'
   import { isMac } from './lib/i18n'
@@ -390,6 +390,7 @@
       }),
     )
     unsubscribers.push(onViewsChanged(() => void loadViews()))
+    unsubscribers.push(onFoldersChanged(() => void refreshSidebar()))
     unsubscribers.push(onProfileChanged(() => void reloadForProfile()))
     unsubscribers.push(onAgentProposals(() => void loadProposals()))
     void loadProposals()

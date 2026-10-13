@@ -347,7 +347,7 @@ func (a *App) discoverFolders(account storage.Account) error {
 	if err != nil {
 		return err
 	}
-	return a.createFolderTree(account.ID, folders)
+	return a.createFolderTree(account.ID, folders, nil)
 }
 
 // ensureFolders discovers the folder tree over an already-connected client when
@@ -365,18 +365,22 @@ func (a *App) ensureFolders(client mailClient, accountID int64) error {
 	if err != nil {
 		return err
 	}
-	return a.createFolderTree(accountID, serverFolders)
+	return a.createFolderTree(accountID, serverFolders, nil)
 }
 
 // createFolderTree inserts folders parent-first so each child can resolve its
 // parent id from the path above it, splitting on the server's delimiter.
-func (a *App) createFolderTree(accountID int64, folders []pimap.Folder) error {
+// byPath holds the folders already stored, by path, so a new folder can hang
+// under one of them; nil means there are none.
+func (a *App) createFolderTree(accountID int64, folders []pimap.Folder, byPath map[string]int64) error {
 	// shallowest first so parents exist before their children.
 	sort.SliceStable(folders, func(i, j int) bool {
 		return depth(folders[i]) < depth(folders[j])
 	})
 
-	byPath := make(map[string]int64)
+	if byPath == nil {
+		byPath = make(map[string]int64)
+	}
 	for _, f := range folders {
 		if f.HasAttr(goimap.MailboxAttrNonExistent) {
 			continue

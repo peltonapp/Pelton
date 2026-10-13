@@ -19,6 +19,7 @@ export const EventNames = {
   updateAvailable: 'update:available',
   mailtoCompose: 'mailto:compose',
   viewsChanged: 'views:changed',
+  foldersChanged: 'folders:changed',
   profileChanged: 'profile:changed',
   importProgress: 'import:progress',
   agentProposals: 'agent:proposals',
@@ -217,6 +218,12 @@ export function onImportProgress(cb: (e: ImportProgressEvent) => void): Unsubscr
 // carries no payload; subscribers reload the views store.
 export function onViewsChanged(cb: () => void): Unsubscribe {
   return EventsOn(EventNames.viewsChanged, () => cb())
+}
+
+// onFoldersChanged fires when a sync found mailboxes added or deleted on the
+// server.
+export function onFoldersChanged(cb: () => void): Unsubscribe {
+  return EventsOn(EventNames.foldersChanged, () => cb())
 }
 
 // onProfileChanged fires when the app switches profile, or when the profile it

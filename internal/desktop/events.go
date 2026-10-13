@@ -58,6 +58,9 @@ const (
 	// EventViewsChanged fires when saved views or their eager-run counts change,
 	// so the sidebar can refresh view rows and badges without polling.
 	EventViewsChanged = "views:changed"
+	// EventFoldersChanged fires when a sync found mailboxes added or deleted on
+	// the server, so the sidebar can reload its folder tree.
+	EventFoldersChanged = "folders:changed"
 	// EventImportProgress fires while mail is being imported from files, and
 	// once more with Running false when the job ends.
 	EventImportProgress = "import:progress"
