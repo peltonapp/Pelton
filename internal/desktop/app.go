@@ -207,6 +207,7 @@ func (a *App) startup(ctx context.Context) {
 	// an App with an ordinary context and never reach this, so those calls stay
 	// no-ops there rather than taking the process down.
 	a.runtimeReady.Store(true)
+	a.watchQuitEvent()
 
 	// --debug has to work before the store is up, since "the app will not
 	// start" is one of the reasons to reach for it. With no store there are no
