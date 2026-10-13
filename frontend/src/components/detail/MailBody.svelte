@@ -20,6 +20,7 @@
   import { errorMessage, toastError, toastSuccess } from '../../stores/toast'
   import { displayName, linkifySegments } from '../../lib/format'
   import { bodyFontStack } from '../../lib/fonts'
+  import { frameKeyRelay, relayedKey, replayKey } from '../../lib/framekeys'
   import { t } from '../../lib/i18n'
   import type { MessageDetail, Verdict } from '../../lib/types'
 
@@ -135,6 +136,7 @@
       nonce +
       '">document.addEventListener("click",function(e){var a=e.target&&e.target.closest("a");if(!a)return;var href=(a.getAttribute("href")||"").trim();if(!href)return;e.preventDefault();if(/^(https?:|mailto:)/i.test(href)){window.parent.postMessage({peltonOpenUrl:href},"*")}});' +
       contextHandler +
+      frameKeyRelay +
       '</scr' +
       'ipt>'
     // data-pelton-ready marks the body as belonging to our own srcdoc, not
@@ -272,6 +274,11 @@
   // might postMessage into this window.
   function onWindowMessage(event: MessageEvent): void {
     if (event.source !== frame?.contentWindow) {
+      return
+    }
+    const key = relayedKey(event.data)
+    if (key && frame) {
+      replayKey(frame, key)
       return
     }
     const data = event.data as { peltonOpenUrl?: unknown; peltonContextLink?: unknown; x?: unknown; y?: unknown } | null
