@@ -6,6 +6,8 @@
 import { writable, get } from 'svelte/store'
 import type { EditorMode, MessageDetail, ComposeAttachment } from '../lib/types'
 import { getSetting, setSetting } from '../lib/api'
+import { formatFullDate } from '../lib/format'
+import { escapeHtml, textToHtml } from '../lib/richtext'
 
 // the compose pane remembers whether the user last worked fullscreen or in the
 // small floating size, so new panes open at that size. persisted in the backend
@@ -202,15 +204,20 @@ function withPrefix(subject: string, prefix: string): string {
   return `${prefix} ${trimmed}`
 }
 
-// quoteBody builds a quoted reply body. plaintext and markdown both quote with
-// "> "; html mode is the stubbed editor so it also gets the plain quote.
+// quoteBody builds a quoted reply body. plaintext and markdown quote with "> ";
+// the rich editor reads html, so it gets the quote as a blockquote, nested
+// where the original quoted further.
 //
 // bodyQuote, not bodyPlain: an html-only message has no text part, so quoting
 // bodyPlain produced an empty reply (#239). The backend renders the html down
 // to text for this field, and falls back to it only when there is no text part
 // to prefer.
-function quoteBody(detail: MessageDetail, _mode: EditorMode): string {
-  const attribution = `On ${detail.date}, ${detail.fromName || detail.fromAddress} wrote:`
+function quoteBody(detail: MessageDetail, mode: EditorMode): string {
+  const date = formatFullDate(detail.date) || detail.date
+  const attribution = `On ${date}, ${detail.fromName || detail.fromAddress} wrote:`
+  if (mode === 'wysiwyg') {
+    return `<p></p><p>${escapeHtml(attribution)}</p><blockquote>${textToHtml(detail.bodyQuote)}</blockquote>`
+  }
   const quoted = detail.bodyQuote
     .split('\n')
     .map((line) => `> ${line}`)
@@ -218,15 +225,19 @@ function quoteBody(detail: MessageDetail, _mode: EditorMode): string {
   return `\n\n${attribution}\n${quoted}\n`
 }
 
-// forwardBody builds a forwarded message body with a header block.
-function forwardBody(detail: MessageDetail, _mode: EditorMode): string {
+// forwardBody builds a forwarded message body with a header block, as html in
+// the rich editor.
+function forwardBody(detail: MessageDetail, mode: EditorMode): string {
   const header = [
     '---------- Forwarded message ----------',
     `From: ${detail.fromName || ''} <${detail.fromAddress}>`,
-    `Date: ${detail.date}`,
+    `Date: ${formatFullDate(detail.date) || detail.date}`,
     `Subject: ${detail.subject}`,
     `To: ${detail.toAddresses}`,
   ].join('\n')
+  if (mode === 'wysiwyg') {
+    return `<p></p>${textToHtml(header)}${textToHtml(detail.bodyQuote)}`
+  }
   return `\n\n${header}\n\n${detail.bodyQuote}\n`
 }
 
