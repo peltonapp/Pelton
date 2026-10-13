@@ -19,6 +19,26 @@
   let query = ''
   let loadedFor = -1
   let busy = false
+  let searchInput: HTMLInputElement | null = null
+  let list: HTMLUListElement | null = null
+  // where focus was before the dialog took it, to hand it back on close.
+  let returnFocus: HTMLElement | null = null
+
+  // the search box takes focus as the dialog opens, so the dialog works from
+  // the keyboard alone (#494).
+  $: if (first && searchInput && document.activeElement !== searchInput && !list?.contains(document.activeElement)) {
+    if (!returnFocus && document.activeElement instanceof HTMLElement && document.activeElement !== document.body) {
+      returnFocus = document.activeElement
+    }
+    searchInput.focus()
+  }
+  $: if (!first && returnFocus) {
+    const el = returnFocus
+    returnFocus = null
+    if (el.isConnected) {
+      el.focus()
+    }
+  }
 
   // every target comes from the same list, so the first one names the account
   // and the folder to leave out.
@@ -101,6 +121,37 @@
       closeMove()
     }
   }
+
+  function folderButtons(): HTMLButtonElement[] {
+    return Array.from(list?.querySelectorAll<HTMLButtonElement>('button.folder') ?? [])
+  }
+
+  // Enter in the search box takes the top match, and the arrows step from the
+  // box into the list and through it.
+  function onSearchKeydown(event: KeyboardEvent): void {
+    if (event.key === 'Enter' && candidates.length > 0) {
+      event.preventDefault()
+      void move(candidates[0])
+    } else if (event.key === 'ArrowDown') {
+      event.preventDefault()
+      folderButtons()[0]?.focus()
+    }
+  }
+
+  function onListKeydown(event: KeyboardEvent): void {
+    if (event.key !== 'ArrowDown' && event.key !== 'ArrowUp') {
+      return
+    }
+    event.preventDefault()
+    const buttons = folderButtons()
+    const at = buttons.indexOf(document.activeElement as HTMLButtonElement)
+    const next = at + (event.key === 'ArrowDown' ? 1 : -1)
+    if (next < 0) {
+      searchInput?.focus()
+    } else if (next < buttons.length) {
+      buttons[next].focus()
+    }
+  }
 </script>
 
 <svelte:window on:keydown={first ? onKeydown : undefined} />
@@ -122,10 +173,18 @@
 
     <div class="search">
       <IconSearch size={15} stroke={1.7} />
-      <input type="search" placeholder={$t('detail.moveDialog.searchPlaceholder')} bind:value={query} />
+      <input
+        type="search"
+        placeholder={$t('detail.moveDialog.searchPlaceholder')}
+        aria-label={$t('detail.moveDialog.searchPlaceholder')}
+        bind:this={searchInput}
+        bind:value={query}
+        on:keydown={onSearchKeydown}
+      />
     </div>
 
-    <ul class="list">
+    <!-- svelte-ignore a11y-no-noninteractive-element-interactions -->
+    <ul class="list" bind:this={list} on:keydown={onListKeydown}>
       {#each candidates as f (f.id)}
         <li>
           <button type="button" class="folder" disabled={busy} on:click={() => move(f)}>
@@ -233,7 +292,8 @@
     border-radius: var(--radius-control);
     font-size: var(--fz-label);
   }
-  .folder:hover {
+  .folder:hover,
+  .folder:focus-visible {
     background: var(--surface-hover);
   }
   .folder :global(svg) {
