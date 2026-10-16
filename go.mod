@@ -5,7 +5,7 @@ go 1.26.0
 require (
 	git.sr.ht/~jackmordaunt/go-toast v1.1.2
 	github.com/JohannesKaufmann/html-to-markdown/v2 v2.5.2
-	github.com/ProtonMail/go-crypto v1.4.1
+	github.com/ProtonMail/go-crypto v1.5.2
 	github.com/VirusTotal/vt-go v1.1.0
 	github.com/blevesearch/bleve/v2 v2.6.1
 	github.com/emersion/go-imap/v2 v2.0.0-beta.8
@@ -16,7 +16,7 @@ require (
 	github.com/emersion/go-webdav v0.7.0
 	github.com/energye/systray v1.0.3
 	github.com/gen2brain/beeep v0.11.2
-	github.com/godbus/dbus/v5 v5.2.2
+	github.com/godbus/dbus/v5 v5.2.3
 	github.com/gogs/chardet v0.0.0-20211120154057-b7413eaefb8f
 	github.com/google/uuid v1.6.0
 	github.com/microcosm-cc/bluemonday v1.0.27
@@ -25,12 +25,12 @@ require (
 	github.com/wailsapp/wails/v2 v2.16.0
 	github.com/yuin/goldmark v1.8.6
 	github.com/zalando/go-keyring v0.2.8
-	golang.org/x/crypto v0.57.0
-	golang.org/x/image v0.46.0
-	golang.org/x/net v0.59.0
+	golang.org/x/crypto v0.58.0
+	golang.org/x/image v0.47.0
+	golang.org/x/net v0.60.0
 	golang.org/x/oauth2 v0.37.0
-	golang.org/x/text v0.42.0
-	modernc.org/sqlite v1.59.0
+	golang.org/x/text v0.43.0
+	modernc.org/sqlite v1.60.1
 )
 
 require (
@@ -99,11 +99,11 @@ require (
 	github.com/wailsapp/mimetype v1.4.1 // indirect
 	github.com/yosida95/uritemplate/v3 v3.0.2 // indirect
 	go.etcd.io/bbolt v1.4.0 // indirect
-	golang.org/x/sync v0.23.0 // indirect
-	golang.org/x/sys v0.48.0 // indirect
+	golang.org/x/sync v0.24.0 // indirect
+	golang.org/x/sys v0.49.0 // indirect
 	golang.org/x/time v0.15.0 // indirect
 	google.golang.org/protobuf v1.36.6 // indirect
-	modernc.org/libc v1.75.7 // indirect
+	modernc.org/libc v1.77.1 // indirect
 	modernc.org/mathutil v1.7.1 // indirect
 	modernc.org/memory v1.12.1 // indirect
 )
