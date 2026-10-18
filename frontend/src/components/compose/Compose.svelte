@@ -6,7 +6,6 @@
   // outbox (with the undo-send window when enabled); save stores a local draft.
   import { formatWeekdayTime, type TimeFormat } from '../../lib/format'
   import { onMount, tick } from 'svelte'
-  import { marked } from 'marked'
   import {
     IconX,
     IconSend,
@@ -22,7 +21,10 @@
     IconCalendarWeek,
   } from '@tabler/icons-svelte'
   import AddressFields from './AddressFields.svelte'
+  import MarkdownPreview from './MarkdownPreview.svelte'
   import EditorModeSwitch from './EditorModeSwitch.svelte'
+  import { caretMark, convertEditorBody } from '../../lib/richtext'
+  import { renderMarkdown } from '../../lib/markdown'
   import Select from '../common/Select.svelte'
   import EditorToolbar from './EditorToolbar.svelte'
   import AttachmentPicker from './AttachmentPicker.svelte'
@@ -39,13 +41,14 @@
   import { shortcutTitle, bindings } from '../../stores/shortcuts'
   import { comboMatches } from '../../lib/shortcuts'
   import { bodyFontStack } from '../../lib/fonts'
-  import { buildRequest, hasRecipients } from '../../lib/mailcompose'
+  import { buildRequest, hasRecipients, parseAddressList } from '../../lib/mailcompose'
   import ProtectionPicker from './ProtectionPicker.svelte'
   import { composeProtectionStatus } from '../../lib/api'
   import type { ProtectionStatus } from '../../lib/types'
   import { atTime, addDays, nextWeekday } from '../../lib/datepresets'
   import { errorMessage, toastError, toastSuccess } from '../../stores/toast'
   import type CodeMirrorEditor from './CodeMirrorEditor.svelte'
+  import type RichEditorView from './RichEditor.svelte'
 
   // the mail body font setting flows into the editors as a css variable so
   // what you type looks like what recipients without their own fonts see
@@ -71,7 +74,6 @@
   let suggestedApplied = false
   let preview = false
   let confirmClose = false
-  let editorGrabFocus = false
 
   // send-later dropdown state: caret toggles the menu, presets are built fresh
   // each time it opens so "tomorrow" is always relative to now. the menu is
@@ -199,17 +201,22 @@
 
   // the rich editor (tiptap) is code-split: it only loads when the session is in
   // wysiwyg mode, keeping prosemirror out of the main bundle.
-  let RichEditor: typeof import('./RichEditor.svelte').default | null = null
+  let RichEditor: typeof RichEditorView | null = null
+  let richEditor: RichEditorView | null = null
   $: if (session.mode === 'wysiwyg' && !RichEditor) {
     void import('./RichEditor.svelte').then((m) => (RichEditor = m.default))
   }
 
   $: accounts = $sidebar.data?.accounts ?? []
-  $: previewHtml = marked.parse(session.body || '', { async: false }) as string
 
   // withBlock inserts a signature block into a body: headers go to the top,
-  // footers to the bottom after the standard "-- " delimiter.
+  // footers to the bottom after the standard "-- " delimiter. The rich editor
+  // reads html, so there the block goes in as html.
   function withBlock(body: string, sig: Signature): string {
+    if (session.mode === 'wysiwyg') {
+      const block = sig.format === 'html' ? sig.content : renderMarkdown(sig.content)
+      return sig.kind === 'header' ? `${block}${body}` : `${body}<p>-- </p>${block}`
+    }
     if (sig.kind === 'header') {
       return `${sig.content}\n\n${body}`
     }
@@ -225,8 +232,6 @@
     } else if (session.subject.trim().length == 0) {
       const input = document.querySelector<HTMLInputElement>(`#subject-${session.id}`)
       input?.focus()
-    } else {
-      editorGrabFocus = true
     }
 
     if (session.signaturesApplied) {
@@ -265,11 +270,52 @@
     updateCompose(session.id, { body: withBlock(session.body, sig) })
   }
 
+  // where the next editor to mount puts its caret, so switching modes or
+  // leaving the preview carries on where the writing stopped. textCaret is an
+  // offset into the body, richCaret the body with caretMark at the caret.
+  // Either one also makes that editor take focus. A message that opens with
+  // its recipient and subject filled in, a reply above all, starts in the
+  // body, at the top; otherwise onMount puts the caret in the first empty field.
+  const startInBody = session.to.trim() !== '' && session.subject.trim() !== ''
+  let textCaret: number | null = startInBody && session.mode !== 'wysiwyg' ? 0 : null
+  let richCaret: string | null = startInBody && session.mode === 'wysiwyg' ? session.body : null
+
+  // bodyWithCaret is the body with caretMark where the caret is, or null when
+  // there is no caret to read.
+  function bodyWithCaret(): string | null {
+    if (session.mode === 'wysiwyg') {
+      return richEditor ? richEditor.contentWithCaret() : null
+    }
+    const offset = preview ? textCaret : editor ? editor.caretOffset() : null
+    return offset === null ? null : session.body.slice(0, offset) + caretMark + session.body.slice(offset)
+  }
+
   function setMode(event: CustomEvent<EditorMode>): void {
-    if (event.detail !== 'markdown') {
+    const mode = event.detail
+    const body = convertEditorBody(session.body, session.mode, mode)
+    const marked = bodyWithCaret()
+    const landed = marked === null ? null : convertEditorBody(marked, session.mode, mode)
+    richCaret = mode === 'wysiwyg' ? (landed ?? body) : null
+    textCaret = mode === 'wysiwyg' ? null : Math.max(0, landed?.indexOf(caretMark) ?? 0)
+    if (mode !== 'markdown') {
       preview = false
     }
-    updateCompose(session.id, { mode: event.detail })
+    updateCompose(session.id, { mode, body })
+  }
+
+  function togglePreview(): void {
+    if (!preview) {
+      textCaret = editor ? editor.caretOffset() : null
+    }
+    preview = !preview
+  }
+
+  // setBody takes an edit from the editor. The carried caret is spent by then,
+  // so an editor remounted later does not jump back to it.
+  function setBody(body: string): void {
+    textCaret = null
+    richCaret = null
+    updateCompose(session.id, { body })
   }
 
   function toggleFullscreen(): void {
@@ -385,31 +431,32 @@
     }
   }
 
-  // hasContent decides whether closing needs a save/discard prompt: any
-  // recipient, subject or body text counts, but a session that was only ever
-  // opened and never touched should close silently.
   // recipientList is every address currently typed in, which is what the
   // status is about.
   $: recipientList = [session.to, session.cc, session.bcc]
-    .join(',')
-    .split(/[,;]/)
-    .map((part) => {
-      const match = part.match(/<([^>]+)>/)
-      return (match ? match[1] : part).trim().toLowerCase()
-    })
+    .flatMap(parseAddressList)
+    .map((a) => a.email.toLowerCase())
     .filter((email) => email.includes('@'))
 
-  $: void refreshProtection(session.accountId, recipientList.join(','))
+  $: void refreshProtection(session.accountId, recipientList)
 
   // refreshProtection asks the backend what is possible. A failure leaves the
   // controls as they were rather than pretending nothing can be protected.
-  async function refreshProtection(accountId: number, key: string): Promise<void> {
+  // The answer depends on the sending account's own keys as much as on the
+  // recipients, so both make up the key a reply is matched against.
+  async function refreshProtection(accountId: number, recipients: string[]): Promise<void> {
+    const key = JSON.stringify([accountId, recipients])
     if (key === statusFor && protectionStatus !== null) {
       return
     }
     statusFor = key
     try {
-      const status = await composeProtectionStatus(accountId, recipientList)
+      const status = await composeProtectionStatus(accountId, recipients)
+      // a newer account or recipient list was asked for while this was in
+      // flight; its answer, not this one, decides what the controls may offer.
+      if (key !== statusFor) {
+        return
+      }
       protectionStatus = status as unknown as ProtectionStatus
       if (!suggestedApplied) {
         suggestedApplied = true
@@ -428,6 +475,9 @@
     }
   }
 
+  // hasContent decides whether closing needs a save/discard prompt: any
+  // recipient, subject or body text counts, but a session that was only ever
+  // opened and never touched should close silently.
   function hasContent(): boolean {
     return (
       session.to.trim().length > 0 ||
@@ -555,17 +605,18 @@
         {#if RichEditor}
           <svelte:component
             this={RichEditor}
+            bind:this={richEditor}
             content={session.body}
-            grabFocus={editorGrabFocus}
-            on:change={(e) => updateCompose(session.id, { body: e.detail })}
+            caretContent={richCaret}
+            on:change={(e) => setBody(e.detail)}
           />
         {:else}
           <div class="editor-loading">{$t('compose.editor.loading')}</div>
         {/if}
       {:else if session.mode === 'markdown'}
-        <EditorToolbar {preview} on:format={(e) => applyFormat(e.detail)} on:togglePreview={() => (preview = !preview)} />
+        <EditorToolbar {preview} on:format={(e) => applyFormat(e.detail)} on:togglePreview={togglePreview} />
         {#if preview}
-          <div class="preview selectable">{@html previewHtml}</div>
+          <MarkdownPreview markdown={session.body} font={composeFont ?? ''} />
         {:else if CMEditor}
           <svelte:component
             this={CMEditor}
@@ -573,8 +624,8 @@
             content={session.body}
             placeholder={$t('compose.editor.placeholderMarkdown')}
             vimEnabled={$prefs.composeVimMode}
-            grabFocus={editorGrabFocus}
-            on:change={(e) => updateCompose(session.id, { body: e.detail })}
+            caret={textCaret}
+            on:change={(e) => setBody(e.detail)}
           />
         {:else}
           <div class="editor-loading">{$t('compose.editor.loading')}</div>
@@ -587,8 +638,8 @@
           placeholder={$t('compose.editor.placeholderPlain')}
           vimEnabled={$prefs.composeVimMode}
           mono
-          grabFocus={editorGrabFocus}
-          on:change={(e) => updateCompose(session.id, { body: e.detail })}
+          caret={textCaret}
+          on:change={(e) => setBody(e.detail)}
         />
       {:else}
         <div class="editor-loading">Loading editor…</div>
@@ -793,19 +844,6 @@
     flex-direction: column;
   }
 
-  .preview {
-    flex: 1;
-    width: 100%;
-    min-height: 0;
-    background: transparent;
-    color: var(--text-primary);
-    font-family: var(--compose-font, inherit);
-    font-size: var(--fz-body);
-    line-height: 1.55;
-    overflow-y: auto;
-    padding: var(--space-3) var(--space-4);
-  }
-
   /* shown briefly while the rich editor chunk loads. */
   .editor-loading {
     flex: 1;
@@ -816,38 +854,11 @@
     font-size: var(--fz-label);
   }
 
-  /* a light github-style rendered preview. */
-  .preview :global(h1),
-  .preview :global(h2),
-  .preview :global(h3) {
-    margin: var(--space-3) 0 var(--space-2);
-  }
-
-  .preview :global(a) {
-    color: var(--link);
-  }
-
-  .preview :global(pre),
-  .preview :global(code) {
-    font-family: var(--font-mono);
-    background: var(--surface-sunken);
-    border-radius: var(--radius-control);
-  }
-
-  .preview :global(pre) {
-    padding: var(--space-3);
-    overflow-x: auto;
-  }
-
-  .preview :global(blockquote) {
-    margin: 0 0 var(--space-2);
-    padding-inline-start: var(--space-3);
-    border-inline-start: 2px solid var(--border-strong);
-    color: var(--text-secondary);
-  }
-
+  /* a narrow pane wraps the controls onto a second row rather than squeezing
+     their labels. */
   .foot {
     display: flex;
+    flex-wrap: wrap;
     align-items: center;
     gap: var(--space-2);
     padding: var(--space-3) var(--space-4);
@@ -878,6 +889,7 @@
     color: var(--text-primary);
     cursor: var(--cursor-action);
     font-size: var(--fz-label);
+    white-space: nowrap;
   }
 
   .send:hover:not(:disabled),
