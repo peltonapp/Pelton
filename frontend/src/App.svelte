@@ -125,6 +125,7 @@
     bulkArchive,
     reportArchiveExport,
     dropDeleted,
+    toggleSpam,
   } from './lib/messageactions'
   import { buildCommands, mailCommands, type CommandContext, type MessageOp, type FolderOp } from './lib/commands'
   import { catalogByAction } from './lib/menuactions'
@@ -706,9 +707,7 @@
         case 'archive': {
           const undo = await archiveMessage(msg.id)
           reportArchiveExport(undo)
-          if (undo.messageId) {
-            recordArchived(msg, undo.messageId, undo.originalFolderId)
-          }
+          recordArchived(msg, undo)
           removeFromList(msg.id)
           closeTab(msg.id)
           if (get(openMessageId) === msg.id) {
@@ -716,6 +715,11 @@
           }
           break
         }
+        case 'toggle-spam':
+          if (await toggleSpam(msg)) {
+            closeTab(msg.id)
+          }
+          break
       }
     } catch (err) {
       toastError(errorMessage(err))
@@ -779,6 +783,7 @@
       case 'download-offline':
       case 'delete-message':
       case 'archive':
+      case 'toggle-spam':
       case 'unsubscribe':
         void messageAction(action)
         break

@@ -33,6 +33,8 @@
     IconStarFilled,
     IconLayoutColumns,
     IconArchive,
+    IconAlertTriangle,
+    IconMailCheck,
   } from '@tabler/icons-svelte'
   import { selection, searchQuery, openMessageId, openMessage } from '../../stores/selection'
   import {
@@ -99,6 +101,8 @@
     bulkArchive,
     bulkTrash,
     reportArchiveExport,
+    spamState,
+    toggleSpam,
   } from '../../lib/messageactions'
 
   // the meta-bar title. built-in unified views are localized by key (matching the
@@ -483,9 +487,7 @@
     try {
       const undo = await archiveMessage(item.id)
       reportArchiveExport(undo)
-      if (undo.messageId) {
-        recordArchived(item, undo.messageId, undo.originalFolderId)
-      }
+      recordArchived(item, undo)
     } catch (err) {
       toastError(errorMessage(err))
       // the move failed; bring the row back so nothing is silently lost.
@@ -583,6 +585,7 @@
       'separator',
       { label: $t('messageList.menu.snooze'), icon: IconClockPause, hint: menuHint('snooze'), action: () => openSnooze(item.id, item.subject) },
       { label: $t('messageList.menu.moveTo'), icon: IconFolderSymlink, hint: menuHint('move-to'), action: () => openMove(item) },
+      ...spamEntry(item),
       item.offline
         ? { label: $t('messageList.menu.removeOffline'), icon: IconDownloadOff, hint: menuHint('remove-offline'), action: () => void toggleOffline(item) }
         : { label: $t('shortcut.downloadOffline'), icon: IconDownload, hint: menuHint('download-offline'), action: () => void toggleOffline(item) },
@@ -590,6 +593,19 @@
       { label: $t('action.delete'), icon: IconTrash, danger: true, hint: menuHint('delete-message'), action: () => void remove(item) },
     ]
     openContextMenu(event.clientX, event.clientY, entries)
+  }
+
+  // spamEntry is the context menu's spam item: "not spam" inside the spam folder,
+  // "mark as spam" elsewhere, and nothing for an account without a spam folder.
+  function spamEntry(item: MessageSummary): MenuEntry[] {
+    switch (spamState(item)) {
+      case 'spam':
+        return [{ label: $t('spam.notSpam'), icon: IconMailCheck, hint: menuHint('toggle-spam'), action: () => void toggleSpam(item) }]
+      case 'markable':
+        return [{ label: $t('spam.mark'), icon: IconAlertTriangle, hint: menuHint('toggle-spam'), action: () => void toggleSpam(item) }]
+      default:
+        return []
+    }
   }
 
   // middle-click opens a message in a tab, the way it opens a link in a browser.

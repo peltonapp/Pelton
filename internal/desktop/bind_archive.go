@@ -9,10 +9,10 @@ import (
 	"github.com/peltonapp/Pelton/internal/storage"
 )
 
-// ArchiveUndoDTO carries what undo-archive needs to move a message back: its
-// stable rfc Message-ID (the moved copy has a new UID) and the folder it came
-// from. MessageID is empty when the message had no Message-ID header, in which
-// case undo is not possible.
+// ArchiveUndoDTO carries what undo needs to move a message back: its stable rfc
+// Message-ID (the moved copy has a new UID), the folder it came from and the
+// folder it went to. MessageID is empty when the message had no Message-ID
+// header, in which case undo is not possible.
 // ExportPath is the .eml copy written by the account's export-on-archive
 // option, empty when the option is off. ExportError explains why no copy was
 // written when one was expected; the archive itself still succeeded, so the ui
@@ -20,6 +20,7 @@ import (
 type ArchiveUndoDTO struct {
 	MessageID        string `json:"messageId"`
 	OriginalFolderID int64  `json:"originalFolderId"`
+	DestFolderID     int64  `json:"destFolderId"`
 	ExportPath       string `json:"exportPath"`
 	ExportError      string `json:"exportError"`
 }
@@ -39,7 +40,7 @@ func (a *App) ArchiveMessage(id int64) (ArchiveUndoDTO, error) {
 	if err != nil {
 		return ArchiveUndoDTO{}, err
 	}
-	return a.moveMessageTo(m, archive)
+	return a.moveMessageTo(m, archive, nil)
 }
 
 // MoveMessage moves a message to any folder (of its own account) on the server,
@@ -60,17 +61,25 @@ func (a *App) MoveMessage(id, destFolderID int64) (ArchiveUndoDTO, error) {
 	if dest.AccountID != m.AccountID {
 		return ArchiveUndoDTO{}, fmt.Errorf("pelton: cannot move a message to another account's folder")
 	}
-	return a.moveMessageTo(m, *dest)
+	return a.moveMessageTo(m, *dest, nil)
+}
+
+// keywordChange is a keyword pair set on a message just before it moves, so the
+// server's filter sees the user's verdict (RFC 5788 $Junk / $NotJunk).
+type keywordChange struct {
+	add, remove imap.Flag
 }
 
 // moveMessageTo performs the server move of a cached message to dest, then drops
-// the local row and its files. It is the shared core of archive and move.
+// the local row and its files. It is the shared core of archive, move and the
+// spam marks. A non-nil kw is stored on the message first, where the source
+// mailbox keeps it; a keyword the server refuses never blocks the move.
 //
 // Asking for a move into the folder the message already sits in is an error
 // rather than a silent success: the caller drops the row from the list on
 // success, so reporting one for a move that never happened made the message
 // look deleted until the next sync brought it back.
-func (a *App) moveMessageTo(m *storage.Message, dest storage.Folder) (ArchiveUndoDTO, error) {
+func (a *App) moveMessageTo(m *storage.Message, dest storage.Folder, kw *keywordChange) (ArchiveUndoDTO, error) {
 	source, err := a.store.GetFolder(a.ctx, m.FolderID)
 	if err != nil {
 		return ArchiveUndoDTO{}, err
@@ -99,8 +108,12 @@ func (a *App) moveMessageTo(m *storage.Message, dest storage.Folder) (ArchiveUnd
 		return ArchiveUndoDTO{}, err
 	}
 	defer client.Logout()
-	if _, err := client.Select(source.IMAPPath); err != nil {
+	mbox, err := client.Select(source.IMAPPath)
+	if err != nil {
 		return ArchiveUndoDTO{}, fmt.Errorf("move: select %q: %w", source.IMAPPath, err)
+	}
+	if kw != nil {
+		a.storeKeywords(client, mbox, imap.UID(m.UID), *kw)
 	}
 
 	// the raw source has to be fetched before the move: afterwards the message
@@ -142,6 +155,7 @@ func (a *App) moveMessageTo(m *storage.Message, dest storage.Folder) (ArchiveUnd
 	return ArchiveUndoDTO{
 		MessageID:        m.MessageID,
 		OriginalFolderID: source.ID,
+		DestFolderID:     dest.ID,
 		ExportPath:       path,
 		ExportError:      exportError,
 	}, nil
@@ -178,23 +192,29 @@ func exportMeta(m *storage.Message) mailexport.Meta {
 	}
 }
 
-// UnarchiveMessage moves an archived message back to originalFolderID, locating
-// it by its rfc Message-ID (its UID changed when it was moved). It errors when
-// the message has no Message-ID or can no longer be found in Archive.
-func (a *App) UnarchiveMessage(rfcMessageID string, originalFolderID int64) error {
+// RestoreMessage undoes a move: it finds the message in fromFolderID by its rfc
+// Message-ID (its UID changed when it was moved) and moves it back to
+// toFolderID. Undoing a spam mark also takes back the keyword the mark set, so
+// the server's filter is not left learning from a verdict the user withdrew. It
+// errors when the message has no Message-ID, the folders belong to different
+// accounts, or the server can no longer find it.
+func (a *App) RestoreMessage(rfcMessageID string, fromFolderID, toFolderID int64) error {
 	if err := a.ready(); err != nil {
 		return err
 	}
 	if rfcMessageID == "" {
-		return fmt.Errorf("pelton: this message cannot be un-archived (no Message-ID)")
+		return fmt.Errorf("pelton: this message cannot be moved back (no Message-ID)")
 	}
-	dest, err := a.store.GetFolder(a.ctx, originalFolderID)
+	from, err := a.store.GetFolder(a.ctx, fromFolderID)
 	if err != nil {
 		return err
 	}
-	archive, err := a.findArchiveFolder(dest.AccountID)
+	dest, err := a.store.GetFolder(a.ctx, toFolderID)
 	if err != nil {
 		return err
+	}
+	if from.AccountID != dest.AccountID {
+		return fmt.Errorf("pelton: cannot move a message to another account's folder")
 	}
 	account, err := a.store.GetAccount(a.ctx, dest.AccountID)
 	if err != nil {
@@ -217,17 +237,28 @@ func (a *App) UnarchiveMessage(rfcMessageID string, originalFolderID int64) erro
 		return err
 	}
 	defer client.Logout()
-	if _, err := client.Select(archive.IMAPPath); err != nil {
-		return fmt.Errorf("unarchive: select %q: %w", archive.IMAPPath, err)
+	mbox, err := client.Select(from.IMAPPath)
+	if err != nil {
+		return fmt.Errorf("undo move: select %q: %w", from.IMAPPath, err)
 	}
 	uids, err := client.SearchByMessageID(rfcMessageID)
 	if err != nil {
 		return err
 	}
 	if len(uids) == 0 {
-		return fmt.Errorf("pelton: archived message not found to restore")
+		return fmt.Errorf("pelton: moved message not found to restore")
 	}
-	if err := client.Move(uids[len(uids)-1], dest.IMAPPath); err != nil {
+	uid := uids[len(uids)-1]
+	switch {
+	case folderRole(*from) == roleJunk:
+		a.storeKeywords(client, mbox, uid, keywordChange{remove: keywordJunk})
+		if err := a.store.ForgetSpamOrigin(a.ctx, from.AccountID, rfcMessageID); err != nil {
+			a.log.Error("undo spam: forget origin", "err", err)
+		}
+	case folderRole(*dest) == roleJunk:
+		a.storeKeywords(client, mbox, uid, keywordChange{remove: keywordNotJunk})
+	}
+	if err := client.Move(uid, dest.IMAPPath); err != nil {
 		return err
 	}
 	a.emit(EventMailNew, MailNewEvent{AccountID: dest.AccountID, FolderID: dest.ID, Count: 1})
@@ -237,14 +268,27 @@ func (a *App) UnarchiveMessage(rfcMessageID string, originalFolderID int64) erro
 // findArchiveFolder returns the account's archive-role folder, or an error when
 // none exists.
 func (a *App) findArchiveFolder(accountID int64) (storage.Folder, error) {
-	folders, err := a.store.ListFolders(a.ctx, accountID)
+	f, ok, err := a.findRoleFolder(accountID, roleArchive)
 	if err != nil {
 		return storage.Folder{}, err
 	}
+	if !ok {
+		return storage.Folder{}, fmt.Errorf("pelton: this account has no Archive folder")
+	}
+	return f, nil
+}
+
+// findRoleFolder returns the account's first folder with the given role, and
+// false when it has none.
+func (a *App) findRoleFolder(accountID int64, role string) (storage.Folder, bool, error) {
+	folders, err := a.store.ListFolders(a.ctx, accountID)
+	if err != nil {
+		return storage.Folder{}, false, err
+	}
 	for _, f := range folders {
-		if folderRole(f) == roleArchive {
-			return f, nil
+		if folderRole(f) == role {
+			return f, true, nil
 		}
 	}
-	return storage.Folder{}, fmt.Errorf("pelton: this account has no Archive folder")
+	return storage.Folder{}, false, nil
 }

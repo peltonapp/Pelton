@@ -507,12 +507,13 @@ export function undoDelete(id: number): Promise<void> {
   return App.UndoDelete(id)
 }
 
-// ArchiveUndo is what undo-archive needs: the message's stable rfc Message-ID and
-// the folder it came from. messageId is empty when the message had no Message-ID
-// (undo not possible then).
+// ArchiveUndo is what undo needs after a move: the message's stable rfc
+// Message-ID, the folder it came from and the folder it went to. messageId is
+// empty when the message had no Message-ID (undo not possible then).
 export interface ArchiveUndo {
   messageId: string
   originalFolderId: number
+  destFolderId: number
   // the .eml copy the account's export-on-archive option wrote, '' when the
   // option is off. exportError explains why no copy was written when one was
   // expected: the archive itself still succeeded.
@@ -599,30 +600,51 @@ export function unsealDraft(id: number, passphrase: string): Promise<desktop.Dra
   return App.UnsealDraft(id, passphrase)
 }
 
+// noUndo is what demo mode answers a move with: nothing to undo.
+const noUndo: ArchiveUndo = { messageId: '', originalFolderId: 0, destFolderId: 0, exportPath: '', exportError: '' }
+
 // archiveMessage moves a message to its account's Archive folder on the server,
 // returning the info needed to undo it.
 export function archiveMessage(id: number): Promise<ArchiveUndo> {
   if (isDemoActive()) {
-    return Promise.resolve({ messageId: '', originalFolderId: 0, exportPath: '', exportError: '' })
+    return Promise.resolve(noUndo)
   }
   return App.ArchiveMessage(id)
 }
 
-// unarchiveMessage moves an archived message back to its original folder,
-// locating it by rfc Message-ID.
-export function unarchiveMessage(messageId: string, originalFolderId: number): Promise<void> {
+// restoreMessage undoes a move: it finds the message in fromFolderId by rfc
+// Message-ID and moves it back to toFolderId.
+export function restoreMessage(messageId: string, fromFolderId: number, toFolderId: number): Promise<void> {
   if (isDemoActive()) {
     return Promise.resolve()
   }
-  return App.UnarchiveMessage(messageId, originalFolderId)
+  return App.RestoreMessage(messageId, fromFolderId, toFolderId)
 }
 
 // moveMessage moves a message to any folder of its account, returning undo info.
 export function moveMessage(id: number, destFolderId: number): Promise<ArchiveUndo> {
   if (isDemoActive()) {
-    return Promise.resolve({ messageId: '', originalFolderId: 0, exportPath: '', exportError: '' })
+    return Promise.resolve(noUndo)
   }
   return App.MoveMessage(id, destFolderId)
+}
+
+// markSpam moves a message to its account's spam folder, tagging it $Junk where
+// the server keeps keywords, and returns undo info.
+export function markSpam(id: number): Promise<ArchiveUndo> {
+  if (isDemoActive()) {
+    return Promise.resolve(noUndo)
+  }
+  return App.MarkSpam(id)
+}
+
+// markNotSpam moves a message out of the spam folder, back to where it was
+// marked from or else the inbox, tagging it $NotJunk, and returns undo info.
+export function markNotSpam(id: number): Promise<ArchiveUndo> {
+  if (isDemoActive()) {
+    return Promise.resolve(noUndo)
+  }
+  return App.MarkNotSpam(id)
 }
 
 // SearchRequest is a ranked search over cached mail: free text plus an optional
