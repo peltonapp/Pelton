@@ -532,6 +532,7 @@ export namespace desktop {
 	    attachments: ComposeAttachment[];
 	    sendAt: string;
 	    protection: string;
+	    draftMessageId: string;
 	
 	    static createFrom(source: any = {}) {
 	        return new ComposeRequest(source);
@@ -551,6 +552,7 @@ export namespace desktop {
 	        this.attachments = this.convertValues(source["attachments"], ComposeAttachment);
 	        this.sendAt = source["sendAt"];
 	        this.protection = source["protection"];
+	        this.draftMessageId = source["draftMessageId"];
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {

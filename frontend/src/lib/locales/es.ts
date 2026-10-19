@@ -504,6 +504,8 @@ const es: Record<string, string> = {
   'compose.error.noRecipients': 'Añade al menos un destinatario antes de enviar.',
   'compose.toast.queued': 'Mensaje en cola para enviarse.',
   'compose.toast.draftSaved': 'Borrador guardado.',
+  'compose.toast.draftLocalOnly': 'Los borradores cifrados no se suben al servidor.',
+  'compose.toast.draftUploadFailed': 'Guardado en este dispositivo, pero no se pudo subir al servidor: {error}',
   'compose.protection.label': 'Protección',
   'compose.protection.sign': 'Firmar',
   'compose.protection.encrypt': 'Cifrar',

@@ -154,16 +154,28 @@ func (a *App) appendToSent(account storage.Account, raw []byte) (string, error) 
 	// sync waits its turn rather than opening a second login for the account.
 	syncMu.Lock()
 	defer syncMu.Unlock()
+	var folder string
+	err = a.withIMAPSession(cfg, func(client mailClient) error {
+		folder, err = client.AppendToSent(raw)
+		return err
+	})
+	return folder, err
+}
+
+// withIMAPSession runs fn against a session logged in with cfg and logs out
+// afterwards. It does not take syncMu: the callers that need to wait for a
+// sync take it themselves.
+func (a *App) withIMAPSession(cfg pimap.Config, fn func(mailClient) error) error {
 	client, err := a.connectIMAP(cfg)
 	if err != nil {
-		return "", err
+		return err
 	}
 	defer func() { _ = client.Close() }()
 	if err := client.Login(); err != nil {
-		return "", err
+		return err
 	}
 	defer func() { _ = client.Logout() }()
-	return client.AppendToSent(raw)
+	return fn(client)
 }
 
 // runInitialSyncAndIdle syncs every account once, then parks each on idle.
@@ -257,6 +269,23 @@ func (a *App) TriggerSync() error {
 		return errNoCredentials
 	}
 	return nil
+}
+
+// queueSync syncs account in the background, after any sync already running.
+// While one is still waiting its turn, another would only repeat it, so it is
+// not queued. syncAccount records a failure in the account's sync state itself.
+func (a *App) queueSync(account storage.Account) {
+	if _, waiting := a.queuedSyncs.LoadOrStore(account.ID, struct{}{}); waiting {
+		return
+	}
+	goSafe("syncing after a change", func() {
+		// cleared once this sync's turn comes, so a change from here on queues
+		// the next one rather than counting on this run to see it.
+		syncMu.Lock()
+		a.queuedSyncs.Delete(account.ID)
+		syncMu.Unlock()
+		_ = a.syncAccount(account)
+	})
 }
 
 // syncAccount syncs one account and records how it went, so a failure survives

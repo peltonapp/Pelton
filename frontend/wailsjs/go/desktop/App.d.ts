@@ -236,6 +236,8 @@ export function MoveMessage(arg1:number,arg2:number):Promise<desktop.ArchiveUndo
 
 export function OpenCrashReport():Promise<void>;
 
+export function OpenDraft(arg1:number):Promise<desktop.DraftDTO>;
+
 export function OpenLocalesFolder():Promise<void>;
 
 export function OpenLogFolder():Promise<void>;
@@ -265,6 +267,8 @@ export function RemoveAddressBook(arg1:number):Promise<void>;
 export function RemoveImageAllow(arg1:string,arg2:string):Promise<void>;
 
 export function RemoveOffline(arg1:number):Promise<void>;
+
+export function RemoveServerDraft(arg1:number,arg2:string):Promise<void>;
 
 export function RemoveVIPSender(arg1:string):Promise<void>;
 
@@ -417,3 +421,5 @@ export function UpdateAccount(arg1:desktop.UpdateAccountRequest):Promise<desktop
 export function UpdateAddressBook(arg1:desktop.AddressBookRequest):Promise<desktop.AddressBookDTO>;
 
 export function UpdateProfile(arg1:desktop.ProfileRequest):Promise<desktop.ProfileDTO>;
+
+export function UploadDraft(arg1:number):Promise<string>;

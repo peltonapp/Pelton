@@ -4,8 +4,9 @@
 // turns the references into the actual threading headers.
 
 import { writable, get } from 'svelte/store'
-import type { EditorMode, MessageDetail, ComposeAttachment } from '../lib/types'
+import type { Address, Draft, EditorMode, MessageDetail, ComposeAttachment } from '../lib/types'
 import { getSetting, setSetting } from '../lib/api'
+import { renderBody } from '../lib/mailcompose'
 
 // the compose pane remembers whether the user last worked fullscreen or in the
 // small floating size, so new panes open at that size. persisted in the backend
@@ -52,6 +53,13 @@ export interface ComposeSession {
   references: string[]
   // draftId is non-zero when this session is editing a saved local draft.
   draftId: number
+  // draftMessageId is the Message-ID of the copy uploaded to the server Drafts
+  // folder, '' until the first upload. A later save replaces that copy.
+  draftMessageId: string
+  // saved marks a session that opens as a saved draft (opened from Drafts, or
+  // brought back after its upload failed): closing it unchanged asks nothing,
+  // and the account's default protection does not override what it was saved with.
+  saved: boolean
   // window state for the floating pane: fullscreen expands it to fill the
   // window; minimized collapses it to its title bar (gmail-style).
   fullscreen: boolean
@@ -87,6 +95,8 @@ function blankSession(accountId: number, mode: EditorMode): ComposeSession {
     inReplyTo: '',
     references: [],
     draftId: 0,
+    draftMessageId: '',
+    saved: false,
     fullscreen: defaultFullscreen,
     minimized: false,
     signaturesApplied: false,
@@ -156,13 +166,82 @@ export function openForward(detail: MessageDetail, mode: EditorMode): number {
   return session.id
 }
 
+// openDraftSession opens a saved local draft for editing. The editor mode is not
+// stored with a draft, so it is read back from the parts: no html is plaintext,
+// html that the text renders to is markdown, anything else is rich text. A
+// draft already open is brought back rather than opened in a second pane.
+export function openDraftSession(draft: Draft): number {
+  const open = bringBack(draft.id)
+  if (open) {
+    return open
+  }
+  const req = draft.request
+  let mode: EditorMode = 'wysiwyg'
+  if (!req.html) {
+    mode = 'plaintext'
+  } else if (renderBody('markdown', req.text).html === req.html) {
+    mode = 'markdown'
+  }
+  const session = blankSession(draft.accountId, mode)
+  Object.assign(session, {
+    to: formatAddressList(req.to),
+    cc: formatAddressList(req.cc),
+    bcc: formatAddressList(req.bcc),
+    showCc: (req.cc ?? []).length > 0,
+    showBcc: (req.bcc ?? []).length > 0,
+    subject: req.subject,
+    body: mode === 'wysiwyg' ? req.html : req.text,
+    attachments: req.attachments ?? [],
+    inReplyTo: req.inReplyTo,
+    references: req.references ?? [],
+    protection: req.protection,
+    draftId: draft.id,
+    draftMessageId: req.draftMessageId ?? '',
+    saved: true,
+    signaturesApplied: true,
+  })
+  composeSessions.update((list) => [...list, session])
+  return session.id
+}
+
+// restoreSession brings back the pane of a saved draft that closed before its
+// upload failed, still saved and linked to its local draft and server copy. A
+// pane already editing that draft is brought back instead of opening a second.
+export function restoreSession(session: ComposeSession): number {
+  const open = bringBack(session.draftId)
+  if (open) {
+    return open
+  }
+  const restored: ComposeSession = { ...session, id: nextId++, saved: true, minimized: false }
+  composeSessions.update((list) => [...list, restored])
+  return restored.id
+}
+
+// bringBack un-minimises the pane editing a draft and returns its id, or 0 when
+// none is open.
+function bringBack(draftId: number): number {
+  const open = get(composeSessions).find((s) => s.draftId === draftId)
+  if (!open) {
+    return 0
+  }
+  updateCompose(open.id, { minimized: false })
+  return open.id
+}
+
+// formatAddressList turns addresses back into the comma-separated form the
+// address inputs edit.
+function formatAddressList(list: Address[] | null): string {
+  return (list ?? []).map((a) => (a.name ? `${a.name} <${a.email}>` : a.email)).join(', ')
+}
+
 // reopenSession brings a sent-but-undone message back into a fresh compose pane,
-// preserving every edited field. draftId is reset because the original local
-// draft was already removed on send, so a save here starts a new one.
+// preserving every edited field. draftId and draftMessageId are reset because
+// the send already removed the local draft and its server copy, so a save here
+// starts a new one.
 export function reopenSession(session: ComposeSession): number {
   // a reopened message already has whatever signature it was sent with, so do not
   // auto-insert defaults again.
-  const restored: ComposeSession = { ...session, id: nextId++, draftId: 0, signaturesApplied: true }
+  const restored: ComposeSession = { ...session, id: nextId++, draftId: 0, draftMessageId: '', saved: false, signaturesApplied: true }
   composeSessions.update((list) => [...list, restored])
   return restored.id
 }

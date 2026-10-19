@@ -504,6 +504,8 @@ const pl: Record<string, string> = {
   'compose.error.noRecipients': 'Dodaj co najmniej jednego odbiorcę przed wysłaniem.',
   'compose.toast.queued': 'Wiadomość dodana do kolejki wysyłania.',
   'compose.toast.draftSaved': 'Wersja robocza zapisana.',
+  'compose.toast.draftLocalOnly': 'Zaszyfrowane wersje robocze nie są wysyłane na serwer.',
+  'compose.toast.draftUploadFailed': 'Zapisano na tym urządzeniu, ale nie udało się wysłać na serwer: {error}',
   'compose.protection.label': 'Ochrona',
   'compose.protection.sign': 'Podpisz',
   'compose.protection.encrypt': 'Zaszyfruj',

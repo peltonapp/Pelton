@@ -504,6 +504,8 @@ const de: Record<string, string> = {
   'compose.error.noRecipients': 'Füge mindestens einen Empfänger hinzu, bevor du sendest.',
   'compose.toast.queued': 'Nachricht zum Senden vorgemerkt.',
   'compose.toast.draftSaved': 'Entwurf gespeichert.',
+  'compose.toast.draftLocalOnly': 'Verschlüsselte Entwürfe werden nicht auf den Server hochgeladen.',
+  'compose.toast.draftUploadFailed': 'Auf diesem Gerät gespeichert, aber das Hochladen auf den Server ist fehlgeschlagen: {error}',
   'compose.protection.label': 'Schutz',
   'compose.protection.sign': 'Signieren',
   'compose.protection.encrypt': 'Verschlüsseln',

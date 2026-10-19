@@ -72,8 +72,10 @@
     getMessage,
     removeOffline,
     archiveMessage,
+    openDraft,
   } from '../../lib/api'
-  import { openReply, openForward } from '../../stores/compose'
+  import { openReply, openForward, openDraftSession } from '../../stores/compose'
+  import { sidebar } from '../../stores/accounts'
   import { openSnooze, openSnoozeMany } from '../../stores/snooze'
   import { openMove, openMoveMany } from '../../stores/move'
   import { recordDeleted } from '../../stores/undodelete'
@@ -297,11 +299,24 @@
   }
 
   // open marks the message seen if needed and shows it in the detail pane. a
-  // plain open also clears any multi-selection.
+  // plain open also clears any multi-selection. A draft Pelton saved on this
+  // device opens in the composer instead; any other draft is only read.
   async function open(index: number): Promise<void> {
     const item = items[index]
     if (!item) {
       return
+    }
+    const folder = $sidebar.data?.foldersByAccount[item.accountId]?.find((f) => f.id === item.folderId)
+    if (folder?.role === 'drafts') {
+      try {
+        const draft = await openDraft(item.id)
+        if (draft.id !== 0) {
+          openDraftSession(draft)
+          return
+        }
+      } catch (err) {
+        toastError(errorMessage(err))
+      }
     }
     activeIndex = index
     clearSelection()

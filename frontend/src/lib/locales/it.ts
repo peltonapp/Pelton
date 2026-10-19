@@ -512,6 +512,8 @@ const it: Record<string, string> = {
   'compose.error.noRecipients': 'Aggiungi almeno un destinatario prima di inviare.',
   'compose.toast.queued': 'Messaggio in coda per l\'invio.',
   'compose.toast.draftSaved': 'Bozza salvata.',
+  'compose.toast.draftLocalOnly': 'Le bozze cifrate non vengono caricate sul server.',
+  'compose.toast.draftUploadFailed': 'Salvata su questo dispositivo, ma non è stato possibile caricarla sul server: {error}',
   'compose.protection.label': 'Protezione',
   'compose.protection.sign': 'Firma',
   'compose.protection.encrypt': 'Crittografa',

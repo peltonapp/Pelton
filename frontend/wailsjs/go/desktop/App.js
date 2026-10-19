@@ -470,6 +470,10 @@ export function OpenCrashReport() {
   return window['go']['desktop']['App']['OpenCrashReport']();
 }
 
+export function OpenDraft(arg1) {
+  return window['go']['desktop']['App']['OpenDraft'](arg1);
+}
+
 export function OpenLocalesFolder() {
   return window['go']['desktop']['App']['OpenLocalesFolder']();
 }
@@ -528,6 +532,10 @@ export function RemoveImageAllow(arg1, arg2) {
 
 export function RemoveOffline(arg1) {
   return window['go']['desktop']['App']['RemoveOffline'](arg1);
+}
+
+export function RemoveServerDraft(arg1, arg2) {
+  return window['go']['desktop']['App']['RemoveServerDraft'](arg1, arg2);
 }
 
 export function RemoveVIPSender(arg1) {
@@ -832,4 +840,8 @@ export function UpdateAddressBook(arg1) {
 
 export function UpdateProfile(arg1) {
   return window['go']['desktop']['App']['UpdateProfile'](arg1);
+}
+
+export function UploadDraft(arg1) {
+  return window['go']['desktop']['App']['UploadDraft'](arg1);
 }
