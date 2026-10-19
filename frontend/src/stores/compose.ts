@@ -4,8 +4,8 @@
 // turns the references into the actual threading headers.
 
 import { writable, get } from 'svelte/store'
-import type { EditorMode, MessageDetail, ComposeAttachment } from '../lib/types'
-import { getSetting, setSetting } from '../lib/api'
+import type { EditorMode, MessageDetail, ComposeAttachment, Folder } from '../lib/types'
+import { getSetting, setSetting, listFolders } from '../lib/api'
 
 // the compose pane remembers whether the user last worked fullscreen or in the
 // small floating size, so new panes open at that size. persisted in the backend
@@ -134,8 +134,8 @@ export function openComposeWith(accountId: number, mode: EditorMode, prefill: Ma
 // body and threading references come from the original message.
 export function openReply(detail: MessageDetail, mode: EditorMode, replyAll: boolean): number {
   const session = blankSession(detail.accountId, mode)
-  // must be kept in sync with internal/imap/append.go:sentFolderNames
-  if (replyAll && ["Sent", "Sent Items", "Sent Mail", "Gesendet"].includes(detail.folderName)) {
+  let folder = listFolders(detail.accountId).find((f: Folder) => f.id === detail.folderId);
+  if (replyAll && folder.role() === 'sent') {
     session.to = detail.toAddresses
   } else {
     // regular reply
