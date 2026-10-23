@@ -4,7 +4,7 @@ Pelton is a free, open source, privacy-focused email client for macOS, Windows a
 
 ## Install
 
-- macOS: .dmg per release at https://github.com/peltonapp/Pelton/releases (unsigned; right-click Open or `xattr -cr /Applications/Pelton.app`)
+- macOS 13 or newer: .dmg per release at https://github.com/peltonapp/Pelton/releases (unsigned; right-click Open or `xattr -cr /Applications/Pelton.app`)
 - Windows: `Pelton-<version>-windows-amd64-installer.exe` from releases (unsigned)
 - Fedora: `sudo dnf copr enable arnek/Pelton && sudo dnf install pelton`
 - Raw rpm: `Pelton-<version>-linux-fedora-x86_64.rpm` from releases

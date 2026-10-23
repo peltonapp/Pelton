@@ -53,12 +53,10 @@ func debugForced(args []string) bool {
 // takes the whole process down whether it is handled or not; the difference is
 // whether anything is left to read afterwards.
 func goSafe(activity string, fn func()) {
-	backgroundWork.Add(1)
-	go func() {
-		defer backgroundWork.Done()
+	backgroundWork.Go(func() {
 		defer logging.Guard(activity)
 		fn()
-	}()
+	})
 }
 
 // backgroundWork counts the goroutines goSafe has running. Several of them

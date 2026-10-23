@@ -9,6 +9,7 @@ import (
 )
 
 func TestRevocationRoundTrip(t *testing.T) {
+	t.Parallel()
 	db := newTestDB(t)
 	ctx := context.Background()
 
@@ -45,6 +46,7 @@ func TestRevocationRoundTrip(t *testing.T) {
 // a second answer for the same certificate replaces the first rather than
 // piling up, or the cache would grow without bound and read back the oldest.
 func TestSaveRevocationReplaces(t *testing.T) {
+	t.Parallel()
 	db := newTestDB(t)
 	ctx := context.Background()
 	now := time.Now()
@@ -68,6 +70,7 @@ func TestSaveRevocationReplaces(t *testing.T) {
 // turning the setting off must leave no record of which authorities were asked
 // about whom, which is the whole reason it is off by default.
 func TestClearRevocations(t *testing.T) {
+	t.Parallel()
 	db := newTestDB(t)
 	ctx := context.Background()
 
@@ -85,6 +88,7 @@ func TestClearRevocations(t *testing.T) {
 }
 
 func TestRevocationFreshness(t *testing.T) {
+	t.Parallel()
 	now := time.Now()
 	cases := []struct {
 		name string
@@ -122,6 +126,7 @@ func TestRevocationFreshness(t *testing.T) {
 }
 
 func TestEncodeDecodeCerts(t *testing.T) {
+	t.Parallel()
 	certs := [][]byte{[]byte("first"), []byte("second and longer")}
 	got := DecodeCerts(EncodeCerts(certs))
 	if len(got) != 2 {

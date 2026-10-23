@@ -290,6 +290,9 @@ export interface MessageDetail extends MessageSummary {
   // when it was opened, so the pane can offer the right next step rather than
   // one generic error.
   pgpState: PGPState
+  // bodyComplete is false while the row is still a stub and the reading pane
+  // may be showing a preview before the full body arrives.
+  bodyComplete?: boolean
 }
 
 export type PGPState = '' | 'open' | 'locked' | 'nokey' | 'failed'

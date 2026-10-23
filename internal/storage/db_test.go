@@ -23,8 +23,8 @@ func TestDataDirName(t *testing.T) {
 			} else {
 				t.Setenv("PELTON_DEV", "")
 			}
-			if got := dataDirName(tt.channel); got != tt.want {
-				t.Errorf("dataDirName(%q) = %q, want %q", tt.channel, got, tt.want)
+			if got := DataDirName(tt.channel); got != tt.want {
+				t.Errorf("DataDirName(%q) = %q, want %q", tt.channel, got, tt.want)
 			}
 		})
 	}
