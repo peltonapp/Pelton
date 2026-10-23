@@ -26,7 +26,7 @@ and finding your way around the codebase. For a plain release build, see
 
 Same as building from source, see
 [Build from source](../install/build-from-source.md#prerequisites) for the
-full list: Go 1.25+, Node.js + pnpm, the pinned Wails CLI version, and
+full list: Go 1.27.1+, Node.js + pnpm, the pinned Wails CLI version, and
 your platform's GTK/WebKitGTK, WebView2, or Xcode toolchain.
 
 ## Running in dev mode

@@ -88,11 +88,19 @@ func (a *App) pushColorKeyword(id int64, color int) {
 	}
 }
 
-// DownloadMessageOffline pins a message for offline availability. Sync already
-// caches the body; this records the deliberate keep signal that drives the
-// downloaded indicator.
+// DownloadMessageOffline pins a message for offline availability, the
+// deliberate keep signal that drives the downloaded indicator. A stub's body
+// is fetched first; it is pinned only once its body is stored, and a failed
+// fetch returns the error and leaves it unpinned.
 func (a *App) DownloadMessageOffline(id int64) error {
 	if err := a.ready(); err != nil {
+		return err
+	}
+	m, err := a.store.GetMessage(a.ctx, id)
+	if err != nil {
+		return err
+	}
+	if _, err := a.ensureBody(m); err != nil {
 		return err
 	}
 	return a.store.SetOffline(a.ctx, id, true)

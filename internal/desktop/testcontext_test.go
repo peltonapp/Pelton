@@ -26,7 +26,7 @@ const backgroundWorkGrace = 10 * time.Second
 // and the store is still open when the goroutines finish with it:
 //
 //	ctx, stopBackground := testContext(t)
-//	store, err := storage.Open(filepath.Join(t.TempDir(), "test.db"))
+//	store, err := storagetest.Open(filepath.Join(t.TempDir(), "test.db"))
 //	t.Cleanup(func() { _ = store.Close() })
 //	t.Cleanup(stopBackground)
 func testContext(t *testing.T) (context.Context, func()) {

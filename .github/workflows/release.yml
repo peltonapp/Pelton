@@ -35,7 +35,7 @@ permissions:
   contents: write
 
 env:
-  GO_VERSION: "1.25"
+  GO_VERSION: "1.27.1"
   # The release these installers belong to, empty when the run is only
   # exercising the build steps. Job-level `if:` cannot read env, so the same
   # condition is spelled out on the jobs that need it.
@@ -125,6 +125,9 @@ jobs:
           mv wails.json.tmp wails.json
 
       - name: Build (${{ matrix.arch }})
+        env:
+          CGO_CFLAGS: -mmacosx-version-min=13.0
+          CGO_LDFLAGS: -mmacosx-version-min=13.0
         run: wails build -platform darwin/${{ matrix.arch }} -ldflags "-X main.version=${{ steps.version.outputs.version }}"
 
       # Best-effort: the Liquid Glass dynamic icon needs actool from a recent
