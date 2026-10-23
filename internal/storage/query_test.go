@@ -8,6 +8,7 @@ import (
 )
 
 func TestUnifiedPageMatchesNaive(t *testing.T) {
+	t.Parallel()
 	db := newTestDB(t)
 	ctx := context.Background()
 	acc, _ := db.EnsureLocalAccount(ctx)
@@ -17,7 +18,7 @@ func TestUnifiedPageMatchesNaive(t *testing.T) {
 	for _, name := range []string{"INBOX", "Sent", "Archive"} {
 		f, _ := db.EnsureLocalFolder(ctx, acc.ID, name)
 		ids = append(ids, f.ID)
-		for i := 0; i < 40; i++ {
+		for range 40 {
 			uid++
 			m := &Message{AccountID: acc.ID, FolderID: f.ID, UID: uid,
 				MessageID: fmt.Sprintf("<%d@x>", uid), Subject: fmt.Sprintf("s%d", uid),
@@ -73,6 +74,7 @@ FROM messages WHERE `+where+` ORDER BY date DESC, uid DESC LIMIT ? OFFSET ?`,
 // select-all reads ids straight from the query rather than paging through the
 // list, so the set it returns has to be exactly what the pages would have held.
 func TestQueryMessageIDsMatchesTheFullPage(t *testing.T) {
+	t.Parallel()
 	db := newTestDB(t)
 	ctx := context.Background()
 	acc, _ := db.EnsureLocalAccount(ctx)
@@ -82,7 +84,7 @@ func TestQueryMessageIDsMatchesTheFullPage(t *testing.T) {
 	for _, name := range []string{"INBOX", "Sent"} {
 		f, _ := db.EnsureLocalFolder(ctx, acc.ID, name)
 		folders = append(folders, f.ID)
-		for i := 0; i < 30; i++ {
+		for range 30 {
 			uid++
 			m := &Message{AccountID: acc.ID, FolderID: f.ID, UID: uid,
 				MessageID: fmt.Sprintf("<%d@x>", uid), Subject: fmt.Sprintf("s%d", uid),

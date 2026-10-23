@@ -4,6 +4,7 @@
 
 import { writable } from 'svelte/store'
 import type { OutboxRow } from '../lib/types'
+import type { SyncPhase } from '../lib/syncstatus'
 import { listOutbox, clearSentOutbox } from '../lib/api'
 import { errorMessage, toastSuccess } from './toast'
 
@@ -27,6 +28,10 @@ export const syncFolder = writable<string>('')
 // are empty when idle or between folders.
 export const syncServer = writable<string>('')
 export const syncAccount = writable<string>('')
+
+// syncPhase is stubs or bodies during a sync's first pass, verify while only
+// the background folder check runs, else empty.
+export const syncPhase = writable<SyncPhase>('')
 
 // SyncCounts is how far the running sync has got, in message bodies. total is
 // what the reconcile plans have asked for so far and grows as mailboxes open;

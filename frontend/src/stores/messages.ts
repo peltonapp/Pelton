@@ -55,11 +55,21 @@ export const messageList = writable<AsyncState<ListData>>(idle())
 
 // the selection the current list belongs to, so loadMore can ask for the next
 // page of the same thing.
+//
+// The next page of a folder or view starts at the number of rows loaded, not at
+// a running offset. Every local change to the list (a head merge, a delete, an
+// undo) changes the server's order the same way it changes the loaded rows, so
+// items.length stays the server position of the first row not loaded yet. When
+// the server moved first (mail saved before a page read), the page overlaps
+// rows already loaded and appendPage drops them: a repeat, never a gap.
 let currentSelection: Selection | null = null
-let currentOffset = 0
 // bumped on every loadList call so a response from a superseded selection
 // never overwrites a later one's result.
 let loadGeneration = 0
+// the loadMore whose page is being read, or 0. While one is in flight the user
+// is already past the first page, even before that page lands.
+let moreInFlight = 0
+let moreSeq = 0
 
 // appendPage joins a freshly read page onto the loaded rows, dropping ids that
 // are already on screen. Paging is by offset over a date-ordered query, so mail
@@ -93,10 +103,119 @@ async function fetchPage(sel: Selection, offset: number): Promise<Page> {
   return { items: page.messages ?? [], total: page.total, hasOlder: page.hasOlder }
 }
 
+// listIsPaginated is true once the user has loaded, or is loading, beyond the
+// first page. mail:new reads it to merge the head instead of reloading the list
+// back to one page, so a page or a backfill still in flight counts: reloading
+// then would also throw that page away.
+export function listIsPaginated(): boolean {
+  const state = get(messageList)
+  if (!state.data || state.data.searching) {
+    return false
+  }
+  if (moreInFlight !== 0 || state.data.backfilling) {
+    return true
+  }
+  // a reload would cut the list back to one page.
+  return state.status === 'ready' && state.data.items.length > PAGE_SIZE
+}
+
+// a mail:new that came while the list was loading. One refresh covers any
+// number of them, so only the latest selection is kept.
+let queuedHead: Selection | null = null
+
+function sameSelection(a: Selection, b: Selection): boolean {
+  if (a.kind === 'view' && b.kind === 'view') return a.view === b.view
+  if (a.kind === 'savedView' && b.kind === 'savedView') return a.viewId === b.viewId
+  if (a.kind === 'folder' && b.kind === 'folder') return a.folderId === b.folderId
+  return false
+}
+
+// flushQueuedHead runs the head refresh queued while the list was loading.
+function flushQueuedHead(): void {
+  const sel = queuedHead
+  queuedHead = null
+  if (sel) {
+    void refreshListHead(sel)
+  }
+}
+
+// refreshListHead re-reads the first page, prepends rows that are not loaded
+// yet, replaces loaded rows with their fresh copy (body sync fills in the
+// snippet, attachment and security flags of rows already on screen) and drops
+// loaded rows within the head's date range that are gone from it. Scroll and
+// the rest of the loaded window stay intact. While the list is loading it queues one
+// refresh for when the load ends.
+export async function refreshListHead(sel: Selection): Promise<void> {
+  if (currentSearch || !currentSelection || !sameSelection(sel, currentSelection)) {
+    return
+  }
+  const state = get(messageList)
+  if (state.status === 'loading') {
+    queuedHead = sel
+    return
+  }
+  if (state.status !== 'ready' || !state.data || state.data.searching) {
+    return
+  }
+  const generation = loadGeneration
+  try {
+    const { items: head, total, hasOlder } = await fetchPage(sel, 0)
+    if (generation !== loadGeneration) {
+      return
+    }
+    if (get(messageList).status === 'loading') {
+      // a loadMore started meanwhile; its result may predate this head.
+      queuedHead = sel
+      return
+    }
+    messageList.update((s) => {
+      if (s.status !== 'ready' || !s.data || s.data.searching) {
+        return s
+      }
+      const byId = new Map(head.map((m) => [m.id, m]))
+      // the head is the whole selection down to its oldest row, so a loaded
+      // row newer than that row that the head lacks has left (deleted, moved,
+      // or read under an unread view). A row on the same date may just sort
+      // below the head (the server breaks date ties by uid, which the list does
+      // not have), so it stays. A short head is the entire selection.
+      const whole = head.length < PAGE_SIZE
+      const oldestHead = whole ? '' : head.reduce((min, m) => (m.date < min ? m.date : min), head[0].date)
+      let changed = total !== s.data.total || hasOlder !== s.data.hasOlder
+      const kept: MessageSummary[] = []
+      for (const m of s.data.items) {
+        const next = byId.get(m.id)
+        byId.delete(m.id)
+        if (!next) {
+          if (whole || m.date > oldestHead) {
+            changed = true
+          } else {
+            kept.push(m)
+          }
+          continue
+        }
+        if (JSON.stringify(next) !== JSON.stringify(m)) {
+          changed = true
+          kept.push(next)
+        } else {
+          kept.push(m)
+        }
+      }
+      const fresh = [...byId.values()]
+      if (fresh.length === 0 && !changed) {
+        return s
+      }
+      const items = [...fresh, ...kept].sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0))
+      return ready({ ...s.data, items, total, hasOlder })
+    })
+  } catch {
+    // a failed head refresh must not disturb the list the user is scrolling.
+  }
+}
+
 // loadList loads the first page for a selection, replacing the list.
 export async function loadList(sel: Selection): Promise<void> {
   currentSelection = sel
-  currentOffset = 0
+  moreInFlight = 0
   // leaving a result set: a late search page must not append onto a folder.
   currentSearch = null
   searchSortKind.set(null)
@@ -115,6 +234,7 @@ export async function loadList(sel: Selection): Promise<void> {
     }
     messageList.set(failed(errorMessage(err)))
   }
+  flushQueuedHead()
 }
 
 // loadMore appends the next page if there are more rows. it is a no-op while
@@ -142,15 +262,19 @@ export async function loadMore(): Promise<void> {
     }
     return
   }
-  const nextOffset = currentOffset + PAGE_SIZE
+  const nextOffset = state.data.items.length
   const generation = loadGeneration
+  const token = ++moreSeq
+  moreInFlight = token
   messageList.update((s) => loading(s))
   try {
     const { items, total, hasOlder } = await fetchPage(currentSelection, nextOffset)
+    if (moreInFlight === token) {
+      moreInFlight = 0
+    }
     if (generation !== loadGeneration) {
       return
     }
-    currentOffset = nextOffset
     messageList.update((s) => {
       if (!s.data) {
         return s
@@ -164,14 +288,17 @@ export async function loadMore(): Promise<void> {
       })
     })
   } catch (err) {
+    if (moreInFlight === token) {
+      moreInFlight = 0
+    }
     if (generation !== loadGeneration) {
       return
     }
-    // leave currentOffset unchanged so a retry re-requests this same page
-    // instead of skipping it; keep the existing list and surface the error
+    // nothing was appended, so a retry re-requests this same page; keep the existing list and surface the error
     // without discarding loaded rows.
     messageList.update((s) => (s.data ? ready(s.data) : failed(errorMessage(err))))
   }
+  flushQueuedHead()
 }
 
 // loadOlder fetches the next batch of older mail from the server and appends
@@ -204,14 +331,14 @@ export async function loadOlder(): Promise<void> {
       return
     }
     // the newly cached mail is older than everything on screen, so it lands at
-    // the end of the list; re-read from the current offset rather than
-    // reloading from the top, which would lose the user's scroll position.
-    const nextOffset = currentOffset + PAGE_SIZE
-    const { items, total } = await fetchPage(sel, nextOffset)
+    // the end of the list; read on from the loaded rows rather than reloading
+    // from the top, which would lose the user's scroll position. The count is
+    // read now, not before the round trip: a head merge may have run meanwhile.
+    const loaded = get(messageList).data?.items.length ?? 0
+    const { items, total } = await fetchPage(sel, loaded)
     if (generation !== loadGeneration) {
       return
     }
-    currentOffset = nextOffset
     messageList.update((s) => {
       if (!s.data) {
         return s

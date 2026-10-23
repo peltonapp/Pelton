@@ -1,6 +1,6 @@
 # Pelton - email client (Wails + Svelte)
 
-.PHONY: build build-mac build-win build-linux build-nix dmg run run-nightly app-dev dev clean tidy deps licenses icon disclaimer sync-docs
+.PHONY: build build-mac build-win build-linux build-nix dmg run run-nightly app-dev dev clean tidy deps licenses icon disclaimer sync-docs e2e e2e-manual e2e-app e2e-channel
 
 # version string injected into the binary. it prefers the latest git tag (with a
 # short commit suffix on untagged commits) and falls back to "dev". it is wired
@@ -13,6 +13,14 @@ LDFLAGS := -X main.version=$(VERSION)
 # whenever pkg-config finds it. empty on macOS and Windows, where there is no
 # webkitgtk.
 WEBKIT_TAGS := $(shell pkg-config --exists webkit2gtk-4.1 2>/dev/null && echo -tags webkit2_41)
+
+# wails adds -mmacosx-version-min=10.13 to the cgo flags unless they already set
+# one, but Info.plist enforces macOS 13 (and Go 1.27 needs it), so build the
+# cgo code for 13 on macOS.
+ifeq ($(shell uname),Darwin)
+export CGO_CFLAGS := $(strip $(CGO_CFLAGS) -mmacosx-version-min=13.0)
+export CGO_LDFLAGS := $(strip $(CGO_LDFLAGS) -mmacosx-version-min=13.0)
+endif
 
 # production build into build/bin
 build:
@@ -87,6 +95,45 @@ run-nightly: deps
 	PELTON_DEV=1 wails dev $(WEBKIT_TAGS) -ldflags "$(LDFLAGS) -X main.channel=nightly"
 
 dev: run
+
+# playwright suite against Stalwart in Docker. see e2e/README.md for the
+# prerequisites (Docker, trusted test CA, free ports).
+e2e:
+	e2e/run.sh
+
+# same Stalwart, accounts and (smaller) seed as e2e, then the app instead of
+# Playwright, so the mailboxes can be added and tried by hand. Quitting Pelton
+# tears Stalwart down and wipes the Pelton-e2e-manual data directory.
+e2e-manual:
+	e2e/manual.sh
+
+# the app as e2e/run.sh and e2e/manual.sh start it: wails dev built as channel
+# $(E2E_CHANNEL), so it gets its own data directory, keyring service and
+# single-instance lock (Pelton-$(E2E_CHANNEL)) and the scripts can wipe them
+# without touching Pelton-dev, which every worktree's `make run` shares.
+# PELTON_DEV is removed because it would win over the channel; PELTON_DEVTOOLS
+# keeps the developer overlays. The Wails dev server gets its own address:
+# `make run` keeps the default 34115, and wails dev only logs a failed bind, so
+# sharing it would point Playwright at the developer's Pelton-dev app.
+# Dependencies install from the lockfiles only (--frozen-lockfile).
+E2E_CHANNEL ?= e2e
+E2E_DEVSERVER_PORT ?= 34125
+e2e-app: e2e-channel
+	go mod download
+	cd frontend && pnpm install --frozen-lockfile
+	@# wails dev runs frontend:install (a plain pnpm install) when package.json.md5
+	@# is missing or stale. Record the checksum it compares, so it skips that.
+	cd frontend && { md5sum package.json 2>/dev/null || md5 -r package.json; } | cut -d' ' -f1 | tr -d '\n' >package.json.md5
+	wails generate module
+	env -u PELTON_DEV PELTON_DEVTOOLS=1 wails dev $(WEBKIT_TAGS) -devserver 127.0.0.1:$(E2E_DEVSERVER_PORT) -ldflags "$(LDFLAGS) -X main.channel=$(E2E_CHANNEL)"
+
+# an empty channel would be the real Pelton data directory, and 34115 is the
+# dev server of `make run`. The port must be plain digits (no leading zero, so
+# 034115 cannot pass for something other than 34115) from 1 to 65535.
+e2e-channel:
+	@case "$(E2E_CHANNEL)" in e2e|e2e-*) ;; *) echo "E2E_CHANNEL must be e2e or e2e-<name>, got '$(E2E_CHANNEL)'" >&2; exit 1;; esac
+	@p='$(E2E_DEVSERVER_PORT)'; case "$$p" in ''|*[!0-9]*|0*|??????*|34115) ok=;; *) ok=1;; esac; \
+	if [ -z "$$ok" ] || [ "$$p" -gt 65535 ]; then echo "E2E_DEVSERVER_PORT must be a port from 1 to 65535 without leading zeros, other than 34115 (make run), got '$$p'" >&2; exit 1; fi
 
 # alias kept for discoverability; identical to run.
 app-dev: run

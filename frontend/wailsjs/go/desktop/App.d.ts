@@ -396,7 +396,7 @@ export function TrustAccountCertificate(arg1:number,arg2:string):Promise<void>;
 
 export function TrustSenderImages(arg1:number):Promise<void>;
 
-export function UnarchiveMessage(arg1:string,arg2:number):Promise<void>;
+export function UnarchiveMessage(arg1:string,arg2:number,arg3:number):Promise<void>;
 
 export function UndoDelete(arg1:number):Promise<void>;
 
