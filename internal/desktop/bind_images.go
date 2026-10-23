@@ -2,6 +2,7 @@ package desktop
 
 import (
 	"fmt"
+	"slices"
 	"strings"
 
 	"github.com/peltonapp/Pelton/internal/storage"
@@ -55,12 +56,7 @@ func messageRemoteKey(m *storage.Message) string {
 // to render remote content.
 func (a *App) remoteMessageAllowed(m *storage.Message) bool {
 	key := messageRemoteKey(m)
-	for _, k := range a.remoteMessages() {
-		if k == key {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(a.remoteMessages(), key)
 }
 
 // AllowRemoteForMessage permanently allows remote content for this one message,
@@ -88,21 +84,14 @@ func (a *App) remoteAutoAllow(fromAddress string) bool {
 	if addr == "" {
 		return false
 	}
-	for _, s := range a.remoteSenders() {
-		if s == addr {
-			return true
-		}
+	if slices.Contains(a.remoteSenders(), addr) {
+		return true
 	}
 	domain := emailDomain(addr)
 	if domain == "" {
 		return false
 	}
-	for _, d := range a.remoteDomains() {
-		if d == domain {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(a.remoteDomains(), domain)
 }
 
 // TrustSenderImages permanently allows remote content from a message's sender.
@@ -213,19 +202,14 @@ func removeValue(list []string, value string) []string {
 
 // emailDomain returns the domain part of an address, or empty if malformed.
 func emailDomain(addr string) string {
-	at := strings.LastIndex(addr, "@")
-	if at < 0 || at == len(addr)-1 {
-		return ""
-	}
-	return addr[at+1:]
+	_, domain, _ := strings.CutLast(addr, "@")
+	return domain
 }
 
 // appendUnique adds value to the slice if it is not already present.
 func appendUnique(list []string, value string) []string {
-	for _, v := range list {
-		if v == value {
-			return list
-		}
+	if slices.Contains(list, value) {
+		return list
 	}
 	return append(list, value)
 }

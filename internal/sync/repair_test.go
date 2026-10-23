@@ -29,6 +29,7 @@ func (c *repairClient) FetchMessage(uid imap.UID) (*pimap.Message, error) {
 }
 
 func TestSyncRepairsMangledMessages(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	db, folder := newSyncTestFolder(t)
 
@@ -43,7 +44,7 @@ func TestSyncRepairsMangledMessages(t *testing.T) {
 		t.Fatalf("mark: %v", err)
 	}
 
-	client := &repairClient{fakeClient: fakeClient{uids: []uint32{1}}}
+	client := &repairClient{uids: []uint32{1}}
 	res, err := NewEngine(client, db, nil).SyncFolder(ctx, folder)
 	if err != nil {
 		t.Fatalf("sync: %v", err)
@@ -67,6 +68,7 @@ func TestSyncRepairsMangledMessages(t *testing.T) {
 // the message is gone from the server: there is nothing to repair it from, so
 // the mark comes off and the next sync does not try again.
 func TestSyncStopsRetryingMessagesTheServerLost(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	db, folder := newSyncTestFolder(t)
 
@@ -81,7 +83,7 @@ func TestSyncStopsRetryingMessagesTheServerLost(t *testing.T) {
 		t.Fatalf("mark: %v", err)
 	}
 
-	client := &repairClient{fakeClient: fakeClient{uids: []uint32{1}}, fetchErr: errors.New("no such message")}
+	client := &repairClient{uids: []uint32{1}, fetchErr: errors.New("no such message")}
 	if _, err := NewEngine(client, db, nil).SyncFolder(ctx, folder); err != nil {
 		t.Fatalf("sync: %v", err)
 	}

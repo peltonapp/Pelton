@@ -3,6 +3,7 @@ package desktop
 import (
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 
 	"github.com/peltonapp/Pelton/internal/storage"
@@ -184,8 +185,8 @@ func (a *App) DeleteFolder(id int64) error {
 		return err
 	}
 	if err := a.withAccountIMAP(folder.AccountID, func(client mailClient) error {
-		for i := len(targets) - 1; i >= 0; i-- {
-			if err := client.DeleteFolder(targets[i].IMAPPath); err != nil {
+		for _, target := range slices.Backward(targets) {
+			if err := client.DeleteFolder(target.IMAPPath); err != nil {
 				return err
 			}
 		}
@@ -194,11 +195,11 @@ func (a *App) DeleteFolder(id int64) error {
 		return err
 	}
 
-	for i := len(targets) - 1; i >= 0; i-- {
-		if _, err := a.store.PurgeFolderMessages(a.ctx, targets[i].AccountID, targets[i].ID); err != nil {
+	for _, target := range slices.Backward(targets) {
+		if _, err := a.store.PurgeFolderMessages(a.ctx, target.AccountID, target.ID); err != nil {
 			return err
 		}
-		if err := a.store.DeleteFolder(a.ctx, targets[i].ID); err != nil {
+		if err := a.store.DeleteFolder(a.ctx, target.ID); err != nil {
 			return err
 		}
 	}
@@ -287,8 +288,8 @@ func renamedPath(path, name, delim string) string {
 	if delim == "" {
 		return name
 	}
-	if i := strings.LastIndex(path, delim); i >= 0 {
-		return path[:i+len(delim)] + name
+	if parent, _, ok := strings.CutLast(path, delim); ok {
+		return parent + delim + name
 	}
 	return name
 }

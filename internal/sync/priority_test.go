@@ -62,6 +62,7 @@ func TestYieldStopsOnCancel(t *testing.T) {
 // the first sync of a large folder used to show nothing until the whole folder
 // was down. Stored ids are handed over as they arrive.
 func TestSyncAnnouncesMessagesAsTheyArrive(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	db, folder := newSyncTestFolder(t)
 	uids := make([]uint32, 60)
@@ -98,6 +99,7 @@ func TestSyncAnnouncesMessagesAsTheyArrive(t *testing.T) {
 // a folder with nothing new announces nothing, so an idle sync does not make
 // the list reload for no reason.
 func TestSyncAnnouncesNothingWhenNothingIsNew(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	db, folder := newSyncTestFolder(t)
 	client := &fakeClient{uids: []uint32{1, 2}}
@@ -120,6 +122,7 @@ func TestSyncAnnouncesNothingWhenNothingIsNew(t *testing.T) {
 // paid the round trip to the server thousands of times before anything else
 // could happen on the connection.
 func TestSyncFetchesBodiesInBatches(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	db, folder := newSyncTestFolder(t)
 	uids := make([]uint32, 120)
@@ -148,6 +151,7 @@ func TestSyncFetchesBodiesInBatches(t *testing.T) {
 // newest first still holds: the newest uid has to be in the first batch, or a
 // large mailbox shows years-old mail for as long as it takes to reach today.
 func TestSyncFetchesNewestBatchFirst(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	db, folder := newSyncTestFolder(t)
 	uids := make([]uint32, 120)

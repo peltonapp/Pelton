@@ -23,6 +23,8 @@
   import FolderDialog from './components/sidebar/FolderDialog.svelte'
   import AttachmentPreview from './components/detail/AttachmentPreview.svelte'
   import MoveDialog from './components/detail/MoveDialog.svelte'
+  import AddMailboxDialog from './components/wizard/AddMailboxDialog.svelte'
+  import { createMailtoHold } from './lib/mailtohold'
   import CommandPalette from './components/common/CommandPalette.svelte'
 
   import { initPrefs, prefs, setPaneWidths, setLowPowerMode } from './stores/prefs'
@@ -51,7 +53,6 @@
     setFlagged,
     deleteMessage,
     getMessage,
-    downloadMessageOffline,
     archiveMessage,
     setMailActionsEnabled,
     isDemoMode,
@@ -142,6 +143,7 @@
   import DevOverlays from './components/dev/DevOverlays.svelte'
   import {
     passwordPrompt,
+    passwordPromptSyncFollows,
     answerPasswordPrompt,
     promptForMissingPasswords,
     refreshMissingPasswords,
@@ -494,33 +496,41 @@
     openComposeWith(accountId, editorMode, { to: email, cc: '', bcc: '', subject: '', body: '' })
   }
 
-  // a mailto: link waiting for a mailbox to exist. onboarding-first: if the link
-  // arrives before any account is set up, it is held here and opened once
-  // onboarding finishes, rather than being dropped.
-  let pendingMailto: MailtoDraft | null = null
+  // a mailto: link waiting for a mailbox to exist, and for the wizard or
+  // onboarding to get out of the way. If the link arrives before any account is
+  // set up, it is held and opened once that flow closes, rather than dropped.
+  const mailtoHold = createMailtoHold({
+    accountId: composeAccountId,
+    covered: () => wizardOpen || onboardingOpen,
+    open: (accountId, draft) => openComposeWith(accountId, editorMode, draft),
+  })
 
-  // openMailtoDraft opens a prefilled compose from a mailto: link, or defers it
-  // until a mailbox exists (see pendingMailto).
+  // openMailtoDraft opens a prefilled compose from a mailto: link, or holds it.
   function openMailtoDraft(draft: MailtoDraft): void {
-    const accountId = composeAccountId()
-    if (accountId === null) {
-      pendingMailto = draft
-      return
-    }
-    openComposeWith(accountId, editorMode, draft)
+    mailtoHold.offer(draft)
   }
 
-  // flushPendingMailto opens a held mailto draft once a mailbox is available.
-  function flushPendingMailto(): void {
-    if (pendingMailto && composeAccountId() !== null) {
-      const draft = pendingMailto
-      pendingMailto = null
-      openComposeWith(composeAccountId() as number, editorMode, draft)
-    }
+  // the sidebar's mailbox list is what compose sends from. A held link opens
+  // when it goes from empty to not, which covers the wizard inside Settings.
+  unsubscribers.push(
+    sidebar.subscribe((s) => {
+      if (s.status === 'ready' && s.data) {
+        mailtoHold.accountsChanged(s.data.accounts.length)
+      }
+    }),
+  )
+
+  // closeWizard closes the add-mailbox wizard and opens a held mailto link once
+  // the sidebar lists the mailbox it may have added, now that compose is no
+  // longer hidden under the wizard.
+  function closeWizard(): void {
+    wizardOpen = false
+    void mailtoHold.releaseAfter(refreshSidebar())
   }
 
   async function runSync(): Promise<void> {
-    await promptForMissingPasswords()
+    // the sync below covers every account, so the prompts leave it to us.
+    await promptForMissingPasswords(true)
     syncing.set(true)
     try {
       await triggerSync()
@@ -541,18 +551,12 @@
     wizardOpen = true
   }
 
-  function onMailboxAdded(): void {
-    wizardOpen = false
-    void refreshSidebar().then(flushPendingMailto)
-    toastInfo(get(t)('app.toast.mailboxAdded'))
-  }
-
   // onboarding completion is persisted so it shows only once. re-run clears it
   // from settings and reopens the flow.
   function finishOnboarding(): void {
     onboardingOpen = false
     void setSetting(SettingKeys.onboarded, 'true')
-    flushPendingMailto()
+    mailtoHold.release()
   }
 
   function rerunOnboarding(): void {
@@ -560,8 +564,9 @@
     onboardingOpen = true
   }
 
+  // the held mailto link waits for finishOnboarding: onboarding is still open.
   function onboardingAddedMailbox(): void {
-    void refreshSidebar().then(flushPendingMailto)
+    void refreshSidebar()
   }
 
   function focusSearch(): void {
@@ -680,8 +685,7 @@
           openSnooze(msg.id, msg.subject)
           break
         case 'download-offline':
-          patchInList(msg.id, { offline: true })
-          await downloadMessageOffline(msg.id)
+          await setOffline(msg, true)
           break
         case 'delete-message':
           await deleteMessage(msg.id)
@@ -706,9 +710,7 @@
         case 'archive': {
           const undo = await archiveMessage(msg.id)
           reportArchiveExport(undo)
-          if (undo.messageId) {
-            recordArchived(msg, undo.messageId, undo.originalFolderId)
-          }
+          recordArchived(msg, undo)
           removeFromList(msg.id)
           closeTab(msg.id)
           if (get(openMessageId) === msg.id) {
@@ -1101,7 +1103,7 @@
       return
     }
     if (wizardOpen) {
-      wizardOpen = false
+      closeWizard()
       return
     }
     // a reading-pane tab is the next thing in, the way a browser tab is: with
@@ -1469,9 +1471,7 @@
 {/if}
 
 {#if wizardOpen}
-  {#await import('./components/wizard/AddMailboxWizard.svelte') then m}
-    <svelte:component this={m.default} on:close={() => (wizardOpen = false)} on:added={onMailboxAdded} />
-  {/await}
+  <AddMailboxDialog on:close={closeWizard} />
 {/if}
 
 {#if $editingView}
@@ -1496,7 +1496,7 @@
 
 <CommandPalette commands={paletteCommands} mail={paletteMailCommands} />
 
-<AccountPasswordDialog account={$passwordPrompt} onDone={answerPasswordPrompt} />
+<AccountPasswordDialog account={$passwordPrompt} syncOnSave={!$passwordPromptSyncFollows} onDone={answerPasswordPrompt} />
 
 <SyncFailureDialog />
 

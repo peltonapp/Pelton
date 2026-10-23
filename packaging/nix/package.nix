@@ -1,7 +1,7 @@
 {
   lib,
   stdenv,
-  buildGoModule,
+  buildGo127Module,
   fetchPnpmDeps,
   pnpmConfigHook,
   pnpm_10,
@@ -19,7 +19,8 @@
   version ? "2026.4",
 }:
 
-buildGoModule (finalAttrs: {
+# go.mod needs Go 1.27; nixpkgs still defaults to 1.26.
+buildGo127Module (finalAttrs: {
   pname = "pelton";
   inherit version src;
 
