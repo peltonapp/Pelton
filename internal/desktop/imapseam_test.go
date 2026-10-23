@@ -13,14 +13,16 @@ import (
 	"github.com/peltonapp/Pelton/internal/credentials"
 	pimap "github.com/peltonapp/Pelton/internal/imap"
 	"github.com/peltonapp/Pelton/internal/storage"
+	"github.com/peltonapp/Pelton/internal/storage/storagetest"
 )
 
 // TestMain swaps go-keyring for its in-memory mock before any test in this
 // package runs, so a test that resolves an account's credentials never reads or
-// writes the machine's real credential store.
+// writes the machine's real credential store. storagetest.Main removes the
+// migrated database the test stores are copied from.
 func TestMain(m *testing.M) {
 	keyring.MockInit()
-	os.Exit(m.Run())
+	os.Exit(storagetest.Main(m))
 }
 
 // fakeIMAP records the commands a binding sends and answers them from canned

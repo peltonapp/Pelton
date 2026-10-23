@@ -316,8 +316,8 @@ func loadMigrations() ([]migration, error) {
 // versionFromName parses the leading digits of a migration filename.
 func versionFromName(name string) (int, error) {
 	prefix := name
-	if i := strings.IndexByte(name, '_'); i >= 0 {
-		prefix = name[:i]
+	if before, _, ok := strings.Cut(name, "_"); ok {
+		prefix = before
 	}
 	version, err := strconv.Atoi(prefix)
 	if err != nil {

@@ -19,6 +19,7 @@ import (
 	pimap "github.com/peltonapp/Pelton/internal/imap"
 	"github.com/peltonapp/Pelton/internal/outbox"
 	"github.com/peltonapp/Pelton/internal/storage"
+	"github.com/peltonapp/Pelton/internal/storage/storagetest"
 )
 
 // submissionServer is enough of a submission server to carry one message:
@@ -101,7 +102,7 @@ func speakSubmission(conn net.Conn) {
 func sendingAccount(t *testing.T, client *fakeIMAP) (*App, storage.Account) {
 	t.Helper()
 	ctx, stopBackground := testContext(t)
-	db, err := storage.Open(filepath.Join(t.TempDir(), "test.db"))
+	db, err := storagetest.Open(filepath.Join(t.TempDir(), "test.db"))
 	if err != nil {
 		t.Fatalf("open: %v", err)
 	}
