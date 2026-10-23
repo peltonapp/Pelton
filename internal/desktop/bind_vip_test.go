@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/peltonapp/Pelton/internal/storage"
+	"github.com/peltonapp/Pelton/internal/storage/storagetest"
 )
 
 func TestBareAddress(t *testing.T) {
@@ -18,6 +19,10 @@ func TestBareAddress(t *testing.T) {
 		{"\"Doe, Jane\" <jane@x.io>", "jane@x.io"},
 		{"", ""},
 		{"No Address Name", "no address name"},
+		{"<boss@corp.com>", "boss@corp.com"},
+		{"Boss <boss@corp.com", "boss <boss@corp.com"},
+		{"Boss <", "boss <"},
+		{"A <a@x.com> B <b@y.com>", "b@y.com"},
 	}
 	for _, tt := range tests {
 		if got := bareAddress(tt.in); got != tt.want {
@@ -29,7 +34,7 @@ func TestBareAddress(t *testing.T) {
 func newVIPTestApp(t *testing.T) *App {
 	t.Helper()
 	ctx, stopBackground := testContext(t)
-	store, err := storage.Open(filepath.Join(t.TempDir(), "test.db"))
+	store, err := storagetest.Open(filepath.Join(t.TempDir(), "test.db"))
 	if err != nil {
 		t.Fatalf("open store: %v", err)
 	}

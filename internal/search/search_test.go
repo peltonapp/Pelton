@@ -1,6 +1,7 @@
 package search
 
 import (
+	"slices"
 	"testing"
 	"time"
 )
@@ -39,12 +40,7 @@ func ids(t *testing.T, idx *Index, q Query) []int64 {
 }
 
 func contains(ids []int64, want int64) bool {
-	for _, id := range ids {
-		if id == want {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(ids, want)
 }
 
 var corpus = []Doc{

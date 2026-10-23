@@ -297,8 +297,8 @@ func (a *App) sessionCtx() context.Context {
 	return a.session
 }
 
-// endProfileSession cancels the current session and clears it, so the next
-// sessionCtx starts a fresh one.
+// endProfileSession cancels the current session, joins every account worker, and
+// clears the session so the next sessionCtx starts a fresh one.
 func (a *App) endProfileSession() {
 	a.sessionMu.Lock()
 	stop := a.sessionStop
@@ -308,6 +308,7 @@ func (a *App) endProfileSession() {
 	if stop != nil {
 		stop()
 	}
+	a.joinAllAccountWorkers()
 }
 
 // toProfileDTO flattens a profile and looks up the accounts it shows.
