@@ -2,6 +2,7 @@ package desktop
 
 import (
 	"errors"
+	"strconv"
 
 	wailsruntime "github.com/wailsapp/wails/v2/pkg/runtime"
 
@@ -148,11 +149,16 @@ const (
 	// what the window's close button does: "background" (default) or "quit".
 	// See close.go.
 	settingCloseAction = "close_button_action"
-	// how many of a folder's newest messages a first sync fetches, and whether
+	// the sync window: how many of a folder's newest messages are kept with
+	// their bodies (raising it fetches the newly admitted ones), and whether
 	// reaching the end of the list pulls the next batch automatically (#175).
 	// 0 messages means no limit: sync the whole mailbox as older versions did.
 	settingSyncMessageLimit = "sync_message_limit"
 	settingSyncAutoBackfill = "sync_auto_backfill"
+	// how many IMAP sessions one account may use at once. IDLE holds one of
+	// them; sending stays outside the pool. Clamped to
+	// [minSyncMaxParallel, maxSyncMaxParallel] on write and on read.
+	settingSyncMaxParallel = "sync_max_parallel"
 	// the order of the unified views block in the sidebar, as a comma-separated
 	// list of view keys (#187). The views have no rows of their own, so unlike
 	// folders and accounts their order lives here. Empty means the built-in
@@ -200,10 +206,17 @@ const (
 	defaultUIScale = "1"
 	// base font size (px) for rendered email content.
 	defaultMessageFont = 14
-	// how many of a folder's newest messages a first sync fetches. Matches the
-	// list's page size, so the first screenful is cached and anything past it is
-	// backfilled on demand rather than downloaded up front.
-	defaultSyncMessageLimit = 50
+	// how many of a folder's newest message bodies a first sync fetches. Older
+	// bodies stay on the server until asked for. 0 means no limit.
+	defaultSyncMessageLimit = 100
+	// parallel sync connections per account: every IMAP session, the IDLE
+	// one included (at 3 that is 2 background workers and the IDLE session,
+	// which also serves the fast lane). Sending does not consume a slot. The
+	// ui offers 2..10; the backend accepts 1..10, and the throttle may lower
+	// the effective size to 1 on its own.
+	defaultSyncMaxParallel = 3
+	minSyncMaxParallel     = 1
+	maxSyncMaxParallel     = 10
 )
 
 // UIPrefsDTO is the complete set of user-facing preferences this step exposes:
@@ -397,12 +410,17 @@ type UIPrefsDTO struct {
 	// CloseAction is what the window's close button does: "background" keeps
 	// Pelton running and syncing with the window hidden, "quit" exits.
 	CloseAction string `json:"closeAction"`
-	// SyncMessageLimit caps how many of a folder's newest messages the first
-	// sync fetches; older mail stays on the server until it is asked for. 0
-	// means no limit. SyncAutoBackfill fetches the next batch automatically on
-	// reaching the end of the list; off puts it behind a button instead.
+	// SyncMessageLimit is the sync window: how many of a folder's newest
+	// messages are kept with their bodies. Older ones stay on the server until
+	// asked for; raising it fetches the newly admitted ones. 0 means no limit.
+	// SyncAutoBackfill fetches the next batch automatically on reaching the end
+	// of the list; off puts it behind a button instead.
 	SyncMessageLimit int  `json:"syncMessageLimit"`
 	SyncAutoBackfill bool `json:"syncAutoBackfill"`
+	// SyncMaxParallel is how many IMAP sessions one account may use at once,
+	// IDLE included. Clamped to 1–10 (the ui offers 2–10). Sending does not
+	// use one.
+	SyncMaxParallel int `json:"syncMaxParallel"`
 	// StartupSelection is what the sidebar selects on launch: "view:<key>" for a
 	// unified view, "folder:<id>" for one account folder, or "last" to restore
 	// the previous session. A target that no longer exists falls back to the
@@ -506,6 +524,7 @@ func (a *App) GetUIPrefs() (UIPrefsDTO, error) {
 		CloseAction:                a.stringSetting(settingCloseAction, closeActionBackground),
 		SyncMessageLimit:           a.syncMessageLimit(),
 		SyncAutoBackfill:           a.boolSetting(settingSyncAutoBackfill, true),
+		SyncMaxParallel:            a.syncMaxParallel(),
 		StartupSelection:           a.stringSetting(settingStartupSelection, defaultStartupSelection),
 		LogToFile:                  a.logsOn(),
 		LogLevel:                   logging.LevelName(a.logLevel()),
@@ -536,8 +555,37 @@ func (a *App) SetSetting(key, value string) error {
 	if err := a.ready(); err != nil {
 		return err
 	}
+	if key == settingSyncMaxParallel {
+		n, err := strconv.Atoi(value)
+		if err != nil {
+			n = defaultSyncMaxParallel
+		}
+		value = strconv.Itoa(clampSyncMaxParallel(n))
+	}
+	var limitRaisedFrom, limitRaisedTo int
+	var raiseMessageLimit bool
+	if key == settingSyncMessageLimit {
+		limitRaisedFrom = a.syncMessageLimit()
+		n, err := strconv.Atoi(value)
+		if err != nil {
+			n = defaultSyncMessageLimit
+		}
+		if n < 0 {
+			n = 0
+		}
+		limitRaisedTo = n
+		value = strconv.Itoa(n)
+		raiseMessageLimit = syncMessageLimitExpanded(limitRaisedFrom, limitRaisedTo)
+	}
 	if err := a.store.Set(a.ctx, key, value); err != nil {
 		return err
+	}
+	if raiseMessageLimit {
+		from, to := limitRaisedFrom, limitRaisedTo
+		goSafe("expanding sync window", func() { a.enqueueSyncLimitDelta(from, to) })
+	}
+	if key == settingSyncMaxParallel {
+		a.reconfigureSyncPools()
 	}
 	if key == storage.SettingTheme {
 		a.applyNativeTheme(value)
@@ -621,6 +669,76 @@ func (a *App) intSetting(key string, def int) int {
 		return def
 	}
 	return value
+}
+
+// clampSyncMaxParallel keeps a parallel-sync setting inside 1–10.
+func clampSyncMaxParallel(n int) int {
+	if n < minSyncMaxParallel {
+		return minSyncMaxParallel
+	}
+	if n > maxSyncMaxParallel {
+		return maxSyncMaxParallel
+	}
+	return n
+}
+
+// syncMessageLimitExpanded reports whether newLimit admits more local bodies
+// than oldLimit. Zero means unlimited (all local bodies per protocol rules).
+func syncMessageLimitExpanded(oldLimit, newLimit int) bool {
+	if newLimit == oldLimit {
+		return false
+	}
+	if oldLimit == 0 {
+		return false
+	}
+	if newLimit == 0 {
+		return true
+	}
+	return newLimit > oldLimit
+}
+
+// syncMaxParallel is how many sync connections one account may use at once.
+// An unset or unparsable value is the default; a stored value outside 1–10 is
+// clamped so a hand-edited setting cannot open more sessions than the pool
+// allows.
+func (a *App) syncMaxParallel() int {
+	return clampSyncMaxParallel(a.intSetting(settingSyncMaxParallel, defaultSyncMaxParallel))
+}
+
+// accountSyncMaxParallel is how many sync connections one account may use: its
+// own override when set, otherwise the global setting, clamped to 1–10.
+func (a *App) accountSyncMaxParallel(accountID int64) int {
+	if a.store != nil {
+		if acct, err := a.store.GetAccount(a.ctx, accountID); err == nil && acct.SyncMaxParallel != nil {
+			return clampSyncMaxParallel(*acct.SyncMaxParallel)
+		}
+	}
+	return a.syncMaxParallel()
+}
+
+// reconfigureSyncPools pushes the current parallelism onto every running pool.
+// Accounts with an override keep it; they land on the same value either way.
+// A pool between two runtimes of its account gets it too.
+func (a *App) reconfigureSyncPools() {
+	a.sessionPoolsMu.Lock()
+	ids := make([]int64, 0, len(a.sessionPools))
+	for id := range a.sessionPools {
+		ids = append(ids, id)
+	}
+	a.sessionPoolsMu.Unlock()
+	for _, id := range ids {
+		a.reconfigureAccountPool(id)
+	}
+}
+
+// reconfigureAccountPool re-reads one account's parallelism into its pool,
+// if it has one (see accountSessions.applyUserSetting). The setting is read
+// under the account's resize lock, so of two applies the later one applies
+// the newer value.
+func (a *App) reconfigureAccountPool(accountID int64) {
+	if s := a.accountShared(accountID); s != nil {
+		s.applyUserSetting(func() int { return a.accountSyncMaxParallel(accountID) })
+	}
 }
 
 // isSettingMissing reports whether err is the not-found sentinel, so callers can

@@ -1,7 +1,6 @@
 package desktop
 
 import (
-	"bytes"
 	"context"
 	"encoding/base64"
 	"errors"
@@ -9,13 +8,18 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"slices"
+	"strconv"
+	"strings"
+	"sync"
 	"sync/atomic"
 	"time"
 
-	"github.com/emersion/go-imap/v2"
 	"github.com/wailsapp/wails/v2/pkg/runtime"
 
+	"github.com/peltonapp/Pelton/internal/desktop/syncsched"
 	"github.com/peltonapp/Pelton/internal/storage"
+	psync "github.com/peltonapp/Pelton/internal/sync"
 )
 
 // maxPreviewBytes caps how large an attachment we will stream to the ui for the
@@ -173,8 +177,9 @@ func (w *progressWriter) Write(p []byte) (int, error) {
 
 // DownloadRange downloads every message from startDateRFC3339 to today that is
 // not already cached, across all accounts and folders, and pins them offline for
-// fast local search. includeAttachments controls whether attachment bytes are
-// persisted. Progress (percent + eta) is emitted for the status bar.
+// fast local search; a message already cached with its body is only pinned.
+// includeAttachments controls whether attachment bytes are persisted.
+// Progress (percent + eta) is emitted for the status bar.
 func (a *App) DownloadRange(startDateRFC3339 string, includeAttachments bool) error {
 	if err := a.ready(); err != nil {
 		return err
@@ -287,21 +292,21 @@ func (a *App) runRangeDownload(ctx context.Context, since time.Time, includeAtta
 	}
 
 	a.emit(EventDownloadProgress, DownloadProgressEvent{Running: true, Label: "Scanning"})
-	tasks, err := a.planDownload(ctx, since)
+	tasks, pin, err := a.planDownload(ctx, since)
 	if err != nil {
 		clearIfNotShutdown()
 		a.emit(EventDownloadProgress, DownloadProgressEvent{Running: false, Error: err.Error()})
 		return
 	}
 	total := len(tasks)
-	if total == 0 {
+	if total == 0 && len(pin) == 0 {
 		clearIfNotShutdown()
 		a.emit(EventDownloadProgress, DownloadProgressEvent{Running: false, Label: "Nothing to download"})
 		return
 	}
 
 	a.emit(EventDownloadProgress, DownloadProgressEvent{Running: true, Total: total, Label: "Starting"})
-	if err := a.runDownload(ctx, tasks, includeAttachments, total); err != nil {
+	if err := a.runDownload(ctx, tasks, pin, includeAttachments, total); err != nil {
 		clearIfNotShutdown()
 		a.emit(EventDownloadProgress, DownloadProgressEvent{Running: false, Error: err.Error()})
 		return
@@ -312,24 +317,32 @@ func (a *App) runRangeDownload(ctx context.Context, since time.Time, includeAtta
 
 // dlTask is one message to fetch, paired with the folder it belongs to.
 type dlTask struct {
-	folder storage.Folder
-	uid    uint32
+	folder   storage.Folder
+	remoteID string
 }
 
-// planDownload connects to each account, searches every folder for messages
-// since the cutoff, and returns the ones not yet cached. It is the cheap counting
-// pass that lets the fetch pass report an accurate percentage and eta.
-func (a *App) planDownload(ctx context.Context, since time.Time) ([]dlTask, error) {
+// downloadBatch is how many messages one Fetch asks for: one round trip per
+// batch keeps progress moving without a request per message.
+const downloadBatch = 25
+
+// planDownload lists, across every account, the messages since the cutoff that
+// are not cached yet (tasks) and the cached ones that only need pinning (pin).
+// It is the cheap counting pass that lets the fetch pass report an accurate
+// percentage and eta.
+func (a *App) planDownload(ctx context.Context, since time.Time) ([]dlTask, []int64, error) {
 	accounts, err := a.store.ListAccounts(a.ctx)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
-	var tasks []dlTask
+	var (
+		tasks []dlTask
+		pin   []int64
+	)
 	for _, account := range accounts {
 		if err := ctx.Err(); err != nil {
-			return nil, err
+			return nil, nil, err
 		}
-		accTasks, err := a.planAccount(ctx, account, since)
+		accTasks, accPin, err := a.planAccount(ctx, account, since)
 		if err != nil {
 			if errors.Is(err, errNoCredentials) {
 				continue
@@ -338,99 +351,152 @@ func (a *App) planDownload(ctx context.Context, since time.Time) ([]dlTask, erro
 			continue
 		}
 		tasks = append(tasks, accTasks...)
+		pin = append(pin, accPin...)
 	}
-	return tasks, nil
+	return tasks, pin, nil
 }
 
-// planAccount opens one account and lists the uncached message uids since the
-// cutoff across its folders.
-func (a *App) planAccount(ctx context.Context, account storage.Account, since time.Time) ([]dlTask, error) {
-	cfg, err := a.resolveIMAP(account)
-	if err != nil {
-		return nil, err
-	}
-	syncMu.Lock()
-	defer syncMu.Unlock()
-
-	client, err := a.connectIMAP(cfg)
-	if err != nil {
-		return nil, err
-	}
-	defer client.Close()
-	if err := client.Login(); err != nil {
-		return nil, err
-	}
-	defer client.Logout()
-
+// planAccount lists, for one account, the messages since the cutoff that are
+// not cached yet (tasks) and the ones already complete that only need pinning.
+// IMAP asks the server, since a folder may hold mail older than what sync
+// listed.
+func (a *App) planAccount(ctx context.Context, account storage.Account, since time.Time) ([]dlTask, []int64, error) {
 	folders, err := a.store.ListFolders(a.ctx, account.ID)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
-	var tasks []dlTask
-	for _, folder := range folders {
-		if err := ctx.Err(); err != nil {
-			return nil, err
-		}
-		// an unchecked folder is not synced, so downloading it for offline use
-		// would fetch mail the user asked not to keep up to date (#173).
-		if folder.SyncExcluded {
-			continue
-		}
-		if _, err := client.Select(folder.IMAPPath); err != nil {
-			a.log.Error("plan select", "folder", folder.IMAPPath, "err", err)
-			continue
-		}
-		uids, err := client.SearchSince(since)
-		if err != nil {
-			a.log.Error("plan search", "folder", folder.IMAPPath, "err", err)
-			continue
-		}
-		have, err := a.cachedUIDs(folder.ID)
-		if err != nil {
-			return nil, err
-		}
-		for _, uid := range uids {
-			if _, ok := have[uint32(uid)]; !ok {
-				tasks = append(tasks, dlTask{folder: folder, uid: uint32(uid)})
+	// an unchecked folder is not synced, so downloading it for offline use
+	// would fetch mail the user asked not to keep up to date (#173).
+	folders = slices.DeleteFunc(folders, func(f storage.Folder) bool { return f.SyncExcluded })
+	return a.protocolFor(account).planDownload(ctx, account, folders, since)
+}
+
+// planIMAPAccount searches each folder on the server for uids since the cutoff
+// and checks them against the cache: a uid missing or cached as a stub is a
+// task, a complete one is pinned. Each folder is one normal-lane task.
+func (a *App) planIMAPAccount(ctx context.Context, account storage.Account, folders []storage.Folder, since time.Time) ([]dlTask, []int64, error) {
+	var (
+		mu    sync.Mutex
+		tasks []dlTask
+		pin   []int64
+	)
+	err := a.runFolderTasks(ctx, account, syncsched.KindOffline, "offline-plan", folders,
+		func(_ context.Context, client mailClient, folder storage.Folder) error {
+			if ctx.Err() != nil {
+				return nil
 			}
+			ft, fp, err := a.planIMAPFolder(client, folder, since)
+			mu.Lock()
+			tasks, pin = append(tasks, ft...), append(pin, fp...)
+			mu.Unlock()
+			return err
+		})
+	if err != nil {
+		return nil, nil, err
+	}
+	return tasks, pin, nil
+}
+
+// planIMAPFolder is one folder of planIMAPAccount. A folder the server
+// refuses is logged and skipped.
+func (a *App) planIMAPFolder(client mailClient, folder storage.Folder, since time.Time) ([]dlTask, []int64, error) {
+	if _, err := client.Select(folder.IMAPPath); err != nil {
+		a.log.Error("plan select", "folder", folder.IMAPPath, "err", err)
+		return nil, nil, nil
+	}
+	uids, err := client.SearchSince(since)
+	if err != nil {
+		a.log.Error("plan search", "folder", folder.IMAPPath, "err", err)
+		return nil, nil, nil
+	}
+	// the server's SINCE has already applied the cutoff, so every cached row
+	// is a candidate match regardless of its stored date.
+	states, err := a.store.MessageBodyStates(a.ctx, folder.ID, time.Time{})
+	if err != nil {
+		return nil, nil, err
+	}
+	have := make(map[uint32]storage.MessageBodyState, len(states))
+	for _, s := range states {
+		have[s.UID] = s
+	}
+	var (
+		tasks []dlTask
+		pin   []int64
+	)
+	for _, uid := range uids {
+		s, cached := have[uint32(uid)]
+		if !cached || !s.BodyComplete {
+			// a stub is fetched too: the user asked to have it offline.
+			tasks = append(tasks, dlTask{folder: folder, remoteID: strconv.FormatUint(uint64(uid), 10)})
+			continue
+		}
+		pin = append(pin, s.ID)
+	}
+	return tasks, pin, nil
+}
+
+// runFolderTasks queues one normal-lane task per folder, keyed by prefix and
+// folder id, and waits for all of them. run may return syncsched.ErrAgain
+// for its next unit. A local error is the run's to return; it ends that
+// folder only. The first error comes back.
+func (a *App) runFolderTasks(ctx context.Context, account storage.Account, kind syncsched.Kind, prefix string, folders []storage.Folder, run func(ctx context.Context, c mailClient, folder storage.Folder) error) error {
+	errs := make(chan error, len(folders))
+	queued := 0
+	for _, f := range folders {
+		err := a.enqueuePooled(ctx, account, poolTask{
+			Kind: kind, FolderID: f.ID, Key: fmt.Sprintf("%s:%d", prefix, f.ID),
+			Run: func(ctx context.Context, c mailClient) error { return run(ctx, c, f) },
+		}, func(err error) { errs <- a.stoppedErr(account.ID, err) })
+		if err != nil {
+			return err
+		}
+		queued++
+	}
+	var first error
+	for range queued {
+		select {
+		case err := <-errs:
+			if first == nil {
+				first = err
+			}
+		case <-ctx.Done():
+			return ctx.Err()
 		}
 	}
-	return tasks, nil
+	return first
 }
 
-// cachedUIDs returns the set of uids already stored for a folder.
-func (a *App) cachedUIDs(folderID int64) (map[uint32]struct{}, error) {
-	states, err := a.store.ListMessageStates(a.ctx, folderID)
-	if err != nil {
-		return nil, err
+// runDownload pins the messages that already have their body, then fetches the
+// planned ones account by account, storing and pinning each, and emits progress
+// with percent and a running eta.
+func (a *App) runDownload(ctx context.Context, tasks []dlTask, pin []int64, includeAttachments bool, total int) error {
+	for _, id := range pin {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		if err := a.store.SetOffline(a.ctx, id, true); err != nil {
+			a.log.Error("download pin", "id", id, "err", err)
+		}
 	}
-	set := make(map[uint32]struct{}, len(states))
-	for _, s := range states {
-		set[s.UID] = struct{}{}
-	}
-	return set, nil
-}
 
-// runDownload fetches the planned messages account by account, storing each and
-// pinning it offline, and emits progress with percent and a running eta.
-func (a *App) runDownload(ctx context.Context, tasks []dlTask, includeAttachments bool, total int) error {
-	byAccount := groupByAccount(tasks)
-	start := time.Now()
-	done := 0
-
-	for accountID, accTasks := range byAccount {
+	prog := &dlProgress{total: total, start: time.Now()}
+	for accountID, accTasks := range groupByAccount(tasks) {
 		if err := ctx.Err(); err != nil {
 			return err
 		}
 		account, err := a.store.GetAccount(a.ctx, accountID)
 		if err != nil {
 			a.log.Error("download get account", "id", accountID, "err", err)
-			done += len(accTasks)
+			prog.add(len(accTasks))
 			continue
 		}
-		if err := a.downloadAccount(ctx, *account, accTasks, includeAttachments, &done, total, start); err != nil {
+		if err := a.downloadAccount(ctx, *account, accTasks, includeAttachments, prog); err != nil {
 			if errors.Is(err, errNoCredentials) {
-				done += len(accTasks)
+				prog.add(len(accTasks))
+				continue
+			}
+			if errors.Is(err, errAccountSyncHeld) {
+				a.log.Info("download stopped: mailbox is being removed or was removed", "account", account.Email)
 				continue
 			}
 			a.log.Error("download account", "account", account.Email, "err", err)
@@ -439,86 +505,86 @@ func (a *App) runDownload(ctx context.Context, tasks []dlTask, includeAttachment
 	return nil
 }
 
-// downloadAccount fetches every task for one account over a single connection.
-func (a *App) downloadAccount(ctx context.Context, account storage.Account, tasks []dlTask, includeAttachments bool, done *int, total int, start time.Time) error {
-	cfg, err := a.resolveIMAP(account)
-	if err != nil {
-		return err
-	}
-	syncMu.Lock()
-	defer syncMu.Unlock()
-
-	client, err := a.connectIMAP(cfg)
-	if err != nil {
-		return err
-	}
-	defer client.Close()
-	if err := client.Login(); err != nil {
-		return err
-	}
-	defer client.Logout()
-
-	selected := ""
-	for _, task := range tasks {
-		if err := ctx.Err(); err != nil {
-			return err
-		}
-		if selected != task.folder.IMAPPath {
-			if _, err := client.Select(task.folder.IMAPPath); err != nil {
-				a.log.Error("download select", "folder", task.folder.IMAPPath, "err", err)
-				*done++
-				continue
-			}
-			selected = task.folder.IMAPPath
-		}
-		if err := a.fetchAndPin(client, task, includeAttachments); err != nil {
-			a.log.Error("download fetch", "uid", task.uid, "err", err)
-		}
-		*done++
-		a.emitDownloadProgress(*done, total, start, account.Email)
-	}
-	return nil
+// dlProgress counts a bulk download's messages across the tasks fetching
+// them, which may run at once on several sessions.
+type dlProgress struct {
+	mu    sync.Mutex
+	done  int
+	total int
+	start time.Time
 }
 
-// fetchAndPin fetches one message and stores it pinned offline. Attachment bytes
-// are persisted only when includeAttachments is set.
-func (a *App) fetchAndPin(client mailClient, task dlTask, includeAttachments bool) error {
-	msg, err := client.FetchMessage(imap.UID(task.uid))
-	if err != nil {
-		return err
+// add counts n more messages and returns the new total done.
+func (p *dlProgress) add(n int) int {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.done += n
+	return p.done
+}
+
+// downloadAccount fetches one account's tasks, folder by folder in batches,
+// storing each message the way sync does and pinning it.
+func (a *App) downloadAccount(ctx context.Context, account storage.Account, tasks []dlTask, includeAttachments bool, prog *dlProgress) error {
+	return a.protocolFor(account).download(ctx, account, groupByFolder(tasks), includeAttachments, prog)
+}
+
+// fetchDownloadBatch fetches one batch of a folder's tasks, stores each message
+// and pins it, then reports progress. Failures are logged per message so one
+// bad message does not stop the rest.
+func (a *App) fetchDownloadBatch(ctx context.Context, ad psync.Adapter, account storage.Account, folder storage.Folder, chunk []string, includeAttachments bool, prog *dlProgress) {
+	fetched, ferr := ad.Fetch(ctx, folder.RemoteID, chunk)
+	if ferr != nil {
+		a.log.Error("download fetch", "folder", folder.ID, "err", ferr)
 	}
-	stored := &storage.Message{
-		AccountID:   task.folder.AccountID,
-		FolderID:    task.folder.ID,
-		UID:         uint32(msg.UID),
-		MessageID:   msg.MessageID,
-		Subject:     msg.Subject,
-		FromAddress: msg.From,
-		ToAddresses: msg.To,
-		CcAddresses: msg.Cc,
-		Date:        msg.Date,
-		Flags:       0,
-		BodyPlain:   msg.Text,
-		BodyHTML:    msg.HTML,
-		SizeBytes:   msg.Size,
-		Offline:     true,
-	}
-	var atts []storage.IncomingAttachment
-	if includeAttachments {
-		for _, at := range msg.Attachments {
-			atts = append(atts, storage.IncomingAttachment{
-				Filename:    at.Filename,
-				ContentType: at.ContentType,
-				ContentID:   at.ContentID,
-				Content:     bytes.NewReader(at.Content),
-			})
+	for _, msg := range fetched {
+		id, err := a.storeOffline(folder, msg, includeAttachments)
+		if err != nil {
+			a.log.Error("download store", "remote_id", msg.RemoteID, "err", err)
+			continue
+		}
+		if id == 0 {
+			continue
+		}
+		if err := a.store.SetOffline(a.ctx, id, true); err != nil {
+			a.log.Error("download pin", "id", id, "err", err)
 		}
 	}
-	id, err := a.store.InsertMessageWithAttachments(a.ctx, stored, atts)
-	if err != nil {
-		return err
+	a.emitDownloadProgress(prog.add(len(chunk)), prog.total, prog.start, account.Email)
+}
+
+// storeOffline stores one downloaded message and returns its row id to pin.
+// A stub, cached at plan time or listed by a sync since, is filled in place
+// with its attachments, as a sync's body fill would. A row that is complete
+// by then, or that a sync inserted between the lookup and the insert, is only
+// looked up. It stores with the app context so a cancel cannot leave a
+// message half written.
+func (a *App) storeOffline(folder storage.Folder, msg psync.Fetched, includeAttachments bool) (int64, error) {
+	if id, err := a.store.MessageIDByRemoteID(a.ctx, folder.ID, msg.RemoteID); err == nil {
+		need, err := a.store.MessageNeedsBody(a.ctx, id)
+		if err != nil {
+			return 0, err
+		}
+		if !need {
+			return id, nil
+		}
+		includeAttachments = true
+	} else if !errors.Is(err, storage.ErrMessageNotFound) {
+		return 0, err
 	}
-	return a.store.SetOffline(a.ctx, id, true)
+	id, err := psync.StoreFetched(a.ctx, a.store, a.log, folder, msg, includeAttachments)
+	if err != nil && !isUniqueViolation(err) {
+		return 0, err
+	}
+	if id == 0 {
+		return a.store.MessageIDByRemoteID(a.ctx, folder.ID, msg.RemoteID)
+	}
+	return id, nil
+}
+
+// isUniqueViolation reports a store error from a row inserted by someone else
+// first.
+func isUniqueViolation(err error) bool {
+	return strings.Contains(err.Error(), "UNIQUE constraint failed")
 }
 
 // emitDownloadProgress computes percent and eta and emits a progress event.
@@ -536,6 +602,27 @@ func (a *App) emitDownloadProgress(done, total int, start time.Time, label strin
 	a.emit(EventDownloadProgress, DownloadProgressEvent{
 		Running: true, Done: done, Total: total, Percent: percent, ETASeconds: eta, Label: label,
 	})
+}
+
+// folderTasks is one folder's share of an account's download tasks.
+type folderTasks struct {
+	folder    storage.Folder
+	remoteIDs []string
+}
+
+// groupByFolder buckets one account's tasks by folder id, since a Fetch asks
+// for messages from a single mailbox.
+func groupByFolder(tasks []dlTask) map[int64]*folderTasks {
+	out := make(map[int64]*folderTasks)
+	for _, t := range tasks {
+		ft, ok := out[t.folder.ID]
+		if !ok {
+			ft = &folderTasks{folder: t.folder}
+			out[t.folder.ID] = ft
+		}
+		ft.remoteIDs = append(ft.remoteIDs, t.remoteID)
+	}
+	return out
 }
 
 // groupByAccount buckets download tasks by their folder's account id.

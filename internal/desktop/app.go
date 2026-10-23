@@ -53,9 +53,6 @@ type App struct {
 	// though a nil check keeps it from crashing.
 	storeReady chan struct{}
 	index      *search.Index
-	// syncTally holds the message counts behind the sync progress bar for the
-	// run in flight.
-	syncTally syncTally
 	// streamTick rate-limits the "mail arrived" events a running sync emits, so
 	// a fast first sync fills the list without asking the ui to redraw it
 	// hundreds of times a minute.
@@ -164,6 +161,47 @@ type App struct {
 	// waiting for the next sidebar refresh.
 	badgeMu     sync.Mutex
 	unreadBadge int
+
+	// workersMu guards workers, the per-account sync/idle goroutines.
+	// stopAccountWorker cancels and joins one entry; profile shutdown cancels
+	// the session and joins all.
+	workersMu sync.Mutex
+	workers   map[int64]*accountWorker
+
+	// accountStatesMu guards accountStates and removedAccounts. A state holds
+	// the account's lock, sync hold, tracked IMAP sessions and progress
+	// tally. Entries outlive the account's scheduler so account
+	// removal can abort, hold and lock only that account across the teardown.
+	accountStatesMu sync.Mutex
+	accountStates   map[int64]*accountState
+	// removedAccounts are the ids DeleteAccount removed while the app ran.
+	// Nothing may start sync work for them again.
+	removedAccounts map[int64]struct{}
+
+	// syncsMu guards syncs, one scheduler and sync pool per account. SMTP
+	// send never checks a slot out and pauses nothing.
+	syncsMu sync.Mutex
+	syncs   map[int64]*accountSync
+	// sessionPoolsMu guards sessionPools, the accounts' connection caps and
+	// sessions. They outlive the schedulers in syncs. Taken under syncsMu.
+	sessionPoolsMu sync.Mutex
+	sessionPools   map[int64]*accountSessions
+
+	// syncStateMu guards syncStateRuns, the sync runs of every account going
+	// now: sync:state says running from the first one to the last one's end.
+	syncStateMu   sync.Mutex
+	syncStateRuns int
+
+	// movedUIDs remembers where recent moves put each message, for undo.
+	movedUIDs movedCopies
+	// emitForTest, when set, receives every event before the wails runtime
+	// (tests).
+	emitForTest func(name string, payload any)
+	// notificationForTest, when set, receives OS notifications instead of the
+	// platform backend (tests).
+	notificationForTest func(notification)
+	// progressHeartbeatEvery, when set, replaces syncProgressHeartbeat (tests).
+	progressHeartbeatEvery time.Duration
 }
 
 // IsDemoMode reports whether the app was launched in the cosmetic demo mode. The
@@ -193,6 +231,7 @@ func newApp(version, channel string) *App {
 		channel:    channel,
 		startedAt:  time.Now(),
 		storeReady: make(chan struct{}),
+		workers:    make(map[int64]*accountWorker),
 	}
 }
 

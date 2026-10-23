@@ -2,74 +2,87 @@ package sync
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"time"
 
-	"github.com/emersion/go-imap/v2"
-
-	pimap "github.com/peltonapp/Pelton/internal/imap"
 	"github.com/peltonapp/Pelton/internal/storage"
 )
 
-// mailClient is the slice of the imap client's public surface the sync engine
-// uses. depending on an interface keeps the boundary explicit and lets tests
-// substitute a fake without a live server.
-type mailClient interface {
-	Select(mailbox string) (*pimap.Mailbox, error)
-	FetchAllFlags() ([]pimap.MessageHeader, error)
-	// Addr is the server the client is talking to, host and port, for the log
-	// lines the debug overlay shows.
-	Addr() string
-	FetchMessage(uid imap.UID) (*pimap.Message, error)
-	// FetchMessages pulls a set of messages in one command, handing each to fn
-	// as it arrives. A first sync is otherwise bound by the round trip to the
-	// server rather than by bandwidth.
-	FetchMessages(uids []imap.UID, fn func(uid imap.UID, msg *pimap.Message, err error) error) error
-	AddFlags(uid imap.UID, flags ...imap.Flag) error
-	DeleteMessages(uids ...imap.UID) error
-	MoveMessages(uids []imap.UID, mailbox string) error
-}
-
-// Engine orchestrates one account's imap connection and the local store. It is
+// Engine orchestrates one account's protocol adapter and the local store. It is
 // created per connected account and is not safe for concurrent use, matching
-// the imap client.
+// the underlying connection.
 type Engine struct {
-	client mailClient
-	store  *storage.DB
+	adapter Adapter
+	store   *storage.DB
+	// states reads per-message sync state; NewEngine sets it to store. A
+	// test swaps in a counter to see how many rows a path reads.
+	states messageStates
 	log    *slog.Logger
-	// ColorSync, when true, adopts server-side flag colors (Thunderbird $LabelN
-	// keywords) into the local cache during each folder sync.
+	// ColorSync, when true, adopts server-side flag colors into the local cache
+	// during each folder sync when the adapter implements ColorSource.
 	ColorSync bool
-	// TrashPath and TrashFolderID identify the account's trash folder, which is
-	// where a deleted message goes. Deleting from the trash itself, or from an
-	// account with no trash folder (TrashPath empty), is the permanent delete
-	// instead. The caller sets these because folder roles are resolved above
-	// this layer.
-	TrashPath     string
+	// TrashRemoteID and TrashFolderID identify the account's trash folder, which
+	// is where a deleted message goes. Deleting from the trash itself, or from
+	// an account with no trash folder (TrashRemoteID empty), is the permanent
+	// delete instead. The caller sets these because folder roles are resolved
+	// above this layer.
+	TrashRemoteID string
 	TrashFolderID int64
 	// InitialLimit caps how many of a folder's newest messages the first sync
 	// fetches; the rest wait behind the folder's sync floor until a backfill asks
-	// for them (see window.go). 0 means no cap, the pre-#175 behavior. It only
-	// applies to a folder's first sync: once a folder is cached, lowering this
-	// never discards anything.
+	// for them (see window.go). 0 means no cap. It only applies to a folder's
+	// first sync: once SyncInitialized is set, lowering this never discards
+	// anything.
 	InitialLimit int
-	// YieldTo, when set, is asked before each message body is fetched and the
-	// sync waits while it says yes. The desktop points it at the outbox, so a
-	// message the user pressed send on goes out during a first sync rather than
-	// after it (#310).
-	YieldTo func() bool
+	// FullList drops a stored sync floor for this run so the stub list covers
+	// every server message. A list-stub phase sets it: a push may have
+	// floored the folder at X already, and InitialLimit is ignored after that.
+	// Bodies stay a later pass. IMAP leaves it false.
+	FullList bool
+	// ForceFull lists the folder in full even when a delta is possible: the
+	// background full reconcile and manual Sync's follow-up set it. Any clean
+	// full list stamps the folder's last_full_sync_at, forced or not. Only a
+	// forced list checks PauseCheck between list pages and envelope batches.
+	ForceFull bool
+	// PauseCheck, when set, is asked after each successful body batch. If it
+	// returns true and ids remain, the engine returns ErrSoftPaused and does
+	// not start the next batch. The batch already in flight is never cancelled.
+	// Nil means never pause. This is cooperative: it does not abort the context.
+	PauseCheck func() bool
+	// ReleaseLock, when set, is called between body-fetch batches so the caller
+	// can drop a process-wide sync mutex. A long body backfill must not freeze
+	// watch / TriggerSync: one SQLite writer is fine; holding syncMu across
+	// thousands of downloads is not. The callback must re-acquire before
+	// returning. Nil for IMAP, where the connection must stay exclusive.
+	ReleaseLock func()
 	// OnProgress, when set, is told how far the current folder has got: how many
 	// message bodies this sync intends to fetch from it and how many are in.
-	// The count comes from the reconcile plan, so it is what will actually be
-	// downloaded rather than the size of the mailbox, and a resync of a cached
-	// folder reports the handful it is really fetching (#313).
 	OnProgress func(p FolderProgress)
 	// OnStored, when set, is called as messages are stored rather than only when
-	// the folder finishes, so a first sync fills the list as mail arrives
-	// instead of showing nothing for several minutes. It is called with the
-	// folder and the ids stored since the last call.
+	// the folder finishes, so a first sync fills the list as mail arrives.
 	OnStored func(folder storage.Folder, ids []int64)
+	// beforeListStub, when set, runs before each list-stub upsert; a non-nil
+	// error counts as a failed upsert. Tests cancel the context or fail a
+	// write here. Nil in production.
+	beforeListStub func(remoteID string) error
+	// afterStubTx, when set, is told about every list-stub write transaction:
+	// how many stubs it took and how long it held the write lock. Tests
+	// count transactions here. Nil in production.
+	afterStubTx func(rows int, held time.Duration)
+	// FetchBatchSize overrides fetchBatch for this engine when > 0. A smaller
+	// value makes soft-pause happen more often; IMAP leaves 0.
+	FetchBatchSize int
+	// AbsorbArrivals, when true (default), re-lists between body batches so new
+	// mail lands as stubs during a long fetch. Background body jobs may set
+	// false; push and manual sync still reconcile.
+	AbsorbArrivals bool
+	// WithoutAttachments stores the bodies it fetches without attachment
+	// files, as an offline download "without attachments" does for mail
+	// with no row (StoreFetched with withAttachments false). The message
+	// is body-complete and lists no attachments.
+	WithoutAttachments bool
 }
 
 // FolderProgress is how far a folder's fetch has got. Total is what the plan
@@ -81,67 +94,171 @@ type FolderProgress struct {
 	Total  int
 }
 
-// fetchBatch is how many message bodies one command asks for. Big enough that
-// the round trip stops being what a large sync is made of, small enough that a
-// send waiting to go out is never more than a batch away from its turn, and
-// that a failure costs one batch rather than a folder.
-const fetchBatch = 50
+// fetchBatch is how many message bodies one command asks for.
+// Tests may lower it so a single batch boundary can be observed.
+var fetchBatch = 50
 
-// yieldPoll is how long the sync waits before asking again whether it may
-// continue. It is a pause between messages, so the send it is standing aside
-// for has the connection and the cpu to itself.
-const yieldPoll = 250 * time.Millisecond
-
-// NewEngine wires an imap client and the store together. A nil logger is
+// NewEngine wires a protocol adapter and the store together. A nil logger is
 // replaced with a discarding default so callers need not pass one.
-func NewEngine(client mailClient, store *storage.DB, log *slog.Logger) *Engine {
+func NewEngine(adapter Adapter, store *storage.DB, log *slog.Logger) *Engine {
 	if log == nil {
 		log = slog.New(slog.DiscardHandler)
 	}
-	return &Engine{client: client, store: store, log: log}
+	return &Engine{adapter: adapter, store: store, states: store, log: log, AbsorbArrivals: true}
+}
+
+// messageStates is the per-message sync state the engine reads from the
+// store: a whole folder for a list, or only the rows of given ids for a
+// bounded page.
+type messageStates interface {
+	ListMessageStates(ctx context.Context, folderID int64) ([]storage.MessageState, error)
+	MessageStatesByRemoteID(ctx context.Context, folderID int64, remoteIDs []string) ([]storage.MessageState, error)
+	FolderHasMessages(ctx context.Context, folderID int64) (bool, error)
+}
+
+func (e *Engine) batchSize() int {
+	if e != nil && e.FetchBatchSize > 0 {
+		return e.FetchBatchSize
+	}
+	return fetchBatch
 }
 
 // FolderSyncResult summarises one folder sync for logging and the cli.
 type FolderSyncResult struct {
-	New              int     // fetched from server into the cache
-	NewIDs           []int64 // storage ids of the messages fetched this sync
-	Deleted          int     // removed from the cache (server side or pushed delete)
-	FlagUpdated      int     // server flag changes adopted locally
-	Conflicts        int     // messages changed on both sides
-	Pushed           int     // local flag or delete operations sent to the server
-	UIDValidityReset bool    // the cache for the folder was dropped and refetched
-	HasOlder         bool    // the server still holds messages below the sync window
-	Repaired         int     // messages refetched because their cached text was broken
-	RepairedIDs      []int64 // storage ids of those messages, for reindexing
+	New             int     // fetched from server into the cache
+	NewIDs          []int64 // storage ids of the messages fetched this sync
+	Deleted         int     // removed from the cache (server side or pushed delete)
+	FlagUpdated     int     // server flag changes adopted locally
+	Conflicts       int     // messages changed on both sides
+	Pushed          int     // local flag or delete operations sent to the server
+	GenerationReset bool    // the cache for the folder was dropped and refetched
+	HasOlder        bool    // the server still holds messages below the sync window
+	Repaired        int     // messages refetched because their cached text was broken
+	RepairedIDs     []int64 // storage ids of those messages, for reindexing
+	// removed is the remote ids executePlan deleted from the cache. Not part
+	// of the public result; absorbArrivals uses it to drop them from the queue.
+	removed []string
 }
 
-// SyncAccount syncs every cached folder for an account. A failure on one folder
-// is logged and does not stop the others, so one broken mailbox cannot block a
-// whole account.
+// StubSyncResult is the list/reconcile half of a folder sync. ToFetch is the
+// remote ids that still need bodies, newest first. Those ids are already
+// stored as list stubs when the headers carried list metadata. Headers without
+// HasListMeta leave no stub row and are still listed in ToFetch, but only
+// SyncFolder stores them: FetchBodies fills existing stubs and never inserts.
+type StubSyncResult struct {
+	FloorID         string
+	HasOlder        bool
+	ToFetch         []string
+	Deleted         int
+	FlagUpdated     int
+	Conflicts       int
+	Pushed          int
+	GenerationReset bool
+	removed         []string // remote ids deleted locally by the delta plan
+	// unstubbed is the ToFetch ids listed without list metadata, so no stub
+	// row holds their place. Their body is the only write that can store them.
+	unstubbed []string
+}
+
+// SyncMailboxes lists remote mailboxes and upserts them by remote id. Local
+// folders whose remote_id is absent from the server list are deleted.
+func (e *Engine) SyncMailboxes(ctx context.Context, accountID int64) error {
+	mailboxes, err := e.adapter.ListMailboxes(ctx)
+	if err != nil {
+		return fmt.Errorf("sync: list mailboxes for account %d: %w", accountID, err)
+	}
+
+	seen := make(map[string]struct{}, len(mailboxes))
+	byRemote := make(map[string]int64, len(mailboxes))
+	for _, mb := range mailboxes {
+		seen[mb.RemoteID] = struct{}{}
+		attrs := mailboxAttributes(mb)
+		folder := &storage.Folder{
+			AccountID:   accountID,
+			Name:        mb.Name,
+			IMAPPath:    mb.RemoteID,
+			RemoteID:    mb.RemoteID,
+			Attributes:  attrs,
+			UIDValidity: generationToUIDValidity(mb.Generation),
+		}
+		if err := e.store.UpsertFolderByRemoteID(ctx, folder); err != nil {
+			return fmt.Errorf("sync: upsert mailbox %q: %w", mb.RemoteID, err)
+		}
+		byRemote[mb.RemoteID] = folder.ID
+	}
+
+	for _, mb := range mailboxes {
+		id := byRemote[mb.RemoteID]
+		var parent *int64
+		if mb.ParentID != "" {
+			if pid, ok := byRemote[mb.ParentID]; ok {
+				parent = &pid
+			}
+		}
+		if err := e.store.SetFolderParent(ctx, id, parent); err != nil {
+			return fmt.Errorf("sync: set parent for mailbox %q: %w", mb.RemoteID, err)
+		}
+	}
+
+	local, err := e.store.ListFolders(ctx, accountID)
+	if err != nil {
+		return fmt.Errorf("sync: list local folders for account %d: %w", accountID, err)
+	}
+	for _, f := range local {
+		if _, ok := seen[f.RemoteID]; ok {
+			continue
+		}
+		if err := e.store.DeleteFolder(ctx, f.ID); err != nil {
+			return fmt.Errorf("sync: delete stale folder %q: %w", f.RemoteID, err)
+		}
+	}
+	return nil
+}
+
+func mailboxAttributes(mb Mailbox) []string {
+	var attrs []string
+	if mb.Role != "" {
+		attrs = append(attrs, mb.Role)
+	}
+	if !mb.Selectable {
+		attrs = append(attrs, `\Noselect`)
+	}
+	return attrs
+}
+
+// SyncAccount syncs every selectable, non-excluded folder for an account.
+// Failures on one folder are logged and do not stop the others; the first
+// error is returned after later folders have run.
 func (e *Engine) SyncAccount(ctx context.Context, accountID int64) error {
 	folders, err := e.store.ListFolders(ctx, accountID)
 	if err != nil {
 		return fmt.Errorf("sync: list folders for account %d: %w", accountID, err)
 	}
+	var firstErr error
 	for _, folder := range folders {
 		if err := ctx.Err(); err != nil {
-			return err
+			if firstErr == nil {
+				return err
+			}
+			return firstErr
 		}
-		// a folder the user unchecked is never opened at all (#173).
-		if folder.SyncExcluded {
+		if folder.SyncExcluded || !selectable(folder) {
 			continue
 		}
 		res, err := e.SyncFolder(ctx, folder)
 		if err != nil {
 			e.log.Error("folder sync failed", "folder", folder.IMAPPath, "err", err)
+			if firstErr == nil {
+				firstErr = err
+			}
 			continue
 		}
 		e.log.Info("folder synced",
-			"folder", folder.IMAPPath, "server", e.client.Addr(),
+			"folder", folder.IMAPPath, "server", e.adapter.Addr(),
 			"new", res.New, "deleted", res.Deleted, "flag_updated", res.FlagUpdated,
-			"conflicts", res.Conflicts, "pushed", res.Pushed, "uidvalidity_reset", res.UIDValidityReset)
+			"conflicts", res.Conflicts, "pushed", res.Pushed, "generation_reset", res.GenerationReset)
 	}
-	return nil
+	return firstErr
 }
 
 // SyncFolder runs a full bidirectional sync of one folder and returns a summary.
@@ -152,7 +269,6 @@ func (e *Engine) SyncFolder(ctx context.Context, folder storage.Folder) (FolderS
 // BackfillFolder lowers the folder's sync window by batch messages and syncs,
 // fetching that many older messages from the server. It is a no-op returning a
 // zero result when the folder has no floor, i.e. it is already cached in full.
-// Callers use HasOlder on the result to decide whether more remain.
 func (e *Engine) BackfillFolder(ctx context.Context, folder storage.Folder, batch int) (FolderSyncResult, error) {
 	return e.syncFolder(ctx, folder, batch)
 }
@@ -160,145 +276,540 @@ func (e *Engine) BackfillFolder(ctx context.Context, folder storage.Folder, batc
 // syncFolder is the shared body of SyncFolder and BackfillFolder. backfill is
 // how many older messages to admit into the window before planning; 0 keeps the
 // window where it is, which is every ordinary sync.
+//
+// Stubs and bodies are separate: SyncFolderStubs reconciles and announces list
+// rows, then FetchBodies downloads bodies. Soft pause is FetchBodies' boundary;
+// this method returns that error unchanged so SoftPauseRemaining still lists
+// the ids that were not started.
 func (e *Engine) syncFolder(ctx context.Context, folder storage.Folder, backfill int) (FolderSyncResult, error) {
 	var res FolderSyncResult
 
-	mbox, err := e.client.Select(folder.IMAPPath)
-	if err != nil {
-		return res, fmt.Errorf("sync: select folder %q: %w", folder.IMAPPath, err)
-	}
-	e.log.Debug("folder selected", "folder", folder.IMAPPath, "server", e.client.Addr(), "messages", mbox.NumMessages)
+	stub, stubErr := e.SyncFolderStubs(ctx, folder, backfill)
+	res.Deleted = stub.Deleted
+	res.FlagUpdated = stub.FlagUpdated
+	res.Conflicts = stub.Conflicts
+	res.Pushed = stub.Pushed
+	res.GenerationReset = stub.GenerationReset
+	res.HasOlder = stub.HasOlder
 
-	state, err := loadFolderSyncState(ctx, e.store, folder)
-	if err != nil {
-		return res, err
-	}
-
-	folder, reset, err := e.handleUIDValidity(ctx, folder, state.StoredUIDValidity, mbox.UIDValidity)
-	if err != nil {
-		return res, err
-	}
-	res.UIDValidityReset = reset
-	// storedFloor is what the folder row actually holds, which the reset below
-	// deliberately stops tracking; the write at the end compares against this so
-	// a reset back to no floor still reaches the database.
-	storedFloor := state.SyncFloorUID
-	if reset {
-		// the cache was dropped, so this is a first sync again and the window has
-		// to be recomputed from scratch rather than kept at a floor that refers to
-		// uids from the old UIDVALIDITY generation.
-		state.SyncFloorUID = 0
-		state.LastSeenUID = 0
-	}
-
-	localStates, err := e.store.ListMessageStates(ctx, folder.ID)
-	if err != nil {
-		return res, fmt.Errorf("sync: load local states for folder %q: %w", folder.IMAPPath, err)
-	}
-	locals, localByUID := localView(localStates)
-
-	servers, serverColors, err := loadServerView(e.client)
-	if err != nil {
-		return res, err
-	}
-
-	floor := e.windowFloor(state, servers, len(localStates), backfill)
-	if floor != storedFloor {
-		if err := e.store.SetFolderSyncFloorUID(ctx, folder.ID, floor); err != nil {
-			return res, err
+	// A list failure has nothing to fetch. A reconcile error recorded while
+	// building ToFetch still downloads bodies; the earlier error wins below.
+	// A cancelled list/plan must not start FetchBodies.
+	var bodyErr error
+	if ctx.Err() == nil && (stubErr == nil || len(stub.ToFetch) > 0) {
+		fresh, rerr := refreshFolder(ctx, e.store, folder)
+		if rerr != nil {
+			if stubErr == nil {
+				stubErr = rerr
+			}
+		} else {
+			folder = fresh
+		}
+		if rerr == nil {
+			var body FolderSyncResult
+			body, bodyErr = e.fetchBodies(ctx, folder, stub.ToFetch, idSet(stub.unstubbed))
+			res.New += body.New
+			res.NewIDs = append(res.NewIDs, body.NewIDs...)
 		}
 	}
-	res.HasOlder = floor > 0
 
-	plan := BuildPlan(locals, servers, floor)
-	e.executePlan(ctx, folder, plan, localByUID, &res)
-
-	// mail cached before charset detection existed is stored with bytes that
-	// are not valid utf-8 and cannot be fixed locally, so it comes from the
-	// server again. A few per sync, after the plan, so it never delays new mail.
-	e.repairMangled(ctx, folder, &res)
-
-	// adopt server-side color labels when color syncing is on. this runs after the
-	// plan so newly fetched messages already have local rows to color.
-	if e.ColorSync {
-		e.adoptColors(ctx, folder, serverColors)
+	post, postErr := e.CompleteFolder(ctx, folder)
+	res.Repaired += post.Repaired
+	res.RepairedIDs = append(res.RepairedIDs, post.RepairedIDs...)
+	if postErr != nil {
+		return res, postErr
 	}
 
-	newHigh := max(highestUID(servers), state.LastSeenUID)
-	if err := e.store.SetFolderLastSeenUID(ctx, folder.ID, newHigh); err != nil {
+	// A hard error outranks a soft one (IsSoftError), so a refused push
+	// cannot hide a dropped connection during the bodies.
+	if err := firstHard(stubErr, bodyErr); err != nil {
+		return res, err
+	}
+	if err := ctx.Err(); err != nil {
 		return res, err
 	}
 	return res, nil
 }
 
-// fetchNew downloads the bodies of the given uids, newest first, in batches.
-//
-// One command per batch rather than one per message: the bytes are the same
-// either way, but 14k separate fetches means paying the round trip to the
-// server 14k times before anything else can happen on the connection (#310).
-// Between batches the sync stands aside for anything the user asked for and
-// tells the ui what has arrived, so a long download stays interruptible and
-// visible rather than being one opaque stretch.
-func (e *Engine) fetchNew(ctx context.Context, folder storage.Folder, uids []uint32, res *FolderSyncResult) {
-	// reported before the first batch so the bar starts at 0 of n rather than
-	// appearing part way through, and reported for an empty plan too so a
-	// folder with nothing to do does not leave the previous folder's numbers on
-	// screen.
-	e.report(folder, 0, len(uids))
+// CompleteFolder runs the SyncFolder steps that follow a stub list and a body
+// fetch: mangled-text repair and optional flag-color adoption. The initial
+// sync and scroll backfill call it so those passes still repair and color the
+// way a full SyncFolder does. The state token is not touched: the list and
+// absorbArrivals store their own. Repair and color log their own errors and
+// still fill RepairedIDs; the error is always nil and kept for callers.
+func (e *Engine) CompleteFolder(ctx context.Context, folder storage.Folder) (FolderSyncResult, error) {
+	var res FolderSyncResult
+	e.repairMangled(ctx, folder, &res)
+	if e.ColorSync {
+		if src, ok := e.adapter.(ColorSource); ok {
+			e.adoptColors(ctx, folder, src.Colors(folder.RemoteID))
+		}
+	}
+	return res, nil
+}
+
+// listMetaBatch is how many envelopes one FetchListMeta call asks for.
+const listMetaBatch = 200
+
+// List modes for the folder listed log line.
+const (
+	listModeFull      = "full"
+	listModeDelta     = "delta"
+	listModeUnchanged = "unchanged"
+	listModePage      = "page"
+)
+
+func (e *Engine) requests() int64 {
+	if rc, ok := e.adapter.(RequestCounter); ok {
+		return rc.Requests()
+	}
+	return 0
+}
+
+func (e *Engine) logListed(folder storage.Folder, mode string, started time.Time, requestsBefore int64, toFetch int) {
+	e.log.Info("folder listed",
+		"folder", folder.IMAPPath, "server", e.adapter.Addr(), "mode", mode,
+		"duration_ms", time.Since(started).Milliseconds(),
+		"requests", e.requests()-requestsBefore, "to_fetch", toFetch)
+}
+
+// useDelta reports whether this run may ask the adapter for changes instead
+// of a full list. A first sync, a backfill, a forced full reconcile and a
+// FullList pass that still has to widen a floored folder all need the full
+// snapshot.
+func (e *Engine) useDelta(folder storage.Folder, state FolderSyncState, backfill int) bool {
+	if e.ForceFull || backfill > 0 || folder.StateToken == "" || !state.SyncInitialized {
+		return false
+	}
+	if e.FullList && state.SyncFloorID != "" {
+		return false
+	}
+	_, ok := e.adapter.(DeltaLister)
+	return ok
+}
+
+// SyncFolderStubs lists one folder, reconciles flags and deletes, and stores
+// list stubs. It does not download bodies. ToFetch is the newest-first remote
+// ids a later FetchBodies should fill, followed by older stubs whose body is
+// still missing (see withIncompleteStubs). With a stored cursor and an adapter
+// that implements DeltaLister it only reconciles what changed; otherwise, or
+// when the adapter returns ErrNeedFullList, it lists the folder in full.
+func (e *Engine) SyncFolderStubs(ctx context.Context, folder storage.Folder, backfill int) (StubSyncResult, error) {
+	started := time.Now()
+	requestsBefore := e.requests()
+	folder, state, localStates, err := e.loadFolder(ctx, folder)
+	if err != nil {
+		return StubSyncResult{}, err
+	}
+	if e.useDelta(folder, state, backfill) {
+		res, unchanged, err := e.syncFolderDelta(ctx, folder, state, localStates)
+		if !errors.Is(err, ErrNeedFullList) {
+			mode := listModeDelta
+			if unchanged {
+				mode = listModeUnchanged
+			}
+			res, err = e.withIncompleteStubs(ctx, folder, res, err)
+			e.logListed(folder, mode, started, requestsBefore, len(res.ToFetch))
+			return res, err
+		}
+	}
+	res, err := e.syncFolderFull(ctx, folder, state, localStates, backfill, nil)
+	res, err = e.withIncompleteStubs(ctx, folder, res, err)
+	e.logListed(folder, listModeFull, started, requestsBefore, len(res.ToFetch))
+	return res, err
+}
+
+// withIncompleteStubs adds the folder's stubs that still lack a body to a
+// clean list's ToFetch, after the listed ids. A list treats a stub as cached,
+// so nothing else fetches a body that failed or was cut short (a dropped
+// connection, a quit, a message that does not parse). They come newest first
+// from inside the window, at most InitialLimit counting the listed stubs.
+// A refused push (soft) does not make the list unclean.
+func (e *Engine) withIncompleteStubs(ctx context.Context, folder storage.Folder, res StubSyncResult, listErr error) (StubSyncResult, error) {
+	if (listErr != nil && !IsSoftError(listErr)) || ctx.Err() != nil {
+		return res, listErr
+	}
+	floorUID, err := e.store.FolderSyncFloorUID(ctx, folder.ID)
+	if err != nil {
+		return res, err
+	}
+	stubs, err := e.store.RemoteIDsNeedingBodyNewest(ctx, folder.ID, floorUID, e.InitialLimit)
+	if err != nil {
+		return res, err
+	}
+	res.ToFetch = appendNew(res.ToFetch, stubs)
+	return res, listErr
+}
+
+// appendNew appends the ids of more that ids does not have yet, in order.
+func appendNew(ids, more []string) []string {
+	seen := make(map[string]struct{}, len(ids))
+	for _, id := range ids {
+		seen[id] = struct{}{}
+	}
+	for _, id := range more {
+		if _, ok := seen[id]; !ok {
+			seen[id] = struct{}{}
+			ids = append(ids, id)
+		}
+	}
+	return ids
+}
+
+// syncFolderFull is the full-list path of SyncFolderStubs. snap, when set,
+// is a list taken by the caller in this same unit; nil lists here.
+func (e *Engine) syncFolderFull(ctx context.Context, folder storage.Folder, state FolderSyncState, localStates []storage.MessageState, backfill int, snap *listSnapshot) (StubSyncResult, error) {
+	var res StubSyncResult
+	var err error
+
+	listBox := RemoteMailbox{
+		RemoteID:   folder.RemoteID,
+		Generation: storedGeneration(folder.UIDValidity),
+	}
+	var (
+		headers      []Header
+		stateToken   string
+		generation   string
+		pageStored   map[string]struct{}
+		stubFailures int
+	)
+	if snap != nil {
+		headers, stateToken, generation = snap.headers, snap.stateToken, snap.generation
+	} else if pl, ok := e.adapter.(PagedLister); ok && e.FullList && backfill == 0 {
+		// FullList without a backfill clears the floor (windowFloor), so every
+		// listed id is a row reconcile would store anyway; inserting it per page
+		// cannot land mail below a floor. A backfill lowers the floor by a page
+		// instead, even with FullList set (scroll backfill), so it and runs
+		// without FullList (IMAP-style windows) take the plain ListMessages path.
+		pageStored = make(map[string]struct{})
+		headers, stateToken, generation, err = pl.ListMessagesPaged(ctx, listBox, e.pageStubWriter(ctx, folder, localStates, pageStored, &stubFailures))
+	} else {
+		headers, stateToken, generation, err = e.adapter.ListMessages(ctx, listBox)
+	}
+	if err != nil {
+		// Page stubs already stored stay: they are real server mail, and the
+		// next successful list reconciles deletes and flags. Nothing is
+		// deleted and the state token does not advance on a partial list.
+		return res, fmt.Errorf("sync: list messages in %q: %w", folder.IMAPPath, err)
+	}
+	if len(pageStored) > 0 {
+		// Reconcile must see the page stubs as local so it neither inserts
+		// them again nor treats them as new.
+		localStates, err = e.states.ListMessageStates(ctx, folder.ID)
+		if err != nil {
+			return res, fmt.Errorf("sync: reload local states for folder %q: %w", folder.IMAPPath, err)
+		}
+	}
+
+	folder, reset, err := e.handleGeneration(ctx, folder, storedGeneration(state.StoredUIDValidity), generation)
+	if err != nil {
+		return res, err
+	}
+	res.GenerationReset = reset
+	// The raw column, so a floor derived from sync_floor_uid gets written.
+	storedFloorID := folder.SyncFloorID
+	if reset {
+		// A generation change purges the folder, page stubs included, and the
+		// plan below stores every listed id again from the new snapshot. No
+		// row from the old generation survives. (A paged adapter may report no
+		// generation, so this only matters for one that grows one.)
+		pageStored = nil
+		state.SyncFloorID = ""
+		state.SyncFloorUID = 0
+		state.LastSeenUID = 0
+		state.SyncInitialized = false
+		localStates, err = e.states.ListMessageStates(ctx, folder.ID)
+		if err != nil {
+			return res, fmt.Errorf("sync: reload local states for folder %q: %w", folder.IMAPPath, err)
+		}
+	}
+
+	locals, localByID := localView(localStates)
+	servers := headersToServers(headers)
+
+	floorID := e.windowFloor(state, servers, localByID, backfill)
+	if floorID != storedFloorID || !state.SyncInitialized {
+		if err := e.store.SetFolderSyncWindow(ctx, folder.ID, floorID, true); err != nil {
+			return res, err
+		}
+		if err := e.store.SetFolderSyncFloorUID(ctx, folder.ID, legacyFloorUID(headers, floorID)); err != nil {
+			return res, err
+		}
+	}
+	res.FloorID = floorID
+	res.HasOlder = floorID != ""
+
+	plan := BuildPlan(locals, servers, floorID)
+
+	var planRes FolderSyncResult
+	outcome := e.executePlan(ctx, folder, plan, localByID, headersByRemoteID(headers), &planRes)
+	stubFailures += outcome.stubFailures
+	planErr := outcome.err()
+	res.ToFetch = withPageStubs(outcome.toFetch, headers, pageStored)
+	res.unstubbed = outcome.unstubbed
+	res.Deleted = planRes.Deleted
+	res.FlagUpdated = planRes.FlagUpdated
+	res.Conflicts = planRes.Conflicts
+	res.Pushed = planRes.Pushed
+
+	if high := highestLegacyUID(headers); high != 0 {
+		if err := e.store.SetFolderLastSeenUID(ctx, folder.ID, high); err != nil {
+			return res, err
+		}
+	}
+
+	// The state token is the incremental cursor. Save it only after this
+	// snapshot's stub rows are stored, and skip the save when the context is
+	// already cancelled or any local write failed. A cancel or failed write
+	// must not advance the cursor, or the next Email/changes pass drops mail
+	// that never landed. A server refusing a push does not hold it (see
+	// planOutcome). An empty token means the adapter has no cursor any more,
+	// so a stale one must not survive and send the next sync to a delta.
+	clean := ctx.Err() == nil && outcome.clean() && stubFailures == 0
+	if clean && stateToken != folder.StateToken {
+		if err := e.store.SetFolderStateToken(ctx, folder.ID, stateToken); err != nil {
+			return res, err
+		}
+		folder.StateToken = stateToken
+	}
+	if clean {
+		if err := e.store.SetFolderFullSyncAt(ctx, folder.ID, time.Now()); err != nil {
+			return res, err
+		}
+	}
+	if planErr != nil {
+		return res, planErr
+	}
+	if stubFailures > 0 {
+		return res, fmt.Errorf("sync: %d list stubs in %q were not stored", stubFailures, folder.IMAPPath)
+	}
+	if err := ctx.Err(); err != nil {
+		return res, err
+	}
+	return res, nil
+}
+
+// syncFolderDelta is SyncFolderStubs for a folder with a stored cursor and an
+// adapter that lists changes. ErrNeedFullList is returned untouched so the
+// caller can fall back to the full list. The cursor only moves when every
+// local write and every stub upsert went through; repeating a delta is
+// harmless, skipping one loses mail. A refused server push is reported but
+// does not hold the cursor. unchanged reports the adapter's Unchanged flag.
+func (e *Engine) syncFolderDelta(ctx context.Context, folder storage.Folder, state FolderSyncState, localStates []storage.MessageState) (res StubSyncResult, unchanged bool, err error) {
+	box := RemoteMailbox{RemoteID: folder.RemoteID, StateToken: folder.StateToken, Generation: storedGeneration(folder.UIDValidity)}
+	delta, err := e.adapter.(DeltaLister).ListChanges(ctx, box, pendingRemoteIDs(localStates))
+	if errors.Is(err, ErrNeedFullList) {
+		return res, false, err
+	}
+	if err != nil {
+		return res, false, fmt.Errorf("sync: list changes in %q: %w", folder.IMAPPath, err)
+	}
+	res.FloorID = state.SyncFloorID
+	res.HasOlder = state.SyncFloorID != ""
+
+	locals, localByID := localView(localStates)
+	plan := BuildDeltaPlan(locals, delta, state.SyncFloorUID)
+	byID := make(map[string]Header, len(delta.Members)+len(delta.Changed))
+	for _, h := range delta.Members {
+		byID[h.RemoteID] = h
+	}
+	for _, h := range delta.Changed {
+		byID[h.RemoteID] = h
+	}
+
+	var planRes FolderSyncResult
+	outcome := e.executePlan(ctx, folder, plan, localByID, byID, &planRes)
+	stubFailures, planErr := outcome.stubFailures, outcome.err()
+	res.ToFetch = outcome.toFetch
+	res.unstubbed = outcome.unstubbed
+	res.Deleted = planRes.Deleted
+	res.FlagUpdated = planRes.FlagUpdated
+	res.Conflicts = planRes.Conflicts
+	res.Pushed = planRes.Pushed
+	res.removed = planRes.removed
+
+	if high := max(highestLegacyUID(delta.Changed), highestLegacyUID(delta.Members)); high > state.LastSeenUID {
+		if err := e.store.SetFolderLastSeenUID(ctx, folder.ID, high); err != nil {
+			return res, delta.Unchanged, err
+		}
+	}
+	if ctx.Err() == nil && outcome.clean() && delta.Cursor != "" && delta.Cursor != folder.StateToken {
+		if err := e.store.SetFolderStateToken(ctx, folder.ID, delta.Cursor); err != nil {
+			return res, delta.Unchanged, err
+		}
+	}
+	if planErr != nil {
+		return res, delta.Unchanged, planErr
+	}
+	if stubFailures > 0 {
+		return res, delta.Unchanged, fmt.Errorf("sync: %d list stubs in %q were not stored", stubFailures, folder.IMAPPath)
+	}
+	return res, delta.Unchanged, ctx.Err()
+}
+
+// fetchNew downloads the bodies of the given remote ids, newest first, in
+// batches chosen by the engine and handed to the adapter. Between batches it
+// releases the caller's sync lock (when ReleaseLock is set) and absorbs any
+// mail that arrived since the list snapshot so new stubs land without waiting
+// for the rest of the body campaign. Only ids in insertable may become new
+// rows (see fetchBatch); arrivals without a stub join it.
+func (e *Engine) fetchNew(ctx context.Context, folder storage.Folder, remoteIDs []string, insertable map[string]struct{}, res *FolderSyncResult) error {
+	queue := append([]string(nil), remoteIDs...)
+	planned := len(queue)
+	e.report(folder, 0, planned)
 	done := 0
-	for start := 0; start < len(uids); start += fetchBatch {
+	var firstErr error
+	for len(queue) > 0 {
 		if err := ctx.Err(); err != nil {
 			e.log.Warn("sync cancelled mid-folder", "folder", folder.IMAPPath)
-			return
+			return err
 		}
-		// anything the user asked for goes first. A body fetch is the expensive
-		// step in a sync, so between batches is the point to stand aside at.
-		e.yield(ctx)
-
-		end := min(start+fetchBatch, len(uids))
-		ids, err := e.fetchBatch(ctx, folder, uids[start:end])
+		end := min(e.batchSize(), len(queue))
+		batch := queue[:end]
+		queue = queue[end:]
+		ids, err := e.fetchBatch(ctx, folder, batch, insertable)
 		if err != nil {
 			e.log.Error("fetch batch failed", "folder", folder.IMAPPath, "err", err)
+			if firstErr == nil {
+				firstErr = err
+			}
 		}
 		res.New += len(ids)
 		res.NewIDs = append(res.NewIDs, ids...)
 		e.announce(folder, ids)
-		// counted by what the batch asked for, not by what came back: a message
-		// the server refused is still one fewer left to wait for, and a bar that
-		// stops short of its total is worse than one that counts a skip.
-		done += end - start
-		e.report(folder, done, len(uids))
+		done += len(batch)
+		e.report(folder, done, planned)
+		// Unreadable messages stay stubs; the rest of the queue still runs.
+		// A hard error stops the campaign and outranks an earlier soft one,
+		// so a dropped connection is not reported as unreadable mail.
+		if err != nil && !isMessageError(err) {
+			return firstHard(firstErr, err)
+		}
+		if len(queue) > 0 && e.pauseRequested() {
+			return newSoftPaused(queue)
+		}
+
+		// After each batch: drop the caller's sync lock so watch / refresh can
+		// run, then pick up any headers that arrived while we were downloading.
+		if len(queue) == 0 {
+			break
+		}
+		if e.ReleaseLock != nil {
+			e.ReleaseLock()
+		}
+		if e.AbsorbArrivals {
+			arrived, unstubbed, removed := e.absorbArrivals(ctx, &folder)
+			if len(unstubbed) > 0 {
+				if insertable == nil {
+					insertable = make(map[string]struct{}, len(unstubbed))
+				}
+				for _, id := range unstubbed {
+					insertable[id] = struct{}{}
+				}
+			}
+			if len(removed) > 0 {
+				gone := make(map[string]struct{}, len(removed))
+				for _, id := range removed {
+					gone[id] = struct{}{}
+				}
+				kept := queue[:0]
+				for _, id := range queue {
+					if _, ok := gone[id]; !ok {
+						kept = append(kept, id)
+					}
+				}
+				planned -= len(queue) - len(kept)
+				queue = kept
+			}
+			if len(arrived) > 0 {
+				queue = append(arrived, queue...)
+				planned += len(arrived)
+			}
+			if len(removed) > 0 || len(arrived) > 0 {
+				e.report(folder, done, planned)
+			}
+		}
+	}
+	return firstErr
+}
+
+// FetchBodies downloads bodies for the given remote ids, newest-first as
+// supplied, in engine batch-sized chunks. Ids that already have body_complete
+// set are left out, so a retry of a partial batch does not fetch them again.
+// A body only fills the id's existing stub: an id with no row, including one
+// the user moved or archived while the body was in flight, is skipped and not
+// counted as new. A soft pause returns ErrSoftPaused after the current chunk;
+// SoftPauseRemaining lists the ids not started, not the ones already stored.
+func (e *Engine) FetchBodies(ctx context.Context, folder storage.Folder, remoteIDs []string) (FolderSyncResult, error) {
+	return e.fetchBodies(ctx, folder, remoteIDs, nil)
+}
+
+// fetchBodies is FetchBodies where the ids in insertable may also be stored
+// as new rows.
+func (e *Engine) fetchBodies(ctx context.Context, folder storage.Folder, remoteIDs []string, insertable map[string]struct{}) (FolderSyncResult, error) {
+	var res FolderSyncResult
+	ids := remoteIDs
+	if e.store != nil && len(remoteIDs) > 0 {
+		need, err := e.store.RemoteIDsNeedingBody(ctx, folder.ID, remoteIDs)
 		if err != nil {
-			// the connection is in an unknown state after a failed fetch, so the
-			// rest of this folder waits for the next sync rather than piling more
-			// commands onto it.
-			return
+			return res, err
 		}
+		ids = need
 	}
+	err := e.fetchNew(ctx, folder, ids, insertable, &res)
+	return res, err
 }
 
-// yield waits while the caller's YieldTo says something more important is
-// happening. A cancelled context ends the wait, since the sync is stopping
-// anyway.
-func (e *Engine) yield(ctx context.Context) {
-	if e.YieldTo == nil {
-		return
+func idSet(ids []string) map[string]struct{} {
+	if len(ids) == 0 {
+		return nil
 	}
-	waited := false
-	for e.YieldTo() {
-		if !waited {
-			e.log.Debug("sync standing aside", "reason", "outbox")
-			waited = true
-		}
-		select {
-		case <-ctx.Done():
-			return
-		case <-time.After(yieldPoll):
-		}
+	out := make(map[string]struct{}, len(ids))
+	for _, id := range ids {
+		out[id] = struct{}{}
 	}
+	return out
 }
 
-// report tells the caller how far this folder has got, if anyone is listening.
+// absorbArrivals applies the folder's delta between body batches, so mail that
+// arrives during a long body fill lands as stubs right away and flag changes
+// and deletes are not held back either. It returns the new ids newest-first
+// so fetchNew can download them ahead of older bodies, those of them with no
+// stub row, and the ids the delta removed from the cache so fetchNew stops
+// queueing their bodies. No-op without a DeltaLister or a stored cursor; a
+// failed delta waits for the next sync.
+func (e *Engine) absorbArrivals(ctx context.Context, folder *storage.Folder) (arrived, unstubbed, removed []string) {
+	if _, ok := e.adapter.(DeltaLister); !ok {
+		return nil, nil, nil
+	}
+	latest, err := refreshFolder(ctx, e.store, *folder)
+	if err != nil {
+		e.log.Debug("absorb arrivals: refresh folder", "err", err)
+		return nil, nil, nil
+	}
+	*folder = latest
+	if folder.StateToken == "" {
+		return nil, nil, nil
+	}
+	state, err := loadFolderSyncState(ctx, e.store, *folder)
+	if err != nil {
+		return nil, nil, nil
+	}
+	localStates, err := e.states.ListMessageStates(ctx, folder.ID)
+	if err != nil {
+		e.log.Debug("absorb arrivals: local states", "err", err)
+		return nil, nil, nil
+	}
+	res, _, err := e.syncFolderDelta(ctx, *folder, state, localStates)
+	if err != nil {
+		e.log.Debug("absorb arrivals", "folder", folder.IMAPPath, "err", err)
+	}
+	if fresh, err := refreshFolder(ctx, e.store, *folder); err == nil {
+		*folder = fresh
+	}
+	return res.ToFetch, res.unstubbed, res.removed
+}
+
 func (e *Engine) report(folder storage.Folder, done, total int) {
 	if e.OnProgress == nil {
 		return
@@ -306,8 +817,6 @@ func (e *Engine) report(folder storage.Folder, done, total int) {
 	e.OnProgress(FolderProgress{Folder: folder, Done: done, Total: total})
 }
 
-// announce hands a batch of freshly stored ids to OnStored, if anyone is
-// listening and there is anything to hand over.
 func (e *Engine) announce(folder storage.Folder, ids []int64) {
 	if e.OnStored == nil || len(ids) == 0 {
 		return
@@ -318,35 +827,51 @@ func (e *Engine) announce(folder storage.Folder, ids []int64) {
 // windowFloor decides the folder's sync floor for this run: a backfill lowers
 // the existing one, a first sync of a folder bigger than InitialLimit
 // establishes one, and everything else keeps what is stored (minus a floor that
-// no longer holds anything back).
-//
-// "First sync" is both an empty high water mark and an empty cache. Checking
-// only the high water mark would re-cap a folder whose messages were all
-// deleted server side, and checking only the cache would re-cap a folder the
-// user had legitimately emptied.
-func (e *Engine) windowFloor(state FolderSyncState, servers []ServerMessage, cached, backfill int) uint32 {
-	if backfill > 0 {
-		return lowerFloor(servers, state.SyncFloorUID, backfill)
+// no longer holds anything back). FullList clears the floor so a later stub
+// pass can widen a folder that push already capped. cached is the folder's
+// local rows by remote id.
+func (e *Engine) windowFloor(state FolderSyncState, servers []ServerMessage, cached map[string]storage.MessageState, backfill int) string {
+	floor := floorRef{ID: state.SyncFloorID, UID: state.SyncFloorUID}
+	if floor.ID != "" {
+		for _, s := range servers {
+			if _, ok := cached[s.RemoteID]; ok {
+				floor.Cached++
+			}
+		}
 	}
-	if state.SyncFloorUID == 0 && state.LastSeenUID == 0 && cached == 0 {
+	if backfill > 0 {
+		return lowerFloor(servers, floor, backfill)
+	}
+	if e.FullList {
+		return ""
+	}
+	if !folderLooksInitialized(state, len(cached)) {
 		return floorForLimit(servers, e.InitialLimit)
 	}
-	return normalizeFloor(servers, state.SyncFloorUID)
+	return normalizeFloor(servers, floor)
 }
 
-// handleUIDValidity drops and refetches the folder cache if the server's
-// UIDVALIDITY changed, which means every cached uid for the folder is stale.
-// this is destructive but correct, so it is logged loudly. returns the folder
-// with its updated uid_validity.
-func (e *Engine) handleUIDValidity(ctx context.Context, folder storage.Folder, stored, server uint32) (storage.Folder, bool, error) {
-	if stored == server {
+// folderLooksInitialized is true once SyncInitialized is set, or when an
+// upgraded pre-migration folder already has local mail / numeric sync cursors
+// (sync_initialized defaults to 0 after migration 0037).
+func folderLooksInitialized(state FolderSyncState, cached int) bool {
+	if state.SyncInitialized {
+		return true
+	}
+	return cached > 0 || state.LastSeenUID != 0 || state.SyncFloorUID != 0
+}
+
+// handleGeneration drops and refetches the folder cache if the server's
+// generation changed. "" and "0" match (choice 2). Returns the folder with its
+// updated uid_validity.
+func (e *Engine) handleGeneration(ctx context.Context, folder storage.Folder, stored, server string) (storage.Folder, bool, error) {
+	if generationsEqual(stored, server) {
 		return folder, false, nil
 	}
 
 	reset := false
-	// stored == 0 is a first sync, there is nothing cached to drop.
-	if stored != 0 {
-		e.log.Warn("uidvalidity changed, dropping stale cache for folder",
+	if normalizeGeneration(stored) != "" {
+		e.log.Warn("generation changed, dropping stale cache for folder",
 			"folder", folder.IMAPPath, "stored", stored, "server", server)
 		n, err := e.store.PurgeFolderMessages(ctx, folder.AccountID, folder.ID)
 		if err != nil {
@@ -356,119 +881,295 @@ func (e *Engine) handleUIDValidity(ctx context.Context, folder storage.Folder, s
 		reset = true
 	}
 
-	if err := e.store.SetFolderUIDValidity(ctx, folder.ID, server); err != nil {
+	uidValidity := generationToUIDValidity(server)
+	if err := e.store.SetFolderUIDValidity(ctx, folder.ID, uidValidity); err != nil {
 		return folder, false, err
 	}
 	if err := e.store.SetFolderLastSeenUID(ctx, folder.ID, 0); err != nil {
 		return folder, false, err
 	}
-	folder.UIDValidity = server
+	if err := e.store.SetFolderSyncFloorUID(ctx, folder.ID, 0); err != nil {
+		return folder, false, err
+	}
+	if err := e.store.SetFolderSyncWindow(ctx, folder.ID, "", false); err != nil {
+		return folder, false, err
+	}
+	folder.UIDValidity = uidValidity
+	folder.SyncFloorID = ""
+	folder.SyncInitialized = false
 	return folder, reset, nil
 }
 
-// adoptColors makes the server authoritative for flag colors: for each cached
-// message whose stored color differs from the server keyword, it writes the
-// server's color (0 clears). It only writes on a difference, so a steady state
-// costs no writes.
-func (e *Engine) adoptColors(ctx context.Context, folder storage.Folder, serverColors map[uint32]int) {
-	states, err := e.store.ListMessageStates(ctx, folder.ID)
+// adoptColors makes the server authoritative for flag colors keyed by remote id.
+func (e *Engine) adoptColors(ctx context.Context, folder storage.Folder, serverColors map[string]int) {
+	if len(serverColors) == 0 {
+		return
+	}
+	states, err := e.states.ListMessageStates(ctx, folder.ID)
 	if err != nil {
 		e.log.Error("color sync: list states", "folder", folder.IMAPPath, "err", err)
 		return
 	}
-	current, err := e.store.FolderFlagColors(ctx, folder.ID)
+	colorsByUID, err := e.store.FolderFlagColors(ctx, folder.ID)
 	if err != nil {
 		e.log.Error("color sync: current colors", "folder", folder.IMAPPath, "err", err)
 		return
 	}
+	current := make(map[string]int, len(states))
 	for _, s := range states {
-		desired, ok := serverColors[s.UID]
+		current[s.RemoteID] = colorsByUID[s.UID]
+	}
+	for _, s := range states {
+		desired, ok := serverColors[s.RemoteID]
 		if !ok {
 			continue
 		}
-		if current[s.UID] != desired {
+		if current[s.RemoteID] != desired {
 			if err := e.store.SetFlagColor(ctx, s.ID, desired); err != nil {
-				e.log.Error("color sync: set color", "uid", s.UID, "err", err)
+				e.log.Error("color sync: set color", "remote_id", s.RemoteID, "err", err)
 			}
 		}
 	}
 }
 
-// executePlan applies a reconciled plan. pull actions and flag pushes run
-// inline; local deletions are batched so they cost two server round trips total.
-// a failure on one message is logged and skipped so it cannot corrupt the cache
-// or block the rest of the folder.
-func (e *Engine) executePlan(ctx context.Context, folder storage.Folder, plan []Decision, localByUID map[uint32]storage.MessageState, res *FolderSyncResult) {
-	var pendingDeletes []storage.MessageState
-	// uids whose bodies have to come down, gathered here and fetched in batches
-	// once the cheap decisions are out of the way.
-	var toFetch []uint32
+// planOutcome is what executePlan left to do and what went wrong. A failed
+// local write (stub upsert, local delete, adopted or cleared flags, list
+// metadata) holds the folder's cursor and full-sync stamp back, since moving
+// on would skip the change for good. A server refusing a push does not: the
+// row keeps its pending marker and every later sync re-reads it.
+type planOutcome struct {
+	toFetch      []string
+	unstubbed    []string // toFetch ids without list metadata, so without a stub
+	stubFailures int
+	localErr     error
+	pushErr      error
+}
 
-	// walked back to front, because BuildPlan orders by ascending uid and a full
-	// body fetch is the expensive step here. Front to back means the oldest mail
-	// downloads first and a large mailbox shows years-old messages for as long as
-	// it takes to reach the present (#175); back to front puts the newest mail on
-	// screen within seconds. Nothing else in the plan is order-sensitive: the
-	// decisions are independent per uid and deletes are batched at the end.
-	for i := len(plan) - 1; i >= 0; i-- {
-		d := plan[i]
+// clean reports whether every local write of the plan went through.
+func (o planOutcome) clean() bool {
+	return o.stubFailures == 0 && o.localErr == nil
+}
+
+// err is the error to report for the plan, local failures first. Stub
+// failures are reported by the caller, which names the folder.
+func (o planOutcome) err() error {
+	if o.localErr != nil {
+		return o.localErr
+	}
+	return o.pushErr
+}
+
+// executePlan applies a reconciled plan front to back (newest first). It stores
+// list stubs once and returns the remote ids that still need bodies. Body
+// download is FetchBodies, so a soft pause is not decided here.
+func (e *Engine) executePlan(ctx context.Context, folder storage.Folder, plan []Decision, localByID map[string]storage.MessageState, headersByID map[string]Header, res *FolderSyncResult) planOutcome {
+	var pendingDeletes []storage.MessageState
+	var out planOutcome
+	fail := func(err error) {
+		if isPushRejected(err) {
+			if out.pushErr == nil {
+				out.pushErr = err
+			}
+			return
+		}
+		if out.localErr == nil {
+			out.localErr = err
+		}
+	}
+
+	for _, d := range plan {
 		if d.Conflict {
 			res.Conflicts++
 		}
 		if err := ctx.Err(); err != nil {
 			e.log.Warn("sync cancelled mid-folder", "folder", folder.IMAPPath)
-			return
+			out.localErr = err
+			return out
 		}
 
 		switch d.Action {
 		case ActionNone:
-			// already in agreement
 
 		case ActionFetchNew:
-			// collected and fetched below, in one command per batch rather than
-			// one per message.
-			toFetch = append(toFetch, d.UID)
+			out.toFetch = append(out.toFetch, d.RemoteID)
 
 		case ActionDeleteLocal:
-			if err := e.deleteLocal(ctx, folder, localByUID[d.UID]); err != nil {
-				e.log.Error("delete local message failed", "uid", d.UID, "err", err)
+			if err := e.deleteLocal(ctx, folder, localByID[d.RemoteID]); err != nil {
+				e.log.Error("delete local message failed", "remote_id", d.RemoteID, "err", err)
+				fail(err)
 				continue
 			}
 			res.Deleted++
+			res.removed = append(res.removed, d.RemoteID)
 
 		case ActionAdoptServerFlags:
-			if err := e.adoptServerFlags(ctx, localByUID[d.UID], d.Flags); err != nil {
-				e.log.Error("adopt server flags failed", "uid", d.UID, "err", err)
+			applied, err := e.adoptServerFlags(ctx, localByID[d.RemoteID], d.Flags)
+			if err != nil {
+				e.log.Error("adopt server flags failed", "remote_id", d.RemoteID, "err", err)
+				fail(err)
 				continue
 			}
-			res.FlagUpdated++
+			if applied {
+				res.FlagUpdated++
+			}
 
 		case ActionPushFlags:
-			if err := e.pushFlags(ctx, localByUID[d.UID], d.Flags); err != nil {
-				e.log.Error("push flags failed", "uid", d.UID, "err", err)
+			if err := e.pushFlags(ctx, folder, localByID[d.RemoteID], d.Flags); err != nil {
+				e.log.Error("push flags failed", "remote_id", d.RemoteID, "err", err)
+				fail(err)
 				continue
 			}
 			res.Pushed++
 
 		case ActionClearPending:
-			if err := e.clearPending(ctx, localByUID[d.UID], d.Flags); err != nil {
-				e.log.Error("clear pending flags failed", "uid", d.UID, "err", err)
+			if err := e.resolvePending(ctx, localByID[d.RemoteID], d.Flags); err != nil {
+				e.log.Error("clear pending flags failed", "remote_id", d.RemoteID, "err", err)
+				fail(err)
 				continue
 			}
 
 		case ActionPushDelete:
-			pendingDeletes = append(pendingDeletes, localByUID[d.UID])
+			pendingDeletes = append(pendingDeletes, localByID[d.RemoteID])
 		}
 	}
 
-	e.fetchNew(ctx, folder, toFetch, res)
+	// Headers-first: fill missing envelopes, then upsert list rows and announce
+	// once. FetchBodies announces again only for rows whose bodies it stored.
+	if err := e.fillListMeta(ctx, folder, out.toFetch, headersByID); err != nil {
+		if errors.Is(err, ErrSoftPaused) || ctx.Err() != nil {
+			out.localErr = err
+			return out
+		}
+		e.log.Error("fetch list meta failed", "folder", folder.IMAPPath, "err", err)
+		fail(err)
+	}
+	for _, id := range out.toFetch {
+		if h, ok := headersByID[id]; !ok || !h.HasListMeta {
+			out.unstubbed = append(out.unstubbed, id)
+		}
+	}
+	stubIDs, stubFailures := e.storeListStubs(ctx, folder, out.toFetch, headersByID)
+	out.stubFailures = stubFailures
+	if len(stubIDs) > 0 {
+		e.announce(folder, stubIDs)
+	}
 
+	// Deletes are part of reconcile, not body fetch, so a later FetchBodies
+	// failure cannot skip a delete the user already marked.
 	if len(pendingDeletes) > 0 {
 		if err := e.pushDeletes(ctx, folder, pendingDeletes); err != nil {
 			e.log.Error("push deletes failed", "folder", folder.IMAPPath, "count", len(pendingDeletes), "err", err)
-			return
+			fail(err)
+		} else {
+			res.Pushed += len(pendingDeletes)
+			res.Deleted += len(pendingDeletes)
+			for _, m := range pendingDeletes {
+				res.removed = append(res.removed, m.RemoteID)
+			}
 		}
-		res.Pushed += len(pendingDeletes)
-		res.Deleted += len(pendingDeletes)
 	}
+	return out
+}
+
+// fillListMeta asks a ListMetaFetcher for the envelope of every id in ids
+// whose header came without one and writes the result into headersByID. Only
+// messages about to become stubs are asked for, so thousands of uncached
+// messages below a sync floor cost nothing. A forced full list stops between
+// batches when PauseCheck asks.
+func (e *Engine) fillListMeta(ctx context.Context, folder storage.Folder, ids []string, headersByID map[string]Header) error {
+	mf, ok := e.adapter.(ListMetaFetcher)
+	if !ok {
+		return nil
+	}
+	var need []string
+	for _, id := range ids {
+		if h, ok := headersByID[id]; !ok || !h.HasListMeta {
+			need = append(need, id)
+		}
+	}
+	box := RemoteMailbox{RemoteID: folder.RemoteID, StateToken: folder.StateToken, Generation: storedGeneration(folder.UIDValidity)}
+	for start := 0; start < len(need); start += listMetaBatch {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		if start > 0 && e.ForceFull && e.pauseRequested() {
+			return ErrSoftPaused
+		}
+		got, err := mf.FetchListMeta(ctx, box, need[start:min(start+listMetaBatch, len(need))])
+		if err != nil {
+			return fmt.Errorf("sync: list meta in %q: %w", folder.IMAPPath, err)
+		}
+		for _, h := range got {
+			headersByID[h.RemoteID] = h
+		}
+	}
+	return nil
+}
+
+func headersByRemoteID(headers []Header) map[string]Header {
+	out := make(map[string]Header, len(headers))
+	for _, h := range headers {
+		out[h.RemoteID] = h
+	}
+	return out
+}
+
+// pageStubWriter returns the onPage callback for a paged full list. It stores
+// and announces stubs only for ids with no local row (insert-only: flags and
+// deletes wait for reconcile on the complete snapshot) and records them in
+// stored; failed counts stubs that did not store. A forced full list stops at a
+// page boundary when PauseCheck asks. It runs on the list call's goroutine.
+func (e *Engine) pageStubWriter(ctx context.Context, folder storage.Folder, localStates []storage.MessageState, stored map[string]struct{}, failed *int) func([]Header) error {
+	local := make(map[string]struct{}, len(localStates))
+	for _, s := range localStates {
+		if s.RemoteID != "" {
+			local[s.RemoteID] = struct{}{}
+		}
+	}
+	return func(page []Header) error {
+		fresh := make([]string, 0, len(page))
+		byID := make(map[string]Header, len(page))
+		for _, h := range page {
+			if _, ok := local[h.RemoteID]; ok || !h.HasListMeta {
+				continue
+			}
+			local[h.RemoteID] = struct{}{}
+			fresh = append(fresh, h.RemoteID)
+			byID[h.RemoteID] = h
+		}
+		ids, n := e.storeListStubs(ctx, folder, fresh, byID)
+		*failed += n
+		for _, rid := range fresh {
+			stored[rid] = struct{}{}
+		}
+		e.announce(folder, ids)
+		if e.ForceFull && e.pauseRequested() {
+			return ErrSoftPaused
+		}
+		return ctx.Err()
+	}
+}
+
+// withPageStubs adds ids stored by a paged list back into toFetch in snapshot
+// order. Reconcile sees those rows as local, so it no longer lists them, but
+// they still need bodies.
+func withPageStubs(toFetch []string, headers []Header, pageStored map[string]struct{}) []string {
+	if len(pageStored) == 0 {
+		return toFetch
+	}
+	want := make(map[string]struct{}, len(toFetch)+len(pageStored))
+	for _, id := range toFetch {
+		want[id] = struct{}{}
+	}
+	for id := range pageStored {
+		want[id] = struct{}{}
+	}
+	out := make([]string, 0, len(want))
+	for _, h := range headers {
+		if _, ok := want[h.RemoteID]; ok {
+			out = append(out, h.RemoteID)
+			delete(want, h.RemoteID)
+		}
+	}
+	return out
 }
