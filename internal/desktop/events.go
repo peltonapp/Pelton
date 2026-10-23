@@ -184,6 +184,9 @@ type AccountSyncStateEvent struct {
 // emit sends a runtime event if the context is set. It is a thin wrapper so call
 // sites stay terse and a nil context (before startup) is a safe no-op.
 func (a *App) emit(name string, payload any) {
+	if a.emitForTest != nil {
+		a.emitForTest(name, payload)
+	}
 	if a.ctx == nil || !a.runtimeReady.Load() {
 		return
 	}

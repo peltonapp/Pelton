@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	goimap "github.com/emersion/go-imap/v2"
 	"github.com/peltonapp/Pelton/internal/autoconfig"
 	"github.com/peltonapp/Pelton/internal/certtrust"
 	"github.com/peltonapp/Pelton/internal/credentials"
@@ -15,7 +16,6 @@ import (
 	"github.com/peltonapp/Pelton/internal/oauth"
 	psmtp "github.com/peltonapp/Pelton/internal/smtp"
 	"github.com/peltonapp/Pelton/internal/storage"
-	goimap "github.com/emersion/go-imap/v2"
 	wailsruntime "github.com/wailsapp/wails/v2/pkg/runtime"
 )
 
@@ -329,25 +329,11 @@ func (a *App) StartAccountSync(accountID int64) error {
 // rows, preserving the hierarchy via the per-server delimiter so the sidebar
 // tree matches the server.
 func (a *App) discoverFolders(account storage.Account) error {
-	cfg, err := a.resolveIMAP(account)
-	if err != nil {
-		return err
-	}
-	client, err := a.connectIMAP(cfg)
-	if err != nil {
-		return err
-	}
-	defer client.Close()
-	if err := client.Login(); err != nil {
-		return err
-	}
-	defer client.Logout()
+	return a.discoverFoldersCtx(a.ctx, account)
+}
 
-	folders, err := client.ListFolders()
-	if err != nil {
-		return err
-	}
-	return a.createFolderTree(account.ID, folders, nil)
+func (a *App) discoverFoldersCtx(ctx context.Context, account storage.Account) error {
+	return a.protocolFor(account).discoverFolders(ctx, account)
 }
 
 // ensureFolders discovers the folder tree over an already-connected client when
@@ -389,9 +375,9 @@ func (a *App) createFolderTree(accountID int64, folders []pimap.Folder, byPath m
 		name := f.Name
 		var parentID *int64
 		if delim != "" {
-			if idx := strings.LastIndex(f.Name, delim); idx >= 0 {
-				name = f.Name[idx+len(delim):]
-				if pid, ok := byPath[f.Name[:idx]]; ok {
+			if parent, last, ok := strings.CutLast(f.Name, delim); ok {
+				name = last
+				if pid, ok := byPath[parent]; ok {
 					parentID = &pid
 				}
 			}
@@ -401,6 +387,7 @@ func (a *App) createFolderTree(accountID int64, folders []pimap.Folder, byPath m
 			AccountID:  accountID,
 			Name:       name,
 			IMAPPath:   f.Name,
+			RemoteID:   f.Name,
 			Delimiter:  delim,
 			ParentID:   parentID,
 			Attributes: attrsToStrings(f.Attrs),

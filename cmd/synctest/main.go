@@ -16,6 +16,7 @@ import (
 	"log/slog"
 	"os"
 	"os/signal"
+	"slices"
 	"strconv"
 	"syscall"
 
@@ -65,7 +66,7 @@ func run() error {
 		return err
 	}
 
-	engine := psync.NewEngine(client, store, log)
+	engine := psync.NewEngine(pimap.NewAdapter(client), store, log)
 
 	fmt.Println("\n=== first sync ===")
 	res, err := engine.SyncFolder(ctx, folder)
@@ -263,15 +264,15 @@ func pushDemo(ctx context.Context, store *storage.DB, client *pimap.Client, engi
 func pickUnseen(states []storage.MessageState) storage.MessageState {
 	// states are ordered by uid ascending.
 	target := states[len(states)-1]
-	for i := len(states) - 1; i >= 0; i-- {
-		if !states[i].Flags.Has(storage.FlagSeen) {
-			return states[i]
+	for _, state := range slices.Backward(states) {
+		if !state.Flags.Has(storage.FlagSeen) {
+			return state
 		}
 	}
 	return target
 }
 
 func printResult(res psync.FolderSyncResult) {
-	fmt.Printf("new=%d deleted=%d flag_updated=%d conflicts=%d pushed=%d uidvalidity_reset=%v\n",
-		res.New, res.Deleted, res.FlagUpdated, res.Conflicts, res.Pushed, res.UIDValidityReset)
+	fmt.Printf("new=%d deleted=%d flag_updated=%d conflicts=%d pushed=%d generation_reset=%v has_older=%v repaired=%d\n",
+		res.New, res.Deleted, res.FlagUpdated, res.Conflicts, res.Pushed, res.GenerationReset, res.HasOlder, res.Repaired)
 }

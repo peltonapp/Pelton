@@ -15,6 +15,7 @@
   import Modal from '../common/Modal.svelte'
   import { checkAccountPassword, setAccountPassword } from '../../lib/api'
   import { errorMessage, toastError, toastInfo } from '../../stores/toast'
+  import { retrySync } from '../../stores/syncfailures'
   import { t } from '../../lib/i18n'
   import type { PasswordPromptResult } from '../../stores/passwordprompt'
   import { accountLabel } from '../../lib/format'
@@ -24,6 +25,11 @@
   export let account: Account | null = null
   /** Called with how the prompt ended. */
   export let onDone: (result: PasswordPromptResult) => void = () => {}
+  /**
+   * Whether saving starts a sync of the mailbox. Off when the prompt came from
+   * a sync of every account, which picks the mailbox up anyway.
+   */
+  export let syncOnSave = true
 
   let password = ''
   let busy = false
@@ -107,6 +113,11 @@
       return
     }
     await setAccountPassword(account.id, password)
+    // the mailbox could not sync without it, so it syncs now rather than on
+    // the next run, unless a sync of everything is about to start anyway.
+    if (syncOnSave) {
+      void retrySync(account.id)
+    }
     password = ''
     refused = false
     onDone('saved')

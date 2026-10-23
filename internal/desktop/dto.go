@@ -333,6 +333,8 @@ func folderRole(f storage.Folder) string {
 	}
 	for _, attr := range f.Attributes {
 		switch strings.ToLower(strings.TrimPrefix(attr, "\\")) {
+		case "inbox":
+			return roleInbox
 		case "sent":
 			return roleSent
 		case "drafts":

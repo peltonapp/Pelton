@@ -237,33 +237,7 @@ func (a *App) CheckAccountPassword(accountID int64, password string) (PasswordCh
 	if existing, err := credentials.Load(accountID); err == nil && existing.Method == credentials.MethodOAuth {
 		return PasswordCheckDTO{}, errAccountUsesOAuth
 	}
-	dial, err := a.accountDial(*account)
-	if err != nil {
-		return PasswordCheckDTO{Error: err.Error()}, nil
-	}
-	client, err := pimap.Connect(pimap.Config{
-		Host:     account.IMAPHost,
-		Port:     account.IMAPPort,
-		Username: loginName(*account),
-		Password: password,
-		TLS:      imapTLSMode(account.IMAPTLS),
-		Trust:    accountTrust(*account),
-		Dial:     dial,
-	})
-	if err != nil {
-		return PasswordCheckDTO{Error: err.Error()}, nil
-	}
-	defer client.Close()
-	if err := client.Login(); err != nil {
-		if errors.Is(err, pimap.ErrAuthFailed) {
-			return PasswordCheckDTO{Rejected: true, Error: err.Error()}, nil
-		}
-		return PasswordCheckDTO{Error: err.Error()}, nil
-	}
-	if err := client.Logout(); err != nil {
-		a.log.Debug("logout after password check", "account", accountID, "err", err)
-	}
-	return PasswordCheckDTO{OK: true}, nil
+	return a.protocolFor(*account).checkPassword(*account, password), nil
 }
 
 // noteLoginResult records what the server said about an account's credentials.
@@ -273,7 +247,7 @@ func (a *App) CheckAccountPassword(accountID int64, password string) (PasswordCh
 //
 // Callers pass the error from Login directly, including nil.
 func (a *App) noteLoginResult(accountID int64, err error) {
-	if err != nil && !errors.Is(err, pimap.ErrAuthFailed) {
+	if err != nil && !loginRefused(err) {
 		return
 	}
 	a.rejectedLoginsMu.Lock()
@@ -286,6 +260,11 @@ func (a *App) noteLoginResult(accountID int64, err error) {
 		a.rejectedLogins = make(map[int64]struct{})
 	}
 	a.rejectedLogins[accountID] = struct{}{}
+}
+
+// loginRefused reports whether err is the server refusing the credentials.
+func loginRefused(err error) bool {
+	return errors.Is(err, pimap.ErrAuthFailed)
 }
 
 // loginRejected reports whether the server refused this account's credentials

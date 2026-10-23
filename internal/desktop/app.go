@@ -164,6 +164,12 @@ type App struct {
 	// waiting for the next sidebar refresh.
 	badgeMu     sync.Mutex
 	unreadBadge int
+
+	// movedUIDs remembers where recent moves put each message, for undo.
+	movedUIDs movedCopies
+	// emitForTest, when set, receives every event before the wails runtime
+	// (tests).
+	emitForTest func(name string, payload any)
 }
 
 // IsDemoMode reports whether the app was launched in the cosmetic demo mode. The
