@@ -15,6 +15,7 @@ func server(uid uint32, flags storage.Flag) *ServerMessage {
 }
 
 func TestReconcile(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name         string
 		local        *LocalMessage
@@ -117,6 +118,7 @@ func TestReconcile(t *testing.T) {
 }
 
 func TestMergeFlagsUnion(t *testing.T) {
+	t.Parallel()
 	got := mergeFlags(storage.FlagSeen, storage.FlagFlagged)
 	want := storage.FlagSeen | storage.FlagFlagged
 	if got != want {
@@ -129,6 +131,7 @@ func TestMergeFlagsUnion(t *testing.T) {
 }
 
 func TestBuildPlanCoversUnionOfUIDsInOrder(t *testing.T) {
+	t.Parallel()
 	locals := []LocalMessage{
 		*local(3, storage.FlagSeen, false, false), // adopt nothing, agree? server has flagged -> adopt
 		*local(5, storage.FlagSeen, false, false), // deleted on server
@@ -157,6 +160,7 @@ func TestBuildPlanCoversUnionOfUIDsInOrder(t *testing.T) {
 }
 
 func TestBuildPlanEmpty(t *testing.T) {
+	t.Parallel()
 	if plan := BuildPlan(nil, nil, 0); len(plan) != 0 {
 		t.Fatalf("empty plan length = %d, want 0", len(plan))
 	}

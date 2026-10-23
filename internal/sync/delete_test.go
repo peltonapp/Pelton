@@ -15,6 +15,7 @@ import (
 // for deletion, and never widen that set because the cache and the server
 // disagree about anything else.
 func TestSyncOnlyDeletesWhatTheUserDeleted(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	db, folder := newSyncTestFolder(t)
 	client := &fakeClient{uids: []uint32{1, 2, 3, 4, 5}}
@@ -58,6 +59,7 @@ func TestSyncOnlyDeletesWhatTheUserDeleted(t *testing.T) {
 // would be worst: the server dropped messages the cache still has. That is a
 // local cleanup, and it must never turn into a server-side delete.
 func TestSyncDeletesNothingOnTheServerWhenTheCacheIsStale(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	db, folder := newSyncTestFolder(t)
 	client := &fakeClient{uids: []uint32{1, 2, 3, 4, 5}}
@@ -85,6 +87,7 @@ func TestSyncDeletesNothingOnTheServerWhenTheCacheIsStale(t *testing.T) {
 // TestSyncDoesNotPushADeleteTheServerAlreadyApplied: the message is gone
 // upstream, so there is nothing to expunge and the local row just goes.
 func TestSyncDoesNotPushADeleteTheServerAlreadyApplied(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	db, folder := newSyncTestFolder(t)
 	client := &fakeClient{uids: []uint32{1, 2}}
@@ -136,6 +139,7 @@ func deleteOne(t *testing.T, db *storage.DB, folderID int64, uid uint32) {
 // message goes to the trash, where it can still be recovered, rather than being
 // destroyed on the spot.
 func TestDeleteMovesToTrash(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	db, folder := newSyncTestFolder(t)
 	client := &fakeClient{uids: []uint32{1, 2, 3}}
@@ -167,6 +171,7 @@ func TestDeleteMovesToTrash(t *testing.T) {
 // is nowhere left to move it. This is emptying the trash, and deleting a single
 // message from inside it.
 func TestDeleteFromTrashIsPermanent(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	db, folder := newSyncTestFolder(t)
 	client := &fakeClient{uids: []uint32{1, 2}}
@@ -195,6 +200,7 @@ func TestDeleteFromTrashIsPermanent(t *testing.T) {
 // TestDeleteWithoutATrashFolderIsPermanent covers an account whose server has
 // no trash: there is nothing to move to, so the delete is the old expunge.
 func TestDeleteWithoutATrashFolderIsPermanent(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	db, folder := newSyncTestFolder(t)
 	client := &fakeClient{uids: []uint32{1, 2}}
@@ -222,6 +228,7 @@ func TestDeleteWithoutATrashFolderIsPermanent(t *testing.T) {
 // way is bad: expunging what should have been moved destroys mail, and moving
 // the trash into itself fails or loops.
 func TestTrashable(t *testing.T) {
+	t.Parallel()
 	engine := &Engine{TrashPath: "Trash", TrashFolderID: 7}
 	tests := []struct {
 		name   string

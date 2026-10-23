@@ -275,7 +275,7 @@ WHERE id = ?`
 	return requireOneRow(res, ErrAccountNotFound)
 }
 
-// SetAccountPGPDefault stores how an account starts a new message: ” for
+// SetAccountPGPDefault stores how an account starts a new message: empty for
 // unprotected, 'sign' or 'auto'. Validating the value is the caller's job.
 func (d *DB) SetAccountPGPDefault(ctx context.Context, id int64, value string) error {
 	res, err := d.sql.ExecContext(ctx, `UPDATE accounts SET pgp_default = ? WHERE id = ?`, value, id)
@@ -330,7 +330,7 @@ func joinLines(items []string) string {
 
 func splitLines(text string) []string {
 	var out []string
-	for _, line := range strings.Split(text, "\n") {
+	for line := range strings.SplitSeq(text, "\n") {
 		if line = strings.TrimSpace(line); line != "" {
 			out = append(out, line)
 		}
