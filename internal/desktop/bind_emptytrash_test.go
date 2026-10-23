@@ -4,16 +4,23 @@ import (
 	"errors"
 	"log/slog"
 	"path/filepath"
+	"slices"
+	"sync"
 	"testing"
 	"time"
 
+	"github.com/emersion/go-imap/v2"
+
+	"github.com/peltonapp/Pelton/internal/desktop/syncsched"
+	pimap "github.com/peltonapp/Pelton/internal/imap"
 	"github.com/peltonapp/Pelton/internal/storage"
+	"github.com/peltonapp/Pelton/internal/storage/storagetest"
 )
 
 func newTrashTestApp(t *testing.T) *App {
 	t.Helper()
 	ctx, stopBackground := testContext(t)
-	store, err := storage.Open(filepath.Join(t.TempDir(), "test.db"))
+	store, err := storagetest.Open(filepath.Join(t.TempDir(), "test.db"))
 	if err != nil {
 		t.Fatalf("open store: %v", err)
 	}
@@ -165,5 +172,45 @@ func TestEmptyTrashTwiceCountsOnlyWhatItMarked(t *testing.T) {
 	}
 	if got, err := a.EmptyTrash(trash.ID); err != nil || got != 0 {
 		t.Fatalf("second EmptyTrash = %d, %v; want 0, nil", got, err)
+	}
+}
+
+// expungeIMAP records each expunge.
+type expungeIMAP struct {
+	fakeIMAP
+	mu       sync.Mutex
+	expunged [][]imap.UID
+}
+
+func (c *expungeIMAP) DeleteMessages(uids ...imap.UID) error {
+	c.mu.Lock()
+	c.expunged = append(c.expunged, slices.Clone(uids))
+	c.mu.Unlock()
+	return nil
+}
+
+// Emptying a big trash expunges a page per normal-lane unit, planned from
+// the store, so the task holds a session for one page at a time and the
+// rows leave the cache as their page is done.
+func TestEmptyTrashExpungesAPagePerUnit(t *testing.T) {
+	a := newHoldTestApp(t)
+	acct, _ := seedHoldAccount(t, a, "a@example.test")
+	client := &expungeIMAP{}
+	a.newIMAPClient = func(pimap.Config) (mailClient, error) { return client, nil }
+	trash := seedFolder(t, a, acct, "Trash", "Trash", []string{`\Trash`}, 1200)
+	if got, err := a.EmptyTrash(trash.ID); err != nil || got != 1200 {
+		t.Fatalf("EmptyTrash = %d, %v; want 1200", got, err)
+	}
+	waitUntil(t, 10*time.Second, "trash never emptied", func() bool { return rowCount(t, a, trash.ID) == 0 })
+	client.mu.Lock()
+	defer client.mu.Unlock()
+	var sizes []int
+	total := 0
+	for _, uids := range client.expunged {
+		sizes = append(sizes, len(uids))
+		total += len(uids)
+	}
+	if total != 1200 || len(sizes) != 3 || slices.Max(sizes) > syncsched.ListPage {
+		t.Fatalf("expunges of %v messages, want 1200 in pages of at most %d", sizes, syncsched.ListPage)
 	}
 }

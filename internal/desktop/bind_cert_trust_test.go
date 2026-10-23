@@ -104,7 +104,7 @@ func TestTestConnectionLogsInOnceTheCertificateIsTrusted(t *testing.T) {
 	if len(got.Untrusted) != 0 {
 		t.Errorf("Untrusted = %+v, want none once trusted", got.Untrusted)
 	}
-	if !client.loggedOut {
+	if !client.loggedOut.Load() {
 		t.Error("test did not log in and out")
 	}
 	if len(trust.Pins) != 1 {

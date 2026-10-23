@@ -19,6 +19,7 @@ import (
 	pimap "github.com/peltonapp/Pelton/internal/imap"
 	"github.com/peltonapp/Pelton/internal/outbox"
 	"github.com/peltonapp/Pelton/internal/storage"
+	"github.com/peltonapp/Pelton/internal/storage/storagetest"
 )
 
 // submissionServer is enough of a submission server to carry one message:
@@ -101,7 +102,7 @@ func speakSubmission(conn net.Conn) {
 func sendingAccount(t *testing.T, client *fakeIMAP) (*App, storage.Account) {
 	t.Helper()
 	ctx, stopBackground := testContext(t)
-	db, err := storage.Open(filepath.Join(t.TempDir(), "test.db"))
+	db, err := storagetest.Open(filepath.Join(t.TempDir(), "test.db"))
 	if err != nil {
 		t.Fatalf("open: %v", err)
 	}
@@ -172,8 +173,11 @@ func TestTransmitAppendsACopyToSent(t *testing.T) {
 	if string(client.appended[0]) != string(raw) {
 		t.Errorf("appended %q, want the message that was sent", client.appended[0])
 	}
-	if !client.loggedOut {
-		t.Error("the imap session opened for the append was left open")
+	// The append ran on a pooled session; stopping the runtime logs it out.
+	app.stopAccountScheduler(account.ID, false)
+	app.accountSessionsFor(account.ID, 0).sessions.WaitClosed(context.Background()) // closes run in the background
+	if !client.loggedOut.Load() {
+		t.Error("the pooled imap session was left open after the runtime stopped")
 	}
 }
 
