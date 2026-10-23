@@ -13,14 +13,16 @@ import (
 	"github.com/peltonapp/Pelton/internal/credentials"
 	pimap "github.com/peltonapp/Pelton/internal/imap"
 	"github.com/peltonapp/Pelton/internal/storage"
+	"github.com/peltonapp/Pelton/internal/storage/storagetest"
 )
 
 // TestMain swaps go-keyring for its in-memory mock before any test in this
 // package runs, so a test that resolves an account's credentials never reads or
-// writes the machine's real credential store.
+// writes the machine's real credential store. storagetest.Main removes the
+// migrated database the test stores are copied from.
 func TestMain(m *testing.M) {
 	keyring.MockInit()
-	os.Exit(m.Run())
+	os.Exit(storagetest.Main(m))
 }
 
 // fakeIMAP records the commands a binding sends and answers them from canned
@@ -105,8 +107,18 @@ func (f *fakeIMAP) FetchMessage(imap.UID) (*pimap.Message, error) { return &pima
 func (f *fakeIMAP) FetchMessages([]imap.UID, func(imap.UID, *pimap.Message, error) error) error {
 	return nil
 }
+func (f *fakeIMAP) FetchPartial(imap.UID, int64, int64) (*pimap.Message, error) {
+	return nil, nil
+}
 func (f *fakeIMAP) FetchRawMessage(imap.UID) ([]byte, error)      { return nil, nil }
 func (f *fakeIMAP) FetchAllFlags() ([]pimap.MessageHeader, error) { return nil, nil }
+func (f *fakeIMAP) FetchFlagsChangedSince(uint64) ([]pimap.MessageHeader, error) {
+	return nil, nil
+}
+func (f *fakeIMAP) SearchAllUIDs() ([]imap.UID, error) { return nil, nil }
+func (f *fakeIMAP) FetchHeaders([]imap.UID, *imap.FetchOptions) ([]pimap.MessageHeader, error) {
+	return nil, nil
+}
 
 func (f *fakeIMAP) AddFlags(imap.UID, ...imap.Flag) error    { return nil }
 func (f *fakeIMAP) RemoveFlags(imap.UID, ...imap.Flag) error { return nil }
@@ -173,6 +185,9 @@ func TestArchiveMessageMovesOnTheServerAndDropsTheRow(t *testing.T) {
 	if undo.OriginalFolderID != inbox.ID {
 		t.Errorf("undo points at folder %d, want the inbox %d", undo.OriginalFolderID, inbox.ID)
 	}
+	if undo.DestFolderID != archive.ID {
+		t.Errorf("undo DestFolderID = %d, want the archive %d", undo.DestFolderID, archive.ID)
+	}
 	if _, err := db.GetMessage(ctx, messageID); err == nil {
 		t.Error("the local row survived a successful archive")
 	}
@@ -194,15 +209,15 @@ func TestArchiveMessageKeepsTheRowWhenTheServerRefuses(t *testing.T) {
 	}
 }
 
-// Undo searches Archive by Message-ID because the move gave the message a new
-// uid, and moves whatever it finds back to the folder it came from.
+// Undo searches the folder the message went to by Message-ID because the move
+// gave it a new uid, and moves whatever it finds back to where it came from.
 func TestUnarchiveMessageMovesTheFoundUIDBack(t *testing.T) {
 	a, db, ctx := moveTestApp(t)
 	inbox, archive, _ := moveTestAccount(t, db, ctx, true)
 	client := &fakeIMAP{searchResult: []imap.UID{7}}
 	useFake(t, a, inbox.AccountID, client)
 
-	if err := a.UnarchiveMessage("<one@example.com>", inbox.ID); err != nil {
+	if err := a.UnarchiveMessage("<one@example.com>", archive.ID, inbox.ID); err != nil {
 		t.Fatalf("UnarchiveMessage: %v", err)
 	}
 
@@ -218,15 +233,61 @@ func TestUnarchiveMessageMovesTheFoundUIDBack(t *testing.T) {
 // that did not happen.
 func TestUnarchiveMessageFailsWhenTheServerHasNoMatch(t *testing.T) {
 	a, db, ctx := moveTestApp(t)
-	inbox, _, _ := moveTestAccount(t, db, ctx, true)
+	inbox, archive, _ := moveTestAccount(t, db, ctx, true)
 	client := &fakeIMAP{}
 	useFake(t, a, inbox.AccountID, client)
 
-	if err := a.UnarchiveMessage("<one@example.com>", inbox.ID); err == nil {
+	if err := a.UnarchiveMessage("<one@example.com>", archive.ID, inbox.ID); err == nil {
 		t.Fatal("UnarchiveMessage returned no error though the search found nothing")
 	}
 	if len(client.moved) != 0 {
 		t.Errorf("moved %+v though there was nothing to restore", client.moved)
+	}
+}
+
+// Undoing a move to an ordinary folder must search that folder, not Archive:
+// the message is not in Archive, so the old lookup could never find it. An
+// account with no Archive folder can still move mail elsewhere, so it must be
+// able to undo that move too.
+func TestUndoMoveSearchesTheDestinationFolder(t *testing.T) {
+	for _, tc := range []struct {
+		name        string
+		withArchive bool
+		uid         imap.UID
+	}{
+		{"with archive", true, 7},
+		{"without archive", false, 3},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			a, db, ctx := moveTestApp(t)
+			accountID, err := db.CreateAccount(ctx, &storage.Account{Email: "me@example.com"})
+			if err != nil {
+				t.Fatal(err)
+			}
+			names := []string{"INBOX", "Projects"}
+			if tc.withArchive {
+				names = append(names, "Archive")
+			}
+			folders := map[string]*storage.Folder{}
+			for _, name := range names {
+				folders[name] = &storage.Folder{AccountID: accountID, Name: name, IMAPPath: name}
+				if _, err := db.CreateFolder(ctx, folders[name]); err != nil {
+					t.Fatal(err)
+				}
+			}
+			client := &fakeIMAP{searchResult: []imap.UID{tc.uid}}
+			useFake(t, a, accountID, client)
+
+			if err := a.UnarchiveMessage("<one@example.com>", folders["Projects"].ID, folders["INBOX"].ID); err != nil {
+				t.Fatalf("UnarchiveMessage: %v", err)
+			}
+			if len(client.selected) != 1 || client.selected[0] != "Projects" {
+				t.Errorf("selected %v, want just Projects", client.selected)
+			}
+			if len(client.moved) != 1 || client.moved[0].uid != tc.uid || client.moved[0].dest != "INBOX" {
+				t.Errorf("moved %+v, want uid %d to INBOX", client.moved, tc.uid)
+			}
+		})
 	}
 }
 

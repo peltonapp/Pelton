@@ -450,15 +450,15 @@ func printOutbox(ctx context.Context, queue *outbox.Queue) {
 // line, for eyeballing threading headers.
 func headerBlock(raw []byte) string {
 	s := string(raw)
-	if i := strings.Index(s, "\r\n\r\n"); i >= 0 {
-		return s[:i]
+	if before, _, ok := strings.Cut(s, "\r\n\r\n"); ok {
+		return before
 	}
 	return s
 }
 
 // contentTypeOf returns the message's top-level Content-Type line for display.
 func contentTypeOf(raw []byte) string {
-	for _, line := range strings.Split(headerBlock(raw), "\r\n") {
+	for line := range strings.SplitSeq(headerBlock(raw), "\r\n") {
 		if strings.HasPrefix(strings.ToLower(line), "content-type:") {
 			return strings.TrimSpace(line)
 		}

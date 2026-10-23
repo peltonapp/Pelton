@@ -1,0 +1,3 @@
+-- body_complete is now created by 0037's rebuild of messages. This used to add
+-- the column and backfill it with a second full-table UPDATE, doubling the
+-- upgrade's writes. The file stays so the numbering does not move.

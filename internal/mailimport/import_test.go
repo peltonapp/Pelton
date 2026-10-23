@@ -7,11 +7,12 @@ import (
 	"testing"
 
 	"github.com/peltonapp/Pelton/internal/storage"
+	"github.com/peltonapp/Pelton/internal/storage/storagetest"
 )
 
 func newTestStore(t *testing.T) *storage.DB {
 	t.Helper()
-	db, err := storage.Open(filepath.Join(t.TempDir(), "test.db"))
+	db, err := storagetest.Open(filepath.Join(t.TempDir(), "test.db"))
 	if err != nil {
 		t.Fatalf("open store: %v", err)
 	}
