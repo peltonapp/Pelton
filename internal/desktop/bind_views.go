@@ -370,7 +370,7 @@ const addrSep = "\n"
 
 // splitAddrs turns a stored newline list into trimmed, non-empty entries.
 func splitAddrs(s string) []string {
-	var out []string
+	out := []string{}
 	for _, line := range strings.Split(s, addrSep) {
 		if t := strings.TrimSpace(line); t != "" {
 			out = append(out, t)

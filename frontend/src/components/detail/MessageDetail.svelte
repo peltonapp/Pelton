@@ -299,7 +299,7 @@ ${bodyHtml}
       <SourceModal messageId={detail.id} on:close={() => (sourceOpen = false)} />
     {/if}
 
-    <div class="scroll selectable" bind:this={scrollEl}>
+    <div class="scroll selectable" tabindex="-1" bind:this={scrollEl}>
       <DetailHeader {detail} />
       <div class="body-wrap">
         {#if detail.phishing.level !== 'none'}
@@ -388,6 +388,13 @@ ${bodyHtml}
     padding: var(--space-2) var(--pane-pad);
     border-bottom: var(--hairline) solid var(--border-subtle);
     flex-shrink: 0;
+  }
+
+  .scroll:focus {
+    outline: none;
+  }
+  .scroll:focus-visible {
+    box-shadow: inset 0 0 0 2px var(--accent);
   }
 
   .scroll {

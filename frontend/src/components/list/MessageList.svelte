@@ -85,6 +85,7 @@
   import { openInTab } from '../../stores/tabs'
   import { errorMessage, toastError } from '../../stores/toast'
   import { isVIPAddress } from '../../stores/vip'
+  import { sidebar } from '../../stores/accounts'
   import type { Selection, MessageSummary, SwipeAction, EditorMode, SearchSortPref } from '../../lib/types'
   import { t } from '../../lib/i18n'
   import {
@@ -194,6 +195,9 @@
   }
 
   $: items = $messageList.data?.items ?? []
+  // each account's colour (#486), shown only while the list mixes accounts.
+  $: accountColors = Object.fromEntries(($sidebar.data?.accounts ?? []).map((a) => [a.id, a.color ?? '']))
+  $: mixedAccounts = items.some((m) => m.accountId !== items[0].accountId)
   // a result set pages too: a broad query matches far more than one page, and
   // stopping at the first page is what made a match ranked below it look like
   // no match at all.
@@ -300,7 +304,7 @@
     applySearch($searchQuery.trim(), searchFilter)
   }
 
-  // open marks the message seen if needed and shows it in the detail pane. a
+  // open marks the message seen if needed (and wanted) and shows it in the detail pane. a
   // plain open also clears any multi-selection.
   async function open(index: number): Promise<void> {
     const item = items[index]
@@ -312,7 +316,7 @@
     // the row that was opened is where a following shift-click measures from.
     anchorAt(item.id)
     openMessage(item.id)
-    if (!item.seen) {
+    if (!item.seen && $prefs.markReadOnOpen) {
       patchInList(item.id, { seen: true })
       try {
         await setSeen(item.id, true)
@@ -791,6 +795,7 @@
         <div id={`msg-${item.id}`}>
           <MessageRow
             message={item}
+            accountColor={mixedAccounts ? (accountColors[item.accountId] ?? '') : ''}
             selected={item.id === $openMessageId || index === activeIndex}
             checked={$selectedIds.has(item.id)}
             on:click={(e) => onRowClick(e, index)}

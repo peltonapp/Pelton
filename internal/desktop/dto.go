@@ -48,6 +48,8 @@ type AccountDTO struct {
 	// PGPDefault is how this account starts a new message: '' unprotected,
 	// 'sign', or 'auto' to sign and encrypt whenever every recipient has a key.
 	PGPDefault string `json:"pgpDefault"`
+	// Color marks the account's mail in views that mix accounts; '' is none.
+	Color string `json:"color"`
 	// PasswordPromptDismissed is true when the user told the missing-password
 	// prompt to stop asking for this account. The ui marks the mailbox instead
 	// of interrupting.
@@ -278,6 +280,7 @@ func toAccountDTO(a storage.Account) AccountDTO {
 		ExportSubfolders:   a.ExportSubfolders,
 		ExportNameTemplate: a.ExportNameTemplate,
 		PGPDefault:         a.PGPDefault,
+		Color:              a.Color,
 
 		PasswordPromptDismissed: a.PasswordPromptDismissed,
 

@@ -141,6 +141,10 @@ func (a *App) restoreGeometry() {
 	}
 	// after the size, so unmaximising lands on the remembered frame.
 	if g.Maximised {
+		if a.startedHidden {
+			a.pendingMaximise.Store(true)
+			return
+		}
 		wailsruntime.WindowMaximise(a.ctx)
 	}
 }

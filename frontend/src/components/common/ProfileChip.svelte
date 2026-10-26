@@ -119,7 +119,7 @@
   .menu {
     position: absolute;
     bottom: calc(100% + var(--space-1));
-    inset-inline-end: 0;
+    inset-inline-start: 0;
     z-index: 320;
     min-width: 180px;
     padding: var(--space-1);

@@ -61,6 +61,7 @@
     setAvatarSource,
     setAvatarStyle,
     setMultiSelectEnabled,
+    setMarkReadOnOpen,
     setSelectAllScope,
     setSearchSort,
     searchSortPref,
@@ -92,11 +93,13 @@
     setStatusClock,
     setStatusUnread,
     setCloseAction,
+    setStartHidden,
     setSyncMessageLimit,
     setSyncAutoBackfill,
     setDefaultEditorMode,
     setComposeAutocomplete,
     setComposeChips,
+    setSignatureAboveQuote,
     setEmptyStateImage,
     setEmptyStateFullscreen,
     setMenuBarInApp,
@@ -209,6 +212,7 @@
     { cat: 'list', label: $t('settingsPanel.label.previewLines'), kw: 'preview lines' },
     { cat: 'list', label: $t('settingsPanel.label.flaggedHighlight'), kw: 'flag highlight' },
     { cat: 'list', label: $t('settingsPanel.toggle.showMailboxEmail'), kw: 'account email' },
+    { cat: 'list', label: $t('settingsPanel.toggle.markReadOnOpen'), kw: 'mark read seen unread open automatically' },
     { cat: 'list', label: $t('settingsPanel.toggle.multiSelect'), kw: 'select multiple' },
     { cat: 'list', label: $t('settingsPanel.toggle.indentGuides'), kw: 'sidebar folders' },
     { cat: 'list', label: $t('settingsPanel.toggle.flaggedCount'), kw: 'sidebar flagged count' },
@@ -232,6 +236,7 @@
     { cat: 'composing', label: $t('settingsPanel.label.defaultEditor'), kw: 'editor html plain markdown' },
     { cat: 'composing', label: $t('settingsPanel.toggle.autocomplete'), kw: 'autocomplete recipients' },
     { cat: 'composing', label: $t('settingsPanel.toggle.chipRecipients'), kw: 'chips recipients' },
+    { cat: 'composing', label: $t('settingsPanel.toggle.signatureAboveQuote'), kw: 'signature footer reply quote above below' },
     { cat: 'composing', label: $t('onboarding.extras.vimEditor'), kw: 'vim' },
     { cat: 'composing', label: $t('settingsPanel.label.undoSendWindow'), kw: 'undo send delay' },
     { cat: 'signatures', label: $t('settingsPanel.category.signatures'), kw: 'signature footer' },
@@ -261,6 +266,7 @@
     { cat: 'power', label: $t('settingsPanel.toggle.verboseSync'), kw: 'sync status' },
     { cat: 'power', label: $t('settingsPanel.toggle.syncProgressBar'), kw: 'sync progress bar percent count' },
     { cat: 'power', label: $t('settingsPanel.label.closeAction'), kw: 'close button tray background quit exit' },
+    { cat: 'power', label: $t('settingsPanel.toggle.startHidden'), kw: 'start minimized hidden tray background launch login autostart' },
     { cat: 'power', label: $t('settingsPanel.label.syncMessageLimit'), kw: 'sync limit messages older initial download' },
     { cat: 'power', label: $t('settingsPanel.toggle.syncAutoBackfill'), kw: 'older mail backfill scroll load more' },
     { cat: 'power', label: $t('settingsPanel.toggle.offlineIndicator'), kw: 'offline' },
@@ -1100,6 +1106,14 @@
               on:change={(e) => setShowAccountEmail(e.detail)}
             />
           </div>
+          <div class="toggle">
+            <span class="row-label">{$t('settingsPanel.toggle.markReadOnOpen')}</span>
+            <ToggleSwitch
+              checked={$prefs.markReadOnOpen}
+              label={$t('settingsPanel.toggle.markReadOnOpen')}
+              on:change={(e) => setMarkReadOnOpen(e.detail)}
+            />
+          </div>
           <div class="toggle" title={$t('settingsPanel.hint.multiSelect')}>
             <span class="row-label">{$t('settingsPanel.toggle.multiSelect')}</span>
             <ToggleSwitch
@@ -1549,6 +1563,15 @@
           <p class="hint">
             {$t('settingsPanel.hint.closeAction')}
           </p>
+          <div class="toggle">
+            <span class="row-label">{$t('settingsPanel.toggle.startHidden')}</span>
+            <ToggleSwitch
+              checked={$prefs.startHidden}
+              label={$t('settingsPanel.toggle.startHidden')}
+              on:change={(e) => setStartHidden(e.detail)}
+            />
+          </div>
+          <p class="hint">{isMac ? $t('settingsPanel.hint.startHiddenMac') : $t('settingsPanel.hint.startHidden')}</p>
           <div class="toggle" title={$t('settingsPanel.hint.lowPowerToggle')}>
             <span class="row-label">{$t('settingsPanel.toggle.lowPowerMode')}</span>
             <ToggleSwitch
@@ -1714,6 +1737,14 @@
           {#if !$prefs.composeChips}
             <p class="hint">{$t('settingsPanel.hint.plainRecipients')}</p>
           {/if}
+          <div class="toggle">
+            <span class="row-label">{$t('settingsPanel.toggle.signatureAboveQuote')}</span>
+            <ToggleSwitch
+              checked={$prefs.signatureAboveQuote}
+              label={$t('settingsPanel.toggle.signatureAboveQuote')}
+              on:change={(e) => setSignatureAboveQuote(e.detail)}
+            />
+          </div>
           <div class="toggle" title={$t('settingsPanel.hint.vimEditor')}>
             <span class="row-label">{$t('onboarding.extras.vimEditor')} <span class="badge-experimental">{$t('common.experimental')}</span></span>
             <ToggleSwitch

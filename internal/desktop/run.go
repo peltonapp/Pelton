@@ -49,6 +49,7 @@ func Run(cfg Config) error {
 	app.programLicense = cfg.ProgramLicense
 	app.trayIcon = cfg.TrayIcon
 	app.demoMode = cfg.DemoMode
+	app.startedHidden = startHidden(os.Args[1:], cfg.Channel)
 
 	// a mailto: click that launched the app arrives as argv on Linux/Windows.
 	// stash it so the first webview mount can open the prefilled compose. macOS
@@ -81,6 +82,9 @@ func Run(cfg Config) error {
 		Height:    defaultWindowHeight,
 		MinWidth:  minWindowWidth,
 		MinHeight: minWindowHeight,
+		// the tray icon, the Dock icon (quitevent_darwin.m) or another launch
+		// shows it.
+		StartHidden: app.startedHidden,
 		AssetServer: &assetserver.Options{
 			Assets: cfg.Assets,
 		},

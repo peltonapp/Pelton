@@ -650,6 +650,10 @@ export function SetAccountCA(arg1, arg2) {
   return window['go']['desktop']['App']['SetAccountCA'](arg1, arg2);
 }
 
+export function SetAccountColor(arg1, arg2) {
+  return window['go']['desktop']['App']['SetAccountColor'](arg1, arg2);
+}
+
 export function SetAccountPGPKey(arg1, arg2) {
   return window['go']['desktop']['App']['SetAccountPGPKey'](arg1, arg2);
 }

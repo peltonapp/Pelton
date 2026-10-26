@@ -67,6 +67,12 @@ export type ShortcutAction =
   | 'switch-profile'
   | 'next-profile'
   | 'prev-profile'
+  // moving focus between the sidebar, the list and the reading pane (#495).
+  | 'next-pane'
+  | 'prev-pane'
+  | 'focus-sidebar'
+  | 'focus-list'
+  | 'focus-reader'
 
 // Shortcut pairs an action with its default combo and the label key for display.
 export interface Shortcut {
@@ -148,6 +154,12 @@ export const shortcuts: Shortcut[] = [
   { action: 'switch-profile', combo: '', labelKey: 'profiles.switch' },
   { action: 'next-profile', combo: '', labelKey: 'profiles.next' },
   { action: 'prev-profile', combo: '', labelKey: 'profiles.previous' },
+  // F6 is the key desktop apps cycle panes with; Tab stays with the controls.
+  { action: 'next-pane', combo: 'f6', labelKey: 'shortcut.nextPane' },
+  { action: 'prev-pane', combo: 'shift+f6', labelKey: 'shortcut.prevPane' },
+  { action: 'focus-sidebar', combo: '', labelKey: 'shortcut.focusSidebar' },
+  { action: 'focus-list', combo: '', labelKey: 'shortcut.focusList' },
+  { action: 'focus-reader', combo: '', labelKey: 'shortcut.focusReader' },
 ]
 
 // ParsedCombo is a combo broken into its modifier flags and final key.
@@ -203,6 +215,12 @@ export function eventToCombo(event: KeyboardEvent): string | null {
   }
   parts.push(normalizeKey(event.key))
   return parts.join('+')
+}
+
+// isFunctionKeyCombo reports whether a combo's key is F1 to F24, which types
+// nothing and so is safe to fire from inside a text field.
+export function isFunctionKeyCombo(combo: string): boolean {
+  return /^f([1-9]|1[0-9]|2[0-4])$/.test(parseCombo(combo).key)
 }
 
 // comboHasModifier reports whether a combo includes any modifier, so callers can

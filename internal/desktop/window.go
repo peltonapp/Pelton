@@ -16,5 +16,8 @@ func (a *App) showWindow() {
 	}
 	wailsruntime.WindowShow(a.ctx)
 	wailsruntime.WindowUnminimise(a.ctx)
+	if a.pendingMaximise.Swap(false) {
+		wailsruntime.WindowMaximise(a.ctx)
+	}
 	bringToFront(a.ctx)
 }

@@ -130,6 +130,12 @@ type App struct {
 	// close and hide the window instead of exiting.
 	quitRequested atomic.Bool
 
+	// startedHidden is set when the window launched hidden (starthidden.go).
+	// A remembered maximise then waits in pendingMaximise for the first
+	// showWindow, since maximising would show the window on Windows.
+	startedHidden   bool
+	pendingMaximise atomic.Bool
+
 	// dlMu guards dlCancel, the cancel function of the running bulk offline
 	// download (nil when none is running). CancelDownload calls it to stop the
 	// job without tearing down the whole app context.

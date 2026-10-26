@@ -167,7 +167,7 @@
     <span class="name">{nightly ? $t('nightly.appName') : APP.name}</span>
     <button type="button" class="version" on:click={toggleViewportInfo}>{version.startsWith('v') ? version : `v${version}`}</button>
   </div>
-  <p class="tagline">{APP.tagline}</p>
+  <p class="tagline">{$t('about.tagline')}</p>
   {#if nightly}
     <p class="nightly-note">{$t('common.statusBar.nightlyTitle')}</p>
   {/if}

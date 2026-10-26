@@ -91,7 +91,10 @@ const defaults: UIPrefs = {
   syncProgressBar: true,
   statusClock: true,
   statusUnread: true,
+  markReadOnOpen: true,
+  signatureAboveQuote: false,
   closeAction: 'background',
+  startHidden: false,
   syncMessageLimit: 50,
   syncAutoBackfill: true,
   startupSelection: 'view:inbox',
@@ -544,11 +547,29 @@ export function setStatusUnread(value: boolean): void {
   void setSetting(SettingKeys.statusUnread, String(value))
 }
 
+// setMarkReadOnOpen picks whether opening a message marks it read.
+export function setMarkReadOnOpen(value: boolean): void {
+  prefs.update((p) => ({ ...p, markReadOnOpen: value }))
+  void setSetting(SettingKeys.markReadOnOpen, String(value))
+}
+
+// setSignatureAboveQuote picks whether a reply's footer goes above the quote.
+export function setSignatureAboveQuote(value: boolean): void {
+  prefs.update((p) => ({ ...p, signatureAboveQuote: value }))
+  void setSetting(SettingKeys.signatureAboveQuote, String(value))
+}
+
 // setCloseAction picks what the window's close button does. The backend reads
 // the setting on each close, so the change takes effect without a restart.
 export function setCloseAction(value: CloseAction): void {
   prefs.update((p) => ({ ...p, closeAction: value }))
   void setSetting(SettingKeys.closeAction, value)
+}
+
+// setStartHidden picks whether Pelton launches with its window hidden.
+export function setStartHidden(value: boolean): void {
+  prefs.update((p) => ({ ...p, startHidden: value }))
+  void setSetting(SettingKeys.startHidden, String(value))
 }
 
 // setSyncMessageLimit caps how many of a folder's newest messages a first sync

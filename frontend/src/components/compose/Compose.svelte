@@ -24,7 +24,7 @@
   import MarkdownPreview from './MarkdownPreview.svelte'
   import EditorModeSwitch from './EditorModeSwitch.svelte'
   import { caretMark, convertEditorBody } from '../../lib/richtext'
-  import { renderMarkdown } from '../../lib/markdown'
+  import { withSignatureBlock } from '../../lib/signatureblock'
   import Select from '../common/Select.svelte'
   import EditorToolbar from './EditorToolbar.svelte'
   import AttachmentPicker from './AttachmentPicker.svelte'
@@ -209,18 +209,10 @@
 
   $: accounts = $sidebar.data?.accounts ?? []
 
-  // withBlock inserts a signature block into a body: headers go to the top,
-  // footers to the bottom after the standard "-- " delimiter. The rich editor
-  // reads html, so there the block goes in as html.
+  // withBlock inserts a signature block into the body (see signatureblock.ts),
+  // above a reply's quote when the user asked for that.
   function withBlock(body: string, sig: Signature): string {
-    if (session.mode === 'wysiwyg') {
-      const block = sig.format === 'html' ? sig.content : renderMarkdown(sig.content)
-      return sig.kind === 'header' ? `${block}${body}` : `${body}<p>-- </p>${block}`
-    }
-    if (sig.kind === 'header') {
-      return `${sig.content}\n\n${body}`
-    }
-    return `${body.replace(/\s*$/, '')}\n\n-- \n${sig.content}`
+    return withSignatureBlock(body, sig, session.mode, $prefs.signatureAboveQuote ? (session.quote ?? '') : '')
   }
 
   // on first open, insert the account's default header/footer once. drafts and

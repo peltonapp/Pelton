@@ -447,7 +447,9 @@
     align-items: center;
     gap: var(--space-1);
     min-height: 30px;
-    padding: var(--space-1) var(--space-2);
+    /* starts past the macOS traffic lights like the bar it replaces; the inset
+       is zero elsewhere. */
+    padding: var(--space-1) var(--space-2) var(--space-1) max(var(--space-2), var(--titlebar-inset));
   }
 
   .chips {

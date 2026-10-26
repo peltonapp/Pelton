@@ -23,7 +23,7 @@
   const dispatch = createEventDispatcher<{ saved: View; close: void }>()
 
   // local copy so cancelling discards edits.
-  let draft: View = { ...value, queryFrom: [...value.queryFrom], queryTo: [...value.queryTo] }
+  let draft: View = { ...value, queryFrom: [...(value.queryFrom ?? [])], queryTo: [...(value.queryTo ?? [])] }
   let saving = false
   // what the draft looked like when the editor opened, so closing knows whether
   // there is anything to lose.

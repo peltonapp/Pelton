@@ -30,3 +30,12 @@ func peltonQuitEvent() {
 	// off the main thread: the event arrives on it, and quitting waits on it.
 	go a.quitApp()
 }
+
+//export peltonReopenEvent
+func peltonReopenEvent() {
+	a := quitEventTarget.Load()
+	if a == nil {
+		return
+	}
+	go a.showWindow()
+}

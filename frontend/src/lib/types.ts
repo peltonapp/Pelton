@@ -41,6 +41,8 @@ export interface Account {
   // how this account starts a new message: '' unprotected, 'sign', or 'auto'
   // to sign and encrypt whenever every recipient has a key.
   pgpDefault: string
+  // marks this account's mail in lists that mix accounts (#486); '' is none.
+  color?: string
   // the user told the missing-password prompt to stop asking about this
   // account. It still cannot sync; the ui marks it instead of interrupting.
   passwordPromptDismissed: boolean
@@ -570,9 +572,15 @@ export interface UIPrefs {
   // unread count of the unified inbox (#488).
   statusClock: boolean
   statusUnread: boolean
+  // markReadOnOpen marks a message read when it is opened (#517).
+  markReadOnOpen: boolean
+  // signatureAboveQuote puts a reply's footer above the quoted original (#512).
+  signatureAboveQuote: boolean
   // closeAction is what the window's close button does: 'background' keeps
   // Pelton running and syncing with the window hidden, 'quit' exits.
   closeAction: CloseAction
+  // startHidden keeps the window hidden at launch (#483).
+  startHidden: boolean
   // syncMessageLimit caps how many of a folder's newest messages the first sync
   // fetches; older mail stays on the server until asked for. 0 means no limit.
   syncMessageLimit: number

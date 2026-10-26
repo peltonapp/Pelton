@@ -73,7 +73,8 @@
   import { selectSavedView } from './stores/selection'
   import { isMac } from './lib/i18n'
   import { Quit, Hide, WindowIsFullscreen, WindowFullscreen, WindowUnfullscreen } from '../wailsjs/runtime/runtime'
-  import { matchShortcut, comboHasModifier, type ShortcutAction } from './lib/shortcuts'
+  import { matchShortcut, comboHasModifier, isFunctionKeyCombo, type ShortcutAction } from './lib/shortcuts'
+  import { cyclePane, focusPane as focusPaneArea } from './lib/panes'
   import { bindings, recording, initShortcuts } from './stores/shortcuts'
   import { initMenuBar } from './stores/menubar'
   import { triggerUndo } from './stores/undosend'
@@ -805,6 +806,21 @@
       case 'prev-profile':
         void switchRelative(-1)
         break
+      case 'next-pane':
+        cyclePane(1)
+        break
+      case 'prev-pane':
+        cyclePane(-1)
+        break
+      case 'focus-sidebar':
+        focusPaneArea('sidebar')
+        break
+      case 'focus-list':
+        focusPaneArea('list')
+        break
+      case 'focus-reader':
+        focusPaneArea('reader')
+        break
       case 'undo':
         if (!triggerUndo() && !triggerUndoDelete() && !triggerUndoArchive()) {
           toastInfo(get(t)('app.toast.nothingToUndo'))
@@ -1272,7 +1288,7 @@
     const action = matchShortcut(event, $bindings)
     if (action) {
       // a modifier-less custom binding must not hijack typing in a field.
-      if (!comboHasModifier($bindings[action]) && isEditableTarget(event.target)) {
+      if (!comboHasModifier($bindings[action]) && !isFunctionKeyCombo($bindings[action]) && isEditableTarget(event.target)) {
         return
       }
       event.preventDefault()

@@ -66,6 +66,9 @@ export interface ComposeSession {
   // against the keys actually available, and the user can change it per
   // message.
   protection: string
+  // quote is the quoted original a reply opened with, so a footer can go above
+  // it (#512). Unset for anything that is not a reply.
+  quote?: string
 }
 
 export const composeSessions = writable<ComposeSession[]>([])
@@ -143,6 +146,7 @@ export function openReply(detail: MessageDetail, mode: EditorMode, replyAll: boo
   }
   session.subject = withPrefix(detail.subject, 'Re:')
   session.body = quoteBody(detail, mode)
+  session.quote = session.body.replace(/^(\n|<p><\/p>)+/, '')
   session.inReplyTo = messageIdRef(detail)
   session.references = buildReferences(detail)
   composeSessions.update((list) => [...list, session])

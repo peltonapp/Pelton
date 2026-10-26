@@ -326,6 +326,8 @@ export function SenderPhotos(arg1:string):Promise<Array<string>>;
 
 export function SetAccountCA(arg1:number,arg2:string):Promise<void>;
 
+export function SetAccountColor(arg1:number,arg2:string):Promise<void>;
+
 export function SetAccountPGPKey(arg1:number,arg2:string):Promise<void>;
 
 export function SetAccountPassword(arg1:number,arg2:string):Promise<void>;

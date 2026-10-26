@@ -145,6 +145,10 @@ const (
 	// the clock and the unread count in the status bar (#488). On by default.
 	settingStatusClock  = "status_clock"
 	settingStatusUnread = "status_unread"
+	// opening a message marks it read (#517). On by default.
+	settingMarkReadOnOpen = "mark_read_on_open"
+	// a reply's footer goes above the quoted original (#512). Off by default.
+	settingSignatureAboveQuote = "signature_above_quote"
 	// what the window's close button does: "background" (default) or "quit".
 	// See close.go.
 	settingCloseAction = "close_button_action"
@@ -394,9 +398,16 @@ type UIPrefsDTO struct {
 	// unread count of the unified inbox.
 	StatusClock  bool `json:"statusClock"`
 	StatusUnread bool `json:"statusUnread"`
+	// MarkReadOnOpen marks a message read when it is opened in the list.
+	MarkReadOnOpen bool `json:"markReadOnOpen"`
+	// SignatureAboveQuote puts a reply's footer between the reply and the
+	// quoted original instead of below the quote.
+	SignatureAboveQuote bool `json:"signatureAboveQuote"`
 	// CloseAction is what the window's close button does: "background" keeps
 	// Pelton running and syncing with the window hidden, "quit" exits.
 	CloseAction string `json:"closeAction"`
+	// StartHidden keeps the window hidden at launch (#483).
+	StartHidden bool `json:"startHidden"`
 	// SyncMessageLimit caps how many of a folder's newest messages the first
 	// sync fetches; older mail stays on the server until it is asked for. 0
 	// means no limit. SyncAutoBackfill fetches the next batch automatically on
@@ -503,7 +514,10 @@ func (a *App) GetUIPrefs() (UIPrefsDTO, error) {
 		SyncProgressBar:            a.boolSetting(settingSyncProgress, true),
 		StatusClock:                a.boolSetting(settingStatusClock, true),
 		StatusUnread:               a.boolSetting(settingStatusUnread, true),
+		MarkReadOnOpen:             a.boolSetting(settingMarkReadOnOpen, true),
+		SignatureAboveQuote:        a.boolSetting(settingSignatureAboveQuote, false),
 		CloseAction:                a.stringSetting(settingCloseAction, closeActionBackground),
+		StartHidden:                a.startHiddenEnabled(),
 		SyncMessageLimit:           a.syncMessageLimit(),
 		SyncAutoBackfill:           a.boolSetting(settingSyncAutoBackfill, true),
 		StartupSelection:           a.stringSetting(settingStartupSelection, defaultStartupSelection),
@@ -550,6 +564,11 @@ func (a *App) SetSetting(key, value string) error {
 	}
 	if key == settingCharsetFallback {
 		a.applyCharsetFallback()
+	}
+	if key == settingStartHidden {
+		if err := a.writeStartHidden(value == "true"); err != nil {
+			return err
+		}
 	}
 	if key == settingUnreadBadge || key == settingLanguage {
 		a.applyUnreadBadge()

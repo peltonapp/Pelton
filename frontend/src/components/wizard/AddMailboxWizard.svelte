@@ -418,8 +418,8 @@
       {:else if step === 'provider'}
         <WizardProviders on:pick={pick} />
       {:else if step === 'config'}
-        <h3>{preset?.label}</h3>
-        {#if preset?.note}<p class="note">{preset.note}</p>{/if}
+        <h3>{preset?.labelKey ? $t(preset.labelKey) : preset?.label}</h3>
+        {#if preset?.noteKey}<p class="note">{$t(preset.noteKey)}</p>{/if}
 
         <label class="field">
           <span>{$t('wizard.field.email')}</span>
