@@ -111,12 +111,12 @@ func TestToolsExposeReadData(t *testing.T) {
 			{ID: 101, Subject: "World", FromAddress: "t@example.com"},
 		},
 		message: &Message{
-			MessageSummary: MessageSummary{ID: 100, Subject: "Hello"},
-			MessageID:      "<abc@example.com>",
-			SizeBytes:      2048,
-			BodyText:       "the body",
-			BodyHTML:       "<p>the body</p>",
-			Attachments:    []Attachment{{Filename: "a.pdf", SizeBytes: 12}},
+			ID: 100, Subject: "Hello",
+			MessageID:   "<abc@example.com>",
+			SizeBytes:   2048,
+			BodyText:    "the body",
+			BodyHTML:    "<p>the body</p>",
+			Attachments: []Attachment{{Filename: "a.pdf", SizeBytes: 12}},
 		},
 	}
 	cs := connect(t, mb)
@@ -156,9 +156,9 @@ func TestToolsExposeReadData(t *testing.T) {
 // HTML escaping, so an html body stays readable.
 func TestGetMessageResultShape(t *testing.T) {
 	mb := &fakeMailbox{message: &Message{
-		MessageSummary: MessageSummary{ID: 5, Subject: "Subj"},
-		BodyText:       "body",
-		BodyHTML:       "<p>hi</p>",
+		ID: 5, Subject: "Subj",
+		BodyText: "body",
+		BodyHTML: "<p>hi</p>",
 	}}
 	cs := connect(t, mb)
 	res := call(t, cs, "get_message", map[string]any{"id": 5})

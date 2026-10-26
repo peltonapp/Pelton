@@ -126,3 +126,93 @@ func TestMoveToAMissingMailboxKeepsTheSource(t *testing.T) {
 		t.Errorf("source holds %v, want both messages", got)
 	}
 }
+
+// TestMoveUIDReportsTheDestinationUID: with MOVE, the server's untagged
+// COPYUID names the copy's UID and the destination's UIDVALIDITY.
+func TestMoveUIDReportsTheDestinationUID(t *testing.T) {
+	caps := imap.CapSet{imap.CapIMAP4rev1: {}, imap.CapMove: {}, imap.CapUIDPlus: {}}
+	c, _ := newTestServer(t, testOptions{caps: caps, subjects: []string{"first", "ours", "keep"}})
+	if err := createMailbox(c, "Archive"); err != nil {
+		t.Fatalf("create Archive: %v", err)
+	}
+	// something already in Archive, so the copy's UID is not trivially 1.
+	if err := c.Move(uidOf(t, c, "first"), "Archive"); err != nil {
+		t.Fatalf("Move first: %v", err)
+	}
+
+	destUID, validity, err := c.MoveUID(uidOf(t, c, "ours"), "Archive")
+	if err != nil {
+		t.Fatalf("MoveUID: %v", err)
+	}
+	want, box := archivedUID(t, c, "ours")
+	if validity == 0 || validity != box.UIDValidity {
+		t.Errorf("uidValidity = %d, want Archive's %d", validity, box.UIDValidity)
+	}
+	if want == 1 || destUID != want {
+		t.Errorf("destUID = %d, want %d (the copy's uid in Archive, after another)", destUID, want)
+	}
+}
+
+// TestMoveUIDWithoutMoveExtension: the copy-then-delete fallback reads COPYUID
+// off the COPY's tagged OK.
+func TestMoveUIDWithoutMoveExtension(t *testing.T) {
+	caps := imap.CapSet{imap.CapIMAP4rev1: {}, imap.CapUIDPlus: {}}
+	c, _ := newTestServer(t, testOptions{caps: caps, subjects: []string{"ours", "keep"}})
+	if err := createMailbox(c, "Archive"); err != nil {
+		t.Fatalf("create Archive: %v", err)
+	}
+	destUID, validity, err := c.MoveUID(uidOf(t, c, "ours"), "Archive")
+	if err != nil {
+		t.Fatalf("MoveUID: %v", err)
+	}
+	if got := mailboxSubjects(t, c, "INBOX"); !slices.Equal(got, []string{"keep"}) {
+		t.Errorf("source holds %v, want [keep]", got)
+	}
+	want, box := archivedUID(t, c, "ours")
+	if validity != box.UIDValidity || destUID != want {
+		t.Errorf("MoveUID = (%d, %d), want (%d, %d)", destUID, validity, want, box.UIDValidity)
+	}
+}
+
+// TestMoveUIDWithoutCopyUID: a server that names no COPYUID still gets the
+// move, and MoveUID says 0, 0 so the caller falls back to a search.
+func TestMoveUIDWithoutCopyUID(t *testing.T) {
+	c, _ := newTestServer(t, testOptions{noCopyUID: true, subjects: []string{"ours", "keep"}})
+	if err := createMailbox(c, "Archive"); err != nil {
+		t.Fatalf("create Archive: %v", err)
+	}
+	destUID, validity, err := c.MoveUID(uidOf(t, c, "ours"), "Archive")
+	if err != nil {
+		t.Fatalf("MoveUID: %v", err)
+	}
+	if destUID != 0 || validity != 0 {
+		t.Errorf("MoveUID = (%d, %d), want (0, 0) without COPYUID", destUID, validity)
+	}
+	if got := mailboxSubjects(t, c, "Archive"); !slices.Equal(got, []string{"ours"}) {
+		t.Errorf("destination holds %v, want [ours]", got)
+	}
+	if got := mailboxSubjects(t, c, "INBOX"); !slices.Equal(got, []string{"keep"}) {
+		t.Errorf("source holds %v, want [keep]", got)
+	}
+}
+
+// archivedUID returns the uid of the message with the given subject in
+// Archive, and Archive as selected.
+func archivedUID(t *testing.T, c *Client, subject string) (imap.UID, *Mailbox) {
+	t.Helper()
+	box, err := c.Select("Archive")
+	if err != nil {
+		t.Fatalf("select Archive: %v", err)
+	}
+	headers, err := c.FetchRecentHeaders(1000)
+	if err != nil {
+		t.Fatalf("fetch headers: %v", err)
+	}
+	for _, h := range headers {
+		if h.Subject == subject {
+			return h.UID, box
+		}
+	}
+	t.Fatalf("no message with subject %q in Archive", subject)
+	return 0, nil
+}

@@ -483,9 +483,7 @@
     try {
       const undo = await archiveMessage(item.id)
       reportArchiveExport(undo)
-      if (undo.messageId) {
-        recordArchived(item, undo.messageId, undo.originalFolderId)
-      }
+      recordArchived(item, undo)
     } catch (err) {
       toastError(errorMessage(err))
       // the move failed; bring the row back so nothing is silently lost.

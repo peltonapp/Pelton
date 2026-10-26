@@ -136,8 +136,8 @@ func TestBuildRawEncryptModeNeedsEngine(t *testing.T) {
 }
 
 func headerOnly(s string) string {
-	if i := strings.Index(s, "\r\n\r\n"); i >= 0 {
-		return s[:i]
+	if before, _, ok := strings.Cut(s, "\r\n\r\n"); ok {
+		return before
 	}
 	return s
 }

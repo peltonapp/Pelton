@@ -167,6 +167,9 @@ type SyncProgressEvent struct {
 	// the "mailbox 3 of 12" part of the line.
 	FoldersDone  int `json:"foldersDone"`
 	FoldersTotal int `json:"foldersTotal"`
+	// Phase is "stubs" while the named folder is listed, "bodies" while bodies
+	// are fetched, else empty.
+	Phase string `json:"phase"`
 }
 
 // SyncStateEvent is the payload for EventSyncState. Error is empty on success.
@@ -184,6 +187,9 @@ type AccountSyncStateEvent struct {
 // emit sends a runtime event if the context is set. It is a thin wrapper so call
 // sites stay terse and a nil context (before startup) is a safe no-op.
 func (a *App) emit(name string, payload any) {
+	if a.emitForTest != nil {
+		a.emitForTest(name, payload)
+	}
 	if a.ctx == nil || !a.runtimeReady.Load() {
 		return
 	}

@@ -22,6 +22,11 @@ const (
 	saltLen = 16
 )
 
+// backupScryptN is the N both directions use: scryptN, which a backup
+// written by any build needs. Tests that only round-trip within the process
+// lower it, since N=2^15 costs seconds under -race.
+var backupScryptN = scryptN
+
 // encryptedBlob is a password-encrypted secret embedded in a backup file. The
 // salt travels with the blob (as every KDF salt should) so the same password
 // re-derives the exact key on import.
@@ -38,7 +43,7 @@ func encryptWithPassword(password string, plaintext []byte) (*encryptedBlob, err
 	if _, err := rand.Read(salt); err != nil {
 		return nil, fmt.Errorf("pelton: generate salt: %w", err)
 	}
-	key, err := scrypt.Key([]byte(password), salt, scryptN, scryptR, scryptP, keyLen)
+	key, err := scrypt.Key([]byte(password), salt, backupScryptN, scryptR, scryptP, keyLen)
 	if err != nil {
 		return nil, fmt.Errorf("pelton: derive key: %w", err)
 	}
@@ -65,7 +70,7 @@ func decryptWithPassword(password string, blob *encryptedBlob) ([]byte, error) {
 	if blob == nil {
 		return nil, errors.New("pelton: no encrypted data")
 	}
-	key, err := scrypt.Key([]byte(password), blob.Salt, scryptN, scryptR, scryptP, keyLen)
+	key, err := scrypt.Key([]byte(password), blob.Salt, backupScryptN, scryptR, scryptP, keyLen)
 	if err != nil {
 		return nil, fmt.Errorf("pelton: derive key: %w", err)
 	}

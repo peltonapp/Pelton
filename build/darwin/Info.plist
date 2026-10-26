@@ -24,7 +24,7 @@
         <key>CFBundleIconName</key>
         <string>pelton</string>
         <key>LSMinimumSystemVersion</key>
-        <string>10.13.0</string>
+        <string>13.0</string>
         <key>NSHighResolutionCapable</key>
         <string>true</string>
         <key>NSHumanReadableCopyright</key>

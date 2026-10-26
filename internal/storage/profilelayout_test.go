@@ -28,6 +28,7 @@ func newLayoutProfile(t *testing.T, db *DB, name string, shareLayout bool) Profi
 // TestFolderOrderIsPerProfile is what #325 asked for: arranging the sidebar in
 // one profile must not rearrange it in another.
 func TestFolderOrderIsPerProfile(t *testing.T) {
+	t.Parallel()
 	db := newTestDB(t)
 	ctx := context.Background()
 
@@ -58,6 +59,7 @@ func TestFolderOrderIsPerProfile(t *testing.T) {
 
 // TestPinnedFoldersArePerProfile covers the other half: the Pinned group.
 func TestPinnedFoldersArePerProfile(t *testing.T) {
+	t.Parallel()
 	db := newTestDB(t)
 	ctx := context.Background()
 
@@ -100,6 +102,7 @@ func TestPinnedFoldersArePerProfile(t *testing.T) {
 // TestAccountOrderIsPerProfile covers the account sections, which move with the
 // folders because profiles already show different sets of accounts.
 func TestAccountOrderIsPerProfile(t *testing.T) {
+	t.Parallel()
 	db := newTestDB(t)
 	ctx := context.Background()
 
@@ -138,6 +141,7 @@ func TestAccountOrderIsPerProfile(t *testing.T) {
 // on the profile follows main, and its own arrangement is still there when it
 // goes off again.
 func TestSharedLayoutReadsMainAndKeepsItsOwn(t *testing.T) {
+	t.Parallel()
 	db := newTestDB(t)
 	ctx := context.Background()
 
@@ -171,6 +175,7 @@ func TestSharedLayoutReadsMainAndKeepsItsOwn(t *testing.T) {
 // TestCopyProfileLayoutIsASnapshot: a new profile starting from main's layout
 // gets a copy, not a link.
 func TestCopyProfileLayoutIsASnapshot(t *testing.T) {
+	t.Parallel()
 	db := newTestDB(t)
 	ctx := context.Background()
 
@@ -210,6 +215,7 @@ func TestCopyProfileLayoutIsASnapshot(t *testing.T) {
 // TestDeletedFolderLeavesNoLayoutRow: the layout rows are keyed to folders, so
 // deleting one must not leave a rank behind that a new folder could inherit.
 func TestDeletedFolderLeavesNoLayoutRow(t *testing.T) {
+	t.Parallel()
 	db := newTestDB(t)
 	ctx := context.Background()
 
