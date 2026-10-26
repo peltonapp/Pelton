@@ -10,6 +10,7 @@ import (
 
 	"github.com/ProtonMail/go-crypto/openpgp"
 	"github.com/ProtonMail/go-crypto/openpgp/armor"
+	"github.com/ProtonMail/go-crypto/openpgp/packet"
 )
 
 // the entity body used across tests, a minimal but realistic mime part.
@@ -23,12 +24,17 @@ const plaintextMarker = "the eagle lands at dawn"
 
 func newTestEntity(t *testing.T, email string) *openpgp.Entity {
 	t.Helper()
-	ent, err := openpgp.NewEntity("Test User", "", email, nil)
+	ent, err := openpgp.NewEntity("Test User", "", email, testKeyConfig)
 	if err != nil {
 		t.Fatalf("new entity for %s: %v", email, err)
 	}
 	return ent
 }
+
+// testKeyConfig makes test keys Ed25519 with a Curve25519 encryption subkey.
+// The default, RSA-2048, took up to a second per key to generate, several
+// under -race, and nothing here depends on the algorithm.
+var testKeyConfig = &packet.Config{Algorithm: packet.PubKeyAlgoEdDSA}
 
 // writeKeyrings serialises public and private keyrings into dir so a PGPKeyStore
 // can read them back, mirroring real on-disk keyrings.

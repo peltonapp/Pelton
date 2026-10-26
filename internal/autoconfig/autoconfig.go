@@ -264,9 +264,9 @@ func socketTLS(socketType string) string {
 
 // domainOf returns the part after @ in an email address, lowercased.
 func domainOf(email string) string {
-	at := strings.LastIndex(email, "@")
-	if at < 0 || at == len(email)-1 {
+	_, domain, ok := strings.CutLast(email, "@")
+	if !ok || domain == "" {
 		return ""
 	}
-	return strings.ToLower(strings.TrimSpace(email[at+1:]))
+	return strings.ToLower(strings.TrimSpace(domain))
 }

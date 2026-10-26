@@ -48,7 +48,7 @@
           default = pkgs.mkShell {
             inputsFrom = [ self.packages.${system}.pelton ];
             packages = with pkgs; [
-              go
+              go_1_27
               gopls
               pnpm_10
               nodejs_22

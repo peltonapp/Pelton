@@ -121,6 +121,12 @@ func (c *Client) selectedMailbox() *Mailbox {
 	return c.selected
 }
 
+// SelectedMailbox returns the mailbox Select last opened on this connection,
+// or nil when none is open. The adapter uses it to skip a repeated SELECT.
+func (c *Client) SelectedMailbox() *Mailbox {
+	return c.selectedMailbox()
+}
+
 // setSelectedMailbox records what Select opened.
 func (c *Client) setSelectedMailbox(m *Mailbox) {
 	c.selectedMu.Lock()

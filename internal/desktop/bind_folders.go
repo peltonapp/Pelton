@@ -1,17 +1,23 @@
 package desktop
 
 import (
+	"context"
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 
+	"github.com/emersion/go-imap/v2"
+
+	"github.com/peltonapp/Pelton/internal/desktop/syncsched"
 	"github.com/peltonapp/Pelton/internal/storage"
 )
 
 // Mailbox management (#132): create, rename and delete folders from the
 // sidebar. Each one changes the server first and only then the local cache, so
-// a failed imap command leaves the cache untouched rather than describing a
-// mailbox that is not there.
+// a failed command leaves the cache untouched rather than describing a
+// mailbox that is not there. Both happen in one pooled task, so a folder
+// discovery (a barrier task) sees neither or both.
 //
 // The local tree is updated directly rather than rediscovered, because the
 // caller knows exactly what changed. A rename in particular is indistinguishable
@@ -67,6 +73,11 @@ func (a *App) CreateFolder(req CreateFolderRequest) (FolderDTO, error) {
 		return FolderDTO{}, errors.New("folder name cannot be empty")
 	}
 
+	account, err := a.store.GetAccount(a.ctx, req.AccountID)
+	if err != nil {
+		return FolderDTO{}, err
+	}
+
 	var (
 		parent *storage.Folder
 		delim  string
@@ -82,10 +93,10 @@ func (a *App) CreateFolder(req CreateFolderRequest) (FolderDTO, error) {
 		}
 		parent = p
 		delim = p.Delimiter
-		if delim == "" {
-			return FolderDTO{}, errors.New("this server has a flat mailbox list and cannot nest folders")
+		path, err = a.protocolFor(*account).folderPath(*p, name)
+		if err != nil {
+			return FolderDTO{}, err
 		}
-		path = p.IMAPPath + delim + name
 	} else {
 		delim = a.accountDelimiter(req.AccountID)
 	}
@@ -93,22 +104,25 @@ func (a *App) CreateFolder(req CreateFolderRequest) (FolderDTO, error) {
 		return FolderDTO{}, fmt.Errorf("a folder name cannot contain %q", delim)
 	}
 
-	if err := a.withAccountIMAP(req.AccountID, func(client mailClient) error {
-		return client.CreateFolder(path)
-	}); err != nil {
-		return FolderDTO{}, err
-	}
-
-	folder := storage.Folder{
-		AccountID: req.AccountID,
-		Name:      name,
-		IMAPPath:  path,
-		Delimiter: delim,
-	}
-	if parent != nil {
-		folder.ParentID = &parent.ID
-	}
-	if _, err := a.store.CreateFolder(a.ctx, &folder); err != nil {
+	var folder storage.Folder
+	err = a.protocolFor(*account).createFolder(a.ctx, *account, parent, name, path, func(remoteID string) error {
+		if remoteID == "" {
+			remoteID = path
+		}
+		folder = storage.Folder{
+			AccountID: req.AccountID,
+			Name:      name,
+			IMAPPath:  a.protocolFor(*account).createdPath(path, remoteID),
+			RemoteID:  remoteID,
+			Delimiter: delim,
+		}
+		if parent != nil {
+			folder.ParentID = &parent.ID
+		}
+		_, err := a.store.CreateFolder(a.ctx, &folder)
+		return err
+	})
+	if err != nil {
 		return FolderDTO{}, err
 	}
 	return toFolderDTO(folder), nil
@@ -141,24 +155,38 @@ func (a *App) RenameFolder(id int64, name string) error {
 		return nil
 	}
 
-	newPath := renamedPath(folder.IMAPPath, name, delim)
-	if err := a.withAccountIMAP(folder.AccountID, func(client mailClient) error {
-		return client.RenameFolder(folder.IMAPPath, newPath)
-	}); err != nil {
+	account, err := a.store.GetAccount(a.ctx, folder.AccountID)
+	if err != nil {
 		return err
 	}
 
-	// the server moved the children along with the parent, so their stored paths
-	// have to follow. do the subtree first: if the process dies between the two,
-	// a stale parent path is recoverable by renaming again, whereas orphaned
-	// children whose parent already moved are not findable by prefix any more.
-	if delim != "" {
-		if _, err := a.store.RenameFolderSubtree(a.ctx,
-			folder.AccountID, folder.IMAPPath+delim, newPath+delim); err != nil {
-			return err
-		}
+	remoteID := folder.RemoteID
+	if remoteID == "" {
+		remoteID = folder.IMAPPath
 	}
-	return a.store.RenameFolder(a.ctx, id, name, newPath)
+	// The new path comes from the stored path and delimiter, never from a
+	// fresh LIST: a failed or partial LIST must not move the folder.
+	newPath := renamedPath(folder.IMAPPath, name, delim)
+	return a.protocolFor(*account).renameFolder(a.ctx, *account, *folder, name, newPath, func() error {
+		// a driver whose remote id is not the path keeps the stored path; IMAP
+		// rewrites it.
+		if a.protocolFor(*account).renameKeepsPath(*folder, remoteID) {
+			return a.store.RenameFolder(a.ctx, id, name, folder.IMAPPath)
+		}
+
+		// the server moved the children along with the parent, so their stored
+		// paths have to follow. do the subtree first: if the process dies
+		// between the two, a stale parent path is recoverable by renaming again,
+		// whereas orphaned children whose parent already moved are not findable
+		// by prefix any more.
+		if delim != "" {
+			if _, err := a.store.RenameFolderSubtree(a.ctx,
+				folder.AccountID, folder.IMAPPath+delim, newPath+delim); err != nil {
+				return err
+			}
+		}
+		return a.store.RenameFolder(a.ctx, id, name, newPath)
+	})
 }
 
 // DeleteFolder deletes a mailbox on the server and drops it, its descendants and
@@ -183,24 +211,24 @@ func (a *App) DeleteFolder(id int64) error {
 	if err != nil {
 		return err
 	}
-	if err := a.withAccountIMAP(folder.AccountID, func(client mailClient) error {
-		for i := len(targets) - 1; i >= 0; i-- {
-			if err := client.DeleteFolder(targets[i].IMAPPath); err != nil {
+	account, err := a.store.GetAccount(a.ctx, folder.AccountID)
+	if err != nil {
+		return err
+	}
+	deepestFirst := slices.Clone(targets)
+	slices.Reverse(deepestFirst)
+	if err := a.protocolFor(*account).deleteFolders(a.ctx, *account, deepestFirst, func() error {
+		for _, target := range slices.Backward(targets) {
+			if _, err := a.store.PurgeFolderMessages(a.ctx, target.AccountID, target.ID); err != nil {
+				return err
+			}
+			if err := a.store.DeleteFolder(a.ctx, target.ID); err != nil {
 				return err
 			}
 		}
 		return nil
 	}); err != nil {
 		return err
-	}
-
-	for i := len(targets) - 1; i >= 0; i-- {
-		if _, err := a.store.PurgeFolderMessages(a.ctx, targets[i].AccountID, targets[i].ID); err != nil {
-			return err
-		}
-		if err := a.store.DeleteFolder(a.ctx, targets[i].ID); err != nil {
-			return err
-		}
 	}
 	goSafe("counting unread mail", a.refreshViewCounts)
 	return nil
@@ -241,14 +269,86 @@ func (a *App) EmptyTrash(folderID int64) (int, error) {
 	}
 
 	goSafe("counting unread mail", a.refreshViewCounts)
-	goSafe("emptying the trash", func() {
-		if err := a.withAccountIMAP(folder.AccountID, func(client mailClient) error {
-			return a.syncOneFolder(client, *folder)
-		}); err != nil {
+	// The server expunge is a normal-lane generator, a page of messages per
+	// unit. What it does not get to stays pending for the next sync.
+	account, err := a.store.GetAccount(a.ctx, folder.AccountID)
+	if err != nil {
+		return marked, nil
+	}
+	_ = a.enqueuePooled(a.ctx, *account, poolTask{
+		Kind: syncsched.KindEmptyTrash, FolderID: folder.ID,
+		Key: folderKey(syncsched.KindEmptyTrash, folder.ID),
+		Run: func(ctx context.Context, c mailClient) error {
+			return a.expungePendingPage(ctx, *account, folder.ID, c)
+		},
+	}, func(err error) {
+		if err != nil && !errors.Is(err, errAccountSyncHeld) && !errors.Is(err, syncsched.ErrStopped) {
 			a.log.Error("push emptied trash", "folder", folder.ID, "err", err)
 		}
 	})
 	return marked, nil
+}
+
+// expungePendingPage deletes, for good, one page of the folder's messages
+// marked for deletion: from the server, then from the cache. It returns
+// syncsched.ErrAgain while more are marked. The page is planned from the
+// store each unit, so the task carries no id list. A folder whose
+// UIDVALIDITY changed is left alone: its UIDs may now name other mail, and
+// its next list resets the cache anyway.
+func (a *App) expungePendingPage(ctx context.Context, account storage.Account, folderID int64, c mailClient) error {
+	folder, err := a.store.GetFolder(ctx, folderID)
+	if errors.Is(err, storage.ErrFolderNotFound) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	states, err := a.store.ListMessageStates(ctx, folder.ID)
+	if err != nil {
+		return err
+	}
+	page := syncsched.ListPage
+	if rt := a.accountSync(account.ID); rt != nil {
+		page = rt.sched.Tunables().ListPage
+	}
+	var batch []storage.MessageState
+	more := false
+	for _, s := range states {
+		if !s.PendingDelete {
+			continue
+		}
+		if len(batch) == page {
+			more = true
+			break
+		}
+		batch = append(batch, s)
+	}
+	if len(batch) == 0 {
+		return nil
+	}
+	box, err := c.Select(folder.IMAPPath)
+	if err != nil {
+		return err
+	}
+	if folder.UIDValidity != 0 && box.UIDValidity != folder.UIDValidity {
+		return nil
+	}
+	uids := make([]imap.UID, len(batch))
+	for i, s := range batch {
+		uids[i] = imap.UID(s.UID)
+	}
+	if err := c.DeleteMessages(uids...); err != nil {
+		return err
+	}
+	for _, s := range batch {
+		if err := a.store.DeleteCachedMessage(ctx, account.ID, s.ID); err != nil {
+			a.log.Error("empty trash: drop expunged row", "id", s.ID, "err", err)
+		}
+	}
+	if more {
+		return syncsched.ErrAgain
+	}
+	return nil
 }
 
 // subtreeFolders returns the folder and everything nested under it, shallowest
@@ -287,8 +387,8 @@ func renamedPath(path, name, delim string) string {
 	if delim == "" {
 		return name
 	}
-	if i := strings.LastIndex(path, delim); i >= 0 {
-		return path[:i+len(delim)] + name
+	if parent, _, ok := strings.CutLast(path, delim); ok {
+		return parent + delim + name
 	}
 	return name
 }
@@ -302,33 +402,4 @@ func protectSpecialFolder(f storage.Folder) error {
 		return fmt.Errorf("%w: %s", errFolderProtected, f.Name)
 	}
 	return nil
-}
-
-// withAccountIMAP runs fn against a logged-in session for an account, taking the
-// same lock sync uses so a folder operation never races a sync on the same
-// connection.
-func (a *App) withAccountIMAP(accountID int64, fn func(mailClient) error) error {
-	account, err := a.store.GetAccount(a.ctx, accountID)
-	if err != nil {
-		return err
-	}
-	cfg, err := a.resolveIMAP(*account)
-	if err != nil {
-		return err
-	}
-
-	syncMu.Lock()
-	defer syncMu.Unlock()
-
-	client, err := a.connectIMAP(cfg)
-	if err != nil {
-		return err
-	}
-	defer client.Close()
-	if err := client.Login(); err != nil {
-		return err
-	}
-	defer client.Logout()
-
-	return fn(client)
 }
