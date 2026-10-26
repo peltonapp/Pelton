@@ -6,6 +6,7 @@
 import { writable, get } from 'svelte/store'
 import type { EditorMode, MessageDetail, ComposeAttachment } from '../lib/types'
 import { getSetting, setSetting } from '../lib/api'
+import { sidebar } from './accounts'
 
 // the compose pane remembers whether the user last worked fullscreen or in the
 // small floating size, so new panes open at that size. persisted in the backend
@@ -134,7 +135,11 @@ export function openComposeWith(accountId: number, mode: EditorMode, prefill: Ma
 // body and threading references come from the original message.
 export function openReply(detail: MessageDetail, mode: EditorMode, replyAll: boolean): number {
   const session = blankSession(detail.accountId, mode)
-  session.to = detail.fromAddress
+  // replying to all from Sent means writing to the people the message went to,
+  // not back to yourself (#485). The folder's role carries the user's override
+  // and the server's \Sent attribute, so no folder name is matched here.
+  const folder = get(sidebar).data?.foldersByAccount[detail.accountId]?.find((f) => f.id === detail.folderId)
+  session.to = replyAll && folder?.role === 'sent' ? detail.toAddresses : detail.fromAddress
   if (replyAll && detail.ccAddresses) {
     session.cc = detail.ccAddresses
     session.showCc = true
