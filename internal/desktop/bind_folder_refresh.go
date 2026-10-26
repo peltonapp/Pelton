@@ -10,6 +10,21 @@ import (
 	"github.com/peltonapp/Pelton/internal/storage"
 )
 
+// syncFolderTree makes sure the account has a folder tree, then brings it in
+// line with the server's list before a sync walks it.
+func (a *App) syncFolderTree(client mailClient, accountID int64) error {
+	if err := a.ensureFolders(client, accountID); err != nil {
+		return err
+	}
+	// a failed refresh keeps the tree it had; the mail is still worth syncing.
+	if changed, err := a.refreshFolders(client, accountID); err != nil {
+		a.log.Error("refresh folder list", "account", accountID, "err", err)
+	} else if changed {
+		a.emit(EventFoldersChanged, nil)
+	}
+	return nil
+}
+
 // refreshFolders brings the stored folder tree in line with the server's list:
 // a mailbox created elsewhere is added, and one deleted elsewhere is dropped
 // with its cached mail. The tree used to be read once at setup, so a folder

@@ -1,6 +1,7 @@
 package desktop
 
 import (
+	"encoding/json"
 	"errors"
 
 	"github.com/peltonapp/Pelton/internal/credentials"
@@ -54,8 +55,36 @@ type UpdateAccountRequest struct {
 	// PGPDefault is the account's starting point for protecting outgoing mail:
 	// '' unprotected, 'sign', or 'auto'. An unknown value is treated as ''.
 	PGPDefault string `json:"pgpDefault"`
+	// SyncMaxParallel overrides the global parallel-sync setting for this
+	// account (clamped to 1-5). Null follows the global setting: it clears a
+	// stored override, which is how the editor's "use default" saves. A
+	// request that leaves the field out keeps the stored override, so a ui
+	// that does not send it cannot clear it by saving something else.
+	SyncMaxParallel *int `json:"syncMaxParallel"`
 	// Proxy is the route the mailbox's connections take (#457).
 	Proxy AccountProxyDTO `json:"proxy"`
+
+	// syncMaxParallelOmitted is set when the request's JSON had no
+	// syncMaxParallel key at all.
+	syncMaxParallelOmitted bool
+}
+
+// UnmarshalJSON decodes the request and records whether syncMaxParallel was
+// sent, since JSON null and a missing key both decode to a nil pointer.
+func (r *UpdateAccountRequest) UnmarshalJSON(data []byte) error {
+	type plain UpdateAccountRequest
+	var req plain
+	if err := json.Unmarshal(data, &req); err != nil {
+		return err
+	}
+	var keys map[string]json.RawMessage
+	if err := json.Unmarshal(data, &keys); err != nil {
+		return err
+	}
+	*r = UpdateAccountRequest(req)
+	_, sent := keys["syncMaxParallel"]
+	r.syncMaxParallelOmitted = !sent
+	return nil
 }
 
 // UpdateAccount persists edits to an account's display name and server settings.
@@ -77,6 +106,7 @@ func (a *App) UpdateAccount(req UpdateAccountRequest) (AccountDTO, error) {
 	if err != nil {
 		return AccountDTO{}, err
 	}
+	before := *account
 	account.DisplayName = req.DisplayName
 	account.LocalLabel = req.LocalLabel
 	account.UseLocalLabel = req.UseLocalLabel
@@ -109,12 +139,43 @@ func (a *App) UpdateAccount(req UpdateAccountRequest) (AccountDTO, error) {
 	if err := a.store.SetAccountProxy(a.ctx, account.ID, route); err != nil {
 		return AccountDTO{}, err
 	}
+	if imapEndpointChanged(before, *account) {
+		a.resetAccountThrottle(account.ID)
+	}
+	if !req.syncMaxParallelOmitted {
+		if req.SyncMaxParallel != nil {
+			n := clampSyncMaxParallel(*req.SyncMaxParallel)
+			req.SyncMaxParallel = &n
+		}
+		account.SyncMaxParallel = req.SyncMaxParallel
+		if err := a.store.SetAccountSyncMaxParallel(a.ctx, account.ID, account.SyncMaxParallel); err != nil {
+			return AccountDTO{}, err
+		}
+		a.reconfigureAccountPool(account.ID)
+	}
 	if req.Password != "" {
 		if err := a.SetAccountPassword(req.ID, req.Password); err != nil {
 			return AccountDTO{}, err
 		}
 	}
 	return toAccountDTO(*account), nil
+}
+
+// imapEndpointChanged reports an edit of where or as whom the account's imap
+// sessions log in: the server's connection limit learnt so far may not
+// apply any more.
+func imapEndpointChanged(before, after storage.Account) bool {
+	return before.IMAPHost != after.IMAPHost || before.IMAPPort != after.IMAPPort ||
+		before.IMAPTLS != after.IMAPTLS || before.Username != after.Username ||
+		before.Proxy != after.Proxy
+}
+
+// resetAccountThrottle forgets what the throttle learnt of the account's
+// server (see accountSessions.resetThrottle), if it has sessions.
+func (a *App) resetAccountThrottle(accountID int64) {
+	if s := a.accountShared(accountID); s != nil {
+		s.resetThrottle()
+	}
 }
 
 // SetAccountPassword stores a login password for an account, replacing whatever
@@ -138,6 +199,7 @@ func (a *App) SetAccountPassword(accountID int64, password string) error {
 		return err
 	}
 	a.clearRejectedLogin(accountID)
+	a.resetAccountThrottle(accountID)
 	// a dismissal answers "stop asking about this missing password". The
 	// password is no longer missing, so the next one that goes missing gets its
 	// own prompt rather than inheriting this answer.
@@ -204,6 +266,7 @@ func (a *App) ReauthorizeOAuthAccount(accountID int64) error {
 		return err
 	}
 	a.clearRejectedLogin(accountID)
+	a.resetAccountThrottle(accountID)
 	return nil
 }
 
@@ -237,33 +300,7 @@ func (a *App) CheckAccountPassword(accountID int64, password string) (PasswordCh
 	if existing, err := credentials.Load(accountID); err == nil && existing.Method == credentials.MethodOAuth {
 		return PasswordCheckDTO{}, errAccountUsesOAuth
 	}
-	dial, err := a.accountDial(*account)
-	if err != nil {
-		return PasswordCheckDTO{Error: err.Error()}, nil
-	}
-	client, err := pimap.Connect(pimap.Config{
-		Host:     account.IMAPHost,
-		Port:     account.IMAPPort,
-		Username: loginName(*account),
-		Password: password,
-		TLS:      imapTLSMode(account.IMAPTLS),
-		Trust:    accountTrust(*account),
-		Dial:     dial,
-	})
-	if err != nil {
-		return PasswordCheckDTO{Error: err.Error()}, nil
-	}
-	defer client.Close()
-	if err := client.Login(); err != nil {
-		if errors.Is(err, pimap.ErrAuthFailed) {
-			return PasswordCheckDTO{Rejected: true, Error: err.Error()}, nil
-		}
-		return PasswordCheckDTO{Error: err.Error()}, nil
-	}
-	if err := client.Logout(); err != nil {
-		a.log.Debug("logout after password check", "account", accountID, "err", err)
-	}
-	return PasswordCheckDTO{OK: true}, nil
+	return a.protocolFor(*account).checkPassword(*account, password), nil
 }
 
 // noteLoginResult records what the server said about an account's credentials.
@@ -273,7 +310,7 @@ func (a *App) CheckAccountPassword(accountID int64, password string) (PasswordCh
 //
 // Callers pass the error from Login directly, including nil.
 func (a *App) noteLoginResult(accountID int64, err error) {
-	if err != nil && !errors.Is(err, pimap.ErrAuthFailed) {
+	if err != nil && !loginRefused(err) {
 		return
 	}
 	a.rejectedLoginsMu.Lock()
@@ -286,6 +323,12 @@ func (a *App) noteLoginResult(accountID int64, err error) {
 		a.rejectedLogins = make(map[int64]struct{})
 	}
 	a.rejectedLogins[accountID] = struct{}{}
+}
+
+// loginRefused reports whether err is the server refusing the credentials.
+// A LOGIN NO for too many connections is not about them.
+func loginRefused(err error) bool {
+	return errors.Is(err, pimap.ErrAuthFailed) && !connectionLimit(err)
 }
 
 // loginRejected reports whether the server refused this account's credentials
@@ -390,22 +433,30 @@ func (a *App) AllAccounts() ([]AccountDTO, error) {
 
 // DeleteAccount removes an account entirely: its keyring secret, its cached mail
 // (folders, messages and attachment rows cascade in the db) and its attachment
-// files on disk. Deleting the keyring secret also lets any running idle loop for
-// the account exit cleanly, since it stops on a missing-credentials error.
+// files on disk. First it hard-cancels that account only: its worker (IDLE),
+// scheduler tasks and IMAP sessions stop, and nothing can start
+// sync work for it again. Other accounts keep running. If the row cannot be
+// deleted, a worker the account had is started again.
 func (a *App) DeleteAccount(id int64) error {
 	if err := a.ready(); err != nil {
 		return err
 	}
-	// drop the secret first so a still-running idle loop unwinds on its next
-	// reconnect instead of retrying against a half-deleted account.
+	release := a.holdAccountSync(id)
+	defer release()
+	hadWorker := a.hasAccountWorker(id)
+	a.abortAccountWorker(id)
+	if err := a.store.DeleteAccount(a.ctx, id); err != nil {
+		if hadWorker {
+			a.startHeldAccountWorker(id)
+		}
+		return err
+	}
+	a.forgetAccountState(id)
 	if err := credentials.Delete(id); err != nil {
 		a.log.Error("delete credentials", "account", id, "err", err)
 	}
 	if err := credentials.DeleteAccountProxyPassword(id); err != nil {
 		a.log.Error("delete proxy password", "account", id, "err", err)
-	}
-	if err := a.store.DeleteAccount(a.ctx, id); err != nil {
-		return err
 	}
 	if err := a.store.DeleteAttachmentFilesForAccount(id); err != nil {
 		a.log.Error("delete attachment files", "account", id, "err", err)
