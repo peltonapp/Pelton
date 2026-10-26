@@ -173,7 +173,7 @@ func orderUnifiedViews(stored string) []unifiedView {
 		byKey[v.key] = v
 	}
 	out := make([]unifiedView, 0, len(unifiedViewOrder))
-	for _, key := range strings.Split(stored, ",") {
+	for key := range strings.SplitSeq(stored, ",") {
 		if v, ok := byKey[key]; ok {
 			out = append(out, v)
 			delete(byKey, key)

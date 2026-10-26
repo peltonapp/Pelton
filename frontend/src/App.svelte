@@ -23,6 +23,8 @@
   import FolderDialog from './components/sidebar/FolderDialog.svelte'
   import AttachmentPreview from './components/detail/AttachmentPreview.svelte'
   import MoveDialog from './components/detail/MoveDialog.svelte'
+  import AddMailboxDialog from './components/wizard/AddMailboxDialog.svelte'
+  import { createMailtoHold } from './lib/mailtohold'
   import CommandPalette from './components/common/CommandPalette.svelte'
 
   import { initPrefs, prefs, setPaneWidths, setLowPowerMode } from './stores/prefs'
@@ -33,9 +35,10 @@
   import { loadSignatures } from './stores/signatures'
   import { loadVIPSenders } from './stores/vip'
   import { loadVirusTotalConfig } from './stores/virustotal'
-  import { loadOutbox, syncing, lastSynced, syncFolder, syncServer, syncAccount, syncCounts, emptySyncCounts } from './stores/outbox'
+  import { loadOutbox, syncing, lastSynced, syncFolder, syncServer, syncAccount, syncCounts, syncPhase, emptySyncCounts } from './stores/outbox'
   import { selection, applyStartupSelection, searchQuery } from './stores/selection'
-  import { loadList, messageList } from './stores/messages'
+  import { loadList, listIsPaginated, messageList, refreshListHead } from './stores/messages'
+  import { refreshListOnMailNew } from './lib/maillistrefresh'
   import { initProgress } from './stores/progress'
   import { composeSessions, openCompose, openComposeWith, initComposePrefs, openReply, openForward, requestComposeClose } from './stores/compose'
   import { openSnooze, openSnoozeMany } from './stores/snooze'
@@ -51,7 +54,6 @@
     setFlagged,
     deleteMessage,
     getMessage,
-    downloadMessageOffline,
     archiveMessage,
     setMailActionsEnabled,
     isDemoMode,
@@ -68,7 +70,10 @@
   import { liabilityAccepted } from './lib/liability'
   import { setDemoActive } from './lib/demo'
   import { recordArchived } from './stores/undoarchive'
-  import { onMailNew, onMailRepaired, onSyncState, onSyncProgress, onOutboxChanged, onMenu, onViewsChanged, onFoldersChanged, onProfileChanged, onMailtoCompose, onAgentProposals, onOpenMessage, type Unsubscribe, type MailtoDraft } from './lib/events'
+  import { accountPhase, applyProgressEvent, applySyncState, currentProgress, currentVerify, isSyncing, startProgressSweep, type SyncView } from './lib/syncprogress'
+  import { onMailNew, onMailRepaired, onMailUpdated, onMailBodyFailed, onSyncState, onSyncProgress, onOutboxChanged, onMenu, onViewsChanged, onFoldersChanged, onProfileChanged, onMailtoCompose, onAgentProposals, onOpenMessage, type Unsubscribe, type MailtoDraft } from './lib/events'
+  import { refreshMessage } from './stores/message'
+  import { markBodyFetchFailed, clearBodyFetchFailed } from './stores/bodyfetch'
   import { loadViews, editingView, closeViewEditor, openViewEditor, views as savedViews } from './stores/views'
   import { selectSavedView } from './stores/selection'
   import { isMac } from './lib/i18n'
@@ -142,6 +147,7 @@
   import DevOverlays from './components/dev/DevOverlays.svelte'
   import {
     passwordPrompt,
+    passwordPromptSyncFollows,
     answerPasswordPrompt,
     promptForMissingPasswords,
     refreshMissingPasswords,
@@ -177,6 +183,30 @@
   // onboarding, and the acknowledgement is deliberately never remembered.
   let nightlyOpen = false
   const unsubscribers: Unsubscribe[] = []
+  let syncView: SyncView = { progress: new Map(), verify: new Map(), running: false }
+  // pushes the view into the status bar's stores. A running sync owns the line;
+  // the background folder check shows only when nothing else runs.
+  function publishSyncView(view: SyncView): void {
+    const running = isSyncing(view)
+    syncing.set(running)
+    const cur = currentProgress(view.progress) ?? (running ? null : currentVerify(view))
+    syncFolder.set(cur ? cur.folder : '')
+    syncServer.set(cur ? cur.server : '')
+    syncAccount.set(cur ? cur.accountEmail : '')
+    syncPhase.set(cur?.phase ? cur.phase : '')
+    syncCounts.set(
+      cur
+        ? {
+            done: cur.done,
+            total: cur.total,
+            folderDone: cur.folderDone,
+            folderTotal: cur.folderTotal,
+            foldersDone: cur.foldersDone,
+            foldersTotal: cur.foldersTotal,
+          }
+        : emptySyncCounts,
+    )
+  }
 
   // live pane widths. they track the persisted prefs unless the user is mid-drag,
   // so a resize feels immediate and only commits on release.
@@ -341,9 +371,15 @@
     }
 
     unsubscribers.push(
-      onMailNew(() => {
+      onMailNew((e) => {
         void refreshSidebar()
-        void loadList(get(selection))
+        refreshListOnMailNew(e.accountId, {
+          selection: () => get(selection),
+          phase: (id) => accountPhase(syncView, id),
+          paginated: listIsPaginated,
+          loadList,
+          refreshListHead,
+        })
       }),
     )
     unsubscribers.push(
@@ -354,15 +390,30 @@
       }),
     )
     unsubscribers.push(
+      onMailUpdated((e) => {
+        clearBodyFetchFailed(e.messageId)
+        const open = get(visibleMessageId)
+        if (open === e.messageId) {
+          void refreshMessage(e.messageId)
+        }
+      }),
+    )
+    unsubscribers.push(
+      onMailBodyFailed((e) => {
+        if (get(visibleMessageId) === e.messageId) {
+          markBodyFetchFailed(e.messageId)
+        }
+      }),
+    )
+    unsubscribers.push(
       onSyncState((e) => {
-        syncing.set(e.running)
+        // fires once per account run, so it cannot clear the status line;
+        // only the progress closing events do that.
+        syncView = applySyncState(syncView, e.running, Date.now())
+        syncing.set(isSyncing(syncView))
         // record the moment a sync finishes for the status bar's last-synced time.
         if (!e.running) {
           lastSynced.set(Date.now())
-          syncFolder.set('')
-          syncServer.set('')
-          syncAccount.set('')
-          syncCounts.set(emptySyncCounts)
           // a password the server refuses is only discovered by trying, so the
           // markers can only be right after a sync has run.
           void refreshMissingPasswords()
@@ -371,26 +422,18 @@
     )
     unsubscribers.push(
       onSyncProgress((e) => {
-        // the closing event carries no folder name; that is what says the run
-        // is over, rather than the counts, which for a resync of a cached
-        // mailbox can be 0 of 0 the whole way through.
-        const running = e.folder !== ''
-        syncFolder.set(running ? e.folder : '')
-        syncServer.set(running ? e.server : '')
-        syncAccount.set(running ? e.accountEmail : '')
-        syncCounts.set(
-          running
-            ? {
-                done: e.done,
-                total: e.total,
-                folderDone: e.folderDone,
-                folderTotal: e.folderTotal,
-                foldersDone: e.foldersDone,
-                foldersTotal: e.foldersTotal,
-              }
-            : emptySyncCounts,
-        )
+        // accounts sync concurrently, so the line follows whichever is still
+        // running instead of going blank when the first one closes.
+        syncView = applyProgressEvent(syncView, e, Date.now())
+        publishSyncView(syncView)
       }),
+    )
+    unsubscribers.push(
+      startProgressSweep(
+        () => syncView,
+        (v) => (syncView = v),
+        publishSyncView,
+      ),
     )
     unsubscribers.push(watchSyncStates())
     unsubscribers.push(
@@ -494,33 +537,41 @@
     openComposeWith(accountId, editorMode, { to: email, cc: '', bcc: '', subject: '', body: '' })
   }
 
-  // a mailto: link waiting for a mailbox to exist. onboarding-first: if the link
-  // arrives before any account is set up, it is held here and opened once
-  // onboarding finishes, rather than being dropped.
-  let pendingMailto: MailtoDraft | null = null
+  // a mailto: link waiting for a mailbox to exist, and for the wizard or
+  // onboarding to get out of the way. If the link arrives before any account is
+  // set up, it is held and opened once that flow closes, rather than dropped.
+  const mailtoHold = createMailtoHold({
+    accountId: composeAccountId,
+    covered: () => wizardOpen || onboardingOpen,
+    open: (accountId, draft) => openComposeWith(accountId, editorMode, draft),
+  })
 
-  // openMailtoDraft opens a prefilled compose from a mailto: link, or defers it
-  // until a mailbox exists (see pendingMailto).
+  // openMailtoDraft opens a prefilled compose from a mailto: link, or holds it.
   function openMailtoDraft(draft: MailtoDraft): void {
-    const accountId = composeAccountId()
-    if (accountId === null) {
-      pendingMailto = draft
-      return
-    }
-    openComposeWith(accountId, editorMode, draft)
+    mailtoHold.offer(draft)
   }
 
-  // flushPendingMailto opens a held mailto draft once a mailbox is available.
-  function flushPendingMailto(): void {
-    if (pendingMailto && composeAccountId() !== null) {
-      const draft = pendingMailto
-      pendingMailto = null
-      openComposeWith(composeAccountId() as number, editorMode, draft)
-    }
+  // the sidebar's mailbox list is what compose sends from. A held link opens
+  // when it goes from empty to not, which covers the wizard inside Settings.
+  unsubscribers.push(
+    sidebar.subscribe((s) => {
+      if (s.status === 'ready' && s.data) {
+        mailtoHold.accountsChanged(s.data.accounts.length)
+      }
+    }),
+  )
+
+  // closeWizard closes the add-mailbox wizard and opens a held mailto link once
+  // the sidebar lists the mailbox it may have added, now that compose is no
+  // longer hidden under the wizard.
+  function closeWizard(): void {
+    wizardOpen = false
+    void mailtoHold.releaseAfter(refreshSidebar())
   }
 
   async function runSync(): Promise<void> {
-    await promptForMissingPasswords()
+    // the sync below covers every account, so the prompts leave it to us.
+    await promptForMissingPasswords(true)
     syncing.set(true)
     try {
       await triggerSync()
@@ -541,18 +592,12 @@
     wizardOpen = true
   }
 
-  function onMailboxAdded(): void {
-    wizardOpen = false
-    void refreshSidebar().then(flushPendingMailto)
-    toastInfo(get(t)('app.toast.mailboxAdded'))
-  }
-
   // onboarding completion is persisted so it shows only once. re-run clears it
   // from settings and reopens the flow.
   function finishOnboarding(): void {
     onboardingOpen = false
     void setSetting(SettingKeys.onboarded, 'true')
-    flushPendingMailto()
+    mailtoHold.release()
   }
 
   function rerunOnboarding(): void {
@@ -560,8 +605,9 @@
     onboardingOpen = true
   }
 
+  // the held mailto link waits for finishOnboarding: onboarding is still open.
   function onboardingAddedMailbox(): void {
-    void refreshSidebar().then(flushPendingMailto)
+    void refreshSidebar()
   }
 
   function focusSearch(): void {
@@ -680,8 +726,7 @@
           openSnooze(msg.id, msg.subject)
           break
         case 'download-offline':
-          patchInList(msg.id, { offline: true })
-          await downloadMessageOffline(msg.id)
+          await setOffline(msg, true)
           break
         case 'delete-message':
           await deleteMessage(msg.id)
@@ -706,9 +751,7 @@
         case 'archive': {
           const undo = await archiveMessage(msg.id)
           reportArchiveExport(undo)
-          if (undo.messageId) {
-            recordArchived(msg, undo.messageId, undo.originalFolderId)
-          }
+          recordArchived(msg, undo)
           removeFromList(msg.id)
           closeTab(msg.id)
           if (get(openMessageId) === msg.id) {
@@ -1101,7 +1144,7 @@
       return
     }
     if (wizardOpen) {
-      wizardOpen = false
+      closeWizard()
       return
     }
     // a reading-pane tab is the next thing in, the way a browser tab is: with
@@ -1469,9 +1512,7 @@
 {/if}
 
 {#if wizardOpen}
-  {#await import('./components/wizard/AddMailboxWizard.svelte') then m}
-    <svelte:component this={m.default} on:close={() => (wizardOpen = false)} on:added={onMailboxAdded} />
-  {/await}
+  <AddMailboxDialog on:close={closeWizard} />
 {/if}
 
 {#if $editingView}
@@ -1496,7 +1537,7 @@
 
 <CommandPalette commands={paletteCommands} mail={paletteMailCommands} />
 
-<AccountPasswordDialog account={$passwordPrompt} onDone={answerPasswordPrompt} />
+<AccountPasswordDialog account={$passwordPrompt} syncOnSave={!$passwordPromptSyncFollows} onDone={answerPasswordPrompt} />
 
 <SyncFailureDialog />
 

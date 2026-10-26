@@ -8,6 +8,7 @@ import (
 )
 
 func TestCachedVerdictRoundTrip(t *testing.T) {
+	t.Parallel()
 	db := newTestDB(t)
 	ctx := context.Background()
 
@@ -32,6 +33,7 @@ func TestCachedVerdictRoundTrip(t *testing.T) {
 // A url and a file digest live in one table, so the kind has to be part of the
 // key: a lookup for one must never return the other's verdict.
 func TestCachedVerdictSeparatesKinds(t *testing.T) {
+	t.Parallel()
 	db := newTestDB(t)
 	ctx := context.Background()
 
@@ -60,6 +62,7 @@ func TestCachedVerdictSeparatesKinds(t *testing.T) {
 }
 
 func TestCacheVerdictReplacesTheEarlierResult(t *testing.T) {
+	t.Parallel()
 	db := newTestDB(t)
 	ctx := context.Background()
 
@@ -80,6 +83,7 @@ func TestCacheVerdictReplacesTheEarlierResult(t *testing.T) {
 }
 
 func TestCachedVerdictExpiry(t *testing.T) {
+	t.Parallel()
 	db := newTestDB(t)
 	ctx := context.Background()
 
@@ -102,6 +106,7 @@ func TestCachedVerdictExpiry(t *testing.T) {
 }
 
 func TestCachedVerdictMissing(t *testing.T) {
+	t.Parallel()
 	db := newTestDB(t)
 	if _, err := db.CachedVerdict(context.Background(), VerdictKindURL, "never-scanned", time.Hour); !errors.Is(err, ErrVerdictNotCached) {
 		t.Errorf("err = %v, want ErrVerdictNotCached", err)
@@ -109,6 +114,7 @@ func TestCachedVerdictMissing(t *testing.T) {
 }
 
 func TestClearVerdicts(t *testing.T) {
+	t.Parallel()
 	db := newTestDB(t)
 	ctx := context.Background()
 
