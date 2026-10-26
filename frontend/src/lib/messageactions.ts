@@ -15,6 +15,8 @@ import {
   archiveMessage,
   downloadMessageOffline,
   removeOffline,
+  markSpam,
+  markNotSpam,
 } from './api'
 import type { ArchiveUndo } from './api'
 import type { MessageSummary } from './types'
@@ -22,10 +24,11 @@ import { patchInList, removeFromList, neighbourInList } from '../stores/messages
 import { openMessageId } from '../stores/selection'
 import { clearSelection } from '../stores/listselect'
 import { recordDeleted, recordDeletedBatch } from '../stores/undodelete'
-import { recordArchived, recordArchivedBatch, type ArchivedMessage } from '../stores/undoarchive'
+import { recordArchived, archivedEntry, recordArchivedBatch, type ArchivedMessage } from '../stores/undoarchive'
 import { askConfirm } from '../stores/confirm'
 import { isVIPAddress, addVIP, removeVIP } from '../stores/vip'
 import { errorMessage, toastError, toastSuccess } from '../stores/toast'
+import { sidebar } from '../stores/accounts'
 import { t } from './i18n'
 import { get } from 'svelte/store'
 
@@ -134,15 +137,53 @@ export async function archive(item: MessageSummary): Promise<void> {
   try {
     const undo = await archiveMessage(item.id)
     reportArchiveExport(undo)
-    if (undo.messageId) {
-      recordArchived(item, undo.messageId, undo.originalFolderId)
-    }
+    recordArchived(item, undo)
     removeFromList(item.id)
     if (get(openMessageId) === item.id) {
       openMessageId.set(null)
     }
   } catch (err) {
     toastError(errorMessage(err))
+  }
+}
+
+/**
+ * Where a message stands for the spam marks: 'spam' when it sits in its
+ * account's spam folder, 'markable' when that account has one to move it to,
+ * and 'none' when it has no spam folder at all, so there is nothing to offer.
+ */
+export function spamState(item: MessageSummary): 'spam' | 'markable' | 'none' {
+  const folders = get(sidebar).data?.foldersByAccount[item.accountId] ?? []
+  if (folders.find((f) => f.id === item.folderId)?.role === 'junk') {
+    return 'spam'
+  }
+  return folders.some((f) => f.role === 'junk') ? 'markable' : 'none'
+}
+
+/**
+ * Marks a message as spam, or rescues it when it already is, recording the move
+ * for undo and closing it if it was open. Rescue sends it back to the folder it
+ * was marked from, or to the inbox for mail the server filtered. Resolves to
+ * whether the message moved.
+ */
+export async function toggleSpam(item: MessageSummary): Promise<boolean> {
+  const state = spamState(item)
+  if (state === 'none') {
+    toastError(get(t)('spam.noFolder'))
+    return false
+  }
+  try {
+    const undo = state === 'spam' ? await markNotSpam(item.id) : await markSpam(item.id)
+    recordArchived(item, undo)
+    removeFromList(item.id)
+    if (get(openMessageId) === item.id) {
+      openMessageId.set(null)
+    }
+    toastSuccess(get(t)(state === 'spam' ? 'spam.toast.notSpam' : 'spam.toast.marked'))
+    return true
+  } catch (err) {
+    toastError(errorMessage(err))
+    return false
   }
 }
 
@@ -225,8 +266,9 @@ export async function bulkArchive(items: MessageSummary[]): Promise<void> {
     try {
       const undo = await archiveMessage(item.id)
       reportArchiveExport(undo)
-      if (undo.messageId) {
-        undone.push({ summary: item, messageId: undo.messageId, originalFolderId: undo.originalFolderId })
+      const entry = archivedEntry(item, undo)
+      if (entry) {
+        undone.push(entry)
       }
       removeFromList(item.id)
       if (get(openMessageId) === item.id) {

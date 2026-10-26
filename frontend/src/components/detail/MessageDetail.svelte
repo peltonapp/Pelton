@@ -171,9 +171,7 @@
     try {
       const undo = await archiveMessage(detail.id)
       reportArchiveExport(undo)
-      if (undo.messageId) {
-        recordArchived(detail, undo.messageId, undo.originalFolderId)
-      }
+      recordArchived(detail, undo)
       removeFromList(detail.id)
       dismiss(detail.id)
     } catch (err) {

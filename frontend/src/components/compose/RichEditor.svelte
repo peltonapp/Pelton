@@ -5,7 +5,7 @@
   // the session body stays the html part the backend sends; a toolbar drives the
   // usual formatting commands and reflects the active marks at the caret.
   import { onMount, onDestroy, createEventDispatcher } from 'svelte'
-  import { Editor } from '@tiptap/core'
+  import { Editor, createDocument, getHTMLFromFragment } from '@tiptap/core'
   import StarterKit from '@tiptap/starter-kit'
   import Link from '@tiptap/extension-link'
   import {
@@ -19,10 +19,14 @@
     IconHeading,
   } from '@tabler/icons-svelte'
   import { t } from '../../lib/i18n'
+  import { caretMark } from '../../lib/richtext'
 
   // the initial html to seed the editor with (a draft or reply body).
   export let content = ''
-  export let grabFocus = false
+  // caretContent, when set, makes the editor take focus on mount. it is the
+  // content with caretMark standing where the caret belongs; without the mark
+  // the caret starts at the top.
+  export let caretContent: string | null = null
 
   const dispatch = createEventDispatcher<{ change: string }>()
 
@@ -34,7 +38,6 @@
 
   onMount(() => {
     editor = new Editor({
-      autofocus: grabFocus,
       element,
       extensions: [
         StarterKit.configure({ heading: { levels: [1, 2, 3] } }),
@@ -48,7 +51,34 @@
         revision += 1
       },
     })
+    if (caretContent !== null) {
+      editor.commands.focus(markPosition(caretContent, editor) ?? 'start')
+    }
   })
+
+  // markPosition finds caretMark in html parsed the way the editor parses its
+  // content, so the position holds in the editor's own document.
+  function markPosition(html: string, editor: Editor): number | null {
+    let found: number | null = null
+    createDocument(html, editor.schema).descendants((node, pos) => {
+      const at = node.isText ? (node.text ?? '').indexOf(caretMark) : -1
+      if (found === null && at >= 0) {
+        found = pos + at
+      }
+      return found === null
+    })
+    return found
+  }
+
+  // contentWithCaret is the current html with caretMark where the caret is.
+  export function contentWithCaret(): string {
+    if (!editor) {
+      return content
+    }
+    const { state } = editor
+    const doc = state.tr.insertText(caretMark, state.selection.head).doc
+    return getHTMLFromFragment(doc.content, editor.schema)
+  }
 
   onDestroy(() => {
     editor?.destroy()

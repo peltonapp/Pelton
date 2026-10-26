@@ -3,25 +3,85 @@
 // editor modes. markdown is rendered to html with marked for the sent html part;
 // the markdown source is kept as the plain text part.
 
-import { marked } from 'marked'
+import { renderMarkdown } from './markdown'
+import { htmlToText } from './richtext'
 import { writingDirection, markDirection } from './textdirection'
 import type { Address, ComposeRequest, EditorMode } from './types'
 import type { ComposeSession } from '../stores/compose'
 
-// parseAddressList parses "Name <a@b>, c@d" into address objects. it splits on
-// commas, then pulls an <email> if present, treating the rest as the name.
+/**
+ * splitAddressList cuts a recipient string at every comma or semicolon that is
+ * outside double quotes and outside <...>, returning trimmed non-empty tokens.
+ * A display name like "Doe, John" therefore stays one recipient, and so does
+ * the unquoted `Doe, John <j@x>` that older stored rows hold.
+ */
+export function splitAddressList(raw: string): string[] {
+  const tokens: string[] = []
+  // separators[i] is the character that ended tokens[i], kept so a name
+  // fragment can be rejoined exactly as it was written.
+  const separators: string[] = []
+  let current = ''
+  let quoted = false
+  let angled = false
+  for (let i = 0; i < raw.length; i++) {
+    const ch = raw[i]
+    if (quoted && ch === '\\' && i + 1 < raw.length) {
+      current += ch + raw[++i]
+      continue
+    }
+    if (ch === '"' && !angled) quoted = !quoted
+    else if (ch === '<' && !quoted) angled = true
+    else if (ch === '>' && !quoted) angled = false
+    else if ((ch === ',' || ch === ';') && !quoted && !angled) {
+      tokens.push(current)
+      separators.push(ch)
+      current = ''
+      continue
+    }
+    current += ch
+  }
+  tokens.push(current)
+  separators.push('')
+  return rejoinNameFragments(tokens, separators)
+    .map((t) => t.trim())
+    .filter((t) => t.length > 0)
+}
+
+// rejoinNameFragments glues runs of tokens that are neither an address nor a
+// named address onto a following `Name <addr>` token. Messages synced before
+// names were quoted on storage hold `Doe, John <j@x>`, which would otherwise
+// read as a bogus "Doe" recipient. A run not followed by a named address is
+// left as separate tokens, so a stray word before a bare address stays apart.
+function rejoinNameFragments(tokens: string[], separators: string[]): string[] {
+  const out: string[] = []
+  let run: number[] = []
+  tokens.forEach((token, i) => {
+    const trimmed = token.trim()
+    if (trimmed !== '' && !trimmed.includes('@') && !trimmed.includes('<')) {
+      run.push(i)
+      return
+    }
+    if (run.length > 0 && trimmed.includes('<')) {
+      out.push(run.map((j) => tokens[j] + separators[j]).join('') + token)
+    } else {
+      out.push(...run.map((j) => tokens[j]), token)
+    }
+    run = []
+  })
+  out.push(...run.map((j) => tokens[j]))
+  return out
+}
+
+/** parseAddressList parses `"Name, X" <a@b>; c@d` into address objects. */
 export function parseAddressList(raw: string): Address[] {
-  return raw
-    .split(',')
-    .map((part) => part.trim())
-    .filter((part) => part.length > 0)
-    .map(parseAddress)
+  return splitAddressList(raw).map(parseAddress)
 }
 
 function parseAddress(token: string): Address {
   const angle = token.match(/^(.*)<(.+?)>\s*$/)
   if (angle) {
-    return { name: angle[1].trim().replace(/^"|"$/g, ''), email: angle[2].trim() }
+    const name = angle[1].trim().replace(/^"(.*)"$/, (_, inner: string) => inner.replace(/\\(.)/g, '$1'))
+    return { name, email: angle[2].trim() }
   }
   return { name: '', email: token }
 }
@@ -46,19 +106,12 @@ export interface RenderedBody {
 export function renderBody(mode: EditorMode, body: string): RenderedBody {
   const direction = writingDirection(body)
   if (mode === 'markdown') {
-    return { text: body, html: markDirection(marked.parse(body) as string, direction) }
+    return { text: body, html: markDirection(renderMarkdown(body), direction) }
   }
   if (mode === 'wysiwyg') {
     return { text: htmlToText(body), html: markDirection(body, direction) }
   }
   return { text: body, html: '' }
-}
-
-// htmlToText extracts readable text from html for the plain-text alternative.
-function htmlToText(html: string): string {
-  const el = document.createElement('div')
-  el.innerHTML = html
-  return el.textContent ?? ''
 }
 
 // buildRequest assembles the full compose request from a session. the result is

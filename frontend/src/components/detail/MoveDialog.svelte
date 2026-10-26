@@ -9,7 +9,7 @@
   import { moveTargets, closeMove } from '../../stores/move'
   import { listFolders, moveMessage } from '../../lib/api'
   import { removeFromList } from '../../stores/messages'
-  import { recordArchivedBatch, type ArchivedMessage } from '../../stores/undoarchive'
+  import { archivedEntry, recordArchivedBatch, type ArchivedMessage } from '../../stores/undoarchive'
   import { openMessageId } from '../../stores/selection'
   import { errorMessage, toastError, toastInfo } from '../../stores/toast'
   import { t } from '../../lib/i18n'
@@ -96,8 +96,9 @@
     for (const target of targets) {
       try {
         const undo = await moveMessage(target.id, folder.id)
-        if (undo.messageId) {
-          undone.push({ summary: target, messageId: undo.messageId, originalFolderId: undo.originalFolderId })
+        const entry = archivedEntry(target, undo)
+        if (entry) {
+          undone.push(entry)
         }
       } catch (err) {
         failure = errorMessage(err)

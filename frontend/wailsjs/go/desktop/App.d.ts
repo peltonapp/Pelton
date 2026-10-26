@@ -228,7 +228,11 @@ export function ListViews():Promise<Array<desktop.ViewDTO>>;
 
 export function MCPPermissions():Promise<Array<desktop.MCPPermissionDTO>>;
 
+export function MarkNotSpam(arg1:number):Promise<desktop.ArchiveUndoDTO>;
+
 export function MarkSenderVIP(arg1:number):Promise<void>;
+
+export function MarkSpam(arg1:number):Promise<desktop.ArchiveUndoDTO>;
 
 export function MessageIDs(arg1:desktop.ListMessagesRequest):Promise<desktop.MessageIDsDTO>;
 
@@ -279,6 +283,8 @@ export function ReorderPinnedFolders(arg1:Array<number>):Promise<void>;
 export function ReorderUnifiedViews(arg1:Array<string>):Promise<void>;
 
 export function ReorderViews(arg1:Array<number>):Promise<void>;
+
+export function RestoreMessage(arg1:string,arg2:number,arg3:number):Promise<void>;
 
 export function ResumePendingDownload():Promise<void>;
 
@@ -395,8 +401,6 @@ export function TriggerSync():Promise<void>;
 export function TrustAccountCertificate(arg1:number,arg2:string):Promise<void>;
 
 export function TrustSenderImages(arg1:number):Promise<void>;
-
-export function UnarchiveMessage(arg1:string,arg2:number):Promise<void>;
 
 export function UndoDelete(arg1:number):Promise<void>;
 

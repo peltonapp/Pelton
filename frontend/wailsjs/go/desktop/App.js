@@ -454,8 +454,16 @@ export function MCPPermissions() {
   return window['go']['desktop']['App']['MCPPermissions']();
 }
 
+export function MarkNotSpam(arg1) {
+  return window['go']['desktop']['App']['MarkNotSpam'](arg1);
+}
+
 export function MarkSenderVIP(arg1) {
   return window['go']['desktop']['App']['MarkSenderVIP'](arg1);
+}
+
+export function MarkSpam(arg1) {
+  return window['go']['desktop']['App']['MarkSpam'](arg1);
 }
 
 export function MessageIDs(arg1) {
@@ -556,6 +564,10 @@ export function ReorderUnifiedViews(arg1) {
 
 export function ReorderViews(arg1) {
   return window['go']['desktop']['App']['ReorderViews'](arg1);
+}
+
+export function RestoreMessage(arg1, arg2, arg3) {
+  return window['go']['desktop']['App']['RestoreMessage'](arg1, arg2, arg3);
 }
 
 export function ResumePendingDownload() {
@@ -788,10 +800,6 @@ export function TrustAccountCertificate(arg1, arg2) {
 
 export function TrustSenderImages(arg1) {
   return window['go']['desktop']['App']['TrustSenderImages'](arg1);
-}
-
-export function UnarchiveMessage(arg1, arg2) {
-  return window['go']['desktop']['App']['UnarchiveMessage'](arg1, arg2);
 }
 
 export function UndoDelete(arg1) {

@@ -9,6 +9,7 @@
   import { searchAddresses } from '../../lib/api'
   import type { AddressBookEntry } from '../../lib/types'
   import { t } from '../../lib/i18n'
+  import { splitAddressList } from '../../lib/mailcompose'
 
   export let value = ''
   export let label: string
@@ -26,10 +27,7 @@
   let highlight = -1
   let debounce: ReturnType<typeof setTimeout> | undefined
 
-  $: chips = value
-    .split(',')
-    .map((s) => s.trim())
-    .filter(Boolean)
+  $: chips = splitAddressList(value)
 
   function emit(next: string[]): void {
     dispatch('change', next.join(', '))
