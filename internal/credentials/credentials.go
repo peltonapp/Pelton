@@ -69,7 +69,7 @@ type Secret struct {
 	ClientSecret string    `json:"clientSecret,omitempty"`
 	RefreshToken string    `json:"refreshToken,omitempty"`
 	AccessToken  string    `json:"accessToken,omitempty"`
-	Expiry       time.Time `json:"expiry,omitempty"`
+	Expiry       time.Time `json:"expiry"`
 }
 
 // Store writes the secret for an account, replacing any existing one. The new

@@ -86,9 +86,9 @@ type MessageAuth struct {
 	DKIMDomain string
 }
 
-// SMIMESignature is a stored verification verdict. Status is '' for unsigned
-// mail, otherwise valid, untrusted or invalid; Detail explains anything that is
-// not valid, in a sentence fit to show the reader.
+// SMIMESignature is a stored verification verdict. Status is empty for
+// unsigned mail, otherwise valid, untrusted or invalid; Detail explains
+// anything that is not valid, in a sentence fit to show the reader.
 type SMIMESignature struct {
 	Status string
 	Signer string

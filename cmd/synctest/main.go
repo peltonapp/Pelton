@@ -16,6 +16,7 @@ import (
 	"log/slog"
 	"os"
 	"os/signal"
+	"slices"
 	"strconv"
 	"syscall"
 
@@ -263,9 +264,9 @@ func pushDemo(ctx context.Context, store *storage.DB, client *pimap.Client, engi
 func pickUnseen(states []storage.MessageState) storage.MessageState {
 	// states are ordered by uid ascending.
 	target := states[len(states)-1]
-	for i := len(states) - 1; i >= 0; i-- {
-		if !states[i].Flags.Has(storage.FlagSeen) {
-			return states[i]
+	for _, state := range slices.Backward(states) {
+		if !state.Flags.Has(storage.FlagSeen) {
+			return state
 		}
 	}
 	return target

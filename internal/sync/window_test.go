@@ -9,6 +9,7 @@ import (
 
 	pimap "github.com/peltonapp/Pelton/internal/imap"
 	"github.com/peltonapp/Pelton/internal/storage"
+	"github.com/peltonapp/Pelton/internal/storage/storagetest"
 )
 
 func serversUpTo(n uint32) []ServerMessage {
@@ -20,6 +21,7 @@ func serversUpTo(n uint32) []ServerMessage {
 }
 
 func TestFloorForLimit(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name    string
 		servers []ServerMessage
@@ -47,6 +49,7 @@ func TestFloorForLimit(t *testing.T) {
 // once anything has ever been deleted, so arithmetic on the highest uid would
 // admit the wrong number of messages.
 func TestFloorForLimitWithGappyUIDs(t *testing.T) {
+	t.Parallel()
 	servers := []ServerMessage{{UID: 3}, {UID: 900}, {UID: 12}, {UID: 4000}, {UID: 77}}
 	// the 2 newest are 4000 and 900, so the floor is 900.
 	if got := floorForLimit(servers, 2); got != 900 {
@@ -55,6 +58,7 @@ func TestFloorForLimitWithGappyUIDs(t *testing.T) {
 }
 
 func TestLowerFloor(t *testing.T) {
+	t.Parallel()
 	servers := serversUpTo(100)
 	tests := []struct {
 		name    string
@@ -81,6 +85,7 @@ func TestLowerFloor(t *testing.T) {
 }
 
 func TestNormalizeFloor(t *testing.T) {
+	t.Parallel()
 	// nothing below the floor is left on the server, so it holds nothing back.
 	if got := normalizeFloor(serversUpTo(100), 1); got != 0 {
 		t.Errorf("normalizeFloor with nothing below = %d, want 0", got)
@@ -94,6 +99,7 @@ func TestNormalizeFloor(t *testing.T) {
 }
 
 func TestWindowFloor(t *testing.T) {
+	t.Parallel()
 	servers := serversUpTo(100)
 	tests := []struct {
 		name     string
@@ -158,6 +164,7 @@ func TestWindowFloor(t *testing.T) {
 }
 
 func TestBuildPlanRespectsFloor(t *testing.T) {
+	t.Parallel()
 	servers := []ServerMessage{*server(1, 0), *server(2, 0), *server(3, 0), *server(4, 0)}
 
 	plan := BuildPlan(nil, servers, 3)
@@ -179,6 +186,7 @@ func TestBuildPlanRespectsFloor(t *testing.T) {
 // already has, so its flags must keep syncing and a server-side delete must
 // still remove it. Skipping it because of the floor would freeze it forever.
 func TestBuildPlanKeepsCachedMessagesBelowFloor(t *testing.T) {
+	t.Parallel()
 	locals := []LocalMessage{
 		*local(1, 0, false, false),
 		*local(2, storage.FlagSeen, false, false),
@@ -273,7 +281,7 @@ func newSyncTestFolder(t *testing.T) (*storage.DB, storage.Folder) {
 	t.Helper()
 	ctx := context.Background()
 
-	db, err := storage.Open(filepath.Join(t.TempDir(), "test.db"))
+	db, err := storagetest.Open(filepath.Join(t.TempDir(), "test.db"))
 	if err != nil {
 		t.Fatalf("open db: %v", err)
 	}
@@ -296,6 +304,7 @@ func newSyncTestFolder(t *testing.T) (*storage.DB, storage.Folder) {
 // the reported bug: a first sync of a big mailbox downloaded the oldest message
 // first and the user waited hours for recent mail. Newest uid must come first.
 func TestSyncFolderFetchesNewestFirst(t *testing.T) {
+	t.Parallel()
 	db, folder := newSyncTestFolder(t)
 	client := &fakeClient{uids: []uint32{1, 2, 3, 4, 5}}
 	engine := NewEngine(client, db, nil)
@@ -316,6 +325,7 @@ func TestSyncFolderFetchesNewestFirst(t *testing.T) {
 }
 
 func TestSyncFolderCapsFirstSyncAndBackfills(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	db, folder := newSyncTestFolder(t)
 	client := &fakeClient{uids: []uint32{1, 2, 3, 4, 5, 6, 7, 8, 9, 10}}
@@ -390,6 +400,7 @@ func TestSyncFolderCapsFirstSyncAndBackfills(t *testing.T) {
 // generation. The stale floor has to actually reach the database, not just the
 // in-memory state.
 func TestSyncFolderResetsFloorOnUIDValidityChange(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	db, folder := newSyncTestFolder(t)
 	client := &fakeClient{uids: []uint32{1, 2, 3, 4, 5, 6, 7, 8, 9, 10}}
@@ -441,6 +452,7 @@ func TestSyncFolderResetsFloorOnUIDValidityChange(t *testing.T) {
 // be capped retroactively: its messages are all in the cache, and a floor would
 // make the ui claim there is older mail to fetch when there is not.
 func TestSyncFolderDoesNotCapAnExistingCache(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	db, folder := newSyncTestFolder(t)
 	client := &fakeClient{uids: []uint32{1, 2, 3, 4, 5, 6, 7, 8, 9, 10}}

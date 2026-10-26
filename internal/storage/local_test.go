@@ -9,6 +9,7 @@ import (
 // the Local Folders section is meant to be invisible until something is
 // imported, which rests on the account not existing before then.
 func TestLocalAccountIsAbsentUntilEnsured(t *testing.T) {
+	t.Parallel()
 	db := newTestDB(t)
 	ctx := context.Background()
 
@@ -36,6 +37,7 @@ func TestLocalAccountIsAbsentUntilEnsured(t *testing.T) {
 // an ordinary account must not be mistaken for the local one, and the local one
 // must not leak into a list that is about to be synced.
 func TestLocalFlagIsPerAccount(t *testing.T) {
+	t.Parallel()
 	db := newTestDB(t)
 	ctx := context.Background()
 
@@ -68,6 +70,7 @@ func TestLocalFlagIsPerAccount(t *testing.T) {
 }
 
 func TestEnsureLocalFolderReusesExisting(t *testing.T) {
+	t.Parallel()
 	db := newTestDB(t)
 	ctx := context.Background()
 	account, err := db.EnsureLocalAccount(ctx)
@@ -99,6 +102,7 @@ func TestEnsureLocalFolderReusesExisting(t *testing.T) {
 // uids are what keeps two imported messages apart in one folder, so the counter
 // has to start above zero and follow what is already stored.
 func TestNextLocalUID(t *testing.T) {
+	t.Parallel()
 	db := newTestDB(t)
 	ctx := context.Background()
 	account, _ := db.EnsureLocalAccount(ctx)
@@ -129,6 +133,7 @@ func TestNextLocalUID(t *testing.T) {
 }
 
 func TestHasLocalMessage(t *testing.T) {
+	t.Parallel()
 	db := newTestDB(t)
 	ctx := context.Background()
 	account, _ := db.EnsureLocalAccount(ctx)
