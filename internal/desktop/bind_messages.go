@@ -3,12 +3,15 @@ package desktop
 import (
 	"context"
 	"encoding/base64"
+	"errors"
 	"fmt"
 	"io"
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
+	"github.com/peltonapp/Pelton/internal/desktop/syncsched"
 	"github.com/peltonapp/Pelton/internal/mailview"
 	"github.com/peltonapp/Pelton/internal/storage"
 	"github.com/wailsapp/wails/v2/pkg/runtime"
@@ -85,7 +88,152 @@ func (a *App) GetMessage(id int64) (MessageDetailDTO, error) {
 	if err != nil {
 		return MessageDetailDTO{}, err
 	}
+	if !m.BodyComplete {
+		detail, derr := a.messageDetailFromStored(id, m)
+		if derr != nil {
+			return MessageDetailDTO{}, derr
+		}
+		account, accErr := a.store.GetAccount(a.ctx, m.AccountID)
+		if accErr == nil && !account.Local {
+			done := make(chan struct{})
+			if _, running := a.bodyFetches.LoadOrStore(id, done); !running {
+				goSafe("on-demand body", func() {
+					defer close(done)
+					defer a.bodyFetches.Delete(id)
+					a.fetchBodyForPane(id)
+				})
+			}
+		}
+		return detail, nil
+	}
+	return a.messageDetailFromStored(id, m)
+}
 
+// onDemandBodyRetryDelays are the pauses before each retry of a body fetch for
+// the reading pane. What makes one fail is usually brief (a dropped connection,
+// a session being re-authenticated), and every failure the reader sees is one
+// they have to retry by hand.
+var onDemandBodyRetryDelays = []time.Duration{time.Second, 3 * time.Second, 8 * time.Second}
+
+// errBodyNotStored is a fetch that finished without storing the body, which is
+// what a message the server no longer has looks like.
+var errBodyNotStored = errors.New("pelton: fetch finished without storing the message body")
+
+// fetchBodyForPane fetches the body of a message open in the reading pane,
+// retrying after each of the retry delays, and always tells the pane how it
+// ended: mail:updated once the body is stored, mail:bodyFailed once every
+// attempt failed. The pane's spinner waits for one of the two. A fetch
+// dropped from a full fast lane did not fail and costs no retry; a message
+// that cannot be read fails at once; a mailbox being removed or a profile
+// switch ends it quietly.
+func (a *App) fetchBodyForPane(id int64) {
+	delays := a.bodyRetryDelays
+	if delays == nil {
+		delays = onDemandBodyRetryDelays
+	}
+	// The pane belongs to the profile it was opened in. After a switch the
+	// id would name a message of the new profile's store.
+	session := a.sessionCtx()
+	var err error
+	for attempt := 0; ; {
+		if session.Err() != nil {
+			return
+		}
+		var msg *storage.Message
+		msg, err = a.store.GetMessage(a.ctx, id)
+		if errors.Is(err, storage.ErrMessageNotFound) {
+			// deleted or moved while the pane had it open: there is nothing
+			// left to fetch, and the pane follows the list, not this message.
+			return
+		}
+		if err == nil {
+			if err = a.fetchMessageBodyOnDemand(msg); err == nil {
+				err = a.bodyStored(id)
+			}
+		}
+		if err == nil {
+			a.emit(EventMailUpdated, MailUpdatedEvent{MessageID: id})
+			return
+		}
+		if msg != nil {
+			if held, _ := a.syncBlock(msg.AccountID); held {
+				return
+			}
+		}
+		if errors.Is(err, errMessageUnreadable) {
+			break
+		}
+		dropped := errors.Is(err, syncsched.ErrDropped)
+		if !dropped && attempt == len(delays) {
+			break
+		}
+		select {
+		case <-time.After(delays[min(attempt, len(delays)-1)]):
+		case <-session.Done():
+			return
+		}
+		if !dropped {
+			attempt++
+		}
+	}
+	a.log.Warn("fetch message body", "message", id, "err", err)
+	a.emit(EventMailBodyFailed, MailBodyFailedEvent{MessageID: id})
+}
+
+// errMessageNotOnServer is the reader's word for errBodyNotStored.
+var errMessageNotOnServer = errors.New("pelton: the server no longer has this message")
+
+// fetchBodyJoined fetches a stub's body for a caller that waits, joining a
+// fetch the reading pane already runs for it instead of starting a second.
+// Errors are the ones a toast can show.
+func (a *App) fetchBodyJoined(m *storage.Message) error {
+	done := make(chan struct{})
+	if v, running := a.bodyFetches.LoadOrStore(m.ID, done); running {
+		select {
+		case <-v.(chan struct{}):
+		case <-a.ctx.Done():
+			return a.ctx.Err()
+		}
+	} else {
+		err := a.fetchMessageBodyOnDemand(m)
+		a.bodyFetches.Delete(m.ID)
+		close(done)
+		// A pane that opened the message meanwhile found this fetch running
+		// and started none: its spinner waits for one of these.
+		if err == nil && a.bodyStored(m.ID) == nil {
+			a.emit(EventMailUpdated, MailUpdatedEvent{MessageID: m.ID})
+		} else {
+			a.emit(EventMailBodyFailed, MailBodyFailedEvent{MessageID: m.ID})
+		}
+		if err != nil {
+			return offlineOrErr(err)
+		}
+	}
+	if err := a.bodyStored(m.ID); err != nil {
+		if held, _ := a.syncBlock(m.AccountID); held {
+			return errAccountSyncHeld
+		}
+		if errors.Is(err, errBodyNotStored) {
+			return errMessageNotOnServer
+		}
+		return err
+	}
+	return nil
+}
+
+// bodyStored reports whether a fetch left the message complete.
+func (a *App) bodyStored(id int64) error {
+	m, err := a.store.GetMessage(a.ctx, id)
+	if err != nil {
+		return err
+	}
+	if !m.BodyComplete {
+		return errBodyNotStored
+	}
+	return nil
+}
+
+func (a *App) messageDetailFromStored(id int64, m *storage.Message) (MessageDetailDTO, error) {
 	email, folderName := a.lookupContext(a.ctx, m.AccountID, m.FolderID)
 	summary := toSummaryDTO(*m, email, folderName)
 	summary.SenderVIP = a.isVIP(m.FromAddress)
@@ -115,6 +263,7 @@ func (a *App) GetMessage(id int64) (MessageDetailDTO, error) {
 		Unsubscribe:       a.unsubscribeInfo(m),
 		Phishing:          a.checkPhishing(*m),
 		CharsetGuess:      m.CharsetGuess,
+		BodyComplete:      m.BodyComplete,
 	}
 	detail.BodyHTMLSafe = a.renderHTML(m.BodyHTML, atts, autoAllow)
 

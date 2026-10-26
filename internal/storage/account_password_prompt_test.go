@@ -10,7 +10,7 @@ import (
 func newAccountTestDB(t *testing.T) (*DB, int64) {
 	t.Helper()
 	ctx := context.Background()
-	db, err := Open(filepath.Join(t.TempDir(), "test.db"))
+	db, err := openMigrated(filepath.Join(t.TempDir(), "test.db"))
 	if err != nil {
 		t.Fatalf("open: %v", err)
 	}
@@ -28,6 +28,7 @@ func newAccountTestDB(t *testing.T) (*DB, int64) {
 // TestPasswordPromptAsksByDefault is the migration guard: an account that
 // existed before the column, and every one created after it, still gets asked.
 func TestPasswordPromptAsksByDefault(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	db, id := newAccountTestDB(t)
 
@@ -41,6 +42,7 @@ func TestPasswordPromptAsksByDefault(t *testing.T) {
 }
 
 func TestSetAccountPasswordPromptDismissed(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	db, id := newAccountTestDB(t)
 
@@ -59,6 +61,7 @@ func TestSetAccountPasswordPromptDismissed(t *testing.T) {
 }
 
 func TestSetAccountPasswordPromptDismissedUnknownAccount(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	db, _ := newAccountTestDB(t)
 

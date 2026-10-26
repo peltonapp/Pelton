@@ -111,7 +111,7 @@ func (d *DB) MessagesNeedingRefetch(ctx context.Context, folderID int64, limit i
 func (d *DB) RepairMessageText(ctx context.Context, id int64, subject, plain, htmlBody, charsetGuess string) error {
 	res, err := d.sql.ExecContext(ctx, `
 UPDATE messages
-   SET subject = ?, body_plain = ?, body_html = ?, charset_guess = ?, needs_refetch = 0
+   SET subject = ?, body_plain = ?, body_html = ?, charset_guess = ?, needs_refetch = 0, `+textRewritten+`
  WHERE id = ?`, subject, plain, htmlBody, charsetGuess, id)
 	if err != nil {
 		return fmt.Errorf("storage: repair text of message %d: %w", id, err)

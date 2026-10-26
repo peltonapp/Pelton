@@ -193,3 +193,25 @@ func TestSanitizeDirectionDoesNotRescueBlockedElements(t *testing.T) {
 		t.Errorf("Sanitize() dropped the direction of the surviving paragraph: %q", got)
 	}
 }
+
+func TestRemoteHostsDropsUserinfoAndPort(t *testing.T) {
+	tests := []struct {
+		name string
+		html string
+		want []string
+	}{
+		{"plain", `<img src="https://CDN.example.com/a.png">`, []string{"cdn.example.com"}},
+		{"userinfo", `<img src="https://user@cdn.example.com/a.png">`, []string{"cdn.example.com"}},
+		{"several at signs", `<img src="https://a@b@cdn.example.com/a.png">`, []string{"cdn.example.com"}},
+		{"userinfo and port", `<img src="https://user:pw@cdn.example.com:8443/a.png">`, []string{"cdn.example.com"}},
+		{"empty host after at", `<img src="https://user@/a.png">`, []string{}},
+		{"leading at", `<img src="https://@cdn.example.com/a.png">`, []string{"cdn.example.com"}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := RemoteHosts(tt.html); !slices.Equal(got, tt.want) {
+				t.Errorf("RemoteHosts = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}

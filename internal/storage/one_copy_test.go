@@ -41,6 +41,7 @@ func gmailCopies(t *testing.T, db *DB) (folders []int64, copies []int64, other i
 }
 
 func TestOneCopyListsAMessageOnce(t *testing.T) {
+	t.Parallel()
 	db := newTestDB(t)
 	ctx := context.Background()
 	folders, copies, other := gmailCopies(t, db)
@@ -78,6 +79,7 @@ func TestOneCopyListsAMessageOnce(t *testing.T) {
 // a copy that left the view, unflagged or deleted, must not hide the ones still
 // in it.
 func TestOneCopyFallsBackToACopyStillInTheView(t *testing.T) {
+	t.Parallel()
 	db := newTestDB(t)
 	ctx := context.Background()
 	folders, copies, _ := gmailCopies(t, db)
@@ -98,6 +100,7 @@ func TestOneCopyFallsBackToACopyStillInTheView(t *testing.T) {
 }
 
 func TestMarkCopiesFlagPendingFollowsTheMessage(t *testing.T) {
+	t.Parallel()
 	db := newTestDB(t)
 	ctx := context.Background()
 	folders, copies, other := gmailCopies(t, db)

@@ -13,8 +13,8 @@ import (
 func domainOf(addr string) string {
 	s := strings.ToLower(strings.TrimSpace(addr))
 	s = strings.Trim(s, "<>")
-	if at := strings.LastIndex(s, "@"); at >= 0 {
-		s = s[at+1:]
+	if _, after, ok := strings.CutLast(s, "@"); ok {
+		s = after
 	}
 	return strings.Trim(s, ". ")
 }
@@ -45,7 +45,7 @@ func sameOrg(a, b string) bool {
 // address made of lookalike characters reaches the wire. Not suspicious on its
 // own: plenty of legitimate mail comes from internationalised domains.
 func punycode(domain string) bool {
-	for _, label := range strings.Split(domain, ".") {
+	for label := range strings.SplitSeq(domain, ".") {
 		if strings.HasPrefix(label, "xn--") {
 			return true
 		}
