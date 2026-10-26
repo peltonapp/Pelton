@@ -179,8 +179,8 @@ func messageSegment(messageID int64) string {
 func sanitizeFilename(name string) string {
 	// drop everything up to the last path separator from either os convention.
 	name = strings.ReplaceAll(name, "\\", "/")
-	if i := strings.LastIndex(name, "/"); i >= 0 {
-		name = name[i+1:]
+	if _, last, ok := strings.CutLast(name, "/"); ok {
+		name = last
 	}
 	name = strings.TrimSpace(name)
 	name = strings.Map(func(r rune) rune {

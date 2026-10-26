@@ -85,10 +85,13 @@ func DefaultPathForChannel(channel string) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("storage: locate user config dir: %w", err)
 	}
-	return filepath.Join(dir, dataDirName(channel), dbFileName), nil
+	return filepath.Join(dir, DataDirName(channel), dbFileName), nil
 }
 
-func dataDirName(channel string) string {
+// DataDirName names the data directory of a build channel: Pelton, Pelton-dev
+// under PELTON_DEV, or Pelton-<channel>. The keyring service is named the same,
+// so each data directory has its own secrets as well as its own database.
+func DataDirName(channel string) string {
 	switch {
 	case os.Getenv("PELTON_DEV") != "":
 		return appDirName + "-dev"
@@ -316,8 +319,8 @@ func loadMigrations() ([]migration, error) {
 // versionFromName parses the leading digits of a migration filename.
 func versionFromName(name string) (int, error) {
 	prefix := name
-	if i := strings.IndexByte(name, '_'); i >= 0 {
-		prefix = name[:i]
+	if before, _, ok := strings.Cut(name, "_"); ok {
+		prefix = before
 	}
 	version, err := strconv.Atoi(prefix)
 	if err != nil {

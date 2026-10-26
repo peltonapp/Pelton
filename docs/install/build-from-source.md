@@ -18,7 +18,7 @@ build/run/package commands; this page just walks through using it.
 
 ## Prerequisites
 
-- [Go](https://go.dev) 1.25 or newer
+- [Go](https://go.dev) 1.27.1 or newer
 - [Node.js](https://nodejs.org) and [pnpm](https://pnpm.io) (the frontend uses pnpm, not npm)
 - The Wails CLI, installed at the exact version this repo pins in `go.mod`:
 
@@ -76,6 +76,10 @@ make build-mac    # macOS, needs macOS
 make build-win    # Windows, needs Windows for a clean build
 make build-linux  # Linux
 ```
+
+On macOS the `Makefile` sets the macOS 13 deployment target for the cgo code
+(`CGO_CFLAGS`/`CGO_LDFLAGS` with `-mmacosx-version-min=13.0`); set those by
+hand if you run `wails build` directly.
 
 Each produces a binary under `build/bin/`. A couple of platforms have an
 extra packaging step:

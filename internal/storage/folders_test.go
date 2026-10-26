@@ -27,6 +27,7 @@ func newFolderTestAccount(t *testing.T, db *DB, delim string, paths ...string) (
 }
 
 func TestRenameFolderSubtree(t *testing.T) {
+	t.Parallel()
 	db := newTestDB(t)
 	ctx := context.Background()
 
@@ -71,6 +72,7 @@ func TestRenameFolderSubtree(t *testing.T) {
 
 // a folder whose name contains a LIKE wildcard must match only itself.
 func TestRenameFolderSubtreeEscapesWildcards(t *testing.T) {
+	t.Parallel()
 	db := newTestDB(t)
 	ctx := context.Background()
 
@@ -102,6 +104,7 @@ func TestRenameFolderSubtreeEscapesWildcards(t *testing.T) {
 }
 
 func TestFolderDescendants(t *testing.T) {
+	t.Parallel()
 	db := newTestDB(t)
 	ctx := context.Background()
 
@@ -126,6 +129,7 @@ func TestFolderDescendants(t *testing.T) {
 }
 
 func TestRenameFolder(t *testing.T) {
+	t.Parallel()
 	db := newTestDB(t)
 	ctx := context.Background()
 
