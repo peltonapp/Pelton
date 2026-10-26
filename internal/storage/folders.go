@@ -6,6 +6,8 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"time"
+	"unicode/utf8"
 )
 
 // ErrFolderNotFound is returned when a folder id has no row.
@@ -33,7 +35,8 @@ const attributeSeparator = " "
 const folderColumns = `f.id, f.account_id, f.name, f.imap_path, f.delimiter, f.parent_id,
        f.attributes, f.uid_validity,
        coalesce(l.position, 0), coalesce(l.pinned_position, 0),
-       f.role_override, f.sync_excluded`
+       f.role_override, f.sync_excluded,
+       f.remote_id, f.state_token, f.sync_floor_id, f.sync_initialized, f.last_full_sync_at`
 
 // folderFrom joins a folder to the active profile's layout. Every query using
 // folderColumns takes the layout profile id as its first argument.
@@ -76,16 +79,32 @@ type Folder struct {
 	// this exists for. It stays in the sidebar, since hiding it would make the
 	// setting impossible to find again.
 	SyncExcluded bool
+	// RemoteID is the stable server id for the mailbox: the imap path for IMAP.
+	// StateToken is the delta cursor after a successful snapshot: the IMAP
+	// CONDSTORE cursor (empty without CONDSTORE). SyncFloorID is an opaque
+	// newest-window boundary for an adapter without numeric ids (empty when
+	// nothing older remains). SyncInitialized
+	// distinguishes a first sync from an already-synced empty folder.
+	RemoteID        string
+	StateToken      string
+	SyncFloorID     string
+	SyncInitialized bool
+	// LastFullSyncAt is when the folder last finished a full reconcile (a
+	// complete server listing rather than a delta). Zero means never.
+	LastFullSyncAt time.Time
 }
 
 // CreateFolder inserts a folder and returns its new id.
 func (d *DB) CreateFolder(ctx context.Context, f *Folder) (int64, error) {
+	if f.RemoteID == "" {
+		f.RemoteID = f.IMAPPath
+	}
 	const query = `
-INSERT INTO folders (account_id, name, imap_path, delimiter, parent_id, attributes, uid_validity)
-VALUES (?, ?, ?, ?, ?, ?, ?)`
+INSERT INTO folders (account_id, name, imap_path, delimiter, parent_id, attributes, uid_validity, remote_id, state_token, sync_floor_id)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
 	res, err := d.sql.ExecContext(ctx, query,
 		f.AccountID, f.Name, f.IMAPPath, f.Delimiter, nullableID(f.ParentID),
-		joinAttributes(f.Attributes), f.UIDValidity)
+		joinAttributes(f.Attributes), f.UIDValidity, f.RemoteID, f.StateToken, f.SyncFloorID)
 	if err != nil {
 		return 0, fmt.Errorf("storage: insert folder %q: %w", f.IMAPPath, err)
 	}
@@ -95,6 +114,94 @@ VALUES (?, ?, ?, ?, ?, ?, ?)`
 	}
 	f.ID = id
 	return id, nil
+}
+
+// UpsertFolderByRemoteID inserts a folder or updates name, imap_path, delimiter,
+// attributes, uid_validity and remote_id matched on (account_id, remote_id). It
+// does not touch parent_id, sync_excluded or role_override.
+func (d *DB) UpsertFolderByRemoteID(ctx context.Context, f *Folder) error {
+	if f.RemoteID == "" {
+		f.RemoteID = f.IMAPPath
+	}
+	var existingID int64
+	err := d.sql.QueryRowContext(ctx,
+		`SELECT id FROM folders WHERE account_id = ? AND remote_id = ?`,
+		f.AccountID, f.RemoteID).Scan(&existingID)
+	if err != nil && !errors.Is(err, sql.ErrNoRows) {
+		return fmt.Errorf("storage: lookup folder by remote id %q: %w", f.RemoteID, err)
+	}
+	if errors.Is(err, sql.ErrNoRows) {
+		_, err := d.CreateFolder(ctx, f)
+		return err
+	}
+	const query = `
+UPDATE folders
+SET name = ?, imap_path = ?, delimiter = ?, attributes = ?, uid_validity = ?, remote_id = ?
+WHERE id = ?`
+	res, err := d.sql.ExecContext(ctx, query,
+		f.Name, f.IMAPPath, f.Delimiter, joinAttributes(f.Attributes), f.UIDValidity, f.RemoteID, existingID)
+	if err != nil {
+		return fmt.Errorf("storage: update folder by remote id %q: %w", f.RemoteID, err)
+	}
+	if err := requireOneRow(res, ErrFolderNotFound); err != nil {
+		return err
+	}
+	f.ID = existingID
+	return nil
+}
+
+// SetFolderStateToken stores the adapter's delta cursor for a folder after a
+// successful snapshot.
+func (d *DB) SetFolderStateToken(ctx context.Context, id int64, token string) error {
+	res, err := d.sql.ExecContext(ctx,
+		`UPDATE folders SET state_token = ? WHERE id = ?`, token, id)
+	if err != nil {
+		return fmt.Errorf("storage: set state token for folder %d: %w", id, err)
+	}
+	return requireOneRow(res, ErrFolderNotFound)
+}
+
+// SetFolderFullSyncAt records when the folder last finished a full reconcile.
+func (d *DB) SetFolderFullSyncAt(ctx context.Context, id int64, at time.Time) error {
+	res, err := d.sql.ExecContext(ctx,
+		`UPDATE folders SET last_full_sync_at = ? WHERE id = ?`, at.Unix(), id)
+	if err != nil {
+		return fmt.Errorf("storage: set full sync time for folder %d: %w", id, err)
+	}
+	return requireOneRow(res, ErrFolderNotFound)
+}
+
+// SetFolderSyncWindow writes the opaque sync floor and whether the folder
+// has completed an initial sync. It does not touch sync_floor_uid.
+func (d *DB) SetFolderSyncWindow(ctx context.Context, id int64, floorID string, initialized bool) error {
+	res, err := d.sql.ExecContext(ctx,
+		`UPDATE folders SET sync_floor_id = ?, sync_initialized = ? WHERE id = ?`,
+		floorID, boolToInt(initialized), id)
+	if err != nil {
+		return fmt.Errorf("storage: set sync window for folder %d: %w", id, err)
+	}
+	return requireOneRow(res, ErrFolderNotFound)
+}
+
+// SetFolderParent records a folder's parent, or clears it when parent is nil.
+func (d *DB) SetFolderParent(ctx context.Context, id int64, parent *int64) error {
+	res, err := d.sql.ExecContext(ctx,
+		`UPDATE folders SET parent_id = ? WHERE id = ?`, nullableID(parent), id)
+	if err != nil {
+		return fmt.Errorf("storage: set parent for folder %d: %w", id, err)
+	}
+	return requireOneRow(res, ErrFolderNotFound)
+}
+
+// DeleteAccountFolders removes every folder for an account, staging attachment
+// files so a transaction failure can restore them. Address books are untouched.
+func (d *DB) DeleteAccountFolders(ctx context.Context, accountID int64) error {
+	return d.withStagedAccountCache(ctx, accountID, func(tx *sql.Tx) error {
+		if _, err := tx.ExecContext(ctx, `DELETE FROM folders WHERE account_id = ?`, accountID); err != nil {
+			return fmt.Errorf("storage: delete folders for account %d: %w", accountID, err)
+		}
+		return nil
+	})
 }
 
 // GetFolder returns one folder by id, or ErrFolderNotFound.
@@ -149,12 +256,17 @@ func (d *DB) SetFolderUIDValidity(ctx context.Context, id int64, uidValidity uin
 	return requireOneRow(res, ErrFolderNotFound)
 }
 
-// RenameFolder updates a folder's display name and imap path. It does not touch
-// the folder's children: the caller renames the subtree, since only it knows the
-// server's delimiter (see RenameFolderSubtree).
+// RenameFolder updates a folder's display name and imap path. A remote id that
+// is the imap path (IMAP) follows the new path; any other remote id is kept. It
+// does not touch the folder's children: the caller renames the subtree, since
+// only it knows the server's delimiter (see RenameFolderSubtree).
 func (d *DB) RenameFolder(ctx context.Context, id int64, name, imapPath string) error {
-	res, err := d.sql.ExecContext(ctx,
-		`UPDATE folders SET name = ?, imap_path = ? WHERE id = ?`, name, imapPath, id)
+	const query = `
+UPDATE folders
+SET name = ?, imap_path = ?,
+    remote_id = CASE WHEN remote_id = imap_path THEN ? ELSE remote_id END
+WHERE id = ?`
+	res, err := d.sql.ExecContext(ctx, query, name, imapPath, imapPath, id)
 	if err != nil {
 		return fmt.Errorf("storage: rename folder %d: %w", id, err)
 	}
@@ -162,19 +274,25 @@ func (d *DB) RenameFolder(ctx context.Context, id int64, name, imapPath string) 
 }
 
 // RenameFolderSubtree rewrites the imap path prefix of every descendant of a
-// renamed folder, which an imap RENAME moves along with their parent. oldPrefix
-// and newPrefix are the parent paths with the server's delimiter already
-// appended, so the match cannot catch a sibling whose name merely starts with
-// the same text. Returns the number of rows rewritten.
+// renamed folder, which an imap RENAME moves along with their parent. A remote
+// id that is the imap path follows it, as in RenameFolder. oldPrefix and
+// newPrefix are the parent paths with the server's delimiter already appended,
+// so the match cannot catch a sibling whose name merely starts with the same
+// text. Returns the number of rows rewritten.
 func (d *DB) RenameFolderSubtree(ctx context.Context, accountID int64, oldPrefix, newPrefix string) (int, error) {
 	// escape the like wildcards in the stored path so a folder legitimately
 	// containing % or _ does not match half the account.
 	const query = `
 UPDATE folders
-SET imap_path = ? || substr(imap_path, ?)
+SET imap_path = ? || substr(imap_path, ?),
+    remote_id = CASE WHEN remote_id = imap_path
+                     THEN ? || substr(imap_path, ?) ELSE remote_id END
 WHERE account_id = ? AND imap_path LIKE ? ESCAPE '\'`
+	// substr counts characters, so the offset must too: a byte count would cut
+	// into a child's path under a non-ascii parent.
+	from := utf8.RuneCountInString(oldPrefix) + 1
 	res, err := d.sql.ExecContext(ctx, query,
-		newPrefix, len(oldPrefix)+1, accountID, escapeLike(oldPrefix)+"%")
+		newPrefix, from, newPrefix, from, accountID, escapeLike(oldPrefix)+"%")
 	if err != nil {
 		return 0, fmt.Errorf("storage: rename folder subtree %q: %w", oldPrefix, err)
 	}
@@ -355,17 +473,24 @@ func (d *DB) DeleteFolder(ctx context.Context, id int64) error {
 
 func scanFolder(row rowScanner) (*Folder, error) {
 	var (
-		f        Folder
-		parent   sql.NullInt64
-		attrs    string
-		excluded int
+		f           Folder
+		parent      sql.NullInt64
+		attrs       string
+		excluded    int
+		initialized int
+		fullSync    sql.NullInt64
 	)
 	if err := row.Scan(&f.ID, &f.AccountID, &f.Name, &f.IMAPPath, &f.Delimiter,
 		&parent, &attrs, &f.UIDValidity, &f.Position, &f.PinnedPosition,
-		&f.RoleOverride, &excluded); err != nil {
+		&f.RoleOverride, &excluded,
+		&f.RemoteID, &f.StateToken, &f.SyncFloorID, &initialized, &fullSync); err != nil {
 		return nil, err
 	}
 	f.SyncExcluded = excluded != 0
+	f.SyncInitialized = initialized != 0
+	if fullSync.Valid {
+		f.LastFullSyncAt = time.Unix(fullSync.Int64, 0).UTC()
+	}
 	if parent.Valid {
 		f.ParentID = &parent.Int64
 	}

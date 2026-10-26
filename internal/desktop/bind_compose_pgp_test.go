@@ -11,9 +11,11 @@ import (
 
 	"github.com/ProtonMail/go-crypto/openpgp"
 	"github.com/ProtonMail/go-crypto/openpgp/armor"
+	"github.com/ProtonMail/go-crypto/openpgp/packet"
 
 	"github.com/peltonapp/Pelton/internal/crypto"
 	"github.com/peltonapp/Pelton/internal/storage"
+	"github.com/peltonapp/Pelton/internal/storage/storagetest"
 )
 
 func TestCryptoModeMapping(t *testing.T) {
@@ -65,7 +67,7 @@ func pgpTestApp(t *testing.T, own, others []string) (*App, *storage.DB, int64) {
 	t.Helper()
 	ctx, stopBackground := testContext(t)
 	dir := t.TempDir()
-	db, err := storage.Open(filepath.Join(dir, "test.db"))
+	db, err := storagetest.Open(filepath.Join(dir, "test.db"))
 	if err != nil {
 		t.Fatalf("open: %v", err)
 	}
@@ -133,12 +135,17 @@ func writeKeyrings(t *testing.T, dir string, pub, priv []*openpgp.Entity) {
 
 func testEntity(t *testing.T, email string) *openpgp.Entity {
 	t.Helper()
-	ent, err := openpgp.NewEntity("Test", "", email, nil)
+	ent, err := openpgp.NewEntity("Test", "", email, testKeyConfig)
 	if err != nil {
 		t.Fatalf("new entity: %v", err)
 	}
 	return ent
 }
+
+// testKeyConfig makes test keys Ed25519 with a Curve25519 encryption subkey.
+// The default, RSA-2048, took up to a second per key to generate, several
+// under -race, and nothing here depends on the algorithm.
+var testKeyConfig = &packet.Config{Algorithm: packet.PubKeyAlgoEdDSA}
 
 func addr(email string) []AddressDTO { return []AddressDTO{{Email: email}} }
 

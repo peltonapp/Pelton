@@ -14,6 +14,14 @@ LDFLAGS := -X main.version=$(VERSION)
 # webkitgtk.
 WEBKIT_TAGS := $(shell pkg-config --exists webkit2gtk-4.1 2>/dev/null && echo -tags webkit2_41)
 
+# wails adds -mmacosx-version-min=10.13 to the cgo flags unless they already set
+# one, but Info.plist enforces macOS 13 (and Go 1.27 needs it), so build the
+# cgo code for 13 on macOS.
+ifeq ($(shell uname),Darwin)
+export CGO_CFLAGS := $(strip $(CGO_CFLAGS) -mmacosx-version-min=13.0)
+export CGO_LDFLAGS := $(strip $(CGO_LDFLAGS) -mmacosx-version-min=13.0)
+endif
+
 # production build into build/bin
 build:
 	wails build -ldflags "$(LDFLAGS)"

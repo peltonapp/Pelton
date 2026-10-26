@@ -9,6 +9,7 @@ import (
 // An account nobody widened trust for must read back with none, which is what
 // keeps every existing mailbox on the standard verification.
 func TestCertTrustDefaultsEmpty(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	db, id := newAccountTestDB(t)
 
@@ -22,6 +23,7 @@ func TestCertTrustDefaultsEmpty(t *testing.T) {
 }
 
 func TestCreateAccountStoresCertTrust(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	db, _ := newAccountTestDB(t)
 	pins := []string{"aa11", "bb22"}
@@ -42,6 +44,7 @@ func TestCreateAccountStoresCertTrust(t *testing.T) {
 // Trust is set on its own, so a regular edit of the account's servers must not
 // wipe the certificates the user accepted.
 func TestSetAccountCertTrustSurvivesAnUpdate(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	db, id := newAccountTestDB(t)
 
@@ -78,6 +81,7 @@ func TestSetAccountCertTrustSurvivesAnUpdate(t *testing.T) {
 }
 
 func TestSetAccountCertTrustUnknownAccount(t *testing.T) {
+	t.Parallel()
 	db, _ := newAccountTestDB(t)
 	if err := db.SetAccountCertTrust(context.Background(), 9999, nil, ""); err != ErrAccountNotFound {
 		t.Errorf("SetAccountCertTrust(unknown) error = %v, want ErrAccountNotFound", err)

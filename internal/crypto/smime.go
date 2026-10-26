@@ -257,8 +257,7 @@ func chainProblem(err error) string {
 	if errors.As(err, &invalid) && invalid.Reason == x509.Expired {
 		return "the signing certificate has expired"
 	}
-	var unknown x509.UnknownAuthorityError
-	if errors.As(err, &unknown) {
+	if _, ok := errors.AsType[x509.UnknownAuthorityError](err); ok {
 		return "the signing certificate was issued by an authority this computer does not trust"
 	}
 	return "the signing certificate could not be validated"
@@ -393,11 +392,11 @@ func splitOnBoundary(body, delimiter []byte) [][]byte {
 // splitHeaders divides an RFC 822 entity into its header block and body at the
 // first blank line, tolerating bare LF as well as CRLF.
 func splitHeaders(entity []byte) (headers, body []byte, ok bool) {
-	if i := bytes.Index(entity, []byte("\r\n\r\n")); i >= 0 {
-		return entity[:i], entity[i+4:], true
+	if before, after, ok := bytes.Cut(entity, []byte("\r\n\r\n")); ok {
+		return before, after, true
 	}
-	if i := bytes.Index(entity, []byte("\n\n")); i >= 0 {
-		return entity[:i], entity[i+2:], true
+	if before, after, ok := bytes.Cut(entity, []byte("\n\n")); ok {
+		return before, after, true
 	}
 	// an entity with headers and no body is still well formed.
 	return entity, nil, len(entity) > 0

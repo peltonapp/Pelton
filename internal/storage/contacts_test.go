@@ -34,6 +34,7 @@ func saveContact(t *testing.T, db *DB, bookID int64, path, name string, emails .
 // SaveContact is the sync's one write, so the same path arriving again has to
 // land as an update rather than a second contact.
 func TestSaveContactUpsertsByPath(t *testing.T) {
+	t.Parallel()
 	db := newTestDB(t)
 	ctx := context.Background()
 	book := newBook(t, db, "personal")
@@ -62,6 +63,7 @@ func TestSaveContactUpsertsByPath(t *testing.T) {
 // an address removed from a card has to disappear locally too, or autocomplete
 // keeps offering an address the contact no longer has.
 func TestSaveContactReplacesAddresses(t *testing.T) {
+	t.Parallel()
 	db := newTestDB(t)
 	ctx := context.Background()
 	book := newBook(t, db, "personal")
@@ -79,6 +81,7 @@ func TestSaveContactReplacesAddresses(t *testing.T) {
 }
 
 func TestSearchContactsMatchesNameOrAddress(t *testing.T) {
+	t.Parallel()
 	db := newTestDB(t)
 	ctx := context.Background()
 	book := newBook(t, db, "personal")
@@ -105,6 +108,7 @@ func TestSearchContactsMatchesNameOrAddress(t *testing.T) {
 // ContactNames is what lets a synced contact's name win over whatever a sender
 // once put in a From header.
 func TestContactNames(t *testing.T) {
+	t.Parallel()
 	db := newTestDB(t)
 	ctx := context.Background()
 	book := newBook(t, db, "personal")
@@ -125,6 +129,7 @@ func TestContactNames(t *testing.T) {
 // Removing a book removes what it held here. The server keeps its own copy:
 // this is Pelton forgetting the book, not deleting the user's contacts.
 func TestDeleteAddressBookTakesItsContacts(t *testing.T) {
+	t.Parallel()
 	db := newTestDB(t)
 	ctx := context.Background()
 	book := newBook(t, db, "personal")
@@ -152,6 +157,7 @@ func TestDeleteAddressBookTakesItsContacts(t *testing.T) {
 // A sync failure must not throw away the token: the next attempt resumes from
 // where it was rather than reading the whole book again.
 func TestRecordAddressBookSyncKeepsTokenOnFailure(t *testing.T) {
+	t.Parallel()
 	db := newTestDB(t)
 	ctx := context.Background()
 	book := newBook(t, db, "personal")
