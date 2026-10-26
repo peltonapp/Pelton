@@ -48,6 +48,10 @@ type fakeIMAP struct {
 	// succeeds without one.
 	appended   [][]byte
 	failAppend error
+	// drafts is every ReplaceDraft call, in order, and removedDrafts the
+	// Message-IDs RemoveDraft was given.
+	drafts        []draftCall
+	removedDrafts []string
 	// failMove makes MOVE fail, for the paths that have to leave the local cache
 	// alone when the server says no.
 	failMove error
@@ -61,6 +65,21 @@ type fakeIMAP struct {
 	permanentFlags []imap.Flag
 	// flagOps records each STORE as "+flag" or "-flag", in order.
 	flagOps []string
+}
+
+type draftCall struct {
+	mailbox, messageID string
+	raw                []byte
+}
+
+func (f *fakeIMAP) ReplaceDraft(mailbox string, raw []byte, messageID string) error {
+	f.drafts = append(f.drafts, draftCall{mailbox, messageID, raw})
+	return nil
+}
+
+func (f *fakeIMAP) RemoveDraft(_, messageID string) error {
+	f.removedDrafts = append(f.removedDrafts, messageID)
+	return nil
 }
 
 type movedMessage struct {

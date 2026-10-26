@@ -515,6 +515,8 @@ const pt: Record<string, string> = {
   'compose.error.noRecipients': 'Adicione pelo menos um destinatário antes de enviar.',
   'compose.toast.queued': 'Mensagem na fila para envio.',
   'compose.toast.draftSaved': 'Rascunho guardado.',
+  'compose.toast.draftLocalOnly': 'Os rascunhos cifrados não são enviados para o servidor.',
+  'compose.toast.draftUploadFailed': 'Guardado neste dispositivo, mas não foi possível enviar para o servidor: {error}',
   'compose.protection.label': 'Proteção',
   'compose.protection.sign': 'Assinar',
   'compose.protection.encrypt': 'Encriptar',

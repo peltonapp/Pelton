@@ -522,6 +522,8 @@ const zhCN: Record<string, string> = {
   'compose.error.noRecipients': '发送前请至少添加一位收件人。',
   'compose.toast.queued': '邮件已加入发送队列。',
   'compose.toast.draftSaved': '草稿已保存。',
+  'compose.toast.draftLocalOnly': '加密草稿不会上传到服务器。',
+  'compose.toast.draftUploadFailed': '已保存在此设备上，但无法上传到服务器：{error}',
   'compose.protection.label': '保护',
   'compose.protection.sign': '签名',
   'compose.protection.encrypt': '加密',

@@ -63,6 +63,12 @@ type App struct {
 	// searchMu serializes index backfills so a startup pass and a post-sync pass
 	// do not advance the watermark concurrently.
 	searchMu sync.Mutex
+	// draftsMu serializes draft changes: the drafts live in one settings value
+	// and every change is a load, modify, write.
+	draftsMu sync.Mutex
+	// queuedSyncs holds the ids of accounts with a queueSync waiting for
+	// syncMu, so a burst of changes queues one sync rather than one each.
+	queuedSyncs sync.Map
 	// rejectedLogins holds the accounts whose credentials the server refused,
 	// which is not something the keyring can tell us: the password is stored,
 	// it is simply wrong. It is in memory on purpose, since the only way to

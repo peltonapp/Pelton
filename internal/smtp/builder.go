@@ -65,6 +65,10 @@ type Message struct {
 	// is its existing reference chain.
 	InReplyTo  string
 	References []string
+
+	// MessageID is used as the Message-ID header when set. Left empty, a fresh
+	// one is generated. Drafts set it so each save replaces the last copy.
+	MessageID string
 }
 
 // Recipients returns every envelope recipient address, including Bcc. The
@@ -101,7 +105,9 @@ type part struct {
 //	text + html                     -> multipart/alternative
 //	+ inline images (with html)     -> multipart/related  [ alt|html, inline... ]
 //	+ regular attachments           -> multipart/mixed    [ body|related, attach... ]
-func (m *Message) topHeaders() (string, error) {
+//
+// withBcc is only ever true for a draft, which is stored and not transmitted.
+func (m *Message) topHeaders(withBcc bool) (string, string, error) {
 	var b strings.Builder
 	writeHeader(&b, headerFrom, formatAddress(m.From))
 	if len(m.To) > 0 {
@@ -110,12 +116,18 @@ func (m *Message) topHeaders() (string, error) {
 	if len(m.Cc) > 0 {
 		writeHeader(&b, headerCc, formatAddressList(m.Cc))
 	}
+	if withBcc && len(m.Bcc) > 0 {
+		writeHeader(&b, headerBcc, formatAddressList(m.Bcc))
+	}
 	writeHeader(&b, headerSubject, encodeWord(m.Subject))
 	writeHeader(&b, headerDate, nowDate())
 
-	msgID, err := generateMessageID(m.From.Email)
-	if err != nil {
-		return "", err
+	msgID := m.MessageID
+	if msgID == "" {
+		var err error
+		if msgID, err = NewMessageID(m.From.Email); err != nil {
+			return "", "", err
+		}
 	}
 	writeHeader(&b, headerMessageID, msgID)
 
@@ -128,7 +140,7 @@ func (m *Message) topHeaders() (string, error) {
 
 	writeHeader(&b, headerMIMEVersion, mimeVersion)
 	writeHeader(&b, headerUserAgent, userAgent)
-	return b.String(), nil
+	return b.String(), msgID, nil
 }
 
 // contentEntity builds the MIME tree for the message body and attachments.
@@ -304,7 +316,7 @@ func base64Body(content []byte) []byte {
 // variable that is never returned on the failure path, so a message meant to be
 // protected can never be transmitted in the clear.
 func BuildRaw(msg *Message, engine crypto.Engine, mode crypto.Mode, opts crypto.Options) ([]byte, error) {
-	top, err := msg.topHeaders()
+	top, _, err := msg.topHeaders(false)
 	if err != nil {
 		return nil, err
 	}
@@ -341,4 +353,20 @@ func newBoundary() (string, error) {
 		return "", fmt.Errorf("smtp: generate boundary: %w", err)
 	}
 	return fmt.Sprintf("pelton-%x", buf), nil
+}
+
+// BuildDraft builds a message for the server Drafts folder and returns it with
+// its Message-ID. Unlike BuildRaw it keeps the Bcc header, so a reopened draft
+// still has those recipients, and it never signs or encrypts: a draft of a
+// message meant to be encrypted is the caller's to keep off the server.
+func BuildDraft(msg *Message) ([]byte, string, error) {
+	top, msgID, err := msg.topHeaders(true)
+	if err != nil {
+		return nil, "", err
+	}
+	root, err := msg.contentEntity()
+	if err != nil {
+		return nil, "", err
+	}
+	return append([]byte(top), serializePart(root)...), msgID, nil
 }

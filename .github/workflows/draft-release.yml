@@ -136,6 +136,8 @@ jobs:
             const disclaimer = [
               "---",
               "",
+              "The builds are not code signed yet, so Windows may warn on the first launch: choose More info, then Run anyway. We have applied to the [SignPath Foundation](https://signpath.org) for free code signing of the Windows builds.",
+              "",
               "Pelton is free software under the GPL-3.0, provided without warranty and used at your own risk. It connects to your real mailboxes, deletions can be permanent, and Pelton is not a backup tool. Keep your own backup of anything you cannot afford to lose.",
               "",
               `Warranty and liability: [DISCLAIMER.md](https://github.com/${owner}/${repo}/blob/main/DISCLAIMER.md) - [pelton.app/terms](https://pelton.app/terms)`,

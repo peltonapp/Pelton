@@ -515,6 +515,8 @@ const ru: Record<string, string> = {
   'compose.error.noRecipients': 'Добавьте хотя бы одного получателя перед отправкой.',
   'compose.toast.queued': 'Сообщение в очереди на отправку.',
   'compose.toast.draftSaved': 'Черновик сохранён.',
+  'compose.toast.draftLocalOnly': 'Зашифрованные черновики не загружаются на сервер.',
+  'compose.toast.draftUploadFailed': 'Сохранено на этом устройстве, но загрузить на сервер не удалось: {error}',
   'compose.protection.label': 'Защитить',
   'compose.protection.sign': 'Зашифровать',
   'compose.protection.encrypt': 'Расшифровать',

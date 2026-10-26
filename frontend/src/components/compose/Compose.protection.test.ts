@@ -36,6 +36,8 @@ function session(to: string): ComposeSession {
     inReplyTo: '',
     references: [],
     draftId: 0,
+    draftMessageId: '',
+    saved: false,
     fullscreen: false,
     minimized: false,
     signaturesApplied: true,

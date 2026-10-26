@@ -367,6 +367,9 @@ export interface ComposeRequest {
   // 'signencrypt'. The send refuses rather than falling back to plaintext when
   // it cannot do what was asked.
   protection: string
+  // draftMessageId is the Message-ID of this draft's copy in the server Drafts
+  // folder, '' until it has been uploaded.
+  draftMessageId: string
 }
 
 // ProtectionStatus is what the compose window needs to offer the pgp controls

@@ -141,3 +141,49 @@ func headerOnly(s string) string {
 	}
 	return s
 }
+
+// A draft is only stored, never transmitted, so it keeps its Bcc header for
+// reopening, and it keeps a Message-ID it was given so every saved copy of it
+// carries the same one.
+func TestBuildDraft(t *testing.T) {
+	for _, given := range []string{"<draft-1@example.com>", ""} {
+		msg := baseMessage()
+		msg.Bcc = []Address{{Email: "secret@example.com"}}
+		msg.MessageID = given
+
+		raw, id, err := BuildDraft(msg)
+		if err != nil {
+			t.Fatalf("build draft %q: %v", given, err)
+		}
+		if given != "" && id != given {
+			t.Errorf("message id = %q, want the given %q", id, given)
+		}
+		if !strings.HasPrefix(id, "<") || !strings.HasSuffix(id, "@example.com>") {
+			t.Errorf("message id = %q, want <...@example.com>", id)
+		}
+		head := headerOnly(string(raw))
+		if !strings.Contains(head, "Message-ID: "+id) || !strings.Contains(head, "Bcc: secret@example.com") {
+			t.Errorf("draft headers lack Message-ID %s or the Bcc:\n%s", id, head)
+		}
+	}
+}
+
+// The Message-ID borrows the sender's domain, so stray spaces or a line break
+// in the account address must not reach the header.
+func TestNewMessageIDKeepsTheDomainClean(t *testing.T) {
+	for email, domain := range map[string]string{
+		"me@example.com":     "example.com",
+		" me@example.com ":   "example.com",
+		"me@exa mple.com":    fallbackDomain,
+		"me@exa\r\nmple.com": fallbackDomain,
+		"me":                 fallbackDomain,
+	} {
+		id, err := NewMessageID(email)
+		if err != nil {
+			t.Fatalf("NewMessageID(%q): %v", email, err)
+		}
+		if !strings.HasSuffix(id, "@"+domain+">") {
+			t.Errorf("NewMessageID(%q) = %q, want the domain %q", email, id, domain)
+		}
+	}
+}

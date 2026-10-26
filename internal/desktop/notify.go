@@ -1,6 +1,7 @@
 package desktop
 
 import (
+	"fmt"
 	"strconv"
 	"strings"
 
@@ -67,21 +68,22 @@ type notifyStrings struct {
 	vipNewMail  string // title when the sender is a VIP
 	noSubject   string // shown in place of an empty subject
 	fromUnknown string // shown in place of an empty sender
+	summary     string // body of the one notification standing in for a burst, with %d for the count
 }
 
 var notifyLocales = map[string]notifyStrings{
-	"en":    {newMail: "New mail", vipNewMail: "New mail from a VIP", noSubject: "(no subject)", fromUnknown: "Unknown sender"},
-	"de":    {newMail: "Neue Nachricht", vipNewMail: "Neue Nachricht von einem VIP", noSubject: "(kein Betreff)", fromUnknown: "Unbekannter Absender"},
-	"fr":    {newMail: "Nouveau message", vipNewMail: "Nouveau message d'un VIP", noSubject: "(sans objet)", fromUnknown: "Expéditeur inconnu"},
-	"nl":    {newMail: "Nieuw bericht", vipNewMail: "Nieuw bericht van een VIP", noSubject: "(geen onderwerp)", fromUnknown: "Onbekende afzender"},
-	"es":    {newMail: "Nuevo mensaje", vipNewMail: "Nuevo mensaje de un VIP", noSubject: "(sin asunto)", fromUnknown: "Remitente desconocido"},
-	"it":    {newMail: "Nuova email", vipNewMail: "Nuova email da un VIP", noSubject: "(nessun oggetto)", fromUnknown: "Mittente sconosciuto"},
-	"pl":    {newMail: "Nowa wiadomość", vipNewMail: "Nowa wiadomość od VIP-a", noSubject: "(bez tematu)", fromUnknown: "Nieznany nadawca"},
-	"ru":    {newMail: "Новая почта", vipNewMail: "Новая почта от VIP-отправителя", noSubject: "(без темы)", fromUnknown: "Неизвестный отправитель"},
-	"tr":    {newMail: "Yeni posta", vipNewMail: "Bir VIP'ten yeni posta", noSubject: "(konu yok)", fromUnknown: "Bilinmeyen gönderici"},
-	"pt":    {newMail: "Correio novo", vipNewMail: "Correio novo de um VIP", noSubject: "(sem assunto)", fromUnknown: "Remetente desconhecido"},
-	"ar":    {newMail: "بريد جديد", vipNewMail: "بريد جديد من جهة مهمة", noSubject: "(بلا موضوع)", fromUnknown: "مرسل غير معروف"},
-	"zh-CN": {newMail: "新邮件", vipNewMail: "来自 VIP 的新邮件", noSubject: "（无主题）", fromUnknown: "未知发件人"},
+	"en":    {newMail: "New mail", vipNewMail: "New mail from a VIP", noSubject: "(no subject)", fromUnknown: "Unknown sender", summary: "%d new messages"},
+	"de":    {newMail: "Neue Nachricht", vipNewMail: "Neue Nachricht von einem VIP", noSubject: "(kein Betreff)", fromUnknown: "Unbekannter Absender", summary: "%d neue Nachrichten"},
+	"fr":    {newMail: "Nouveau message", vipNewMail: "Nouveau message d'un VIP", noSubject: "(sans objet)", fromUnknown: "Expéditeur inconnu", summary: "%d nouveaux messages"},
+	"nl":    {newMail: "Nieuw bericht", vipNewMail: "Nieuw bericht van een VIP", noSubject: "(geen onderwerp)", fromUnknown: "Onbekende afzender", summary: "%d nieuwe berichten"},
+	"es":    {newMail: "Nuevo mensaje", vipNewMail: "Nuevo mensaje de un VIP", noSubject: "(sin asunto)", fromUnknown: "Remitente desconocido", summary: "%d mensajes nuevos"},
+	"it":    {newMail: "Nuova email", vipNewMail: "Nuova email da un VIP", noSubject: "(nessun oggetto)", fromUnknown: "Mittente sconosciuto", summary: "%d nuove email"},
+	"pl":    {newMail: "Nowa wiadomość", vipNewMail: "Nowa wiadomość od VIP-a", noSubject: "(bez tematu)", fromUnknown: "Nieznany nadawca", summary: "Nowe wiadomości: %d"},
+	"ru":    {newMail: "Новая почта", vipNewMail: "Новая почта от VIP-отправителя", noSubject: "(без темы)", fromUnknown: "Неизвестный отправитель", summary: "Новых писем: %d"},
+	"tr":    {newMail: "Yeni posta", vipNewMail: "Bir VIP'ten yeni posta", noSubject: "(konu yok)", fromUnknown: "Bilinmeyen gönderici", summary: "%d yeni posta"},
+	"pt":    {newMail: "Correio novo", vipNewMail: "Correio novo de um VIP", noSubject: "(sem assunto)", fromUnknown: "Remetente desconhecido", summary: "%d mensagens novas"},
+	"ar":    {newMail: "بريد جديد", vipNewMail: "بريد جديد من جهة مهمة", noSubject: "(بلا موضوع)", fromUnknown: "مرسل غير معروف", summary: "رسائل جديدة: %d"},
+	"zh-CN": {newMail: "新邮件", vipNewMail: "来自 VIP 的新邮件", noSubject: "（无主题）", fromUnknown: "未知发件人", summary: "%d 封新邮件"},
 }
 
 // notifyStringsFor returns the notification text table for lang, falling back to
@@ -109,6 +111,7 @@ func (a *App) notifyNewMail(folder storage.Folder, ids []int64) {
 	}
 
 	s := notifyStringsFor(a.stringSetting(settingLanguage, "en"))
+	var pending []notification
 	for _, id := range ids {
 		if a.ctx.Err() != nil {
 			return
@@ -131,8 +134,26 @@ func (a *App) notifyNewMail(folder storage.Folder, ids []int64) {
 		if vip {
 			title = s.vipNewMail
 		}
-		a.sendNotification(notification{title: title, body: notifyBody(m, s), messageID: m.ID})
+		pending = append(pending, notification{title: title, body: notifyBody(m, s), messageID: m.ID})
 	}
+	for _, n := range collapseNotifications(pending, s) {
+		a.sendNotification(n)
+	}
+}
+
+// notifyBurstLimit is the most notifications one sync of a folder raises one
+// by one. Past it, a single summary stands in for all of them, so opening
+// Pelton after a while away does not bring a flood of alerts.
+const notifyBurstLimit = 3
+
+// collapseNotifications returns list as is, or one summary notification when
+// it holds more than notifyBurstLimit. The summary names no message, so a
+// click on it only shows the window.
+func collapseNotifications(list []notification, s notifyStrings) []notification {
+	if len(list) <= notifyBurstLimit {
+		return list
+	}
+	return []notification{{title: s.newMail, body: fmt.Sprintf(s.summary, len(list))}}
 }
 
 // notifyBody builds the notification body: sender then subject, each falling

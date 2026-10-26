@@ -764,6 +764,34 @@ export function deleteDraft(id: number): Promise<void> {
   return App.DeleteDraft(id)
 }
 
+// uploadDraft puts a saved local draft into the account's server Drafts folder,
+// replacing its previous copy there, and returns the Message-ID it used ('' for a
+// local-only account). Encrypted drafts are refused: they stay on this device.
+export function uploadDraft(id: number): Promise<string> {
+  if (isDemoActive()) {
+    return Promise.resolve('')
+  }
+  return App.UploadDraft(id)
+}
+
+// openDraft looks up the local draft behind a message in a Drafts folder. A
+// draft with id 0 means Pelton on this device did not save that message.
+export function openDraft(messageId: number): Promise<Draft> {
+  if (isDemoActive()) {
+    return Promise.resolve({ id: 0, savedAt: '', request: {} as ComposeRequest, locked: false, accountId: 0, protection: '' })
+  }
+  return App.OpenDraft(messageId)
+}
+
+// removeServerDraft deletes a draft's copy from the server Drafts folder. An
+// empty messageId is a no-op.
+export function removeServerDraft(accountId: number, messageId: string): Promise<void> {
+  if (isDemoActive()) {
+    return Promise.resolve()
+  }
+  return App.RemoveServerDraft(accountId, messageId)
+}
+
 // listOutbox returns the current outbox contents.
 export function listOutbox(): Promise<OutboxRow[]> {
   if (isDemoActive()) {

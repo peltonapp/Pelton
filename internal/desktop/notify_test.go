@@ -6,6 +6,24 @@ import (
 	"github.com/peltonapp/Pelton/internal/storage"
 )
 
+func TestCollapseNotificationsSummarisesABurst(t *testing.T) {
+	s := notifyStringsFor("en")
+	few := []notification{{messageID: 1}, {messageID: 2}, {messageID: 3}}
+	if got := collapseNotifications(few, s); len(got) != 3 {
+		t.Fatalf("up to the limit each message notifies, got %d", len(got))
+	}
+	many := append(few, notification{messageID: 4}, notification{messageID: 5})
+	got := collapseNotifications(many, s)
+	if len(got) != 1 || got[0].body != "5 new messages" || got[0].messageID != 0 {
+		t.Fatalf("a burst should become one summary, got %+v", got)
+	}
+	for lang, l := range notifyLocales {
+		if l.summary == "" {
+			t.Errorf("%s has no summary text", lang)
+		}
+	}
+}
+
 func notifyTestMessage(name, address, subject string) *storage.Message {
 	return &storage.Message{FromName: name, FromAddress: address, Subject: subject}
 }

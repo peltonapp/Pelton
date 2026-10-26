@@ -132,6 +132,7 @@ export function buildRequest(session: ComposeSession): ComposeRequest {
     attachments: session.attachments,
     sendAt: '',
     protection: session.protection,
+    draftMessageId: session.draftMessageId,
   } as ComposeRequest
 }
 

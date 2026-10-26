@@ -515,6 +515,8 @@ const nl: Record<string, string> = {
   'compose.error.noRecipients': 'Voeg minstens één ontvanger toe voordat je verzendt.',
   'compose.toast.queued': 'Bericht in de wachtrij gezet om te verzenden.',
   'compose.toast.draftSaved': 'Concept opgeslagen.',
+  'compose.toast.draftLocalOnly': 'Versleutelde concepten worden niet naar de server geüpload.',
+  'compose.toast.draftUploadFailed': 'Opgeslagen op dit apparaat, maar uploaden naar de server is mislukt: {error}',
   'compose.protection.label': 'Bescherming',
   'compose.protection.sign': 'Ondertekenen',
   'compose.protection.encrypt': 'Versleutelen',

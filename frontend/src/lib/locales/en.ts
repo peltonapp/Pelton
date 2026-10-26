@@ -515,6 +515,8 @@ const en: Record<string, string> = {
   'compose.error.noRecipients': 'Add at least one recipient before sending.',
   'compose.toast.queued': 'Message queued for sending.',
   'compose.toast.draftSaved': 'Draft saved.',
+  'compose.toast.draftLocalOnly': 'Encrypted drafts are not uploaded to the server.',
+  'compose.toast.draftUploadFailed': "Saved on this device, but couldn't upload to the server: {error}",
   'compose.protection.label': 'Protection',
   'compose.protection.sign': 'Sign',
   'compose.protection.encrypt': 'Encrypt',

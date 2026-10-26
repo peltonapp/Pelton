@@ -515,6 +515,8 @@ const fr: Record<string, string> = {
   'compose.error.noRecipients': 'Ajoute au moins un destinataire avant d\'envoyer.',
   'compose.toast.queued': 'Message mis en file d\'attente pour l\'envoi.',
   'compose.toast.draftSaved': 'Brouillon enregistré.',
+  'compose.toast.draftLocalOnly': 'Les brouillons chiffrés ne sont pas envoyés sur le serveur.',
+  'compose.toast.draftUploadFailed': "Enregistré sur cet appareil, mais l'envoi vers le serveur a échoué : {error}",
   'compose.protection.label': 'Protection',
   'compose.protection.sign': 'Signer',
   'compose.protection.encrypt': 'Chiffrer',

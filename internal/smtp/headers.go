@@ -7,12 +7,14 @@ import (
 	"net/mail"
 	"strings"
 	"time"
+	"unicode"
 )
 
 const (
 	headerFrom                    = "From"
 	headerTo                      = "To"
 	headerCc                      = "Cc"
+	headerBcc                     = "Bcc"
 	headerSubject                 = "Subject"
 	headerDate                    = "Date"
 	headerMessageID               = "Message-ID"
@@ -80,9 +82,9 @@ func formatAddressList(addrs []Address) string {
 	return strings.Join(parts, ", ")
 }
 
-// generateMessageID builds a unique Message-ID using the sender's domain so it
+// NewMessageID builds a unique Message-ID using the sender's domain so it
 // looks like it came from that host.
-func generateMessageID(senderEmail string) (string, error) {
+func NewMessageID(senderEmail string) (string, error) {
 	buf := make([]byte, messageIDBytes)
 	if _, err := rand.Read(buf); err != nil {
 		return "", fmt.Errorf("smtp: generate message id: %w", err)
@@ -92,10 +94,19 @@ func generateMessageID(senderEmail string) (string, error) {
 
 // domainOf returns the part after the @ in an address, or a safe fallback.
 func domainOf(email string) string {
-	if i := strings.LastIndexByte(email, '@'); i >= 0 && i < len(email)-1 {
-		return email[i+1:]
+	email = strings.TrimSpace(email)
+	i := strings.LastIndexByte(email, '@')
+	if i < 0 || i == len(email)-1 {
+		return fallbackDomain
 	}
-	return fallbackDomain
+	domain := email[i+1:]
+	// anything that cannot sit in a header, like a line break, falls back.
+	if strings.ContainsFunc(domain, func(r rune) bool {
+		return unicode.IsSpace(r) || unicode.IsControl(r) || r == '<' || r == '>'
+	}) {
+		return fallbackDomain
+	}
+	return domain
 }
 
 // referenceChain builds the References header value for a reply. The chain is

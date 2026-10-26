@@ -515,6 +515,8 @@ const tr: Record<string, string> = {
   'compose.error.noRecipients': 'Göndermeden önce en az bir alıcı ekleyin.',
   'compose.toast.queued': 'İleti gönderilmek üzere sıraya alındı.',
   'compose.toast.draftSaved': 'Taslak kaydedildi.',
+  'compose.toast.draftLocalOnly': 'Şifreli taslaklar sunucuya yüklenmez.',
+  'compose.toast.draftUploadFailed': 'Bu cihaza kaydedildi ancak sunucuya yüklenemedi: {error}',
   'compose.protection.label': 'Koruma',
   'compose.protection.sign': 'İmzala',
   'compose.protection.encrypt': 'Şifrele',

@@ -172,6 +172,9 @@ Refer to our [Documentation (docs.pelton.app)](https://docs.pelton.app/install/)
 
 *We also support copr (dnf). We also have rpm and deb packages as well as a generic binary. Find installation instructions [here (docs.pelton.app/install/linux](https://docs.pelton.app/install/linux/)*
 
+> [!NOTE]
+> The builds are not code signed yet, so Windows may warn on the first launch: choose **More info**, then **Run anyway**. We have applied to the [SignPath Foundation](https://signpath.org) for free code signing of the Windows builds.
+
 ## <img src="https://api.iconify.design/tabler/tag.svg?color=white" width="26" style="vertical-align: -4px;"> Versioning
 
 Up to and including **1.0.9**, Pelton used semantic versioning. From the next release onward it uses **Calendar Versioning** in the form:

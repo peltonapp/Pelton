@@ -1,9 +1,18 @@
+<script module lang="ts">
+  // pending is each session's draft save (local save, then server upload) still
+  // in flight. It outlives the pane (save and close returns before the upload
+  // does), and the next save, send or discard waits on it so it reads the draft
+  // id and Message-ID that save stored rather than making a second copy.
+  const pending = new Map<number, Promise<void>>()
+</script>
+
 <script lang="ts">
   // a single compose pane. it edits one session: addresses, subject, the body in
   // the chosen editor mode, and attachments. the floating pane can be minimized
   // to its title bar or expanded to fill the window. markdown mode gets a
   // formatting toolbar and a github-style live preview. send enqueues to the
-  // outbox (with the undo-send window when enabled); save stores a local draft.
+  // outbox (with the undo-send window when enabled); save stores a local draft
+  // and uploads a copy to the server Drafts folder.
   import { formatWeekdayTime, type TimeFormat } from '../../lib/format'
   import { onMount, tick } from 'svelte'
   import {
@@ -30,11 +39,11 @@
   import AttachmentPicker from './AttachmentPicker.svelte'
   import DateTimePicker from '../common/DateTimePicker.svelte'
   import { currentUIScale } from '../../theme/theme'
-  import { updateCompose, closeCompose, closeRequest, setComposeFullscreenDefault, type ComposeSession } from '../../stores/compose'
+  import { updateCompose, closeCompose, closeRequest, getSession, restoreSession, setComposeFullscreenDefault, type ComposeSession } from '../../stores/compose'
   import { signatures, signatureById, getAccountSignatures } from '../../stores/signatures'
   import type { Signature } from '../../lib/types'
   import { sidebar } from '../../stores/accounts'
-  import { sendMessage, saveDraft, deleteDraft } from '../../lib/api'
+  import { sendMessage, saveDraft, deleteDraft, uploadDraft, removeServerDraft } from '../../lib/api'
   import { loadOutbox } from '../../stores/outbox'
   import { scheduleUndo } from '../../stores/undosend'
   import { prefs } from '../../stores/prefs'
@@ -46,7 +55,7 @@
   import { composeProtectionStatus } from '../../lib/api'
   import type { ProtectionStatus } from '../../lib/types'
   import { atTime, addDays, nextWeekday } from '../../lib/datepresets'
-  import { errorMessage, toastError, toastSuccess } from '../../stores/toast'
+  import { errorMessage, toastError, toastInfo, toastSuccess } from '../../stores/toast'
   import type CodeMirrorEditor from './CodeMirrorEditor.svelte'
   import type RichEditorView from './RichEditor.svelte'
 
@@ -71,9 +80,13 @@
   let statusFor = ''
   // suggestedApplied keeps the account default from overriding a choice the
   // user made: it is a starting point, once, not a correction.
-  let suggestedApplied = false
+  // A saved draft keeps the protection it was saved with.
+  let suggestedApplied = session.saved
   let preview = false
   let confirmClose = false
+  // savedAs is the draft as last saved, so closing it unchanged asks nothing.
+  // A session that opens as a saved draft starts out saved.
+  let savedAs = session.saved ? draftState(session) : ''
 
   // send-later dropdown state: caret toggles the menu, presets are built fresh
   // each time it opens so "tomorrow" is always relative to now. the menu is
@@ -365,14 +378,15 @@
     }
     sending = true
     try {
-      const snapshot: ComposeSession = { ...session }
-      const req = buildRequest(session)
+      const current = await settled()
+      const snapshot: ComposeSession = { ...current }
+      const req = buildRequest(current)
       if (scheduledAt) {
         req.sendAt = scheduledAt.toISOString()
       }
       const id = await sendMessage(req)
-      if (session.draftId) {
-        await deleteDraft(session.draftId)
+      if (current.draftId) {
+        await deleteDraft(current.draftId)
       }
       await loadOutbox()
       closeCompose(session.id)
@@ -413,13 +427,57 @@
     await send()
   }
 
-  async function save(): Promise<void> {
-    try {
-      const id = await saveDraft(session.draftId, buildRequest(session))
-      updateCompose(session.id, { draftId: id })
+  // settled waits for this session's save in flight and returns the session as
+  // it stands afterwards, carrying the draft id and Message-ID it stored.
+  async function settled(): Promise<ComposeSession> {
+    await pending.get(session.id)
+    return getSession(session.id) ?? session
+  }
+
+  // save stores the draft locally, runs saved (the pane closing, for save and
+  // close), and puts a copy in the server Drafts folder. It is queued behind
+  // the session's save already in flight before anything awaits.
+  function save(saved?: () => void): Promise<void> {
+    const id = session.id
+    const run = (pending.get(id) ?? Promise.resolve()).then(async () => {
+      const current = getSession(id) ?? session
+      const draftId = await saveDraft(current.draftId, buildRequest(current))
+      updateCompose(id, { draftId })
+      savedAs = draftState(current)
       toastSuccess($t('compose.toast.draftSaved'))
+      saved?.()
+      await upload(current, draftId)
+    })
+    const done = run.catch((err) => toastError(errorMessage(err)))
+    pending.set(id, done)
+    void done.then(() => {
+      if (pending.get(id) === done) {
+        pending.delete(id)
+      }
+    })
+    return done
+  }
+
+  // upload replaces the draft's server copy. An encrypted draft is not uploaded,
+  // and a plaintext copy an earlier save left there is removed.
+  async function upload(current: ComposeSession, draftId: number): Promise<void> {
+    if (current.protection === 'encrypt' || current.protection === 'signencrypt') {
+      toastInfo($t('compose.toast.draftLocalOnly'))
+      if (current.draftMessageId) {
+        await removeServerDraft(current.accountId, current.draftMessageId)
+        updateCompose(current.id, { draftMessageId: '' })
+      }
+      return
+    }
+    try {
+      updateCompose(current.id, { draftMessageId: await uploadDraft(draftId) })
     } catch (err) {
-      toastError(errorMessage(err))
+      toastError($t('compose.toast.draftUploadFailed').replace('{error}', errorMessage(err)))
+      // a pane that save and close already shut comes back, since nothing
+      // could open a draft kept only on this device.
+      if (!getSession(current.id)) {
+        restoreSession({ ...current, draftId })
+      }
     }
   }
 
@@ -487,33 +545,30 @@
     requestClose()
   }
 
+  // draftState is what a save would store, minus the server link it gains after.
+  function draftState(s: ComposeSession): string {
+    return JSON.stringify({ ...buildRequest(s), draftMessageId: '' })
+  }
+
   function requestClose(): void {
-    if (hasContent()) {
+    if (hasContent() && draftState(session) !== savedAs) {
       confirmClose = true
       return
     }
     closeCompose(session.id)
   }
 
-  async function saveAndClose(): Promise<void> {
-    try {
-      await saveDraft(session.draftId, buildRequest(session))
-      toastSuccess($t('compose.toast.draftSaved'))
-      closeCompose(session.id)
-    } catch (err) {
-      toastError(errorMessage(err))
-    }
+  function saveAndClose(): Promise<void> {
+    return save(() => closeCompose(session.id))
   }
 
+  // discardAndClose drops the edits since the last save. A saved draft stays,
+  // locally and on the server, and a pane never saved has nothing stored. A
+  // save still running finishes first, so its failed upload does not bring the
+  // discarded pane back.
   async function discardAndClose(): Promise<void> {
     confirmClose = false
-    try {
-      if (session.draftId) {
-        await deleteDraft(session.draftId)
-      }
-    } catch (err) {
-      toastError(errorMessage(err))
-    }
+    await settled()
     closeCompose(session.id)
   }
 </script>
@@ -666,7 +721,7 @@
         status={protectionStatus}
         on:change={(e) => updateCompose(session.id, { protection: e.detail })}
       />
-      <button type="button" class="save" on:click={save}>
+      <button type="button" class="save" on:click={() => save()}>
         <IconDeviceFloppy size={15} stroke={1.6} />
         {$t('action.saveDraft')}
       </button>

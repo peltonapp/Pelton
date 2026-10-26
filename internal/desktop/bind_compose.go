@@ -2,10 +2,14 @@ package desktop
 
 import (
 	"encoding/base64"
+	"errors"
 	"fmt"
+	"slices"
+	"strings"
 	"time"
 
 	"github.com/peltonapp/Pelton/internal/smtp"
+	"github.com/peltonapp/Pelton/internal/storage"
 )
 
 // ErrSendAtInvalid is returned when a ComposeRequest.SendAt string does not
@@ -56,6 +60,10 @@ type ComposeRequest struct {
 	// it from the account default and what the keys actually allow, and the
 	// send refuses rather than falling back to plaintext.
 	Protection string `json:"protection"`
+	// DraftMessageID is the Message-ID of the server copy of this draft, empty
+	// until one has been uploaded. It is only for replacing that copy: a sent
+	// message gets a Message-ID of its own.
+	DraftMessageID string `json:"draftMessageId"`
 }
 
 // SendMessage builds the mime message and enqueues it in the durable outbox. The
@@ -240,10 +248,9 @@ func (a *App) buildMessage(req ComposeRequest) (*smtp.Message, error) {
 }
 
 // DraftDTO is a locally saved unsent draft. Drafts are stored in the settings
-// table as json for now. Appending drafts to the server Drafts folder needs a
-// live imap connection and credentials, which arrive with the account-setup and
-// keyring step; until then drafts are local only.
-// TODO(backend): once credentials exist, also AppendToDrafts on the imap client.
+// table as json. UploadDraft also puts a copy in the account's Drafts folder on
+// the server; the local one stays the copy Pelton edits, since it keeps what
+// the server copy cannot be trusted to bring back.
 // A draft of a message the user chose to encrypt is not stored as it stands:
 // the point of encrypting it was that its contents are not to sit around
 // readable, and an unsent draft is no different from a sent one in that
@@ -280,17 +287,55 @@ type storedDraft struct {
 // draftsKey is the settings key holding the json array of local drafts.
 const draftsKey = "local_drafts"
 
+// maxSafeDraftID is the largest id a JavaScript number holds exactly. Draft ids
+// travel to the frontend as numbers, and a larger one comes back rounded to a
+// different id.
+const maxSafeDraftID int64 = 1<<53 - 1
+
+// ErrDraftNotFound is returned when a draft is saved under an id that is not in
+// the list, instead of reporting a save that wrote nothing.
+var ErrDraftNotFound = errors.New("pelton: this draft no longer exists")
+
+// nextDraftID is one above the highest id in use.
+func nextDraftID(drafts []storedDraft) int64 {
+	var highest int64
+	for _, d := range drafts {
+		highest = max(highest, d.ID)
+	}
+	return highest + 1
+}
+
+// renumberUnsafeDraftIDs gives every draft whose id a JavaScript number cannot
+// hold a fresh small id, and reports whether it changed anything.
+func renumberUnsafeDraftIDs(drafts []storedDraft) bool {
+	var next int64
+	for _, d := range drafts {
+		if d.ID <= maxSafeDraftID {
+			next = max(next, d.ID)
+		}
+	}
+	changed := false
+	for i := range drafts {
+		if drafts[i].ID > maxSafeDraftID {
+			next++
+			drafts[i].ID = next
+			changed = true
+		}
+	}
+	return changed
+}
+
 // SaveDraft stores a compose request as a local draft and returns its id. An id
 // of 0 in the request creates a new draft; a non zero id replaces that draft.
 func (a *App) SaveDraft(id int64, req ComposeRequest) (int64, error) {
 	if err := a.ready(); err != nil {
 		return 0, err
 	}
-	drafts, err := a.loadDrafts()
-	if err != nil {
-		return 0, err
+	if req.DraftMessageID != "" {
+		if err := checkMessageID(req.DraftMessageID); err != nil {
+			return 0, err
+		}
 	}
-
 	entry := storedDraft{
 		ID:         id,
 		SavedAt:    time.Now().UTC().Format(time.RFC3339),
@@ -308,22 +353,52 @@ func (a *App) SaveDraft(id int64, req ComposeRequest) (int64, error) {
 			return 0, err
 		}
 		entry.Sealed = sealed
-		entry.Request = ComposeRequest{AccountID: req.AccountID, Protection: req.Protection}
+		// the Message-ID stays in the clear: it is what finds a plaintext copy
+		// an earlier save put on the server, so a failed removal can be retried.
+		entry.Request = ComposeRequest{AccountID: req.AccountID, Protection: req.Protection, DraftMessageID: req.DraftMessageID}
+	} else if req.DraftMessageID == "" {
+		// the Message-ID is fixed at the first save, so every server copy of
+		// this draft carries the same one, whatever the composer still knows.
+		acc, err := a.store.GetAccount(a.ctx, req.AccountID)
+		if err != nil {
+			return 0, err
+		}
+		if entry.Request.DraftMessageID, err = smtp.NewMessageID(acc.Email); err != nil {
+			return 0, err
+		}
 	}
 
+	a.draftsMu.Lock()
+	defer a.draftsMu.Unlock()
+	drafts, err := a.loadDrafts()
+	if err != nil {
+		return 0, err
+	}
 	if id == 0 {
-		entry.ID = time.Now().UnixNano()
+		entry.ID = nextDraftID(drafts)
 		id = entry.ID
 		drafts = append(drafts, entry)
-	}
-	for i := range drafts {
-		if drafts[i].ID == id {
-			entry.ID = id
-			drafts[i] = entry
+	} else {
+		i := slices.IndexFunc(drafts, func(d storedDraft) bool { return d.ID == id })
+		if i < 0 {
+			return 0, ErrDraftNotFound
 		}
+		if kept := drafts[i].Request.DraftMessageID; kept != "" {
+			entry.Request.DraftMessageID = kept
+		}
+		drafts[i] = entry
 	}
 	if err := a.store.SetJSON(a.ctx, draftsKey, drafts); err != nil {
 		return 0, err
+	}
+	// a draft now sealed must leave no plaintext copy on the server. Every
+	// sealed save tries again, and DeleteDraft once more on send or delete.
+	if messageID := entry.Request.DraftMessageID; entry.Sealed != "" && messageID != "" {
+		goSafe("removing the plaintext copy of an encrypted draft", func() {
+			if err := a.RemoveServerDraft(entry.AccountID, messageID); err != nil {
+				a.log.Error("remove plaintext draft from the server", "err", err)
+			}
+		})
 	}
 	return id, nil
 }
@@ -335,7 +410,9 @@ func (a *App) ListDrafts() ([]DraftDTO, error) {
 	if err := a.ready(); err != nil {
 		return nil, err
 	}
+	a.draftsMu.Lock()
 	drafts, err := a.loadDrafts()
+	a.draftsMu.Unlock()
 	if err != nil {
 		return nil, err
 	}
@@ -376,7 +453,9 @@ func (a *App) UnsealDraft(id int64, passphrase string) (DraftDTO, error) {
 	if err := a.ready(); err != nil {
 		return DraftDTO{}, err
 	}
+	a.draftsMu.Lock()
 	drafts, err := a.loadDrafts()
+	a.draftsMu.Unlock()
 	if err != nil {
 		return DraftDTO{}, err
 	}
@@ -399,25 +478,44 @@ func (a *App) UnsealDraft(id int64, passphrase string) (DraftDTO, error) {
 	return DraftDTO{}, fmt.Errorf("pelton: draft %d not found", id)
 }
 
-// DeleteDraft removes a local draft by id.
+// DeleteDraft removes a local draft by id, and its copy in the server Drafts
+// folder in the background.
 func (a *App) DeleteDraft(id int64) error {
 	if err := a.ready(); err != nil {
 		return err
 	}
+	a.draftsMu.Lock()
+	defer a.draftsMu.Unlock()
 	drafts, err := a.loadDrafts()
 	if err != nil {
 		return err
 	}
+	var gone storedDraft
 	kept := drafts[:0]
 	for _, d := range drafts {
 		if d.ID != id {
 			kept = append(kept, d)
+		} else {
+			gone = d
 		}
 	}
-	return a.store.SetJSON(a.ctx, draftsKey, kept)
+	if err := a.store.SetJSON(a.ctx, draftsKey, kept); err != nil {
+		return err
+	}
+	// the server copy goes too, found by the Message-ID stored here, since the
+	// composer may never have learned it. A failure costs a stale server copy.
+	if messageID := gone.Request.DraftMessageID; messageID != "" {
+		goSafe("removing a deleted draft", func() {
+			if err := a.RemoveServerDraft(gone.AccountID, messageID); err != nil {
+				a.log.Error("remove deleted draft from the server", "err", err)
+			}
+		})
+	}
+	return nil
 }
 
-// loadDrafts reads the drafts json, treating an unset key as an empty list.
+// loadDrafts reads the drafts json, treating an unset key as an empty list. It
+// may write the list back, so the caller holds draftsMu.
 func (a *App) loadDrafts() ([]storedDraft, error) {
 	var drafts []storedDraft
 	err := a.store.GetJSON(a.ctx, draftsKey, &drafts)
@@ -427,7 +525,188 @@ func (a *App) loadDrafts() ([]storedDraft, error) {
 		}
 		return nil, err
 	}
+	if renumberUnsafeDraftIDs(drafts) {
+		if err := a.store.SetJSON(a.ctx, draftsKey, drafts); err != nil {
+			return nil, err
+		}
+	}
 	return drafts, nil
+}
+
+// ErrProtectedDraftStaysLocal is returned by UploadDraft for a draft of a
+// message to be encrypted. Such a draft is never put on the server in the
+// clear; the frontend does not ask, and this is the boundary if it does.
+var ErrProtectedDraftStaysLocal = errors.New("pelton: a draft of an encrypted message stays on this device")
+
+// UploadDraft puts the local draft id in its account's Drafts folder on the
+// server, replacing the copy an earlier upload put there, and returns the
+// Message-ID that links the two, fixed by SaveDraft. A sign-only draft goes up
+// unsigned, since signing happens at send. An unknown id is ErrDraftNotFound, a draft to be encrypted is
+// ErrProtectedDraftStaysLocal, and an account with no server uploads nothing
+// and returns "".
+func (a *App) UploadDraft(id int64) (string, error) {
+	if err := a.ready(); err != nil {
+		return "", err
+	}
+	a.draftsMu.Lock()
+	drafts, err := a.loadDrafts()
+	a.draftsMu.Unlock()
+	if err != nil {
+		return "", err
+	}
+	i := slices.IndexFunc(drafts, func(d storedDraft) bool { return d.ID == id })
+	if i < 0 {
+		return "", ErrDraftNotFound
+	}
+	draft := drafts[i]
+	if draft.Sealed != "" || encrypts(draft.Protection) {
+		return "", ErrProtectedDraftStaysLocal
+	}
+	account, err := a.store.GetAccount(a.ctx, draft.AccountID)
+	if err != nil {
+		return "", err
+	}
+	if account.Local {
+		return "", nil
+	}
+
+	msg, err := a.buildMessage(draft.Request)
+	if err != nil {
+		return "", err
+	}
+	msg.MessageID = draft.Request.DraftMessageID
+	raw, messageID, err := smtp.BuildDraft(msg)
+	if err != nil {
+		return "", err
+	}
+	mailbox, err := a.draftsFolder(account.ID)
+	if err != nil {
+		return "", err
+	}
+	cfg, err := a.resolveIMAP(*account)
+	if err != nil {
+		return "", err
+	}
+	// no syncMu: a sync can hold it for minutes, and saving a draft must not
+	// wait for that. A second short login is the cheaper cost.
+	if err := a.withIMAPSession(cfg, func(client mailClient) error {
+		return client.ReplaceDraft(mailbox, raw, messageID)
+	}); err != nil {
+		return "", err
+	}
+	a.queueSync(*account)
+	return messageID, nil
+}
+
+// ErrNoDraftsFolder means the account has no folder Pelton uses as Drafts.
+var ErrNoDraftsFolder = errors.New(`pelton: this account has no Drafts folder. Create one, or pick "Use as…" and Drafts on an existing folder`)
+
+// draftsFolder is the path of the folder the folder list shows as the
+// account's Drafts: one the user picked by hand first, then the server's
+// \Drafts folder or one named Drafts.
+func (a *App) draftsFolder(accountID int64) (string, error) {
+	folders, err := a.store.ListFolders(a.ctx, accountID)
+	if err != nil {
+		return "", err
+	}
+	if i := slices.IndexFunc(folders, func(f storage.Folder) bool { return f.RoleOverride == roleDrafts }); i >= 0 {
+		return folders[i].IMAPPath, nil
+	}
+	if i := slices.IndexFunc(folders, func(f storage.Folder) bool { return folderRole(f) == roleDrafts }); i >= 0 {
+		return folders[i].IMAPPath, nil
+	}
+	return "", ErrNoDraftsFolder
+}
+
+// RemoveServerDraft deletes the server copy of a draft by its Message-ID. An
+// empty Message-ID, or an account with no server, does nothing; one that is
+// not a single <local@domain> is errBadMessageID.
+func (a *App) RemoveServerDraft(accountID int64, messageID string) error {
+	if strings.Trim(strings.TrimSpace(messageID), "<>") == "" {
+		return nil
+	}
+	if err := checkMessageID(messageID); err != nil {
+		return err
+	}
+	if err := a.ready(); err != nil {
+		return err
+	}
+	account, err := a.store.GetAccount(a.ctx, accountID)
+	if err != nil {
+		return err
+	}
+	if account.Local {
+		return nil
+	}
+	mailbox, err := a.draftsFolder(account.ID)
+	if err != nil {
+		return err
+	}
+	cfg, err := a.resolveIMAP(*account)
+	if err != nil {
+		return err
+	}
+	// no syncMu, for the same reason as UploadDraft.
+	if err := a.withIMAPSession(cfg, func(client mailClient) error {
+		return client.RemoveDraft(mailbox, messageID)
+	}); err != nil {
+		return err
+	}
+	a.queueSync(*account)
+	return nil
+}
+
+// errBadMessageID is returned for a draft Message-ID from the frontend that is
+// not a single <local@domain>. It goes into a header of the server copy, where
+// a line break would start a header of its own.
+var errBadMessageID = errors.New("pelton: a draft Message-ID must have the form <local@domain>")
+
+// checkMessageID returns errBadMessageID unless id is <local@domain> with no
+// whitespace, control characters, brackets or second @ inside.
+func checkMessageID(id string) error {
+	inner, ok := strings.CutPrefix(id, "<")
+	if ok {
+		inner, ok = strings.CutSuffix(inner, ">")
+	}
+	local, domain, _ := strings.Cut(inner, "@")
+	invalid := func(r rune) bool { return r <= ' ' || r == 0x7f || strings.ContainsRune("<>@", r) }
+	if !ok || local == "" || domain == "" || strings.ContainsFunc(local+domain, invalid) {
+		return fmt.Errorf("%w: %q", errBadMessageID, id)
+	}
+	return nil
+}
+
+// OpenDraft returns the local draft behind a message in a Drafts folder, given
+// the message's storage id, so the composer can edit it. ID is 0 when the
+// message is not a draft Pelton saved on this device; such a draft is shown
+// read-only, since rebuilding it from the cached message would drop
+// attachments, Bcc and remote content.
+func (a *App) OpenDraft(messageID int64) (DraftDTO, error) {
+	if err := a.ready(); err != nil {
+		return DraftDTO{}, err
+	}
+	m, err := a.store.GetMessage(a.ctx, messageID)
+	if err != nil {
+		return DraftDTO{}, err
+	}
+	// sync stores the Message-ID without its angle brackets, the builder
+	// writes it with them.
+	want := strings.Trim(m.MessageID, "<>")
+	if want == "" {
+		return DraftDTO{}, nil
+	}
+	a.draftsMu.Lock()
+	drafts, err := a.loadDrafts()
+	a.draftsMu.Unlock()
+	if err != nil {
+		return DraftDTO{}, err
+	}
+	for _, d := range drafts {
+		if strings.Trim(d.Request.DraftMessageID, "<>") == want {
+			return a.toDraftDTO(d), nil
+		}
+	}
+	return DraftDTO{}, nil
 }
 
 // OutboxRowDTO is one queued or failed message for the outbox view.
