@@ -3,7 +3,9 @@ package desktop
 import (
 	"fmt"
 
+	pimap "github.com/peltonapp/Pelton/internal/imap"
 	"github.com/peltonapp/Pelton/internal/storage"
+	psync "github.com/peltonapp/Pelton/internal/sync"
 )
 
 // Fetching older mail on demand (#175). A first sync only caches a folder's
@@ -117,7 +119,7 @@ func (a *App) backfillAccount(accountID int64, folders []storage.Folder) (int, b
 	}
 	defer client.Logout()
 
-	engine := a.newSyncEngine(client, accountID)
+	engine := a.newSyncEngine(pimap.NewAdapter(client), accountID)
 	email := a.accountEmail(accountID)
 	// a backfill is a sync run of its own as far as the progress bar is
 	// concerned: a known number of older messages, fetched now.
@@ -132,6 +134,11 @@ func (a *App) backfillAccount(accountID int64, folders []storage.Folder) (int, b
 		a.syncTally.enterFolder(i, f.Name)
 		a.emitSyncProgress(accountID, email, client.Addr(), a.syncTally.counts())
 		res, err := engine.BackfillFolder(a.ctx, f, batch)
+		if psync.IsSoftError(err) {
+			// an unreadable message stays a stub; the page itself landed.
+			a.log.Warn("backfill folder", "folder", f.Name, "err", err)
+			err = nil
+		}
 		if err != nil {
 			a.log.Error("backfill folder", "folder", f.Name, "err", err)
 			continue

@@ -199,8 +199,8 @@ func RemoteHosts(html string) []string {
 	for _, m := range matches {
 		host := strings.ToLower(strings.TrimSpace(m[1]))
 		// drop any leading userinfo and trailing port for a clean host.
-		if at := strings.LastIndex(host, "@"); at >= 0 {
-			host = host[at+1:]
+		if _, after, ok := strings.CutLast(host, "@"); ok {
+			host = after
 		}
 		if colon := strings.IndexByte(host, ':'); colon >= 0 {
 			host = host[:colon]

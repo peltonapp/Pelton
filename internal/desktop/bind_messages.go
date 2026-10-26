@@ -85,6 +85,11 @@ func (a *App) GetMessage(id int64) (MessageDetailDTO, error) {
 	if err != nil {
 		return MessageDetailDTO{}, err
 	}
+	// a stub the sync has not filled yet is fetched now, so the pane gets
+	// the whole message or an error, never an empty body.
+	if m, err = a.ensureBody(m); err != nil {
+		return MessageDetailDTO{}, err
+	}
 
 	email, folderName := a.lookupContext(a.ctx, m.AccountID, m.FolderID)
 	summary := toSummaryDTO(*m, email, folderName)

@@ -42,3 +42,21 @@ func (c *Client) SearchSince(since time.Time) ([]imap.UID, error) {
 	}
 	return data.AllUIDs(), nil
 }
+
+// SearchAllUIDs returns every UID in the selected mailbox, asking for the
+// compact ESEARCH form when the server offers it, which keeps the answer a few
+// ranges long even for a large mailbox.
+func (c *Client) SearchAllUIDs() ([]imap.UID, error) {
+	if c.selectedMailbox() == nil {
+		return nil, fmt.Errorf("imap: no mailbox selected for search")
+	}
+	var options *imap.SearchOptions
+	if c.raw.Caps().Has(imap.CapESearch) {
+		options = &imap.SearchOptions{ReturnAll: true}
+	}
+	data, err := c.raw.UIDSearch(&imap.SearchCriteria{}, options).Wait()
+	if err != nil {
+		return nil, fmt.Errorf("imap: search all uids: %w", err)
+	}
+	return data.AllUIDs(), nil
+}

@@ -337,7 +337,7 @@ func (a *App) syncFolders(client mailClient, accountID int64) error {
 			folders = append(folders, f)
 		}
 	}
-	engine := a.newSyncEngine(client, accountID)
+	engine := a.newSyncEngine(pimap.NewAdapter(client), accountID)
 	email := a.accountEmail(accountID)
 	a.syncTally.begin(len(folders))
 
@@ -352,6 +352,12 @@ func (a *App) syncFolders(client mailClient, accountID int64) error {
 		a.syncTally.enterFolder(i, f.Name)
 		a.emitSyncProgress(accountID, email, client.Addr(), a.syncTally.counts())
 		res, err := engine.SyncFolder(a.ctx, f)
+		if psync.IsSoftError(err) {
+			// unreadable messages stay stubs and a refused push stays
+			// pending; the folder synced, so its new mail is announced.
+			a.log.Warn("sync folder", "folder", f.Name, "err", err)
+			err = nil
+		}
 		if err != nil {
 			a.log.Error("sync folder", "folder", f.Name, "err", err)
 			failedFolders = append(failedFolders, f.Name)
@@ -429,9 +435,15 @@ func (a *App) syncOneFolder(client mailClient, folder storage.Folder) error {
 	if folder.SyncExcluded {
 		return nil
 	}
-	engine := a.newSyncEngine(client, folder.AccountID)
+	engine := a.newSyncEngine(pimap.NewAdapter(client), folder.AccountID)
 
 	res, err := engine.SyncFolder(a.ctx, folder)
+	if psync.IsSoftError(err) {
+		// unreadable messages stay stubs and a refused push stays
+		// pending; the folder synced, so its new mail is announced.
+		a.log.Warn("sync folder", "folder", folder.Name, "err", err)
+		err = nil
+	}
 	if err != nil {
 		return err
 	}
@@ -533,29 +545,30 @@ func (a *App) idleSession(ctx context.Context, account storage.Account) error {
 // newSyncEngine builds a sync engine for one account with the settings every
 // caller needs, including where deleted mail goes. Roles are resolved here
 // because the sync package does not know about them.
-func (a *App) newSyncEngine(client mailClient, accountID int64) *psync.Engine {
-	engine := psync.NewEngine(client, a.store, a.log)
+func (a *App) newSyncEngine(adapter psync.Adapter, accountID int64) *psync.Engine {
+	engine := psync.NewEngine(adapter, a.store, a.log)
 	engine.ColorSync = a.boolSetting(settingFlagColorSync, false)
 	engine.InitialLimit = a.syncMessageLimit()
-	// a message the user pressed send on goes out during a sync, not after it.
-	engine.YieldTo = a.outboxPending
-	// and the list fills as mail arrives rather than staying empty until the
-	// whole folder is down.
+	// Stored ids are announced as they land, so the list fills as mail arrives
+	// rather than staying empty until the whole folder is down.
 	engine.OnStored = a.announceStored
 	// the counts behind the progress bar. The account and server are captured
 	// here because the engine does not know them and the line names them.
 	email := a.accountEmail(accountID)
-	// the trash-folder tests build an engine with no client, and a progress line
+	// the trash-folder tests build an engine with no adapter, and a progress line
 	// is not worth a panic over.
 	server := ""
-	if client != nil {
-		server = client.Addr()
+	if adapter != nil {
+		server = adapter.Addr()
 	}
 	engine.OnProgress = func(p psync.FolderProgress) {
 		a.emitSyncProgress(accountID, email, server, a.syncTally.record(p))
 	}
 	if trash, ok := a.findTrashFolder(accountID); ok {
-		engine.TrashPath = trash.IMAPPath
+		engine.TrashRemoteID = trash.RemoteID
+		if engine.TrashRemoteID == "" {
+			engine.TrashRemoteID = trash.IMAPPath
+		}
 		engine.TrashFolderID = trash.ID
 	}
 	return engine
@@ -647,15 +660,6 @@ func (a *App) accountEmail(accountID int64) string {
 		return ""
 	}
 	return account.Email
-}
-
-// outboxPending reports whether anything is waiting to be sent. Sync asks it
-// between messages and stands aside while it is true.
-func (a *App) outboxPending() bool {
-	if a.queue == nil {
-		return false
-	}
-	return a.queue.Pending(a.ctx)
 }
 
 // announceStored tells the ui about mail stored so far in a folder that is

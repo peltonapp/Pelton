@@ -18,17 +18,26 @@ type Mailbox struct {
 	UIDNext     imap.UID
 	// UIDValidity invalidates cached UIDs when it changes.
 	UIDValidity uint32
+	// HighestModSeq is the mailbox's CONDSTORE mod-sequence, or 0 when the
+	// server has no CONDSTORE or reports NOMODSEQ for this mailbox.
+	HighestModSeq uint64
 }
 
 // MessageHeader is the envelope-level summary used for listings.
 type MessageHeader struct {
-	SeqNum  uint32
-	UID     imap.UID
-	Subject string
-	From    string
-	To      string
-	Date    time.Time
-	Flags   []imap.Flag
+	SeqNum   uint32
+	UID      imap.UID
+	Subject  string
+	From     string
+	FromName string
+	To       string
+	Date     time.Time
+	Flags    []imap.Flag
+	// Size is RFC822.SIZE when the fetch asked for it, else 0.
+	Size int64
+	// HasEnvelope is true when this header was filled from a FETCH ENVELOPE.
+	// A flags-only snapshot leaves it false.
+	HasEnvelope bool
 }
 
 // Message is a fully parsed message with extracted bodies and attachments.
@@ -73,10 +82,11 @@ type Message struct {
 type Attachment = rfc822.Attachment
 
 // Select opens a mailbox. IMAP selects one mailbox per connection, so this
-// must precede the fetch and flag methods.
+// must precede the fetch and flag methods. When the server offers CONDSTORE the
+// mailbox is selected with it, so HighestModSeq is filled.
 func (c *Client) Select(mailbox string) (*Mailbox, error) {
 	// go-imap encodes non-ASCII names as modified UTF-7 when needed
-	data, err := c.raw.Select(mailbox, nil).Wait()
+	data, err := c.raw.Select(mailbox, &imap.SelectOptions{CondStore: c.raw.Caps().Has(imap.CapCondStore)}).Wait()
 	if err != nil {
 		c.setSelectedMailbox(nil)
 		return nil, fmt.Errorf("imap: select %q: %w", mailbox, err)
@@ -86,6 +96,8 @@ func (c *Client) Select(mailbox string) (*Mailbox, error) {
 		NumMessages: data.NumMessages,
 		UIDNext:     data.UIDNext,
 		UIDValidity: data.UIDValidity,
+
+		HighestModSeq: data.HighestModSeq,
 	}
 	// recorded from the response we already hold rather than read back off the
 	// client afterwards, which is racy. See Client.selected.
@@ -142,8 +154,8 @@ func bodyFetchOptions() (*imap.FetchItemBodySection, *imap.FetchOptions) {
 	}
 }
 
-// FetchMessages fetches a set of messages in one command and hands each to fn as
-// it arrives.
+// FetchMessages fetches a set of messages in one command (more when the UID
+// set would make the line too long) and hands each to fn as it arrives.
 //
 // One command rather than one per message is the difference between a first
 // sync being bound by bandwidth and being bound by round trips: 14k messages
@@ -161,7 +173,16 @@ func (c *Client) FetchMessages(uids []imap.UID, fn func(uid imap.UID, msg *Messa
 		return nil
 	}
 	section, options := bodyFetchOptions()
-	cmd := c.raw.Fetch(imap.UIDSetNum(uids...), options)
+	for _, set := range splitUIDSet(uids, c.uidSetBytes()) {
+		if err := c.fetchMessages(set, len(uids), section, options, fn); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (c *Client) fetchMessages(set imap.UIDSet, batch int, section *imap.FetchItemBodySection, options *imap.FetchOptions, fn func(uid imap.UID, msg *Message, err error) error) error {
+	cmd := c.raw.Fetch(set, options)
 	defer cmd.Close()
 
 	for {
@@ -171,7 +192,7 @@ func (c *Client) FetchMessages(uids []imap.UID, fn func(uid imap.UID, msg *Messa
 		}
 		buf, err := data.Collect()
 		if err != nil {
-			return fmt.Errorf("imap: fetch batch of %d: %w", len(uids), err)
+			return fmt.Errorf("imap: fetch batch of %d: %w", batch, err)
 		}
 		raw := buf.FindBodySection(section)
 		if raw == nil {
@@ -190,7 +211,7 @@ func (c *Client) FetchMessages(uids []imap.UID, fn func(uid imap.UID, msg *Messa
 		}
 	}
 	if err := cmd.Close(); err != nil {
-		return fmt.Errorf("imap: fetch batch of %d: %w", len(uids), err)
+		return fmt.Errorf("imap: fetch batch of %d: %w", batch, err)
 	}
 	return nil
 }
@@ -288,15 +309,76 @@ func (c *Client) FetchAllFlags() ([]MessageHeader, error) {
 	return headers, nil
 }
 
+// FetchFlagsChangedSince returns UID and flags for every message in the
+// selected mailbox whose mod-sequence is above modSeq (RFC 7162 CHANGEDSINCE).
+// It needs a mailbox selected with CONDSTORE.
+func (c *Client) FetchFlagsChangedSince(modSeq uint64) ([]MessageHeader, error) {
+	mbox := c.selectedMailbox()
+	if mbox == nil {
+		return nil, fmt.Errorf("imap: no mailbox selected")
+	}
+	if mbox.NumMessages == 0 {
+		return nil, nil
+	}
+	seqSet := imap.SeqSet{}
+	seqSet.AddRange(1, mbox.NumMessages)
+	buffers, err := c.raw.Fetch(seqSet, &imap.FetchOptions{Flags: true, UID: true, ChangedSince: modSeq}).Collect()
+	if err != nil {
+		return nil, fmt.Errorf("imap: fetch flags changed since %d: %w", modSeq, err)
+	}
+	headers := make([]MessageHeader, 0, len(buffers))
+	for _, b := range buffers {
+		headers = append(headers, MessageHeader{UID: b.UID, Flags: b.Flags})
+	}
+	return headers, nil
+}
+
+// FetchHeaders fetches the requested items for uids in one UID FETCH, or a
+// few when the UID set would make the line too long (see uidSetBytes).
+// Callers that only need list stubs pass ENVELOPE and UID, with no body
+// section.
+func (c *Client) FetchHeaders(uids []imap.UID, options *imap.FetchOptions) ([]MessageHeader, error) {
+	if len(uids) == 0 {
+		return nil, nil
+	}
+	if c.selectedMailbox() == nil {
+		return nil, fmt.Errorf("imap: no mailbox selected")
+	}
+	if options == nil {
+		options = &imap.FetchOptions{Envelope: true, UID: true}
+	}
+	headers := make([]MessageHeader, 0, len(uids))
+	for _, set := range splitUIDSet(uids, c.uidSetBytes()) {
+		buffers, err := c.raw.Fetch(set, options).Collect()
+		if err != nil {
+			return nil, fmt.Errorf("imap: fetch envelopes: %w", err)
+		}
+		for _, b := range buffers {
+			headers = append(headers, headerFromBuffer(b))
+		}
+	}
+	return headers, nil
+}
+
 func headerFromBuffer(b *imapclient.FetchMessageBuffer) MessageHeader {
-	h := MessageHeader{SeqNum: b.SeqNum, UID: b.UID, Flags: b.Flags}
+	h := MessageHeader{SeqNum: b.SeqNum, UID: b.UID, Flags: b.Flags, Size: b.RFC822Size}
 	if b.Envelope != nil {
+		h.HasEnvelope = true
 		h.Subject, _ = charsetguess.Text(b.Envelope.Subject)
 		h.From = formatAddresses(b.Envelope.From)
+		h.FromName = envelopeName(b.Envelope.From)
 		h.To = formatAddresses(b.Envelope.To)
 		h.Date = b.Envelope.Date
 	}
 	return h
+}
+
+func envelopeName(addrs []imap.Address) string {
+	if len(addrs) == 0 {
+		return ""
+	}
+	name, _ := charsetguess.Text(addrs[0].Name)
+	return name
 }
 
 // parseBody extracts text, HTML and attachment metadata from a raw message.
