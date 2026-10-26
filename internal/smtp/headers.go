@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"mime"
 	"net/mail"
+	"slices"
 	"strings"
 	"time"
 )
@@ -92,8 +93,8 @@ func generateMessageID(senderEmail string) (string, error) {
 
 // domainOf returns the part after the @ in an address, or a safe fallback.
 func domainOf(email string) string {
-	if i := strings.LastIndexByte(email, '@'); i >= 0 && i < len(email)-1 {
-		return email[i+1:]
+	if _, domain, ok := strings.CutLast(email, "@"); ok && domain != "" {
+		return domain
 	}
 	return fallbackDomain
 }
@@ -116,12 +117,7 @@ func referenceChain(references []string, inReplyTo string) string {
 }
 
 func contains(list []string, s string) bool {
-	for _, v := range list {
-		if v == s {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(list, s)
 }
 
 // nowDate renders the current time in the rfc 5322 layout. Split out so callers

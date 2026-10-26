@@ -29,6 +29,7 @@
     getProxyConfig,
   } from '../../lib/api'
   import CertificateReview from '../common/CertificateReview.svelte'
+  import AddMailboxDialog from '../wizard/AddMailboxDialog.svelte'
   import AccountRouteFields from '../common/AccountRouteFields.svelte'
   import { routeSummary } from '../../lib/proxyroute'
   import { refreshSidebar } from '../../stores/accounts'
@@ -100,10 +101,9 @@
     }
   }
 
+  // the dialog stays open after 'added' for the folder picker and done step.
   function onMailboxAdded(): void {
-    wizardOpen = false
     void load()
-    void refreshSidebar()
   }
 
   async function load(): Promise<void> {
@@ -706,9 +706,7 @@
 {/if}
 
 {#if wizardOpen}
-  {#await import('../wizard/AddMailboxWizard.svelte') then m}
-    <svelte:component this={m.default} on:close={() => (wizardOpen = false)} on:added={onMailboxAdded} />
-  {/await}
+  <AddMailboxDialog on:close={() => (wizardOpen = false)} on:added={onMailboxAdded} />
 {/if}
 
 <style>

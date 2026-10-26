@@ -342,6 +342,7 @@ export namespace desktop {
 	export class ArchiveUndoDTO {
 	    messageId: string;
 	    originalFolderId: number;
+	    destFolderId: number;
 	    exportPath: string;
 	    exportError: string;
 	
@@ -353,6 +354,7 @@ export namespace desktop {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.messageId = source["messageId"];
 	        this.originalFolderId = source["originalFolderId"];
+	        this.destFolderId = source["destFolderId"];
 	        this.exportPath = source["exportPath"];
 	        this.exportError = source["exportError"];
 	    }

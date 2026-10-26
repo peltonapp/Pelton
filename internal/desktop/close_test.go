@@ -5,13 +5,13 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/peltonapp/Pelton/internal/storage"
+	"github.com/peltonapp/Pelton/internal/storage/storagetest"
 )
 
 func newCloseTestApp(t *testing.T) *App {
 	t.Helper()
 	ctx, stopBackground := testContext(t)
-	store, err := storage.Open(filepath.Join(t.TempDir(), "test.db"))
+	store, err := storagetest.Open(filepath.Join(t.TempDir(), "test.db"))
 	if err != nil {
 		t.Fatalf("open store: %v", err)
 	}

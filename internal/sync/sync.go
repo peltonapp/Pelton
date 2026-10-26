@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"slices"
 	"time"
 
 	"github.com/emersion/go-imap/v2"
@@ -410,8 +411,7 @@ func (e *Engine) executePlan(ctx context.Context, folder storage.Folder, plan []
 	// it takes to reach the present (#175); back to front puts the newest mail on
 	// screen within seconds. Nothing else in the plan is order-sensitive: the
 	// decisions are independent per uid and deletes are batched at the end.
-	for i := len(plan) - 1; i >= 0; i-- {
-		d := plan[i]
+	for _, d := range slices.Backward(plan) {
 		if d.Conflict {
 			res.Conflicts++
 		}

@@ -213,3 +213,38 @@ func TestAccountProxyPasswordIsSeparate(t *testing.T) {
 		t.Errorf("global proxy password = %q, %v, want it untouched", got, err)
 	}
 }
+
+// A dev run and a nightly keep their own databases, so their account ids start
+// at 1 just like the installed app's. Their secrets must not land on the
+// installed app's entries, or testing a build overwrites the real password.
+func TestUseServiceKeepsInstallsApart(t *testing.T) {
+	const accountID = 1
+	t.Cleanup(func() {
+		for _, name := range []string{"Pelton", "Pelton-dev"} {
+			UseService(name)
+			_ = Delete(accountID)
+		}
+		UseService(defaultService)
+	})
+
+	UseService("Pelton")
+	if err := Store(accountID, Secret{Method: MethodPassword, Password: "real"}); err != nil {
+		t.Fatalf("store stable: %v", err)
+	}
+	UseService("Pelton-dev")
+	if _, err := Load(accountID); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("dev Load of the stable account returned %v, want ErrNotFound", err)
+	}
+	if err := Store(accountID, Secret{Method: MethodPassword, Password: "alice-e2e"}); err != nil {
+		t.Fatalf("store dev: %v", err)
+	}
+
+	UseService("Pelton")
+	got, err := Load(accountID)
+	if err != nil {
+		t.Fatalf("load stable: %v", err)
+	}
+	if got.Password != "real" {
+		t.Errorf("stable password = %q after a dev store, want %q", got.Password, "real")
+	}
+}
