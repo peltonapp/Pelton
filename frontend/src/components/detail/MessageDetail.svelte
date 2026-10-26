@@ -17,6 +17,7 @@
   import { visibleMessageId, hasTabs, activeTabId, tabs, markTabStale, labelTab, closeTab } from '../../stores/tabs'
   import { openMessageId } from '../../stores/selection'
   import { messageDetail, loadMessage, clearMessage } from '../../stores/message'
+  import { isBodyFetchError } from '../../lib/bodyfetcherror'
   import { setFlagged, deleteMessage, archiveMessage, scanMessage } from '../../lib/api'
   import { reportArchiveExport, dropDeleted } from '../../lib/messageactions'
   import {
@@ -63,7 +64,9 @@
   $: if ($activeTabId !== null && $messageDetail.status === 'ready' && $messageDetail.data) {
     labelTab($activeTabId, $messageDetail.data.subject)
   }
-  $: if ($activeTabId !== null && $messageDetail.status === 'error') {
+  // a stub whose body could not be fetched still exists: it keeps its tab
+  // and shows the error with a retry.
+  $: if ($activeTabId !== null && $messageDetail.status === 'error' && !isBodyFetchError($messageDetail.error)) {
     markTabStale($activeTabId)
   }
 
@@ -171,9 +174,7 @@
     try {
       const undo = await archiveMessage(detail.id)
       reportArchiveExport(undo)
-      if (undo.messageId) {
-        recordArchived(detail, undo.messageId, undo.originalFolderId)
-      }
+      recordArchived(detail, undo)
       removeFromList(detail.id)
       dismiss(detail.id)
     } catch (err) {

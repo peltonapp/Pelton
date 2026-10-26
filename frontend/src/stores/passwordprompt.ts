@@ -20,6 +20,13 @@ export type PasswordPromptResult = 'saved' | 'skipped' | 'dismissed'
 export const passwordPrompt = writable<Account | null>(null)
 
 /**
+ * Whether a sync of every account already follows the open prompt. When it
+ * does (the prompt came from runSync), the dialog must not start its own sync
+ * of the account on save, or the mailbox syncs twice in a row.
+ */
+export const passwordPromptSyncFollows = writable(false)
+
+/**
  * The accounts that cannot sync because no password is stored, dismissed ones
  * included. The sidebar and the settings list mark these.
  */
@@ -33,7 +40,7 @@ const skipped = new Set<number>()
 
 // one dialog at a time. A click on a second mailbox's marker while the first is
 // open queues rather than losing the click or replacing what is on screen.
-const queue: { account: Account; resolve: (result: PasswordPromptResult) => void }[] = []
+const queue: { account: Account; syncFollows: boolean; resolve: (result: PasswordPromptResult) => void }[] = []
 let active: ((result: PasswordPromptResult) => void) | null = null
 
 /**
@@ -59,10 +66,13 @@ export async function refreshMissingPasswords(): Promise<Account[]> {
   return pending
 }
 
-/** Opens the prompt for one account and resolves once it is answered. */
-export function askForPassword(account: Account): Promise<PasswordPromptResult> {
+/**
+ * Opens the prompt for one account and resolves once it is answered.
+ * syncFollows says the caller syncs the account itself afterwards.
+ */
+export function askForPassword(account: Account, syncFollows = false): Promise<PasswordPromptResult> {
   return new Promise<PasswordPromptResult>((resolve) => {
-    queue.push({ account, resolve })
+    queue.push({ account, syncFollows, resolve })
     if (!active) {
       next()
     }
@@ -74,9 +84,11 @@ function next(): void {
   if (!entry) {
     active = null
     passwordPrompt.set(null)
+    passwordPromptSyncFollows.set(false)
     return
   }
   active = entry.resolve
+  passwordPromptSyncFollows.set(entry.syncFollows)
   passwordPrompt.set(entry.account)
 }
 
@@ -112,12 +124,17 @@ export function answerPasswordPrompt(result: PasswordPromptResult): void {
  * Asks about every account that has no stored password, one after another.
  * Accounts the user dismissed or already skipped this session are left alone:
  * they keep their marker instead.
+ *
+ * syncFollows is for runSync alone, which syncs every account once this
+ * returns, so its prompts must not sync on their own. Any other caller (the
+ * Thunderbird import) leaves it off: there a saved password is what starts
+ * the account's first sync.
  */
-export async function promptForMissingPasswords(): Promise<void> {
+export async function promptForMissingPasswords(syncFollows = false): Promise<void> {
   for (const account of await refreshMissingPasswords()) {
     if (dismissed.has(account.id) || skipped.has(account.id)) {
       continue
     }
-    await askForPassword(account)
+    await askForPassword(account, syncFollows)
   }
 }

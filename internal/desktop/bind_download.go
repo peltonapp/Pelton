@@ -9,6 +9,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strconv"
 	"sync/atomic"
 	"time"
 
@@ -398,15 +399,19 @@ func (a *App) planAccount(ctx context.Context, account storage.Account, since ti
 	return tasks, nil
 }
 
-// cachedUIDs returns the set of uids already stored for a folder.
+// cachedUIDs returns the set of uids already stored with their body for a
+// folder. A stub (body not fetched yet) is left out, so the download fetches
+// it and fills it in place.
 func (a *App) cachedUIDs(folderID int64) (map[uint32]struct{}, error) {
-	states, err := a.store.ListMessageStates(a.ctx, folderID)
+	states, err := a.store.MessageBodyStates(a.ctx, folderID, time.Time{})
 	if err != nil {
 		return nil, err
 	}
 	set := make(map[uint32]struct{}, len(states))
 	for _, s := range states {
-		set[s.UID] = struct{}{}
+		if s.BodyComplete {
+			set[s.UID] = struct{}{}
+		}
 	}
 	return set, nil
 }
@@ -481,8 +486,28 @@ func (a *App) downloadAccount(ctx context.Context, account storage.Account, task
 }
 
 // fetchAndPin fetches one message and stores it pinned offline. Attachment bytes
-// are persisted only when includeAttachments is set.
+// are persisted only when includeAttachments is set. A message cached as a
+// stub is filled by the engine's body fill instead (fillStubOnSession), with
+// its attachments, and pinned once its body is stored.
 func (a *App) fetchAndPin(client mailClient, task dlTask, includeAttachments bool) error {
+	remoteID := strconv.FormatUint(uint64(task.uid), 10)
+	if id, err := a.store.MessageIDByRemoteID(a.ctx, task.folder.ID, remoteID); err == nil {
+		if need, err := a.store.MessageNeedsBody(a.ctx, id); err != nil {
+			return err
+		} else if need {
+			if err := a.fillStubOnSession(a.ctx, client, task.folder, remoteID); err != nil {
+				return err
+			}
+			if need, err := a.store.MessageNeedsBody(a.ctx, id); err != nil {
+				return err
+			} else if need {
+				return fmt.Errorf("stub %s was not filled", remoteID)
+			}
+		}
+		return a.store.SetOffline(a.ctx, id, true)
+	} else if !errors.Is(err, storage.ErrMessageNotFound) {
+		return err
+	}
 	msg, err := client.FetchMessage(imap.UID(task.uid))
 	if err != nil {
 		return err
@@ -514,7 +539,17 @@ func (a *App) fetchAndPin(client mailClient, task dlTask, includeAttachments boo
 			})
 		}
 	}
-	id, err := a.store.InsertMessageWithAttachments(a.ctx, stored, atts)
+	// stored under the folder generation the plan read: a folder reset to
+	// another one since then stores nothing (ErrBodyTargetChanged).
+	id, err := a.store.InsertFetchedMessage(a.ctx, storage.BodyTarget{UIDValidity: task.folder.UIDValidity}, stored, atts)
+	if errors.Is(err, storage.ErrBodyTargetChanged) {
+		a.log.Warn("download: folder reset meanwhile, message skipped", "folder", task.folder.Name, "uid", task.uid)
+		return nil
+	}
+	if errors.Is(err, storage.ErrMessageBodyComplete) {
+		// a sync filled the stub meanwhile: it is readable, so it is pinned.
+		id, err = a.store.MessageIDByRemoteID(a.ctx, task.folder.ID, strconv.FormatUint(uint64(task.uid), 10))
+	}
 	if err != nil {
 		return err
 	}

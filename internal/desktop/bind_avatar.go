@@ -95,7 +95,7 @@ func lookupBIMI(domain string) string {
 		return ""
 	}
 	for _, rec := range records {
-		for _, part := range strings.Split(rec, ";") {
+		for part := range strings.SplitSeq(rec, ";") {
 			part = strings.TrimSpace(part)
 			if strings.HasPrefix(strings.ToLower(part), "l=") {
 				return strings.TrimSpace(part[2:])
