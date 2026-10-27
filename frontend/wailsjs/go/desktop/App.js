@@ -238,6 +238,10 @@ export function DownloadRange(arg1, arg2) {
   return window['go']['desktop']['App']['DownloadRange'](arg1, arg2);
 }
 
+export function DraftSubjects(arg1) {
+  return window['go']['desktop']['App']['DraftSubjects'](arg1);
+}
+
 export function EmptyTrash(arg1) {
   return window['go']['desktop']['App']['EmptyTrash'](arg1);
 }

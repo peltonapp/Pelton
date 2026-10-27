@@ -1,7 +1,7 @@
 // passphrase.ts drives the prompt for a locked PGP private key (#192). The
-// prompt is raised from wherever a locked key is needed (settings today,
-// decryption and signing later), so the request goes through this store rather
-// than each caller rendering its own copy of the dialog.
+// prompt is raised from wherever a locked key is needed (settings, opening a
+// sealed draft), so the request goes through this store rather than each
+// caller rendering its own copy of the dialog.
 //
 // The passphrase itself never lands in this store: the dialog hands it straight
 // to the backend, which verifies it against the key and holds it for the

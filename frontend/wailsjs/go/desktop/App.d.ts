@@ -120,6 +120,8 @@ export function DownloadMessageOffline(arg1:number):Promise<void>;
 
 export function DownloadRange(arg1:string,arg2:boolean):Promise<void>;
 
+export function DraftSubjects(arg1:number):Promise<Record<string, string>>;
+
 export function EmptyTrash(arg1:number):Promise<number>;
 
 export function ExportData(arg1:Array<string>,arg2:string):Promise<string>;

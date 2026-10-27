@@ -66,6 +66,18 @@ type App struct {
 	// draftsMu serializes draft changes: the drafts live in one settings value
 	// and every change is a load, modify, write.
 	draftsMu sync.Mutex
+	// sealedDrafts is the last saved request of each sealed draft, held in
+	// memory only under draftsMu, so UploadDraft can encrypt its server copy
+	// without the passphrase unsealing would take.
+	sealedDrafts map[draftKey]ComposeRequest
+	// draftUploadLocks holds a *sync.Mutex per draftKey, taken around each
+	// upload of the draft so they take turns.
+	draftUploadLocks sync.Map
+	// uploadingCopies holds, under draftsMu, the Message-IDs of the draft
+	// copies being uploaded right now, which no queued removal may touch yet.
+	uploadingCopies map[string]struct{}
+	// draftRemovalsMu runs one drain of the draft removal queue at a time.
+	draftRemovalsMu sync.Mutex
 	// queuedSyncs holds the ids of accounts with a queueSync waiting for
 	// syncMu, so a burst of changes queues one sync rather than one each.
 	queuedSyncs sync.Map

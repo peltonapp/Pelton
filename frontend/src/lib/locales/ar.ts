@@ -515,7 +515,6 @@ const ar: Record<string, string> = {
   'compose.error.noRecipients': 'أضف مستلماً واحداً على الأقل قبل الإرسال.',
   'compose.toast.queued': 'الرسالة في قائمة انتظار الإرسال.',
   'compose.toast.draftSaved': 'تم حفظ المسودة.',
-  'compose.toast.draftLocalOnly': 'لا تُرفع المسودات المشفرة إلى الخادم.',
   'compose.toast.draftUploadFailed': 'حُفظت على هذا الجهاز، لكن تعذر رفعها إلى الخادم: {error}',
   'compose.protection.label': 'الحماية',
   'compose.protection.sign': 'توقيع',

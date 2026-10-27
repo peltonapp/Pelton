@@ -46,12 +46,14 @@ func (d *DB) Get(ctx context.Context, key string) (string, error) {
 	return value, nil
 }
 
-// Set writes key to value, inserting or updating, and bumps updated_at.
-func (d *DB) Set(ctx context.Context, key, value string) error {
-	const query = `
+// upsertSetting writes one setting, inserting or updating, with its write time.
+const upsertSetting = `
 INSERT INTO settings (key, profile_id, value, updated_at) VALUES (?, ?, ?, ?)
 ON CONFLICT(key, profile_id) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at`
-	if _, err := d.sql.ExecContext(ctx, query, key, d.settingsProfile(), value, nowText()); err != nil {
+
+// Set writes key to value, inserting or updating, and bumps updated_at.
+func (d *DB) Set(ctx context.Context, key, value string) error {
+	if _, err := d.sql.ExecContext(ctx, upsertSetting, key, d.settingsProfile(), value, nowText()); err != nil {
 		return fmt.Errorf("storage: set setting %q: %w", key, err)
 	}
 	return nil
@@ -113,6 +115,62 @@ func (d *DB) SetJSON(ctx context.Context, key string, value any) error {
 		return fmt.Errorf("storage: encode json setting %q: %w", key, err)
 	}
 	return d.Set(ctx, key, string(encoded))
+}
+
+// SettingsScope is the profile whose settings rows the store reads and writes
+// right now. Work that must stay with the profile it started in, across a
+// switch, keeps it and reads and writes with GetJSONIn and SetJSONsIn.
+func (d *DB) SettingsScope() int64 { return d.settingsProfile() }
+
+// GetJSONIn is GetJSON on the settings of profile scope.
+func (d *DB) GetJSONIn(ctx context.Context, scope int64, key string, target any) error {
+	var raw string
+	err := d.sql.QueryRowContext(ctx,
+		`SELECT value FROM settings WHERE key = ? AND profile_id = ?`, key, scope).Scan(&raw)
+	if errors.Is(err, sql.ErrNoRows) {
+		return ErrSettingNotFound
+	}
+	if err != nil {
+		return fmt.Errorf("storage: get setting %q: %w", key, err)
+	}
+	if err := json.Unmarshal([]byte(raw), target); err != nil {
+		return fmt.Errorf("storage: decode json setting %q: %w", key, err)
+	}
+	return nil
+}
+
+// ScopedSetting names one setting of one profile.
+type ScopedSetting struct {
+	Scope int64
+	Key   string
+}
+
+// SetJSONsIn marshals each value to json and writes them all in one
+// transaction, each to its profile: either every one is written or none is.
+func (d *DB) SetJSONsIn(ctx context.Context, values map[ScopedSetting]any) error {
+	encoded := make(map[ScopedSetting]string, len(values))
+	for at, value := range values {
+		raw, err := json.Marshal(value)
+		if err != nil {
+			return fmt.Errorf("storage: encode json setting %q: %w", at.Key, err)
+		}
+		encoded[at] = string(raw)
+	}
+	tx, err := d.sql.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("storage: begin settings write: %w", err)
+	}
+	defer tx.Rollback()
+	now := nowText()
+	for at, value := range encoded {
+		if _, err := tx.ExecContext(ctx, upsertSetting, at.Key, at.Scope, value, now); err != nil {
+			return fmt.Errorf("storage: set setting %q: %w", at.Key, err)
+		}
+	}
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("storage: commit settings write: %w", err)
+	}
+	return nil
 }
 
 // Setting pairs a key/value with its last write time, used by config sync to

@@ -94,6 +94,23 @@ type part struct {
 	boundary    string
 }
 
+// headerSet is which top-level headers a built message carries.
+type headerSet int
+
+const (
+	// headersSend is everything but Bcc, for a message that is transmitted.
+	headersSend headerSet = iota
+	// headersDraft adds Bcc, for a draft that is only stored.
+	headersDraft
+	// headersHidden leaves out every header that says what the message is
+	// about: recipients, thread, and the subject, which becomes hiddenSubject.
+	headersHidden
+)
+
+// hiddenSubject stands in for the subject of an encrypted draft, the same
+// placeholder Thunderbird shows for an encrypted subject.
+const hiddenSubject = "..."
+
 // topHeaders builds the message's top-level rfc 5322 headers, without a trailing
 // blank line so the content entity's own headers follow directly. Bcc is
 // deliberately omitted from the transmitted headers.
@@ -105,22 +122,25 @@ type part struct {
 //	text + html                     -> multipart/alternative
 //	+ inline images (with html)     -> multipart/related  [ alt|html, inline... ]
 //	+ regular attachments           -> multipart/mixed    [ body|related, attach... ]
-//
-// withBcc is only ever true for a draft, which is stored and not transmitted.
-func (m *Message) topHeaders(withBcc bool) (string, string, error) {
+func (m *Message) topHeaders(set headerSet, date string) (string, string, error) {
 	var b strings.Builder
 	writeHeader(&b, headerFrom, formatAddress(m.From))
-	if len(m.To) > 0 {
+	hidden := set == headersHidden
+	if !hidden && len(m.To) > 0 {
 		writeHeader(&b, headerTo, formatAddressList(m.To))
 	}
-	if len(m.Cc) > 0 {
+	if !hidden && len(m.Cc) > 0 {
 		writeHeader(&b, headerCc, formatAddressList(m.Cc))
 	}
-	if withBcc && len(m.Bcc) > 0 {
+	if set == headersDraft && len(m.Bcc) > 0 {
 		writeHeader(&b, headerBcc, formatAddressList(m.Bcc))
 	}
-	writeHeader(&b, headerSubject, encodeWord(m.Subject))
-	writeHeader(&b, headerDate, nowDate())
+	if hidden {
+		writeHeader(&b, headerSubject, hiddenSubject)
+	} else {
+		writeHeader(&b, headerSubject, encodeWord(m.Subject))
+	}
+	writeHeader(&b, headerDate, date)
 
 	msgID := m.MessageID
 	if msgID == "" {
@@ -131,16 +151,70 @@ func (m *Message) topHeaders(withBcc bool) (string, string, error) {
 	}
 	writeHeader(&b, headerMessageID, msgID)
 
-	if m.InReplyTo != "" {
+	if !hidden && m.InReplyTo != "" {
 		writeHeader(&b, headerInReplyTo, m.InReplyTo)
 	}
-	if refs := referenceChain(m.References, m.InReplyTo); refs != "" {
+	if refs := referenceChain(m.References, m.InReplyTo); !hidden && refs != "" {
 		writeHeader(&b, headerReferences, refs)
 	}
 
 	writeHeader(&b, headerMIMEVersion, mimeVersion)
 	writeHeader(&b, headerUserAgent, userAgent)
 	return b.String(), msgID, nil
+}
+
+// protectHeaders puts the message's real headers on root, the part that gets
+// encrypted, marked protected-headers="v1" (draft-autocrypt-lamps-protected-
+// headers), which is where Thunderbird and other clients that decrypt the
+// message read its subject, recipients and thread from. Bcc is among them,
+// since only a draft, encrypted to its author alone, carries protected
+// headers. A value with a line break that is not a header fold is refused
+// rather than written: inside the encryption it would start a header of its
+// own.
+func (m *Message) protectHeaders(root *part, date, msgID string) error {
+	var headers [][2]string
+	add := func(key, value string) {
+		if value != "" {
+			headers = append(headers, [2]string{key, value})
+		}
+	}
+	add(headerFrom, formatAddress(m.From))
+	add(headerTo, formatAddressList(m.To))
+	add(headerCc, formatAddressList(m.Cc))
+	add(headerBcc, formatAddressList(m.Bcc))
+	// Subject goes in even when empty: a client replaces the clear "..." only
+	// with a protected Subject it finds.
+	headers = append(headers, [2]string{headerSubject, encodeWord(m.Subject)})
+	add(headerDate, date)
+	add(headerMessageID, msgID)
+	add(headerInReplyTo, m.InReplyTo)
+	add(headerReferences, referenceChain(m.References, m.InReplyTo))
+	for _, h := range headers {
+		if !isHeaderValue(h[1]) {
+			return fmt.Errorf("smtp: the %s of this draft holds a line break", h[0])
+		}
+	}
+	root.contentType += `; protected-headers="v1"`
+	root.headers = append(headers, root.headers...)
+	return nil
+}
+
+// isHeaderValue reports whether v can be written as a header value as it
+// stands: no control characters but tab, and line breaks only as folds, a
+// crlf followed by a space or tab.
+func isHeaderValue(v string) bool {
+	for i := 0; i < len(v); i++ {
+		switch c := v[i]; {
+		case c == '\r':
+			if i+2 >= len(v) || v[i+1] != '\n' || (v[i+2] != ' ' && v[i+2] != '\t') {
+				return false
+			}
+			i++
+		case c < ' ' && c != '\t', c == 0x7f:
+			return false
+		}
+	}
+	return true
 }
 
 // contentEntity builds the MIME tree for the message body and attachments.
@@ -316,26 +390,40 @@ func base64Body(content []byte) []byte {
 // variable that is never returned on the failure path, so a message meant to be
 // protected can never be transmitted in the clear.
 func BuildRaw(msg *Message, engine crypto.Engine, mode crypto.Mode, opts crypto.Options) ([]byte, error) {
-	top, _, err := msg.topHeaders(false)
+	raw, _, err := msg.build(headersSend, engine, mode, opts)
+	return raw, err
+}
+
+// build assembles the headers and content entity, wrapped by engine unless
+// mode is ModeNone, and returns the bytes with the Message-ID they carry.
+func (m *Message) build(set headerSet, engine crypto.Engine, mode crypto.Mode, opts crypto.Options) ([]byte, string, error) {
+	date := nowDate()
+	top, msgID, err := m.topHeaders(set, date)
 	if err != nil {
-		return nil, err
+		return nil, "", err
 	}
-	root, err := msg.contentEntity()
+	root, err := m.contentEntity()
 	if err != nil {
-		return nil, err
+		return nil, "", err
+	}
+	// headers hidden from the clear go inside the encryption instead.
+	if set == headersHidden {
+		if err := m.protectHeaders(root, date, msgID); err != nil {
+			return nil, "", err
+		}
 	}
 	content := serializePart(root)
 
 	if mode == crypto.ModeNone {
-		return append([]byte(top), content...), nil
+		return append([]byte(top), content...), msgID, nil
 	}
 
 	if engine == nil {
-		return nil, fmt.Errorf("smtp: crypto mode %s requested but no engine is configured", mode)
+		return nil, "", fmt.Errorf("smtp: crypto mode %s requested but no engine is configured", mode)
 	}
 	wrapped, err := engine.Wrap(content, mode, opts)
 	if err != nil {
-		return nil, fmt.Errorf("smtp: crypto wrap failed, refusing to send in plaintext: %w", err)
+		return nil, "", fmt.Errorf("smtp: crypto wrap failed, refusing to send in plaintext: %w", err)
 	}
 
 	var b bytes.Buffer
@@ -343,7 +431,7 @@ func BuildRaw(msg *Message, engine crypto.Engine, mode crypto.Mode, opts crypto.
 	b.WriteString(headerContentType + ": " + wrapped.ContentType + crlf)
 	b.WriteString(crlf)
 	b.Write(wrapped.Body)
-	return b.Bytes(), nil
+	return b.Bytes(), msgID, nil
 }
 
 // newBoundary returns a random multipart boundary.
@@ -357,16 +445,23 @@ func newBoundary() (string, error) {
 
 // BuildDraft builds a message for the server Drafts folder and returns it with
 // its Message-ID. Unlike BuildRaw it keeps the Bcc header, so a reopened draft
-// still has those recipients, and it never signs or encrypts: a draft of a
-// message meant to be encrypted is the caller's to keep off the server.
+// still has those recipients, and it never signs or encrypts. A draft of a
+// message meant to be encrypted goes through BuildEncryptedDraft instead.
 func BuildDraft(msg *Message) ([]byte, string, error) {
-	top, msgID, err := msg.topHeaders(true)
-	if err != nil {
-		return nil, "", err
-	}
-	root, err := msg.contentEntity()
-	if err != nil {
-		return nil, "", err
-	}
-	return append([]byte(top), serializePart(root)...), msgID, nil
+	return msg.build(headersDraft, nil, crypto.ModeNone, crypto.Options{})
+}
+
+// BuildEncryptedDraft builds a draft for the server Drafts folder encrypted to
+// the key of owner, the account's own address, and nobody else's, so the server
+// and the recipients alike only ever get ciphertext, and returns it with its
+// Message-ID. owner rather than the From address picks the key, so a draft
+// sent from an address with no key of its own still goes up. It is not
+// signed. Unlike an encrypted send its clear headers say nothing about the
+// content: no To, Cc, Bcc, In-Reply-To or References, and "..." for the
+// subject. From, Date and the Message-ID stay. The real ones, Bcc included,
+// travel inside the encryption as protected headers. A failed encryption
+// returns an error and no bytes.
+func BuildEncryptedDraft(msg *Message, owner string, engine crypto.Engine) ([]byte, string, error) {
+	opts := crypto.Options{SenderEmail: owner, Recipients: []string{owner}}
+	return msg.build(headersHidden, engine, crypto.ModeEncrypt, opts)
 }

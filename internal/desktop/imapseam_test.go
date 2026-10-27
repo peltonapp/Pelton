@@ -52,6 +52,13 @@ type fakeIMAP struct {
 	// Message-IDs RemoveDraft was given.
 	drafts        []draftCall
 	removedDrafts []string
+	// removedFrom is the mailbox of each RemoveDraft call, in order.
+	removedFrom []string
+	// failReplaceDraft makes ReplaceDraft fail, as on a full mailbox, and
+	// failRemoveDrafts makes the next that many RemoveDraft calls fail. A
+	// failed call is not recorded.
+	failReplaceDraft error
+	failRemoveDrafts int
 	// failMove makes MOVE fail, for the paths that have to leave the local cache
 	// alone when the server says no.
 	failMove error
@@ -73,12 +80,20 @@ type draftCall struct {
 }
 
 func (f *fakeIMAP) ReplaceDraft(mailbox string, raw []byte, messageID string) error {
+	if f.failReplaceDraft != nil {
+		return f.failReplaceDraft
+	}
 	f.drafts = append(f.drafts, draftCall{mailbox, messageID, raw})
 	return nil
 }
 
-func (f *fakeIMAP) RemoveDraft(_, messageID string) error {
+func (f *fakeIMAP) RemoveDraft(mailbox, messageID string) error {
+	if f.failRemoveDrafts > 0 {
+		f.failRemoveDrafts--
+		return errors.New("remove failed")
+	}
 	f.removedDrafts = append(f.removedDrafts, messageID)
+	f.removedFrom = append(f.removedFrom, mailbox)
 	return nil
 }
 

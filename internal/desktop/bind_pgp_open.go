@@ -94,6 +94,10 @@ func (a *App) anyPassphrase() []byte {
 // parsed the same way any body would be rather than shown as raw source.
 func splitOpenedBody(entity []byte) (plain, html string) {
 	msg, err := mailview.ParseEntity(entity)
+	if errors.Is(err, mailview.ErrNoReadableBody) {
+		// a MIME entity with nothing to read: an empty body, not its source.
+		return "", ""
+	}
 	if err != nil {
 		// not a MIME entity: a clearsigned block is plain text as it stands.
 		return string(entity), ""

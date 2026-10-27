@@ -11,6 +11,7 @@ package mailview
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	stdhtml "html"
 	"io"
@@ -328,6 +329,10 @@ func DetectPGP(plain, html string) PGPStatus {
 	}
 }
 
+// ErrNoReadableBody is returned by ParseEntity for a MIME entity with no text
+// or html to show: an empty body, or attachments alone.
+var ErrNoReadableBody = errors.New("mailview: entity has no readable body")
+
 // Entity is the readable content of a MIME entity: its text and html bodies.
 type Entity struct {
 	Text string
@@ -378,7 +383,12 @@ func ParseEntity(raw []byte) (Entity, error) {
 		}
 	}
 	if out.Text == "" && out.HTML == "" {
-		return Entity{}, fmt.Errorf("mailview: entity has no readable body")
+		// only a declared MIME entity is one with nothing to read; text that
+		// merely parses as headers is not MIME at all.
+		if reader.Header.Get("Content-Type") != "" {
+			return Entity{}, ErrNoReadableBody
+		}
+		return Entity{}, fmt.Errorf("mailview: not a MIME entity")
 	}
 	return out, nil
 }

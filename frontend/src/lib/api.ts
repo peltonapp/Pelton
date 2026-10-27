@@ -766,7 +766,7 @@ export function deleteDraft(id: number): Promise<void> {
 
 // uploadDraft puts a saved local draft into the account's server Drafts folder,
 // replacing its previous copy there, and returns the Message-ID it used ('' for a
-// local-only account). Encrypted drafts are refused: they stay on this device.
+// local-only account). An encrypted draft goes up encrypted to the user's own key.
 export function uploadDraft(id: number): Promise<string> {
   if (isDemoActive()) {
     return Promise.resolve('')
@@ -783,13 +783,14 @@ export function openDraft(messageId: number): Promise<Draft> {
   return App.OpenDraft(messageId)
 }
 
-// removeServerDraft deletes a draft's copy from the server Drafts folder. An
-// empty messageId is a no-op.
-export function removeServerDraft(accountId: number, messageId: string): Promise<void> {
+// draftSubjects returns the real subjects of an account's encrypted drafts
+// that can be read without a passphrase prompt, keyed by Message-ID without
+// angle brackets. Their server copies are titled "...".
+export function draftSubjects(accountId: number): Promise<Record<string, string>> {
   if (isDemoActive()) {
-    return Promise.resolve()
+    return Promise.resolve({})
   }
-  return App.RemoveServerDraft(accountId, messageId)
+  return App.DraftSubjects(accountId)
 }
 
 // listOutbox returns the current outbox contents.

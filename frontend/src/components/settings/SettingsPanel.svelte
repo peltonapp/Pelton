@@ -32,7 +32,6 @@
   import RowLayoutPreview from './RowLayoutPreview.svelte'
   import AboutSection from './AboutSection.svelte'
   import EncryptionSection from './EncryptionSection.svelte'
-  import PassphraseDialog from './PassphraseDialog.svelte'
   import { settingsCategories, settingsGroups } from '../../lib/settingscategories'
   import { paletteQuickSelect, setPaletteQuickSelect } from '../../stores/palette'
   import ToggleSwitch from '../common/ToggleSwitch.svelte'
@@ -1828,8 +1827,6 @@
     <svelte:component this={m.default} on:close={() => (vipOpen = false)} />
   {/await}
 {/if}
-
-<PassphraseDialog />
 
 <style>
   .screen {

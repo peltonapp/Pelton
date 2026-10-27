@@ -1309,6 +1309,7 @@ export namespace desktop {
 	    snoozeUntil: string;
 	    senderVip: boolean;
 	    smime: SMIMEDTO;
+	    messageId: string;
 	    toAddresses: string;
 	    ccAddresses: string;
 	    bodyPlain: string;
@@ -1351,6 +1352,7 @@ export namespace desktop {
 	        this.snoozeUntil = source["snoozeUntil"];
 	        this.senderVip = source["senderVip"];
 	        this.smime = this.convertValues(source["smime"], SMIMEDTO);
+	        this.messageId = source["messageId"];
 	        this.toAddresses = source["toAddresses"];
 	        this.ccAddresses = source["ccAddresses"];
 	        this.bodyPlain = source["bodyPlain"];
@@ -1423,6 +1425,7 @@ export namespace desktop {
 	    snoozeUntil: string;
 	    senderVip: boolean;
 	    smime: SMIMEDTO;
+	    messageId: string;
 	
 	    static createFrom(source: any = {}) {
 	        return new MessageSummaryDTO(source);
@@ -1450,6 +1453,7 @@ export namespace desktop {
 	        this.snoozeUntil = source["snoozeUntil"];
 	        this.senderVip = source["senderVip"];
 	        this.smime = this.convertValues(source["smime"], SMIMEDTO);
+	        this.messageId = source["messageId"];
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
