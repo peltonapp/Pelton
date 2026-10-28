@@ -492,6 +492,8 @@ func (a *App) fetchAndPin(client mailClient, task dlTask, includeAttachments boo
 		FolderID:    task.folder.ID,
 		UID:         uint32(msg.UID),
 		MessageID:   msg.MessageID,
+		InReplyTo:   msg.InReplyTo,
+		References:  msg.References,
 		Subject:     msg.Subject,
 		FromAddress: msg.From,
 		ToAddresses: msg.To,
