@@ -198,8 +198,8 @@ export function openDraftSession(draft: Draft): number {
     subject: req.subject,
     body: mode === 'wysiwyg' ? req.html : req.text,
     attachments: req.attachments ?? [],
-    inReplyTo: req.inReplyTo,
-    references: req.references ?? [],
+    inReplyTo: req.inReplyTo ?? '',
+    references: [...(req.references ?? [])],
     protection: req.protection,
     draftId: draft.id,
     draftMessageId: req.draftMessageId ?? '',
@@ -218,7 +218,7 @@ export function restoreSession(session: ComposeSession): number {
   if (open) {
     return open
   }
-  const restored: ComposeSession = { ...session, id: nextId++, saved: true, minimized: false }
+  const restored: ComposeSession = { ...session, references: [...session.references], id: nextId++, saved: true, minimized: false }
   composeSessions.update((list) => [...list, restored])
   return restored.id
 }
@@ -241,7 +241,7 @@ function bringBack(draftId: number): number {
 export function reopenSession(session: ComposeSession): number {
   // a reopened message already has whatever signature it was sent with, so do not
   // auto-insert defaults again.
-  const restored: ComposeSession = { ...session, id: nextId++, draftId: 0, draftMessageId: '', saved: false, signaturesApplied: true }
+  const restored: ComposeSession = { ...session, references: [...session.references], id: nextId++, draftId: 0, draftMessageId: '', saved: false, signaturesApplied: true }
   composeSessions.update((list) => [...list, restored])
   return restored.id
 }
@@ -318,17 +318,11 @@ function forwardBody(detail: MessageDetail, mode: EditorMode): string {
   return `\n\n${header}\n\n${detail.bodyQuote}\n`
 }
 
-// messageIdRef would be the original Message-ID for threading. the detail dto
-// does not expose it directly today, so we leave it empty and rely on the
-// backend, which has the stored Message-ID, to fill threading on send.
-// TODO(backend): expose the original Message-ID in MessageDetailDTO so replies
-// thread precisely from the frontend reference too.
-function messageIdRef(_detail: MessageDetail): string {
-  return ''
+function messageIdRef(detail: MessageDetail): string {
+  return detail.messageId ?? ''
 }
 
-// buildReferences returns the reference chain for threading. empty for the same
-// reason as messageIdRef above.
-function buildReferences(_detail: MessageDetail): string[] {
-  return []
+function buildReferences(detail: MessageDetail): string[] {
+  const parent = messageIdRef(detail)
+  return parent ? [parent] : []
 }
