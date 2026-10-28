@@ -3,6 +3,7 @@ package desktop
 import (
 	"errors"
 	"fmt"
+	"reflect"
 	"slices"
 	"strings"
 	"sync"
@@ -421,11 +422,18 @@ func TestDraftMessageIDsFromTheFrontendAreChecked(t *testing.T) {
 		"<a@>",
 		"<a@b@example.com>",
 		"<a b@example.com>",
+		"<<a@example.com>>",
+		"<a@example.com",
+		"a@example.com>",
+		"<a\t@example.com>",
+		"<a\x00@example.com>",
+		"<a\x7f@example.com>",
 	} {
-		if _, err := app.SaveDraft(0, ComposeRequest{AccountID: accountID, DraftMessageID: bad}); !errors.Is(err, errBadMessageID) {
+		want := fmt.Sprintf("pelton: a draft Message-ID must have the form <local@domain>: %q", bad)
+		if _, err := app.SaveDraft(0, ComposeRequest{AccountID: accountID, DraftMessageID: bad}); !errors.Is(err, errBadMessageID) || err.Error() != want {
 			t.Errorf("SaveDraft(%q) = %v, want errBadMessageID", bad, err)
 		}
-		if err := app.RemoveServerDraft(accountID, bad); !errors.Is(err, errBadMessageID) {
+		if err := app.RemoveServerDraft(accountID, bad); !errors.Is(err, errBadMessageID) || err.Error() != want {
 			t.Errorf("RemoveServerDraft(%q) = %v, want errBadMessageID", bad, err)
 		}
 	}
@@ -439,13 +447,98 @@ func TestDraftMessageIDsFromTheFrontendAreChecked(t *testing.T) {
 		t.Fatalf("drafts removed on the server: %q", client.removedDrafts)
 	}
 
-	const good = "<a1.b-c@mail.example.com>"
-	id := saveDraft(t, app, 0, ComposeRequest{AccountID: accountID, DraftMessageID: good})
-	if drafts := listDrafts(t, app); len(drafts) != 1 || drafts[0].ID != id || drafts[0].Request.DraftMessageID != good {
-		t.Fatalf("drafts = %+v, want one keeping %s", drafts, good)
+	for _, good := range []string{
+		"<a1.b-c@mail.example.com>",
+		"<" + strings.Repeat("a", 1000) + "@example.com>",
+		`<"quoted"@example.com>`,
+		"<é@example.com>",
+		"<a@exämple.com>",
+		"<.a@example.com>",
+		"<a.@example.com>",
+		"<a..b@example.com>",
+		"<a@.example.com>",
+		"<a@example..com>",
+		"<a@example.com.>",
+	} {
+		id := saveDraft(t, app, 0, ComposeRequest{AccountID: accountID, DraftMessageID: good})
+		drafts := listDrafts(t, app)
+		i := slices.IndexFunc(drafts, func(d DraftDTO) bool { return d.ID == id })
+		if i < 0 || drafts[i].Request.DraftMessageID != good {
+			t.Fatalf("drafts = %+v, want draft %d keeping %s", drafts, id, good)
+		}
+		if err := app.RemoveServerDraft(accountID, good); err != nil {
+			t.Fatalf("RemoveServerDraft(%s): %v", good, err)
+		}
+		settle(t)
+		if got := client.removedDrafts; len(got) != 1 || got[0] != good {
+			t.Fatalf("removed %v, want exactly %q", got, good)
+		}
+		client.removedDrafts = nil
 	}
-	if err := app.RemoveServerDraft(accountID, good); err != nil {
-		t.Fatalf("RemoveServerDraft(%s): %v", good, err)
+}
+
+func TestOpenDraftRejectsMalformedMessageIDs(t *testing.T) {
+	for _, tt := range []struct {
+		name, cached, local string
+		wantMatch           bool
+		prependInvalid      bool
+	}{
+		{"bare cache bracketed local", "parent@example.com", "<parent@example.com>", true, false},
+		{"bracketed cache bracketed local", "<parent@example.com>", "<parent@example.com>", true, false},
+		{"bare cache bare local", "parent@example.com", "parent@example.com", true, false},
+		{"bracketed cache bare local", "<parent@example.com>", "parent@example.com", true, false},
+		{"nested cache", "<<parent@example.com>>", "<parent@example.com>", false, false},
+		{"nested local", "parent@example.com", "<<parent@example.com>>", false, false},
+		{"invalid cache and local", "<<parent@example.com>>", "<<parent@example.com>>", false, false},
+		{"empty cache and invalid local", "", "<<parent@example.com>>", false, false},
+		{"unicode", "draft@bücher.de", "<draft@bücher.de>", true, false},
+		{"trailing dot", "<draft@example.com.>", "draft@example.com.", true, false},
+		{"no punycode conversion", "draft@xn--bcher-kva.de", "<draft@bücher.de>", false, false},
+		{"case sensitive", "Parent@example.com", "<parent@example.com>", false, false},
+		{"empty both", "", "", false, false},
+		{"empty wrappers", "<>", "<>", false, false},
+		{"unclosed cache", "<parent@example.com", "<parent@example.com>", false, false},
+		{"unopened local", "parent@example.com", "parent@example.com>", false, false},
+		{"skip invalid candidate", "parent@example.com", "<parent@example.com>", true, true},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			app, db, accountID := pgpTestApp(t, nil, nil)
+			folder := addFolder(t, app, accountID, "Drafts", `\Drafts`)
+			localID := saveDraft(t, app, 0, ComposeRequest{
+				AccountID: accountID, Subject: "editable local draft", DraftMessageID: "<parent@example.com>",
+			})
+			var drafts []storedDraft
+			if err := db.GetJSON(app.ctx, draftsKey, &drafts); err != nil {
+				t.Fatalf("read local draft: %v", err)
+			}
+			drafts[0].Request.DraftMessageID = tt.local
+			if tt.prependInvalid {
+				invalid := drafts[0]
+				invalid.ID = localID + 1
+				invalid.Request.DraftMessageID = "<<parent@example.com>>"
+				drafts = append([]storedDraft{invalid}, drafts...)
+			}
+			if err := db.SetJSON(app.ctx, draftsKey, drafts); err != nil {
+				t.Fatalf("seed legacy local_drafts: %v", err)
+			}
+			id, err := db.InsertMessage(app.ctx, &storage.Message{
+				AccountID: accountID, FolderID: folder.ID, UID: 1, MessageID: tt.cached,
+				Subject: "server copy", Date: time.Now(),
+			})
+			if err != nil {
+				t.Fatalf("insert cached draft: %v", err)
+			}
+			got, err := app.OpenDraft(id)
+			if err != nil {
+				t.Fatalf("OpenDraft: %v", err)
+			}
+			if tt.wantMatch {
+				if got.ID != localID || got.Request.Subject != "editable local draft" {
+					t.Errorf("OpenDraft = %+v, want editable local draft %d", got, localID)
+				}
+			} else if !reflect.DeepEqual(got, DraftDTO{}) {
+				t.Errorf("OpenDraft = %+v, want DraftDTO{}", got)
+			}
+		})
 	}
-	settle(t)
 }
