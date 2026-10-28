@@ -1,8 +1,10 @@
 package desktop
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
+	"net/mail"
 	"reflect"
 	"slices"
 	"strings"
@@ -147,18 +149,27 @@ func draftsOnServer(t *testing.T, app *App, accountID int64, messageIDs ...strin
 func TestDraftRoundTripsThroughTheServer(t *testing.T) {
 	app, accountID, client := draftTestApp(t)
 	req := ComposeRequest{
-		AccountID: accountID,
-		To:        []AddressDTO{{Email: "you@example.com"}},
-		Bcc:       []AddressDTO{{Email: "hidden@example.com"}},
-		Text:      "body",
+		AccountID:  accountID,
+		To:         []AddressDTO{{Email: "you@example.com"}},
+		Bcc:        []AddressDTO{{Email: "hidden@example.com"}},
+		Text:       "body",
+		InReplyTo:  "parent@example.com",
+		References: []string{"root@example.com", "parent@example.com"},
 	}
 	var id int64
 	var messageID string
-	// the composer never passes the Message-ID back, as after a reload: the
-	// second save must still replace the first copy, not add another.
+	var ids []int64
+	var opened DraftDTO
+	// The composer may not pass the draft Message-ID back after a reload.
 	for _, subject := range []string{"first", "second"} {
 		req.Subject = subject
+		req.DraftMessageID = ""
 		id = saveDraft(t, app, id, req)
+		drafts := listDrafts(t, app)
+		if len(drafts) != 1 || drafts[0].ID != id || drafts[0].Request.Subject != subject {
+			t.Fatalf("saved drafts = %+v, want draft %d with subject %q", drafts, id, subject)
+		}
+		assertDraftReplyRequest(t, drafts[0].Request)
 		got, err := app.UploadDraft(id)
 		settle(t)
 		if err != nil {
@@ -168,41 +179,64 @@ func TestDraftRoundTripsThroughTheServer(t *testing.T) {
 			t.Errorf("upload %q used %q, want %q", subject, got, messageID)
 		}
 		messageID = got
-		if drafts := listDrafts(t, app); messageID == "" || drafts[0].Request.DraftMessageID != messageID {
-			t.Fatalf("local draft links to %q, want the uploaded %q", drafts[0].Request.DraftMessageID, messageID)
+		drafts = listDrafts(t, app)
+		if len(drafts) != 1 || messageID == "" || drafts[0].Request.DraftMessageID != messageID {
+			t.Fatalf("local drafts = %+v, want one linked to uploaded %q", drafts, messageID)
 		}
+		assertDraftReplyRequest(t, drafts[0].Request)
+		if strings.Trim(messageID, "<>") == "parent@example.com" {
+			t.Fatal("draft Message-ID reused the parent Message-ID")
+		}
+		// The fake reports an empty mailbox during the queued sync, so seed
+		// the cached server copies after each upload has settled.
+		ids = draftsOnServer(t, app, accountID, messageID, "<webmail@example.com>")
+		opened, err = app.OpenDraft(ids[0])
+		if err != nil {
+			t.Fatalf("OpenDraft: %v", err)
+		}
+		if opened.ID != id || opened.Request.Subject != subject || !slices.Equal(opened.Request.Bcc, req.Bcc) || opened.Request.DraftMessageID != messageID {
+			t.Fatalf("opened %+v, want local draft %d with its subject, Bcc and Message-ID", opened, id)
+		}
+		assertDraftReplyRequest(t, opened.Request)
+		req = opened.Request
 	}
 	if len(client.drafts) != 2 {
 		t.Fatalf("got %d uploads, want 2", len(client.drafts))
 	}
 	for i, call := range client.drafts {
-		raw := string(call.raw)
-		if call.messageID != messageID || !strings.Contains(raw, "Message-ID: "+messageID) {
-			t.Errorf("upload %d replaces %q with %q, want %q for both", i, call.messageID, raw, messageID)
+		header := draftReplyHeaders(t, call.raw)
+		if call.messageID != messageID || header.Get("Message-ID") != messageID {
+			t.Errorf("upload %d replaces %q with %q, want %q for both", i, call.messageID, header.Get("Message-ID"), messageID)
 		}
-		if !strings.Contains(raw, "hidden@example.com") {
-			t.Errorf("upload %d lost the Bcc recipient: %q", i, raw)
+		if !strings.Contains(header.Get("Bcc"), "hidden@example.com") {
+			t.Errorf("upload %d lost the Bcc recipient: %q", i, header.Get("Bcc"))
 		}
-	}
-
-	ids := draftsOnServer(t, app, accountID, messageID, "<webmail@example.com>")
-	opened, err := app.OpenDraft(ids[0])
-	if err != nil {
-		t.Fatalf("OpenDraft: %v", err)
-	}
-	if opened.ID != id || opened.Request.Subject != "second" || !slices.Equal(opened.Request.Bcc, req.Bcc) {
-		t.Fatalf("opened %+v, want local draft %d with its subject and Bcc", opened, id)
 	}
 	if other, err := app.OpenDraft(ids[1]); err != nil || other.ID != 0 {
 		t.Fatalf("OpenDraft(written elsewhere) = %+v, %v, want an empty draft and no error", other, err)
 	}
 
-	// once sent, the composer deletes the draft and its server copy has to go
-	// too, found by the Message-ID stored here: the composer may not know it.
 	app.queue = outbox.NewQueue(app.store)
-	if _, err := app.SendMessage(req); err != nil {
+	queuedID, err := app.SendMessage(opened.Request)
+	if err != nil {
 		t.Fatalf("SendMessage: %v", err)
 	}
+	queued, err := app.queue.List(app.ctx)
+	if err != nil {
+		t.Fatalf("list outbox: %v", err)
+	}
+	if len(queued) != 1 || queued[0].ID != queuedID {
+		t.Fatalf("outbox = %+v, want queued message %d", queued, queuedID)
+	}
+	header := draftReplyHeaders(t, queued[0].Raw)
+	if sentID := header.Get("Message-ID"); sentID == "" || sentID == messageID || sentID == "<parent@example.com>" {
+		t.Errorf("sent Message-ID = %q, want a fresh ID distinct from draft %q and parent", sentID, messageID)
+	}
+	if !slices.Contains(queued[0].Recipients, "hidden@example.com") {
+		t.Errorf("outbox recipients = %v, want the Bcc recipient", queued[0].Recipients)
+	}
+	// The composer deletes the local draft after sending; the stored draft
+	// Message-ID also identifies the server copy to remove.
 	if err := app.DeleteDraft(id); err != nil {
 		t.Fatalf("DeleteDraft: %v", err)
 	}
@@ -210,6 +244,33 @@ func TestDraftRoundTripsThroughTheServer(t *testing.T) {
 	if !slices.Equal(client.removedDrafts, []string{messageID}) {
 		t.Fatalf("removed %v, want just %q", client.removedDrafts, messageID)
 	}
+	if drafts := listDrafts(t, app); len(drafts) != 0 {
+		t.Fatalf("drafts after send/delete = %+v, want none", drafts)
+	}
+}
+
+func assertDraftReplyRequest(t *testing.T, req ComposeRequest) {
+	t.Helper()
+	if req.InReplyTo != "parent@example.com" || !slices.Equal(req.References, []string{"root@example.com", "parent@example.com"}) {
+		t.Errorf("draft threading = %q, %v, want bare parent and root/parent chain", req.InReplyTo, req.References)
+	}
+}
+
+func draftReplyHeaders(t *testing.T, raw []byte) mail.Header {
+	t.Helper()
+	parsed, err := mail.ReadMessage(bytes.NewReader(raw))
+	if err != nil {
+		t.Fatalf("parse draft/outbox MIME: %v", err)
+	}
+	for field, want := range map[string]string{
+		"In-Reply-To": "<parent@example.com>",
+		"References":  "<root@example.com> <parent@example.com>",
+	} {
+		if got := parsed.Header[field]; len(got) != 1 || got[0] != want {
+			t.Errorf("%s = %q, want exactly one %q", field, got, want)
+		}
+	}
+	return parsed.Header
 }
 
 // The draft goes to the folder the folder list shows as Drafts: one the user
@@ -268,8 +329,11 @@ func TestUploadDraftKeepsEncryptedDraftsOffTheServer(t *testing.T) {
 		t.Run(tt.protection, func(t *testing.T) {
 			app, accountID, client := draftTestApp(t)
 			draft := storedDraft{
-				ID:         1,
-				Request:    ComposeRequest{AccountID: accountID, Subject: "secret", Protection: tt.protection},
+				ID: 1,
+				Request: ComposeRequest{
+					AccountID: accountID, Subject: "secret", Protection: tt.protection,
+					InReplyTo: "parent@example.com", References: []string{"root@example.com", "parent@example.com"},
+				},
 				Sealed:     tt.sealed,
 				AccountID:  accountID,
 				Protection: tt.protection,
@@ -278,13 +342,23 @@ func TestUploadDraftKeepsEncryptedDraftsOffTheServer(t *testing.T) {
 				t.Fatalf("seed draft: %v", err)
 			}
 
-			_, err := app.UploadDraft(1)
+			messageID, err := app.UploadDraft(1)
 			settle(t)
 			if !errors.Is(err, tt.want) {
 				t.Fatalf("UploadDraft = %v, want %v", err, tt.want)
 			}
-			if uploaded := len(client.drafts) > 0; uploaded != (tt.want == nil) {
-				t.Errorf("uploaded = %v with protection %q", uploaded, tt.protection)
+			wantUploads := 0
+			if tt.want == nil {
+				wantUploads = 1
+			}
+			if len(client.drafts) != wantUploads {
+				t.Errorf("got %d uploads with protection %q, want %d", len(client.drafts), tt.protection, wantUploads)
+			}
+			if tt.want != nil && messageID != "" {
+				t.Errorf("refused upload returned Message-ID %q", messageID)
+			}
+			for _, call := range client.drafts {
+				draftReplyHeaders(t, call.raw)
 			}
 		})
 	}

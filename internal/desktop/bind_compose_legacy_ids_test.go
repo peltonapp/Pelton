@@ -1,9 +1,68 @@
 package desktop
 
 import (
+	"bytes"
+	"net/mail"
 	"slices"
+	"strings"
 	"testing"
+
+	"github.com/peltonapp/Pelton/internal/messageid"
+	"github.com/peltonapp/Pelton/internal/smtp"
 )
+
+func TestGeneratedDraftMessageIDRoundTrip(t *testing.T) {
+	for _, tt := range []struct{ email, domain string }{
+		{"me@bücher.de", "xn--bcher-kva.de"},
+		{"me@exämple.com", "xn--exmple-cua.com"},
+		{"me@example.com.", "localhost"},
+		{"me@example.com", "example.com"},
+	} {
+		t.Run(tt.email, func(t *testing.T) {
+			generated, err := smtp.NewMessageID(tt.email)
+			if err != nil {
+				t.Fatalf("NewMessageID: %v", err)
+			}
+			if _, ok := messageid.Normalize(generated); !ok {
+				t.Errorf("NewMessageID = %q, want strict reply token", generated)
+			}
+			app, accountID, client := draftTestApp(t)
+			account, err := app.store.GetAccount(app.ctx, accountID)
+			if err != nil {
+				t.Fatalf("GetAccount: %v", err)
+			}
+			account.Email = tt.email
+			if err := app.store.UpdateAccount(app.ctx, account); err != nil {
+				t.Fatalf("UpdateAccount: %v", err)
+			}
+			req := ComposeRequest{AccountID: accountID, Subject: "first", Text: "body", Bcc: addr("hidden@example.com")}
+			id := saveDraft(t, app, 0, req)
+			uploaded, err := app.UploadDraft(id)
+			settle(t)
+			if err != nil {
+				t.Fatalf("UploadDraft: %v", err)
+			}
+			if _, ok := messageid.Normalize(uploaded); !ok || !strings.HasSuffix(uploaded, "@"+tt.domain+">") {
+				t.Errorf("uploaded ID = %q, want strict token with domain %q", uploaded, tt.domain)
+			}
+			if len(client.drafts) != 1 || client.drafts[0].messageID != uploaded {
+				t.Fatalf("uploads = %+v, want one linked to %q", client.drafts, uploaded)
+			}
+			parsed, err := mail.ReadMessage(bytes.NewReader(client.drafts[0].raw))
+			if err != nil || parsed.Header.Get("Message-ID") != uploaded {
+				t.Fatalf("uploaded MIME = %v, %v, want Message-ID %q", parsed, err, uploaded)
+			}
+			req.DraftMessageID = uploaded
+			req.Subject = "edited"
+			saveDraft(t, app, id, req)
+			cached := draftsOnServer(t, app, accountID, uploaded)
+			opened, err := app.OpenDraft(cached[0])
+			if err != nil || opened.ID != id || opened.Request.Subject != "edited" || opened.Request.DraftMessageID != uploaded || !slices.Equal(opened.Request.Bcc, req.Bcc) {
+				t.Fatalf("OpenDraft = %+v, %v, want edited draft %d with original ID and Bcc", opened, err, id)
+			}
+		})
+	}
+}
 
 func TestLegacyStoredDraftMessageIDs(t *testing.T) {
 	for _, messageID := range []string{"<draft@bücher.de>", "<draft@exämple.com>", "<draft@example.com.>"} {

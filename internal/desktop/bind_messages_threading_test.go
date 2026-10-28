@@ -1,11 +1,14 @@
 package desktop
 
 import (
+	"bytes"
 	"encoding/json"
+	"net/mail"
 	"strconv"
 	"testing"
 	"time"
 
+	"github.com/peltonapp/Pelton/internal/smtp"
 	"github.com/peltonapp/Pelton/internal/storage"
 )
 
@@ -34,6 +37,27 @@ func TestGetMessageThreadingMetadata(t *testing.T) {
 			detail, err := app.GetMessage(id)
 			if err != nil {
 				t.Fatalf("GetMessage: %v", err)
+			}
+			if tt.want == "" {
+				msg, err := app.buildMessage(ComposeRequest{
+					AccountID: accountID, To: addr("recipient@example.com"), Text: "reply",
+					InReplyTo: detail.MessageID, References: []string{"root@example.com"},
+				})
+				if err != nil {
+					t.Fatalf("build reply: %v", err)
+				}
+				raw, _, err := smtp.BuildDraft(msg)
+				if err != nil {
+					t.Fatalf("serialize reply: %v", err)
+				}
+				parsed, err := mail.ReadMessage(bytes.NewReader(raw))
+				if err != nil {
+					t.Fatalf("parse reply: %v", err)
+				}
+				header := parsed.Header
+				if header.Get("In-Reply-To") != "" || header.Get("References") != "" {
+					t.Fatalf("reply to invalid parent has threading headers: %v", header)
+				}
 			}
 			data, err := json.Marshal(detail)
 			if err != nil {
