@@ -193,10 +193,40 @@ describe('compose threading snapshots', () => {
     expect(buildRequest(last()).references).toEqual([])
   })
 
-  it('uses only the direct parent in Part 1', () => {
-    openReply(detail({ messageId: 'parent@example.com', inReplyTo: ['older@example.com'], references: ['root@example.com'] }), 'plaintext', false)
-    expect(buildRequest(last()).inReplyTo).toBe('parent@example.com')
-    expect(buildRequest(last()).references).toEqual(['parent@example.com'])
+  describe.each(replyCases)('ancestry selection ($mode, replyAll=$replyAll)', ({ mode, replyAll }) => {
+    it.each([
+      { name: 'references ancestry wins over inReplyTo', inReplyTo: ['other@example.com'], references: ['a@example.com', 'b@example.com'], want: ['a@example.com', 'b@example.com', 'parent@example.com'] },
+      { name: 'one inReplyTo is a fallback', inReplyTo: ['a@example.com'], references: [], want: ['a@example.com', 'parent@example.com'] },
+      { name: 'multiple inReplyTo is not a fallback', inReplyTo: ['a@example.com', 'b@example.com'], references: [], want: ['parent@example.com'] },
+      { name: 'duplicate inReplyTo is not a fallback', inReplyTo: ['a@example.com', 'a@example.com'], references: [], want: ['parent@example.com'] },
+      // Go invalidates malformed In-Reply-To and maps legacy NULL ancestry to these same empty DTO lists.
+      { name: 'empty DTO ancestry uses only the parent', inReplyTo: [], references: [], want: ['parent@example.com'] },
+      { name: 'references keep duplicates and parent position for Go to normalize', inReplyTo: [], references: ['parent@example.com', 'a@example.com', 'a@example.com'], want: ['parent@example.com', 'a@example.com', 'a@example.com', 'parent@example.com'] },
+    ])('$name', ({ inReplyTo, references, want }) => {
+      openReply(detail({ messageId: 'parent@example.com', inReplyTo, references }), mode, replyAll)
+      expect(last().inReplyTo).toBe('parent@example.com')
+      expect(last().references).toEqual(want)
+      expect(buildRequest(last()).inReplyTo).toBe('parent@example.com')
+      expect(buildRequest(last()).references).toEqual(want)
+    })
+
+    it.each([
+      { name: 'References', inReplyTo: ['other@example.com'], references: ['a@example.com', 'b@example.com'], want: ['a@example.com', 'b@example.com', 'parent@example.com'] },
+      { name: 'In-Reply-To fallback', inReplyTo: ['a@example.com'], references: [], want: ['a@example.com', 'parent@example.com'] },
+    ])('reply ancestry is a snapshot ($name)', ({ inReplyTo, references, want }) => {
+      const parent = detail({ messageId: 'parent@example.com', inReplyTo, references })
+      const id = openReply(parent, mode, replyAll)
+      const session = getSession(id)!
+      const request = buildRequest(session)
+      parent.messageId = 'changed@example.com'
+      parent.inReplyTo.splice(0, parent.inReplyTo.length, 'changed@example.com')
+      parent.references.splice(0, parent.references.length, 'changed@example.com')
+      expect(session.inReplyTo).toBe('parent@example.com')
+      expect(session.references).toEqual(want)
+      expect(request.inReplyTo).toBe('parent@example.com')
+      expect(request.references).toEqual(want)
+      expect(buildRequest(session).references).toEqual(want)
+    })
   })
 
   describe('draft reopen and undo preserve an independent snapshot', () => {

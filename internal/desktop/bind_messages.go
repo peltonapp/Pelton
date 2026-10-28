@@ -102,11 +102,29 @@ func (a *App) GetMessage(id int64) (MessageDetailDTO, error) {
 	autoAllow := a.remoteAutoAllow(m.FromAddress) || a.remoteMessageAllowed(m)
 
 	parentID, _ := messageid.Normalize(m.MessageID)
+	inReplyTo := []string{}
+	for _, value := range m.InReplyTo {
+		id, ok := messageid.Normalize(value)
+		if !ok {
+			// Filtering could turn an ambiguous field into a single-parent fallback.
+			inReplyTo = []string{}
+			break
+		}
+		inReplyTo = append(inReplyTo, id)
+	}
+	references := []string{}
+	// Dropping a bad entry is deliberate: the ordered list loses only that ancestor.
+	// In-Reply-To is cleared whole: RFC 5322 section 3.6.4 uses it only with one ID.
+	for _, value := range m.References {
+		if id, ok := messageid.Normalize(value); ok {
+			references = append(references, id)
+		}
+	}
 	detail := MessageDetailDTO{
 		MessageSummaryDTO: summary,
 		MessageID:         parentID,
-		InReplyTo:         []string{},
-		References:        []string{},
+		InReplyTo:         inReplyTo,
+		References:        references,
 		ToAddresses:       m.ToAddresses,
 		CcAddresses:       m.CcAddresses,
 		BodyPlain:         m.BodyPlain,

@@ -1,6 +1,7 @@
 package desktop
 
 import (
+	"database/sql"
 	"fmt"
 	"io"
 	"reflect"
@@ -9,6 +10,7 @@ import (
 	"github.com/emersion/go-imap/v2"
 	pimap "github.com/peltonapp/Pelton/internal/imap"
 	"github.com/peltonapp/Pelton/internal/rfc822"
+	"github.com/peltonapp/Pelton/internal/storage"
 )
 
 const threadingBody = "MIME-Version: 1.0\r\n" +
@@ -112,5 +114,61 @@ func TestFetchAndPinPreservesThreadingMetadata(t *testing.T) {
 				}
 			})
 		}
+	}
+}
+
+func TestGetMessageThreadingFromMIMEAndLegacyNull(t *testing.T) {
+	app, db, accountID := pgpTestApp(t, nil, nil)
+	folder := addFolder(t, app, accountID, "INBOX")
+	client := &threadingClient{raw: []byte(
+		"In-Reply-To: <Parent@Example.com>\r\n" +
+			"References: <Root@Example.com>\r\n <middle@example.com>\r\n\t<Parent@Example.com>\r\n" +
+			threadingBody,
+	)}
+	// The client parses raw MIME into the IMAP model; fetchAndPin uses the production storage writer.
+	if err := app.fetchAndPin(client, dlTask{folder: *folder, uid: 73}, false); err != nil {
+		t.Fatalf("fetchAndPin: %v", err)
+	}
+	messages, err := db.ListMessages(app.ctx, folder.ID, 0)
+	if err != nil || len(messages) != 1 {
+		t.Fatalf("messages = %+v, %v, want one fetched message", messages, err)
+	}
+	detail, err := app.GetMessage(messages[0].ID)
+	if err != nil {
+		t.Fatalf("GetMessage fetched message: %v", err)
+	}
+	wantInReplyTo := []string{"Parent@Example.com"}
+	wantReferences := []string{"Root@Example.com", "middle@example.com", "Parent@Example.com"}
+	if !reflect.DeepEqual(detail.InReplyTo, wantInReplyTo) || !reflect.DeepEqual(detail.References, wantReferences) {
+		t.Errorf("MIME ancestry DTO = %#v / %#v, want %#v / %#v", detail.InReplyTo, detail.References, wantInReplyTo, wantReferences)
+	}
+
+	legacyID, err := db.InsertMessage(app.ctx, &storage.Message{
+		AccountID: accountID, FolderID: folder.ID, UID: 74,
+		MessageID: "legacy@example.com", BodyPlain: "legacy body",
+	})
+	if err != nil {
+		t.Fatalf("insert legacy message: %v", err)
+	}
+	rawDB, err := sql.Open("sqlite", db.Path())
+	if err != nil {
+		t.Fatalf("open raw storage: %v", err)
+	}
+	defer rawDB.Close()
+	var inReplyToNull, referencesNull bool
+	if err := rawDB.QueryRowContext(app.ctx,
+		`SELECT in_reply_to IS NULL, "references" IS NULL FROM messages WHERE id = ?`, legacyID,
+	).Scan(&inReplyToNull, &referencesNull); err != nil {
+		t.Fatalf("read legacy columns: %v", err)
+	}
+	if !inReplyToNull || !referencesNull {
+		t.Fatalf("legacy SQL NULL columns = %t / %t, want both true", inReplyToNull, referencesNull)
+	}
+	legacy, err := app.GetMessage(legacyID)
+	if err != nil {
+		t.Fatalf("GetMessage legacy message: %v", err)
+	}
+	if !reflect.DeepEqual(legacy.InReplyTo, []string{}) || !reflect.DeepEqual(legacy.References, []string{}) {
+		t.Errorf("legacy ancestry DTO = %#v / %#v, want non-nil empty arrays", legacy.InReplyTo, legacy.References)
 	}
 }
