@@ -594,6 +594,7 @@ jobs:
   # sandbox needs to run `vite build` and `go build` offline.
   # ---------------------------------------------------------------------------
   flatpak-source:
+    if: ${{ !inputs.windows_only }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
@@ -615,7 +616,7 @@ jobs:
 
       - name: Resolve version
         id: version
-        run: echo "version=${GITHUB_REF_NAME:-0.0.0-dev}" >> "$GITHUB_OUTPUT"
+        run: echo "version=${RELEASE_TAG:-0.0.0-dev}" >> "$GITHUB_OUTPUT"
 
       - name: Assemble vendored tarball
         env:
