@@ -11,6 +11,9 @@
     <img src="https://img.shields.io/badge/CalVer-YYYY.Q.INCR-22bfda?style=for-the-badge" alt="CalVer YYYY.Q.INCR">
   </a>
   <img src="https://img.shields.io/badge/Language-Go-00ADD8?style=for-the-badge&logo=go" alt="Written in Go">
+  <a href="#-code-signing-policy">
+    <img src="https://img.shields.io/badge/Code_signing-SignPath_Foundation-5b2ee6?style=for-the-badge" alt="Code signing by SignPath Foundation">
+  </a>
   <a href="https://pelton.app/discord">
     <img src="https://img.shields.io/badge/Discord-Join_Community-7289DA?style=for-the-badge&logo=discord&logoColor=white" alt="Discord">
   </a>
@@ -173,7 +176,18 @@ Refer to our [Documentation (docs.pelton.app)](https://docs.pelton.app/install/)
 *We also support copr (dnf). We also have rpm and deb packages as well as a generic binary. Find installation instructions [here (docs.pelton.app/install/linux](https://docs.pelton.app/install/linux/)*
 
 > [!NOTE]
-> The builds are not code signed yet, so Windows may warn on the first launch: choose **More info**, then **Run anyway**. We have applied to the [SignPath Foundation](https://signpath.org) for free code signing of the Windows builds.
+> Windows code signing through the [SignPath Foundation](https://signpath.org) is being set up, see the [code signing policy](#-code-signing-policy).
+
+## <img src="https://api.iconify.design/tabler/shield-check.svg?color=white" width="26" style="vertical-align: -4px;"> Code signing policy
+
+Free code signing provided by [SignPath.io](https://about.signpath.io), certificate by [SignPath Foundation](https://signpath.org).
+
+- Committers and reviewers: [members of the peltonapp organisation](https://github.com/orgs/peltonapp/people)
+- Approvers: [Arne K.](https://github.com/TRC-Loop)
+
+Only the Windows builds made by this repository's release workflow from a version tag are signed. Every release is approved by hand before it is published.
+
+Privacy: this program will not transfer any information to other networked systems unless specifically requested by the user or the person installing or operating it. Pelton connects only to the mail servers you add, and to GitHub only if you turn on the update check. See the [privacy policy](https://pelton.app/privacy).
 
 ## <img src="https://api.iconify.design/tabler/tag.svg?color=white" width="26" style="vertical-align: -4px;"> Versioning
 

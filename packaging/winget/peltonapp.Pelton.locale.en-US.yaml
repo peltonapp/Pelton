@@ -1,0 +1,35 @@
+# yaml-language-server: $schema=https://aka.ms/winget-manifest.defaultLocale.1.12.0.schema.json
+
+PackageIdentifier: peltonapp.Pelton
+PackageVersion: 2026.4.6
+PackageLocale: en-US
+Publisher: Arne K.
+PublisherUrl: https://pelton.app
+PublisherSupportUrl: https://github.com/peltonapp/Pelton/issues
+PrivacyUrl: https://pelton.app/privacy
+Author: Arne K. and the Pelton contributors
+PackageName: Pelton
+PackageUrl: https://pelton.app
+License: GPL-3.0-or-later
+LicenseUrl: https://github.com/peltonapp/Pelton/blob/main/LICENSE
+Copyright: Copyright (c) 2026 Arne K. and the Pelton contributors
+ShortDescription: An open-source, privacy-respecting desktop email client.
+Description: |-
+  Pelton is a free, open-source email client for IMAP and SMTP mailboxes. Mail is stored locally, remote content
+  is blocked until you allow it, and Pelton sends no telemetry. It has fast search, snoozing, coloured flags,
+  attachment previews, themes and customizable keyboard shortcuts.
+Moniker: pelton
+Tags:
+- email
+- email-client
+- imap
+- mail
+- open-source
+- privacy
+- smtp
+ReleaseNotesUrl: https://github.com/peltonapp/Pelton/releases/tag/v2026.4.6
+Documentations:
+- DocumentLabel: Documentation
+  DocumentUrl: https://docs.pelton.app
+ManifestType: defaultLocale
+ManifestVersion: 1.12.0

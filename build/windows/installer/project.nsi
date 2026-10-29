@@ -209,6 +209,32 @@ FunctionEnd
 
 !define PELTON_REG_KEY "Software\${INFO_COMPANYNAME}\${INFO_PRODUCTNAME}"
 
+; wails.writeUninstaller always writes the Apps and Features entry to HKLM,
+; which a per-user install has no rights to, so that install never showed up
+; there. These write it to SHCTX, which follows the install mode.
+!macro pelton.writeUninstaller
+    WriteUninstaller "$INSTDIR\uninstall.exe"
+
+    SetRegView 64
+    WriteRegStr SHCTX "${UNINST_KEY}" "Publisher" "${INFO_COMPANYNAME}"
+    WriteRegStr SHCTX "${UNINST_KEY}" "DisplayName" "${INFO_PRODUCTNAME}"
+    WriteRegStr SHCTX "${UNINST_KEY}" "DisplayVersion" "${INFO_PRODUCTVERSION}"
+    WriteRegStr SHCTX "${UNINST_KEY}" "DisplayIcon" "$INSTDIR\${PRODUCT_EXECUTABLE}"
+    WriteRegStr SHCTX "${UNINST_KEY}" "UninstallString" "$\"$INSTDIR\uninstall.exe$\""
+    WriteRegStr SHCTX "${UNINST_KEY}" "QuietUninstallString" "$\"$INSTDIR\uninstall.exe$\" /S"
+
+    ${GetSize} "$INSTDIR" "/S=0K" $0 $1 $2
+    IntFmt $0 "0x%08X" $0
+    WriteRegDWORD SHCTX "${UNINST_KEY}" "EstimatedSize" "$0"
+!macroend
+
+!macro pelton.deleteUninstaller
+    Delete "$INSTDIR\uninstall.exe"
+
+    SetRegView 64
+    DeleteRegKey SHCTX "${UNINST_KEY}"
+!macroend
+
 Section "-Core" SecCore
     ; leading "-" hides this from the components list and keeps it mandatory:
     ; the app itself and its file/protocol associations always install
@@ -235,7 +261,7 @@ Section "-Core" SecCore
     !insertmacro wails.associateFiles
     !insertmacro wails.associateCustomProtocols
 
-    !insertmacro wails.writeUninstaller
+    !insertmacro pelton.writeUninstaller
 SectionEnd
 
 Section "Start Menu Shortcut" SecStartMenuShortcut
@@ -290,5 +316,5 @@ Section "uninstall"
     ; strings pointing at an executable that is gone.
     DeleteRegKey HKCU "Software\Classes\AppUserModelId\${PELTON_AUMID}"
 
-    !insertmacro wails.deleteUninstaller
+    !insertmacro pelton.deleteUninstaller
 SectionEnd
