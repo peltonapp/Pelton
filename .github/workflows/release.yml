@@ -276,10 +276,10 @@ jobs:
       - name: Build + NSIS installer
         run: wails build -platform windows/amd64 -nsis -ldflags "-X main.version=${{ steps.version.outputs.version }}"
 
-      # A run without a tag signs with whatever policy is set, so the setup can
-      # be tried on test-signing. A release is only signed once the policy is
-      # release-signing: until then it ships unsigned rather than with the
-      # untrusted test certificate.
+      # Releases are signed with release-signing only, and builds without a tag
+      # with test-signing only. The code signing policy promises the release
+      # certificate goes on tagged releases and nothing else, and a release
+      # never ships with the untrusted test certificate.
       - name: Decide whether to sign
         id: signing
         shell: bash
@@ -287,7 +287,8 @@ jobs:
           ORG: ${{ vars.SIGNPATH_ORGANIZATION_ID }}
           POLICY: ${{ vars.SIGNPATH_SIGNING_POLICY_SLUG }}
         run: |
-          if [ -n "$ORG" ] && { [ -z "$RELEASE_TAG" ] || [ "$POLICY" = release-signing ]; }; then
+          if [ -z "$RELEASE_TAG" ]; then want=test-signing; else want=release-signing; fi
+          if [ -n "$ORG" ] && [ "$POLICY" = "$want" ]; then
             echo "sign=true" >> "$GITHUB_OUTPUT"
           else
             echo "sign=false" >> "$GITHUB_OUTPUT"
