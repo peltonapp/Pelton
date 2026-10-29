@@ -31,6 +31,10 @@ on:
         description: "Existing tag to build and upload into, e.g. v2026.3.3. Empty builds without uploading."
         required: false
         default: ""
+      windows_only:
+        description: "Rebuild only the Windows files, e.g. to sign a release made before signing was set up"
+        type: boolean
+        default: false
 
 permissions:
   contents: write
@@ -77,7 +81,7 @@ jobs:
   # ---------------------------------------------------------------------------
   macos:
     needs: draft
-    if: github.event_name != 'release'
+    if: github.event_name != 'release' && !inputs.windows_only
     strategy:
       fail-fast: false
       matrix:
@@ -401,7 +405,7 @@ jobs:
   # ---------------------------------------------------------------------------
   linux:
     needs: draft
-    if: github.event_name != 'release'
+    if: github.event_name != 'release' && !inputs.windows_only
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
@@ -671,9 +675,10 @@ jobs:
   # It only needs flatpak-source. The installers were uploaded by the tag-push
   # run and have been sitting on the draft since; the vendored tarball is the
   # one asset that appears on publish, so it is the only one worth waiting for.
-  # Naming the build jobs here as well would not add a guarantee and would cost
-  # the job entirely: they are skipped on the release event, and a skipped
-  # dependency skips everything that needs it.
+  # The build jobs are named too, for a rebuild started by hand with a tag:
+  # there the files change after publishing, so the digests are refreshed once
+  # the uploads are done. On the release event they are skipped, which is why
+  # the condition starts with always().
   #
   # pelton.app/thanks reads the digest out of the release notes, not out of the
   # asset. Release downloads redirect to a host that sends no CORS headers, so a
@@ -681,12 +686,16 @@ jobs:
   # body happily. The file stays for humans and for `sha256sum -c`.
   # ---------------------------------------------------------------------------
   checksums:
-    needs: flatpak-source
-    if: github.event_name == 'release'
+    needs: [flatpak-source, macos, windows, linux]
+    if: >-
+      always()
+      && !contains(needs.*.result, 'failure')
+      && !contains(needs.*.result, 'cancelled')
+      && (github.event_name == 'release' || inputs.tag != '')
     runs-on: ubuntu-latest
     env:
       GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      TAG: ${{ github.event.release.tag_name }}
+      TAG: ${{ github.event.release.tag_name || inputs.tag }}
     steps:
       - name: Hash every published asset
         run: |
