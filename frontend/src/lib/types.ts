@@ -253,7 +253,11 @@ export interface PhishingReport {
   links?: string[]
 }
 
+/** MessageDetail includes rendered content and bare RFC identifiers for replies. */
 export interface MessageDetail extends MessageSummary {
+  messageId: string
+  inReplyTo: string[]
+  references: string[]
   toAddresses: string
   ccAddresses: string
   bodyPlain: string

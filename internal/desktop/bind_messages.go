@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/peltonapp/Pelton/internal/mailview"
+	"github.com/peltonapp/Pelton/internal/messageid"
 	"github.com/peltonapp/Pelton/internal/storage"
 	"github.com/wailsapp/wails/v2/pkg/runtime"
 )
@@ -100,8 +101,12 @@ func (a *App) GetMessage(id int64) (MessageDetailDTO, error) {
 	// else is blocked until the user asks.
 	autoAllow := a.remoteAutoAllow(m.FromAddress) || a.remoteMessageAllowed(m)
 
+	parentID, _ := messageid.Normalize(m.MessageID)
 	detail := MessageDetailDTO{
 		MessageSummaryDTO: summary,
+		MessageID:         parentID,
+		InReplyTo:         []string{},
+		References:        []string{},
 		ToAddresses:       m.ToAddresses,
 		CcAddresses:       m.CcAddresses,
 		BodyPlain:         m.BodyPlain,

@@ -172,10 +172,10 @@ export function openForward(detail: MessageDetail, mode: EditorMode): number {
   return session.id
 }
 
-// openDraftSession opens a saved local draft for editing. The editor mode is not
-// stored with a draft, so it is read back from the parts: no html is plaintext,
-// html that the text renders to is markdown, anything else is rich text. A
-// draft already open is brought back rather than opened in a second pane.
+/** openDraftSession opens a saved local draft for editing. The editor mode is not
+ * stored with a draft, so it is read back from the parts: no html is plaintext,
+ * html that the text renders to is markdown, anything else is rich text. A
+ * draft already open is brought back rather than opened in a second pane. */
 export function openDraftSession(draft: Draft): number {
   const open = bringBack(draft.id)
   if (open) {
@@ -198,8 +198,8 @@ export function openDraftSession(draft: Draft): number {
     subject: req.subject,
     body: mode === 'wysiwyg' ? req.html : req.text,
     attachments: req.attachments ?? [],
-    inReplyTo: req.inReplyTo,
-    references: req.references ?? [],
+    inReplyTo: req.inReplyTo ?? '',
+    references: [...(req.references ?? [])],
     protection: req.protection,
     draftId: draft.id,
     draftMessageId: req.draftMessageId ?? '',
@@ -210,15 +210,15 @@ export function openDraftSession(draft: Draft): number {
   return session.id
 }
 
-// restoreSession brings back the pane of a saved draft that closed before its
-// upload failed, still saved and linked to its local draft and server copy. A
-// pane already editing that draft is brought back instead of opening a second.
+/** restoreSession brings back the pane of a saved draft that closed before its
+ * upload failed, still saved and linked to its local draft and server copy. A
+ * pane already editing that draft is brought back instead of opening a second. */
 export function restoreSession(session: ComposeSession): number {
   const open = bringBack(session.draftId)
   if (open) {
     return open
   }
-  const restored: ComposeSession = { ...session, id: nextId++, saved: true, minimized: false }
+  const restored: ComposeSession = { ...session, references: [...session.references], id: nextId++, saved: true, minimized: false }
   composeSessions.update((list) => [...list, restored])
   return restored.id
 }
@@ -240,14 +240,14 @@ function formatAddressList(list: Address[] | null): string {
   return (list ?? []).map((a) => (a.name ? `${a.name} <${a.email}>` : a.email)).join(', ')
 }
 
-// reopenSession brings a sent-but-undone message back into a fresh compose pane,
-// preserving every edited field. draftId and draftMessageId are reset because
-// the send already removed the local draft and its server copy, so a save here
-// starts a new one.
+/** reopenSession brings a sent-but-undone message back into a fresh compose pane,
+ * preserving every edited field. draftId and draftMessageId are reset because
+ * the send already removed the local draft and its server copy, so a save here
+ * starts a new one. */
 export function reopenSession(session: ComposeSession): number {
   // a reopened message already has whatever signature it was sent with, so do not
   // auto-insert defaults again.
-  const restored: ComposeSession = { ...session, id: nextId++, draftId: 0, draftMessageId: '', saved: false, signaturesApplied: true }
+  const restored: ComposeSession = { ...session, references: [...session.references], id: nextId++, draftId: 0, draftMessageId: '', saved: false, signaturesApplied: true }
   composeSessions.update((list) => [...list, restored])
   return restored.id
 }
@@ -324,17 +324,11 @@ function forwardBody(detail: MessageDetail, mode: EditorMode): string {
   return `\n\n${header}\n\n${detail.bodyQuote}\n`
 }
 
-// messageIdRef would be the original Message-ID for threading. the detail dto
-// does not expose it directly today, so we leave it empty and rely on the
-// backend, which has the stored Message-ID, to fill threading on send.
-// TODO(backend): expose the original Message-ID in MessageDetailDTO so replies
-// thread precisely from the frontend reference too.
-function messageIdRef(_detail: MessageDetail): string {
-  return ''
+function messageIdRef(detail: MessageDetail): string {
+  return detail.messageId ?? ''
 }
 
-// buildReferences returns the reference chain for threading. empty for the same
-// reason as messageIdRef above.
-function buildReferences(_detail: MessageDetail): string[] {
-  return []
+function buildReferences(detail: MessageDetail): string[] {
+  const parent = messageIdRef(detail)
+  return parent ? [parent] : []
 }

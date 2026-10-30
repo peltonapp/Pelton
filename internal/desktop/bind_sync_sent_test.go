@@ -2,6 +2,7 @@ package desktop
 
 import (
 	"bufio"
+	"bytes"
 	"context"
 	"crypto/tls"
 	"errors"
@@ -9,15 +10,19 @@ import (
 	"net"
 	"net/http"
 	"net/http/httptest"
+	"net/mail"
 	"path/filepath"
 	"strconv"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/peltonapp/Pelton/internal/certtrust"
 	"github.com/peltonapp/Pelton/internal/credentials"
+	"github.com/peltonapp/Pelton/internal/crypto"
 	pimap "github.com/peltonapp/Pelton/internal/imap"
 	"github.com/peltonapp/Pelton/internal/outbox"
+	"github.com/peltonapp/Pelton/internal/smtp"
 	"github.com/peltonapp/Pelton/internal/storage"
 )
 
@@ -28,7 +33,7 @@ import (
 //
 // The whole point of these tests is the step that happens after a send
 // succeeds, so the send has to actually succeed.
-func submissionServer(t *testing.T) (port int, fingerprint string) {
+func submissionServer(t *testing.T, captured ...chan<- []byte) (port int, fingerprint string) {
 	t.Helper()
 	certServer := httptest.NewTLSServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {}))
 	certServer.Close()
@@ -46,7 +51,7 @@ func submissionServer(t *testing.T) (port int, fingerprint string) {
 			if err != nil {
 				return
 			}
-			go speakSubmission(conn)
+			go speakSubmission(conn, captured...)
 		}
 	}()
 
@@ -55,7 +60,7 @@ func submissionServer(t *testing.T) (port int, fingerprint string) {
 	return n, certtrust.Fingerprint(certServer.Certificate())
 }
 
-func speakSubmission(conn net.Conn) {
+func speakSubmission(conn net.Conn, captured ...chan<- []byte) {
 	defer func() { _ = conn.Close() }()
 	r := bufio.NewReader(conn)
 	write := func(s string) { _, _ = conn.Write([]byte(s + "\r\n")) }
@@ -75,14 +80,15 @@ func speakSubmission(conn net.Conn) {
 			write("235 2.7.0 authenticated")
 		case strings.HasPrefix(cmd, "DATA"):
 			write("354 go ahead")
-			// read to the end-of-data marker and accept whatever arrived.
-			for {
-				body, err := r.ReadString('\n')
-				if err != nil {
+			data, err := readSubmissionData(r)
+			if err != nil {
+				return
+			}
+			for _, capture := range captured {
+				select {
+				case capture <- data:
+				case <-time.After(5 * time.Second):
 					return
-				}
-				if strings.TrimSpace(body) == "." {
-					break
 				}
 			}
 			write("250 2.0.0 queued")
@@ -95,10 +101,31 @@ func speakSubmission(conn net.Conn) {
 	}
 }
 
+// readSubmissionData removes SMTP transparency without changing MIME line endings.
+func readSubmissionData(r *bufio.Reader) ([]byte, error) {
+	var data bytes.Buffer
+	for {
+		line, err := r.ReadString('\n')
+		if err != nil {
+			return nil, err
+		}
+		if !strings.HasSuffix(line, "\r\n") {
+			return nil, errors.New("SMTP DATA line missing CRLF")
+		}
+		if line == ".\r\n" {
+			return data.Bytes(), nil
+		}
+		if strings.HasPrefix(line, "..") {
+			line = line[1:]
+		}
+		data.WriteString(line)
+	}
+}
+
 // sendingAccount builds an app and an account whose smtp points at a live test
 // server, with the server's certificate pinned and a password stored, and
 // points the imap side at client.
-func sendingAccount(t *testing.T, client *fakeIMAP) (*App, storage.Account) {
+func sendingAccount(t *testing.T, client *fakeIMAP, captured ...chan<- []byte) (*App, storage.Account) {
 	t.Helper()
 	ctx, stopBackground := testContext(t)
 	db, err := storage.Open(filepath.Join(t.TempDir(), "test.db"))
@@ -111,7 +138,7 @@ func sendingAccount(t *testing.T, client *fakeIMAP) (*App, storage.Account) {
 		t.Fatalf("migrate: %v", err)
 	}
 
-	port, fingerprint := submissionServer(t)
+	port, fingerprint := submissionServer(t, captured...)
 	account := storage.Account{
 		Email:        "me@example.com",
 		Username:     "me@example.com",
@@ -171,6 +198,94 @@ func TestTransmitAppendsACopyToSent(t *testing.T) {
 	}
 	if string(client.appended[0]) != string(raw) {
 		t.Errorf("appended %q, want the message that was sent", client.appended[0])
+	}
+	if !client.loggedOut {
+		t.Error("the imap session opened for the append was left open")
+	}
+}
+
+func TestTransmitReplyPreservesQueuedBytesInSent(t *testing.T) {
+	ctx := context.Background()
+	client := &fakeIMAP{}
+	captured := make(chan []byte, 1)
+	app, account := sendingAccount(t, client, captured)
+
+	msg, err := app.buildMessage(ComposeRequest{
+		AccountID:  account.ID,
+		To:         []AddressDTO{{Email: "you@example.com"}},
+		Subject:    "Re: threading",
+		Text:       "reply body\r\n.dot-prefixed body\r\n.\r\n",
+		InReplyTo:  "parent@example.com",
+		References: []string{"root@example.com", "parent@example.com"},
+	})
+	if err != nil {
+		t.Fatalf("build message: %v", err)
+	}
+	raw, err := smtp.BuildRaw(msg, nil, crypto.ModeNone, crypto.Options{})
+	if err != nil {
+		t.Fatalf("build MIME: %v", err)
+	}
+	if !bytes.Contains(raw, []byte("\r\n.dot-prefixed body\r\n.\r\n")) || !bytes.HasSuffix(raw, []byte("\r\n")) {
+		t.Fatal("MIME fixture must contain dot-prefixed body lines and end with CRLF")
+	}
+	queue := outbox.NewQueue(app.store)
+	id, err := queue.Enqueue(ctx, outbox.Message{
+		AccountID:    account.ID,
+		EnvelopeFrom: msg.From.Email,
+		Recipients:   msg.Recipients(),
+		Raw:          raw,
+	})
+	if err != nil {
+		t.Fatalf("enqueue: %v", err)
+	}
+	rows, err := queue.List(ctx)
+	if err != nil {
+		t.Fatalf("list queue: %v", err)
+	}
+	if len(rows) != 1 || rows[0].ID != id {
+		t.Fatalf("queue = %+v, want one row with ID %d", rows, id)
+	}
+	queued := rows[0]
+	if !bytes.Equal(queued.Raw, raw) {
+		t.Error("queue changed the built MIME bytes")
+	}
+	transmitter := &accountTransmitter{app: app}
+	if err := transmitter.Transmit(ctx, queued); err != nil {
+		t.Fatalf("Transmit: %v", err)
+	}
+	var data []byte
+	select {
+	case data = <-captured:
+	case <-time.After(5 * time.Second):
+		t.Fatal("timed out waiting for SMTP DATA")
+	}
+	if !bytes.Equal(data, queued.Raw) {
+		t.Error("SMTP DATA differs from queued MIME bytes")
+	}
+	if len(client.appended) != 1 {
+		t.Fatalf("appended %d messages to Sent, want 1", len(client.appended))
+	}
+	if !bytes.Equal(client.appended[0], queued.Raw) {
+		t.Error("Sent APPEND differs from queued MIME bytes")
+	}
+	for _, copy := range []struct {
+		name string
+		raw  []byte
+	}{
+		{"queued", queued.Raw},
+		{"SMTP DATA", data},
+		{"Sent APPEND", client.appended[0]},
+	} {
+		parsed, err := mail.ReadMessage(bytes.NewReader(copy.raw))
+		if err != nil {
+			t.Fatalf("parse %s: %v", copy.name, err)
+		}
+		if got := parsed.Header.Get("In-Reply-To"); got != "<parent@example.com>" {
+			t.Errorf("%s In-Reply-To = %q, want <parent@example.com>", copy.name, got)
+		}
+		if got := parsed.Header.Get("References"); got != "<root@example.com> <parent@example.com>" {
+			t.Errorf("%s References = %q, want <root@example.com> <parent@example.com>", copy.name, got)
+		}
 	}
 	if !client.loggedOut {
 		t.Error("the imap session opened for the append was left open")

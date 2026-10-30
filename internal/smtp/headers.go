@@ -8,6 +8,9 @@ import (
 	"strings"
 	"time"
 	"unicode"
+
+	"github.com/peltonapp/Pelton/internal/messageid"
+	"golang.org/x/net/idna"
 )
 
 const (
@@ -83,13 +86,18 @@ func formatAddressList(addrs []Address) string {
 }
 
 // NewMessageID builds a unique Message-ID using the sender's domain so it
-// looks like it came from that host.
+// looks like it came from that host. Domains are IDNA-encoded; an invalid or
+// oversized token uses a safe ASCII fallback.
 func NewMessageID(senderEmail string) (string, error) {
 	buf := make([]byte, messageIDBytes)
 	if _, err := rand.Read(buf); err != nil {
 		return "", fmt.Errorf("smtp: generate message id: %w", err)
 	}
-	return fmt.Sprintf("<%x@%s>", buf, domainOf(senderEmail)), nil
+	id := fmt.Sprintf("<%x@%s>", buf, domainOf(senderEmail))
+	if _, ok := messageid.Normalize(id); !ok {
+		id = fmt.Sprintf("<%x@%s>", buf, fallbackDomain)
+	}
+	return id, nil
 }
 
 // domainOf returns the part after the @ in an address, or a safe fallback.
@@ -106,33 +114,21 @@ func domainOf(email string) string {
 	}) {
 		return fallbackDomain
 	}
-	return domain
+	ascii, err := idna.ToASCII(domain)
+	if err != nil {
+		return fallbackDomain
+	}
+	return ascii
 }
 
-// referenceChain builds the References header value for a reply. The chain is
-// the parent's existing references followed by the message being replied to, so
-// the recipient's client can thread correctly. Folded onto continuation lines
-// to keep each line within rfc length limits.
+// referenceChain validates and bounds reply ancestry, then folds between whole
+// bracketed identifiers so unfolding produces single spaces between tokens.
 func referenceChain(references []string, inReplyTo string) string {
-	chain := make([]string, 0, len(references)+1)
-	chain = append(chain, references...)
-	if inReplyTo != "" && !contains(chain, inReplyTo) {
-		chain = append(chain, inReplyTo)
+	chain := messageid.References(references, inReplyTo)
+	for i, id := range chain {
+		chain[i], _ = messageid.Bracket(id)
 	}
-	if len(chain) == 0 {
-		return ""
-	}
-	// fold with crlf + space between identifiers, a valid header continuation.
 	return strings.Join(chain, crlf+" ")
-}
-
-func contains(list []string, s string) bool {
-	for _, v := range list {
-		if v == s {
-			return true
-		}
-	}
-	return false
 }
 
 // nowDate renders the current time in the rfc 5322 layout. Split out so callers
