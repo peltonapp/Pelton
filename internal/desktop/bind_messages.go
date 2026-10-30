@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/peltonapp/Pelton/internal/mailview"
+	"github.com/peltonapp/Pelton/internal/messageid"
 	"github.com/peltonapp/Pelton/internal/storage"
 	"github.com/wailsapp/wails/v2/pkg/runtime"
 )
@@ -100,8 +101,28 @@ func (a *App) GetMessage(id int64) (MessageDetailDTO, error) {
 	// else is blocked until the user asks.
 	autoAllow := a.remoteAutoAllow(m.FromAddress) || a.remoteMessageAllowed(m)
 
+	parentID, _ := messageid.Normalize(m.MessageID)
+	inReplyTo := []string{}
+	for _, value := range m.InReplyTo {
+		id, ok := messageid.Normalize(value)
+		if !ok {
+			// Filtering could turn an ambiguous field into a single-parent fallback.
+			inReplyTo = []string{}
+			break
+		}
+		inReplyTo = append(inReplyTo, id)
+	}
+	references := []string{}
+	for _, value := range m.References {
+		if id, ok := messageid.Normalize(value); ok {
+			references = append(references, id)
+		}
+	}
 	detail := MessageDetailDTO{
 		MessageSummaryDTO: summary,
+		MessageID:         parentID,
+		InReplyTo:         inReplyTo,
+		References:        references,
 		ToAddresses:       m.ToAddresses,
 		CcAddresses:       m.CcAddresses,
 		BodyPlain:         m.BodyPlain,

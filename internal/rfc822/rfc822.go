@@ -20,6 +20,7 @@ import (
 
 	// decodes the legacy charsets, and guesses at the ones a message gets wrong
 	"github.com/peltonapp/Pelton/internal/charsetguess"
+	"github.com/peltonapp/Pelton/internal/messageid"
 )
 
 // Message is a parsed message. Text and HTML hold the first body part of each
@@ -33,6 +34,12 @@ type Message struct {
 	Date      time.Time
 	Text      string
 	HTML      string
+	// InReplyTo and References contain validated bare IDs in wire order,
+	// preserving duplicates. Both are non-nil even when absent or invalid.
+	// Invalid or repeated In-Reply-To fields leave InReplyTo empty; References
+	// keeps recoverable tokens from each physical field.
+	InReplyTo  []string
+	References []string
 	// Size is the raw source length in bytes.
 	Size        int64
 	Attachments []Attachment
@@ -97,8 +104,9 @@ func Parse(raw []byte) (*Message, error) {
 	return msg, nil
 }
 
-// ParseBody reads only the bodies and attachments, for callers that already
-// have the envelope from elsewhere (the imap server's ENVELOPE response).
+// ParseBody reads the bodies, attachments and common metadata headers, including
+// reply ancestry, for callers that already have the envelope from elsewhere
+// (the imap server's ENVELOPE response).
 func ParseBody(raw []byte) (*Message, error) {
 	msg := &Message{Size: int64(len(raw))}
 	mr, err := reader(raw)
@@ -121,14 +129,31 @@ func reader(raw []byte) (*mail.Reader, error) {
 	return mr, nil
 }
 
-// parts walks the message body, filling in the bodies, the attachments and the
-// unsubscribe headers.
+// parts reads common metadata headers and walks the bodies and attachments.
 func parts(mr *mail.Reader, msg *Message) error {
 	msg.Header = mr.Header
 	msg.ReplyTo = addressList(&mr.Header, "Reply-To")
 	msg.AuthResults = headerValues(&mr.Header, "Authentication-Results")
 	msg.ListUnsubscribe = mr.Header.Get("List-Unsubscribe")
 	msg.ListUnsubscribePost = strings.Contains(strings.ToLower(mr.Header.Get("List-Unsubscribe-Post")), "one-click")
+	msg.InReplyTo = []string{}
+	fields := mr.Header.FieldsByKey("In-Reply-To")
+	count := 0
+	for fields.Next() {
+		count++
+		ids, valid := messageid.ParseHeader(fields.Value())
+		if count == 1 && valid {
+			msg.InReplyTo = ids
+		} else {
+			msg.InReplyTo = []string{}
+		}
+	}
+	msg.References = []string{}
+	fields = mr.Header.FieldsByKey("References")
+	for fields.Next() {
+		ids, _ := messageid.ParseHeader(fields.Value())
+		msg.References = append(msg.References, ids...)
+	}
 
 	for {
 		part, err := mr.NextPart()

@@ -661,8 +661,8 @@ func (a *App) RemoveServerDraft(accountID int64, messageID string) error {
 // a line break would start a header of its own.
 var errBadMessageID = errors.New("pelton: a draft Message-ID must have the form <local@domain>")
 
-// checkMessageID returns errBadMessageID unless id is <local@domain> with no
-// whitespace, control characters, brackets or second @ inside.
+// checkMessageID keeps legacy draft keys injection-safe. Reply tokens use a
+// stricter syntax and length policy; applying it here would orphan old drafts.
 func checkMessageID(id string) error {
 	inner, ok := strings.CutPrefix(id, "<")
 	if ok {
@@ -674,6 +674,14 @@ func checkMessageID(id string) error {
 		return fmt.Errorf("%w: %q", errBadMessageID, id)
 	}
 	return nil
+}
+
+// draftLookupID removes one optional bracket pair without rewriting the key.
+func draftLookupID(id string) (string, bool) {
+	if strings.HasPrefix(id, "<") && strings.HasSuffix(id, ">") {
+		id = id[1 : len(id)-1]
+	}
+	return id, id != "" && !strings.ContainsAny(id, "<>")
 }
 
 // OpenDraft returns the local draft behind a message in a Drafts folder, given
@@ -691,8 +699,8 @@ func (a *App) OpenDraft(messageID int64) (DraftDTO, error) {
 	}
 	// sync stores the Message-ID without its angle brackets, the builder
 	// writes it with them.
-	want := strings.Trim(m.MessageID, "<>")
-	if want == "" {
+	want, ok := draftLookupID(m.MessageID)
+	if !ok {
 		return DraftDTO{}, nil
 	}
 	a.draftsMu.Lock()
@@ -702,7 +710,8 @@ func (a *App) OpenDraft(messageID int64) (DraftDTO, error) {
 		return DraftDTO{}, err
 	}
 	for _, d := range drafts {
-		if strings.Trim(d.Request.DraftMessageID, "<>") == want {
+		candidate, ok := draftLookupID(d.Request.DraftMessageID)
+		if ok && candidate == want {
 			return a.toDraftDTO(d), nil
 		}
 	}

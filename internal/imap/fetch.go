@@ -81,6 +81,10 @@ type Message struct {
 	// charset or one nothing knows, and is empty for mail that was right about
 	// itself. It is kept so the reader can be told the text was guessed at.
 	CharsetGuess string
+	// InReplyTo and References preserve parsed bare IDs in wire order,
+	// including duplicates. Both are non-nil when absent or invalid.
+	InReplyTo  []string
+	References []string
 }
 
 // Attachment holds attachment metadata and its decoded content. It is the
@@ -334,5 +338,7 @@ func parseBody(raw []byte, msg *Message) error {
 	msg.ListUnsubscribePost = parsed.ListUnsubscribePost
 	msg.ReplyTo = parsed.ReplyTo
 	msg.AuthResults = parsed.AuthResults
+	msg.InReplyTo = parsed.InReplyTo
+	msg.References = parsed.References
 	return nil
 }

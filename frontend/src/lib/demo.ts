@@ -211,6 +211,9 @@ export function demoMessage(id: number): MessageDetail {
   const summary = messages.find((m) => m.id === id) ?? messages[0]
   return {
     ...summary,
+    messageId: '',
+    inReplyTo: [],
+    references: [],
     seen: true,
     toAddresses: 'spud@pelton.email',
     ccAddresses: '',
