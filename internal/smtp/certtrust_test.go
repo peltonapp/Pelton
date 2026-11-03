@@ -15,9 +15,10 @@ import (
 )
 
 // selfSignedSubmission starts an implicit-TLS submission server with httptest's
-// self-signed certificate that answers just enough (greeting, EHLO, QUIT) for
-// Dial and Close. It returns the port and the certificate's fingerprint.
-func selfSignedSubmission(t *testing.T) (int, string) {
+// self-signed certificate. serve handles each connection; serveSubmission
+// answers just enough (greeting, EHLO, QUIT) for Dial and Close. It returns
+// the port and the certificate's fingerprint.
+func selfSignedSubmission(t *testing.T, serve func(net.Conn)) (int, string) {
 	t.Helper()
 	certServer := httptest.NewTLSServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {}))
 	certServer.Close()
@@ -35,7 +36,7 @@ func selfSignedSubmission(t *testing.T) (int, string) {
 			if err != nil {
 				return
 			}
-			go serveSubmission(conn)
+			go serve(conn)
 		}
 	}()
 
@@ -71,7 +72,7 @@ func serveSubmission(conn net.Conn) {
 // could say "connection failed" but not that it was the certificate, so the
 // trust prompt never had anything to show (#446).
 func TestDialReportsAnUntrustedCertificate(t *testing.T) {
-	port, fp := selfSignedSubmission(t)
+	port, fp := selfSignedSubmission(t, serveSubmission)
 
 	_, err := Dial(Config{Host: "127.0.0.1", Port: port, TLS: TLSImplicit})
 	if !errors.Is(err, ErrConnect) {
@@ -87,7 +88,7 @@ func TestDialReportsAnUntrustedCertificate(t *testing.T) {
 }
 
 func TestDialAcceptsAPinnedCertificate(t *testing.T) {
-	port, fp := selfSignedSubmission(t)
+	port, fp := selfSignedSubmission(t, serveSubmission)
 
 	client, err := Dial(Config{Host: "127.0.0.1", Port: port, TLS: TLSImplicit, Trust: certtrust.Trust{Pins: []string{fp}}})
 	if err != nil {
