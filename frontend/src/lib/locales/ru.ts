@@ -315,6 +315,7 @@ const ru: Record<string, string> = {
   'common.statusBar.lowPowerTitle': 'Режим энергосбережения включён: автосинхронизация и пакетная загрузка на паузе. Нажмите, чтобы выключить.',
   'common.statusBar.lowPower': 'Режим энергосбережения',
   'common.statusBar.devMode': 'РЕЖИМ РАЗРАБОТЧИКА',
+  'common.statusBar.visualMode': 'ВИЗУАЛЬНЫЙ',
   'common.statusBar.devModeTitle': 'Работаем с каталогом разработчиков, а не с вашим настоящим почтовым ящиком.',
   'common.statusBar.devToolsTitle': 'Включены инструменты для разработчиков. Нажмите для наложения.',
   'common.statusBar.nightly': 'Ночная сборка',

@@ -315,6 +315,7 @@ const es: Record<string, string> = {
   'common.statusBar.lowPowerTitle': 'El modo de bajo consumo está activado: la sincronización automática y las descargas masivas están en pausa. Haz clic para desactivarlo.',
   'common.statusBar.lowPower': 'Bajo consumo',
   'common.statusBar.devMode': 'MODO DESARROLLADOR',
+  'common.statusBar.visualMode': 'VISUAL',
   'common.statusBar.devModeTitle': 'Usando la carpeta de datos de desarrollo, no tu buzón real.',
   'common.statusBar.devToolsTitle': 'Las herramientas de desarrollo están activas. Haz clic para ver los paneles.',
   'common.statusBar.nightly': 'Nightly',

@@ -315,6 +315,7 @@ const nl: Record<string, string> = {
   'common.statusBar.lowPowerTitle': 'Energiebesparende modus staat aan: automatisch synchroniseren en bulkdownloads zijn gepauzeerd. Klik om uit te zetten.',
   'common.statusBar.lowPower': 'Energiebesparend',
   'common.statusBar.devMode': 'ONTWIKKELMODUS',
+  'common.statusBar.visualMode': 'VISUEEL',
   'common.statusBar.devModeTitle': 'Draait op de ontwikkel-datamap, niet je echte mailbox.',
   'common.statusBar.devToolsTitle': 'Ontwikkelaarsgereedschap staat aan. Klik voor de overlays.',
   'common.statusBar.nightly': 'Nightly',

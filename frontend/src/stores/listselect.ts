@@ -24,11 +24,20 @@ let anchored: Set<number> = new Set()
 // clearing: an offer left standing over a list nobody selected is a lie.
 export const expandOffer = writable<{ loaded: number; matching: number } | null>(null)
 
+/**
+ * Whether a vim-mode visual selection is running. While it is, moving the
+ * cursor extends the range from the anchor instead of only moving. It ends with
+ * the selection, so a bulk action or a folder switch never leaves the next
+ * motion quietly selecting rows.
+ */
+export const visualMode = writable(false)
+
 // clearSelection drops every selection and the anchor. called on folder/search
 // changes so a stale selection never lingers across lists.
 export function clearSelection(): void {
   anchorId = null
   anchored = new Set()
+  visualMode.set(false)
   selectedIds.set(new Set())
   expandOffer.set(null)
 }
@@ -99,4 +108,23 @@ export function deselect(id: number): void {
   if (next.delete(id)) {
     selectedIds.set(next)
   }
+}
+
+// startVisual begins a visual selection at the cursor row, on top of whatever is
+// already selected, so ending one range, moving past some rows and starting
+// another skips the rows in between.
+export function startVisual(orderedIds: number[], id: number): void {
+  anchorAt(id)
+  visualMode.set(true)
+  selectRange(orderedIds, id)
+}
+
+// endVisual stops extending the selection and keeps what it picked.
+export function endVisual(): void {
+  visualMode.set(false)
+}
+
+/** Reports whether a vim-mode visual selection is running. */
+export function inVisual(): boolean {
+  return get(visualMode)
 }

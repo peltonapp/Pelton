@@ -322,6 +322,7 @@ const zhCN: Record<string, string> = {
   'common.statusBar.lowPowerTitle': '低功耗模式已开启：自动同步和批量下载已暂停。点击关闭。',
   'common.statusBar.lowPower': '低功耗',
   'common.statusBar.devMode': '开发者模式',
+  'common.statusBar.visualMode': '可视',
   'common.statusBar.devModeTitle': '当前使用的是开发数据目录，而非你真实的邮箱。',
   'common.statusBar.devToolsTitle': '开发者工具已开启。点击可查看各个覆盖层。',
   'common.statusBar.nightly': '每夜构建版',
