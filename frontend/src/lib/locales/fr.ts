@@ -315,6 +315,7 @@ const fr: Record<string, string> = {
   'common.statusBar.lowPowerTitle': 'Le mode basse consommation est activé : la synchronisation automatique et les téléchargements en masse sont en pause. Clique pour le désactiver.',
   'common.statusBar.lowPower': 'Basse consommation',
   'common.statusBar.devMode': 'MODE DÉVELOPPEUR',
+  'common.statusBar.visualMode': 'VISUEL',
   'common.statusBar.devModeTitle': "Utilise le dossier de données de développement, pas votre vraie boîte mail.",
   'common.statusBar.devToolsTitle': 'Les outils de développement sont actifs. Cliquez pour les panneaux.',
   'common.statusBar.nightly': 'Nightly',

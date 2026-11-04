@@ -315,6 +315,7 @@ const it: Record<string, string> = {
   'common.statusBar.lowPowerTitle': 'La modalità di risparmio energetico è attiva: la sincronizzazione automatica e i download massivi sono in pausa. Fai clic per disattivare.',
   'common.statusBar.lowPower': 'Risparmio energetico',
   'common.statusBar.devMode': 'MODALITÀ SVILUPPATORE',
+  'common.statusBar.visualMode': 'VISUALE',
   'common.statusBar.devModeTitle': 'In esecuzione sulla directory dei dati di sviluppo, non sulla tua casella di posta reale.',
   'common.statusBar.devToolsTitle': 'Gli strumenti per sviluppatori sono attivi. Fai clic per visualizzare gli overlay.',
   'common.statusBar.nightly': 'Nightly',

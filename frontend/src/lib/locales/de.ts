@@ -315,6 +315,7 @@ const de: Record<string, string> = {
   'common.statusBar.lowPowerTitle': 'Energiesparmodus ist aktiv: Automatische Synchronisierung und Massendownloads sind pausiert. Klicken zum Ausschalten.',
   'common.statusBar.lowPower': 'Energiesparmodus',
   'common.statusBar.devMode': 'ENTWICKLERMODUS',
+  'common.statusBar.visualMode': 'VISUELL',
   'common.statusBar.devModeTitle': 'Läuft mit dem Entwickler-Datenverzeichnis, nicht mit deinem echten Postfach.',
   'common.statusBar.devToolsTitle': 'Entwicklerwerkzeuge sind aktiv. Klicken für die Overlays.',
   'common.statusBar.nightly': 'Nightly',

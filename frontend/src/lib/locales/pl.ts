@@ -315,6 +315,7 @@ const pl: Record<string, string> = {
   'common.statusBar.lowPowerTitle': 'Tryb oszczędzania energii jest włączony: autosynchronizacja i masowe pobierania są wstrzymane. Kliknij, aby wyłączyć.',
   'common.statusBar.lowPower': 'Oszczędzanie energii',
   'common.statusBar.devMode': 'TRYB DEWELOPERSKI',
+  'common.statusBar.visualMode': 'WIZUALNY',
   'common.statusBar.devModeTitle': 'Działa na deweloperskim katalogu danych, nie na prawdziwej skrzynce.',
   'common.statusBar.devToolsTitle': 'Narzędzia deweloperskie są włączone. Kliknij, aby otworzyć nakładki.',
   'common.statusBar.nightly': 'Nightly',

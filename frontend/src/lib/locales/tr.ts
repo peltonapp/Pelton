@@ -315,6 +315,7 @@ const tr: Record<string, string> = {
   'common.statusBar.lowPowerTitle': 'Düşük güç modu açık: otomatik eşitleme ve toplu indirmeler duraklatıldı. Kapatmak için tıklayın.',
   'common.statusBar.lowPower': 'Düşük güç',
   'common.statusBar.devMode': 'GELİŞTİRİCİ MODU',
+  'common.statusBar.visualMode': 'GÖRSEL',
   'common.statusBar.devModeTitle': 'Gerçek posta kutunuza değil, geliştirme veri dizinine bağlı çalışıyor.',
   'common.statusBar.devToolsTitle': 'Geliştirici araçları açık. Panelleri görmek için tıklayın.',
   'common.statusBar.nightly': 'Gece Sürümü',

@@ -315,6 +315,7 @@ const ar: Record<string, string> = {
   'common.statusBar.lowPowerTitle': 'وضع توفير الطاقة مفعّل: المزامنة التلقائية والتنزيلات الجماعية معلّقة. انقر للإيقاف.',
   'common.statusBar.lowPower': 'توفير الطاقة',
   'common.statusBar.devMode': 'وضع المطور',
+  'common.statusBar.visualMode': 'مرئي',
   'common.statusBar.devModeTitle': 'يعمل على مجلد بيانات التطوير، وليس صندوق بريدك الحقيقي.',
   'common.statusBar.devToolsTitle': 'أدوات المطورين مفعّلة. انقر لعرض الطبقات.',
   'common.statusBar.nightly': 'الإصدار الليلي',

@@ -143,6 +143,12 @@
   --nightly: #8b3cc0;
   --nightly-bg: color-mix(in srgb, #b965e2 16%, transparent);
 
+  /* the VISUAL badge app vim mode shows while a visual selection runs. a fixed
+     blue rather than the accent, so it reads the same whatever accent is
+     picked and never blends into the selected rows it describes. */
+  --visual: #1f6feb;
+  --visual-bg: color-mix(in srgb, #1f6feb 12%, transparent);
+
   /* the dim behind a modal. */
   --scrim: rgba(0, 0, 0, 0.4);
 }
@@ -180,6 +186,9 @@
 
   --nightly: #c98cea;
   --nightly-bg: color-mix(in srgb, #b965e2 22%, transparent);
+
+  --visual: #6ea8fe;
+  --visual-bg: color-mix(in srgb, #6ea8fe 18%, transparent);
 
   --scrim: rgba(0, 0, 0, 0.55);
 

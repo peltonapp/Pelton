@@ -315,6 +315,7 @@ const en: Record<string, string> = {
   'common.statusBar.lowPowerTitle': 'Low power mode is on: auto-sync and bulk downloads are paused. Click to turn off.',
   'common.statusBar.lowPower': 'Low power',
   'common.statusBar.devMode': 'DEVELOPER MODE',
+  'common.statusBar.visualMode': 'VISUAL',
   'common.statusBar.devModeTitle': 'Running against the dev data directory, not your real mailbox.',
   'common.statusBar.devToolsTitle': 'Developer tools are on. Click for the overlays.',
   'common.statusBar.nightly': 'Nightly',

@@ -2,8 +2,8 @@
   // column 2: the message list. it loads the page for the current selection,
   // runs fts5 search, and owns keyboard navigation (up/down to move, enter to
   // open). opening a message marks it seen optimistically. when multi-select is
-  // enabled, cmd/ctrl-click toggles rows and shift-click selects a range, with a
-  // selection toolbar for bulk mark/flag/delete. loading, empty and error states
+  // enabled, cmd/ctrl-click or space toggles rows and shift-click or shift+up/down
+  // selects a range, with a selection toolbar for bulk mark/flag/delete. loading, empty and error states
   // are all explicit so the pane is never blank.
   import { tick, onMount } from 'svelte'
   import MessageRow from './MessageRow.svelte'
@@ -360,9 +360,12 @@
     void open(index)
   }
 
-  // keyboard navigation over the rows.
+  // keyboard navigation over the rows. In app vim mode, escape and
+  // shift+up/down belong to the vim motions in App.svelte, whose cursor is the
+  // open message rather than this highlight.
   async function onKeydown(event: KeyboardEvent): Promise<void> {
-    if (event.key === 'Escape' && selectionCount > 0) {
+    const vim = $prefs.appVimMode
+    if (event.key === 'Escape' && selectionCount > 0 && !vim) {
       clearAll()
       return
     }
@@ -377,17 +380,29 @@
       await selectAllInList(items.map((m) => m.id))
       return
     }
-    if (event.key === 'ArrowDown') {
+    if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+      const extend = event.shiftKey && $prefs.multiSelectEnabled
+      if (extend && vim) {
+        return
+      }
       event.preventDefault()
-      activeIndex = Math.min(activeIndex + 1, items.length - 1)
-      await scrollActiveIntoView()
-    } else if (event.key === 'ArrowUp') {
-      event.preventDefault()
-      activeIndex = Math.max(activeIndex - 1, 0)
+      activeIndex =
+        event.key === 'ArrowDown' ? Math.min(activeIndex + 1, items.length - 1) : Math.max(activeIndex - 1, 0)
+      const id = items[activeIndex].id
+      // a plain move makes the row the anchor, so a range started from it
+      // includes it, the way a click does.
+      if (extend) {
+        selectRange(items.map((m) => m.id), id)
+      } else {
+        anchorAt(id)
+      }
       await scrollActiveIntoView()
     } else if (event.key === 'Enter' && activeIndex >= 0) {
       event.preventDefault()
       await open(activeIndex)
+    } else if (event.key === ' ' && $prefs.multiSelectEnabled && activeIndex >= 0) {
+      event.preventDefault()
+      toggleSelect(items[activeIndex].id)
     }
   }
 
