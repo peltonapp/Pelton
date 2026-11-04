@@ -24,11 +24,28 @@ let anchored: Set<number> = new Set()
 // clearing: an offer left standing over a list nobody selected is a lie.
 export const expandOffer = writable<{ loaded: number; matching: number } | null>(null)
 
+/**
+ * Whether a vim-mode visual selection is running. While it is, moving the
+ * cursor extends the range from the anchor instead of only moving. It ends with
+ * the selection, so a bulk action or a folder switch never leaves the next
+ * motion quietly selecting rows.
+ */
+export const visualMode = writable(false)
+
+/**
+ * The row a keyboard range ends on in app vim mode, or null while the cursor is
+ * simply the open message. Extending a range moves this instead of opening
+ * every message on the way, which would mark each of them read.
+ */
+export const rangeCursor = writable<number | null>(null)
+
 // clearSelection drops every selection and the anchor. called on folder/search
 // changes so a stale selection never lingers across lists.
 export function clearSelection(): void {
   anchorId = null
   anchored = new Set()
+  visualMode.set(false)
+  rangeCursor.set(null)
   selectedIds.set(new Set())
   expandOffer.set(null)
 }
@@ -40,6 +57,17 @@ export function clearSelection(): void {
 export function anchorAt(id: number): void {
   anchorId = id
   anchored = new Set(get(selectedIds))
+}
+
+/**
+ * Anchors at a row unless an anchor is already set. Clearing the selection and
+ * select all both drop the anchor, and a keyboard range extended after either
+ * has to start at the highlighted row rather than one past it.
+ */
+export function ensureAnchor(id: number): void {
+  if (anchorId === null) {
+    anchorAt(id)
+  }
 }
 
 // toggleSelect flips one id (cmd/ctrl-click) and makes it the new anchor.
@@ -99,4 +127,23 @@ export function deselect(id: number): void {
   if (next.delete(id)) {
     selectedIds.set(next)
   }
+}
+
+// startVisual begins a visual selection at the cursor row, on top of whatever is
+// already selected, so ending one range, moving past some rows and starting
+// another skips the rows in between.
+export function startVisual(orderedIds: number[], id: number): void {
+  anchorAt(id)
+  visualMode.set(true)
+  selectRange(orderedIds, id)
+}
+
+// endVisual stops extending the selection and keeps what it picked.
+export function endVisual(): void {
+  visualMode.set(false)
+}
+
+/** Reports whether a vim-mode visual selection is running. */
+export function inVisual(): boolean {
+  return get(visualMode)
 }
