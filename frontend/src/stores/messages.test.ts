@@ -35,6 +35,7 @@ function summary(id: number, over: Partial<MessageSummary> = {}): MessageSummary
     snoozeUntil: '',
     senderVip: false,
     smime: { status: '', signer: '', email: '', issuer: '', detail: '' },
+    messageId: '',
     ...over,
   }
 }

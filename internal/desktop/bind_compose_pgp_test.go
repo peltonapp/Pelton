@@ -281,13 +281,13 @@ func TestComposeProtectionStatusWithNoRecipients(t *testing.T) {
 // TestSealedDraftIsNotStoredInTheClear: the whole point of the draft sealing is
 // that the database does not hold the text of a message chosen to be encrypted.
 func TestSealedDraftIsNotStoredInTheClear(t *testing.T) {
-	app, db, accountID := pgpTestApp(t, []string{"me@example.com"}, []string{"a@example.com"})
+	app, db, accountID := pgpTestApp(t, []string{"me@example.com"}, []string{"alice@other.test"})
 	ctx := context.Background()
 
 	req := ComposeRequest{
 		AccountID:  accountID,
 		Protection: protectionEncrypt,
-		To:         addr("a@example.com"),
+		To:         addr("alice@other.test"),
 		Subject:    "quarterly numbers",
 		Text:       "not for the database",
 	}
@@ -300,7 +300,7 @@ func TestSealedDraftIsNotStoredInTheClear(t *testing.T) {
 	if err != nil {
 		t.Fatalf("read drafts setting: %v", err)
 	}
-	for _, secret := range []string{"quarterly numbers", "not for the database", "a@example.com"} {
+	for _, secret := range []string{"quarterly numbers", "not for the database", "alice@other.test"} {
 		if strings.Contains(raw, secret) {
 			t.Errorf("the stored draft still contains %q", secret)
 		}

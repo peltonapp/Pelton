@@ -129,6 +129,9 @@ type MessageSummaryDTO struct {
 	// SMIME is the s/mime signature verdict recorded when the message synced.
 	// Empty status means unsigned, which is most mail.
 	SMIME SMIMEDTO `json:"smime"`
+	// MessageID is the Message-ID header without its angle brackets, empty
+	// when the message had none.
+	MessageID string `json:"messageId"`
 }
 
 // smimeDTO flattens a verified signature for the ui. It carries both PGP and
@@ -394,6 +397,7 @@ func toSummaryDTO(m storage.Message, accountEmail, folderName string) MessageSum
 			Issuer: m.SMIME.Issuer,
 			Detail: m.SMIME.Detail,
 		},
+		MessageID: strings.Trim(m.MessageID, "<>"),
 	}
 }
 

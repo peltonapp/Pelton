@@ -1,6 +1,7 @@
 package mailview
 
 import (
+	"errors"
 	"fmt"
 	"slices"
 	"strings"
@@ -191,5 +192,25 @@ func TestSanitizeDirectionDoesNotRescueBlockedElements(t *testing.T) {
 	}
 	if !strings.Contains(got, `dir="rtl"`) {
 		t.Errorf("Sanitize() dropped the direction of the surviving paragraph: %q", got)
+	}
+}
+
+// A MIME entity with nothing to read, an empty body or attachments alone, is
+// ErrNoReadableBody, which a caller shows as an empty body. Text that is not a
+// MIME entity at all is a different error, for a caller to show as it stands.
+func TestParseEntityWithoutAReadableBody(t *testing.T) {
+	for name, raw := range map[string]string{
+		"empty body": "Content-Type: text/plain; charset=utf-8; protected-headers=\"v1\"\r\nSubject: x\r\n\r\n",
+		"attachments only": "Content-Type: multipart/mixed; boundary=b\r\n\r\n--b\r\n" +
+			"Content-Type: application/octet-stream\r\nContent-Disposition: attachment; filename=a.bin\r\n\r\nAA==\r\n--b--\r\n",
+	} {
+		if _, err := ParseEntity([]byte(raw)); !errors.Is(err, ErrNoReadableBody) {
+			t.Errorf("%s: ParseEntity = %v, want ErrNoReadableBody", name, err)
+		}
+	}
+	for _, raw := range []string{"Hello Bob,\nsee you tomorrow.\n", "Note: this looks like a header\n"} {
+		if _, err := ParseEntity([]byte(raw)); err == nil || errors.Is(err, ErrNoReadableBody) {
+			t.Errorf("ParseEntity(%q) = %v, want an error other than ErrNoReadableBody", raw, err)
+		}
 	}
 }

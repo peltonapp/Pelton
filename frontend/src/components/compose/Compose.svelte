@@ -43,7 +43,7 @@
   import { signatures, signatureById, getAccountSignatures } from '../../stores/signatures'
   import type { Signature } from '../../lib/types'
   import { sidebar } from '../../stores/accounts'
-  import { sendMessage, saveDraft, deleteDraft, uploadDraft, removeServerDraft } from '../../lib/api'
+  import { sendMessage, saveDraft, deleteDraft, uploadDraft } from '../../lib/api'
   import { loadOutbox } from '../../stores/outbox'
   import { scheduleUndo } from '../../stores/undosend'
   import { prefs } from '../../stores/prefs'
@@ -55,7 +55,7 @@
   import { composeProtectionStatus } from '../../lib/api'
   import type { ProtectionStatus } from '../../lib/types'
   import { atTime, addDays, nextWeekday } from '../../lib/datepresets'
-  import { errorMessage, toastError, toastInfo, toastSuccess } from '../../stores/toast'
+  import { errorMessage, toastError, toastSuccess } from '../../stores/toast'
   import type CodeMirrorEditor from './CodeMirrorEditor.svelte'
   import type RichEditorView from './RichEditor.svelte'
 
@@ -458,17 +458,9 @@
     return done
   }
 
-  // upload replaces the draft's server copy. An encrypted draft is not uploaded,
-  // and a plaintext copy an earlier save left there is removed.
+  // upload replaces the draft's server copy. The backend encrypts the copy of
+  // an encrypted draft to the user's own key.
   async function upload(current: ComposeSession, draftId: number): Promise<void> {
-    if (current.protection === 'encrypt' || current.protection === 'signencrypt') {
-      toastInfo($t('compose.toast.draftLocalOnly'))
-      if (current.draftMessageId) {
-        await removeServerDraft(current.accountId, current.draftMessageId)
-        updateCompose(current.id, { draftMessageId: '' })
-      }
-      return
-    }
     try {
       updateCompose(current.id, { draftMessageId: await uploadDraft(draftId) })
     } catch (err) {

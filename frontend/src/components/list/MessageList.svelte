@@ -75,9 +75,15 @@
     removeOffline,
     archiveMessage,
     openDraft,
+    unsealDraft,
+    signerFingerprint,
+    listPGPKeys,
+    draftSubjects,
   } from '../../lib/api'
+  import { openPassphrase } from '../../stores/passphrase'
+  import { currentProfile } from '../../stores/profiles'
   import { openReply, openForward, openDraftSession } from '../../stores/compose'
-  import { sidebar } from '../../stores/accounts'
+  import { sidebar, type SidebarData } from '../../stores/accounts'
   import { openSnooze, openSnoozeMany } from '../../stores/snooze'
   import { openMove, openMoveMany } from '../../stores/move'
   import { recordDeleted } from '../../stores/undodelete'
@@ -87,7 +93,7 @@
   import { openInTab } from '../../stores/tabs'
   import { errorMessage, toastError } from '../../stores/toast'
   import { isVIPAddress } from '../../stores/vip'
-  import type { Selection, MessageSummary, SwipeAction, EditorMode, SearchSortPref } from '../../lib/types'
+  import type { Selection, MessageSummary, SwipeAction, EditorMode, SearchSortPref, Draft } from '../../lib/types'
   import { t } from '../../lib/i18n'
   import {
     markSeen,
@@ -199,6 +205,45 @@
   // each account's colour (#486), shown only while the list mixes accounts.
   $: accountColors = Object.fromEntries(($sidebar.data?.accounts ?? []).map((a) => [a.id, a.color ?? '']))
   $: mixedAccounts = items.some((m) => m.accountId !== items[0].accountId)
+
+  // isDraftRow is true for a message in a folder used as Drafts.
+  function isDraftRow(item: MessageSummary, data: SidebarData | null): boolean {
+    return data?.foldersByAccount[item.accountId]?.find((f) => f.id === item.folderId)?.role === 'drafts'
+  }
+
+  // subjects holds the real subjects of encrypted drafts this device can read
+  // without a prompt, by Message-ID. Their server copies are titled "...".
+  // Only a list holding drafts looks them up, and a failed lookup leaves
+  // "..." showing. The list outlives a profile switch, so a switch clears
+  // them, and only the newest lookup's answer is used: an older one may be
+  // another profile's.
+  let subjects: Record<string, string> = {}
+  let subjectsProfile: number | undefined
+  let subjectsLookup = 0
+  async function loadDraftSubjects(rows: MessageSummary[], data: SidebarData | null, profile: number | undefined): Promise<void> {
+    const lookup = ++subjectsLookup
+    if (profile !== subjectsProfile) {
+      subjectsProfile = profile
+      subjects = {}
+    }
+    const accounts = [...new Set(rows.filter((m) => isDraftRow(m, data)).map((m) => m.accountId))]
+    if (accounts.length === 0) {
+      return
+    }
+    const found = await Promise.all(accounts.map((id) => draftSubjects(id).catch(() => ({}))))
+    if (lookup === subjectsLookup) {
+      subjects = Object.assign({}, ...found)
+    }
+  }
+  $: void loadDraftSubjects(items, $sidebar.data, $currentProfile?.id)
+
+  // shown puts a known subject on a row. Only a sealed draft's server copy
+  // carries one of those Message-IDs.
+  function shown(item: MessageSummary, known: Record<string, string>): MessageSummary {
+    const subject = item.messageId ? known[item.messageId] : undefined
+    return subject === undefined ? item : { ...item, subject }
+  }
+
   // a result set pages too: a broad query matches far more than one page, and
   // stopping at the first page is what made a match ranked below it look like
   // no match at all.
@@ -305,6 +350,28 @@
     applySearch($searchQuery.trim(), searchFilter)
   }
 
+  // openLockedDraft asks for the passphrase of the account's own key and opens
+  // the draft once it is unsealed. Cancelling the prompt opens nothing, and a
+  // wrong passphrase keeps the prompt up. With no key of its own to ask for,
+  // the unseal is tried anyway so its error reaches the user.
+  async function openLockedDraft(draft: Draft): Promise<void> {
+    const unseal = (): Promise<void> =>
+      unsealDraft(draft.id, '').then(
+        (opened) => {
+          openDraftSession(opened)
+          void loadDraftSubjects(items, $sidebar.data, $currentProfile?.id)
+        },
+        (err) => toastError(errorMessage(err)),
+      )
+    const fingerprint = await signerFingerprint(draft.accountId)
+    const key = fingerprint ? (await listPGPKeys()).find((k) => k.fingerprint === fingerprint) : undefined
+    if (!key) {
+      await unseal()
+      return
+    }
+    openPassphrase(key, () => void unseal())
+  }
+
   // open marks the message seen if needed (and wanted) and shows it in the detail pane. a
   // plain open also clears any multi-selection. A draft Pelton saved on this
   // device opens in the composer instead; any other draft is only read.
@@ -313,10 +380,13 @@
     if (!item) {
       return
     }
-    const folder = $sidebar.data?.foldersByAccount[item.accountId]?.find((f) => f.id === item.folderId)
-    if (folder?.role === 'drafts') {
+    if (isDraftRow(item, $sidebar.data)) {
       try {
         const draft = await openDraft(item.id)
+        if (draft.locked) {
+          await openLockedDraft(draft)
+          return
+        }
         if (draft.id !== 0) {
           openDraftSession(draft)
           return
@@ -808,7 +878,7 @@
         {@const index = startIndex + i}
         <div id={`msg-${item.id}`}>
           <MessageRow
-            message={item}
+            message={shown(item, subjects)}
             accountColor={mixedAccounts ? (accountColors[item.accountId] ?? '') : ''}
             selected={item.id === $openMessageId || index === activeIndex}
             checked={$selectedIds.has(item.id)}

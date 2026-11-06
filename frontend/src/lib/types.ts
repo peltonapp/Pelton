@@ -168,6 +168,9 @@ export interface MessageSummary {
   senderVip: boolean
   // smime is the signature verdict recorded when the message synced.
   smime: SMIMESignature
+  // messageId is the Message-ID header without its angle brackets, '' when
+  // the message had none.
+  messageId: string
 }
 
 // SMIMESignature is a message's s/mime signature verdict. An empty status means
@@ -391,8 +394,8 @@ export interface Draft {
   savedAt: string
   request: ComposeRequest
   // locked is true for a draft of an encrypted message that could not be
-  // opened with a passphrase Pelton currently holds. Its request is empty
-  // until unsealDraft opens it.
+  // opened with a passphrase Pelton currently holds. Its request holds only
+  // the draftMessageId until unsealDraft opens it.
   locked: boolean
   accountId: number
   protection: string

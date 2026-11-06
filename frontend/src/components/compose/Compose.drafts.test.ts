@@ -8,7 +8,6 @@ const api = vi.hoisted(() => ({
   saveDraft: vi.fn(),
   deleteDraft: vi.fn(),
   uploadDraft: vi.fn(),
-  removeServerDraft: vi.fn(),
   composeProtectionStatus: vi.fn(),
 }))
 
@@ -129,16 +128,6 @@ describe('saving a draft to the server', () => {
     expect(api.deleteDraft).toHaveBeenCalledWith(7)
   })
 
-  it('keeps an encrypted draft on this device', async () => {
-    openPane({ protection: 'encrypt' })
-
-    await click('Save draft')
-
-    await vi.waitFor(() => expect(toastMessages()).toContain('Encrypted drafts are not uploaded to the server.'))
-    expect(api.saveDraft).toHaveBeenCalledOnce()
-    expect(api.uploadDraft).not.toHaveBeenCalled()
-  })
-
   it('reports a failed upload without hiding the local save', async () => {
     openPane()
     api.uploadDraft.mockRejectedValue(new Error('no Drafts folder'))
@@ -196,7 +185,6 @@ describe('saving a draft to the server', () => {
 
     await vi.waitFor(() => expect(get(composeSessions)).toEqual([]))
     expect(api.deleteDraft).not.toHaveBeenCalled()
-    expect(api.removeServerDraft).not.toHaveBeenCalled()
   })
 
   it('does not bring a discarded pane back when its running upload fails', async () => {
@@ -226,18 +214,16 @@ describe('saving a draft to the server', () => {
     expect(screen.queryByRole('button', { name: 'Discard' })).toBeNull()
   })
 
-  it('removes the plaintext server copy once the draft is switched to encrypted', async () => {
+  it('uploads an encrypted draft over its plaintext server copy', async () => {
     const id = openPane()
     await saveUploaded(id)
 
     updateCompose(id, { protection: 'encrypt' })
     await click('Save draft')
 
-    await vi.waitFor(() => {
-      expect(api.removeServerDraft).toHaveBeenCalledWith(1, '<d1@pelton>')
-      expect(getSession(id)?.draftMessageId).toBe('')
-    })
-    expect(api.uploadDraft).toHaveBeenCalledOnce()
+    await vi.waitFor(() => expect(api.uploadDraft).toHaveBeenCalledTimes(2))
+    expect(getSession(id)?.draftMessageId).toBe('<d1@pelton>')
+    expect(toastMessages().filter((m) => m !== 'Draft saved.')).toEqual([])
   })
 
   it('keeps the protection an opened draft was saved with', async () => {

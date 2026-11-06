@@ -319,6 +319,8 @@ func (a *App) unsealDraft(draft storedDraft, passphrase []byte) (ComposeRequest,
 	if err := json.Unmarshal(plain, &req); err != nil {
 		return ComposeRequest{}, fmt.Errorf("pelton: this draft could not be read back: %w", err)
 	}
+	// the Message-ID kept outside the seal is the one the server copy carries.
+	req.DraftMessageID = draft.Request.DraftMessageID
 	// the passphrase worked, so hold it for the rest of the session and save
 	// the user answering the same prompt for the next draft.
 	if len(passphrase) > 0 {

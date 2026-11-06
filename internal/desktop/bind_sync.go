@@ -180,6 +180,8 @@ func (a *App) withIMAPSession(cfg pimap.Config, fn func(mailClient) error) error
 
 // runInitialSyncAndIdle syncs every account once, then parks each on idle.
 func (a *App) runInitialSyncAndIdle() {
+	// draft copies queued for removal while a server was out of reach go now.
+	a.drainDraftRemovals()
 	accounts, err := a.store.ListAccounts(a.ctx)
 	if err != nil {
 		a.log.Error("list accounts for sync", "err", err)

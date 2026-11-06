@@ -244,7 +244,17 @@ func (a *App) DeleteProfile(id int64) error {
 			return err
 		}
 	}
-	return a.store.DeleteProfile(a.ctx, id)
+	// its own settings rows go, and the drafts in them, so their server copies
+	// are queued for removal first. That holds for a profile sharing main's
+	// settings now too: the drafts it kept before it did are still its own.
+	if err := a.queueDraftCopiesOf(id); err != nil {
+		return err
+	}
+	if err := a.store.DeleteProfile(a.ctx, id); err != nil {
+		return err
+	}
+	goSafe("removing the draft copies of a deleted profile", a.drainDraftRemovals)
+	return nil
 }
 
 // SwitchProfile moves the app to another profile: the current profile's
