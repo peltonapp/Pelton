@@ -93,7 +93,7 @@ func (a *App) CreateFolder(req CreateFolderRequest) (FolderDTO, error) {
 		return FolderDTO{}, fmt.Errorf("a folder name cannot contain %q", delim)
 	}
 
-	if err := a.withAccountIMAP(req.AccountID, func(client mailClient) error {
+	if err := a.onServer(req.AccountID, func(client mailClient) error {
 		return client.CreateFolder(path)
 	}); err != nil {
 		return FolderDTO{}, err
@@ -142,7 +142,7 @@ func (a *App) RenameFolder(id int64, name string) error {
 	}
 
 	newPath := renamedPath(folder.IMAPPath, name, delim)
-	if err := a.withAccountIMAP(folder.AccountID, func(client mailClient) error {
+	if err := a.onServer(folder.AccountID, func(client mailClient) error {
 		return client.RenameFolder(folder.IMAPPath, newPath)
 	}); err != nil {
 		return err
@@ -183,7 +183,7 @@ func (a *App) DeleteFolder(id int64) error {
 	if err != nil {
 		return err
 	}
-	if err := a.withAccountIMAP(folder.AccountID, func(client mailClient) error {
+	if err := a.onServer(folder.AccountID, func(client mailClient) error {
 		for i := len(targets) - 1; i >= 0; i-- {
 			if err := client.DeleteFolder(targets[i].IMAPPath); err != nil {
 				return err
@@ -302,6 +302,20 @@ func protectSpecialFolder(f storage.Folder) error {
 		return fmt.Errorf("%w: %s", errFolderProtected, f.Name)
 	}
 	return nil
+}
+
+// onServer runs a folder change on the account's server. The Local Folders
+// account has no server and no credentials, so the change is only the local
+// row and fn is not run.
+func (a *App) onServer(accountID int64, fn func(mailClient) error) error {
+	account, err := a.store.GetAccount(a.ctx, accountID)
+	if err != nil {
+		return err
+	}
+	if account.Local {
+		return nil
+	}
+	return a.withAccountIMAP(accountID, fn)
 }
 
 // withAccountIMAP runs fn against a logged-in session for an account, taking the
