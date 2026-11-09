@@ -26,6 +26,30 @@ function last() {
   return list[list.length - 1]
 }
 
+describe('reply recipients', () => {
+  beforeEach(() => composeSessions.set([]))
+
+  it('addresses a plain sender by name and address', () => {
+    openReply(detail({}), 'plaintext', false)
+    expect(last().to).toBe('Ann <ann@example.com>')
+  })
+
+  it('quotes a sender name with a comma', () => {
+    openReply(detail({ fromName: 'Doe, Jane', fromAddress: 'jane@example.com' }), 'plaintext', false)
+    expect(last().to).toBe('"Doe, Jane" <jane@example.com>')
+  })
+
+  it('escapes a quote in the sender name', () => {
+    openReply(detail({ fromName: 'Jane "JD" Doe', fromAddress: 'jane@example.com' }), 'plaintext', false)
+    expect(last().to).toBe('"Jane \\"JD\\" Doe" <jane@example.com>')
+  })
+
+  it('quotes a comma name in the reply-all cc', () => {
+    openReply(detail({ ccAddresses: 'Doe, Jane <jane@example.com>, bob@example.com' }), 'plaintext', true)
+    expect(last().cc).toBe('"Doe, Jane" <jane@example.com>, bob@example.com')
+  })
+})
+
 describe('reply quote', () => {
   beforeEach(() => composeSessions.set([]))
 

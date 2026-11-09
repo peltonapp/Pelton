@@ -6,7 +6,7 @@
 import { writable, get } from 'svelte/store'
 import type { Address, Draft, EditorMode, MessageDetail, ComposeAttachment } from '../lib/types'
 import { getSetting, setSetting } from '../lib/api'
-import { renderBody } from '../lib/mailcompose'
+import { formatAddress, formatAddressList, parseAddressList, renderBody } from '../lib/mailcompose'
 import { formatFullDate } from '../lib/format'
 import { escapeHtml, textToHtml } from '../lib/richtext'
 
@@ -149,9 +149,9 @@ export function openComposeWith(accountId: number, mode: EditorMode, prefill: Ma
 // body and threading references come from the original message.
 export function openReply(detail: MessageDetail, mode: EditorMode, replyAll: boolean): number {
   const session = blankSession(detail.accountId, mode)
-  session.to = detail.fromAddress
+  session.to = formatAddress({ name: detail.fromName, email: detail.fromAddress })
   if (replyAll && detail.ccAddresses) {
-    session.cc = detail.ccAddresses
+    session.cc = formatAddressList(parseAddressList(detail.ccAddresses))
     session.showCc = true
   }
   session.subject = withPrefix(detail.subject, 'Re:')
@@ -232,12 +232,6 @@ function bringBack(draftId: number): number {
   }
   updateCompose(open.id, { minimized: false })
   return open.id
-}
-
-// formatAddressList turns addresses back into the comma-separated form the
-// address inputs edit.
-function formatAddressList(list: Address[] | null): string {
-  return (list ?? []).map((a) => (a.name ? `${a.name} <${a.email}>` : a.email)).join(', ')
 }
 
 // reopenSession brings a sent-but-undone message back into a fresh compose pane,

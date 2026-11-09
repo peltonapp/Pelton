@@ -86,6 +86,21 @@ function parseAddress(token: string): Address {
   return { name: '', email: token }
 }
 
+/**
+ * formatAddress renders one address as `Name <a@b>`, quoting a display name that
+ * holds an RFC 5322 special so it stays one recipient when split again.
+ */
+export function formatAddress(a: Address): string {
+  if (!a.name) return a.email
+  const name = /[()<>[\]:;@\\,."]/.test(a.name) ? `"${a.name.replace(/[\\"]/g, '\\$&')}"` : a.name
+  return `${name} <${a.email}>`
+}
+
+/** formatAddressList joins addresses into the comma-separated form the address inputs edit. */
+export function formatAddressList(list: Address[] | null): string {
+  return (list ?? []).map(formatAddress).join(', ')
+}
+
 // renderedBody is the text and html parts produced from one editor mode.
 export interface RenderedBody {
   text: string
