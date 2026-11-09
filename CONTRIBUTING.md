@@ -126,6 +126,27 @@ BREAKING CHANGE: sync endpoint now returns paginated results
 
 Please keep the short description under ~72 characters, written in the imperative mood ("add" not "added" or "adds"). Don't forget to sign off your commits per the DCO requirement above.
 
+## Pull Requests and Reviews
+
+Pelton is maintained by one person in their free time. I go through new issues and pull requests about once a week, so a reply can take a few days. If nobody has answered after two weeks, a friendly ping on the issue or PR is welcome.
+
+**Open an issue first for features and large changes.** Bug fixes and small improvements can go straight to a PR. For a new feature, a change in how something behaves, or a PR of more than about 500 changed lines, please open an issue (or comment on an existing one) and wait until we have agreed on the approach. That way nobody spends days on something that doesn't fit Pelton or conflicts with other work.
+
+**Keep pull requests small.** One change per PR. Large work is easier to review, and to land, as a series of small PRs that each make sense on their own than as one big one.
+
+**First PRs need a click from me.** For first-time contributors, GitHub waits for a maintainer to approve the CI run. That's normal and doesn't mean anything is wrong with your PR.
+
+*TLDR; Issue first for big things, small PRs, expect about a week.*
+
+## Triage
+
+Some regular contributors have Triage access. Triage can label, sort and assign issues and PRs, close duplicates and ask reporters for missing details. It cannot push or merge.
+
+If you have Triage access:
+- Label and sort freely, and close duplicates with a link to the original.
+- Ask reporters for logs, versions or steps when a report is missing them.
+- Leave milestones, closing feature requests, and any decision about what Pelton should or shouldn't do to the maintainer. When unsure, leave a comment and let me decide.
+
 ## Branches
 
 **Send every pull request to `main`.** That is the only branch you need to think about, whether you're fixing a typo or adding a feature.
