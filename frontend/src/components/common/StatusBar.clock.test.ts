@@ -12,6 +12,7 @@ vi.mock('../../lib/api', async (importOriginal) => ({
 import StatusBar from './StatusBar.svelte'
 import { sidebar } from '../../stores/accounts'
 import { prefs } from '../../stores/prefs'
+import { proposals } from '../../stores/agent'
 import { selection } from '../../stores/selection'
 import { ready, idle } from '../../lib/async'
 import type { UnifiedView } from '../../lib/types'
@@ -29,6 +30,7 @@ beforeEach(() => {
 afterEach(() => {
   vi.useRealTimers()
   sidebar.set(idle())
+  proposals.set([])
   prefs.update((p) => ({ ...p, statusClock: true, statusUnread: true, timeFormat: 'auto' }))
   selection.set({ kind: 'folder', folderId: 1, accountId: 1, label: 'x' } as never)
 })
@@ -56,6 +58,18 @@ describe('status bar clock and unread count (#488)', () => {
     withInboxUnread(0)
     render(StatusBar)
     expect(screen.queryByRole('button', { name: /unread/ })).toBeNull()
+  })
+
+  it('shows waiting agent proposals with a single profile', () => {
+    proposals.set([{ id: 1, accountId: 1, to: 'a@example.com', cc: '', bcc: '', subject: 's', body: 'b', when: '' }])
+    render(StatusBar)
+    expect(screen.getByRole('button', { name: /1 awaiting you/ })).toBeTruthy()
+  })
+
+  it('shows no proposal chip when nothing is waiting', () => {
+    proposals.set([])
+    render(StatusBar)
+    expect(screen.queryByRole('button', { name: /awaiting you/ })).toBeNull()
   })
 
   it('hides both when they are switched off', () => {
