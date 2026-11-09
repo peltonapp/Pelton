@@ -170,10 +170,10 @@
         {/if}
       </div>
     {/if}
+    <AgentProposals />
     <!-- which profile you are writing from. Only once there is more than one:
          an install with a single profile has no question to answer. -->
     {#if $profiles.length > 1 && $currentProfile}
-      <AgentProposals />
       <ProfileChip />
     {/if}
     {#if $prefs.statusUnread && inboxUnread > 0}
