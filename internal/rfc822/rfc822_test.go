@@ -262,3 +262,56 @@ func TestParseAddressWithRawHighBytesIsValidUTF8(t *testing.T) {
 		t.Fatalf("from is not valid utf-8: %q", msg.From)
 	}
 }
+
+// An image part marked Content-Disposition: inline is what Vaultwarden and most
+// transactional mail send for a logo. The mail reader hands it over as an
+// inline part, which used to be read as text and dropped.
+func TestParseKeepsInlineDispositionImages(t *testing.T) {
+	raw := "From: a@example.com\r\n" +
+		"MIME-Version: 1.0\r\n" +
+		"Content-Type: multipart/mixed; boundary=outer\r\n" +
+		"\r\n" +
+		"--outer\r\n" +
+		"Content-Type: multipart/related; boundary=rel\r\n" +
+		"\r\n" +
+		"--rel\r\n" +
+		"Content-Type: text/html; charset=utf-8\r\n" +
+		"\r\n" +
+		"<img src=\"cid:logo-gray.png\">\r\n" +
+		"--rel\r\n" +
+		"Content-Type: image/png; name=\"logo-gray.png\"\r\n" +
+		"Content-Disposition: inline; filename=\"logo-gray.png\"\r\n" +
+		"Content-ID: <Logo-Gray.png>\r\n" +
+		"Content-Transfer-Encoding: base64\r\n" +
+		"\r\n" +
+		"aGVsbG8=\r\n" +
+		"--rel\r\n" +
+		"Content-Type: image/png\r\n" +
+		"Content-ID: <second.png>\r\n" +
+		"Content-Transfer-Encoding: base64\r\n" +
+		"\r\n" +
+		"d29ybGQ=\r\n" +
+		"--rel--\r\n" +
+		"--outer--\r\n"
+
+	msg, err := Parse([]byte(raw))
+	if err != nil {
+		t.Fatalf("parse: %v", err)
+	}
+	if msg.Text != "" {
+		t.Errorf("an image part leaked into the text body: %q", msg.Text)
+	}
+	if !strings.Contains(msg.HTML, "cid:logo-gray.png") {
+		t.Errorf("html = %q", msg.HTML)
+	}
+	if len(msg.Attachments) != 2 {
+		t.Fatalf("got %d attachments, want 2", len(msg.Attachments))
+	}
+	first := msg.Attachments[0]
+	if first.ContentID != "Logo-Gray.png" || first.Filename != "logo-gray.png" || first.ContentType != "image/png" || string(first.Content) != "hello" {
+		t.Errorf("first attachment = %+v", first)
+	}
+	if second := msg.Attachments[1]; second.ContentID != "second.png" || string(second.Content) != "world" {
+		t.Errorf("second attachment = %+v", second)
+	}
+}
