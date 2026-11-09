@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { parseAddressList, splitAddressList, renderBody } from './mailcompose'
+import { formatAddress, parseAddressList,splitAddressList, renderBody } from './mailcompose'
 
 describe('parseAddressList', () => {
   it('keeps a comma inside a quoted name', () => {
@@ -44,6 +44,28 @@ describe('parseAddressList', () => {
 describe('splitAddressList', () => {
   it('returns trimmed raw tokens', () => {
     expect(splitAddressList('"Doe, John" <j@x> , b@y')).toEqual(['"Doe, John" <j@x>', 'b@y'])
+  })
+})
+
+describe('formatAddress', () => {
+  it('leaves a plain name unquoted', () => {
+    expect(formatAddress({ name: 'Ann Lee', email: 'ann@x' })).toBe('Ann Lee <ann@x>')
+  })
+
+  it('quotes a name with a comma so it stays one recipient', () => {
+    const text = formatAddress({ name: 'Doe, Jane', email: 'jane@example.com' })
+    expect(text).toBe('"Doe, Jane" <jane@example.com>')
+    expect(parseAddressList(text)).toEqual([{ name: 'Doe, Jane', email: 'jane@example.com' }])
+  })
+
+  it('escapes quotes and backslashes in a name', () => {
+    const text = formatAddress({ name: 'Jane "JD" Doe\\', email: 'j@x' })
+    expect(text).toBe('"Jane \\"JD\\" Doe\\\\" <j@x>')
+    expect(parseAddressList(text)).toEqual([{ name: 'Jane "JD" Doe\\', email: 'j@x' }])
+  })
+
+  it('returns the bare address when there is no name', () => {
+    expect(formatAddress({ name: '', email: 'a@x' })).toBe('a@x')
   })
 })
 
