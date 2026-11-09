@@ -14,6 +14,7 @@ import (
 	"fmt"
 	stdhtml "html"
 	"io"
+	"net/url"
 	"regexp"
 	"strings"
 	"unicode/utf8"
@@ -143,17 +144,24 @@ func buildPolicy(allowRemote, allowFonts bool) *bluemonday.Policy {
 	p.AllowRelativeURLs(false)
 
 	if allowRemote {
-		p.AllowURLSchemes("http", "https", "mailto", "data", "cid")
+		p.AllowURLSchemes("http", "https", "mailto", "cid")
 	} else {
 		// no http(s): remote images and remote links by url get stripped. cid and
 		// data stay so inline images we resolve ourselves still render.
-		p.AllowURLSchemes("mailto", "data", "cid")
+		p.AllowURLSchemes("mailto", "cid")
 	}
+	p.AllowURLSchemeWithCustomPolicy("data", isImageDataURL)
 
 	// open links in a new context and never leak the referrer.
 	p.RequireNoReferrerOnLinks(true)
 	p.AddTargetBlankToFullyQualifiedLinks(true)
 	return p
+}
+
+// isImageDataURL accepts a data: url only when its media type is an image, so a
+// message cannot smuggle data:text/html or similar into a src or href.
+func isImageDataURL(u *url.URL) bool {
+	return strings.HasPrefix(strings.ToLower(u.Opaque), "image/")
 }
 
 // Sanitize cleans untrusted mail html for display. When allowRemote is false

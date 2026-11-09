@@ -238,7 +238,7 @@ func (a *App) trackerDTOs(html string) []TrackingPixelDTO {
 func (a *App) inlineDataURLs(atts []storage.Attachment) map[string]string {
 	out := make(map[string]string)
 	for _, att := range atts {
-		if att.ContentID == "" {
+		if att.ContentID == "" || !strings.HasPrefix(strings.ToLower(att.ContentType), "image/") {
 			continue
 		}
 		rc, err := a.store.OpenAttachment(att.DiskPath)
@@ -250,7 +250,7 @@ func (a *App) inlineDataURLs(atts []storage.Attachment) map[string]string {
 		if err != nil {
 			continue
 		}
-		id := trimAngles(att.ContentID)
+		id := strings.ToLower(trimAngles(att.ContentID))
 		out[id] = fmt.Sprintf("data:%s;base64,%s", att.ContentType, base64.StdEncoding.EncodeToString(data))
 	}
 	return out

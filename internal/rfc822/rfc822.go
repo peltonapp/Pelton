@@ -139,7 +139,14 @@ func parts(mr *mail.Reader, msg *Message) error {
 			return fmt.Errorf("rfc822: read part: %w", err)
 		}
 
-		switch header := part.Header.(type) {
+		header := part.Header
+		if ih, ok := header.(*mail.InlineHeader); ok {
+			if mediaType, _, _ := ih.ContentType(); !strings.HasPrefix(strings.ToLower(mediaType), "text/") {
+				header = &mail.AttachmentHeader{Header: ih.Header}
+			}
+		}
+
+		switch header := header.(type) {
 		case *mail.InlineHeader:
 			body, err := io.ReadAll(part.Body)
 			if err != nil {
