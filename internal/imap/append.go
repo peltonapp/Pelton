@@ -164,12 +164,29 @@ func (c *Client) findSpecialFolder(attr imap.MailboxAttr, fallbacks []string) (s
 			return f.Name, nil
 		}
 	}
+	return matchFallbackName(folders, fallbacks, attr)
+}
+
+// matchFallbackName returns the first selectable folder whose name, with any
+// INBOX namespace prefix removed, equals one of fallbacks, trying the names in
+// order.
+func matchFallbackName(folders []Folder, fallbacks []string, attr imap.MailboxAttr) (string, error) {
 	for _, name := range fallbacks {
 		for _, f := range folders {
-			if strings.EqualFold(f.Name, name) {
+			if !f.Selectable() {
+				continue
+			}
+			if strings.EqualFold(StripInboxNamespace(f.Name, delimString(f.Delimiter)), name) {
 				return f.Name, nil
 			}
 		}
 	}
 	return "", fmt.Errorf("%w: attr %q", ErrSpecialFolderNotFound, attr)
+}
+
+func delimString(r rune) string {
+	if r == 0 {
+		return ""
+	}
+	return string(r)
 }
