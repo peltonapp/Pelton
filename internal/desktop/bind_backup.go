@@ -33,7 +33,8 @@ const backupFileTag = "pelton-backup"
 
 // backupSkipSettings are settings that must not travel between installs: the
 // search watermark and the pending-download marker are local, transient state,
-// the whitelist keys are exported under their own category instead, and local
+// the whitelist keys are exported under their own category instead, the theme
+// seed marker describes this install's themes folder, not the backup's, and local
 // drafts reference account ids that don't exist on the target install (and can
 // carry whole attachments). The skip applies on import too, so backup files
 // written before a key landed here are also filtered.
@@ -43,6 +44,7 @@ var backupSkipSettings = map[string]bool{
 	settingRemoteSenders:   true,
 	settingRemoteDomains:   true,
 	draftsKey:              true,
+	settingThemesSeeded:    true,
 }
 
 // whitelistBackup is the trusted-sender allowlist as exported.
