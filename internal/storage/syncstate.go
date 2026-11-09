@@ -9,10 +9,13 @@ import (
 // identity, flags and whether a local change is waiting to be pushed. it
 // deliberately carries no bodies so a full-folder scan stays cheap.
 type MessageState struct {
-	ID            int64
-	UID           uint32
-	Flags         Flag
-	PendingFlags  bool
+	ID           int64
+	UID          uint32
+	Flags        Flag
+	PendingFlags bool
+	// PendingMask is the set of flag bits the pending local change touched; 0
+	// means unrecorded.
+	PendingMask   Flag
 	PendingDelete bool
 }
 
@@ -20,7 +23,7 @@ type MessageState struct {
 // ordered by uid.
 func (d *DB) ListMessageStates(ctx context.Context, folderID int64) ([]MessageState, error) {
 	const query = `
-SELECT id, uid, flags, pending_flags, pending_delete
+SELECT id, uid, flags, pending_flags, pending_flag_mask, pending_delete
 FROM messages WHERE folder_id = ? ORDER BY uid`
 	rows, err := d.sql.QueryContext(ctx, query, folderID)
 	if err != nil {
@@ -34,12 +37,14 @@ FROM messages WHERE folder_id = ? ORDER BY uid`
 			s             MessageState
 			flags         uint8
 			pendingFlags  int
+			pendingMask   uint8
 			pendingDelete int
 		)
-		if err := rows.Scan(&s.ID, &s.UID, &flags, &pendingFlags, &pendingDelete); err != nil {
+		if err := rows.Scan(&s.ID, &s.UID, &flags, &pendingFlags, &pendingMask, &pendingDelete); err != nil {
 			return nil, fmt.Errorf("storage: scan message state: %w", err)
 		}
 		s.Flags = Flag(flags)
+		s.PendingMask = Flag(pendingMask)
 		s.PendingFlags = pendingFlags != 0
 		s.PendingDelete = pendingDelete != 0
 		states = append(states, s)
@@ -51,10 +56,12 @@ FROM messages WHERE folder_id = ? ORDER BY uid`
 }
 
 // MarkFlagsPending records a local flag change: it stores the new flags and
-// marks the row so the next sync pushes them to the server.
+// marks the row so the next sync pushes them to the server. The bits that
+// differ from the stored flags join the row's pending mask.
 func (d *DB) MarkFlagsPending(ctx context.Context, id int64, flags Flag) error {
 	res, err := d.sql.ExecContext(ctx,
-		`UPDATE messages SET flags = ?, pending_flags = 1 WHERE id = ?`, uint8(flags), id)
+		`UPDATE messages SET pending_flag_mask = pending_flag_mask | ((flags | ?1) - (flags & ?1)), flags = ?1, pending_flags = 1 WHERE id = ?2`,
+		uint8(flags), id)
 	if err != nil {
 		return fmt.Errorf("storage: mark flags pending on message %d: %w", id, err)
 	}
@@ -74,9 +81,9 @@ func (d *DB) MarkCopiesFlagPending(ctx context.Context, accountID, exceptID int6
 		set, differs = `flags = flags & ~?`, `flags & ? != 0`
 	}
 	_, err := d.sql.ExecContext(ctx,
-		`UPDATE messages SET `+set+`, pending_flags = 1
+		`UPDATE messages SET `+set+`, pending_flag_mask = pending_flag_mask | ?, pending_flags = 1
 WHERE account_id = ? AND message_id = ? AND id != ? AND pending_delete = 0 AND `+differs,
-		uint8(flag), accountID, messageID, exceptID, uint8(flag))
+		uint8(flag), uint8(flag), accountID, messageID, exceptID, uint8(flag))
 	if err != nil {
 		return fmt.Errorf("storage: mark copies of message %d: %w", exceptID, err)
 	}
@@ -86,7 +93,7 @@ WHERE account_id = ? AND message_id = ? AND id != ? AND pending_delete = 0 AND `
 // ClearFlagsPending clears the pending flag marker after a successful push.
 func (d *DB) ClearFlagsPending(ctx context.Context, id int64) error {
 	res, err := d.sql.ExecContext(ctx,
-		`UPDATE messages SET pending_flags = 0 WHERE id = ?`, id)
+		`UPDATE messages SET pending_flags = 0, pending_flag_mask = 0 WHERE id = ?`, id)
 	if err != nil {
 		return fmt.Errorf("storage: clear flags pending on message %d: %w", id, err)
 	}
