@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/peltonapp/Pelton/internal/crypto"
+	pimap "github.com/peltonapp/Pelton/internal/imap"
 	"github.com/peltonapp/Pelton/internal/mailview"
 	"github.com/peltonapp/Pelton/internal/storage"
 )
@@ -348,7 +349,7 @@ func folderRole(f storage.Folder) string {
 			return roleArchive
 		}
 	}
-	switch strings.ToUpper(f.IMAPPath) {
+	switch strings.ToUpper(pimap.StripInboxNamespace(f.IMAPPath, f.Delimiter)) {
 	case storage.FolderInbox:
 		return roleInbox
 	case strings.ToUpper(storage.FolderSent):

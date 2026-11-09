@@ -70,7 +70,7 @@ func (e *Engine) pushDeletes(ctx context.Context, folder storage.Folder, states 
 	// flagged.
 	if e.trashable(folder) {
 		if err := e.client.MoveMessages(uids, e.TrashPath); err != nil {
-			return fmt.Errorf("sync: move to trash on server: %w", err)
+			return fmt.Errorf("sync: move to trash %q on server: %w", e.TrashPath, err)
 		}
 	} else if err := e.client.DeleteMessages(uids...); err != nil {
 		return fmt.Errorf("sync: delete on server: %w", err)
