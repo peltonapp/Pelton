@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 	"unicode"
+	"unicode/utf8"
 
 	"github.com/peltonapp/Pelton/internal/messageid"
 	"golang.org/x/net/idna"
@@ -108,8 +109,10 @@ func domainOf(email string) string {
 		return fallbackDomain
 	}
 	domain := email[i+1:]
-	// anything that cannot sit in a header, like a line break, falls back.
-	if strings.ContainsFunc(domain, func(r rune) bool {
+	// invalid UTF-8, or anything that cannot sit in a header, like a line
+	// break, falls back. idna.ToASCII rejects invalid UTF-8 only on some Go
+	// versions, so check it here.
+	if !utf8.ValidString(domain) || strings.ContainsFunc(domain, func(r rune) bool {
 		return unicode.IsSpace(r) || unicode.IsControl(r) || r == '<' || r == '>'
 	}) {
 		return fallbackDomain
