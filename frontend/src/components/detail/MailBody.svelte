@@ -274,22 +274,12 @@
   }
 
   let hoverUrl = ''
-  let hoverRight = 0
-  let hoverBottom = 0
-  let plainEl: HTMLElement | undefined
 
   // showHover updates the status overlay with the address of the hovered link,
   // or hides it for an empty href. mailto links show just the address. The
-  // overlay sits in the bottom-right corner of the visible message pane.
+  // overlay is anchored to the message pane, outside its scroll area.
   function showHover(href: string): void {
-    const shown = /^mailto:/i.test(href) ? href.slice(7).split('?')[0] : /^https?:/i.test(href) ? href : ''
-    hoverUrl = shown
-    const pane = (frame ?? plainEl)?.closest('.scroll') ?? frame ?? plainEl
-    if (shown && pane) {
-      const rect = pane.getBoundingClientRect()
-      hoverRight = Math.max(window.innerWidth - rect.right, 0)
-      hoverBottom = Math.max(window.innerHeight - rect.bottom, 0)
-    }
+    hoverUrl = /^mailto:/i.test(href) ? href.slice(7).split('?')[0] : /^https?:/i.test(href) ? href : ''
   }
 
   // onWindowMessage receives the url from the click handler running inside
@@ -629,7 +619,7 @@
   <!-- dir="auto" for the same reason as the html document above: a plain-text
        message written right to left reads that way, whatever the interface is
        set to. -->
-  <pre bind:this={plainEl} dir="auto" class="body-plain mono selectable" style={`font-size:${$prefs.messageFontSize}px`}>{#each plainSegments as segment}{#if segment.href}<a
+  <pre dir="auto" class="body-plain mono selectable" style={`font-size:${$prefs.messageFontSize}px`}>{#each plainSegments as segment}{#if segment.href}<a
         class="plain-link"
         href={segment.href}
         on:click|preventDefault={() => BrowserOpenURL(segment.href ?? '')}
@@ -640,12 +630,14 @@
 {/if}
 
 {#if hoverUrl}
-  <div class="link-hover mono" style={`right:${hoverRight}px;bottom:${hoverBottom}px`} aria-hidden="true">{hoverUrl}</div>
+  <div class="link-hover mono" aria-hidden="true">{hoverUrl}</div>
 {/if}
 
 <style>
   .link-hover {
-    position: fixed;
+    position: absolute;
+    right: 0;
+    bottom: 0;
     z-index: 30;
     max-width: 55%;
     padding: var(--space-1) var(--space-2);
