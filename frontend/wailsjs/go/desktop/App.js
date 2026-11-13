@@ -246,8 +246,16 @@ export function ExportData(arg1, arg2) {
   return window['go']['desktop']['App']['ExportData'](arg1, arg2);
 }
 
+export function ExportMessageEML(arg1) {
+  return window['go']['desktop']['App']['ExportMessageEML'](arg1);
+}
+
 export function ExportMessagePrintView(arg1) {
   return window['go']['desktop']['App']['ExportMessagePrintView'](arg1);
+}
+
+export function ExportMessagesEML(arg1) {
+  return window['go']['desktop']['App']['ExportMessagesEML'](arg1);
 }
 
 export function ExportPGPKey(arg1, arg2) {

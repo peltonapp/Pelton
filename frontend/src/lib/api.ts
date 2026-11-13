@@ -964,6 +964,25 @@ export function exportMessagePrintView(id: number): Promise<void> {
   return App.ExportMessagePrintView(id)
 }
 
+// exportMessageEml asks where to save one message and writes it as an .eml
+// file, returning the path written ('' when the user cancelled).
+export function exportMessageEml(id: number): Promise<string> {
+  if (isDemoActive()) {
+    return Promise.resolve('')
+  }
+  return App.ExportMessageEML(id)
+}
+
+// exportMessagesEml asks for a folder and writes one .eml file per message into
+// it. dir is '' when the user cancelled; failed counts messages that could not
+// be exported and firstError says why the first one failed.
+export function exportMessagesEml(ids: number[]): Promise<desktop.EmlExportDTO> {
+  if (isDemoActive()) {
+    return Promise.resolve(new desktop.EmlExportDTO({ dir: '', exported: 0, failed: 0, firstError: '' }))
+  }
+  return App.ExportMessagesEML(ids)
+}
+
 // LicenseEntry is one third-party dependency's license record.
 export interface LicenseEntry {
   group: string

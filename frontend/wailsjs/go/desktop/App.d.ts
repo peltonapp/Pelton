@@ -124,7 +124,11 @@ export function EmptyTrash(arg1:number):Promise<number>;
 
 export function ExportData(arg1:Array<string>,arg2:string):Promise<string>;
 
+export function ExportMessageEML(arg1:number):Promise<string>;
+
 export function ExportMessagePrintView(arg1:number):Promise<void>;
+
+export function ExportMessagesEML(arg1:Array<number>):Promise<desktop.EmlExportDTO>;
 
 export function ExportPGPKey(arg1:string,arg2:boolean):Promise<string>;
 

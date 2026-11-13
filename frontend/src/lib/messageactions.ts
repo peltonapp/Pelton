@@ -17,6 +17,8 @@ import {
   removeOffline,
   markSpam,
   markNotSpam,
+  exportMessageEml,
+  exportMessagesEml,
 } from './api'
 import type { ArchiveUndo } from './api'
 import type { MessageSummary } from './types'
@@ -256,6 +258,40 @@ function confirmBulkDelete(count: number): Promise<boolean> {
     confirmLabel: label('messageList.bulk.deleteConfirmAction').replace('{n}', String(count)),
     danger: true,
   })
+}
+
+/**
+ * Exports messages as .eml files: one asks for a file name, several ask for a
+ * folder. The dialogs and the work run in the backend; a cancelled dialog does
+ * nothing and any failure is reported as a toast.
+ */
+export async function exportEml(ids: number[]): Promise<void> {
+  if (ids.length === 0) {
+    return
+  }
+  try {
+    if (ids.length === 1) {
+      const path = await exportMessageEml(ids[0])
+      if (path) {
+        toastSuccess(get(t)('export.eml.done'))
+      }
+      return
+    }
+    const result = await exportMessagesEml(ids)
+    if (!result.dir) {
+      return
+    }
+    if (result.failed > 0) {
+      const text = get(t)('export.eml.partial')
+        .replace('{done}', String(result.exported))
+        .replace('{failed}', String(result.failed))
+      toastError(`${text} ${result.firstError}`)
+      return
+    }
+    toastSuccess(get(t)('export.eml.doneCount').replace('{n}', String(result.exported)))
+  } catch (err) {
+    toastError(errorMessage(err))
+  }
 }
 
 /** Archives every given message, sequentially, as one undo step. */

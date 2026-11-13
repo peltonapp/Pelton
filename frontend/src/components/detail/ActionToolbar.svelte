@@ -12,6 +12,7 @@
     IconFlag,
     IconFlagFilled,
     IconPrinter,
+    IconFileExport,
     IconInfoCircle,
     IconCode,
     IconShieldSearch,
@@ -35,6 +36,7 @@
     delete: void
     toggleFlag: void
     print: void
+    exportEml: void
     info: void
     source: void
     scan: void
@@ -98,6 +100,9 @@
     on:click={() => dispatch('print')}
   >
     <IconPrinter size={18} stroke={1.6} />
+  </IconButton>
+  <IconButton label={$t('menu.exportEml')} on:click={() => dispatch('exportEml')}>
+    <IconFileExport size={18} stroke={1.6} />
   </IconButton>
   <IconButton label={$t('detail.toolbar.messageInfo')} on:click={() => dispatch('info')}>
     <IconInfoCircle size={18} stroke={1.6} />
