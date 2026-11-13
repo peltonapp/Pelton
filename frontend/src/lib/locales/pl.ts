@@ -1490,6 +1490,8 @@ const pl: Record<string, string> = {
   'settingsPanel.hint.menuBarInApp': 'Pokazuje własny pasek menu Pelton u góry okna. Pasek menu macOS pozostaje dostępny.',
   'settingsPanel.toggle.menuBarNativeMinimal': 'Ogranicz pasek menu macOS',
   'settingsPanel.hint.menuBarNativeMinimal': 'Zostawia tylko menu Pelton i Edycja w pasku menu macOS, gdy pasek w aplikacji jest włączony.',
+  'settingsPanel.toggle.liquidGlass': 'Liquid Glass',
+  'settingsPanel.hint.liquidGlass': 'Pokazuje tło okna przez pasek boczny i pasek stanu. Działa po ponownym uruchomieniu Pelton.',
   'settingsPanel.toggle.menuBarIcons': 'Pokazuj ikony w pasku menu',
   'settingsPanel.hint.menuBarIcons': 'Dodaje ikony obok pozycji w pasku menu aplikacji.',
   'menuBar.editButton': 'Edytuj pasek menu',

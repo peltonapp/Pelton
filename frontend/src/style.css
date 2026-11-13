@@ -42,6 +42,25 @@ body {
   width: 100%;
 }
 
+/* liquid glass (macOS, opt-in): the window behind the page is Apple's glass
+   material. the chrome, meaning the title strip, the sidebar and the status
+   bar, lets it through; the message list and the reading pane stay solid so
+   mail text always sits on an opaque surface. main.ts sets the class. */
+html.liquid-glass,
+html.liquid-glass body {
+  background-color: transparent;
+}
+
+html.liquid-glass .sidebar,
+html.liquid-glass .statusbar {
+  background: transparent;
+}
+
+html.liquid-glass .list-col,
+html.liquid-glass .detail {
+  background-color: var(--surface-base);
+}
+
 code,
 pre,
 .mono {

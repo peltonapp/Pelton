@@ -1537,6 +1537,8 @@ const ru: Record<string, string> = {
   'settingsPanel.hint.menuBarInApp': 'Показывает собственную строку меню Pelton в верхней части окна. Стройка меню macOS тоже остаётся.',
   'settingsPanel.toggle.menuBarNativeMinimal': 'Уменьшить строку меню macOS',
   'settingsPanel.hint.menuBarNativeMinimal': 'Оставляет только Pelton, View и Edit в строке меню macOS.',
+  'settingsPanel.toggle.liquidGlass': 'Liquid Glass',
+  'settingsPanel.hint.liquidGlass': 'Фон окна просвечивает сквозь боковую панель и строку состояния. Вступает в силу после перезапуска Pelton.',
   'settingsPanel.toggle.menuBarIcons': 'Показывать иконки в собственном меню',
   'settingsPanel.hint.menuBarIcons': 'Добавляет иконки в элементы меню в собственной строке меню Pelton.',
   'menuBar.editButton': 'Изменить строку меню',

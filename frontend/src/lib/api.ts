@@ -97,6 +97,12 @@ export function isDevMode(): Promise<boolean> {
   return App.IsDevMode()
 }
 
+// liquidGlassActive reports whether the window was created with the macOS
+// Liquid Glass backdrop, so the ui can let it show through.
+export function liquidGlassActive(): Promise<boolean> {
+  return App.LiquidGlassActive()
+}
+
 // isNightly reports whether this is an automated nightly build cut from the dev
 // branch. Nightlies are untested and keep their own separate data directory, so
 // the ui warns about it at every launch and marks the status bar.
@@ -1415,6 +1421,7 @@ export const SettingKeys = {
   themeId: 'theme_id',
   menuBarInApp: 'menu_bar_in_app',
   menuBarNativeMinimal: 'menu_bar_native_minimal',
+  liquidGlass: 'liquid_glass',
   menuBarIcons: 'menu_bar_icons',
   menuBarLayout: 'menu_bar_layout',
   paletteUsage: 'palette_usage',

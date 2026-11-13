@@ -1545,6 +1545,8 @@ const it: Record<string, string> = {
   'settingsPanel.hint.menuBarInApp': 'Mostra la barra dei menu di Pelton nella parte superiore della finestra. La barra dei menu di macOS rimane comunque disponibile.',
   'settingsPanel.toggle.menuBarNativeMinimal': 'Riduci la barra dei menu di macOS',
   'settingsPanel.hint.menuBarNativeMinimal': 'Mantiene nella barra dei menu di macOS solo i menu Pelton e Modifica mentre quella interna all\'app è attiva.',
+  'settingsPanel.toggle.liquidGlass': 'Liquid Glass',
+  'settingsPanel.hint.liquidGlass': 'Lascia trasparire lo sfondo della finestra attraverso la barra laterale e la barra di stato. Si applica al riavvio di Pelton.',
   'settingsPanel.toggle.menuBarIcons': 'Mostra le icone nella barra dei menu',
   'settingsPanel.hint.menuBarIcons': 'Aggiunge le icone accanto alle voci nella barra dei menu interna all\'app.',
   'menuBar.editButton': 'Modifica barra dei menu',

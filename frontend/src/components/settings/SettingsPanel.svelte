@@ -103,6 +103,7 @@
     setEmptyStateImage,
     setEmptyStateFullscreen,
     setMenuBarInApp,
+    setLiquidGlass,
     setMenuBarNativeMinimal,
     setMenuBarIcons,
     setTimeFormat,
@@ -195,6 +196,7 @@
     { cat: 'appearance', label: $t('onboarding.accentTitle'), kw: 'accent color' },
     { cat: 'appearance', label: $t('settingsPanel.label.density'), kw: '' },
     { cat: 'appearance', label: $t('settingsPanel.label.corners'), kw: 'rounded square' },
+    ...(isMac ? [{ cat: 'appearance', label: $t('settingsPanel.toggle.liquidGlass'), kw: 'glass translucent transparent blur' }] : []),
     { cat: 'appearance', label: $t('settingsPanel.label.interfaceScale'), kw: 'zoom scale size' },
     { cat: 'appearance', label: $t('settingsPanel.toggle.reduceMotion'), kw: 'animation' },
     { cat: 'appearance', label: $t('settingsPanel.toggle.handCursor'), kw: 'cursor pointer mouse arrow hand' },
@@ -999,6 +1001,17 @@
             </div>
             <p class="hint">{$t('settingsPanel.hint.emptyStateFullscreen')}</p>
           </div>
+          {#if isMac}
+            <div class="toggle">
+              <span class="row-label">{$t('settingsPanel.toggle.liquidGlass')}</span>
+              <ToggleSwitch
+                checked={$prefs.liquidGlass}
+                label={$t('settingsPanel.toggle.liquidGlass')}
+                on:change={(e) => setLiquidGlass(e.detail)}
+              />
+            </div>
+            <p class="hint">{$t('settingsPanel.hint.liquidGlass')}</p>
+          {/if}
         </section>
       {:else if active === 'menubar'}
         <section>

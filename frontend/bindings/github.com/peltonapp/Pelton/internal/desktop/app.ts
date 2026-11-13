@@ -986,6 +986,15 @@ export function Licenses(): $CancellablePromise<string> {
 }
 
 /**
+ * LiquidGlassActive reports whether the running window has the Liquid Glass
+ * backdrop, which the frontend needs to know to let it show through. It can
+ * differ from the setting until the next launch.
+ */
+export function LiquidGlassActive(): $CancellablePromise<boolean> {
+    return $Call.ByID(2364817644);
+}
+
+/**
  * ListAccounts returns all configured accounts. Accounts are created by the cli
  * tools today; an in-app add-account flow is the next step and would call a new
  * CreateAccount binding here plus a keyring write for credentials.

@@ -4653,6 +4653,12 @@ export class UIPrefsDTO {
     "menuBarNativeMinimal": boolean;
 
     /**
+     * LiquidGlass is the stored Liquid Glass preference (macOS); whether the
+     * running window has it is LiquidGlassActive.
+     */
+    "liquidGlass": boolean;
+
+    /**
      * MenuBarIcons shows icons next to the in-app menu bar's dropdown items.
      */
     "menuBarIcons": boolean;
@@ -4957,6 +4963,9 @@ export class UIPrefsDTO {
         }
         if (!("menuBarNativeMinimal" in $$source)) {
             this["menuBarNativeMinimal"] = false;
+        }
+        if (!("liquidGlass" in $$source)) {
+            this["liquidGlass"] = false;
         }
         if (!("menuBarIcons" in $$source)) {
             this["menuBarIcons"] = false;

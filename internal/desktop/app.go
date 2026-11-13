@@ -40,7 +40,10 @@ type App struct {
 	// windowOptions is what the main window is created with, filled in by Run
 	// and completed in ServiceStartup once the remembered geometry is readable.
 	windowOptions application.WebviewWindowOptions
-	log           *slog.Logger
+	// liquidGlass is set when the window was created with the Liquid Glass
+	// backdrop (glass.go).
+	liquidGlass bool
+	log         *slog.Logger
 	// logWriter is where log lines go. It always writes to stderr and, when
 	// the setting is on, also to a rotating file in the data directory. See
 	// logging.go.
@@ -270,6 +273,7 @@ func (a *App) startup(ctx context.Context) {
 	// as early as the store allows, so the window opens at its remembered
 	// frame rather than resizing in front of the user.
 	a.applySavedGeometry(&a.windowOptions)
+	a.applyLiquidGlass(&a.windowOptions)
 	a.createWindow()
 
 	// the tray icon (Windows and Linux; no-op elsewhere). started after the

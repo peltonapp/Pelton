@@ -17,7 +17,7 @@ import './style.css'
 
 import { mount } from 'svelte'
 import App from './App.svelte'
-import { isDemoMode } from './lib/api'
+import { isDemoMode, liquidGlassActive } from './lib/api'
 import { setDemoActive } from './lib/demo'
 
 const target = document.getElementById('app')
@@ -36,6 +36,12 @@ if (!target) {
 // on some platform, the later answer is what it always was rather than nothing.
 await isDemoMode()
   .then(setDemoActive)
+  .catch(() => {})
+
+// a window created with the Liquid Glass backdrop shows it through the chrome
+// (style.css), so the class has to be on before the first paint.
+await liquidGlassActive()
+  .then((on) => document.documentElement.classList.toggle('liquid-glass', on))
   .catch(() => {})
 
 const app = mount(App, { target })

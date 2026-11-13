@@ -1538,6 +1538,8 @@ const zhCN: Record<string, string> = {
   'settingsPanel.hint.menuBarInApp': '在窗口顶部显示 Pelton 自带的菜单栏。macOS 菜单栏仍然可用。',
   'settingsPanel.toggle.menuBarNativeMinimal': '精简 macOS 菜单栏',
   'settingsPanel.hint.menuBarNativeMinimal': '开启应用内菜单栏时，macOS 菜单栏只保留 Pelton 和“编辑”菜单。',
+  'settingsPanel.toggle.liquidGlass': 'Liquid Glass',
+  'settingsPanel.hint.liquidGlass': '让窗口背景透过侧边栏和状态栏显示。重启 Pelton 后生效。',
   'settingsPanel.toggle.menuBarIcons': '在菜单栏中显示图标',
   'settingsPanel.hint.menuBarIcons': '在应用内菜单栏的条目旁添加图标。',
   'menuBar.editButton': '编辑菜单栏',

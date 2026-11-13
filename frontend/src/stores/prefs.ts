@@ -76,6 +76,7 @@ const defaults: UIPrefs = {
   menuBarInApp: false,
   menuBarNativeMinimal: false,
   menuBarIcons: false,
+  liquidGlass: false,
   timeFormat: 'auto',
   reduceMotion: false,
   handCursor: false,
@@ -462,6 +463,13 @@ export function setThemeDarkTimes(start: string, end: string): void {
 // setMenuBarInApp shows the in-app menu bar on macOS. setMenuBarNativeMinimal
 // reduces the native macOS menu to the app menu while the in-app bar is on;
 // the backend rebuilds the native menu when either setting is written.
+// setLiquidGlass stores the macOS Liquid Glass preference. The window takes
+// it at the next launch.
+export function setLiquidGlass(value: boolean): void {
+  prefs.update((p) => ({ ...p, liquidGlass: value }))
+  void setSetting(SettingKeys.liquidGlass, String(value))
+}
+
 export function setMenuBarInApp(value: boolean): void {
   prefs.update((p) => ({ ...p, menuBarInApp: value }))
   void setSetting(SettingKeys.menuBarInApp, String(value))
