@@ -1,6 +1,6 @@
 module github.com/peltonapp/Pelton
 
-go 1.26.0
+go 1.27.0
 
 require (
 	git.sr.ht/~jackmordaunt/go-toast v1.1.2
