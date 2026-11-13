@@ -131,7 +131,7 @@
       ? 'document.addEventListener("contextmenu",function(e){var a=e.target&&e.target.closest("a");if(!a)return;var href=(a.getAttribute("href")||"").trim();if(!/^https?:/i.test(href))return;e.preventDefault();window.parent.postMessage({peltonContextLink:href,x:e.clientX,y:e.clientY},"*")});'
       : ''
     const hoverHandler =
-      'function hov(h){window.parent.postMessage({peltonHoverLink:h},"*")}' +
+      'var lastHov="";function hov(h){if(h===lastHov)return;lastHov=h;window.parent.postMessage({peltonHoverLink:h},"*")}' +
       'document.addEventListener("mouseover",function(e){var a=e.target&&e.target.closest&&e.target.closest("a");hov(a?(a.getAttribute("href")||"").trim():"")});' +
       'document.documentElement.addEventListener("mouseleave",function(){hov("")});'
     const script =
@@ -244,6 +244,7 @@
   // in case 'load' fires before contentDocument.body is actually populated
   // (observed to be unreliable timing on some webview engines).
   function onFrameLoad(): void {
+    hoverUrl = ''
     attachInteractivity()
   }
 
