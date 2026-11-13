@@ -874,6 +874,7 @@ const tr: Record<string, string> = {
   'messageList.bulk.deleteConfirmAction': '{n} tanesini sil',
   'messageList.menu.open': 'Aç',
   'messageList.menu.openInTab': 'Yeni sekmede aç',
+  'messageList.menu.openInWindow': 'Yeni pencerede aç',
   'settingsPanel.category.profiles': 'Profiller',
   'settingsPanel.keywords.profiles': 'profil iş özel çalışma alanı ayrı geçiş',
   'profiles.hint': 'İş ve özel yaşamı tek kurulumda ayrı tutun. Bir profil, hangi posta kutularını gördüğünüzü ve ayarlarının, imzalarının ve kayıtlı görünümlerinin kendine mi ait yoksa ana profilinizle paylaşılan mı olduğunu belirler. Postanız her durumda bir kez saklanır.',

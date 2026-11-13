@@ -1288,6 +1288,22 @@ export function closeWindow(): void {
   void App.CloseWindow()
 }
 
+// closeCurrentWindow closes a message window it is called from; from the main
+// window it does what closeWindow does.
+export function closeCurrentWindow(): void {
+  void App.CloseCurrentWindow()
+}
+
+// openMessageWindow shows a message in a window of its own, or brings forward
+// the one it is already open in. Nothing to open in demo mode, where the ids
+// belong to samples.
+export function openMessageWindow(id: number, title: string): Promise<void> {
+  if (isDemoActive()) {
+    return Promise.resolve()
+  }
+  return App.OpenMessageWindow(id, title)
+}
+
 // titleBarDoubleClick runs the system's title-bar double-click action (zoom,
 // minimise or nothing). Needed because the app draws its own title bar on
 // macOS, so the window server never sees the click.

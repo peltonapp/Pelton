@@ -309,6 +309,15 @@ export function ClearSentOutbox(): $CancellablePromise<void> {
 }
 
 /**
+ * CloseCurrentWindow closes the window it is called from when that is a
+ * secondary window, and does what the main window's close button does
+ * otherwise.
+ */
+export function CloseCurrentWindow(): $CancellablePromise<void> {
+    return $Call.ByID(397860451);
+}
+
+/**
  * CloseWindow does what the window's close button does, for the Close Window
  * menu item and its Cmd+W accelerator: honour the close action setting, so the
  * two never disagree about what closing means.
@@ -1286,6 +1295,15 @@ export function OpenLocalesFolder(): $CancellablePromise<void> {
  */
 export function OpenLogFolder(): $CancellablePromise<void> {
     return $Call.ByID(3202011632);
+}
+
+/**
+ * OpenMessageWindow shows a message in its own window, or brings forward the
+ * window it is already open in. title is the window title, normally the
+ * subject.
+ */
+export function OpenMessageWindow(id: number, title: string): $CancellablePromise<void> {
+    return $Call.ByID(3214634389, id, title);
 }
 
 /**

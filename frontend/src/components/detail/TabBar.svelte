@@ -10,7 +10,9 @@
   import { tabs, activeTabId, closeTab, focusTab, focusPane, reorderTabs } from '../../stores/tabs'
   import { prefs } from '../../stores/prefs'
   import { shortcutTitle } from '../../stores/shortcuts'
-  import { reorder, type ReorderDetail } from '../../lib/reorder'
+  import { reorder, type ReorderDetail, type TearOffDetail } from '../../lib/reorder'
+  import { openMessageWindow } from '../../lib/api'
+  import { errorMessage, toastError } from '../../stores/toast'
   import { t } from '../../lib/i18n'
 
   // a tab sliding in and out reads as one thing moving rather than the bar
@@ -31,6 +33,22 @@
   // place: it is where the list puts a message, not one of the parked ones.
   function onReorder(event: CustomEvent<ReorderDetail>): void {
     reorderTabs(event.detail.ids.map(Number))
+  }
+
+  // a tab dragged off the bar leaves the pane for a window of its own (#298),
+  // the way a browser tab does. The tab closes only once the window opened.
+  async function onTearOff(event: CustomEvent<TearOffDetail>): Promise<void> {
+    const id = Number(event.detail.id)
+    const tab = $tabs.find((candidate) => candidate.id === id)
+    if (!tab || tab.stale) {
+      return
+    }
+    try {
+      await openMessageWindow(id, tab.label)
+      closeTab(id)
+    } catch (err) {
+      toastError(errorMessage(err))
+    }
   }
 
   // a drag is only a drag past a few pixels, so a plain press still selects.
@@ -54,10 +72,11 @@
   <div
     class="strip"
     class:dragging
-    use:reorder={{ axis: 'x' }}
+    use:reorder={{ axis: 'x', tearOff: true }}
     on:reorderstart={() => (dragging = true)}
     on:reorderend={() => (dragging = false)}
     on:reorder={onReorder}
+    on:reordertearoff={onTearOff}
   >
     {#each $tabs as tab (tab.id)}
       <div

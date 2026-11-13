@@ -874,6 +874,7 @@ const ar: Record<string, string> = {
   'messageList.bulk.deleteConfirmAction': 'حذف {n}',
   'messageList.menu.open': 'فتح',
   'messageList.menu.openInTab': 'فتح في تبويب جديد',
+  'messageList.menu.openInWindow': 'فتح في نافذة جديدة',
   'settingsPanel.category.profiles': 'الملفات الشخصية',
   'settingsPanel.keywords.profiles': 'ملف شخصي عمل خاص مساحة عمل منفصل تبديل',
   'profiles.hint': 'أبقِ العمل والحياة الخاصة منفصلين في تثبيت واحد. يحدد الملف الشخصي أي صناديق البريد تراها، وما إذا كانت إعداداته وتواقيعه وعروضه المحفوظة خاصة به أو مشتركة مع ملفك الشخصي الرئيسي. بريدك يُخزَّن مرة واحدة في كلتا الحالتين.',

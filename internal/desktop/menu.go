@@ -172,6 +172,14 @@ func (a *App) SetMailActionsEnabled(enabled bool) {
 // action string.
 func (a *App) menuAction(action string) func(*application.Context) {
 	return func(*application.Context) {
+		// Cmd+W in a message window closes that window. Every other action
+		// belongs to the main window, which is the only one listening.
+		if action == "close-window" {
+			if w := a.focusedSecondaryWindow(); w != nil {
+				w.Close()
+				return
+			}
+		}
 		a.emit(EventMenu, action)
 	}
 }

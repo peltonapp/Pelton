@@ -881,6 +881,7 @@ const it: Record<string, string> = {
   'messageList.bulk.deleteConfirmAction': 'Elimina {n}',
   'messageList.menu.open': 'Apri',
   'messageList.menu.openInTab': 'Apri in una nuova scheda',
+  'messageList.menu.openInWindow': 'Apri in una nuova finestra',
   'settingsPanel.category.profiles': 'Profili',
   'settingsPanel.keywords.profiles': 'profilo lavoro privato area di lavoro separato cambio',
   'profiles.hint': 'Tieni separati la vita lavorativa e privata in un\'unica installazione. Un profilo decide quali caselle di posta vedi e se le sue impostazioni, firme e viste salvate sono proprie o condivise con il profilo principale. La posta viene comunque memorizzata una sola volta.',

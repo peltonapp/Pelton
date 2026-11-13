@@ -874,6 +874,7 @@ const fr: Record<string, string> = {
   'messageList.bulk.deleteConfirmAction': 'Supprimer {n}',
   'messageList.menu.open': 'Ouvrir',
   'messageList.menu.openInTab': 'Ouvrir dans un nouvel onglet',
+  'messageList.menu.openInWindow': 'Ouvrir dans une nouvelle fenêtre',
   'settingsPanel.category.profiles': 'Profils',
   'settingsPanel.keywords.profiles': 'profil travail privé espace séparer changer',
   'profiles.hint': 'Séparer le travail et le privé dans une seule installation. Un profil décide des boîtes que vous voyez, et si ses réglages, signatures et vues enregistrées lui appartiennent ou sont partagés avec le profil principal. Votre courrier n’est stocké qu’une fois dans tous les cas.',

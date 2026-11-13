@@ -874,6 +874,7 @@ const nl: Record<string, string> = {
   'messageList.bulk.deleteConfirmAction': '{n} verwijderen',
   'messageList.menu.open': 'Openen',
   'messageList.menu.openInTab': 'Openen in nieuw tabblad',
+  'messageList.menu.openInWindow': 'Openen in nieuw venster',
   'settingsPanel.category.profiles': 'Profielen',
   'settingsPanel.keywords.profiles': 'profiel werk privé werkruimte scheiden wisselen',
   'profiles.hint': 'Werk en privé gescheiden houden in één installatie. Een profiel bepaalt welke mailboxen je ziet, en of instellingen, ondertekeningen en opgeslagen weergaven van hemzelf zijn of gedeeld met je hoofdprofiel. Je mail wordt hoe dan ook één keer bewaard.',

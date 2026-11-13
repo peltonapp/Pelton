@@ -874,6 +874,7 @@ const de: Record<string, string> = {
   'messageList.bulk.deleteConfirmAction': '{n} löschen',
   'messageList.menu.open': 'Öffnen',
   'messageList.menu.openInTab': 'In neuem Tab öffnen',
+  'messageList.menu.openInWindow': 'In neuem Fenster öffnen',
   'settingsPanel.category.profiles': 'Profile',
   'settingsPanel.keywords.profiles': 'profil arbeit privat arbeitsbereich trennen wechseln',
   'profiles.hint': 'Arbeit und Privates in einer Installation trennen. Ein Profil bestimmt, welche Postfächer du siehst und ob Einstellungen, Signaturen und gespeicherte Ansichten eigene sind oder mit dem Hauptprofil geteilt werden. Deine Mails werden so oder so nur einmal gespeichert.',

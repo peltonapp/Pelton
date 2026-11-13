@@ -874,6 +874,7 @@ const en: Record<string, string> = {
   'messageList.bulk.deleteConfirmAction': 'Delete {n}',
   'messageList.menu.open': 'Open',
   'messageList.menu.openInTab': 'Open in new tab',
+  'messageList.menu.openInWindow': 'Open in new window',
   'settingsPanel.category.profiles': 'Profiles',
   'settingsPanel.keywords.profiles': 'profile work private workspace separate switch',
   'profiles.hint': 'Keep work and private life apart in one install. A profile decides which mailboxes you see, and whether its settings, signatures and saved views are its own or shared with your main profile. Your mail is stored once either way.',

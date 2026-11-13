@@ -874,6 +874,7 @@ const ru: Record<string, string> = {
   'messageList.bulk.deleteConfirmAction': 'Удалить {n}',
   'messageList.menu.open': 'Открыть',
   'messageList.menu.openInTab': 'Открыть в новой вкладке',
+  'messageList.menu.openInWindow': 'Открыть в новом окне',
   'settingsPanel.category.profiles': 'Профили',
   'settingsPanel.keywords.profiles': 'профиль рабочий личный рабочее пространство разделить переключить',
   'profiles.hint': 'Разделите работу и личную жизнь в рамках одной установки. Профиль определяет, какие почтовые ящики вы просматриваете, а также являются ли его настройки, подписи и сохраненные просмотры собственными или общими для вашего основного профиля. В любом случае ваша почта сохраняется один раз.',

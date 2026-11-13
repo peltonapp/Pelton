@@ -872,6 +872,7 @@ const pl: Record<string, string> = {
   'messageList.bulk.deleteConfirmAction': 'Usuń {n}',
   'messageList.menu.open': 'Otwórz',
   'messageList.menu.openInTab': 'Otwórz w nowej karcie',
+  'messageList.menu.openInWindow': 'Otwórz w nowym oknie',
   'settingsPanel.category.profiles': 'Profile',
   'settingsPanel.keywords.profiles': 'profil praca prywatne przestrzeń oddziel przełącz',
   'profiles.hint': 'Trzymaj pracę i sprawy prywatne osobno w jednej instalacji. Profil decyduje, które skrzynki widzisz i czy jego ustawienia, podpisy i zapisane widoki są własne, czy współdzielone z profilem głównym. Poczta i tak jest przechowywana raz.',

@@ -32,6 +32,7 @@
     IconStar,
     IconStarFilled,
     IconLayoutColumns,
+    IconAppWindow,
     IconArchive,
     IconFileExport,
     IconAlertTriangle,
@@ -78,6 +79,7 @@
     removeOffline,
     archiveMessage,
     openDraft,
+    openMessageWindow,
   } from '../../lib/api'
   import { openReply, openForward, openDraftSession } from '../../stores/compose'
   import { sidebar } from '../../stores/accounts'
@@ -629,6 +631,7 @@
     const entries: MenuEntry[] = [
       { label: $t('messageList.menu.open'), icon: IconMail, action: () => open(items.indexOf(item)) },
       { label: $t('messageList.menu.openInTab'), icon: IconLayoutColumns, action: () => openInTab(item.id, item.subject) },
+      { label: $t('messageList.menu.openInWindow'), icon: IconAppWindow, action: () => void openMessageWindow(item.id, item.subject) },
       { label: $t('action.reply'), icon: IconArrowBackUp, hint: menuHint('reply'), action: () => void replyTo(item, false) },
       { label: $t('shortcut.replyAll'), icon: IconArrowBackUp, hint: menuHint('reply-all'), action: () => void replyTo(item, true) },
       { label: $t('action.forward'), icon: IconArrowForwardUp, hint: menuHint('forward'), action: () => void forward(item) },
@@ -861,6 +864,7 @@
             checked={$selectedIds.has(item.id)}
             on:click={(e) => onRowClick(e, index)}
             on:auxclick={(e) => onRowAux(e, item)}
+            on:dblclick={() => void openMessageWindow(item.id, item.subject)}
             on:contextmenu={(e) => onContext(e, item)}
             on:swipe={(e) => performSwipe(item, e.detail)}
           />

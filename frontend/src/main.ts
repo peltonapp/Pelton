@@ -17,6 +17,7 @@ import './style.css'
 
 import { mount } from 'svelte'
 import App from './App.svelte'
+import MessageWindow from './MessageWindow.svelte'
 import { isDemoMode, windowMaterialActive } from './lib/api'
 import { setDemoActive } from './lib/demo'
 
@@ -45,7 +46,14 @@ await windowMaterialActive()
   .then((on) => document.documentElement.classList.toggle('window-material', on))
   .catch(() => {})
 
-const app = mount(App, { target })
+// a message opened in a window of its own loads the same page with
+// ?window=message&id=N and gets the reading pane alone instead of the app.
+const params = new URLSearchParams(window.location.search)
+const messageId = Number(params.get('id'))
+const app =
+  params.get('window') === 'message' && messageId > 0
+    ? mount(MessageWindow, { target, props: { messageId } })
+    : mount(App, { target })
 
 // remove the pre-mount splash now that svelte has taken over.
 document.getElementById('splash')?.remove()
