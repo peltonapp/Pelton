@@ -136,7 +136,7 @@ jobs:
 
       - name: Bindings are up to date
         run: |
-          go run "github.com/wailsapp/wails/v3/cmd/wails3@$(go list -m -f '{{.Version}}' github.com/wailsapp/wails/v3)" \
+          go run -tags gtk3 "github.com/wailsapp/wails/v3/cmd/wails3@$(go list -m -f '{{.Version}}' github.com/wailsapp/wails/v3)" \
             generate bindings -ts -d frontend/bindings -silent -f "-tags=gtk3" ./...
           if ! git diff --exit-code -- frontend/bindings || [ -n "$(git status --porcelain -- frontend/bindings)" ]; then
             echo "::error::frontend/bindings is out of date; run make bindings and commit the result"

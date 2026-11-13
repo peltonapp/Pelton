@@ -34,7 +34,7 @@ fi
 
 wails_version="$(go list -m -f '{{.Version}}' github.com/wailsapp/wails/v3)"
 wails3() {
-  go run "github.com/wailsapp/wails/v3/cmd/wails3@$wails_version" "$@"
+  go run -tags gtk3 "github.com/wailsapp/wails/v3/cmd/wails3@$wails_version" "$@"
 }
 
 # meta NAME [appmeta flags...] TEMPLATE renders a packaging template.

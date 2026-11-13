@@ -10,8 +10,10 @@ export VERSION
 
 # the wails3 cli, run at the version go.mod pins rather than whatever happens
 # to be installed. only the bindings generator and the windows build use it.
+# gtk3 keeps the cli itself buildable on Linux with the GTK 3 headers Pelton
+# needs anyway; the tag does nothing elsewhere.
 WAILS_VERSION := $(shell go list -m -f '{{.Version}}' github.com/wailsapp/wails/v3 2>/dev/null)
-WAILS3 := go run github.com/wailsapp/wails/v3/cmd/wails3@$(WAILS_VERSION)
+WAILS3 := go run -tags gtk3 github.com/wailsapp/wails/v3/cmd/wails3@$(WAILS_VERSION)
 
 # production build for this OS into build/bin (the .app on macOS). see
 # scripts/build.sh.
