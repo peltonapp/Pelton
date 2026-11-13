@@ -274,14 +274,22 @@
   }
 
   let hoverUrl = ''
-  let hoverLeft = 0
+  let hoverRight = 0
+  let hoverBottom = 0
+  let plainEl: HTMLElement | undefined
 
   // showHover updates the status overlay with the address of the hovered link,
-  // or hides it for an empty href. mailto links show just the address.
+  // or hides it for an empty href. mailto links show just the address. The
+  // overlay sits in the bottom-right corner of the visible message pane.
   function showHover(href: string): void {
     const shown = /^mailto:/i.test(href) ? href.slice(7).split('?')[0] : /^https?:/i.test(href) ? href : ''
     hoverUrl = shown
-    hoverLeft = frame ? Math.max(frame.getBoundingClientRect().left, 0) : 0
+    const pane = (frame ?? plainEl)?.closest('.scroll') ?? frame ?? plainEl
+    if (shown && pane) {
+      const rect = pane.getBoundingClientRect()
+      hoverRight = Math.max(window.innerWidth - rect.right, 0)
+      hoverBottom = Math.max(window.innerHeight - rect.bottom, 0)
+    }
   }
 
   // onWindowMessage receives the url from the click handler running inside
@@ -621,7 +629,7 @@
   <!-- dir="auto" for the same reason as the html document above: a plain-text
        message written right to left reads that way, whatever the interface is
        set to. -->
-  <pre dir="auto" class="body-plain mono selectable" style={`font-size:${$prefs.messageFontSize}px`}>{#each plainSegments as segment}{#if segment.href}<a
+  <pre bind:this={plainEl} dir="auto" class="body-plain mono selectable" style={`font-size:${$prefs.messageFontSize}px`}>{#each plainSegments as segment}{#if segment.href}<a
         class="plain-link"
         href={segment.href}
         on:click|preventDefault={() => BrowserOpenURL(segment.href ?? '')}
@@ -632,23 +640,22 @@
 {/if}
 
 {#if hoverUrl}
-  <div class="link-hover mono" style={`left:${hoverLeft}px`} aria-hidden="true">{hoverUrl}</div>
+  <div class="link-hover mono" style={`right:${hoverRight}px;bottom:${hoverBottom}px`} aria-hidden="true">{hoverUrl}</div>
 {/if}
 
 <style>
   .link-hover {
     position: fixed;
-    bottom: 0;
     z-index: 30;
-    max-width: 70%;
-    padding: var(--space-1) var(--space-3);
+    max-width: 55%;
+    padding: var(--space-1) var(--space-2);
     border: var(--hairline) solid var(--border-default);
-    border-left: none;
+    border-right: none;
     border-bottom: none;
-    border-top-right-radius: var(--radius-control);
+    border-top-left-radius: var(--radius-control);
     background: var(--surface-overlay);
     color: var(--text-secondary);
-    font-size: var(--fz-meta);
+    font-size: calc(var(--fz-meta) - 1px);
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
