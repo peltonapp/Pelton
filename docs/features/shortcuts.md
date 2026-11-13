@@ -59,6 +59,23 @@ Mark read, download-for-offline and unsubscribe ship unbound. Bind them to whate
 
 Whatever you bind shows up next to the matching entry when you right-click a message, and in the toolbar tooltips. Turn that off under **Settings, Shortcuts** with "Show keyboard shortcut hints in the app".
 
+## Selecting messages
+
+With the message list focused:
+
+| Shortcut | Action |
+| -------- | ------ |
+| ++shift+down++ / ++shift+up++ | Extend the selection to the next or previous message |
+| ++space++ | Add or remove the highlighted message |
+| ++cmd+a++ | Select all |
+| ++esc++ | Clear the selection |
+
+The message actions above then apply to everything selected, so ++shift+down++ a few times and then ++backspace++ deletes them all. ++shift+down++ measures from the message you last moved to, opened or picked with ++space++, and adds to what is already selected.
+
+If you bind ++space++, ++shift+down++ or ++shift+up++ to an action of your own under **Settings, Shortcuts**, your binding wins and the key no longer selects.
+
+In the unified views ++cmd+a++ only works once **Select all in unified views** is on in **Settings**, since those lists span every account. All of this needs **Select multiple messages at once**, which is on by default.
+
 ## Reading tabs
 
 Middle-click a message, or right-click it and pick **Open in new tab**, to park it in a tab. The tab bar only exists while a tab does.
@@ -113,6 +130,12 @@ Two independent toggles for keyboard-centric use:
 
 - **App vim mode** (**Settings, Shortcuts**): `h`/`j`/`k`/`l` style navigation across the message list and panes.
 - **Compose vim mode** (**Settings, Composing**): vim keybindings inside the compose editor.
+
+In app vim mode, ++v++ starts a visual selection at the current message, and `j`, `k`, `gg` and `G` extend it from there. A **VISUAL** badge in your accent color shows in the status bar while it runs. ++esc++ ends it and keeps what it selected, so you can move past a few messages and press ++v++ again to add another range. ++shift+down++ and ++shift+up++ extend the selection without entering visual mode. With messages selected and visual mode off, ++esc++ clears the selection, and the next ++esc++ closes the reading pane.
+
+Extending a selection moves the highlight without opening anything, so the messages you pass are not marked read and the reading pane stays on the one you had open. The next plain `j` or `k` carries on from the highlight and opens as usual. Clearing the selection puts the highlight back on the open message.
+
+Like the other vim keys, ++v++ is handled before your own bindings. An action you bound to ++v++ does not fire while app vim mode is on, unless **Select multiple messages at once** is off.
 
 ## Need help?
 

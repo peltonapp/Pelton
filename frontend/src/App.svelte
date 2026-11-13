@@ -104,7 +104,17 @@
   import { snoozeTarget } from './stores/snooze'
   import { previewTarget } from './stores/preview'
   import { openMove, openMoveMany } from './stores/move'
-  import { selectedIds, clearSelection } from './stores/listselect'
+  import {
+    selectedIds,
+    clearSelection,
+    anchorAt,
+    ensureAnchor,
+    selectRange,
+    rangeCursor,
+    startVisual,
+    endVisual,
+    inVisual,
+  } from './stores/listselect'
   import { selectFolder, selectView, revealMessage } from './stores/selection'
   import { setTheme, setThemeId } from './stores/prefs'
   import { openCreateFolder, openRenameFolder, openDeleteFolder, openEmptyTrash } from './stores/folderdialog'
@@ -1164,9 +1174,10 @@
 
   // in-app vim navigation: when enabled, plain h/j/k/l (and gg/G) move around
   // the message list and open/close the reading pane, mirroring mutt-style
-  // navigation instead of just the compose editor. it never fires in a text
-  // field, while a dialog/panel is open, or with a modifier held (so cmd+j
-  // etc. still reach the normal shortcut path).
+  // navigation instead of just the compose editor. v starts a visual selection
+  // the motions extend, and shift plus an arrow extends one directly. it never
+  // fires in a text field, while a dialog/panel is open, or with cmd, ctrl or
+  // alt held (so cmd+j etc. still reach the normal shortcut path).
   let lastVimKey = ''
   let lastVimKeyAt = 0
 
@@ -1174,15 +1185,40 @@
     return get(messageList).data?.items ?? []
   }
 
-  function vimMove(delta: number): void {
+  // vimCursorIndex is the row motions start from: the range cursor while one is
+  // out, the open message otherwise.
+  function vimCursorIndex(items: { id: number }[]): number {
+    const id = get(rangeCursor) ?? get(openMessageId)
+    return id === null ? -1 : items.findIndex((m) => m.id === id)
+  }
+
+  // vimCursorTo moves the cursor to a row. Extending carries the selection
+  // along from the anchor and leaves the reading pane alone, so a range does
+  // not open and mark read every message it passes. A plain move opens the row
+  // and makes it the anchor, so a selection started from it includes it.
+  function vimCursorTo(items: { id: number }[], index: number, extend: boolean): void {
+    const id = items[index].id
+    if (extend) {
+      rangeCursor.set(id)
+      selectRange(items.map((m) => m.id), id)
+    } else {
+      rangeCursor.set(null)
+      openMessageId.set(id)
+      anchorAt(id)
+    }
+  }
+
+  function vimMove(delta: number, extend: boolean): void {
     const items = vimNavList()
     if (items.length === 0) {
       return
     }
-    const currentId = get(openMessageId)
-    const idx = currentId === null ? -1 : items.findIndex((m) => m.id === currentId)
+    const idx = vimCursorIndex(items)
+    if (extend && idx !== -1) {
+      ensureAnchor(items[idx].id)
+    }
     const next = idx === -1 ? (delta > 0 ? 0 : items.length - 1) : Math.min(Math.max(idx + delta, 0), items.length - 1)
-    openMessageId.set(items[next].id)
+    vimCursorTo(items, next, extend)
   }
 
   function vimJump(toLast: boolean): void {
@@ -1190,7 +1226,35 @@
     if (items.length === 0) {
       return
     }
-    openMessageId.set(toLast ? items[items.length - 1].id : items[0].id)
+    vimCursorTo(items, toLast ? items.length - 1 : 0, inVisual())
+  }
+
+  // vimVisual toggles visual selection at the cursor, putting the cursor on the
+  // first row when it is nowhere yet.
+  function vimVisual(): void {
+    if (inVisual()) {
+      endVisual()
+      return
+    }
+    const items = vimNavList()
+    if (items.length === 0) {
+      return
+    }
+    const { id } = items[Math.max(vimCursorIndex(items), 0)]
+    rangeCursor.set(id)
+    startVisual(items.map((m) => m.id), id)
+  }
+
+  // vimEscape unwinds one layer at a time: visual mode first, keeping what it
+  // selected, then the selection, then the reading pane.
+  function vimEscape(): void {
+    if (inVisual()) {
+      endVisual()
+    } else if (get(selectedIds).size > 0) {
+      clearSelection()
+    } else {
+      openMessageId.set(null)
+    }
   }
 
   function anyDialogOpen(): boolean {
@@ -1215,29 +1279,43 @@
   }
 
   function tryVimNav(event: KeyboardEvent): boolean {
-    if (!$prefs.appVimMode || event.metaKey || event.ctrlKey || event.altKey || event.shiftKey) {
+    if (!$prefs.appVimMode || event.metaKey || event.ctrlKey || event.altKey) {
       return false
     }
     if (isEditableTarget(event.target) || inSidebar(event.target) || anyDialogOpen()) {
       return false
     }
+    // shift is part of G itself; with anything else it can only be extending
+    // the selection.
+    if (event.shiftKey && event.key !== 'G') {
+      return tryVimExtend(event)
+    }
     const now = Date.now()
     switch (event.key) {
       case 'j':
-        vimMove(1)
+        vimMove(1, inVisual())
         break
       case 'k':
-        vimMove(-1)
+        vimMove(-1, inVisual())
         break
       case 'l':
       case 'Enter':
         if (get(openMessageId) === null) {
-          vimMove(1)
+          vimMove(1, inVisual())
         }
         break
       case 'h':
-      case 'Escape':
         openMessageId.set(null)
+        break
+      case 'Escape':
+        vimEscape()
+        break
+      case 'v':
+        if (!$prefs.multiSelectEnabled) {
+          lastVimKey = ''
+          return false
+        }
+        vimVisual()
         break
       case 'g':
         if (lastVimKey === 'g' && now - lastVimKeyAt < 500) {
@@ -1255,6 +1333,20 @@
         lastVimKey = ''
         return false
     }
+    lastVimKey = ''
+    return true
+  }
+
+  // tryVimExtend handles shift plus an arrow, which extends the selection
+  // without entering visual mode. A binding the user put on the same keys wins.
+  function tryVimExtend(event: KeyboardEvent): boolean {
+    if ((event.key !== 'ArrowDown' && event.key !== 'ArrowUp') || !$prefs.multiSelectEnabled) {
+      return false
+    }
+    if (matchShortcut(event, $bindings) !== null) {
+      return false
+    }
+    vimMove(event.key === 'ArrowDown' ? 1 : -1, true)
     lastVimKey = ''
     return true
   }

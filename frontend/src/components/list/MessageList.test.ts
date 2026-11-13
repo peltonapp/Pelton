@@ -20,11 +20,14 @@ vi.mock('../../lib/api', async (importOriginal) => ({
 import MessageList from './MessageList.svelte'
 import { messageList } from '../../stores/messages'
 import { openMessageId, searchQuery, selection } from '../../stores/selection'
-import { clearSelection } from '../../stores/listselect'
+import { clearSelection, selectedIds } from '../../stores/listselect'
+import { bindings } from '../../stores/shortcuts'
 import { prefs } from '../../stores/prefs'
 import { idle, ready } from '../../lib/async'
 import { sidebar } from '../../stores/accounts'
 import { composeSessions } from '../../stores/compose'
+
+const defaultBindings = get(bindings)
 
 vi.stubGlobal(
   'ResizeObserver',
@@ -75,7 +78,8 @@ beforeEach(() => {
   searchQuery.set('')
   openMessageId.set(null)
   clearSelection()
-  prefs.update((p) => ({ ...p, rowShowAvatar: false }))
+  prefs.update((p) => ({ ...p, rowShowAvatar: false, appVimMode: false, multiSelectEnabled: true }))
+  bindings.set(defaultBindings)
 })
 
 describe('MessageList search selection', () => {
@@ -112,6 +116,69 @@ describe('MessageList search selection', () => {
     // Clearing a filter should not also discard the message being read; it only
     // stops a different row at the old numeric index from looking selected.
     expect(get(openMessageId)).toBe(42)
+  })
+})
+
+describe('MessageList keyboard selection', () => {
+  // focusList lists three messages and puts focus on the list.
+  async function focusList(): Promise<ReturnType<typeof userEvent.setup>> {
+    api.listViewMessages.mockResolvedValue(page([summary(1, 'First'), summary(2, 'Second'), summary(3, 'Third')]))
+    render(MessageList)
+    await screen.findByText('First')
+    screen.getByRole('listbox').focus()
+    return userEvent.setup()
+  }
+
+  function selected(): number[] {
+    return [...get(selectedIds)].sort((a, b) => a - b)
+  }
+
+  it('extends from the highlighted row with shift+down and back with shift+up', async () => {
+    const user = await focusList()
+    await user.keyboard('{ArrowDown}{Shift>}{ArrowDown}{ArrowDown}{/Shift}')
+    expect(selected()).toEqual([1, 2, 3])
+    await user.keyboard('{Shift>}{ArrowUp}{/Shift}')
+    expect(selected()).toEqual([1, 2])
+    expect(get(openMessageId)).toBeNull()
+  })
+
+  it('toggles the highlighted row with space', async () => {
+    const user = await focusList()
+    await user.keyboard('{ArrowDown}{ArrowDown} ')
+    expect(selected()).toEqual([2])
+    await user.keyboard(' ')
+    expect(selected()).toEqual([])
+  })
+
+  it('clears with escape, then extends from the row still highlighted', async () => {
+    const user = await focusList()
+    await user.keyboard('{ArrowDown}{Shift>}{ArrowDown}{/Shift}{Escape}')
+    expect(selected()).toEqual([])
+    await user.keyboard('{Shift>}{ArrowDown}{/Shift}')
+    expect(selected()).toEqual([2, 3])
+  })
+
+  it('leaves escape and shift+arrows to the vim motions in app vim mode', async () => {
+    prefs.update((p) => ({ ...p, appVimMode: true }))
+    const user = await focusList()
+    await user.keyboard('{ArrowDown} {Shift>}{ArrowDown}{/Shift}')
+    expect(selected()).toEqual([1])
+    await user.keyboard('{Escape}')
+    expect(selected()).toEqual([1])
+  })
+
+  it('stands aside for a binding the user put on its keys', async () => {
+    bindings.set({ ...defaultBindings, flag: 'space', archive: 'shift+arrowdown' })
+    const user = await focusList()
+    await user.keyboard('{ArrowDown} {Shift>}{ArrowDown}{/Shift}')
+    expect(selected()).toEqual([])
+  })
+
+  it('ignores the selection keys when multi-select is off', async () => {
+    prefs.update((p) => ({ ...p, multiSelectEnabled: false }))
+    const user = await focusList()
+    await user.keyboard('{ArrowDown} {Shift>}{ArrowDown}{/Shift}')
+    expect(selected()).toEqual([])
   })
 })
 

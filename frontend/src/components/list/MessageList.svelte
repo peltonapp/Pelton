@@ -2,8 +2,8 @@
   // column 2: the message list. it loads the page for the current selection,
   // runs fts5 search, and owns keyboard navigation (up/down to move, enter to
   // open). opening a message marks it seen optimistically. when multi-select is
-  // enabled, cmd/ctrl-click toggles rows and shift-click selects a range, with a
-  // selection toolbar for bulk mark/flag/delete. loading, empty and error states
+  // enabled, cmd/ctrl-click or space toggles rows and shift-click or shift+up/down
+  // selects a range, with a selection toolbar for bulk mark/flag/delete. loading, empty and error states
   // are all explicit so the pane is never blank.
   import { tick, onMount } from 'svelte'
   import MessageRow from './MessageRow.svelte'
@@ -56,6 +56,8 @@
     selectedIds,
     clearSelection,
     anchorAt,
+    ensureAnchor,
+    rangeCursor,
     selectOnly,
     toggleSelect,
     selectRange,
@@ -83,7 +85,8 @@
   import { recordDeleted } from '../../stores/undodelete'
   import { recordArchived } from '../../stores/undoarchive'
   import { openContextMenu, type MenuEntry } from '../../stores/contextmenu'
-  import { menuHint, shortcutTitle } from '../../stores/shortcuts'
+  import { bindings, menuHint, shortcutTitle } from '../../stores/shortcuts'
+  import { matchShortcut } from '../../lib/shortcuts'
   import { openInTab } from '../../stores/tabs'
   import { errorMessage, toastError } from '../../stores/toast'
   import { isVIPAddress } from '../../stores/vip'
@@ -261,11 +264,24 @@
   // keep the keyboard-nav highlight in sync with whichever message is open,
   // however it got opened (click, Enter, or the in-app vim motions), so a
   // stale arrow-key position never leaves two rows looking selected at once.
-  $: if ($openMessageId !== null) {
+  // While app vim mode extends a range its cursor leaves the open message
+  // behind, and the highlight goes with the cursor.
+  $: cursorId = $rangeCursor ?? $openMessageId
+  $: if (cursorId !== null) {
     // -1 is a real result: changing from search results back to the mailbox can
     // leave the open message outside the new list, so its old numeric position
     // must not highlight whichever row replaced it.
-    activeIndex = items.findIndex((m) => m.id === $openMessageId)
+    activeIndex = items.findIndex((m) => m.id === cursorId)
+  }
+
+  // a range cursor is moved from App.svelte, which cannot scroll this list.
+  $: void followRangeCursor($rangeCursor)
+  async function followRangeCursor(id: number | null): Promise<void> {
+    if (id === null) {
+      return
+    }
+    await tick()
+    await scrollActiveIntoView()
   }
 
   // search handling. the list shows ranked results when there is a query or an
@@ -360,9 +376,13 @@
     void open(index)
   }
 
-  // keyboard navigation over the rows.
+  // keyboard navigation over the rows. In app vim mode, escape and
+  // shift+up/down belong to the vim motions in App.svelte, which keep their own
+  // cursor. Space and shift+up/down also stand aside for a binding the user put
+  // on them, which the global handler then runs alone.
   async function onKeydown(event: KeyboardEvent): Promise<void> {
-    if (event.key === 'Escape' && selectionCount > 0) {
+    const vim = $prefs.appVimMode
+    if (event.key === 'Escape' && selectionCount > 0 && !vim) {
       clearAll()
       return
     }
@@ -377,17 +397,37 @@
       await selectAllInList(items.map((m) => m.id))
       return
     }
-    if (event.key === 'ArrowDown') {
+    if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+      const extend = event.shiftKey && $prefs.multiSelectEnabled
+      if (extend && (vim || matchShortcut(event, $bindings) !== null)) {
+        return
+      }
       event.preventDefault()
-      activeIndex = Math.min(activeIndex + 1, items.length - 1)
-      await scrollActiveIntoView()
-    } else if (event.key === 'ArrowUp') {
-      event.preventDefault()
-      activeIndex = Math.max(activeIndex - 1, 0)
+      if (extend && activeIndex >= 0) {
+        ensureAnchor(items[activeIndex].id)
+      }
+      activeIndex =
+        event.key === 'ArrowDown' ? Math.min(activeIndex + 1, items.length - 1) : Math.max(activeIndex - 1, 0)
+      const id = items[activeIndex].id
+      // a plain move makes the row the anchor, so a range started from it
+      // includes it, the way a click does.
+      if (extend) {
+        selectRange(items.map((m) => m.id), id)
+      } else {
+        anchorAt(id)
+      }
       await scrollActiveIntoView()
     } else if (event.key === 'Enter' && activeIndex >= 0) {
       event.preventDefault()
       await open(activeIndex)
+    } else if (
+      event.key === ' ' &&
+      $prefs.multiSelectEnabled &&
+      activeIndex >= 0 &&
+      matchShortcut(event, $bindings) === null
+    ) {
+      event.preventDefault()
+      toggleSelect(items[activeIndex].id)
     }
   }
 
