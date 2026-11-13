@@ -18,7 +18,7 @@
   import { openMessageId } from '../../stores/selection'
   import { messageDetail, loadMessage, clearMessage } from '../../stores/message'
   import { setFlagged, deleteMessage, archiveMessage, scanMessage } from '../../lib/api'
-  import { reportArchiveExport, dropDeleted } from '../../lib/messageactions'
+  import { reportArchiveExport, dropDeleted, exportEml } from '../../lib/messageactions'
   import {
     virusTotal,
     scanning,
@@ -286,6 +286,7 @@ ${bodyHtml}
         on:delete={() => remove(detail)}
         on:toggleFlag={() => toggleFlag(detail)}
         on:print={() => printMessage(detail)}
+        on:exportEml={() => void exportEml([detail.id])}
         on:info={() => (infoOpen = true)}
         on:source={() => (sourceOpen = true)}
       />

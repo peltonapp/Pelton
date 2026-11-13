@@ -134,6 +134,7 @@
     bulkSetOffline,
     bulkTrash,
     bulkArchive,
+    exportEml,
     reportArchiveExport,
     dropDeleted,
     toggleSpam,
@@ -592,6 +593,17 @@
     exportMessagePrintView(id).catch((err) => toastError(errorMessage(err)))
   }
 
+  // export the currently open message as an .eml file, or tell the user to open
+  // one first.
+  function exportOpenEml(): void {
+    const id = get(visibleMessageId)
+    if (id === null) {
+      toastInfo(get(t)('app.toast.exportOpenFirst'))
+      return
+    }
+    void exportEml([id])
+  }
+
   // currentMessage resolves the message on screen so the message-level shortcuts
   // can act on it: the active tab's, or the one picked in the list.
   //
@@ -746,6 +758,7 @@
     | 'open-mailboxes'
     | 'open-contacts'
     | 'hide-window'
+    | 'export-eml'
 
   // dispatch maps an action (from a shortcut or a menu item) to its handler.
   function dispatchAction(action: MenuAction): void {
@@ -759,6 +772,9 @@
         break
       case 'export-pdf':
         exportPdf()
+        break
+      case 'export-eml':
+        exportOpenEml()
         break
       case 'preferences':
         settingsCategory = null

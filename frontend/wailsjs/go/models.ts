@@ -984,6 +984,24 @@ export namespace desktop {
 		    return a;
 		}
 	}
+	export class EmlExportDTO {
+	    dir: string;
+	    exported: number;
+	    failed: number;
+	    firstError: string;
+
+	    static createFrom(source: any = {}) {
+	        return new EmlExportDTO(source);
+	    }
+
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.dir = source["dir"];
+	        this.exported = source["exported"];
+	        this.failed = source["failed"];
+	        this.firstError = source["firstError"];
+	    }
+	}
 	export class FetchOlderResult {
 	    fetched: number;
 	    hasOlder: boolean;

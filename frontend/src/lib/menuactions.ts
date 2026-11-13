@@ -13,6 +13,7 @@ import {
   IconX,
   IconPencil,
   IconFileTypePdf,
+  IconFileExport,
   IconRefresh,
   IconPlus,
   IconMailbox,
@@ -60,6 +61,7 @@ export type MenuActionId =
   | 'open-mailboxes'
   | 'open-contacts'
   | 'hide-window'
+  | 'export-eml'
 
 // MenuActionDef describes one assignable action: how it labels and renders, and
 // the constraints the bar applies (message-required, danger styling, platform).
@@ -92,6 +94,7 @@ export const menuActionCatalog: MenuActionDef[] = [
   { action: 'quit', labelKey: 'menu.quit', iconName: 'power', icon: IconPower, hint: isMac ? 'mod+q' : undefined },
   { action: 'compose', labelKey: 'menu.compose', iconName: 'pencil', icon: IconPencil },
   { action: 'export-pdf', labelKey: 'menu.exportPdf', iconName: 'file-type-pdf', icon: IconFileTypePdf },
+  { action: 'export-eml', labelKey: 'menu.exportEml', iconName: 'file-export', icon: IconFileExport },
   { action: 'close-window', labelKey: 'menu.closeWindow', iconName: 'x', icon: IconX, hint: isMac ? 'mod+w' : undefined },
   { action: 'sync', labelKey: 'menu.sync', iconName: 'refresh', icon: IconRefresh },
   { action: 'add-mailbox', labelKey: 'menu.addMailbox', iconName: 'plus', icon: IconPlus },
@@ -218,7 +221,7 @@ export function defaultMenuLayout(): MenuBarLayout {
         id: 'file',
         builtin: true,
         labelKey: 'menu.file',
-        items: [action('compose'), sep('file', 0), action('export-pdf'), sep('file', 1), action('close-window')],
+        items: [action('compose'), sep('file', 0), action('export-pdf'), action('export-eml'), sep('file', 1), action('close-window')],
       },
       {
         id: 'mailbox',

@@ -33,6 +33,7 @@
     IconStarFilled,
     IconLayoutColumns,
     IconArchive,
+    IconFileExport,
     IconAlertTriangle,
     IconMailCheck,
   } from '@tabler/icons-svelte'
@@ -105,6 +106,7 @@
     bulkSetOffline,
     bulkArchive,
     bulkTrash,
+    exportEml,
     reportArchiveExport,
     spamState,
     toggleSpam,
@@ -610,6 +612,7 @@
         anyOnline
           ? { label: $t('messageList.bulk.downloadCount').replace('{n}', n), icon: IconDownload, action: () => void bulkSetOfflineCopies(true) }
           : { label: $t('messageList.bulk.removeOfflineCount').replace('{n}', n), icon: IconDownloadOff, action: () => void bulkSetOfflineCopies(false) },
+        { label: $t('messageList.bulk.exportEmlCount').replace('{n}', n), icon: IconFileExport, action: () => void exportEml(selectedItems.map((m) => m.id)) },
         'separator',
         { label: $t('messageList.bulk.deleteCount').replace('{n}', n), icon: IconTrash, danger: true, hint: menuHint('delete-message'), action: () => void bulkDelete() },
       ]
@@ -647,6 +650,7 @@
       item.offline
         ? { label: $t('messageList.menu.removeOffline'), icon: IconDownloadOff, hint: menuHint('remove-offline'), action: () => void toggleOffline(item) }
         : { label: $t('shortcut.downloadOffline'), icon: IconDownload, hint: menuHint('download-offline'), action: () => void toggleOffline(item) },
+      { label: $t('menu.exportEml'), icon: IconFileExport, action: () => void exportEml([item.id]) },
       'separator',
       { label: $t('action.delete'), icon: IconTrash, danger: true, hint: menuHint('delete-message'), action: () => void remove(item) },
     ]
@@ -760,6 +764,9 @@
       </button>
       <button type="button" class="act" title={$shortcutTitle($t('messageList.menu.moveTo'), 'move-to')} on:click={bulkMove}>
         <IconFolderSymlink size={16} stroke={1.7} />
+      </button>
+      <button type="button" class="act" title={$t('messageList.bulk.exportEml')} aria-label={$t('messageList.bulk.exportEml')} on:click={() => exportEml(selectedItems.map((m) => m.id))}>
+        <IconFileExport size={16} stroke={1.7} />
       </button>
       <button type="button" class="act danger" title={$shortcutTitle($t('action.delete'), 'delete-message')} on:click={bulkDelete}>
         <IconTrash size={16} stroke={1.7} />
