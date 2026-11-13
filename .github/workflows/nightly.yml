@@ -123,7 +123,7 @@ jobs:
   macos:
     needs: check
     if: needs.check.outputs.build == 'true'
-    runs-on: macos-14
+    runs-on: macos-15
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
