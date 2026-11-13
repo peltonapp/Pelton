@@ -45,6 +45,6 @@ trim_trailing_whitespace = false
 end_of_line = crlf
 
 # vendored or generated: left exactly as its producer wrote it.
-[frontend/wailsjs/**]
+[frontend/bindings/**]
 trim_trailing_whitespace = false
 insert_final_newline = false

@@ -6,7 +6,6 @@
   pnpmConfigHook,
   pnpm_10,
   nodejs_22,
-  wails,
   gnumake,
   pkg-config,
   gtk3,
@@ -40,7 +39,6 @@ buildGoModule (finalAttrs: {
     pnpmConfigHook
     pnpm_10
     nodejs_22
-    wails
     gnumake
   ]
   ++ lib.optionals stdenv.hostPlatform.isLinux [

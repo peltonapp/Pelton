@@ -1,22 +1,22 @@
-# Pelton - email client (Wails + Svelte)
+# Pelton - email client (Wails v3 + Svelte)
 
-.PHONY: build build-mac build-win build-linux build-nix dmg run run-nightly app-dev dev clean tidy deps licenses icon disclaimer sync-docs
+.PHONY: build build-mac build-win build-linux build-nix dmg run nice-potatoes run-nightly app-dev dev bindings clean tidy deps licenses icon disclaimer sync-docs
 
 # version string injected into the binary. it prefers the latest git tag (with a
 # short commit suffix on untagged commits) and falls back to "dev". it is wired
 # into main.version via ldflags and shown in the about section.
 VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo dev)
-LDFLAGS := -X main.version=$(VERSION)
+export VERSION
 
-# wails links webkit2gtk-4.0 on Linux unless built with the webkit2_41 tag. most
-# current distros ship only 4.1, so build-linux and the dev targets add the tag
-# whenever pkg-config finds it. empty on macOS and Windows, where there is no
-# webkitgtk.
-WEBKIT_TAGS := $(shell pkg-config --exists webkit2gtk-4.1 2>/dev/null && echo -tags webkit2_41)
+# the wails3 cli, run at the version go.mod pins rather than whatever happens
+# to be installed. only the bindings generator and the windows build use it.
+WAILS_VERSION := $(shell go list -m -f '{{.Version}}' github.com/wailsapp/wails/v3 2>/dev/null)
+WAILS3 := go run github.com/wailsapp/wails/v3/cmd/wails3@$(WAILS_VERSION)
 
-# production build into build/bin
+# production build for this OS into build/bin (the .app on macOS). see
+# scripts/build.sh.
 build:
-	wails build -ldflags "$(LDFLAGS)"
+	scripts/build.sh
 
 # compile the macOS Liquid Glass app icon (build/darwin/pelton.icon) into the
 # built .app via actool. needs a one-time `sudo xcodebuild -runFirstLaunch`.
@@ -34,7 +34,7 @@ dmg: build-mac
 	rm -f build/bin/Pelton.dmg
 	create-dmg \
 		--volname "Pelton" \
-		--volicon "build/bin/Pelton.app/Contents/Resources/pelton.icns" \
+		--volicon "build/icons/pelton.icns" \
 		--window-size 540 380 \
 		--icon-size 128 \
 		--icon "Pelton.app" 130 170 \
@@ -43,48 +43,50 @@ dmg: build-mac
 		"build/bin/Pelton.dmg" \
 		"build/bin/Pelton.app"
 
-# windows build (amd64). cross-compiling from another OS needs the appropriate
-# toolchain (mingw-w64) and webview2; run on Windows for a no-fuss build.
+# windows build (amd64) with the NSIS installer. run on Windows with NSIS
+# installed; makensis has to be on PATH.
 build-win: disclaimer
-	wails build -platform windows/amd64 -ldflags "$(LDFLAGS)"
+	NSIS=1 scripts/build.sh
 
 # linux build (amd64), then drop the .desktop launcher next to the binary so it
-# is easy to install into ~/.local/share/applications (or a package). building
-# from macOS needs the gtk/webkit2gtk toolchain; run on Linux for a clean build.
+# is easy to install into ~/.local/share/applications (or a package). needs the
+# gtk3 and webkit2gtk-4.1 development packages.
 build-linux:
-	wails build -platform linux/amd64 $(WEBKIT_TAGS) -ldflags "$(LDFLAGS)"
+	scripts/build.sh
 	cp build/linux/pelton.desktop build/bin/pelton.desktop
 	@echo "linux binary + pelton.desktop in build/bin (install the .desktop and an icon named 'pelton')"
 
-# nix packaging build: same as build-linux but tagged for nixpkgs'
-# webkitgtk_4_1 (nixpkgs dropped the older webkit2gtk 4.0 build)
+# nix packaging build: the frontend and a gtk3 binary named pelton, with no
+# git or network (packaging/nix/package.nix passes VERSION).
 build-nix:
-	wails build -tags webkit2_41 -ldflags "$(LDFLAGS)" -o pelton
+	cd frontend && pnpm run build
+	go build -tags "production gtk3" -trimpath -ldflags "-s -w -X main.version=$(VERSION)" -o build/bin/pelton .
 
-# run the whole app in dev mode: make sure go + npm deps are present, regenerate
-# the typescript bindings from the go methods, then launch wails dev with hot
-# reload for both the go backend and the svelte frontend. PELTON_DEV points the
-# app at a separate Pelton-dev config/database directory (see
-# internal/storage/db.go), so testing here never touches a real install's
-# accounts, mail cache or settings.
-run: deps
-	wails generate module
-	PELTON_DEV=1 wails dev $(WEBKIT_TAGS) -ldflags "$(LDFLAGS)"
+# regenerate the typescript bindings in frontend/bindings from the bound go
+# methods. run after adding or changing a method on desktop.App.
+bindings:
+	$(WAILS3) generate bindings -ts -d frontend/bindings -silent ./...
+
+# run the whole app in dev mode: vite serves the frontend with hot reload and
+# the app loads it from there. PELTON_DEV points the app at a separate
+# Pelton-dev config/database directory (see internal/storage/db.go), so testing
+# here never touches a real install's accounts, mail cache or settings. go
+# changes need a restart of make run.
+run: deps bindings
+	scripts/dev.sh
 
 # run the app in the cosmetic demo mode (--potatoes-are-nice): the ui fills with
 # fixed potato-themed sample data for website screenshots and never touches real
 # accounts, mail or the network. Same dev setup as `run`, just with the flag.
-nice-potatoes: deps
-	wails generate module
-	PELTON_DEV=1 wails dev $(WEBKIT_TAGS) -appargs "--potatoes-are-nice" -ldflags "$(LDFLAGS)"
+nice-potatoes: deps bindings
+	scripts/dev.sh --potatoes-are-nice
 
 # run the app as a nightly build would behave: the launch warning dialog, the
 # status bar marker and the nightly name/icon in the about block. PELTON_DEV
 # still points it at the dev data directory, so this does not create the real
 # nightly one either.
-run-nightly: deps
-	wails generate module
-	PELTON_DEV=1 wails dev $(WEBKIT_TAGS) -ldflags "$(LDFLAGS) -X main.channel=nightly"
+run-nightly: deps bindings
+	CHANNEL=nightly scripts/dev.sh
 
 dev: run
 
@@ -111,7 +113,7 @@ licenses:
 
 clean:
 	go clean
-	wails build -clean || true
+	rm -rf build/bin frontend/dist
 
 # regenerate docs/contributing/{guidelines,code-of-conduct,dco}.md from the
 # canonical CONTRIBUTING.md, CODE_OF_CONDUCT.md and DCO.md at the repo root.

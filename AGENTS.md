@@ -36,6 +36,6 @@ you start:
 - `frontend/` — Svelte 5 + TypeScript + Vite.
 - `cmd/` — standalone test/debug binaries, not the main app.
 - `main.go` + `wails.json` wire the two together.
-- `make run` for dev (hot reload, isolated `PELTON_DEV` data dir). `make
+- `make run` for dev (frontend hot reload, restart for Go changes, isolated `PELTON_DEV` data dir). `make
   build-*` for platform builds. The `Makefile` is the source of truth for
   build/run/package commands.

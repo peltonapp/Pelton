@@ -6,6 +6,6 @@
 build/windows/installer/disclaimer.txt text eol=crlf
 
 # the translation tables are strings, not code, so they stay out of github's
-# language stats. the wails bindings are written by `wails generate module`.
+# language stats. the wails bindings are written by `make bindings`.
 frontend/src/lib/locales/*.ts linguist-detectable=false
-frontend/wailsjs/** linguist-generated
+frontend/bindings/** linguist-generated
