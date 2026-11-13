@@ -16,6 +16,8 @@ import (
 	"github.com/peltonapp/Pelton/internal/storage"
 	"github.com/wailsapp/wails/v3/pkg/application"
 	"github.com/wailsapp/wails/v3/pkg/events"
+	"github.com/wailsapp/wails/v3/pkg/services/dock"
+	"github.com/wailsapp/wails/v3/pkg/services/notifications"
 )
 
 // Config carries what the root entrypoint owns: the embedded frontend assets,
@@ -74,6 +76,12 @@ func Run(cfg Config) error {
 		title = "Pelton Nightly"
 	}
 
+	// new-mail notifications and the macOS Dock badge, through the Wails
+	// services rather than per-platform code of Pelton's own (#568).
+	app.notifier = notifications.New()
+	app.notifier.OnNotificationResponse(app.onNotificationResponse)
+	app.dock = dock.New()
+
 	dist, err := fs.Sub(cfg.Assets, "frontend/dist")
 	if err != nil {
 		return fmt.Errorf("pelton: frontend assets: %w", err)
@@ -85,6 +93,8 @@ func Run(cfg Config) error {
 		Logger:      app.log,
 		Services: []application.Service{
 			application.NewService(app),
+			application.NewService(app.notifier),
+			application.NewService(app.dock),
 		},
 		Assets: application.AssetOptions{
 			Handler: application.AssetFileServerFS(dist),

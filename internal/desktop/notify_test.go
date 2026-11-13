@@ -1,6 +1,7 @@
 package desktop
 
 import (
+	"encoding/json"
 	"testing"
 
 	"github.com/peltonapp/Pelton/internal/storage"
@@ -28,18 +29,20 @@ func notifyTestMessage(name, address, subject string) *storage.Message {
 	return &storage.Message{FromName: name, FromAddress: address, Subject: subject}
 }
 
-// The two halves of the click argument are the whole of click-to-open (#170):
-// Windows hands back exactly what was put on the toast, and nothing else checks
-// that the writer and the reader still agree.
-func TestNotifyArgsRoundTrip(t *testing.T) {
-	for _, id := range []int64{1, 42, 9007199254740993} {
-		got, ok := notifyMessageID(notifyArgs(id))
-		if !ok {
-			t.Errorf("notifyMessageID(%q) refused its own encoding", notifyArgs(id))
-			continue
-		}
-		if got != id {
-			t.Errorf("round trip of %d = %d", id, got)
+// Click-to-open (#170) rests on reading the id back out of data that has been
+// through the OS, and on some platforms through JSON, so every shape a number
+// can come back as has to work.
+func TestNotifyMessageIDReadsEveryNumberShape(t *testing.T) {
+	for _, data := range []map[string]any{
+		{notifyDataMessageID: int64(42)},
+		{notifyDataMessageID: 42},
+		{notifyDataMessageID: float64(42)},
+		{notifyDataMessageID: json.Number("42")},
+		{notifyDataMessageID: "42"},
+	} {
+		got, ok := notifyMessageID(data)
+		if !ok || got != 42 {
+			t.Errorf("notifyMessageID(%v) = %d, %v; want 42, true", data, got, ok)
 		}
 	}
 }
@@ -48,18 +51,18 @@ func TestNotifyArgsRoundTrip(t *testing.T) {
 // zero: the caller opens the window and stops, instead of looking up a message
 // that does not exist.
 func TestNotifyMessageIDRejectsAnythingElse(t *testing.T) {
-	for _, args := range []string{
-		"",
-		"message:",
-		"message:nope",
-		"message:0",
-		"message:-3",
-		"12",
-		"compose:12",
-		" message:12",
+	for _, data := range []map[string]any{
+		nil,
+		{},
+		{notifyDataMessageID: ""},
+		{notifyDataMessageID: "nope"},
+		{notifyDataMessageID: 0},
+		{notifyDataMessageID: -3},
+		{notifyDataMessageID: true},
+		{"other": 12},
 	} {
-		if id, ok := notifyMessageID(args); ok {
-			t.Errorf("notifyMessageID(%q) = %d, true; want it refused", args, id)
+		if id, ok := notifyMessageID(data); ok {
+			t.Errorf("notifyMessageID(%v) = %d, true; want it refused", data, id)
 		}
 	}
 }

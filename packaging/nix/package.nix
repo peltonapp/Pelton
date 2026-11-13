@@ -28,12 +28,6 @@ buildGoModule (finalAttrs: {
 
   vendorHash = "sha256-CbLUhrekFyM/JZwm8Q0iBzIUC+cOye4hLpCJoAQHO2o=";
 
-  overrideModAttrs = {
-    preBuild = ''
-      make build-nix VERSION=${finalAttrs.version}
-    '';
-  };
-
   nativeBuildInputs = [
     pkg-config
     pnpmConfigHook

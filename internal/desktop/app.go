@@ -26,6 +26,8 @@ import (
 	"github.com/peltonapp/Pelton/internal/storage"
 	"github.com/wailsapp/wails/v3/pkg/application"
 	"github.com/wailsapp/wails/v3/pkg/events"
+	"github.com/wailsapp/wails/v3/pkg/services/dock"
+	"github.com/wailsapp/wails/v3/pkg/services/notifications"
 	"golang.org/x/oauth2"
 )
 
@@ -48,7 +50,11 @@ type App struct {
 	// compose windows by name. See windows.go.
 	composeHandoff sync.Map
 	composeWindows sync.Map
-	log            *slog.Logger
+	// notifier posts the new-mail notifications (notify.go) and dock carries
+	// the unread badge on macOS. Both are nil in tests.
+	notifier *notifications.NotificationService
+	dock     *dock.DockService
+	log      *slog.Logger
 	// logWriter is where log lines go. It always writes to stderr and, when
 	// the setting is on, also to a rotating file in the data directory. See
 	// logging.go.

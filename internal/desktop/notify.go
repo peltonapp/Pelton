@@ -1,62 +1,97 @@
 package desktop
 
 import (
+	"encoding/json"
 	"fmt"
 	"strconv"
 	"strings"
+	"sync/atomic"
 
 	"github.com/peltonapp/Pelton/internal/storage"
+	"github.com/wailsapp/wails/v3/pkg/services/notifications"
 )
 
-// Native OS notifications for new mail (#126). Delivery is per platform:
-// UserNotifications on macOS so the alert carries the app's own icon (#143),
-// go-toast on Windows so the toast carries Pelton's name, icon and a click that
-// opens the message (#170), and beeep on Linux for a dbus notification.
+// Native OS notifications for new mail (#126), through the Wails notification
+// service on every platform: UserNotifications on macOS, so the alert carries
+// the app's own icon (#143); a toast on Windows, under Pelton's name and the
+// exe's icon (#170); and a dbus notification on Linux. A click on one opens the
+// message it was about, wherever the platform reports clicks back.
 // Notifications only fire for INBOX so sent/archived mail moved by a sync never
 // notifies.
 
-// notifyAppName is the application name notifications are posted under. On
-// Linux it is the dbus app_name; on Windows it is the AppUserModelID, which is
-// also what the toast prints under itself. beeep defaults it to the literal
-// string "DefaultAppName", which is what Pelton's notifications used to be
-// labelled with everywhere (#170).
-const notifyAppName = "Pelton"
-
 // notification is one OS notification waiting to be delivered. The message id
-// travels with it so a platform that can report a click back (Windows) knows
-// which message the click was about.
+// travels with it so a click can open that message.
 type notification struct {
 	title     string
 	body      string
 	messageID int64
 }
 
-// notifyArgPrefix marks a notification's activation argument as a message id.
-// The OS hands the string back verbatim on a click, so a prefix keeps a second
-// kind of notification, if there ever is one, from being read as a message.
-const notifyArgPrefix = "message:"
+// notifyDataMessageID is the key of the message id in a notification's data.
+// The OS hands the data back on a click.
+const notifyDataMessageID = "messageId"
 
-// notifyArgs encodes which message a notification is about into the string the
-// OS hands back when it is clicked; notifyMessageID reads it back. The two
-// halves live together because nothing else checks they agree: get them out of
-// step and every click quietly opens nothing.
-func notifyArgs(messageID int64) string {
-	return notifyArgPrefix + strconv.FormatInt(messageID, 10)
+// notifySeq makes notification ids unique within a run.
+var notifySeq atomic.Int64
+
+// notifyMessageID reads a message id back out of a clicked notification's
+// data. ok is false for anything else, including a summary notification, which
+// names no message. The data has been through JSON on some platforms, so the
+// id can come back as any of the shapes a number takes there.
+func notifyMessageID(data map[string]any) (int64, bool) {
+	var id int64
+	switch v := data[notifyDataMessageID].(type) {
+	case int64:
+		id = v
+	case int:
+		id = int64(v)
+	case float64:
+		id = int64(v)
+	case json.Number:
+		id, _ = v.Int64()
+	case string:
+		id, _ = strconv.ParseInt(v, 10, 64)
+	}
+	return id, id > 0
 }
 
-// notifyMessageID reads a message id back out of an activation argument. ok is
-// false for anything else, including an empty string, which is what a click on
-// a toast from an older version arrives as.
-func notifyMessageID(args string) (int64, bool) {
-	rest, found := strings.CutPrefix(args, notifyArgPrefix)
-	if !found {
-		return 0, false
+// deliverNotification posts one notification. Without the service (tests) it
+// does nothing. On macOS the first one asks for permission; after that the
+// stored answer is used without asking again. The sound is off on purpose:
+// what Pelton should make a noise about is its own question (#240).
+func (a *App) deliverNotification(n notification) error {
+	if a.notifier == nil {
+		return nil
 	}
-	id, err := strconv.ParseInt(rest, 10, 64)
-	if err != nil || id <= 0 {
-		return 0, false
+	if ok, err := a.notifier.RequestNotificationAuthorization(); err != nil || !ok {
+		return fmt.Errorf("pelton: notifications not allowed: %v", err)
 	}
-	return id, true
+	data := map[string]any{}
+	if n.messageID > 0 {
+		data[notifyDataMessageID] = n.messageID
+	}
+	return a.notifier.SendNotification(notifications.NotificationOptions{
+		ID:    "pelton-" + strconv.FormatInt(notifySeq.Add(1), 10),
+		Title: n.title,
+		Body:  n.body,
+		Data:  data,
+		Sound: &notifications.NotificationSound{Silent: true},
+	})
+}
+
+// onNotificationResponse runs when a notification is clicked. A click on one
+// about a message opens that message; any other click still asked for Pelton,
+// so it brings the window up.
+func (a *App) onNotificationResponse(result notifications.NotificationResult) {
+	if result.Error != nil {
+		a.log.Warn("notification response", "err", result.Error)
+		return
+	}
+	if id, ok := notifyMessageID(result.Response.UserInfo); ok {
+		a.openFromNotification(id)
+		return
+	}
+	a.showWindow()
 }
 
 // notifyStrings holds the localizable text of a new-mail notification. Like the
