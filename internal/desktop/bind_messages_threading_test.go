@@ -2,6 +2,7 @@ package desktop
 
 import (
 	"bytes"
+	"database/sql"
 	"encoding/json"
 	"net/mail"
 	"strconv"
@@ -14,29 +15,75 @@ import (
 
 func TestGetMessageThreadingMetadata(t *testing.T) {
 	for _, tt := range []struct {
-		name, stored, want string
+		name, stored, want            string
+		inReplyTo, references         []string
+		wantInReplyTo, wantReferences string
+		rawAncestry                   string
 	}{
-		{"bare", "Parent@Example.com", "Parent@Example.com"},
-		{"bracketed", "<Parent@Example.com>", "Parent@Example.com"},
-		{"invalid", "<<Parent@Example.com>>", ""},
-		{"missing", "", ""},
-		{"IDN parent", "<parent@bücher.de>", ""},
-		{"trailing dot parent", "<parent@example.com.>", ""},
+		{name: "bare", stored: "Parent@Example.com", want: "Parent@Example.com"},
+		{name: "bracketed", stored: "<Parent@Example.com>", want: "Parent@Example.com"},
+		{name: "invalid", stored: "<<Parent@Example.com>>"},
+		{name: "missing"},
+		{name: "IDN parent", stored: "<parent@bücher.de>"},
+		{name: "trailing dot parent", stored: "<parent@example.com.>"},
+		{name: "legacy nil", stored: "parent@example.com", want: "parent@example.com"},
+		{name: "known empty", stored: "parent@example.com", want: "parent@example.com", inReplyTo: []string{}, references: []string{}},
+		{name: "corrupt JSON", stored: "parent@example.com", want: "parent@example.com", rawAncestry: "["},
+		{name: "JSON null", stored: "parent@example.com", want: "parent@example.com", rawAncestry: "null"},
+		{name: "non-array JSON", stored: "parent@example.com", want: "parent@example.com", rawAncestry: "{}"},
+		{name: "non-string JSON element", stored: "parent@example.com", want: "parent@example.com", rawAncestry: `["root@example.com",1]`},
+		{
+			name: "ordered mixed bracketed and bare ancestry", stored: "<parent@example.com>", want: "parent@example.com",
+			inReplyTo: []string{"<A@Example.com>", "b@example.com"}, references: []string{"<Root@Example.com>", "a@example.com", "<parent@example.com>", "a@example.com"},
+			wantInReplyTo: `["A@Example.com","b@example.com"]`, wantReferences: `["Root@Example.com","a@example.com","parent@example.com","a@example.com"]`,
+		},
+		{
+			name: "invalid IRT clears entire list", stored: "parent@example.com", want: "parent@example.com",
+			inReplyTo: []string{"a@example.com", "<<bad@example.com>>", "b@example.com"},
+		},
+		{
+			name: "duplicate IRT stays duplicated", stored: "parent@example.com", want: "parent@example.com",
+			inReplyTo: []string{"<a@example.com>", "a@example.com"}, wantInReplyTo: `["a@example.com","a@example.com"]`,
+		},
+		{
+			name: "invalid References elements are filtered", stored: "parent@example.com", want: "parent@example.com",
+			references:     []string{"<<bad@example.com>>", "<root@example.com>", "bad\r\nBcc: attacker@example.com", "a@example.com", "trailing@example.com."},
+			wantReferences: `["root@example.com","a@example.com"]`,
+		},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			app, db, accountID := pgpTestApp(t, nil, nil)
 			folder := addFolder(t, app, accountID, "Inbox")
 			id, err := db.InsertMessage(app.ctx, &storage.Message{
 				AccountID: accountID, FolderID: folder.ID, UID: 1,
-				MessageID: tt.stored, FromAddress: "sender@example.com",
+				MessageID: tt.stored, InReplyTo: tt.inReplyTo, References: tt.references, FromAddress: "sender@example.com",
 				Subject: "parent", BodyPlain: "readable body", Date: time.Now(),
 			})
 			if err != nil {
 				t.Fatalf("insert message: %v", err)
 			}
+			if tt.rawAncestry != "" {
+				rawDB, err := sql.Open("sqlite", db.Path())
+				if err != nil {
+					t.Fatalf("open raw storage: %v", err)
+				}
+				defer rawDB.Close()
+				if _, err := rawDB.ExecContext(app.ctx, `UPDATE messages SET in_reply_to = ?, "references" = ? WHERE id = ?`, tt.rawAncestry, tt.rawAncestry, id); err != nil {
+					t.Fatalf("write raw ancestry: %v", err)
+				}
+			}
 			detail, err := app.GetMessage(id)
 			if err != nil {
 				t.Fatalf("GetMessage: %v", err)
+			}
+			if detail.BodyPlain != "readable body" {
+				t.Errorf("detail body = %q, want readable body", detail.BodyPlain)
+			}
+			if tt.wantInReplyTo == "" {
+				tt.wantInReplyTo = "[]"
+			}
+			if tt.wantReferences == "" {
+				tt.wantReferences = "[]"
 			}
 			if tt.want == "" {
 				msg, err := app.buildMessage(ComposeRequest{
@@ -69,7 +116,7 @@ func TestGetMessageThreadingMetadata(t *testing.T) {
 			}
 			for key, want := range map[string]string{
 				"messageId": strconv.Quote(tt.want), "accountId": strconv.FormatInt(accountID, 10),
-				"inReplyTo": "[]", "references": "[]",
+				"inReplyTo": tt.wantInReplyTo, "references": tt.wantReferences,
 			} {
 				if got := string(fields[key]); got != want {
 					t.Errorf("detail.%s = %q, want %q", key, got, want)

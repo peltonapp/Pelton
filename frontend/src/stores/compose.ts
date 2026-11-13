@@ -324,5 +324,9 @@ function messageIdRef(detail: MessageDetail): string {
 
 function buildReferences(detail: MessageDetail): string[] {
   const parent = messageIdRef(detail)
-  return parent ? [parent] : []
+  if (!parent) return []
+  const references = detail.references ?? []
+  const inReplyTo = detail.inReplyTo ?? []
+  const ancestors = references.length ? references : inReplyTo.length === 1 ? inReplyTo : []
+  return [...ancestors, parent]
 }

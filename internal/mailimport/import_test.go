@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"reflect"
 	"testing"
 
 	"github.com/peltonapp/Pelton/internal/storage"
@@ -254,6 +255,84 @@ func TestImportReportsWhichFileItIsOn(t *testing.T) {
 		}
 		if p.FileTotal != len(sources) {
 			t.Errorf("%s reported %d files in total, want %d", folder, p.FileTotal, len(sources))
+		}
+	}
+}
+
+const threadingBody = "MIME-Version: 1.0\r\n" +
+	"Content-Type: multipart/mixed; boundary=threading\r\n\r\n" +
+	"--threading\r\nContent-Type: text/plain; charset=utf-8\r\n\r\nreadable body\r\n" +
+	"--threading\r\nContent-Type: text/html; charset=utf-8\r\n\r\n<p>readable body</p>\r\n" +
+	"--threading\r\nContent-Type: text/plain\r\nContent-Disposition: attachment; filename=note.txt\r\n\r\nattachment bytes\r\n" +
+	"--threading--\r\n"
+
+func threadingCases() []struct {
+	name       string
+	headers    string
+	inReplyTo  []string
+	references []string
+} {
+	return []struct {
+		name       string
+		headers    string
+		inReplyTo  []string
+		references []string
+	}{
+		{"single parent and folded references", "In-Reply-To: <parent@example.com>\r\nReferences: <root@example.com>\r\n <root@example.com> <parent@example.com>\r\n", []string{"parent@example.com"}, []string{"root@example.com", "root@example.com", "parent@example.com"}},
+		{"multiple parents preserve duplicates", "In-Reply-To: <one@example.com> <two@example.com> <one@example.com>\r\n", []string{"one@example.com", "two@example.com", "one@example.com"}, []string{}},
+		{"absent headers are known empty", "", []string{}, []string{}},
+		{"invalid parent does not block body", "In-Reply-To: <parent@example.com> invalid\r\nReferences: <root@example.com>\r\n", []string{}, []string{"root@example.com"}},
+		{"invalid headers are known empty", "In-Reply-To: invalid\r\nReferences: invalid\r\n", []string{}, []string{}},
+	}
+}
+
+func TestImportPreservesThreadingMetadata(t *testing.T) {
+	for _, format := range []string{"eml", "mbox"} {
+		for _, tt := range threadingCases() {
+			t.Run(format+"/"+tt.name, func(t *testing.T) {
+				ctx := context.Background()
+				db := newTestStore(t)
+				raw := "Message-ID: <message@example.com>\r\n" + tt.headers + threadingBody
+				if format == "mbox" {
+					raw = "From alice@example.com Mon Jan  6 10:00:00 2020\r\n" + raw
+				}
+				path := writeFile(t, t.TempDir(), "message."+format, raw)
+				importer := New(db, nil)
+				result, err := importer.Import(ctx, []Source{{Path: path, Folder: "Threading"}})
+				if err != nil || result.Imported != 1 || result.Failed != 0 || result.Skipped != 0 {
+					t.Fatalf("Import = %+v, %v", result, err)
+				}
+				account, err := db.LocalAccount(ctx)
+				if err != nil {
+					t.Fatal(err)
+				}
+				folders, err := db.ListFolders(ctx, account.ID)
+				if err != nil || len(folders) != 1 {
+					t.Fatalf("folders = %+v, %v", folders, err)
+				}
+				messages, err := db.ListMessages(ctx, folders[0].ID, 0)
+				if err != nil || len(messages) != 1 {
+					t.Fatalf("messages = %+v, %v", messages, err)
+				}
+				m, err := db.GetMessage(ctx, messages[0].ID)
+				if err != nil {
+					t.Fatal(err)
+				}
+				if !reflect.DeepEqual(m.InReplyTo, tt.inReplyTo) || !reflect.DeepEqual(m.References, tt.references) {
+					t.Errorf("stored ancestry = %#v / %#v, want %#v / %#v", m.InReplyTo, m.References, tt.inReplyTo, tt.references)
+				}
+				if m.BodyPlain != "readable body" || m.BodyHTML != "<p>readable body</p>" || m.MessageID != "message@example.com" || m.UID == 0 {
+					t.Errorf("stored message = %+v", m)
+				}
+				atts, err := db.ListAttachments(ctx, m.ID)
+				if err != nil || len(atts) != 1 || atts[0].Filename != "note.txt" {
+					t.Fatalf("stored attachments = %+v, %v", atts, err)
+				}
+				result, err = importer.Import(ctx, []Source{{Path: path, Folder: "Threading"}})
+				if err != nil || result.Imported != 0 || result.Skipped != 1 || result.Failed != 0 {
+					t.Fatalf("duplicate import = %+v, %v", result, err)
+				}
+			})
 		}
 	}
 }
