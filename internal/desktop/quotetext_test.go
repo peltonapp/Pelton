@@ -27,6 +27,17 @@ func TestQuoteTextPrefersTheTextPart(t *testing.T) {
 			want:  "real content",
 		},
 		{
+			name:  "a stored jpeg body is not quoted",
+			plain: "\xff\xd8\xff\xe0\x00\x10JFIF\x00\x01\x01\x01\x00H\x00H\x00\x00\xff\xdb\x00C\x00",
+			html:  "<p>real content</p>",
+			want:  "real content",
+		},
+		{
+			name:  "a stored jpeg body with no html quotes nothing",
+			plain: "\xff\xd8\xff\xe0\x00\x10JFIF\x00\x01",
+			want:  "",
+		},
+		{
 			name: "nothing at all",
 			want: "",
 		},

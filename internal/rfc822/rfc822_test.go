@@ -315,3 +315,92 @@ func TestParseKeepsInlineDispositionImages(t *testing.T) {
 		t.Errorf("second attachment = %+v", second)
 	}
 }
+
+func TestParseAppleMailRichLinkImageIsNotTextBody(t *testing.T) {
+	jpeg := "/9j/4AAQSkZJRgABAQEASABIAAD/2wBDAP8="
+	raw := "From: a@icloud.com\r\n" +
+		"MIME-Version: 1.0 (Mac OS X Mail 16.0)\r\n" +
+		"Content-Type: multipart/alternative; boundary=alt\r\n" +
+		"\r\n" +
+		"--alt\r\n" +
+		"Content-Type: multipart/mixed; boundary=mix\r\n" +
+		"\r\n" +
+		"--mix\r\n" +
+		"Content-Disposition: inline; filename=preview.jpeg\r\n" +
+		"Content-Id: <preview@icloud.com>\r\n" +
+		"Content-Transfer-Encoding: base64\r\n" +
+		"\r\n" +
+		jpeg + "\r\n" +
+		"--mix\r\n" +
+		"Content-Type: text/plain; charset=us-ascii\r\n" +
+		"Content-Transfer-Encoding: 7bit\r\n" +
+		"\r\n" +
+		"Have a look https://example.com/\r\n" +
+		"--mix--\r\n" +
+		"--alt\r\n" +
+		"Content-Type: multipart/related; type=\"text/html\"; boundary=rel\r\n" +
+		"\r\n" +
+		"--rel\r\n" +
+		"Content-Type: text/html; charset=us-ascii\r\n" +
+		"\r\n" +
+		"<html><body>Have a look <img src=\"cid:preview@icloud.com\"></body></html>\r\n" +
+		"--rel\r\n" +
+		"Content-Type: image/jpeg;\r\n" +
+		"\tname=preview.jpeg\r\n" +
+		"Content-Disposition: inline;\r\n" +
+		"\tfilename=preview.jpeg\r\n" +
+		"Content-Id: <preview@icloud.com>\r\n" +
+		"Content-Transfer-Encoding: base64\r\n" +
+		"\r\n" +
+		jpeg + "\r\n" +
+		"--rel--\r\n" +
+		"--alt--\r\n"
+
+	msg, err := Parse([]byte(raw))
+	if err != nil {
+		t.Fatalf("parse: %v", err)
+	}
+	if msg.Text != "Have a look https://example.com/" {
+		t.Errorf("text = %q", msg.Text)
+	}
+	if !strings.Contains(msg.HTML, "cid:preview@icloud.com") {
+		t.Errorf("html = %q", msg.HTML)
+	}
+	if len(msg.Attachments) != 2 {
+		t.Errorf("got %d attachments, want 2", len(msg.Attachments))
+	}
+}
+
+func TestParseBinaryPartNeverBecomesTextBody(t *testing.T) {
+	cases := map[string]string{
+		"image first":     "Content-Type: image/jpeg\r\nContent-Disposition: inline\r\n",
+		"mixed case type": "Content-Type: Image/JPEG; name=x.jpg\r\nContent-Disposition: INLINE\r\n",
+		"malformed type":  "Content-Type: image/jpeg; name=\"x.jpg\r\nContent-Disposition: inline\r\n",
+		"no content type": "Content-Disposition: inline; filename=x.jpg\r\nContent-Id: <x@y>\r\n",
+		"mislabelled":     "Content-Type: text/plain\r\nContent-Disposition: inline\r\n",
+	}
+	for name, headers := range cases {
+		t.Run(name, func(t *testing.T) {
+			raw := "From: a@icloud.com\r\n" +
+				"MIME-Version: 1.0\r\n" +
+				"Content-Type: multipart/mixed; boundary=b\r\n" +
+				"\r\n" +
+				"--b\r\n" +
+				headers +
+				"Content-Transfer-Encoding: base64\r\n" +
+				"\r\n" +
+				"/9j/4AAQSkZJRgABAQEASABIAAD/2wBDAP8=\r\n" +
+				"--b--\r\n"
+			msg, err := Parse([]byte(raw))
+			if err != nil {
+				t.Fatalf("parse: %v", err)
+			}
+			if msg.Text != "" {
+				t.Errorf("binary leaked into text body: %q", msg.Text)
+			}
+			if len(msg.Attachments) != 1 {
+				t.Errorf("got %d attachments, want 1", len(msg.Attachments))
+			}
+		})
+	}
+}

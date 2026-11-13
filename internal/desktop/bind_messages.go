@@ -490,12 +490,25 @@ func trimSuffixByte(s string, b byte) string {
 	return s
 }
 
+func looksBinary(s string) bool {
+	if strings.IndexByte(s, 0) >= 0 {
+		return true
+	}
+	ctrl := 0
+	for _, r := range s {
+		if r < 0x20 && r != '\n' && r != '\r' && r != '\t' {
+			ctrl++
+		}
+	}
+	return ctrl*50 > len(s)
+}
+
 // quoteText is the message as text for a reply or forward to quote: the text
 // part when there is one, and otherwise the html rendered down to text. An
 // html-only message has no text part at all, which is why replying to one used
-// to quote nothing (#239).
+// to quote nothing (#239). A text part holding binary data is not a text part.
 func quoteText(plain, html string) string {
-	if strings.TrimSpace(plain) != "" {
+	if strings.TrimSpace(plain) != "" && !looksBinary(plain) {
 		return plain
 	}
 	return mailview.TextForQuote(html)
