@@ -231,6 +231,13 @@ func (a *App) EmptyTrash(folderID int64) (int, error) {
 	if folderRole(*folder) != roleTrash {
 		return 0, errNotTrash
 	}
+	account, err := a.store.GetAccount(a.ctx, folder.AccountID)
+	if err != nil {
+		return 0, err
+	}
+	if account.Local {
+		return a.emptyLocalFolder(*folder)
+	}
 
 	marked, err := a.store.MarkFolderDeletePending(a.ctx, folderID)
 	if err != nil {
@@ -249,6 +256,30 @@ func (a *App) EmptyTrash(folderID int64) (int, error) {
 		}
 	})
 	return marked, nil
+}
+
+// emptyLocalFolder deletes every message in a Local Folders folder outright,
+// the way DeleteMessage does for a single imported message: there is no server
+// to confirm a pending deletion.
+func (a *App) emptyLocalFolder(folder storage.Folder) (int, error) {
+	messages, err := a.store.ListMessages(a.ctx, folder.ID, 0)
+	if err != nil {
+		return 0, err
+	}
+	deleted := 0
+	for _, m := range messages {
+		if err := a.store.DeleteAttachmentFilesForMessage(m.AccountID, m.ID); err != nil {
+			return deleted, err
+		}
+		if err := a.store.DeleteMessage(a.ctx, m.ID); err != nil {
+			return deleted, err
+		}
+		deleted++
+	}
+	if deleted > 0 {
+		goSafe("counting unread mail", a.refreshViewCounts)
+	}
+	return deleted, nil
 }
 
 // subtreeFolders returns the folder and everything nested under it, shallowest
