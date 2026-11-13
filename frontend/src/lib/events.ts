@@ -1,9 +1,14 @@
 // events.ts is the typed contract for the wails runtime events the backend emits
-// (see events.go). it wraps EventsOn so subscribers get a typed payload and a
+// (see events.go). it wraps Events.On so subscribers get a typed payload and a
 // single unsubscribe function, and keeps the event-name strings in one place.
 
-import { EventsOn } from '../../wailsjs/runtime/runtime'
+import { Events } from '@wailsio/runtime'
 import type { AccountSyncState } from './types'
+
+// EventsOn subscribes to a backend event and hands the callback its payload.
+function EventsOn<T>(name: string, cb: (data: T) => void): () => void {
+  return Events.On(name, (ev) => cb(ev.data as T))
+}
 
 // event names, matching the go constants exactly.
 export const EventNames = {

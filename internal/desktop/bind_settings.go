@@ -3,8 +3,6 @@ package desktop
 import (
 	"errors"
 
-	wailsruntime "github.com/wailsapp/wails/v2/pkg/runtime"
-
 	"github.com/peltonapp/Pelton/internal/logging"
 	"github.com/peltonapp/Pelton/internal/storage"
 )
@@ -587,11 +585,11 @@ func (a *App) SetSetting(key, value string) error {
 func (a *App) applyNativeTheme(theme string) {
 	switch theme {
 	case "dark":
-		wailsruntime.WindowSetDarkTheme(a.ctx)
+		a.setNativeTheme(nativeThemeDark)
 	case "light":
-		wailsruntime.WindowSetLightTheme(a.ctx)
+		a.setNativeTheme(nativeThemeLight)
 	default:
-		wailsruntime.WindowSetSystemDefaultTheme(a.ctx)
+		a.setNativeTheme(nativeThemeSystem)
 	}
 }
 

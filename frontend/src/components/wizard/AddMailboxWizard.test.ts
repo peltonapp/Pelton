@@ -14,8 +14,8 @@ vi.mock('../../lib/api', async (importOriginal) => ({
   addOAuthAccount: api.addOAuthAccount,
 }))
 
-vi.mock('../../../wailsjs/runtime/runtime', () => ({
-  BrowserOpenURL: vi.fn(),
+vi.mock('../../lib/browser', () => ({
+  openURL: vi.fn(),
 }))
 
 import AddMailboxWizard from './AddMailboxWizard.svelte'

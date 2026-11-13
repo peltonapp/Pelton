@@ -9,7 +9,7 @@
   // asks the backend to re-render with remote content allowed.
   import { onDestroy, tick } from 'svelte'
   import { get } from 'svelte/store'
-  import { BrowserOpenURL } from '../../../wailsjs/runtime/runtime'
+  import { openURL } from '../../lib/browser'
   import { IconPhoto, IconUserCheck, IconWorldCheck, IconMailCheck, IconShieldSearch, IconChevronDown, IconEyeOff } from '@tabler/icons-svelte'
   import { prefs } from '../../stores/prefs'
   import { getMessageHtml, trustSenderImages, allowDomainImages, allowRemoteForMessage, scanUrl } from '../../lib/api'
@@ -318,7 +318,7 @@
     }
     const href = data?.peltonOpenUrl
     if (typeof href === 'string' && /^(https?:|mailto:)/i.test(href)) {
-      BrowserOpenURL(href)
+      openURL(href)
       return
     }
     const link = data?.peltonContextLink
@@ -637,7 +637,7 @@
   <pre dir="auto" class="body-plain mono selectable" style={`font-size:${$prefs.messageFontSize}px`}>{#each plainSegments as segment}{#if segment.href}<a
         class="plain-link"
         href={segment.href}
-        on:click|preventDefault={() => BrowserOpenURL(segment.href ?? '')}
+        on:click|preventDefault={() => openURL(segment.href ?? '')}
         on:contextmenu={(e) => onPlainContext(e, segment.href ?? '')}
         on:mouseenter={() => showHover(segment.href ?? '')}
         on:mouseleave={() => showHover('')}

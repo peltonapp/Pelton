@@ -5,7 +5,7 @@
   // (read-before-import, remote-reference choice).
   import { onMount } from 'svelte'
   import { IconFileImport, IconRefresh, IconTrash, IconUpload, IconAlertTriangle, IconWorld, IconWorldWww, IconPlus, IconPencil, IconFolderOpen } from '@tabler/icons-svelte'
-  import { BrowserOpenURL } from '../../../wailsjs/runtime/runtime'
+  import { openURL } from '../../lib/browser'
   import { listThemes, previewThemeImport, deleteTheme, exportTheme, getThemeApply, getThemeDraft, openThemesFolder } from '../../lib/api'
   import type { ThemeInfo, ThemeImportPreview, ThemePref } from '../../lib/types'
   import { prefs, setThemeId } from '../../stores/prefs'
@@ -171,7 +171,7 @@
     <IconFileImport size={15} stroke={1.6} />
     {$t('themes.import')}
   </button>
-  <button type="button" class="action-btn" on:click={() => BrowserOpenURL(galleryURL)} title={$t('themes.browseHint')}>
+  <button type="button" class="action-btn" on:click={() => openURL(galleryURL)} title={$t('themes.browseHint')}>
     <IconWorldWww size={15} stroke={1.6} />
     {$t('themes.browse')}
   </button>

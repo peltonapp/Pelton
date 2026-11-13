@@ -1,8 +1,6 @@
 package desktop
 
-import (
-	wailsruntime "github.com/wailsapp/wails/v2/pkg/runtime"
-)
+import "github.com/wailsapp/wails/v3/pkg/application"
 
 // window geometry remembered across launches, so Pelton reopens at the size it
 // was left at rather than the same default every time.
@@ -38,18 +36,10 @@ type geometry struct {
 	Maximised bool
 }
 
-// fitGeometry clamps a remembered frame to something the current screen can
-// actually show. Size is bounded by the app's minimum and the screen; position
-// is dropped, rather than corrected, when it would put the window somewhere the
-// user cannot reach it.
-//
-// The position check is deliberately conservative. Wails' ScreenGetAll reports
-// each screen's size but not where it sits in the desktop's coordinate space,
-// so there is no way to tell whether an off-primary position belongs to a
-// monitor that is still attached. Rather than risk restoring a window onto a
-// display that has been unplugged, anything outside the current screen is
-// treated as not usable and the platform places the window instead. The cost is
-// that a window left on a second monitor comes back on the first one.
+// fitGeometry clamps a frame to something a screen can actually show. X and Y
+// are relative to that screen's work area. Size is bounded by the app's
+// minimum and the screen; position is dropped, rather than corrected, when it
+// would put the window somewhere the user cannot reach it.
 func fitGeometry(g geometry, screenW, screenH int) geometry {
 	out := g
 
@@ -108,44 +98,66 @@ func (a *App) savedGeometry() geometry {
 	return g
 }
 
-// restoreGeometry applies the remembered frame to the window. Called from
-// startup, once the store is open, so the window is already on screen: the size
-// change is visible as a brief resize on launch, which is the price of the
-// settings table being the single source of truth for everything the app
-// remembers.
-func (a *App) restoreGeometry() {
-	if a.ctx == nil {
-		return
-	}
+// applySavedGeometry puts the remembered frame into the options the window is
+// created with, so it opens where it was left instead of resizing after it
+// appears. Screens are not known yet at this point; keepOnScreen checks the
+// result once the window is up.
+func (a *App) applySavedGeometry(o *application.WebviewWindowOptions) {
 	g := a.savedGeometry()
 	if g.Width <= 0 || g.Height <= 0 {
 		return
 	}
-
-	screenW, screenH := 0, 0
-	if screens, err := wailsruntime.ScreenGetAll(a.ctx); err == nil {
-		for _, s := range screens {
-			if s.IsCurrent {
-				screenW, screenH = s.Size.Width, s.Size.Height
-				break
-			}
-		}
-	}
-
-	g = fitGeometry(g, screenW, screenH)
-	wailsruntime.WindowSetSize(a.ctx, g.Width, g.Height)
+	o.Width = max(g.Width, minWindowWidth)
+	o.Height = max(g.Height, minWindowHeight)
 	if g.Placed {
-		wailsruntime.WindowSetPosition(a.ctx, g.X, g.Y)
-	} else {
-		wailsruntime.WindowCenter(a.ctx)
+		o.InitialPosition = application.WindowXY
+		o.X, o.Y = g.X, g.Y
 	}
-	// after the size, so unmaximising lands on the remembered frame.
 	if g.Maximised {
+		// maximising would show a window that is meant to start hidden, so it
+		// waits for the first showWindow.
 		if a.startedHidden {
 			a.pendingMaximise.Store(true)
-			return
+		} else {
+			o.StartState = application.WindowStateMaximised
 		}
-		wailsruntime.WindowMaximise(a.ctx)
+	}
+}
+
+// keepOnScreen moves the window back into reach when its remembered frame
+// does not fit any attached screen: a monitor that has since been unplugged,
+// or a resolution that shrank. It runs once the window is up and the screen
+// list is known.
+func (a *App) keepOnScreen() {
+	if a.win == nil || a.wapp == nil || a.win.IsMaximised() || a.win.IsFullscreen() {
+		return
+	}
+	x, y := a.win.Position()
+	w, h := a.win.Size()
+	if w <= 0 || h <= 0 {
+		return
+	}
+	var screen *application.Screen
+	for _, s := range a.wapp.Screen.GetAll() {
+		b := s.WorkArea
+		if x >= b.X && y >= b.Y && x < b.X+b.Width && y < b.Y+b.Height {
+			screen = s
+			break
+		}
+	}
+	if screen == nil {
+		screen = a.wapp.Screen.GetPrimary()
+	}
+	if screen == nil {
+		return
+	}
+	b := screen.WorkArea
+	g := fitGeometry(geometry{Width: w, Height: h, X: x - b.X, Y: y - b.Y, Placed: true}, b.Width, b.Height)
+	if g.Width != w || g.Height != h {
+		a.win.SetSize(g.Width, g.Height)
+	}
+	if !g.Placed {
+		a.win.Center()
 	}
 }
 
@@ -153,18 +165,18 @@ func (a *App) restoreGeometry() {
 // quitting and closing the window, since a maximised window's own size is not
 // worth storing (unmaximising would then restore to the full screen).
 func (a *App) saveGeometry() {
-	if a.ctx == nil || a.store == nil {
+	if a.win == nil || a.store == nil {
 		return
 	}
-	maximised := wailsruntime.WindowIsMaximised(a.ctx)
+	maximised := a.win.IsMaximised()
 	if err := a.store.SetBool(a.ctx, settingWindowMaximised, maximised); err != nil {
 		a.log.Error("save window maximised", "err", err)
 	}
 	if maximised {
 		return
 	}
-	w, h := wailsruntime.WindowGetSize(a.ctx)
-	x, y := wailsruntime.WindowGetPosition(a.ctx)
+	w, h := a.win.Size()
+	x, y := a.win.Position()
 	if w <= 0 || h <= 0 {
 		return
 	}

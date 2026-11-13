@@ -3,7 +3,7 @@
   // a check for clean, a cross for flagged, a question mark for anything
   // VirusTotal has never analysed. hovering explains the result, and clicking
   // opens the full report in the external browser.
-  import { BrowserOpenURL } from '../../../wailsjs/runtime/runtime'
+  import { openURL } from '../../lib/browser'
   import { IconCheck, IconX, IconQuestionMark, IconAlertTriangle } from '@tabler/icons-svelte'
   import { t } from '../../lib/i18n'
   import type { Verdict } from '../../lib/types'
@@ -42,7 +42,7 @@
 
   function openReport(): void {
     if (verdict.permalink) {
-      BrowserOpenURL(verdict.permalink)
+      openURL(verdict.permalink)
     }
   }
 </script>

@@ -10,7 +10,6 @@ import (
 
 	"github.com/peltonapp/Pelton/internal/mailimport"
 	"github.com/peltonapp/Pelton/internal/storage"
-	"github.com/wailsapp/wails/v2/pkg/runtime"
 )
 
 // Importing from another mail client (#196). Two separate things share this
@@ -89,7 +88,7 @@ func (a *App) ChooseThunderbirdProfile() ([]ThunderbirdProfileDTO, error) {
 	if err := a.ready(); err != nil {
 		return nil, err
 	}
-	dir, err := runtime.OpenDirectoryDialog(a.ctx, runtime.OpenDialogOptions{
+	dir, err := a.openDirectoryDialog(openDialogOptions{
 		Title: "Choose a Thunderbird profile folder",
 	})
 	if err != nil || dir == "" {
@@ -222,9 +221,9 @@ func (a *App) ChooseMailFiles() ([]string, error) {
 	if err := a.ready(); err != nil {
 		return nil, err
 	}
-	return runtime.OpenMultipleFilesDialog(a.ctx, runtime.OpenDialogOptions{
+	return a.openMultipleFilesDialog(openDialogOptions{
 		Title: "Choose mail to import",
-		Filters: []runtime.FileFilter{
+		Filters: []fileFilter{
 			{DisplayName: "Mail files (*.eml, *.mbox)", Pattern: "*.eml;*.mbox;*.mbx"},
 			{DisplayName: "All files", Pattern: "*"},
 		},

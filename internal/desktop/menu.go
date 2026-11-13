@@ -3,9 +3,7 @@ package desktop
 import (
 	goruntime "runtime"
 
-	"github.com/wailsapp/wails/v2/pkg/menu"
-	"github.com/wailsapp/wails/v2/pkg/menu/keys"
-	wailsruntime "github.com/wailsapp/wails/v2/pkg/runtime"
+	"github.com/wailsapp/wails/v3/pkg/application"
 )
 
 // The native menu bar exists only on macOS. Windows and Linux use the in-app
@@ -17,9 +15,9 @@ import (
 // additionally reduce the native menu to the minimal app menu via
 // menu_bar_native_minimal so items are not duplicated across two bars.
 
-// initialMenu returns the menu to hand wails at startup: the native menu on
+// initialMenu returns the menu to install at startup: the native menu on
 // macOS, none elsewhere.
-func (a *App) initialMenu() *menu.Menu {
+func (a *App) initialMenu() *application.Menu {
 	if goruntime.GOOS != "darwin" {
 		return nil
 	}
@@ -29,28 +27,24 @@ func (a *App) initialMenu() *menu.Menu {
 // buildMenu builds the native application menubar in the current language
 // setting. Menu items that map to ui actions emit the menu event with a short
 // action string; the frontend listens and performs the action (open settings,
-// compose, sync, add mailbox). Window level items (hide, quit) call the wails
-// runtime directly.
-func (a *App) buildMenu() *menu.Menu {
+// compose, sync, add mailbox). Window level items (hide, quit) act directly.
+func (a *App) buildMenu() *application.Menu {
 	s := menuStringsFor(a.stringSetting(settingLanguage, "en"))
-	root := menu.NewMenu()
+	root := application.NewMenu()
 
 	// the app menu, folded under the bold "Pelton" menu next to the apple logo.
 	appMenu := root.AddSubmenu(s.appMenu)
-	appMenu.AddText(s.about, nil, a.menuAction("about"))
+	appMenu.Add(s.about).OnClick(a.menuAction("about"))
 	appMenu.AddSeparator()
-	appMenu.AddText(s.preferences, keys.CmdOrCtrl(","), a.menuAction("preferences"))
+	appMenu.Add(s.preferences).SetAccelerator("CmdOrCtrl+,").OnClick(a.menuAction("preferences"))
 	// profiles (#270). No accelerator: switching ships unbound so the user picks
 	// their own key under Settings, Shortcuts.
-	appMenu.AddText(s.switchProfile, nil, a.menuAction("switch-profile"))
+	appMenu.Add(s.switchProfile).OnClick(a.menuAction("switch-profile"))
 	appMenu.AddSeparator()
-	appMenu.AddText(s.hide, keys.CmdOrCtrl("h"), func(_ *menu.CallbackData) {
-		// Hide, not WindowHide: see the note in beforeClose. Ordering the window
-		// out on macOS strands it, since wails has no reopen handler, so the
-		// dock icon cannot bring it back.
-		wailsruntime.Hide(a.ctx)
+	appMenu.Add(s.hide).SetAccelerator("CmdOrCtrl+H").OnClick(func(*application.Context) {
+		a.hideApp()
 	})
-	appMenu.AddText(s.quit, keys.CmdOrCtrl("q"), func(_ *menu.CallbackData) {
+	appMenu.Add(s.quit).SetAccelerator("CmdOrCtrl+Q").OnClick(func(*application.Context) {
 		a.quitApp()
 	})
 
@@ -71,22 +65,22 @@ func (a *App) buildMenu() *menu.Menu {
 	} else {
 		// file menu: composing new mail and exporting the open message.
 		fileMenu := root.AddSubmenu(s.fileMenu)
-		fileMenu.AddText(s.compose, keys.CmdOrCtrl("n"), a.menuAction("compose"))
+		fileMenu.Add(s.compose).SetAccelerator("CmdOrCtrl+N").OnClick(a.menuAction("compose"))
 		fileMenu.AddSeparator()
-		fileMenu.AddText(s.exportPDF, keys.CmdOrCtrl("p"), a.menuAction("export-pdf"))
+		fileMenu.Add(s.exportPDF).SetAccelerator("CmdOrCtrl+P").OnClick(a.menuAction("export-pdf"))
 		fileMenu.AddSeparator()
 		// dispatched to the frontend rather than hiding the window here: what
 		// Cmd+W closes depends on what is on screen, and only the frontend
 		// knows that.
-		fileMenu.AddText(s.closeWindow, keys.CmdOrCtrl("w"), a.menuAction("close-window"))
+		fileMenu.Add(s.closeWindow).SetAccelerator("CmdOrCtrl+W").OnClick(a.menuAction("close-window"))
 
 		// mailbox menu: mailbox-level operations - syncing and managing accounts.
 		mailboxMenu := root.AddSubmenu(s.mailboxMenu)
-		mailboxMenu.AddText(s.syncNow, keys.CmdOrCtrl("r"), a.menuAction("sync"))
+		mailboxMenu.Add(s.syncNow).SetAccelerator("CmdOrCtrl+R").OnClick(a.menuAction("sync"))
 		mailboxMenu.AddSeparator()
-		mailboxMenu.AddText(s.addMailbox, keys.CmdOrCtrl("m"), a.menuAction("add-mailbox"))
-		mailboxMenu.AddText(s.manageMailboxes, nil, a.menuAction("open-mailboxes"))
-		mailboxMenu.AddText(s.contacts, nil, a.menuAction("open-contacts"))
+		mailboxMenu.Add(s.addMailbox).SetAccelerator("CmdOrCtrl+M").OnClick(a.menuAction("add-mailbox"))
+		mailboxMenu.Add(s.manageMailboxes).OnClick(a.menuAction("open-mailboxes"))
+		mailboxMenu.Add(s.contacts).OnClick(a.menuAction("open-contacts"))
 
 		// mail menu: actions on the open message. Undo stays enabled (it undoes
 		// the last send/delete/archive, which needs no open message), but the
@@ -96,17 +90,17 @@ func (a *App) buildMenu() *menu.Menu {
 		// handled by the app's own keydown handler; binding it again would
 		// double-fire.
 		mailMenu := root.AddSubmenu(s.mailMenu)
-		mailMenu.AddText(s.undo, nil, a.menuAction("undo"))
+		mailMenu.Add(s.undo).OnClick(a.menuAction("undo"))
 		mailMenu.AddSeparator()
-		a.mailMenuItems = []*menu.MenuItem{
-			mailMenu.AddText(s.markRead, nil, a.menuAction("mark-read")),
-			mailMenu.AddText(s.markUnread, nil, a.menuAction("mark-unread")),
-			mailMenu.AddText(s.flagUnflag, nil, a.menuAction("flag")),
-			mailMenu.AddText(s.archive, nil, a.menuAction("archive")),
-			mailMenu.AddText(s.deleteMessage, nil, a.menuAction("delete-message")),
+		a.mailMenuItems = []*application.MenuItem{
+			mailMenu.Add(s.markRead).OnClick(a.menuAction("mark-read")),
+			mailMenu.Add(s.markUnread).OnClick(a.menuAction("mark-unread")),
+			mailMenu.Add(s.flagUnflag).OnClick(a.menuAction("flag")),
+			mailMenu.Add(s.archive).OnClick(a.menuAction("archive")),
+			mailMenu.Add(s.deleteMessage).OnClick(a.menuAction("delete-message")),
 		}
 		for _, item := range a.mailMenuItems {
-			item.Disabled = !a.mailActionsEnabled
+			item.SetEnabled(a.mailActionsEnabled)
 		}
 
 		// view menu: a reliable fullscreen toggle (the native green button can
@@ -114,32 +108,28 @@ func (a *App) buildMenu() *menu.Menu {
 		viewMenu := root.AddSubmenu(s.viewMenu)
 		a.addFullscreenItem(viewMenu, s)
 		viewMenu.AddSeparator()
-		viewMenu.AddText(s.lowPowerMode, nil, a.menuAction("toggle-low-power"))
+		viewMenu.Add(s.lowPowerMode).OnClick(a.menuAction("toggle-low-power"))
 		// reading-pane tabs. No accelerators: they ship unbound so the user
 		// picks their own under Settings, Shortcuts.
 		viewMenu.AddSeparator()
-		viewMenu.AddText(s.openInTab, nil, a.menuAction("open-in-tab"))
-		viewMenu.AddText(s.closeTab, nil, a.menuAction("close-tab"))
+		viewMenu.Add(s.openInTab).OnClick(a.menuAction("open-in-tab"))
+		viewMenu.Add(s.closeTab).OnClick(a.menuAction("close-tab"))
 	}
 
 	// the standard edit menu gives copy/paste/select-all their native bindings,
 	// which the webview needs on macos to work in inputs and the mail body.
-	// wails' EditMenu() ships with its own fixed English labels (Cut/Copy/
-	// Paste/Select All/Undo/Redo), which it doesn't expose a way to translate.
-	root.Append(menu.EditMenu())
+	// the role ships with its own fixed English labels (Cut/Copy/Paste/Select
+	// All/Undo/Redo), which there is no way to translate.
+	root.AddRole(application.EditMenu)
 
 	return root
 }
 
 // addFullscreenItem adds the fullscreen toggle and its accelerator to a menu.
 // Shared so the reduced menu keeps the binding without duplicating the toggle.
-func (a *App) addFullscreenItem(m *menu.Menu, s menuStrings) {
-	m.AddText(s.toggleFullscreen, keys.Combo("f", keys.CmdOrCtrlKey, keys.ControlKey), func(_ *menu.CallbackData) {
-		if wailsruntime.WindowIsFullscreen(a.ctx) {
-			wailsruntime.WindowUnfullscreen(a.ctx)
-		} else {
-			wailsruntime.WindowFullscreen(a.ctx)
-		}
+func (a *App) addFullscreenItem(m *application.Menu, s menuStrings) {
+	m.Add(s.toggleFullscreen).SetAccelerator("Ctrl+CmdOrCtrl+F").OnClick(func(*application.Context) {
+		a.ToggleFullscreen()
 	})
 }
 
@@ -149,10 +139,13 @@ func (a *App) addFullscreenItem(m *menu.Menu, s menuStrings) {
 // next launch. Only macOS has a native menu to rebuild; Windows/Linux use the
 // in-app bar, which re-renders itself.
 func (a *App) RebuildMenu() {
-	if a.ctx == nil || !a.runtimeReady.Load() || goruntime.GOOS != "darwin" {
+	if a.wapp == nil || !a.runtimeReady.Load() || goruntime.GOOS != "darwin" {
 		return
 	}
-	wailsruntime.MenuSetApplicationMenu(a.ctx, a.buildMenu())
+	menu := a.buildMenu()
+	application.InvokeSync(func() {
+		a.wapp.Menu.Set(menu)
+	})
 }
 
 // SetMailActionsEnabled greys out or restores the native Mail menu's message-
@@ -167,18 +160,18 @@ func (a *App) SetMailActionsEnabled(enabled bool) {
 	if goruntime.GOOS != "darwin" || len(a.mailMenuItems) == 0 {
 		return
 	}
-	for _, item := range a.mailMenuItems {
-		item.Disabled = !enabled
-	}
-	if a.ctx != nil {
-		wailsruntime.MenuUpdateApplicationMenu(a.ctx)
-	}
+	items := a.mailMenuItems
+	application.InvokeSync(func() {
+		for _, item := range items {
+			item.SetEnabled(enabled)
+		}
+	})
 }
 
 // menuAction returns a menu callback that emits the menu event with the given
 // action string.
-func (a *App) menuAction(action string) menu.Callback {
-	return func(_ *menu.CallbackData) {
+func (a *App) menuAction(action string) func(*application.Context) {
+	return func(*application.Context) {
 		a.emit(EventMenu, action)
 	}
 }

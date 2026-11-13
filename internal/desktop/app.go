@@ -24,7 +24,8 @@ import (
 	"github.com/peltonapp/Pelton/internal/proxy"
 	"github.com/peltonapp/Pelton/internal/search"
 	"github.com/peltonapp/Pelton/internal/storage"
-	"github.com/wailsapp/wails/v2/pkg/menu"
+	"github.com/wailsapp/wails/v3/pkg/application"
+	"github.com/wailsapp/wails/v3/pkg/events"
 	"golang.org/x/oauth2"
 )
 
@@ -32,7 +33,14 @@ import (
 // frontend calls.
 type App struct {
 	ctx context.Context
-	log *slog.Logger
+	// wapp is the running wails application and win its one window. Both are
+	// nil in tests, where every runtime call is a no-op.
+	wapp *application.App
+	win  *application.WebviewWindow
+	// windowOptions is what the main window is created with, filled in by Run
+	// and completed in ServiceStartup once the remembered geometry is readable.
+	windowOptions application.WebviewWindowOptions
+	log           *slog.Logger
 	// logWriter is where log lines go. It always writes to stderr and, when
 	// the setting is on, also to a rotating file in the data directory. See
 	// logging.go.
@@ -128,7 +136,7 @@ type App struct {
 	// open message changes. mailActionsEnabled mirrors that same state so a menu
 	// rebuild (RebuildMenu, on a language change) can restore it instead of
 	// resetting every item back to disabled.
-	mailMenuItems      []*menu.MenuItem
+	mailMenuItems      []*application.MenuItem
 	mailActionsEnabled bool
 
 	// quitRequested marks a quit the user asked for directly (the Quit menu
@@ -208,16 +216,29 @@ func newApp(version, channel string) *App {
 	}
 }
 
-// startup is the wails OnStartup hook. It opens the store, runs migrations,
-// builds the outbox queue and starts background services. A failure here is
-// fatal to a useful app, so we log loudly; the ui surfaces the missing store via
-// the bound methods returning errors.
+// ServiceStartup is the wails service startup hook. It opens the store, runs
+// migrations, creates the window, builds the outbox queue and starts
+// background services. A failure here is fatal to a useful app, so we log
+// loudly; the ui surfaces the missing store via the bound methods returning
+// errors. It always returns nil: an error would stop the app from starting at
+// all, and a window that explains the problem is worth more than none.
+//
+// It runs before the native event loop, so nothing here may wait on the main
+// thread.
+func (a *App) ServiceStartup(ctx context.Context, _ application.ServiceOptions) error {
+	a.startup(ctx)
+	return nil
+}
+
 func (a *App) startup(ctx context.Context) {
-	a.ctx = ctx
+	// wails cancels its context the moment a quit starts, but the shutdown
+	// path still writes the window geometry with this one.
+	a.ctx = context.WithoutCancel(ctx)
+	ctx = a.ctx
 	// from here the wails runtime is usable: emitting events and rebuilding the
-	// native menu both need the context wails itself handed us. Tests construct
-	// an App with an ordinary context and never reach this, so those calls stay
-	// no-ops there rather than taking the process down.
+	// native menu both need the running app. Tests construct an App with an
+	// ordinary context and never reach this, so those calls stay no-ops there
+	// rather than taking the process down.
 	a.runtimeReady.Store(true)
 	a.watchQuitEvent()
 
@@ -232,6 +253,7 @@ func (a *App) startup(ctx context.Context) {
 	if err != nil {
 		a.log.Error("open store", "err", err)
 		close(a.storeReady)
+		a.createWindow()
 		// even without a store the tray must come up: with the window closed
 		// it is the only visible way to reopen or quit the app.
 		a.startTray()
@@ -245,9 +267,10 @@ func (a *App) startup(ctx context.Context) {
 	a.loadProxy()
 	close(a.storeReady)
 
-	// as early as the store allows, so the window settles at its remembered size
-	// before the frontend has painted anything into it.
-	a.restoreGeometry()
+	// as early as the store allows, so the window opens at its remembered
+	// frame rather than resizing in front of the user.
+	a.applySavedGeometry(&a.windowOptions)
+	a.createWindow()
 
 	// the tray icon (Windows and Linux; no-op elsewhere). started after the
 	// store is up so its menu labels can follow the language setting.
@@ -301,19 +324,32 @@ func (a *App) startup(ctx context.Context) {
 	a.ResumePendingDownload()
 }
 
-// domReady is the wails OnDomReady hook. Native window calls (like the theme
-// setter) need the webview up first, so the initial theme is applied here
-// rather than in startup. It can run concurrently with startup (a large
-// mailbox can still be opening when the webview signals dom-ready), so it
-// waits for storeReady first to avoid racing on store.
-func (a *App) domReady(ctx context.Context) {
+// createWindow creates the main window from windowOptions. Before the event
+// loop runs, wails queues it and opens it as soon as the loop starts.
+func (a *App) createWindow() {
+	if a.wapp == nil {
+		return
+	}
+	a.win = a.wapp.Window.NewWithOptions(a.windowOptions)
+	a.win.RegisterHook(events.Common.WindowClosing, a.onWindowClosing)
+	a.win.OnWindowEvent(events.Common.WindowRuntimeReady, func(*application.WindowEvent) {
+		a.domReady()
+	})
+}
+
+// domReady runs once the frontend's runtime is loaded in the window. Native
+// window calls (like the theme setter) need the window up first, so the
+// initial theme is applied here rather than in startup.
+func (a *App) domReady() {
 	<-a.storeReady
+	a.keepOnScreen()
 	a.applyNativeTheme(a.stringSetting(storage.SettingTheme, defaultTheme))
 }
 
-// shutdown is the wails OnShutdown hook. It closes the store so the sqlite wal
-// is checkpointed cleanly.
-func (a *App) shutdown(ctx context.Context) {
+// shutdown runs when the app is quitting, before the window is torn down. It
+// saves the window frame and closes the store so the sqlite wal is
+// checkpointed cleanly.
+func (a *App) shutdown() {
 	// before the store closes, and before anything else can fail on the way out.
 	a.saveGeometry()
 	a.stopTray()
