@@ -103,7 +103,7 @@
     setEmptyStateImage,
     setEmptyStateFullscreen,
     setMenuBarInApp,
-    setLiquidGlass,
+    setWindowMaterial,
     setMenuBarNativeMinimal,
     setMenuBarIcons,
     setTimeFormat,
@@ -120,7 +120,11 @@
     setCrashLogs,
   } from '../../stores/prefs'
   import peltonLogo from '../../assets/images/icons/pelton-logo.png'
-  import { isMac } from '../../lib/i18n'
+  import { isMac, isWindows } from '../../lib/i18n'
+
+  // the native window material's product name, which is not translated.
+  // Linux has none and gets no setting.
+  const materialName = isMac ? 'Liquid Glass' : isWindows ? 'Mica' : ''
   import { downloadRange, cancelDownload, openLocalesFolder, saveLocaleTemplate, getLogStatus, openLogFolder, deleteLogs } from '../../lib/api'
   import en from '../../lib/locales/en'
   import { downloadProgress } from '../../stores/progress'
@@ -196,7 +200,7 @@
     { cat: 'appearance', label: $t('onboarding.accentTitle'), kw: 'accent color' },
     { cat: 'appearance', label: $t('settingsPanel.label.density'), kw: '' },
     { cat: 'appearance', label: $t('settingsPanel.label.corners'), kw: 'rounded square' },
-    ...(isMac ? [{ cat: 'appearance', label: $t('settingsPanel.toggle.liquidGlass'), kw: 'glass translucent transparent blur' }] : []),
+    ...(materialName ? [{ cat: 'appearance', label: materialName, kw: 'glass mica material translucent transparent blur' }] : []),
     { cat: 'appearance', label: $t('settingsPanel.label.interfaceScale'), kw: 'zoom scale size' },
     { cat: 'appearance', label: $t('settingsPanel.toggle.reduceMotion'), kw: 'animation' },
     { cat: 'appearance', label: $t('settingsPanel.toggle.handCursor'), kw: 'cursor pointer mouse arrow hand' },
@@ -1001,16 +1005,16 @@
             </div>
             <p class="hint">{$t('settingsPanel.hint.emptyStateFullscreen')}</p>
           </div>
-          {#if isMac}
+          {#if materialName}
             <div class="toggle">
-              <span class="row-label">{$t('settingsPanel.toggle.liquidGlass')}</span>
+              <span class="row-label">{materialName}</span>
               <ToggleSwitch
-                checked={$prefs.liquidGlass}
-                label={$t('settingsPanel.toggle.liquidGlass')}
-                on:change={(e) => setLiquidGlass(e.detail)}
+                checked={$prefs.windowMaterial}
+                label={materialName}
+                on:change={(e) => setWindowMaterial(e.detail)}
               />
             </div>
-            <p class="hint">{$t('settingsPanel.hint.liquidGlass')}</p>
+            <p class="hint">{$t('settingsPanel.hint.windowMaterial')}</p>
           {/if}
         </section>
       {:else if active === 'menubar'}

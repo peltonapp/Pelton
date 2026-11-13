@@ -21,6 +21,9 @@ tags=""
 case "$(go env GOOS)" in
 linux) tags="gtk3" ;;
 darwin)
+  # private_mac_apis for the transparent webview Liquid Glass needs; see
+  # build.sh.
+  tags="private_mac_apis"
   export MACOSX_DEPLOYMENT_TARGET=13.0
   # in CGO_CFLAGS as well, which unlike the environment variable is part of
   # the build cache key, so no object compiled for another target is reused.

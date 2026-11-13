@@ -542,9 +542,9 @@ export interface UIPrefs {
   menuBarInApp: boolean
   menuBarNativeMinimal: boolean
   menuBarIcons: boolean
-  // liquidGlass gives the macOS window Apple's Liquid Glass backdrop from the
-  // next launch on.
-  liquidGlass: boolean
+  // windowMaterial puts the window over a native material (Liquid Glass on
+  // macOS, Mica on Windows) from the next launch on.
+  windowMaterial: boolean
   // timeFormat picks the clock for rendered times: auto (locale), 12, or 24.
   timeFormat: string
   // reduceMotion disables ui transitions and animations.

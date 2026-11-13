@@ -58,7 +58,10 @@ darwin)
   app="$out/$product.app"
   rm -rf "$app"
   mkdir -p "$app/Contents/MacOS" "$app/Contents/Resources"
-  go build -tags production -trimpath -ldflags "$ldflags -extldflags=-mmacosx-version-min=13.0" -o "$app/Contents/MacOS/$product" .
+  # private_mac_apis: the only way to a transparent webview, which the Liquid
+  # Glass setting needs. It rules out the Mac App Store, which Pelton does not
+  # ship through.
+  go build -tags "production private_mac_apis" -trimpath -ldflags "$ldflags -extldflags=-mmacosx-version-min=13.0" -o "$app/Contents/MacOS/$product" .
   meta "$product" build/darwin/Info.plist >"$app/Contents/Info.plist"
   icns=build/icons/pelton.icns
   if [ "$channel" = "nightly" ]; then

@@ -103,9 +103,10 @@ const (
 	// in-app bar (no native menu is created there at all).
 	settingMenuBarInApp         = "menu_bar_in_app"
 	settingMenuBarNativeMinimal = "menu_bar_native_minimal"
-	// the macOS Liquid Glass window backdrop. read when the window is
-	// created, so a change applies at the next launch. see glass.go.
-	settingLiquidGlass = "liquid_glass"
+	// the native window material: Liquid Glass on macOS, Mica on Windows. read
+	// when the window is created, so a change applies at the next launch. see
+	// material.go.
+	settingWindowMaterial = "window_material"
 	// icons in the in-app menu bar's dropdowns; off keeps the classic
 	// text-only native look.
 	settingMenuBarIcons = "menu_bar_icons"
@@ -362,9 +363,10 @@ type UIPrefsDTO struct {
 	// native macOS menu to the app menu, dropping the duplicated submenus.
 	MenuBarInApp         bool `json:"menuBarInApp"`
 	MenuBarNativeMinimal bool `json:"menuBarNativeMinimal"`
-	// LiquidGlass is the stored Liquid Glass preference (macOS); whether the
-	// running window has it is LiquidGlassActive.
-	LiquidGlass bool `json:"liquidGlass"`
+	// WindowMaterial is the stored native material preference (Liquid Glass
+	// on macOS, Mica on Windows); whether the running window has it is
+	// WindowMaterialActive.
+	WindowMaterial bool `json:"windowMaterial"`
 	// MenuBarIcons shows icons next to the in-app menu bar's dropdown items.
 	MenuBarIcons bool `json:"menuBarIcons"`
 	// TimeFormat picks the clock for rendered times: auto (locale), 12, or 24.
@@ -502,7 +504,7 @@ func (a *App) GetUIPrefs() (UIPrefsDTO, error) {
 		ThemeID:                    a.stringSetting(settingThemeID, ""),
 		MenuBarInApp:               a.boolSetting(settingMenuBarInApp, false),
 		MenuBarNativeMinimal:       a.boolSetting(settingMenuBarNativeMinimal, false),
-		LiquidGlass:                a.boolSetting(settingLiquidGlass, false),
+		WindowMaterial:             a.boolSetting(settingWindowMaterial, false),
 		MenuBarIcons:               a.boolSetting(settingMenuBarIcons, false),
 		TimeFormat:                 a.stringSetting(settingTimeFormat, "auto"),
 		ReduceMotion:               a.boolSetting(settingReduceMotion, false),
