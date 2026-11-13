@@ -166,7 +166,7 @@ func parts(mr *mail.Reader, msg *Message) error {
 
 		header := part.Header
 		if ih, ok := header.(*mail.InlineHeader); ok {
-			if mediaType, _, _ := ih.ContentType(); !strings.HasPrefix(strings.ToLower(mediaType), "text/") {
+			if !isTextHeader(ih) {
 				header = &mail.AttachmentHeader{Header: ih.Header}
 			}
 		}
@@ -176,6 +176,10 @@ func parts(mr *mail.Reader, msg *Message) error {
 			body, err := io.ReadAll(part.Body)
 			if err != nil {
 				return fmt.Errorf("rfc822: read inline part: %w", err)
+			}
+			if bytes.IndexByte(body, 0) >= 0 {
+				msg.Attachments = append(msg.Attachments, attachmentFrom(&mail.AttachmentHeader{Header: header.Header}, body))
+				continue
 			}
 			contentType, params, _ := header.ContentType()
 			// a part that named no charset was never converted, so what came
@@ -200,23 +204,38 @@ func parts(mr *mail.Reader, msg *Message) error {
 				msg.Text = text
 			}
 		case *mail.AttachmentHeader:
-			filename, _ := header.Filename()
-			contentType, _, _ := header.ContentType()
 			content, err := io.ReadAll(part.Body)
 			if err != nil {
 				return fmt.Errorf("rfc822: read attachment part: %w", err)
 			}
-			// content-id arrives wrapped in angle brackets, strip them
-			contentID := strings.Trim(header.Get("Content-Id"), "<>")
-			msg.Attachments = append(msg.Attachments, Attachment{
-				Filename:    filename,
-				ContentType: contentType,
-				ContentID:   contentID,
-				Content:     content,
-			})
+			msg.Attachments = append(msg.Attachments, attachmentFrom(header, content))
 		}
 	}
 	return nil
+}
+
+func attachmentFrom(header *mail.AttachmentHeader, content []byte) Attachment {
+	filename, _ := header.Filename()
+	contentType, _, _ := header.ContentType()
+	return Attachment{
+		Filename:    filename,
+		ContentType: contentType,
+		// content-id arrives wrapped in angle brackets, strip them
+		ContentID: strings.Trim(header.Get("Content-Id"), "<>"),
+		Content:   content,
+	}
+}
+
+// isTextHeader reports whether an inline part can be a body. A part with no
+// Content-Type defaults to text/plain, but one that names a file or carries a
+// content id is a resource, not prose.
+func isTextHeader(h *mail.InlineHeader) bool {
+	if h.Get("Content-Type") == "" {
+		name, _ := (&mail.AttachmentHeader{Header: h.Header}).Filename()
+		return name == "" && h.Get("Content-Id") == ""
+	}
+	mediaType, _, _ := h.ContentType()
+	return strings.HasPrefix(strings.ToLower(mediaType), "text/")
 }
 
 // addressList renders one address header as `Name <user@host>, ...`, matching
