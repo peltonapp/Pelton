@@ -22,6 +22,9 @@ case "$(go env GOOS)" in
 linux) tags="gtk3" ;;
 darwin)
   export MACOSX_DEPLOYMENT_TARGET=13.0
+  # in CGO_CFLAGS as well, which unlike the environment variable is part of
+  # the build cache key, so no object compiled for another target is reused.
+  export CGO_CFLAGS="${CGO_CFLAGS:--O2 -g} -mmacosx-version-min=13.0"
   ldflags="$ldflags -extldflags=-mmacosx-version-min=13.0"
   ;;
 esac
@@ -43,11 +46,14 @@ fi
 mkdir -p frontend/dist
 [ -e frontend/dist/index.html ] || : >frontend/dist/index.html
 
-(cd frontend && exec pnpm exec vite --port "$port" --strictPort) &
+# an explicit IPv4 address on both ends: "localhost" can resolve to ::1 for
+# vite and to 127.0.0.1 for the app's proxy, which then finds nothing there.
+devserver="http://127.0.0.1:$port"
+(cd frontend && exec pnpm exec vite --host 127.0.0.1 --port "$port" --strictPort) &
 vite=$!
 trap 'kill "$vite" 2>/dev/null || true' EXIT INT TERM
 
-until curl -s -o /dev/null "http://localhost:$port/"; do
+until curl -s -o /dev/null "$devserver/"; do
   if ! kill -0 "$vite" 2>/dev/null; then
     echo "dev.sh: the vite dev server exited, see its output above" >&2
     exit 1
@@ -55,5 +61,5 @@ until curl -s -o /dev/null "http://localhost:$port/"; do
   sleep 0.2
 done
 
-PELTON_DEV=1 FRONTEND_DEVSERVER_URL="http://localhost:$port" \
+PELTON_DEV=1 FRONTEND_DEVSERVER_URL="$devserver" \
   go run -tags "$tags" -ldflags "$ldflags" . "$@"

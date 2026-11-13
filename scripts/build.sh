@@ -54,6 +54,7 @@ darwin)
   # Go 1.27 runs on macOS 13 and later; build and link the cgo parts for the
   # same, so the binary does not claim an older macOS than it runs on.
   export MACOSX_DEPLOYMENT_TARGET=13.0
+  export CGO_CFLAGS="${CGO_CFLAGS:--O2 -g} -mmacosx-version-min=13.0"
   app="$out/$product.app"
   rm -rf "$app"
   mkdir -p "$app/Contents/MacOS" "$app/Contents/Resources"
