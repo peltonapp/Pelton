@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/peltonapp/Pelton/internal/crypto"
+	"github.com/peltonapp/Pelton/internal/messageid"
 )
 
 const (
@@ -131,11 +132,9 @@ func (m *Message) topHeaders(withBcc bool) (string, string, error) {
 	}
 	writeHeader(&b, headerMessageID, msgID)
 
-	if m.InReplyTo != "" {
-		writeHeader(&b, headerInReplyTo, m.InReplyTo)
-	}
-	if refs := referenceChain(m.References, m.InReplyTo); refs != "" {
-		writeHeader(&b, headerReferences, refs)
+	if parent, ok := messageid.Bracket(m.InReplyTo); ok {
+		writeHeader(&b, headerInReplyTo, parent)
+		writeHeader(&b, headerReferences, referenceChain(m.References, m.InReplyTo))
 	}
 
 	writeHeader(&b, headerMIMEVersion, mimeVersion)
