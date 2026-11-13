@@ -7,7 +7,7 @@
   // plaintext renders in the mono font, with bare urls linkified. remote
   // images are blocked by the backend by default; a per-message affordance
   // asks the backend to re-render with remote content allowed.
-  import { onDestroy } from 'svelte'
+  import { onDestroy, tick } from 'svelte'
   import { get } from 'svelte/store'
   import { BrowserOpenURL } from '../../../wailsjs/runtime/runtime'
   import { IconPhoto, IconUserCheck, IconWorldCheck, IconMailCheck, IconShieldSearch, IconChevronDown, IconEyeOff } from '@tabler/icons-svelte'
@@ -279,7 +279,22 @@
   // or hides it for an empty href. mailto links show just the address. The
   // overlay is anchored to the message pane, outside its scroll area.
   function showHover(href: string): void {
-    hoverUrl = /^mailto:/i.test(href) ? href.slice(7).split('?')[0] : /^https?:/i.test(href) ? href : ''
+    const shown = /^mailto:/i.test(href) ? href.slice(7).split('?')[0] : /^https?:/i.test(href) ? href : ''
+    if (shown === hoverUrl) return
+    hoverUrl = shown
+    hoverSlide = 0
+    if (shown) void measureHover()
+  }
+
+  let hoverBox: HTMLDivElement | undefined
+  let hoverText: HTMLSpanElement | undefined
+  let hoverSlide = 0
+
+  // an address wider than the bar slides back and forth instead of being cut.
+  async function measureHover(): Promise<void> {
+    await tick()
+    if (!hoverBox || !hoverText) return
+    hoverSlide = Math.max(hoverText.offsetWidth - hoverBox.clientWidth, 0)
   }
 
   // onWindowMessage receives the url from the click handler running inside
@@ -630,7 +645,14 @@
 {/if}
 
 {#if hoverUrl}
-  <div class="link-hover mono" aria-hidden="true">{hoverUrl}</div>
+  <div class="link-hover mono" aria-hidden="true" bind:this={hoverBox}>
+    <span
+      class="link-hover-text"
+      class:sliding={hoverSlide > 0}
+      style={`--slide:-${hoverSlide}px;--slide-time:${Math.max(3, hoverSlide / 40)}s`}
+      bind:this={hoverText}>{hoverUrl}</span
+    >
+  </div>
 {/if}
 
 <style>
@@ -639,8 +661,7 @@
     right: 0;
     bottom: 0;
     z-index: 30;
-    max-width: 55%;
-    padding: var(--space-1) var(--space-2);
+    max-width: calc(100% - var(--space-6));
     border: var(--hairline) solid var(--border-default);
     border-right: none;
     border-bottom: none;
@@ -649,9 +670,34 @@
     color: var(--text-secondary);
     font-size: calc(var(--fz-meta) - 1px);
     overflow: hidden;
-    text-overflow: ellipsis;
     white-space: nowrap;
     pointer-events: none;
+  }
+
+  .link-hover-text {
+    display: inline-block;
+    padding: var(--space-1) var(--space-2);
+  }
+
+  .link-hover-text.sliding {
+    animation: link-slide var(--slide-time) ease-in-out 0.6s infinite alternate;
+  }
+
+  @keyframes link-slide {
+    0%,
+    15% {
+      transform: translateX(0);
+    }
+    85%,
+    100% {
+      transform: translateX(var(--slide));
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .link-hover-text.sliding {
+      animation: none;
+    }
   }
 
   /* a warning-tinted banner, since blocked remote content is a privacy matter. */
