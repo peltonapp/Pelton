@@ -311,7 +311,8 @@ export function ClearSentOutbox(): $CancellablePromise<void> {
 /**
  * CloseCurrentWindow closes the window it is called from when that is a
  * secondary window, and does what the main window's close button does
- * otherwise.
+ * otherwise. A compose window asking to close has already settled its draft,
+ * so its closing hook lets it go.
  */
 export function CloseCurrentWindow(): $CancellablePromise<void> {
     return $Call.ByID(397860451);
@@ -1260,6 +1261,15 @@ export function MoveMessage(id: number, destFolderID: number): $CancellablePromi
 }
 
 /**
+ * OpenComposeWindow moves a compose pane into a window of its own (#573).
+ * session is the pane's state as the frontend keeps it; the new window picks
+ * it up once with TakeComposeSession, so it never travels in a url.
+ */
+export function OpenComposeWindow(session: string): $CancellablePromise<void> {
+    return $Call.ByID(3855036690, session);
+}
+
+/**
  * OpenCrashReport opens the pending crash file in whatever the system opens
  * plain text with, and marks it seen so the next launch stops offering it.
  */
@@ -1958,9 +1968,9 @@ export function SetWindowTheme(dark: boolean): $CancellablePromise<void> {
 }
 
 /**
- * SetWindowTitle updates the native window title so it can reflect context (the
- * open message's subject, the current folder, etc.). A blank title is ignored so
- * the window never ends up nameless.
+ * SetWindowTitle updates the title of the window it is called from so it can
+ * reflect context (the open message's subject, the current folder, etc.). A
+ * blank title is ignored so the window never ends up nameless.
  */
 export function SetWindowTitle(title: string): $CancellablePromise<void> {
     return $Call.ByID(1720939644, title);
@@ -2035,6 +2045,13 @@ export function SyncContacts(): $CancellablePromise<void> {
  */
 export function SystemColorScheme(): $CancellablePromise<string> {
     return $Call.ByID(1010669893);
+}
+
+/**
+ * TakeComposeSession hands a compose window the pane it was opened for, once.
+ */
+export function TakeComposeSession(token: string): $CancellablePromise<string> {
+    return $Call.ByID(3031140669, token);
 }
 
 /**

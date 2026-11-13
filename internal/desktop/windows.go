@@ -1,9 +1,13 @@
 package desktop
 
 import (
+	"context"
+	"crypto/rand"
+	"encoding/hex"
 	"fmt"
 	"net/url"
 	"strconv"
+	"sync/atomic"
 
 	"github.com/wailsapp/wails/v3/pkg/application"
 	"github.com/wailsapp/wails/v3/pkg/events"
@@ -74,14 +78,14 @@ func (a *App) OpenMessageWindow(id int64, title string) error {
 	}
 	w := a.wapp.Window.NewWithOptions(opts)
 	w.RegisterHook(events.Common.WindowClosing, func(*application.WindowEvent) {
-		a.saveMessageWindowSize(w)
+		a.saveWindowSize(w, settingMessageWindowWidth, settingMessageWindowHeight)
 	})
 	return nil
 }
 
-// saveMessageWindowSize remembers the size a message window was closed at, for
-// the next one. Maximised and fullscreen sizes are not worth keeping.
-func (a *App) saveMessageWindowSize(w *application.WebviewWindow) {
+// saveWindowSize remembers the size a secondary window was closed at, for the
+// next one of its kind. Maximised and fullscreen sizes are not worth keeping.
+func (a *App) saveWindowSize(w *application.WebviewWindow, widthKey, heightKey string) {
 	if a.store == nil || w.IsMaximised() || w.IsFullscreen() {
 		return
 	}
@@ -89,12 +93,9 @@ func (a *App) saveMessageWindowSize(w *application.WebviewWindow) {
 	if width <= 0 || height <= 0 {
 		return
 	}
-	for key, value := range map[string]int{
-		settingMessageWindowWidth:  width,
-		settingMessageWindowHeight: height,
-	} {
+	for key, value := range map[string]int{widthKey: width, heightKey: height} {
 		if err := a.store.SetInt(a.ctx, key, value); err != nil {
-			a.log.Error("save message window size", "key", key, "err", err)
+			a.log.Error("save window size", "key", key, "err", err)
 		}
 	}
 }
@@ -114,11 +115,103 @@ func (a *App) focusedSecondaryWindow() application.Window {
 
 // CloseCurrentWindow closes the window it is called from when that is a
 // secondary window, and does what the main window's close button does
-// otherwise.
-func (a *App) CloseCurrentWindow() {
-	if w := a.focusedSecondaryWindow(); w != nil {
-		w.Close()
+// otherwise. A compose window asking to close has already settled its draft,
+// so its closing hook lets it go.
+func (a *App) CloseCurrentWindow(ctx context.Context) {
+	w, _ := ctx.Value(application.WindowKey).(application.Window)
+	if w == nil || a.win == nil || w.Name() == a.win.Name() {
+		a.CloseWindow()
 		return
 	}
-	a.CloseWindow()
+	if cw, ok := a.composeWindows.Load(w.Name()); ok {
+		cw.(*composeWindow).closing.Store(true)
+	}
+	w.Close()
+}
+
+// remembered size of compose windows, shared by all of them.
+const (
+	settingComposeWindowWidth  = "compose_window_width"
+	settingComposeWindowHeight = "compose_window_height"
+)
+
+const (
+	defaultComposeWindowWidth  = 760
+	defaultComposeWindowHeight = 680
+	minComposeWindowWidth      = 520
+	minComposeWindowHeight     = 420
+)
+
+// EventComposeCloseRequest asks a compose window to close its compose the way
+// its own close button does, so unsaved text gets the save or discard prompt
+// instead of vanishing with the window.
+const EventComposeCloseRequest = "compose:close-request"
+
+// composeWindow is the backend's record of an open compose window.
+type composeWindow struct {
+	// closing is set once the frontend has settled the draft and asked for
+	// the window to go; until then the close button is turned into a request.
+	closing atomic.Bool
+}
+
+// OpenComposeWindow moves a compose pane into a window of its own (#573).
+// session is the pane's state as the frontend keeps it; the new window picks
+// it up once with TakeComposeSession, so it never travels in a url.
+func (a *App) OpenComposeWindow(session string) error {
+	if err := a.ready(); err != nil {
+		return err
+	}
+	if a.wapp == nil {
+		return nil
+	}
+	raw := make([]byte, 16)
+	if _, err := rand.Read(raw); err != nil {
+		return err
+	}
+	token := hex.EncodeToString(raw)
+	a.composeHandoff.Store(token, session)
+
+	name := "compose-" + token
+	query := url.Values{}
+	query.Set("window", "compose")
+	query.Set("token", token)
+
+	opts := application.WebviewWindowOptions{
+		Name:             name,
+		Title:            "Pelton",
+		Width:            max(a.intSetting(settingComposeWindowWidth, defaultComposeWindowWidth), minComposeWindowWidth),
+		Height:           max(a.intSetting(settingComposeWindowHeight, defaultComposeWindowHeight), minComposeWindowHeight),
+		MinWidth:         minComposeWindowWidth,
+		MinHeight:        minComposeWindowHeight,
+		URL:              "/?" + query.Encode(),
+		BackgroundColour: a.windowOptions.BackgroundColour,
+		BackgroundType:   a.windowOptions.BackgroundType,
+		Mac:              a.windowOptions.Mac,
+		Windows:          a.windowOptions.Windows,
+	}
+	cw := &composeWindow{}
+	a.composeWindows.Store(name, cw)
+	w := a.wapp.Window.NewWithOptions(opts)
+	w.RegisterHook(events.Common.WindowClosing, func(e *application.WindowEvent) {
+		// a quit takes every window with it; the drafts autosave as they are
+		// typed, so nothing is asked then.
+		if !cw.closing.Load() && !a.quitRequested.Load() {
+			e.Cancel()
+			w.DispatchWailsEvent(&application.CustomEvent{Name: EventComposeCloseRequest})
+			return
+		}
+		a.saveWindowSize(w, settingComposeWindowWidth, settingComposeWindowHeight)
+		a.composeWindows.Delete(name)
+		a.composeHandoff.Delete(token)
+	})
+	return nil
+}
+
+// TakeComposeSession hands a compose window the pane it was opened for, once.
+func (a *App) TakeComposeSession(token string) string {
+	session, ok := a.composeHandoff.LoadAndDelete(token)
+	if !ok {
+		return ""
+	}
+	return session.(string)
 }

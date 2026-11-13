@@ -81,7 +81,19 @@ export interface ComposeSession {
 
 export const composeSessions = writable<ComposeSession[]>([])
 
+// composeInWindow is set in a compose window (#573), where the one compose
+// fills the window and the pane's own size controls have nothing to do.
+export const composeInWindow = writable(false)
+
 let nextId = 1
+
+// adoptSession takes over a pane moved here from another window, with every
+// field as it was, and returns its new id.
+export function adoptSession(session: ComposeSession): number {
+  const adopted: ComposeSession = { ...session, references: [...session.references], id: nextId++, minimized: false, fullscreen: false }
+  composeSessions.update((list) => [...list, adopted])
+  return adopted.id
+}
 
 // blankSession builds an empty session for a given account and editor mode.
 function blankSession(accountId: number, mode: EditorMode): ComposeSession {

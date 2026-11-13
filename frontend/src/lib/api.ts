@@ -1304,6 +1304,19 @@ export function openMessageWindow(id: number, title: string): Promise<void> {
   return App.OpenMessageWindow(id, title)
 }
 
+// openComposeWindow moves a compose pane's state into a window of its own,
+// which picks it up with takeComposeSession.
+export function openComposeWindow(session: unknown): Promise<void> {
+  return App.OpenComposeWindow(JSON.stringify(session))
+}
+
+// takeComposeSession returns the compose pane a compose window was opened
+// for, once, or null when there is none (the window was reloaded).
+export async function takeComposeSession<T>(token: string): Promise<T | null> {
+  const raw = await App.TakeComposeSession(token)
+  return raw ? (JSON.parse(raw) as T) : null
+}
+
 // titleBarDoubleClick runs the system's title-bar double-click action (zoom,
 // minimise or nothing). Needed because the app draws its own title bar on
 // macOS, so the window server never sees the click.

@@ -43,6 +43,11 @@ type App struct {
 	// windowMaterial is set when the window was created over a native
 	// material (material.go).
 	windowMaterial bool
+	// composeHandoff holds a compose pane on its way into a window of its own,
+	// by token, until the window takes it; composeWindows tracks the open
+	// compose windows by name. See windows.go.
+	composeHandoff sync.Map
+	composeWindows sync.Map
 	log            *slog.Logger
 	// logWriter is where log lines go. It always writes to stderr and, when
 	// the setting is on, also to a rotating file in the data directory. See

@@ -1,13 +1,25 @@
 package desktop
 
-// SetWindowTitle updates the native window title so it can reflect context (the
-// open message's subject, the current folder, etc.). A blank title is ignored so
-// the window never ends up nameless.
-func (a *App) SetWindowTitle(title string) {
-	if a.win == nil || title == "" {
+import (
+	"context"
+
+	"github.com/wailsapp/wails/v3/pkg/application"
+)
+
+// SetWindowTitle updates the title of the window it is called from so it can
+// reflect context (the open message's subject, the current folder, etc.). A
+// blank title is ignored so the window never ends up nameless.
+func (a *App) SetWindowTitle(ctx context.Context, title string) {
+	if title == "" {
 		return
 	}
-	a.win.SetTitle(title)
+	if w, ok := ctx.Value(application.WindowKey).(application.Window); ok && w != nil {
+		w.SetTitle(title)
+		return
+	}
+	if a.win != nil {
+		a.win.SetTitle(title)
+	}
 }
 
 // TitleBarDoubleClick runs the system's title-bar double-click action. On macOS
