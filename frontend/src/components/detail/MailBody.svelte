@@ -130,12 +130,17 @@
     const contextHandler = offerScan
       ? 'document.addEventListener("contextmenu",function(e){var a=e.target&&e.target.closest("a");if(!a)return;var href=(a.getAttribute("href")||"").trim();if(!/^https?:/i.test(href))return;e.preventDefault();window.parent.postMessage({peltonContextLink:href,x:e.clientX,y:e.clientY},"*")});'
       : ''
+    const hoverHandler =
+      'function hov(h){window.parent.postMessage({peltonHoverLink:h},"*")}' +
+      'document.addEventListener("mouseover",function(e){var a=e.target&&e.target.closest&&e.target.closest("a");hov(a?(a.getAttribute("href")||"").trim():"")});' +
+      'document.documentElement.addEventListener("mouseleave",function(){hov("")});'
     const script =
       '<scr' +
       'ipt nonce="' +
       nonce +
       '">document.addEventListener("click",function(e){var a=e.target&&e.target.closest("a");if(!a)return;var href=(a.getAttribute("href")||"").trim();if(!href)return;e.preventDefault();if(/^(https?:|mailto:)/i.test(href)){window.parent.postMessage({peltonOpenUrl:href},"*")}});' +
       contextHandler +
+      hoverHandler +
       frameKeyRelay +
       '</scr' +
       'ipt>'
@@ -267,6 +272,17 @@
     scheduleAttach()
   }
 
+  let hoverUrl = ''
+  let hoverLeft = 0
+
+  // showHover updates the status overlay with the address of the hovered link,
+  // or hides it for an empty href. mailto links show just the address.
+  function showHover(href: string): void {
+    const shown = /^mailto:/i.test(href) ? href.slice(7).split('?')[0] : /^https?:/i.test(href) ? href : ''
+    hoverUrl = shown
+    hoverLeft = frame ? Math.max(frame.getBoundingClientRect().left, 0) : 0
+  }
+
   // onWindowMessage receives the url from the click handler running inside
   // the iframe's own document (see the injected script in buildSrcdoc) and
   // opens it in the external browser. The source check makes sure this only
@@ -281,7 +297,11 @@
       replayKey(frame, key)
       return
     }
-    const data = event.data as { peltonOpenUrl?: unknown; peltonContextLink?: unknown; x?: unknown; y?: unknown } | null
+    const data = event.data as { peltonOpenUrl?: unknown; peltonContextLink?: unknown; peltonHoverLink?: unknown; x?: unknown; y?: unknown } | null
+    if (typeof data?.peltonHoverLink === 'string') {
+      showHover(data.peltonHoverLink)
+      return
+    }
     const href = data?.peltonOpenUrl
     if (typeof href === 'string' && /^(https?:|mailto:)/i.test(href)) {
       BrowserOpenURL(href)
@@ -605,10 +625,35 @@
         href={segment.href}
         on:click|preventDefault={() => BrowserOpenURL(segment.href ?? '')}
         on:contextmenu={(e) => onPlainContext(e, segment.href ?? '')}
+        on:mouseenter={() => showHover(segment.href ?? '')}
+        on:mouseleave={() => showHover('')}
       >{segment.text}</a>{#if $linkVerdicts.has(segment.href ?? '')}<VerdictBadge verdict={$linkVerdicts.get(segment.href ?? '')!} size={12} />{/if}{:else}{segment.text}{/if}{/each}</pre>
 {/if}
 
+{#if hoverUrl}
+  <div class="link-hover mono" style={`left:${hoverLeft}px`} aria-hidden="true">{hoverUrl}</div>
+{/if}
+
 <style>
+  .link-hover {
+    position: fixed;
+    bottom: 0;
+    z-index: 30;
+    max-width: 70%;
+    padding: var(--space-1) var(--space-3);
+    border: var(--hairline) solid var(--border-default);
+    border-left: none;
+    border-bottom: none;
+    border-top-right-radius: var(--radius-control);
+    background: var(--surface-overlay);
+    color: var(--text-secondary);
+    font-size: var(--fz-meta);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    pointer-events: none;
+  }
+
   /* a warning-tinted banner, since blocked remote content is a privacy matter. */
   .remote-bar {
     display: flex;
