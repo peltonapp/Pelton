@@ -1871,6 +1871,9 @@ const en: Record<string, string> = {
   'settings2.theme.window': 'Window and reading pane',
   'settings2.theme.windowMaterial': 'Window material',
   'settings2.layout.alerts': 'Notifications and badge',
+  'sidebar.options': 'Folder pane options',
+  'sidebar.options.unlockPanes': 'Unlock pane sizes',
+  'sidebar.options.settings': 'Layout settings',
 }
 
 export default en

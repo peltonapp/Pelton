@@ -75,7 +75,9 @@
     <span class="label">{label}</span>
     <slot name="badge" />
     {#if count > 0}
-      <span class="count" aria-label={`${count} ${$t('sidebar.unreadSuffix')}`}>{count}</span>
+      {#key count}
+        <span class="count" aria-label={`${count} ${$t('sidebar.unreadSuffix')}`}>{count}</span>
+      {/key}
     {/if}
   </button>
 
@@ -193,5 +195,27 @@
     padding: 0 var(--space-2);
     min-width: 18px;
     text-align: center;
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* the new design: rows ease between states, and a count that changes ticks
+     into place instead of swapping. */
+  :global(:root[data-design='new']) .row {
+    transition: background-color var(--motion-fast) var(--ease-out);
+  }
+
+  :global(:root[data-design='new']) .caret :global(svg) {
+    transition: transform var(--motion-base) var(--ease-out);
+  }
+
+  :global(:root[data-design='new']) .count {
+    animation: tick var(--motion-base) var(--ease-out);
+  }
+
+  @keyframes tick {
+    from {
+      opacity: 0;
+      transform: translateY(-3px);
+    }
   }
 </style>

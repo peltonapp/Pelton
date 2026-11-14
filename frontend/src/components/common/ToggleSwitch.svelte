@@ -77,4 +77,26 @@
     inset-inline-start: 18px;
     background: var(--accent-fg, #fff);
   }
+
+  /* the new design: the knob stretches toward where it is going while the
+     switch is held, then lands. */
+  :global(:root[data-design='new']) .switch {
+    transition:
+      background-color var(--motion-base) var(--ease-out),
+      border-color var(--motion-base) var(--ease-out);
+  }
+
+  :global(:root[data-design='new']) .knob {
+    transition:
+      inset-inline-start var(--motion-base) var(--ease-out),
+      width var(--motion-fast) var(--ease-out);
+  }
+
+  :global(:root[data-design='new']) .switch:active:not(:disabled) .knob {
+    width: 18px;
+  }
+
+  :global(:root[data-design='new']) .switch.on:active:not(:disabled) .knob {
+    inset-inline-start: 14px;
+  }
 </style>
