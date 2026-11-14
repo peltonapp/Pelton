@@ -617,6 +617,8 @@ export interface UIPrefs {
   // avatarPlacement puts the sender picture in its own column, inline in the
   // address line, or hides it.
   avatarPlacement: AvatarPlacement
+  // contactsView is how the contacts space shows its contacts.
+  contactsView: ContactsView
   // listHeight is the message list height in the stacked layout, in px.
   listHeight: number
   // nativeTitlebar uses the operating system's title bar instead of the
@@ -1130,6 +1132,8 @@ export type RailSide = 'left' | 'right'
 export type PaneStyle = 'hybrid' | 'flat' | 'soft'
 /** Where the sender picture goes in a list row and the reading header. */
 export type AvatarPlacement = 'column' | 'inline' | 'hidden'
+/** How the contacts space shows its contacts: a list with a detail pane, or a card grid. */
+export type ContactsView = 'panes' | 'grid'
 /** Where compose opens in the new design: its own window, docked, or a tab. */
 export type ComposeOpenIn = 'window' | 'docked' | 'tab'
 /** How wide the reading column runs in the new design. */

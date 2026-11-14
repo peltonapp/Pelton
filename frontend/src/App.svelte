@@ -1672,10 +1672,9 @@
       </div>
     {:else if $space === 'contacts'}
       <div class="space-host">
-        {#await import('./components/contacts/ContactsScreen.svelte') then m}
+        {#await import('./components/contacts/ContactsSpace.svelte') then m}
           <svelte:component
             this={m.default}
-            on:close={() => openSpace('mail')}
             on:compose={(e) => { openSpace('mail'); startComposeTo(e.detail) }}
           />
         {/await}

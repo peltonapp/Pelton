@@ -6311,6 +6311,11 @@ export class UIPrefsDTO {
     "avatarPlacement": string;
 
     /**
+     * ContactsView is how the contacts space shows its contacts: panes or grid.
+     */
+    "contactsView": string;
+
+    /**
      * ListHeight is the message list height in the stacked layout, in pixels.
      */
     "listHeight": number;
@@ -6688,6 +6693,9 @@ export class UIPrefsDTO {
         }
         if (!("avatarPlacement" in $$source)) {
             this["avatarPlacement"] = "";
+        }
+        if (!("contactsView" in $$source)) {
+            this["contactsView"] = "";
         }
         if (!("listHeight" in $$source)) {
             this["listHeight"] = 0;
