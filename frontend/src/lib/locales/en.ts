@@ -1874,6 +1874,19 @@ const en: Record<string, string> = {
   'sidebar.options': 'Folder pane options',
   'sidebar.options.unlockPanes': 'Unlock pane sizes',
   'sidebar.options.settings': 'Layout settings',
+  'list.avatarPlacement.label': 'Sender picture',
+  'list.avatarPlacement.hint': 'Where the sender picture sits in each row.',
+  'list.avatar.column': 'Column',
+  'list.avatar.column.hint': 'A larger picture beside the whole row.',
+  'list.avatar.inline': 'Inline',
+  'list.avatar.inline.hint': 'A small picture in front of the sender name.',
+  'list.avatar.hidden': 'Hidden',
+  'list.avatar.hidden.hint': 'No sender picture.',
+  'list.card.layout': 'Row layout',
+  'list.card.dateTime': 'Date and time',
+  'list.card.selection': 'Selection',
+  'reading.card.opening': 'Opening messages',
+  'reading.sample': 'The quick brown fox jumps over the lazy dog. Pack my box with five dozen liquor jugs, then read it again at the size you chose.',
 }
 
 export default en

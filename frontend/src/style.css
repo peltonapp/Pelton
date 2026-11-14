@@ -166,6 +166,26 @@ a:hover {
   color: var(--text-tertiary);
 }
 
+/* while mail is being dragged (stores/maildrag.ts) the pointer is a closed
+   hand everywhere, and the place it would land in says so. */
+.mail-dragging,
+.mail-dragging * {
+  cursor: grabbing !important;
+}
+
+.maildrop-over {
+  background: var(--selection-bg-strong) !important;
+  box-shadow: inset 0 0 0 1.5px var(--accent);
+  border-radius: var(--radius-control);
+  animation: maildrop-pulse 0.9s var(--ease-in-out) infinite alternate;
+}
+
+@keyframes maildrop-pulse {
+  to {
+    box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--accent) 45%, transparent);
+  }
+}
+
 /* reduce motion: freeze animations and transitions when the user asked for it,
    either through the in-app setting (data-reduce-motion on the root) or the
    os-level preference. near-zero durations instead of `none` so animation and
