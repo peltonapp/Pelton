@@ -363,6 +363,7 @@ func (a *App) createWindow() {
 	a.win.OnWindowEvent(events.Common.WindowRuntimeReady, func(*application.WindowEvent) {
 		a.domReady()
 	})
+	a.win.OnWindowEvent(events.Common.WindowFilesDropped, a.onFilesDropped)
 }
 
 // domReady runs once the frontend's runtime is loaded in the window. Native

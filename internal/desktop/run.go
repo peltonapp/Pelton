@@ -156,6 +156,9 @@ func Run(cfg Config) error {
 		// the frontend paints. the real colors come from the css token theme.
 		BackgroundColour: application.NewRGB(17, 18, 20),
 		URL:              "/",
+		// files dropped on an element marked data-file-drop-target, such as
+		// the import dialog, reach the page as EventFilesDropped.
+		EnableFileDrop: true,
 		Mac: application.MacWindow{
 			// draw the ui all the way to the top of the window instead of under an
 			// opaque native title bar, which never matches the theme. the frontend

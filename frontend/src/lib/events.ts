@@ -27,6 +27,7 @@ export const EventNames = {
   foldersChanged: 'folders:changed',
   profileChanged: 'profile:changed',
   importProgress: 'import:progress',
+  filesDropped: 'files:dropped',
   agentProposals: 'agent:proposals',
   openMessage: 'message:open',
   composeCloseRequest: 'compose:close-request',
@@ -221,6 +222,18 @@ export function onMailtoCompose(cb: (e: MailtoDraft) => void): Unsubscribe {
 // with running false when the job ends.
 export function onImportProgress(cb: (e: ImportProgressEvent) => void): Unsubscribe {
   return EventsOn(EventNames.importProgress, (e: ImportProgressEvent) => cb(e))
+}
+
+/** FilesDroppedEvent names the drop target files from the system landed on. */
+export interface FilesDroppedEvent {
+  /** The target's data-file-drop-target value. */
+  target: string
+  paths: string[]
+}
+
+/** onFilesDropped fires when files are dropped onto an element marked data-file-drop-target. */
+export function onFilesDropped(cb: (e: FilesDroppedEvent) => void): Unsubscribe {
+  return EventsOn(EventNames.filesDropped, (e: FilesDroppedEvent) => cb(e))
 }
 
 // onViewsChanged fires when saved views or their eager-run counts change. it
