@@ -151,11 +151,13 @@ func (d *DB) CountMessages(ctx context.Context, q MessageQuery) (int, error) {
 }
 
 // FolderCounts returns the total and unread message counts for a single folder.
-// Unread means the \Seen flag bit is not set.
+// Unread means the \Seen flag bit is not set. Rows the list hides (awaiting
+// expunge after a delete, or snoozed away) are left out, so the badge agrees
+// with the list.
 func (d *DB) FolderCounts(ctx context.Context, folderID int64) (total, unread int, err error) {
 	const query = `
 SELECT COUNT(*), COALESCE(SUM(CASE WHEN flags & ? = 0 THEN 1 ELSE 0 END), 0)
-FROM messages WHERE folder_id = ?`
+FROM messages WHERE folder_id = ? AND pending_delete = 0 AND snooze_hidden = 0`
 	if err := d.sql.QueryRowContext(ctx, query, uint8(FlagSeen), folderID).Scan(&total, &unread); err != nil {
 		return 0, 0, fmt.Errorf("storage: folder counts %d: %w", folderID, err)
 	}
@@ -170,7 +172,9 @@ func (d *DB) UnreadCount(ctx context.Context, folderIDs []int64) (int, error) {
 	}
 	placeholders, args := inClause(folderIDs)
 	args = append([]any{uint8(FlagSeen)}, args...)
-	query := `SELECT COUNT(*) FROM messages WHERE flags & ? = 0 AND folder_id IN (` + placeholders + `)`
+	// rows the list hides (awaiting expunge after a delete, or snoozed away)
+	// must not count either, or a badge says 3 over an empty folder.
+	query := `SELECT COUNT(*) FROM messages WHERE flags & ? = 0 AND pending_delete = 0 AND snooze_hidden = 0 AND folder_id IN (` + placeholders + `)`
 	var n int
 	if err := d.sql.QueryRowContext(ctx, query, args...).Scan(&n); err != nil {
 		return 0, fmt.Errorf("storage: unread count: %w", err)

@@ -52,6 +52,11 @@
     if (view.key === 'flagged') {
       return showFlagged ? view.totalCount : 0
     }
+    // the unified inbox is the default view and its unread count is already
+    // on each account's inbox and the dock badge; a third copy is noise.
+    if (view.key === 'inbox') {
+      return 0
+    }
     return view.key === 'drafts' ? view.totalCount : view.unreadCount
   }
 
