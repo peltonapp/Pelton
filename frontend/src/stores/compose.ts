@@ -246,16 +246,40 @@ export function replyRecipients(source: Pick<MessageDetail, 'fromName' | 'fromAd
 // recipients. the quoted body and threading references come from the original
 // message.
 export function openReply(detail: MessageDetail, mode: EditorMode, replyAll: boolean): number {
-  const session = blankSession(detail.accountId, mode)
-  Object.assign(session, replyFields(originOf(detail, replyAll ? 'replyAll' : 'reply'), session.mode, ''))
-  composeSessions.update((list) => [...list, session])
-  return session.id
+  return openReplyWith(detail, mode, replyAll ? 'replyAll' : 'reply', '')
 }
 
 // openForward prefills a forward with the original quoted and no recipients.
 export function openForward(detail: MessageDetail, mode: EditorMode): number {
+  return openReplyWith(detail, mode, 'forward', '')
+}
+
+// typedLead turns text typed outside the composer into what goes above the
+// original in a body of the given mode.
+function typedLead(text: string, mode: EditorMode): string {
+  if (text.trim() === '') {
+    return ''
+  }
+  return mode === 'wysiwyg' ? `${textToHtml(text)}<p></p>` : `${text}\n\n`
+}
+
+/**
+ * replySession builds a reply, reply all or forward of a message without
+ * opening a composer for it, with typed (plain text) already written above
+ * the original.
+ */
+export function replySession(detail: MessageDetail, mode: EditorMode, kind: ReplyKind, typed: string): ComposeSession {
   const session = blankSession(detail.accountId, mode)
-  Object.assign(session, replyFields(originOf(detail, 'forward'), session.mode, ''))
+  Object.assign(session, replyFields(originOf(detail, kind), session.mode, typedLead(typed, session.mode)))
+  return session
+}
+
+/**
+ * openReplyWith opens a reply, reply all or forward in the composer, with
+ * typed (plain text) already written above the original, and returns its id.
+ */
+export function openReplyWith(detail: MessageDetail, mode: EditorMode, kind: ReplyKind, typed: string): number {
+  const session = replySession(detail, mode, kind, typed)
   composeSessions.update((list) => [...list, session])
   return session.id
 }

@@ -1,7 +1,8 @@
 <script lang="ts">
   // a progress indicator for places too small for a bar: a ring whose inside
   // fills clockwise from twelve o'clock as the work advances. with no value it
-  // shows a fixed wedge that turns, for work whose length is unknown.
+  // is a faint ring with an arc running round it, for work whose length is
+  // unknown.
 
   /** Progress from 0 to 1, or null when the length of the work is unknown. */
   export let value: number | null = null
@@ -13,7 +14,7 @@
   const radius = 5
   const circumference = 2 * Math.PI * radius
 
-  $: clamped = value === null ? 0.3 : Math.max(0, Math.min(1, value))
+  $: clamped = value === null ? 0 : Math.max(0, Math.min(1, value))
   $: dash = `${clamped * circumference} ${circumference}`
 </script>
 
@@ -29,8 +30,12 @@
   aria-valuemax={100}
   aria-valuenow={value === null ? undefined : Math.round(clamped * 100)}
 >
-  <circle class="ring" cx="12" cy="12" r="10" />
-  <circle class="wedge" cx="12" cy="12" r={radius} stroke-dasharray={dash} />
+  <circle class="ring" class:track={value === null} cx="12" cy="12" r="10" />
+  {#if value === null}
+    <circle class="arc" cx="12" cy="12" r="10" />
+  {:else}
+    <circle class="wedge" cx="12" cy="12" r={radius} stroke-dasharray={dash} />
+  {/if}
 </svg>
 
 <style>
@@ -54,6 +59,19 @@
     transform: rotate(-90deg);
     transform-origin: 50% 50%;
     transition: stroke-dasharray var(--motion-base) var(--ease-out);
+  }
+
+  /* work of unknown length: a faint ring with a short arc running round it. */
+  .ring.track {
+    opacity: 0.25;
+  }
+
+  .arc {
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 2.5;
+    stroke-linecap: round;
+    stroke-dasharray: 18 45;
   }
 
   .spin {

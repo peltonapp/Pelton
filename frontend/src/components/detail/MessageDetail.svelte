@@ -18,8 +18,8 @@
   import { visibleMessageId, hasTabs, activeTabId, tabs, markTabStale, labelTab, closeTab } from '../../stores/tabs'
   import { openMessageId } from '../../stores/selection'
   import { messageDetail, loadMessage, clearMessage } from '../../stores/message'
-  import { setFlagged, deleteMessage, archiveMessage, scanMessage } from '../../lib/api'
-  import { reportArchiveExport, dropDeleted, exportEml } from '../../lib/messageactions'
+  import { setFlagged, deleteMessage, archiveMessage, scanMessage, openMessageWindow } from '../../lib/api'
+  import { reportArchiveExport, dropDeleted, exportEml, markSeen } from '../../lib/messageactions'
   import {
     virusTotal,
     scanning,
@@ -38,13 +38,90 @@
   import { t } from '../../lib/i18n'
   import { get } from 'svelte/store'
   import { tick } from 'svelte'
+  import {
+    IconArrowBackUpDouble,
+    IconArrowForwardUp,
+    IconFlag,
+    IconFlagFilled,
+    IconMailFilled,
+    IconAppWindow,
+    IconPrinter,
+    IconFileExport,
+    IconShieldSearch,
+    IconInfoCircle,
+    IconCode,
+    IconTrash,
+  } from '@tabler/icons-svelte'
+  import Conversation from './Conversation.svelte'
+  import { openContextMenu, type MenuEntry } from '../../stores/contextmenu'
+  import { menuHint } from '../../stores/shortcuts'
+  import { forgetCard } from '../../stores/threads'
   import type { MessageDetail, EditorMode } from '../../lib/types'
 
   // default editor mode for replies and forwards, from settings.
   $: replyMode = $prefs.defaultEditorMode as EditorMode
 
-  let infoOpen = false
-  let sourceOpen = false
+  // the message whose info or source is shown, null while closed. In the
+  // conversation reader it can be any card's.
+  let infoFor: MessageDetail | null = null
+  let sourceFor: number | null = null
+
+  $: newDesign = $prefs.design !== 'classic'
+
+  // onReaderAction runs what a conversation card or the action bar asked for,
+  // on the message it was asked for.
+  function onReaderAction(kind: string, message: MessageDetail): void {
+    switch (kind) {
+      case 'reply':
+        openReply(message, replyMode, false)
+        break
+      case 'replyAll':
+        openReply(message, replyMode, true)
+        break
+      case 'forward':
+        openForward(message, replyMode)
+        break
+      case 'archive':
+        void archive(message)
+        break
+      case 'delete':
+        void remove(message)
+        break
+      case 'reload':
+        if (message.id === $messageDetail.data?.id) {
+          void loadMessage(message.id)
+        } else {
+          forgetCard(message.id)
+        }
+        break
+    }
+  }
+
+  // openReaderMenu offers the rest of what the toolbar of the classic pane
+  // holds, for one message of the conversation.
+  function openReaderMenu(message: MessageDetail, x: number, y: number): void {
+    const entries: MenuEntry[] = [
+      { label: $t('shortcut.replyAll'), icon: IconArrowBackUpDouble, hint: menuHint('reply-all'), action: () => openReply(message, replyMode, true) },
+      { label: $t('action.forward'), icon: IconArrowForwardUp, hint: menuHint('forward'), action: () => openForward(message, replyMode) },
+      'separator',
+      message.flagged
+        ? { label: $t('messageList.unflag'), icon: IconFlag, hint: menuHint('flag'), action: () => void toggleFlag(message) }
+        : { label: $t('messageList.flag'), icon: IconFlagFilled, hint: menuHint('flag'), action: () => void toggleFlag(message) },
+      { label: $t('shortcut.markUnread'), icon: IconMailFilled, hint: menuHint('mark-unread'), action: () => void markSeen(message, false) },
+      'separator',
+      { label: $t('messageList.menu.openInWindow'), icon: IconAppWindow, action: () => void openMessageWindow(message.id, message.subject) },
+      { label: $t('detail.toolbar.print'), icon: IconPrinter, action: () => printMessage(message) },
+      { label: $t('menu.exportEml'), icon: IconFileExport, action: () => void exportEml([message.id]) },
+      ...(canScan
+        ? [{ label: $t('virustotal.scanMessage'), icon: IconShieldSearch, action: () => void runScan(message.id, true, true) }]
+        : []),
+      { label: $t('detail.toolbar.messageInfo'), icon: IconInfoCircle, action: () => (infoFor = message) },
+      { label: $t('detail.toolbar.viewSource'), icon: IconCode, action: () => (sourceFor = message.id) },
+      'separator',
+      { label: $t('action.delete'), icon: IconTrash, danger: true, hint: menuHint('delete-message'), action: () => void remove(message) },
+    ]
+    openContextMenu(x, y, entries)
+  }
 
   // the pane follows whichever message is visible: the active tab's, or the one
   // picked in the list when no tab is active.
@@ -52,8 +129,8 @@
   $: if ($visibleMessageId !== null && $visibleMessageId !== loadedId) {
     loadedId = $visibleMessageId
     // a modal left open belongs to the message that is going away
-    infoOpen = false
-    sourceOpen = false
+    infoFor = null
+    sourceFor = null
     void loadMessage($visibleMessageId)
   }
   $: if ($visibleMessageId === null && loadedId !== -1) {
@@ -286,6 +363,12 @@ ${bodyHtml}
     <Spinner label={$t('detail.loadingMessage')} />
   {:else if $messageDetail.status === 'error'}
     <ErrorState message={$messageDetail.error} onRetry={() => $visibleMessageId && loadMessage($visibleMessageId)} />
+  {:else if $messageDetail.data && newDesign}
+    <Conversation
+      detail={$messageDetail.data}
+      on:action={(e) => onReaderAction(e.detail.kind, e.detail.message)}
+      on:more={(e) => openReaderMenu(e.detail.message, e.detail.x, e.detail.y)}
+    />
   {:else if $messageDetail.data}
     {@const detail = $messageDetail.data}
     <div class="toolbar-bar">
@@ -302,18 +385,10 @@ ${bodyHtml}
         on:toggleFlag={() => toggleFlag(detail)}
         on:print={() => printMessage(detail)}
         on:exportEml={() => void exportEml([detail.id])}
-        on:info={() => (infoOpen = true)}
-        on:source={() => (sourceOpen = true)}
+        on:info={() => (infoFor = detail)}
+        on:source={() => (sourceFor = detail.id)}
       />
     </div>
-
-    {#if infoOpen}
-      <InfoModal {detail} on:close={() => (infoOpen = false)} />
-    {/if}
-
-    {#if sourceOpen}
-      <SourceModal messageId={detail.id} on:close={() => (sourceOpen = false)} />
-    {/if}
 
     <div class="scroll selectable" tabindex="-1" bind:this={scrollEl}>
       <DetailHeader {detail} />
@@ -338,6 +413,14 @@ ${bodyHtml}
       </div>
       <AttachmentList messageId={detail.id} attachments={detail.attachments} />
     </div>
+  {/if}
+
+  {#if infoFor}
+    <InfoModal detail={infoFor} on:close={() => (infoFor = null)} />
+  {/if}
+
+  {#if sourceFor !== null}
+    <SourceModal messageId={sourceFor} on:close={() => (sourceFor = null)} />
   {/if}
 </section>
 

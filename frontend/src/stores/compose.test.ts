@@ -3,7 +3,7 @@ import { get } from 'svelte/store'
 
 vi.mock('../lib/api', () => ({ getSetting: vi.fn(async () => ({ value: '', found: false })), setSetting: vi.fn() }))
 
-import { closeCompose, composeSessions, getSession, openCompose, openDraftSession, openForward, openReply, reopenSession, restoreSession, switchReplyKind, typedPart, updateCompose } from './compose'
+import { closeCompose, composeSessions, getSession, openCompose, openDraftSession, openForward, openReply, openReplyWith, replySession, reopenSession, restoreSession, switchReplyKind, typedPart, updateCompose } from './compose'
 import { buildRequest } from '../lib/mailcompose'
 import { defaultSelection, openMessageId, searchQuery, selection } from './selection'
 import type { ComposeRequest, Draft, EditorMode, MessageDetail, Selection } from '../lib/types'
@@ -138,6 +138,36 @@ describe('switching the reply type', () => {
     updateCompose(id, { subject: 'New topic' })
     switchReplyKind(id, 'forward')
     expect(getSession(id)!.subject).toBe('New topic')
+  })
+})
+
+describe('replies started outside the composer', () => {
+  beforeEach(() => composeSessions.set([]))
+
+  it('records what a forward forwards and nothing for a reply', () => {
+    openForward(detail({ id: 42 }), 'plaintext')
+    expect(buildRequest(last()).forwardOf).toBe(42)
+    openReply(detail({ id: 43 }), 'plaintext', false)
+    expect(buildRequest(last()).forwardOf).toBe(0)
+    openCompose(1, 'plaintext')
+    expect(buildRequest(last()).forwardOf).toBe(0)
+  })
+
+  it('builds a quick reply without opening a composer', () => {
+    const session = replySession(detail({}), 'plaintext', 'reply', 'Sounds good')
+    expect(get(composeSessions)).toEqual([])
+    expect(session.to).toBe('Ann <ann@example.com>')
+    expect(session.subject).toBe('Re: Plans')
+    expect(session.body.startsWith('Sounds good\n\nOn ')).toBe(true)
+    expect(session.body).toContain('> hello')
+    expect(typedPart(session)).toBe('Sounds good\n\n')
+  })
+
+  it('carries typed text into a rich composer as paragraphs', () => {
+    const id = openReplyWith(detail({}), 'wysiwyg', 'replyAll', 'Yes\nsee you')
+    const session = getSession(id)!
+    expect(session.body.startsWith('<p>Yes<br>see you</p><p></p><p>On ')).toBe(true)
+    expect(session.cc).toContain('carol@example.com')
   })
 })
 

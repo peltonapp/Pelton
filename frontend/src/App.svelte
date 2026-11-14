@@ -1610,8 +1610,11 @@
     on:dblclick={titleBarDoubleClick}
   >
     <!-- the app mark sits where a native title bar would put the title, just
-         past the traffic lights -->
-    <img class="titlebar-logo" src={peltonLogo} alt="" draggable="false" />
+         past the traffic lights. the new design's overlays have headers of
+         their own there. -->
+    {#if classic}
+      <img class="titlebar-logo" src={peltonLogo} alt="" draggable="false" />
+    {/if}
   </div>
 {/if}
 
@@ -1903,6 +1906,33 @@
   /* flat: edge to edge, split by hairlines only. */
   :global(:root[data-panes='flat']) .surface {
     border-width: var(--hairline) 0 var(--hairline) var(--hairline);
+  }
+
+  .frame .side-col {
+    position: relative;
+    background: var(--sidebar-bg);
+    border-start-start-radius: var(--pane-radius);
+    border-end-start-radius: var(--pane-radius);
+  }
+
+  /* the folder pane's color runs on under the rounded corners of the surface
+     beside it, so no chrome shows through between the two. */
+  .frame .side-col::after {
+    content: '';
+    position: absolute;
+    inset-block: 0;
+    inset-inline-start: 100%;
+    width: var(--pane-radius);
+    background: var(--sidebar-bg);
+    pointer-events: none;
+  }
+
+  :global(:root[data-panes='soft']) .frame .side-col {
+    border-radius: var(--pane-radius);
+  }
+
+  :global(:root[data-panes='soft']) .frame .side-col::after {
+    display: none;
   }
 
   /* soft: every pane is a rounded panel of its own, with a gap between. */

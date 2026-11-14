@@ -86,7 +86,7 @@ beforeEach(() => {
   clearSelection()
   clearSearch()
   resetQuickFilter()
-  prefs.update((p) => ({ ...p, rowShowAvatar: false, appVimMode: false, design: 'new', quickFilterBar: false }))
+  prefs.update((p) => ({ ...p, rowShowAvatar: false, appVimMode: false, design: 'new', quickFilterBar: false, threadedList: false }))
 })
 
 describe('MessageList in the new design', () => {

@@ -19,7 +19,7 @@
   ]
 </script>
 
-<Card title={$t('design.label')} description={$t('design.hint')} bare>
+<Card id="design" title={$t('design.label')} description={$t('design.hint')} bare>
   <ChoiceCards
     label={$t('design.label')}
     value={$prefs.design}
@@ -39,7 +39,7 @@
   </ChoiceCards>
 </Card>
 
-<Card title={$t('panes.label')} description={$t('panes.description')} bare>
+<Card id="panes" title={$t('panes.label')} description={$t('panes.description')} bare>
   <ChoiceCards
     label={$t('panes.label')}
     value={$prefs.paneStyle}
