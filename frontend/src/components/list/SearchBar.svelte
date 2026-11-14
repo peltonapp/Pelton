@@ -146,9 +146,11 @@
   // emit debounces and dispatches the current free text and chip filter.
   function emit(): void {
     clearTimeout(timer)
+    // the filter goes first: the list only stores it, and runs the search once
+    // on the query event.
     timer = setTimeout(() => {
-      dispatch('search', text.trim())
       dispatch('filter', buildFilter())
+      dispatch('search', text.trim())
     }, 180)
   }
 
@@ -221,8 +223,8 @@
     // just cleared as though they were still applied.
     afterDate = ''
     beforeDate = ''
-    dispatch('search', '')
     dispatch('filter', { ...emptyFilter })
+    dispatch('search', '')
   }
 
   // applyDates turns the popover's picked dates into before/after chips.
