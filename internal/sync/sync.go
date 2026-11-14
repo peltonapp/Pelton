@@ -114,7 +114,13 @@ type FolderSyncResult struct {
 	HasOlder         bool    // the server still holds messages below the sync window
 	Repaired         int     // messages refetched because their cached text was broken
 	RepairedIDs      []int64 // storage ids of those messages, for reindexing
+	// ReplyStateChanged counts cached messages whose answered or forwarded
+	// state this sync changed, so an open list can show it.
+	ReplyStateChanged int
 }
+
+// replyStateFlags are the bits that say a message was answered or forwarded.
+const replyStateFlags = storage.FlagAnswered | storage.FlagForwarded
 
 // SyncAccount syncs every cached folder for an account. A failure on one folder
 // is logged and does not stop the others, so one broken mailbox cannot block a
@@ -419,6 +425,12 @@ func (e *Engine) executePlan(ctx context.Context, folder storage.Folder, plan []
 		if err := ctx.Err(); err != nil {
 			e.log.Warn("sync cancelled mid-folder", "folder", folder.IMAPPath)
 			return
+		}
+
+		if d.Action == ActionAdoptServerFlags || d.Action == ActionPushFlags || d.Action == ActionClearPending {
+			if (localByUID[d.UID].Flags^d.Flags)&replyStateFlags != 0 {
+				res.ReplyStateChanged++
+			}
 		}
 
 		switch d.Action {

@@ -130,6 +130,14 @@ type MessageSummaryDTO struct {
 	// SMIME is the s/mime signature verdict recorded when the message synced.
 	// Empty status means unsigned, which is most mail.
 	SMIME SMIMEDTO `json:"smime"`
+	// ThreadID is the conversation the message belongs to within its account,
+	// 0 until the background threading pass reaches mail cached before
+	// threading existed. Answered and Forwarded mirror \Answered and
+	// $Forwarded, set from the server or when the user replied or forwarded
+	// through Pelton.
+	ThreadID  int64 `json:"threadId"`
+	Answered  bool  `json:"answered"`
+	Forwarded bool  `json:"forwarded"`
 }
 
 // smimeDTO flattens a verified signature for the ui. It carries both PGP and
@@ -229,6 +237,12 @@ type MessageDetailDTO struct {
 	// picked but not reported back. Empty for mail that was right about itself,
 	// which is nearly all of it, and the reader is shown nothing then.
 	CharsetGuess string `json:"charsetGuess"`
+	// ReplyIDs and ForwardIDs are the cached copies of messages the user sent
+	// from Pelton in reply to or as a forward of this one, oldest first, so the
+	// reader can jump to them. A sent message shows up here once its Sent
+	// folder has synced.
+	ReplyIDs   []int64 `json:"replyIds"`
+	ForwardIDs []int64 `json:"forwardIds"`
 }
 
 // TrackingPixelDTO is one remote image the scan thinks exists to report the
@@ -394,6 +408,9 @@ func toSummaryDTO(m storage.Message, accountEmail, folderName string) MessageSum
 		FlagColor:      m.FlagColor,
 		Offline:        m.Offline,
 		SnoozeUntil:    m.SnoozeUntil,
+		ThreadID:       m.ThreadID,
+		Answered:       m.Flags.Has(storage.FlagAnswered),
+		Forwarded:      m.Flags.Has(storage.FlagForwarded),
 		SMIME: SMIMEDTO{
 			Status: m.SMIME.Status,
 			Signer: m.SMIME.Signer,

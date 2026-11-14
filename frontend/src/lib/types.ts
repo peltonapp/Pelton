@@ -168,6 +168,58 @@ export interface MessageSummary {
   senderVip: boolean
   // smime is the signature verdict recorded when the message synced.
   smime: SMIMESignature
+  // threadId is the conversation the message belongs to within its account,
+  // 0 until the background threading pass reaches mail cached before
+  // threading existed.
+  threadId: number
+  // answered and forwarded mirror \Answered and $Forwarded, from the server
+  // or from a reply or forward sent through Pelton.
+  answered: boolean
+  forwarded: boolean
+}
+
+/** ThreadSummary is one conversation row in the threaded list. head is the
+ * newest message of the conversation in the listed folders, which the list is
+ * ordered by. count, unreadCount, participants, hasAttachments and flagged
+ * cover every member, the user's replies in Sent included; Trash and Junk only
+ * count when they are what is listed. answered and forwarded are the head's.
+ * messageIds are the members, oldest first, each message once. threadId is 0
+ * for a message not threaded yet, which is then the only member. */
+export interface ThreadSummary {
+  threadId: number
+  head: MessageSummary
+  count: number
+  unreadCount: number
+  // distinct sender names, newest first, at most four.
+  participants: string[]
+  hasAttachments: boolean
+  flagged: boolean
+  answered: boolean
+  forwarded: boolean
+  messageIds: number[]
+}
+
+/** ThreadList is a page of conversations; total and paging count
+ * conversations, not messages. */
+export interface ThreadList {
+  threads: ThreadSummary[]
+  total: number
+  hasOlder: boolean
+}
+
+/** ThreadMessage is one message of an open conversation. folderRole is the
+ * role of its folder ('inbox', 'sent', 'archive', 'normal' and so on) and
+ * fromMe is true when the user sent it. */
+export interface ThreadMessage extends MessageSummary {
+  folderRole: string
+  fromMe: boolean
+}
+
+/** Thread is an open conversation, oldest message first. Bodies come from
+ * getMessage per message. */
+export interface Thread {
+  threadId: number
+  messages: ThreadMessage[]
 }
 
 // SMIMESignature is a message's s/mime signature verdict. An empty status means
@@ -296,6 +348,11 @@ export interface MessageDetail extends MessageSummary {
   // when it was opened, so the pane can offer the right next step rather than
   // one generic error.
   pgpState: PGPState
+  // replyIds and forwardIds are the cached copies of what the user sent from
+  // Pelton in reply to or as a forward of this message, oldest first. A sent
+  // message appears once its Sent folder has synced.
+  replyIds: number[]
+  forwardIds: number[]
 }
 
 export type PGPState = '' | 'open' | 'locked' | 'nokey' | 'failed'
@@ -374,6 +431,9 @@ export interface ComposeRequest {
   // draftMessageId is the Message-ID of this draft's copy in the server Drafts
   // folder, '' until it has been uploaded.
   draftMessageId: string
+  // forwardOf is the id of the message this one forwards; once sent, that
+  // message is marked forwarded. Leave it out (or 0) for anything else.
+  forwardOf?: number
 }
 
 // ProtectionStatus is what the compose window needs to offer the pgp controls

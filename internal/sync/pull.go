@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/emersion/go-imap/v2"
 
@@ -15,24 +16,29 @@ import (
 )
 
 // imapFlagsToStorage maps the imap flag list to the storage bitmask, keeping
-// only the flags Pelton models. unknown server flags (\Answered, \Draft, custom
-// keywords) are intentionally ignored here.
+// only the flags Pelton models. Other server flags (\Draft, most keywords) are
+// ignored here. Keywords compare without case, as imap defines them.
 func imapFlagsToStorage(flags []imap.Flag) storage.Flag {
 	var out storage.Flag
 	for _, f := range flags {
-		switch f {
-		case imap.FlagSeen:
+		switch {
+		case f == imap.FlagSeen:
 			out |= storage.FlagSeen
-		case imap.FlagFlagged:
+		case f == imap.FlagFlagged:
 			out |= storage.FlagFlagged
-		case imap.FlagDeleted:
+		case f == imap.FlagDeleted:
 			out |= storage.FlagDeleted
+		case f == imap.FlagAnswered:
+			out |= storage.FlagAnswered
+		case strings.EqualFold(string(f), string(imap.FlagForwarded)):
+			out |= storage.FlagForwarded
 		}
 	}
 	return out
 }
 
-// storageFlagsToImap maps the storage bitmask back to imap flags.
+// storageFlagsToImap maps the system flags of the storage bitmask back to
+// imap flags. Keywords are mapped by storageKeywordsToImap.
 func storageFlagsToImap(f storage.Flag) []imap.Flag {
 	var out []imap.Flag
 	if f.Has(storage.FlagSeen) {
@@ -44,7 +50,20 @@ func storageFlagsToImap(f storage.Flag) []imap.Flag {
 	if f.Has(storage.FlagDeleted) {
 		out = append(out, imap.FlagDeleted)
 	}
+	if f.Has(storage.FlagAnswered) {
+		out = append(out, imap.FlagAnswered)
+	}
 	return out
+}
+
+// storageKeywordsToImap maps the keyword bits of the storage bitmask to imap
+// keywords. They are stored apart from the system flags because a server may
+// refuse keywords outright.
+func storageKeywordsToImap(f storage.Flag) []imap.Flag {
+	if f.Has(storage.FlagForwarded) {
+		return []imap.Flag{imap.FlagForwarded}
+	}
+	return nil
 }
 
 // fetchAndStore pulls a full message by uid and inserts it with its

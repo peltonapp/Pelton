@@ -1107,6 +1107,12 @@ export class ComposeRequest {
      */
     "draftMessageId": string;
 
+    /**
+     * ForwardOf is the local id of the message this one forwards, 0 when it
+     * forwards nothing. Once sent, that message is marked forwarded.
+     */
+    "forwardOf": number;
+
     /** Creates a new ComposeRequest instance. */
     constructor($$source: Partial<ComposeRequest> = {}) {
         if (!("accountId" in $$source)) {
@@ -1147,6 +1153,9 @@ export class ComposeRequest {
         }
         if (!("draftMessageId" in $$source)) {
             this["draftMessageId"] = "";
+        }
+        if (!("forwardOf" in $$source)) {
+            this["forwardOf"] = 0;
         }
 
         Object.assign(this, $$source);
@@ -2352,6 +2361,17 @@ export class MessageDetailDTO {
     "smime": SMIMEDTO;
 
     /**
+     * ThreadID is the conversation the message belongs to within its account,
+     * 0 until the background threading pass reaches mail cached before
+     * threading existed. Answered and Forwarded mirror \Answered and
+     * $Forwarded, set from the server or when the user replied or forwarded
+     * through Pelton.
+     */
+    "threadId": number;
+    "answered": boolean;
+    "forwarded": boolean;
+
+    /**
      * MessageID is the bare RFC Message-ID, empty when missing or invalid.
      */
     "messageId": string;
@@ -2431,6 +2451,15 @@ export class MessageDetailDTO {
      */
     "charsetGuess": string;
 
+    /**
+     * ReplyIDs and ForwardIDs are the cached copies of messages the user sent
+     * from Pelton in reply to or as a forward of this one, oldest first, so the
+     * reader can jump to them. A sent message shows up here once its Sent
+     * folder has synced.
+     */
+    "replyIds": number[];
+    "forwardIds": number[];
+
     /** Creates a new MessageDetailDTO instance. */
     constructor($$source: Partial<MessageDetailDTO> = {}) {
         if (!("id" in $$source)) {
@@ -2493,6 +2522,15 @@ export class MessageDetailDTO {
         if (!("smime" in $$source)) {
             this["smime"] = (new SMIMEDTO());
         }
+        if (!("threadId" in $$source)) {
+            this["threadId"] = 0;
+        }
+        if (!("answered" in $$source)) {
+            this["answered"] = false;
+        }
+        if (!("forwarded" in $$source)) {
+            this["forwarded"] = false;
+        }
         if (!("messageId" in $$source)) {
             this["messageId"] = "";
         }
@@ -2547,6 +2585,12 @@ export class MessageDetailDTO {
         if (!("charsetGuess" in $$source)) {
             this["charsetGuess"] = "";
         }
+        if (!("replyIds" in $$source)) {
+            this["replyIds"] = [];
+        }
+        if (!("forwardIds" in $$source)) {
+            this["forwardIds"] = [];
+        }
 
         Object.assign(this, $$source);
     }
@@ -2556,37 +2600,45 @@ export class MessageDetailDTO {
      */
     static createFrom($$source: any = {}): MessageDetailDTO {
         const $$createField19_0 = $$createType15;
-        const $$createField21_0 = $$createType0;
-        const $$createField22_0 = $$createType0;
-        const $$createField31_0 = $$createType0;
-        const $$createField32_0 = $$createType17;
-        const $$createField33_0 = $$createType19;
-        const $$createField34_0 = $$createType20;
-        const $$createField36_0 = $$createType22;
+        const $$createField24_0 = $$createType0;
+        const $$createField25_0 = $$createType0;
+        const $$createField34_0 = $$createType0;
+        const $$createField35_0 = $$createType17;
+        const $$createField36_0 = $$createType19;
+        const $$createField37_0 = $$createType20;
+        const $$createField39_0 = $$createType22;
+        const $$createField41_0 = $$createType23;
+        const $$createField42_0 = $$createType23;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("smime" in $$parsedSource) {
             $$parsedSource["smime"] = $$createField19_0($$parsedSource["smime"]);
         }
         if ("inReplyTo" in $$parsedSource) {
-            $$parsedSource["inReplyTo"] = $$createField21_0($$parsedSource["inReplyTo"]);
+            $$parsedSource["inReplyTo"] = $$createField24_0($$parsedSource["inReplyTo"]);
         }
         if ("references" in $$parsedSource) {
-            $$parsedSource["references"] = $$createField22_0($$parsedSource["references"]);
+            $$parsedSource["references"] = $$createField25_0($$parsedSource["references"]);
         }
         if ("remoteHosts" in $$parsedSource) {
-            $$parsedSource["remoteHosts"] = $$createField31_0($$parsedSource["remoteHosts"]);
+            $$parsedSource["remoteHosts"] = $$createField34_0($$parsedSource["remoteHosts"]);
         }
         if ("trackingPixels" in $$parsedSource) {
-            $$parsedSource["trackingPixels"] = $$createField32_0($$parsedSource["trackingPixels"]);
+            $$parsedSource["trackingPixels"] = $$createField35_0($$parsedSource["trackingPixels"]);
         }
         if ("attachments" in $$parsedSource) {
-            $$parsedSource["attachments"] = $$createField33_0($$parsedSource["attachments"]);
+            $$parsedSource["attachments"] = $$createField36_0($$parsedSource["attachments"]);
         }
         if ("phishing" in $$parsedSource) {
-            $$parsedSource["phishing"] = $$createField34_0($$parsedSource["phishing"]);
+            $$parsedSource["phishing"] = $$createField37_0($$parsedSource["phishing"]);
         }
         if ("unsubscribe" in $$parsedSource) {
-            $$parsedSource["unsubscribe"] = $$createField36_0($$parsedSource["unsubscribe"]);
+            $$parsedSource["unsubscribe"] = $$createField39_0($$parsedSource["unsubscribe"]);
+        }
+        if ("replyIds" in $$parsedSource) {
+            $$parsedSource["replyIds"] = $$createField41_0($$parsedSource["replyIds"]);
+        }
+        if ("forwardIds" in $$parsedSource) {
+            $$parsedSource["forwardIds"] = $$createField42_0($$parsedSource["forwardIds"]);
         }
         return new MessageDetailDTO($$parsedSource as Partial<MessageDetailDTO>);
     }
@@ -2752,6 +2804,17 @@ export class MessageSummaryDTO {
      */
     "smime": SMIMEDTO;
 
+    /**
+     * ThreadID is the conversation the message belongs to within its account,
+     * 0 until the background threading pass reaches mail cached before
+     * threading existed. Answered and Forwarded mirror \Answered and
+     * $Forwarded, set from the server or when the user replied or forwarded
+     * through Pelton.
+     */
+    "threadId": number;
+    "answered": boolean;
+    "forwarded": boolean;
+
     /** Creates a new MessageSummaryDTO instance. */
     constructor($$source: Partial<MessageSummaryDTO> = {}) {
         if (!("id" in $$source)) {
@@ -2813,6 +2876,15 @@ export class MessageSummaryDTO {
         }
         if (!("smime" in $$source)) {
             this["smime"] = (new SMIMEDTO());
+        }
+        if (!("threadId" in $$source)) {
+            this["threadId"] = 0;
+        }
+        if (!("answered" in $$source)) {
+            this["answered"] = false;
+        }
+        if (!("forwarded" in $$source)) {
+            this["forwarded"] = false;
         }
 
         Object.assign(this, $$source);
@@ -4223,6 +4295,304 @@ export class ThemeInfoDTO {
 }
 
 /**
+ * ThreadDTO is an open conversation, its messages in date order, oldest first.
+ */
+export class ThreadDTO {
+    "threadId": number;
+    "messages": ThreadMessageDTO[];
+
+    /** Creates a new ThreadDTO instance. */
+    constructor($$source: Partial<ThreadDTO> = {}) {
+        if (!("threadId" in $$source)) {
+            this["threadId"] = 0;
+        }
+        if (!("messages" in $$source)) {
+            this["messages"] = [];
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new ThreadDTO instance from a string or object.
+     */
+    static createFrom($$source: any = {}): ThreadDTO {
+        const $$createField1_0 = $$createType40;
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        if ("messages" in $$parsedSource) {
+            $$parsedSource["messages"] = $$createField1_0($$parsedSource["messages"]);
+        }
+        return new ThreadDTO($$parsedSource as Partial<ThreadDTO>);
+    }
+}
+
+/**
+ * ThreadListDTO is a page of conversations plus the total for paging. HasOlder
+ * means the same as on MessageListDTO.
+ */
+export class ThreadListDTO {
+    "threads": ThreadSummaryDTO[];
+    "total": number;
+    "hasOlder": boolean;
+
+    /** Creates a new ThreadListDTO instance. */
+    constructor($$source: Partial<ThreadListDTO> = {}) {
+        if (!("threads" in $$source)) {
+            this["threads"] = [];
+        }
+        if (!("total" in $$source)) {
+            this["total"] = 0;
+        }
+        if (!("hasOlder" in $$source)) {
+            this["hasOlder"] = false;
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new ThreadListDTO instance from a string or object.
+     */
+    static createFrom($$source: any = {}): ThreadListDTO {
+        const $$createField0_0 = $$createType42;
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        if ("threads" in $$parsedSource) {
+            $$parsedSource["threads"] = $$createField0_0($$parsedSource["threads"]);
+        }
+        return new ThreadListDTO($$parsedSource as Partial<ThreadListDTO>);
+    }
+}
+
+/**
+ * ThreadMessageDTO is one message of an open conversation. FolderRole is the
+ * role of the folder it sits in ("inbox", "sent", "archive", "normal" and so
+ * on) and FromMe is true when the user sent it.
+ */
+export class ThreadMessageDTO {
+    "id": number;
+    "accountId": number;
+    "folderId": number;
+    "accountEmail": string;
+    "folderName": string;
+    "subject": string;
+    "fromName": string;
+    "fromAddress": string;
+    "snippet": string;
+    "date": string;
+    "seen": boolean;
+    "flagged": boolean;
+    "hasAttachments": boolean;
+    "pgp": string;
+    "auth": string;
+
+    /**
+     * FlagColor is 0 (none) or 1..8. Offline marks a user-pinned message.
+     * SnoozeUntil is a stored timestamp (empty when not snoozed).
+     */
+    "flagColor": number;
+    "offline": boolean;
+    "snoozeUntil": string;
+
+    /**
+     * SenderVIP is true when this message's from-address is on the VIP list, so
+     * the ui can mark it with a star (#126).
+     */
+    "senderVip": boolean;
+
+    /**
+     * SMIME is the s/mime signature verdict recorded when the message synced.
+     * Empty status means unsigned, which is most mail.
+     */
+    "smime": SMIMEDTO;
+
+    /**
+     * ThreadID is the conversation the message belongs to within its account,
+     * 0 until the background threading pass reaches mail cached before
+     * threading existed. Answered and Forwarded mirror \Answered and
+     * $Forwarded, set from the server or when the user replied or forwarded
+     * through Pelton.
+     */
+    "threadId": number;
+    "answered": boolean;
+    "forwarded": boolean;
+    "folderRole": string;
+    "fromMe": boolean;
+
+    /** Creates a new ThreadMessageDTO instance. */
+    constructor($$source: Partial<ThreadMessageDTO> = {}) {
+        if (!("id" in $$source)) {
+            this["id"] = 0;
+        }
+        if (!("accountId" in $$source)) {
+            this["accountId"] = 0;
+        }
+        if (!("folderId" in $$source)) {
+            this["folderId"] = 0;
+        }
+        if (!("accountEmail" in $$source)) {
+            this["accountEmail"] = "";
+        }
+        if (!("folderName" in $$source)) {
+            this["folderName"] = "";
+        }
+        if (!("subject" in $$source)) {
+            this["subject"] = "";
+        }
+        if (!("fromName" in $$source)) {
+            this["fromName"] = "";
+        }
+        if (!("fromAddress" in $$source)) {
+            this["fromAddress"] = "";
+        }
+        if (!("snippet" in $$source)) {
+            this["snippet"] = "";
+        }
+        if (!("date" in $$source)) {
+            this["date"] = "";
+        }
+        if (!("seen" in $$source)) {
+            this["seen"] = false;
+        }
+        if (!("flagged" in $$source)) {
+            this["flagged"] = false;
+        }
+        if (!("hasAttachments" in $$source)) {
+            this["hasAttachments"] = false;
+        }
+        if (!("pgp" in $$source)) {
+            this["pgp"] = "";
+        }
+        if (!("auth" in $$source)) {
+            this["auth"] = "";
+        }
+        if (!("flagColor" in $$source)) {
+            this["flagColor"] = 0;
+        }
+        if (!("offline" in $$source)) {
+            this["offline"] = false;
+        }
+        if (!("snoozeUntil" in $$source)) {
+            this["snoozeUntil"] = "";
+        }
+        if (!("senderVip" in $$source)) {
+            this["senderVip"] = false;
+        }
+        if (!("smime" in $$source)) {
+            this["smime"] = (new SMIMEDTO());
+        }
+        if (!("threadId" in $$source)) {
+            this["threadId"] = 0;
+        }
+        if (!("answered" in $$source)) {
+            this["answered"] = false;
+        }
+        if (!("forwarded" in $$source)) {
+            this["forwarded"] = false;
+        }
+        if (!("folderRole" in $$source)) {
+            this["folderRole"] = "";
+        }
+        if (!("fromMe" in $$source)) {
+            this["fromMe"] = false;
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new ThreadMessageDTO instance from a string or object.
+     */
+    static createFrom($$source: any = {}): ThreadMessageDTO {
+        const $$createField19_0 = $$createType15;
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        if ("smime" in $$parsedSource) {
+            $$parsedSource["smime"] = $$createField19_0($$parsedSource["smime"]);
+        }
+        return new ThreadMessageDTO($$parsedSource as Partial<ThreadMessageDTO>);
+    }
+}
+
+/**
+ * ThreadSummaryDTO is one conversation row in the threaded list. Head is the
+ * newest message of the conversation in the listed folders, which is also what
+ * the list is ordered by. Count, UnreadCount, Participants, HasAttachments and
+ * Flagged cover every member, including the user's replies in other folders of
+ * the account; Trash and Junk count only when they are what is listed.
+ * Answered and Forwarded are the head's. MessageIDs are the members' ids in
+ * date order, oldest first, each message once however many folders hold it.
+ * ThreadID is 0 for a message the threading pass has not reached yet, which is
+ * then the only member.
+ */
+export class ThreadSummaryDTO {
+    "threadId": number;
+    "head": MessageSummaryDTO;
+    "count": number;
+    "unreadCount": number;
+    "participants": string[];
+    "hasAttachments": boolean;
+    "flagged": boolean;
+    "answered": boolean;
+    "forwarded": boolean;
+    "messageIds": number[];
+
+    /** Creates a new ThreadSummaryDTO instance. */
+    constructor($$source: Partial<ThreadSummaryDTO> = {}) {
+        if (!("threadId" in $$source)) {
+            this["threadId"] = 0;
+        }
+        if (!("head" in $$source)) {
+            this["head"] = (new MessageSummaryDTO());
+        }
+        if (!("count" in $$source)) {
+            this["count"] = 0;
+        }
+        if (!("unreadCount" in $$source)) {
+            this["unreadCount"] = 0;
+        }
+        if (!("participants" in $$source)) {
+            this["participants"] = [];
+        }
+        if (!("hasAttachments" in $$source)) {
+            this["hasAttachments"] = false;
+        }
+        if (!("flagged" in $$source)) {
+            this["flagged"] = false;
+        }
+        if (!("answered" in $$source)) {
+            this["answered"] = false;
+        }
+        if (!("forwarded" in $$source)) {
+            this["forwarded"] = false;
+        }
+        if (!("messageIds" in $$source)) {
+            this["messageIds"] = [];
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new ThreadSummaryDTO instance from a string or object.
+     */
+    static createFrom($$source: any = {}): ThreadSummaryDTO {
+        const $$createField1_0 = $$createType24;
+        const $$createField4_0 = $$createType0;
+        const $$createField9_0 = $$createType23;
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        if ("head" in $$parsedSource) {
+            $$parsedSource["head"] = $$createField1_0($$parsedSource["head"]);
+        }
+        if ("participants" in $$parsedSource) {
+            $$parsedSource["participants"] = $$createField4_0($$parsedSource["participants"]);
+        }
+        if ("messageIds" in $$parsedSource) {
+            $$parsedSource["messageIds"] = $$createField9_0($$parsedSource["messageIds"]);
+        }
+        return new ThreadSummaryDTO($$parsedSource as Partial<ThreadSummaryDTO>);
+    }
+}
+
+/**
  * ThunderbirdAccountDTO is one account read out of a Thunderbird profile.
  * Password is never read: Thunderbird keeps its own, and the user
  * re-authenticates once after importing.
@@ -4353,8 +4723,8 @@ export class ThunderbirdProfileDTO {
      * Creates a new ThunderbirdProfileDTO instance from a string or object.
      */
     static createFrom($$source: any = {}): ThunderbirdProfileDTO {
-        const $$createField2_0 = $$createType40;
-        const $$createField3_0 = $$createType42;
+        const $$createField2_0 = $$createType44;
+        const $$createField3_0 = $$createType46;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("accounts" in $$parsedSource) {
             $$parsedSource["accounts"] = $$createField2_0($$parsedSource["accounts"]);
@@ -5836,7 +6206,11 @@ const $$createType35 = $Create.Map($Create.Any, $Create.Any);
 const $$createType36 = ThemeInfoDTO.createFrom;
 const $$createType37 = themepack$0.CSSFile.createFrom;
 const $$createType38 = $Create.Array($$createType37);
-const $$createType39 = ThunderbirdAccountDTO.createFrom;
+const $$createType39 = ThreadMessageDTO.createFrom;
 const $$createType40 = $Create.Array($$createType39);
-const $$createType41 = ThunderbirdFolderDTO.createFrom;
+const $$createType41 = ThreadSummaryDTO.createFrom;
 const $$createType42 = $Create.Array($$createType41);
+const $$createType43 = ThunderbirdAccountDTO.createFrom;
+const $$createType44 = $Create.Array($$createType43);
+const $$createType45 = ThunderbirdFolderDTO.createFrom;
+const $$createType46 = $Create.Array($$createType45);

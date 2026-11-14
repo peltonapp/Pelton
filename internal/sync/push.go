@@ -13,7 +13,9 @@ import (
 // the cleared ones and clears the pending marker.
 //
 // the server push is STORE +FLAGS and -FLAGS, never a full replace, so flags we
-// do not model (\Answered, \Draft, keywords) are left untouched.
+// do not model (\Draft, other keywords) are left untouched. Keywords go in a
+// store of their own whose failure is only logged: a server that takes no
+// keywords must not keep \Seen from ever reaching it.
 func (e *Engine) pushFlags(ctx context.Context, state storage.MessageState, flags, remove storage.Flag) error {
 	if err := e.store.SetMessageFlags(ctx, state.ID, flags); err != nil {
 		return fmt.Errorf("sync: store merged flags for uid %d: %w", state.UID, err)
@@ -26,6 +28,16 @@ func (e *Engine) pushFlags(ctx context.Context, state storage.MessageState, flag
 	if imapFlags := storageFlagsToImap(remove); len(imapFlags) > 0 {
 		if err := e.client.RemoveFlags(imap.UID(state.UID), imapFlags...); err != nil {
 			return fmt.Errorf("sync: clear flags for uid %d: %w", state.UID, err)
+		}
+	}
+	if keywords := storageKeywordsToImap(flags); len(keywords) > 0 {
+		if err := e.client.AddFlags(imap.UID(state.UID), keywords...); err != nil {
+			e.log.Warn("server refused keywords", "uid", state.UID, "err", err)
+		}
+	}
+	if keywords := storageKeywordsToImap(remove); len(keywords) > 0 {
+		if err := e.client.RemoveFlags(imap.UID(state.UID), keywords...); err != nil {
+			e.log.Warn("server refused keywords", "uid", state.UID, "err", err)
 		}
 	}
 	if err := e.store.ClearFlagsPending(ctx, state.ID); err != nil {
