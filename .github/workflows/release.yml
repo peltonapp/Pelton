@@ -40,7 +40,7 @@ permissions:
   contents: write
 
 env:
-  GO_VERSION: "1.25"
+  GO_VERSION: "1.27"
   # The release these installers belong to, empty when the run is only
   # exercising the build steps. Job-level `if:` cannot read env, so the same
   # condition is spelled out on the jobs that need it.
@@ -114,9 +114,6 @@ jobs:
           cache: pnpm
           cache-dependency-path: frontend/pnpm-lock.yaml
 
-      - name: Install wails CLI
-        run: go install github.com/wailsapp/wails/v2/cmd/wails@$(go list -m -f '{{.Version}}' github.com/wailsapp/wails/v2)
-
       - name: Install dependencies
         run: |
           go mod download
@@ -126,19 +123,13 @@ jobs:
         id: version
         run: echo "version=${RELEASE_TAG:-dev}" >> "$GITHUB_OUTPUT"
 
-      # Stamp info.productVersion so the bundle's Info.plist
+      # build.sh also stamps the version into the bundle's Info.plist
       # (CFBundleVersion / CFBundleShortVersionString, i.e. Finder's Get
-      # Info) matches the app instead of the checked-in dev placeholder.
-      # Without this, every release reported the same bundle version and a
-      # stale app copy was indistinguishable from the new one (#83).
-      - name: Stamp product version
-        run: |
-          ver="${{ steps.version.outputs.version }}"
-          jq --arg v "${ver#v}" '.info.productVersion = $v' wails.json > wails.json.tmp
-          mv wails.json.tmp wails.json
-
+      # Info), so a stale app copy can be told apart from the new one (#83).
       - name: Build (${{ matrix.arch }})
-        run: wails build -platform darwin/${{ matrix.arch }} -ldflags "-X main.version=${{ steps.version.outputs.version }}"
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: scripts/build.sh
 
       # Best-effort: the Liquid Glass dynamic icon needs actool from a recent
       # enough Xcode (macOS 26 / Xcode 26). If the hosted runner's Xcode is
@@ -236,9 +227,6 @@ jobs:
           cache: pnpm
           cache-dependency-path: frontend/pnpm-lock.yaml
 
-      - name: Install wails CLI
-        run: go install github.com/wailsapp/wails/v2/cmd/wails@$(go list -m -f '{{.Version}}' github.com/wailsapp/wails/v2)
-
       - name: Install NSIS
         shell: pwsh
         run: |
@@ -259,28 +247,15 @@ jobs:
         shell: bash
         run: echo "version=${RELEASE_TAG:-dev}" >> "$GITHUB_OUTPUT"
 
-      # Stamp info.productVersion into the exe's version resources and the
-      # NSIS installer metadata, same reasoning as the macOS job (#83).
-      # NSIS VIProductVersion/VIFileVersion and the exe manifest require a
-      # 4-part numeric version; the bundled Windows templates append ".0" to
-      # info.productVersion, so pad it to exactly 3 numeric parts here. That
-      # keeps SemVer tags working ("1.0.9" -> "1.0.9.0") and fixes CalVer tags
-      # with fewer parts ("2026.3" -> "2026.3.0" -> "2026.3.0.0").
-      - name: Stamp product version
-        shell: bash
-        run: |
-          ver="${{ steps.version.outputs.version }}"
-          v="${ver#v}"
-          num="${v%%-*}"
-          [[ "$num" =~ ^[0-9]+(\.[0-9]+)*$ ]] || num="0.0.0"
-          IFS='.' read -ra parts <<< "$num"
-          while [ "${#parts[@]}" -lt 3 ]; do parts+=("0"); done
-          pv="${parts[0]}.${parts[1]}.${parts[2]}"
-          jq --arg v "$pv" '.info.productVersion = $v' wails.json > wails.json.tmp
-          mv wails.json.tmp wails.json
-
+      # build.sh stamps the version into the exe's version resources and the
+      # NSIS installer metadata, same reasoning as the macOS job (#83), padded
+      # to the numeric x.y.z Windows requires ("2026.3" -> "2026.3.0").
       - name: Build + NSIS installer
-        run: wails build -platform windows/amd64 -nsis -ldflags "-X main.version=${{ steps.version.outputs.version }}"
+        shell: bash
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+          NSIS: "1"
+        run: scripts/build.sh
 
       # Releases are signed with release-signing only, and builds without a tag
       # with test-signing only. The code signing policy promises the release
@@ -322,8 +297,8 @@ jobs:
           wait-for-completion: true
           output-artifact-directory: signed/exe
 
-      # wails build left the rendered NSIS project behind, so makensis runs it
-      # again the way wails does, only around the signed exe.
+      # build.sh left the rendered NSIS project behind, so makensis runs it
+      # again the way build.sh does, only around the signed exe.
       - name: Rebuild the installer around the signed exe
         if: steps.signing.outputs.sign == 'true'
         shell: pwsh
@@ -437,9 +412,6 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.1-dev build-essential pkg-config rpm
 
-      - name: Install wails CLI
-        run: go install github.com/wailsapp/wails/v2/cmd/wails@$(go list -m -f '{{.Version}}' github.com/wailsapp/wails/v2)
-
       - name: Install nfpm
         run: go install github.com/goreleaser/nfpm/v2/cmd/nfpm@latest
 
@@ -457,7 +429,9 @@ jobs:
           echo "pkg_version=${raw#v}" >> "$GITHUB_OUTPUT"
 
       - name: Build
-        run: wails build -platform linux/amd64 -tags webkit2_41 -ldflags "-X main.version=${{ steps.version.outputs.version }}"
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: scripts/build.sh
 
       - name: Stage raw binary
         run: cp "build/bin/Pelton" "build/bin/Pelton-${{ steps.version.outputs.version }}-linux-amd64"
@@ -521,9 +495,8 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.1-dev build-essential pkg-config rpm python3-pip
 
-      - name: Install wails CLI + copr-cli
+      - name: Install copr-cli
         run: |
-          go install github.com/wailsapp/wails/v2/cmd/wails@$(go list -m -f '{{.Version}}' github.com/wailsapp/wails/v2)
           pip install --user copr-cli
           echo "$HOME/.local/bin" >> "$GITHUB_PATH"
 
@@ -539,7 +512,9 @@ jobs:
           echo "rpm_version=${raw#v}" >> "$GITHUB_OUTPUT"
 
       - name: Build
-        run: wails build -platform linux/amd64 -tags webkit2_41 -ldflags "-X main.version=${{ steps.version.outputs.rpm_version }}"
+        env:
+          VERSION: ${{ steps.version.outputs.rpm_version }}
+        run: scripts/build.sh
 
       - name: Assemble source tarball
         env:

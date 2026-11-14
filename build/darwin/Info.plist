@@ -8,7 +8,7 @@
         <key>CFBundleExecutable</key>
         <string>{{.OutputFilename}}</string>
         <key>CFBundleIdentifier</key>
-        <string>sh.arne.pelton</string>
+        <string>sh.arne.pelton{{if .Nightly}}.nightly{{end}}</string>
         <key>CFBundleVersion</key>
         <string>{{.Info.ProductVersion}}</string>
         <key>CFBundleGetInfoString</key>
@@ -17,14 +17,17 @@
         <string>{{.Info.ProductVersion}}</string>
         <key>CFBundleIconFile</key>
         <string>iconfile</string>
+        {{if not .Nightly}}
         <!-- CFBundleIconName points at the "pelton" app icon compiled from the
              Liquid Glass build/darwin/pelton.icon into Assets.car by
              scripts/build-icon.sh (make icon). macOS prefers it over the static
-             iconfile.icns on systems that support the dynamic icon. -->
+             iconfile.icns on systems that support the dynamic icon. A nightly
+             has no Liquid Glass icon and uses iconfile.icns. -->
         <key>CFBundleIconName</key>
         <string>pelton</string>
+        {{end}}
         <key>LSMinimumSystemVersion</key>
-        <string>10.13.0</string>
+        <string>13.0.0</string>
         <key>NSHighResolutionCapable</key>
         <string>true</string>
         <key>NSHumanReadableCopyright</key>

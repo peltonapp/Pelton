@@ -2,7 +2,7 @@
 # build-icon.sh compiles the macOS "Liquid Glass" app icon (Icon Composer
 # build/darwin/pelton.icon) into an Assets.car + a partial Info.plist using
 # actool, then copies them next to the built .app so macOS 26 renders the new
-# dynamic icon. Run after `wails build` (the .app must already exist).
+# dynamic icon. Run after `make build` (the .app must already exist).
 #
 # Prerequisite (one time, needs admin): the actool image-compiler helper must be
 # installed, otherwise it fails with "A required plugin failed to load":

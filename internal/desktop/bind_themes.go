@@ -7,8 +7,6 @@ import (
 	"path/filepath"
 	"strings"
 
-	wailsruntime "github.com/wailsapp/wails/v2/pkg/runtime"
-
 	"github.com/peltonapp/Pelton/internal/themepack"
 )
 
@@ -297,7 +295,7 @@ func (a *App) ExportTheme(id string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	dest, err := wailsruntime.SaveFileDialog(a.ctx, wailsruntime.SaveDialogOptions{
+	dest, err := a.saveFileDialog(saveDialogOptions{
 		DefaultFilename: themepack.ContainerFileName(t.pkg.Manifest.Name),
 		Title:           "Export theme",
 	})

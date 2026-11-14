@@ -6,7 +6,7 @@
   import { IconExternalLink } from '@tabler/icons-svelte'
   import { t } from '../../lib/i18n'
   import { termsUrl } from '../../lib/liability'
-  import { BrowserOpenURL } from '../../../wailsjs/runtime/runtime'
+  import { openURL } from '../../lib/browser'
 
   /** whether the user has ticked the acknowledgement. */
   export let accepted = false
@@ -17,7 +17,7 @@
 <p class="body">{$t('liability.limits')}</p>
 <p class="body">{$t('liability.development')}</p>
 
-<button type="button" class="terms" on:click={() => BrowserOpenURL(termsUrl())}>
+<button type="button" class="terms" on:click={() => openURL(termsUrl())}>
   {$t('liability.link')}
   <IconExternalLink size={14} stroke={1.7} />
 </button>

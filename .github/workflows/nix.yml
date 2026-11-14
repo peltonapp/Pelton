@@ -63,8 +63,11 @@ jobs:
             if nix build -L --no-link .#pelton 2> build.log; then
               break
             fi
-            specified=$(grep -oE 'specified: +sha256-[A-Za-z0-9+/=]+' build.log | head -1 | grep -oE 'sha256-.*')
-            got=$(grep -oE 'got: +sha256-[A-Za-z0-9+/=]+' build.log | head -1 | grep -oE 'sha256-.*')
+            # || true: under bash -e a grep that finds nothing would end the
+            # step here, before the log of a failure that is not a stale hash
+            # is printed below.
+            specified=$(grep -oE 'specified: +sha256-[A-Za-z0-9+/=]+' build.log | head -1 | grep -oE 'sha256-.*' || true)
+            got=$(grep -oE 'got: +sha256-[A-Za-z0-9+/=]+' build.log | head -1 | grep -oE 'sha256-.*' || true)
             if [ -z "$specified" ] || [ -z "$got" ]; then
               tail -n 80 build.log
               echo "::error::The Nix build failed for a reason other than a stale hash."
