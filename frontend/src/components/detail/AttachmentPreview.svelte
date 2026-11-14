@@ -69,8 +69,14 @@
     pdfBytes = null
     errorText = ''
     releaseUrl()
+    const key = lastKey
     try {
       const c = await readAttachment(target.messageId, target.attachment.id)
+      // the preview was closed or moved to another file while this one was
+      // read; its bytes would land under the wrong name
+      if (key !== lastKey) {
+        return
+      }
       content = c
       const k = previewKind(target.attachment.contentType, target.attachment.filename)
       if (c.data && k === 'pdf') {
@@ -79,9 +85,13 @@
         objectUrl = URL.createObjectURL(new Blob([base64ToBytes(c.data)], { type: c.contentType || 'application/octet-stream' }))
       }
     } catch (err) {
-      errorText = errorMessage(err)
+      if (key === lastKey) {
+        errorText = errorMessage(err)
+      }
     } finally {
-      loading = false
+      if (key === lastKey) {
+        loading = false
+      }
     }
   }
 

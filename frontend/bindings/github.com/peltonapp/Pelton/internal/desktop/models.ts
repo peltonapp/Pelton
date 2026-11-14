@@ -4738,6 +4738,12 @@ export class UIPrefsDTO {
     "markReadOnOpen": boolean;
 
     /**
+     * OpenOnArrow opens the message the arrow keys move to in the list, instead
+     * of only highlighting it until Enter.
+     */
+    "openOnArrow": boolean;
+
+    /**
      * SignatureAboveQuote puts a reply's footer between the reply and the
      * quoted original instead of below the quote.
      */
@@ -5018,6 +5024,9 @@ export class UIPrefsDTO {
         }
         if (!("markReadOnOpen" in $$source)) {
             this["markReadOnOpen"] = false;
+        }
+        if (!("openOnArrow" in $$source)) {
+            this["openOnArrow"] = false;
         }
         if (!("signatureAboveQuote" in $$source)) {
             this["signatureAboveQuote"] = false;

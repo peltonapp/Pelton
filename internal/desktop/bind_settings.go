@@ -149,6 +149,7 @@ const (
 	settingStatusUnread = "status_unread"
 	// opening a message marks it read (#517). On by default.
 	settingMarkReadOnOpen = "mark_read_on_open"
+	settingOpenOnArrow    = "open_on_arrow"
 	// a reply's footer goes above the quoted original (#512). Off by default.
 	settingSignatureAboveQuote = "signature_above_quote"
 	// what the window's close button does: "background" (default) or "quit".
@@ -406,6 +407,9 @@ type UIPrefsDTO struct {
 	StatusUnread bool `json:"statusUnread"`
 	// MarkReadOnOpen marks a message read when it is opened in the list.
 	MarkReadOnOpen bool `json:"markReadOnOpen"`
+	// OpenOnArrow opens the message the arrow keys move to in the list, instead
+	// of only highlighting it until Enter.
+	OpenOnArrow bool `json:"openOnArrow"`
 	// SignatureAboveQuote puts a reply's footer between the reply and the
 	// quoted original instead of below the quote.
 	SignatureAboveQuote bool `json:"signatureAboveQuote"`
@@ -522,6 +526,7 @@ func (a *App) GetUIPrefs() (UIPrefsDTO, error) {
 		StatusClock:                a.boolSetting(settingStatusClock, true),
 		StatusUnread:               a.boolSetting(settingStatusUnread, true),
 		MarkReadOnOpen:             a.boolSetting(settingMarkReadOnOpen, true),
+		OpenOnArrow:                a.boolSetting(settingOpenOnArrow, false),
 		SignatureAboveQuote:        a.boolSetting(settingSignatureAboveQuote, false),
 		CloseAction:                a.stringSetting(settingCloseAction, closeActionBackground),
 		StartHidden:                a.startHiddenEnabled(),

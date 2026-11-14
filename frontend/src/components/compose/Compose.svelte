@@ -548,7 +548,8 @@
       session.cc.trim().length > 0 ||
       session.bcc.trim().length > 0 ||
       session.subject.trim().length > 0 ||
-      session.body.trim().length > 0
+      session.body.trim().length > 0 ||
+      session.attachments.length > 0
     )
   }
 
@@ -603,7 +604,9 @@
   <!-- svelte-ignore a11y-click-events-have-key-events a11y-no-static-element-interactions -->
   <header class="head" on:dblclick={() => !$composeInWindow && toggleMinimize()}>
     <span class="title">{session.subject || $t('compose.title.untitled')}</span>
-    <div class="win">
+    <!-- a quick second click on a window button must not also count as a
+         double-click on the bar -->
+    <div class="win" on:dblclick|stopPropagation role="presentation">
       {#if !$composeInWindow}
         <button type="button" class="win-btn" aria-label={$t('compose.window.minimize')} title={$t('compose.window.minimize')} on:click={toggleMinimize}>
           <IconMinus size={15} stroke={1.8} />
@@ -711,7 +714,7 @@
           on:change={(e) => setBody(e.detail)}
         />
       {:else}
-        <div class="editor-loading">Loading editor…</div>
+        <div class="editor-loading">{$t('compose.editor.loading')}</div>
       {/if}
     </div>
 

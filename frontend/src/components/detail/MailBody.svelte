@@ -38,6 +38,9 @@
     lastId = detail.id
     remoteLoaded = detail.remoteAllowed
     frameHeight = 320
+    pixelsBlocked = false
+    pixelMenu = null
+    pixelDetails = false
   }
 
   $: senderLabel = displayName(detail.fromName, detail.fromAddress)
@@ -167,7 +170,17 @@
     return crypto.randomUUID().replace(/-/g, '')
   }
 
-  $: srcdoc = buildSrcdoc(detail.bodyHtmlSafe, remoteLoaded, $prefs.messageFontSize, $prefs.bodyFont, makeNonce(), canScan)
+  // one nonce per message: drawing a fresh one on every update made the
+  // document a new string each time, and the frame reloaded when a flag was
+  // toggled or the pane re-rendered for any other reason.
+  let nonce = makeNonce()
+  let nonceFor = -1
+  $: if (detail.id !== nonceFor) {
+    nonceFor = detail.id
+    nonce = makeNonce()
+  }
+
+  $: srcdoc = buildSrcdoc(detail.bodyHtmlSafe, remoteLoaded, $prefs.messageFontSize, $prefs.bodyFont, nonce, canScan)
 
   // plain-text bodies render in a <pre>, not the sandboxed iframe, so bare
   // urls need their own linkification: nothing upstream turns them into real
@@ -467,6 +480,10 @@
       const id = detail.id
       const html = await getMessageHtml(id, true, includeTrackers)
       setBodyHtml(id, html)
+      // the reader may have moved on while the html was fetched
+      if (detail.id !== id) {
+        return
+      }
       remoteLoaded = true
       pixelsBlocked = !includeTrackers && trackers.length > 0
       pixelMenu = null
