@@ -1877,8 +1877,30 @@
   }
 
   .frame .side-col {
+    position: relative;
     background: var(--sidebar-bg);
+    border-start-start-radius: var(--pane-radius);
+    border-end-start-radius: var(--pane-radius);
+  }
+
+  /* the folder pane's color runs on under the rounded corners of the surface
+     beside it, so no chrome shows through between the two. */
+  .frame .side-col::after {
+    content: '';
+    position: absolute;
+    inset-block: 0;
+    inset-inline-start: 100%;
+    width: var(--pane-radius);
+    background: var(--sidebar-bg);
+    pointer-events: none;
+  }
+
+  :global(:root[data-panes='soft']) .frame .side-col {
     border-radius: var(--pane-radius);
+  }
+
+  :global(:root[data-panes='soft']) .frame .side-col::after {
+    display: none;
   }
 
   /* soft: every pane is a rounded panel of its own, with a gap between. */
