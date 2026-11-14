@@ -572,8 +572,10 @@
         void remove(item)
         break
       case 'read':
+        void markSeen(item, true)
+        break
       case 'unread':
-        void toggleSeen(item)
+        void markSeen(item, false)
         break
       case 'flag':
         void toggleFlag(item)
