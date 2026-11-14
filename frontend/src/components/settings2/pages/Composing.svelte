@@ -6,7 +6,7 @@
   import Segmented from '../ui/Segmented.svelte'
   import ToggleSwitch from '../../common/ToggleSwitch.svelte'
   import Select from '../../common/Select.svelte'
-  import VimPreview from '../../onboarding/VimPreview.svelte'
+  import VimPreview from '../skeletons/VimPreview.svelte'
   import {
     prefs,
     setDefaultEditorMode,
