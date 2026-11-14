@@ -94,6 +94,15 @@ export function AddOAuthAccount(req: $models.AddAccountRequest): $CancellablePro
 }
 
 /**
+ * AddOCRLanguage asks for a tesseract language file (.traineddata, optionally
+ * gzipped) and copies it into the ocr folder. Returns its code, or "" if the
+ * user canceled. A file with the same code replaces the old one.
+ */
+export function AddOCRLanguage(): $CancellablePromise<string> {
+    return $Call.ByID(2447172345);
+}
+
+/**
  * AddPasswordAccount creates a password-authenticated account: it stores the
  * metadata, files the password in the keyring, discovers the folder tree and
  * runs an initial sync.
@@ -1088,6 +1097,15 @@ export function ListOAuthProviders(): $CancellablePromise<{ [_ in string]?: stri
 }
 
 /**
+ * ListOCRLanguages returns the codes of the language files the user added.
+ */
+export function ListOCRLanguages(): $CancellablePromise<string[]> {
+    return $Call.ByID(2208958617).then(($result: any) => {
+        return $$createType15($result);
+    });
+}
+
+/**
  * ListOutbox returns the current outbox, so the ui can show queued, sending and
  * failed messages and surface send failures explicitly.
  */
@@ -1317,6 +1335,13 @@ export function OpenMessageWindow(id: number, title: string): $CancellablePromis
 }
 
 /**
+ * OpenOCRFolder shows the ocr folder in the system file manager.
+ */
+export function OpenOCRFolder(): $CancellablePromise<void> {
+    return $Call.ByID(1452344790);
+}
+
+/**
  * OpenThemesFolder shows the themes folder in the system file manager, so
  * .peltontheme files can be dropped in or copied out directly.
  */
@@ -1382,6 +1407,15 @@ export function ReadAttachment(messageID: number, attachmentID: number): $Cancel
 }
 
 /**
+ * ReadOCRLanguage returns a user-added language file for tesseract to load.
+ */
+export function ReadOCRLanguage(code: string): $CancellablePromise<string> {
+    return $Call.ByID(3311324412, code).then(($result: any) => {
+        return $Create.ByteSlice($result);
+    });
+}
+
+/**
  * ReauthorizeOAuthAccount runs the consent flow again for an oauth account with
  * the client it was set up with, and replaces its tokens. It is the way back
  * once the provider revoked or expired the refresh token, without deleting the
@@ -1433,6 +1467,13 @@ export function RemoveAddressBook(id: number): $CancellablePromise<void> {
  */
 export function RemoveImageAllow(kind: string, value: string): $CancellablePromise<void> {
     return $Call.ByID(3954120632, kind, value);
+}
+
+/**
+ * RemoveOCRLanguage deletes a language file the user added.
+ */
+export function RemoveOCRLanguage(code: string): $CancellablePromise<void> {
+    return $Call.ByID(3747166912, code);
 }
 
 /**

@@ -16,6 +16,7 @@
   import StepSlider from './StepSlider.svelte'
   import AccentPicker from './AccentPicker.svelte'
   import TechToggles from './TechToggles.svelte'
+  import OCRSettings from './OCRSettings.svelte'
   import ToastPositionPicker from './ToastPositionPicker.svelte'
   import ShortcutSettings from './ShortcutSettings.svelte'
   import SignaturesSection from './SignaturesSection.svelte'
@@ -239,6 +240,7 @@
     { cat: 'display', label: $t('settingsPanel.label.monoFont'), kw: 'font monospace code' },
     { cat: 'display', label: $t('settingsPanel.label.charsetFallback'), kw: 'encoding charset unicode gibberish mojibake utf8 latin' },
     { cat: 'display', label: $t('settings.lockPanes'), kw: 'panes layout lock' },
+    { cat: 'display', label: $t('settingsPanel.ocr.heading'), kw: 'ocr scan scanned pdf tesseract text recognition language' },
     { cat: 'composing', label: $t('settingsPanel.label.defaultEditor'), kw: 'editor html plain markdown' },
     { cat: 'composing', label: $t('settingsPanel.toggle.autocomplete'), kw: 'autocomplete recipients' },
     { cat: 'composing', label: $t('settingsPanel.toggle.chipRecipients'), kw: 'chips recipients' },
@@ -1534,6 +1536,8 @@
             />
           </div>
           <p class="hint">{$t('settingsPanel.hint.statusUnread')}</p>
+          <h4 class="subhead">{$t('settingsPanel.ocr.heading')}</h4>
+          <OCRSettings />
         </section>
       {:else if active === 'gestures'}
         <section>

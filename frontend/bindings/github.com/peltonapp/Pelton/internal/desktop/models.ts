@@ -4660,6 +4660,12 @@ export class UIPrefsDTO {
     "windowMaterial": boolean;
 
     /**
+     * OCRLanguages is the "+" joined list of tesseract languages the pdf
+     * viewer reads with; empty follows the ui language.
+     */
+    "ocrLanguages": string;
+
+    /**
      * MenuBarIcons shows icons next to the in-app menu bar's dropdown items.
      */
     "menuBarIcons": boolean;
@@ -4967,6 +4973,9 @@ export class UIPrefsDTO {
         }
         if (!("windowMaterial" in $$source)) {
             this["windowMaterial"] = false;
+        }
+        if (!("ocrLanguages" in $$source)) {
+            this["ocrLanguages"] = "";
         }
         if (!("menuBarIcons" in $$source)) {
             this["menuBarIcons"] = false;

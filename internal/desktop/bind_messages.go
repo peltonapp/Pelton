@@ -5,8 +5,6 @@ import (
 	"encoding/base64"
 	"fmt"
 	"io"
-	"os"
-	"path/filepath"
 	"strings"
 
 	"github.com/peltonapp/Pelton/internal/mailview"
@@ -402,30 +400,14 @@ func (a *App) SaveAttachment(messageID, attachmentID int64) (string, error) {
 	if dest == "" {
 		return "", nil
 	}
-	if err := a.copyAttachment(target.DiskPath, dest); err != nil {
+	done := AttachmentProgressEvent{AttachmentID: target.ID, Filename: target.Filename, FilesDone: 1, FilesTotal: 1}
+	if err := a.copyAttachmentProgress(*target, dest, 0, 1); err != nil {
+		done.Error = err.Error()
+		a.emit(EventAttachmentProgress, done)
 		return "", err
 	}
+	a.emit(EventAttachmentProgress, done)
 	return dest, nil
-}
-
-// copyAttachment streams an attachment file from disk to dest.
-func (a *App) copyAttachment(diskPath, dest string) error {
-	src, err := a.store.OpenAttachment(diskPath)
-	if err != nil {
-		return err
-	}
-	defer src.Close()
-
-	out, err := os.Create(filepath.Clean(dest))
-	if err != nil {
-		return err
-	}
-	defer out.Close()
-
-	if _, err := io.Copy(out, src); err != nil {
-		return err
-	}
-	return nil
 }
 
 // buildSummaries flattens stored messages into list rows, resolving each
