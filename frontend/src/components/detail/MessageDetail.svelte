@@ -132,11 +132,15 @@
 
   async function toggleFlag(detail: MessageDetail): Promise<void> {
     const next = !detail.flagged
-    messageDetail.update((s) => (s.data ? { ...s, data: { ...s.data, flagged: next } } : s))
-    patchInList(detail.id, { flagged: next })
+    const apply = (flagged: boolean) => {
+      messageDetail.update((s) => (s.data?.id === detail.id ? { ...s, data: { ...s.data, flagged } } : s))
+      patchInList(detail.id, { flagged })
+    }
+    apply(next)
     try {
       await setFlagged(detail.id, next)
     } catch (err) {
+      apply(!next)
       toastError(errorMessage(err))
     }
   }
