@@ -154,14 +154,4 @@
     min-width: 0;
   }
 
-  /* settings search lands here and the row says so for a moment. */
-  .row:global(.found) {
-    animation: found var(--motion-slow) var(--ease-out) 3 alternate;
-  }
-
-  @keyframes found {
-    to {
-      background: var(--selection-bg);
-    }
-  }
 </style>

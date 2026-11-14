@@ -2019,6 +2019,7 @@ const en: Record<string, string> = {
   'composing.openIn.tab': 'Tab',
   'composing.openIn.tab.hint': 'A tab that fills the reading area.',
   'messageList.noText': 'No text',
+  'settings2.search.hint': '{count} found. Arrow keys move, Enter opens the setting.',
   'wizard.email.guessed': 'Not confirmed: {host} is a guess from the address. Check the servers on the next step.',
   'thread.expand': 'Show the whole conversation',
   'thread.collapse': 'Hide the conversation',

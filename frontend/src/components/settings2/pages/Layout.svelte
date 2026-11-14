@@ -75,7 +75,7 @@
   <p class="note">{$t('layout.classicNote')}</p>
 {/if}
 
-<Card title={$t('layout.label')} description={$t('layout.description')} bare>
+<Card id="layout" title={$t('layout.label')} description={$t('layout.description')} bare>
   <ChoiceCards
     label={$t('layout.label')}
     value={$prefs.layoutMode}
@@ -95,7 +95,7 @@
   </ChoiceCards>
 </Card>
 
-<Card title={$t('nav.label')} description={$t('nav.description')} bare>
+<Card id="nav" title={$t('nav.label')} description={$t('nav.description')} bare>
   <ChoiceCards
     label={$t('nav.label')}
     value={$prefs.navStyle}
@@ -114,7 +114,7 @@
 </Card>
 
 {#if $prefs.navStyle === 'rail'}
-  <Card title={$t('nav.side.label')} bare>
+  <Card id="rail-side" title={$t('nav.side.label')} bare>
     <ChoiceCards
       label={$t('nav.side.label')}
       value={$prefs.railSide}

@@ -8,7 +8,9 @@
   // checkbox rather than as close.
   import closeIcon from '@phosphor-icons/core/assets/regular/x.svg?raw'
   import searchIcon from '@phosphor-icons/core/assets/duotone/magnifying-glass-duotone.svg?raw'
+  import goIcon from '@phosphor-icons/core/assets/regular/arrow-right.svg?raw'
   import Ph from '../common/Ph.svelte'
+  import Highlight from '../common/Highlight.svelte'
   import Spinner from '../common/Spinner.svelte'
   import PassphraseDialog from '../settings/PassphraseDialog.svelte'
   import { settingsPages2, settingsGroups2, settingsIndex2, pageExists, loadPage, resolvePage, type SettingsIndexEntry } from '../../lib/settings2'
@@ -28,52 +30,107 @@
   let contentEl: HTMLDivElement | undefined
   let loadedKey = ''
 
+  // the load in flight, so a caller that asks for the page already being
+  // loaded waits for it instead of returning early.
+  let loading: Promise<void> = Promise.resolve()
+
   $: void open(active)
-  async function open(key: string): Promise<void> {
+  function open(key: string): Promise<void> {
     if (key === loadedKey) {
-      return
+      return loading
     }
     loadedKey = key
     component = null
-    try {
-      const loaded = await loadPage(key)
-      if (loadedKey === key) {
-        component = loaded
-        await tick()
-        contentEl?.scrollTo({ top: 0 })
+    loading = (async () => {
+      try {
+        const loaded = await loadPage(key)
+        if (loadedKey === key) {
+          component = loaded
+          await tick()
+          contentEl?.scrollTo({ top: 0 })
+        }
+      } catch (err) {
+        toastError(errorMessage(err))
       }
-    } catch (err) {
-      toastError(errorMessage(err))
-    }
+    })()
+    return loading
   }
 
   let query = ''
   $: q = query.trim().toLowerCase()
+  $: terms = q === '' ? [] : q.split(/\s+/)
   $: pageLabel = (key: string): string => $t(pages.find((p) => p.key === key)?.labelKey ?? '')
-  $: shownPages =
-    q === ''
-      ? pages
-      : pages.filter((p) => $t(p.labelKey).toLowerCase().includes(q) || results.some((r) => r.page === p.key))
-  $: results =
-    q === ''
-      ? []
-      : settingsIndex2.filter(
-          (entry) =>
-            pageExists(entry.page) &&
-            ($t(entry.labelKey).toLowerCase().includes(q) || (entry.keywords ?? '').toLowerCase().includes(q)),
-        )
 
-  // a search result opens its page and then points at the setting itself.
+  // every word typed has to appear in the setting's name, its synonyms or the
+  // name of its page. names that start with the search come first.
+  $: results =
+    terms.length === 0
+      ? []
+      : settingsIndex2
+          .filter((entry) => {
+            if (!pageExists(entry.page)) {
+              return false
+            }
+            const hay = `${$t(entry.labelKey)} ${entry.keywords ?? ''} ${pageLabel(entry.page)}`.toLowerCase()
+            return terms.every((term) => hay.includes(term))
+          })
+          .sort((a, b) => rank(a) - rank(b))
+  $: rank = (entry: SettingsIndexEntry): number => {
+    const label = $t(entry.labelKey).toLowerCase()
+    return label.startsWith(q) ? 0 : terms.every((term) => label.includes(term)) ? 1 : 2
+  }
+  $: groups = pages
+    .map((page) => ({ page, entries: results.filter((r) => r.page === page.key) }))
+    .filter((g) => g.entries.length > 0)
+  $: flat = groups.flatMap((g) => g.entries)
+
+  // the result the arrow keys are on; Enter opens it.
+  let cursor = 0
+  $: if (q !== undefined) {
+    cursor = 0
+  }
+
+  const markMs = 2600
+  const findFrames = 30
+
+  // a search result opens its page, scrolls to the setting and marks it. the
+  // page may still be laying out its rows, so the row is looked for over a
+  // few frames.
   async function openResult(entry: SettingsIndexEntry): Promise<void> {
     query = ''
     active = entry.page
     await open(entry.page)
     await tick()
-    const row = contentEl?.querySelector<HTMLElement>(`[data-setting="${entry.id}"]`)
-    if (row) {
-      row.scrollIntoView({ block: 'center' })
-      row.classList.add('found')
-      row.addEventListener('animationend', () => row.classList.remove('found'), { once: true })
+    let row: HTMLElement | null = null
+    for (let i = 0; i < findFrames && !row; i += 1) {
+      row = contentEl?.querySelector<HTMLElement>(`[data-setting="${entry.id}"]`) ?? null
+      if (!row) {
+        await new Promise((resolve) => requestAnimationFrame(resolve))
+      }
+    }
+    if (!row) {
+      return
+    }
+    const found = row
+    found.scrollIntoView({ block: 'center', behavior: 'smooth' })
+    found.classList.remove('s2-found')
+    void found.offsetWidth
+    found.classList.add('s2-found')
+    setTimeout(() => found.classList.remove('s2-found'), markMs)
+  }
+
+  function onSearchKeydown(event: KeyboardEvent): void {
+    if (flat.length === 0) {
+      return
+    }
+    if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+      event.preventDefault()
+      const step = event.key === 'ArrowDown' ? 1 : -1
+      cursor = (cursor + step + flat.length) % flat.length
+      void tick().then(() => contentEl?.querySelector('.result.on')?.scrollIntoView({ block: 'nearest' }))
+    } else if (event.key === 'Enter') {
+      event.preventDefault()
+      void openResult(flat[cursor])
     }
   }
 
@@ -96,12 +153,18 @@
     <h2>{$t('settings.title')}</h2>
     <label class="search">
       <Ph svg={searchIcon} size={14} />
-      <input type="text" bind:value={query} placeholder={$t('settings.search')} aria-label={$t('settings.search')} />
+      <input
+        type="text"
+        bind:value={query}
+        placeholder={$t('settings.search')}
+        aria-label={$t('settings.search')}
+        on:keydown={onSearchKeydown}
+      />
     </label>
 
     <div class="pages">
       {#each ['', ...settingsGroups2.map((g) => g.key)] as groupKey (groupKey)}
-        {@const items = shownPages.filter((p) => p.group === groupKey)}
+        {@const items = pages.filter((p) => p.group === groupKey)}
         {#if items.length}
           {#if groupKey}
             <div class="group">{$t(settingsGroups2.find((g) => g.key === groupKey)?.labelKey ?? '')}</div>
@@ -111,6 +174,7 @@
               type="button"
               class="item"
               class:active={active === page.key && q === ''}
+              class:dim={q !== '' && !groups.some((g) => g.page.key === page.key)}
               aria-current={active === page.key ? 'page' : undefined}
               on:click={() => {
                 active = page.key
@@ -118,14 +182,17 @@
               }}
             >
               <Ph svg={page.icon} size={17} />
-              <span>{$t(page.labelKey)}</span>
+              <span class="item-name">{$t(page.labelKey)}</span>
+              {#if q !== ''}
+                {@const hits = groups.find((g) => g.page.key === page.key)?.entries.length ?? 0}
+                {#if hits > 0}
+                  <span class="hits">{hits}</span>
+                {/if}
+              {/if}
             </button>
           {/each}
         {/if}
       {/each}
-      {#if shownPages.length === 0}
-        <p class="empty">{$t('settings.searchEmpty')}</p>
-      {/if}
     </div>
   </nav>
 
@@ -143,14 +210,30 @@
           {#if results.length === 0}
             <p class="empty">{$t('settings.searchEmpty')}</p>
           {:else}
-            <div class="results">
-              {#each results as entry (entry.page + entry.id)}
-                <button type="button" class="result" on:click={() => openResult(entry)}>
-                  <span>{$t(entry.labelKey)}</span>
-                  <span class="where">{pageLabel(entry.page)}</span>
-                </button>
-              {/each}
-            </div>
+            <p class="found-note">{$t('settings2.search.hint').replace('{count}', String(flat.length))}</p>
+            {#each groups as group (group.page.key)}
+              <div class="result-group">
+                <div class="result-head">
+                  <Ph svg={group.page.icon} size={15} />
+                  <span>{$t(group.page.labelKey)}</span>
+                </div>
+                <div class="results">
+                  {#each group.entries as entry (entry.id)}
+                    <!-- svelte-ignore a11y-mouse-events-have-key-events -->
+                    <button
+                      type="button"
+                      class="result"
+                      class:on={flat[cursor] === entry}
+                      on:mousemove={() => (cursor = flat.indexOf(entry))}
+                      on:click={() => openResult(entry)}
+                    >
+                      <span><Highlight text={$t(entry.labelKey)} {terms} /></span>
+                      <span class="go" aria-hidden="true"><Ph svg={goIcon} size={14} /></span>
+                    </button>
+                  {/each}
+                </div>
+              </div>
+            {/each}
           {/if}
         {:else if component}
           {#key active}
@@ -364,18 +447,83 @@
     font-size: var(--fz-list);
     text-align: start;
     cursor: var(--cursor-action);
+    transition: background-color var(--motion-fast) var(--ease-out);
   }
 
   .result + .result {
     border-top: var(--hairline) solid var(--border-subtle);
   }
 
-  .result:hover {
-    background: var(--surface-hover);
+  .result.on {
+    background: var(--selection-bg);
   }
 
-  .where {
+  .go {
+    display: inline-flex;
+    color: var(--accent);
+    opacity: 0;
+    transform: translateX(-4px);
+    transition:
+      opacity var(--motion-fast) var(--ease-out),
+      transform var(--motion-fast) var(--ease-out);
+  }
+
+  .result.on .go {
+    opacity: 1;
+    transform: none;
+  }
+
+  .result-group + .result-group {
+    margin-top: var(--space-5);
+  }
+
+  .result-head {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    margin: 0 var(--space-1) var(--space-2);
     font-size: var(--fz-label);
+    font-weight: var(--fw-medium);
+    color: var(--text-secondary);
+  }
+
+  /* the setting a search result led to: an accent outline and tint that hold
+     long enough to be found, then fade. */
+  .content :global(.s2-found) {
+    border-radius: var(--radius-control);
+    animation: s2-mark 2600ms var(--ease-out);
+  }
+
+  @keyframes s2-mark {
+    0%,
+    70% {
+      background: var(--selection-bg);
+      box-shadow: inset 0 0 0 2px var(--accent);
+    }
+    100% {
+      background: transparent;
+      box-shadow: inset 0 0 0 2px transparent;
+    }
+  }
+
+  .found-note {
+    margin: 0 var(--space-1) var(--space-4);
+    font-size: var(--fz-label);
+    color: var(--text-tertiary);
+  }
+
+  .item-name {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .item.dim {
+    opacity: 0.45;
+  }
+
+  .hits {
+    font-family: var(--font-mono);
+    font-size: var(--fz-meta);
     color: var(--text-tertiary);
   }
 
