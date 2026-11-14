@@ -475,7 +475,8 @@
     align-items: center;
     gap: var(--space-2);
     height: calc(var(--control-height) - var(--space-2));
-    padding: 0 var(--space-2) 0 var(--space-3);
+    padding-block: 0;
+    padding-inline: var(--space-3) var(--space-2);
     border: var(--hairline) solid var(--border-default);
     border-radius: var(--radius-control);
     background: var(--surface-raised);

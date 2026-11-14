@@ -80,7 +80,8 @@
     flex-wrap: wrap;
     align-items: center;
     gap: var(--space-1);
-    padding: var(--space-2) var(--space-2) var(--space-2) var(--row-pad-x);
+    padding-block: var(--space-2);
+    padding-inline: var(--row-pad-x) var(--space-2);
     border-bottom: var(--hairline) solid var(--border-subtle);
     background: var(--surface-raised);
     animation: open var(--motion-base) var(--ease-out);

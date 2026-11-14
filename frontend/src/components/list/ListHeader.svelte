@@ -76,7 +76,7 @@
   {#if searching}
     <button
       type="button"
-      class="icon-btn"
+      class="icon-btn back"
       aria-label={$t('search.results.close')}
       use:tip={{ text: backLabel ? $t('search.results.backTo').replace('{name}', backLabel) : $t('search.results.close'), side: 'bottom' }}
       on:click={clearSearch}
@@ -159,7 +159,8 @@
     align-items: center;
     gap: var(--space-2);
     min-width: 0;
-    padding: var(--space-2) var(--space-2) var(--space-2) var(--row-pad-x);
+    padding-block: var(--space-2);
+    padding-inline: var(--row-pad-x) var(--space-2);
     border-bottom: var(--hairline) solid var(--border-subtle);
   }
 
@@ -221,6 +222,10 @@
   .icon-btn:hover {
     background: var(--surface-hover);
     color: var(--text-primary);
+  }
+
+  :global(:root[dir='rtl']) .back {
+    transform: scaleX(-1);
   }
 
   .icon-btn.on {
