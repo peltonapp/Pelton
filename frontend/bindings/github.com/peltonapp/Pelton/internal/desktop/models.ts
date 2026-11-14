@@ -4682,6 +4682,18 @@ export class UIPrefsDTO {
     "nativeTitlebar": boolean;
 
     /**
+     * ComposeOpenIn is where a new message, reply or forward opens in the new
+     * design: window, docked or tab.
+     */
+    "composeOpenIn": string;
+
+    /**
+     * ComposeMarkdown converts Markdown typed or pasted into the compose editor
+     * into formatting.
+     */
+    "composeMarkdown": boolean;
+
+    /**
      * ThemeID selects an installed custom theme (see bind_themes.go). Empty
      * means the built-in default themes driven by the Theme setting.
      */
@@ -5028,6 +5040,12 @@ export class UIPrefsDTO {
         }
         if (!("nativeTitlebar" in $$source)) {
             this["nativeTitlebar"] = false;
+        }
+        if (!("composeOpenIn" in $$source)) {
+            this["composeOpenIn"] = "";
+        }
+        if (!("composeMarkdown" in $$source)) {
+            this["composeMarkdown"] = false;
         }
         if (!("themeId" in $$source)) {
             this["themeId"] = "";

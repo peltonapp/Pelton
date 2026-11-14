@@ -1310,6 +1310,12 @@ export function openComposeWindow(session: unknown): Promise<void> {
   return App.OpenComposeWindow(JSON.stringify(session))
 }
 
+// showMessageInMainWindow brings the main window forward with a message open,
+// for a compose window to show the message it replies to.
+export function showMessageInMainWindow(id: number): Promise<void> {
+  return App.ShowMessageInMainWindow(id)
+}
+
 // takeComposeSession returns the compose pane a compose window was opened
 // for, once, or null when there is none (the window was reloaded).
 export async function takeComposeSession<T>(token: string): Promise<T | null> {
@@ -1455,6 +1461,8 @@ export const SettingKeys = {
   avatarPlacement: 'avatar_placement',
   listHeight: 'list_height',
   nativeTitlebar: 'native_titlebar',
+  composeOpenIn: 'compose_open_in',
+  composeMarkdown: 'compose_markdown',
   themeId: 'theme_id',
   menuBarInApp: 'menu_bar_in_app',
   menuBarNativeMinimal: 'menu_bar_native_minimal',

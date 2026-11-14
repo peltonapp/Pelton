@@ -1977,6 +1977,15 @@ export function SetWindowTitle(title: string): $CancellablePromise<void> {
 }
 
 /**
+ * ShowMessageInMainWindow brings the main window forward and opens a message
+ * there, in the folder it lives in. A message that is gone only shows the
+ * window.
+ */
+export function ShowMessageInMainWindow(id: number): $CancellablePromise<void> {
+    return $Call.ByID(3614075796, id);
+}
+
+/**
  * SignerFingerprint returns the fingerprint of the key an account signs with,
  * so the compose window can send the user to the right passphrase prompt. Empty
  * when the account has no signing key.

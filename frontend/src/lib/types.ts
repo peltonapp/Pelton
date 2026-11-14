@@ -552,6 +552,11 @@ export interface UIPrefs {
   // nativeTitlebar uses the operating system's title bar instead of the
   // integrated one.
   nativeTitlebar: boolean
+  // composeOpenIn is where a new message, reply or forward opens in the new
+  // design.
+  composeOpenIn: ComposeOpenIn
+  // composeMarkdown converts Markdown typed or pasted into the compose editor.
+  composeMarkdown: boolean
   // themeId selects an installed custom theme; empty means the built-in
   // default themes driven by the theme (light/dark/system) setting.
   themeId: string
@@ -1049,6 +1054,8 @@ export type RailSide = 'left' | 'right'
 export type PaneStyle = 'hybrid' | 'flat' | 'soft'
 /** Where the sender picture goes in a list row and the reading header. */
 export type AvatarPlacement = 'column' | 'inline' | 'hidden'
+/** Where compose opens in the new design: its own window, docked, or a tab. */
+export type ComposeOpenIn = 'window' | 'docked' | 'tab'
 /** One of the top-level areas of the app. */
 export type Space = 'mail' | 'contacts' | 'calendar'
 export type SelectAllScope = 'offer' | 'all' | 'loaded'
