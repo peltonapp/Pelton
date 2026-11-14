@@ -61,7 +61,7 @@ buildGoModule (finalAttrs: {
       src = "${finalAttrs.src}/frontend";
       pnpm = pnpm_10;
       fetcherVersion = 3;
-      hash = "sha256-jHTlUX5+5dk2Cs6csjn99v/rQ9JmNQw5QdPdVskJ4Oo=";
+      hash = "sha256-0C7IfSZ/hJ2/6SGGHGShsoaZ4C3lIbOklOAtCl8jRVA=";
     };
     pnpmRoot = "frontend";
   };
