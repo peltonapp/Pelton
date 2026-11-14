@@ -137,8 +137,16 @@
   }
 
   textarea {
-    min-height: calc(var(--control-height) - var(--space-2));
-    padding: var(--space-1) var(--space-2);
+    display: block;
+    box-sizing: border-box;
+    width: 100%;
+    min-height: calc(1.5em + 2 * var(--space-2));
+    padding: var(--space-2);
+    overflow-x: hidden;
+    overflow-y: auto;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    text-overflow: ellipsis;
     border: none;
     background: transparent;
     color: var(--text-primary);
