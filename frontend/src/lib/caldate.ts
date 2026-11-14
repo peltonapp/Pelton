@@ -75,6 +75,26 @@ export function atMinutes(day: Date, minutes: number): Date {
   return out
 }
 
+/** The next full or half hour after now, which can be tomorrow's midnight. */
+export function nextHalfHour(now: Date): Date {
+  const out = new Date(now.getFullYear(), now.getMonth(), now.getDate(), now.getHours(), now.getMinutes() < 30 ? 30 : 60)
+  return out
+}
+
+/**
+ * Where a new event starts on a day when no time was picked: the next half
+ * hour when the day is today, and the same clock time on any other day.
+ * Late at night that clock time is the next slot only on the next day, so on
+ * another day it is pulled back to keep the hour inside it.
+ */
+export function defaultSlot(day: Date, now: Date): Date {
+  const next = nextHalfHour(now)
+  if (sameDay(day, now)) {
+    return next
+  }
+  return atMinutes(day, Math.min(minutesOfDay(next) || dayMinutes, dayMinutes - 60))
+}
+
 /** Rounds minutes to the nearest step. */
 export function snapMinutes(minutes: number, step = 15): number {
   return Math.round(minutes / step) * step
