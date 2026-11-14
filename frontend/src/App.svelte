@@ -20,6 +20,7 @@
   import Rail from './components/shell/Rail.svelte'
   import SpaceSwitcher from './components/shell/SpaceSwitcher.svelte'
   import { space, openSpace } from './stores/space'
+  import { frameIntegrated } from './stores/windowframe'
   import SnoozeDialog from './components/detail/SnoozeDialog.svelte'
   import ConfirmDialog from './components/common/ConfirmDialog.svelte'
   import SyncFailureDialog from './components/common/SyncFailureDialog.svelte'
@@ -252,7 +253,7 @@
   // ui paints to the top edge and keeps a strip clear for the traffic lights.
   // fullscreen hides the lights, and the strip goes with them.
   let fullscreen = false
-  $: macTitlebar = isMac && !fullscreen
+  $: macTitlebar = isMac && !fullscreen && $frameIntegrated
   $: applyTitlebar(macTitlebar)
   function applyTitlebar(on: boolean): void {
     if (on) {

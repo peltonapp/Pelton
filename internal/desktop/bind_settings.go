@@ -619,6 +619,9 @@ func (a *App) SetSetting(key, value string) error {
 	if key == settingLogToFile || key == settingLogLevel || key == settingLogMessageMetadata || key == settingCrashLogs {
 		a.applyLogSettings()
 	}
+	if key == settingDesign || key == settingNativeTitlebar {
+		a.refreshWindowFrame()
+	}
 	if key == settingCharsetFallback {
 		a.applyCharsetFallback()
 	}

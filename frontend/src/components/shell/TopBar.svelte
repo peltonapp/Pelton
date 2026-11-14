@@ -11,7 +11,9 @@
   import { shortcutTitle, bindings, menuHint } from '../../stores/shortcuts'
   import { titleBarDoubleClick } from '../../lib/api'
   import { tip } from '../../lib/tip'
-  import { t } from '../../lib/i18n'
+  import { t, isMac } from '../../lib/i18n'
+  import WindowButtons from './WindowButtons.svelte'
+  import { frameIntegrated } from '../../stores/windowframe'
 
   /** Shows the space switcher as tabs in the bar. */
   export let tabs: boolean = false
@@ -24,7 +26,12 @@
 </script>
 
 <!-- svelte-ignore a11y-no-static-element-interactions -->
-<header class="topbar" style="--wails-draggable:drag" on:dblclick|self={titleBarDoubleClick}>
+<header
+  class="topbar"
+  class:buttons={!isMac && $frameIntegrated}
+  style="--wails-draggable:drag"
+  on:dblclick|self={titleBarDoubleClick}
+>
   <div class="side start">
     <slot name="menu" />
     {#if tabs}
@@ -58,6 +65,9 @@
       </span>
     {/if}
     <slot name="end" />
+    {#if !isMac && $frameIntegrated}
+      <WindowButtons />
+    {/if}
   </div>
 </header>
 
@@ -72,8 +82,14 @@
     user-select: none;
   }
 
+  /* the window buttons run to the corner of the window. */
+  .topbar.buttons {
+    padding-inline-end: 0;
+  }
+
   .side {
     display: flex;
+    align-self: stretch;
     align-items: center;
     gap: var(--space-3);
     min-width: 0;

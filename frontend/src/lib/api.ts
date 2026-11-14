@@ -1340,6 +1340,29 @@ export function isFullscreen(): Promise<boolean> {
   return App.IsFullscreen()
 }
 
+/**
+ * Reports whether the main window draws its own title bar, in which case the
+ * interface supplies the window buttons and the drag region.
+ */
+export function windowFrameIntegrated(): Promise<boolean> {
+  return App.WindowFrameIntegrated()
+}
+
+/** Minimises the main window. */
+export function minimiseWindow(): void {
+  void App.MinimiseWindow()
+}
+
+/** Maximises the main window, or restores it. */
+export function toggleMaximiseWindow(): Promise<void> {
+  return App.ToggleMaximiseWindow()
+}
+
+/** Reports whether the main window is maximised. */
+export function isWindowMaximised(): Promise<boolean> {
+  return App.IsWindowMaximised()
+}
+
 // toggleFullscreen enters or leaves fullscreen.
 export function toggleFullscreen(): Promise<void> {
   return App.ToggleFullscreen()

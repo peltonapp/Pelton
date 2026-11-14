@@ -11,6 +11,7 @@ import { applyTheme, applyDensity, applyAccent, applyScale, applyReduceMotion, a
 import { applyUserTheme } from '../theme/usertheme'
 import { uiFontStack, monoFontStack } from '../lib/fonts'
 import { setLocale } from '../lib/i18n'
+import { refreshWindowFrame } from './windowframe'
 
 // defaults match the backend defaults so the ui renders sanely even before the
 // first load resolves.
@@ -158,6 +159,7 @@ export async function initPrefs(): Promise<void> {
   }
 
   applyAll(loaded)
+  void refreshWindowFrame()
 
   // a persisted custom theme applies after the base prefs so its base wins.
   // a missing or broken theme folder falls back to the default silently; the
@@ -245,7 +247,7 @@ export function setDesign(design: DesignPref): void {
     return { ...p, design }
   })
   applyDesign(design, pane)
-  void setSetting(SettingKeys.design, design)
+  void setSetting(SettingKeys.design, design).then(refreshWindowFrame)
 }
 
 /** Arranges the mail panes side by side or with the list above the reader. */
@@ -292,7 +294,7 @@ export function setListHeight(listHeight: number): void {
 /** Chooses between the integrated title bar and the operating system's. */
 export function setNativeTitlebar(nativeTitlebar: boolean): void {
   prefs.update((p) => ({ ...p, nativeTitlebar }))
-  void setSetting(SettingKeys.nativeTitlebar, String(nativeTitlebar))
+  void setSetting(SettingKeys.nativeTitlebar, String(nativeTitlebar)).then(refreshWindowFrame)
 }
 
 export function setDensity(density: DensityPref): void {

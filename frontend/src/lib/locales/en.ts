@@ -1812,7 +1812,7 @@ const en: Record<string, string> = {
   'layout.classicNote': 'These choices apply to the new design. Classic keeps its own layout.',
   'layout.window': 'Window',
   'layout.nativeTitlebar': 'Use the system title bar',
-  'layout.nativeTitlebar.hint': 'Puts the operating system\'s own title bar above the top bar. Takes effect after a restart.',
+  'layout.nativeTitlebar.hint': 'Puts the operating system\'s own title bar above the top bar. On macOS this takes effect after a restart.',
   'nav.label': 'Navigation',
   'nav.description': 'Where you switch between Mail, Contacts and Calendar.',
   'nav.rail': 'Rail',
@@ -1852,6 +1852,10 @@ const en: Record<string, string> = {
   'settings2.page.shortcuts': 'Shortcuts',
   'settings2.page.sync': 'Sync and power',
   'settings2.page.about': 'About',
+  'window.minimise': 'Minimize',
+  'window.maximise': 'Maximize',
+  'window.restore': 'Restore',
+  'window.close': 'Close',
 }
 
 export default en
