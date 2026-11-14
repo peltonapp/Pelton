@@ -331,6 +331,10 @@ func (a *App) startup(ctx context.Context) {
 	// hold a window open for.
 	goSafe("checking cached mail for broken text", a.markMangledMail)
 
+	// mail cached before threading existed gets its conversations here, in
+	// small batches so a sync is never kept waiting on the database for long.
+	goSafe("threading cached mail", a.backfillThreads)
+
 	a.startBackgroundServices()
 
 	// off by default; only runs at all if the user turned on a check

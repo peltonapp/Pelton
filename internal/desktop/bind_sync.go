@@ -137,7 +137,11 @@ func (t *accountTransmitter) Transmit(ctx context.Context, m outbox.Message) err
 			}()
 		}),
 	)
-	return sender.Transmit(ctx, m)
+	if err := sender.Transmit(ctx, m); err != nil {
+		return err
+	}
+	t.app.afterSent(ctx, m)
+	return nil
 }
 
 // sentCopyWait bounds how long the copy to Sent waits for the account's other
@@ -424,6 +428,7 @@ func (a *App) syncFolders(client mailClient, accountID int64) error {
 			goSafe("announcing new mail", func() { a.notifyNewMail(f, res.NewIDs) })
 		}
 		a.afterRepairs(f, res.RepairedIDs)
+		a.afterReplyStateSync(f, res.ReplyStateChanged)
 	}
 	// an empty folder name is how the ui knows the run is over and clears its
 	// line; the counts ride along so a finished bar reads full rather than
@@ -494,6 +499,7 @@ func (a *App) syncOneFolder(client mailClient, folder storage.Folder) error {
 		return err
 	}
 	a.afterRepairs(folder, res.RepairedIDs)
+	a.afterReplyStateSync(folder, res.ReplyStateChanged)
 	if res.New > 0 {
 		a.emit(EventMailNew, MailNewEvent{AccountID: folder.AccountID, FolderID: folder.ID, Count: res.New})
 		goSafe("announcing new mail", func() { a.notifyNewMail(folder, res.NewIDs) })
@@ -746,6 +752,17 @@ func (a *App) findTrashFolder(accountID int64) (storage.Folder, bool) {
 		}
 	}
 	return storage.Folder{}, false
+}
+
+// afterReplyStateSync reloads open lists when a sync changed whether messages
+// in a folder were answered or forwarded.
+func (a *App) afterReplyStateSync(folder storage.Folder, changed int) {
+	if changed == 0 {
+		return
+	}
+	a.emit(EventMailRepaired, MailRepairedEvent{
+		AccountID: folder.AccountID, FolderID: folder.ID, Count: changed,
+	})
 }
 
 // afterRepairs deals with messages whose text was fetched again because what

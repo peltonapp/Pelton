@@ -16,8 +16,10 @@ var errSearchUnavailable = errors.New("pelton: search index is unavailable")
 const (
 	// EventMailNew fires when a sync or idle cycle pulled new messages.
 	EventMailNew = "mail:new"
-	// EventMailRepaired fires when a sync replaced the text of messages that
-	// were cached with an encoding nothing could read, so the list reloads.
+	// EventMailRepaired fires when cached messages changed underneath an open
+	// list without new mail arriving, so the list reloads: a sync replaced text
+	// cached with an encoding nothing could read, conversations were regrouped,
+	// or messages became answered or forwarded.
 	EventMailRepaired = "mail:repaired"
 	// EventSyncProgress fires as folders are synced so the ui can show progress.
 	EventSyncProgress = "sync:progress"
@@ -131,7 +133,8 @@ type MailNewEvent struct {
 }
 
 // MailRepairedEvent is the payload for EventMailRepaired. Count is how many
-// messages in the folder were rewritten.
+// messages changed. AccountID and FolderID are 0 when the change spans more
+// than one.
 type MailRepairedEvent struct {
 	AccountID int64 `json:"accountId"`
 	FolderID  int64 `json:"folderId"`

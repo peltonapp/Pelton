@@ -64,6 +64,9 @@ type ComposeRequest struct {
 	// until one has been uploaded. It is only for replacing that copy: a sent
 	// message gets a Message-ID of its own.
 	DraftMessageID string `json:"draftMessageId"`
+	// ForwardOf is the local id of the message this one forwards, 0 when it
+	// forwards nothing. Once sent, that message is marked forwarded.
+	ForwardOf int64 `json:"forwardOf"`
 }
 
 // SendMessage builds the mime message and enqueues it in the durable outbox. The
@@ -98,6 +101,13 @@ func (a *App) SendMessage(req ComposeRequest) (int64, error) {
 	}
 	mode, opts, engine, err := a.protectionOptions(*account, req)
 	if err != nil {
+		return 0, err
+	}
+
+	if msg.MessageID, err = smtp.NewMessageID(account.Email); err != nil {
+		return 0, err
+	}
+	if err := a.recordReplySources(req, msg.MessageID); err != nil {
 		return 0, err
 	}
 
