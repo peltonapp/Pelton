@@ -4,7 +4,9 @@
   // open page on the right. pages are separate components loaded on first use.
   import { createEventDispatcher, tick, type ComponentType } from 'svelte'
   import { get } from 'svelte/store'
-  import closeIcon from '@phosphor-icons/core/assets/duotone/x-duotone.svg?raw'
+  // the duotone x draws a tinted square behind the cross, which reads as a
+  // checkbox rather than as close.
+  import closeIcon from '@phosphor-icons/core/assets/regular/x.svg?raw'
   import searchIcon from '@phosphor-icons/core/assets/duotone/magnifying-glass-duotone.svg?raw'
   import Ph from '../common/Ph.svelte'
   import Spinner from '../common/Spinner.svelte'
