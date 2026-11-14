@@ -2051,7 +2051,6 @@ const en: Record<string, string> = {
   'calendar.color': 'Color',
   'calendar.colorN': 'Color {n}',
   'calendar.rename': 'Rename',
-  'calendar.importIcs': 'Import .ics file',
   'calendar.exportIcs': 'Export as .ics file',
   'calendar.deleteCalendar': 'Delete calendar',
   'calendar.imported': '{n} events imported.',
@@ -2277,6 +2276,8 @@ const en: Record<string, string> = {
   'list.card.conversations': 'Conversations',
   'list.threaded.label': 'Group into conversations',
   'list.threaded.hint': 'Show each conversation as one row with its replies beneath, and open it as a conversation.',
+  'calendar.importFile': 'Import calendar file',
+  'calendar.exportJscal': 'Export as JSCalendar (.json)',
 }
 
 export default en

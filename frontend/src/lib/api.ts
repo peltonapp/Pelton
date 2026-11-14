@@ -76,6 +76,10 @@ import type {
   InviteAnswer,
   InviteAnswerResult,
   ICSImportResult,
+  ICSFile,
+  EventBundle,
+  MailEventSource,
+  MessageRef,
   AttachmentContent,
   ThemeInfo,
   ThemeApply,
@@ -2154,19 +2158,59 @@ export function applyInvite(messageId: number): Promise<InviteAnswerResult> {
   return App.ApplyInvite(messageId) as unknown as Promise<InviteAnswerResult>
 }
 
-/** importICS asks for an .ics file and imports it into a calendar. */
-export function importICS(calendarId: number): Promise<ICSImportResult> {
-  return App.ImportICS(calendarId) as unknown as Promise<ICSImportResult>
-}
-
-/** importICSData imports iCalendar text, such as a dropped file, into a calendar. */
+/** importICSData imports iCalendar or JSCalendar text into a calendar. */
 export function importICSData(calendarId: number, data: string): Promise<ICSImportResult> {
   return App.ImportICSData(calendarId, data) as unknown as Promise<ICSImportResult>
 }
 
-/** exportICS saves a calendar as an .ics file and returns the path, empty when cancelled. */
-export function exportICS(calendarId: number): Promise<string> {
-  return App.ExportICS(calendarId)
+/** openICSFile asks for a calendar file and reads it for import; an empty name means cancelled. */
+export function openICSFile(): Promise<ICSFile> {
+  return App.OpenICSFile() as unknown as Promise<ICSFile>
+}
+
+/** readICSFiles reads dropped or opened calendar files for import. */
+export function readICSFiles(paths: string[]): Promise<ICSFile[]> {
+  return App.ReadICSFiles(paths) as unknown as Promise<ICSFile[]>
+}
+
+/** consumePendingICS returns the .ics files the app was asked to open, once. */
+export function consumePendingICS(): Promise<string[]> {
+  return App.ConsumePendingICS()
+}
+
+/** exportCalendar saves a calendar as iCalendar or JSCalendar and returns the path, empty when cancelled. */
+export function exportCalendar(calendarId: number, format: 'ics' | 'jscal'): Promise<string> {
+  return App.ExportCalendar(calendarId, format)
+}
+
+/** decodeEventLink reads the events a pasted event link carries; nothing is fetched. */
+export function decodeEventLink(link: string): Promise<EventBundle> {
+  return App.DecodeEventLink(link) as unknown as Promise<EventBundle>
+}
+
+/** decodeJSCalendar reads pasted JSCalendar text into event drafts. */
+export function decodeJSCalendar(text: string): Promise<EventBundle> {
+  return App.DecodeJSCalendar(text) as unknown as Promise<EventBundle>
+}
+
+/** mailEventSource reads a mail for turning it into an event. */
+export function mailEventSource(messageId: number): Promise<MailEventSource> {
+  return App.MailEventSource(messageId)
+}
+
+/** findMessageByLink finds the stored message a mid: link names. */
+export function findMessageByLink(link: string): Promise<MessageRef> {
+  return App.FindMessageByLink(link)
+}
+
+/** defaultCalendarFileStatus reports whether Pelton opens .ics files. */
+export function defaultCalendarFileStatus(): Promise<desktop.DefaultMailStatusDTO> {
+  return App.DefaultCalendarFileStatus()
+}
+
+/** setDefaultCalendarFileHandler asks the OS to open .ics files with Pelton. */
+export function setDefaultCalendarFileHandler(): Promise<void> {
+  return App.SetDefaultCalendarFileHandler()
 }
 
 /** createEventDraftFromMessage prefills an event from a mail dropped on the calendar. */
