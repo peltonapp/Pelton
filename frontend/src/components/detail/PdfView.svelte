@@ -49,6 +49,7 @@
   const ocrWords = new Map<number, OCRWord[]>()
   let ocrState: 'idle' | 'running' | 'done' = 'idle'
   let ocrProgress = 0
+  let ocrPageFraction = 0
   let ocrStop = false
 
   onMount(() => {
@@ -138,6 +139,7 @@
           break
         }
         ocrProgress++
+        ocrPageFraction = 0
         if (ocrWords.has(n)) {
           continue
         }
@@ -150,7 +152,8 @@
         canvas.width = Math.floor(viewport.width)
         canvas.height = Math.floor(viewport.height)
         await page.render({ canvas, viewport, background: '#ffffff' }).promise
-        const words = await recognize(canvas, engine, langs)
+        const words = await recognize(canvas, engine, langs, (f) => (ocrPageFraction = f))
+        ocrPageFraction = 1
         canvas.width = 0
         canvas.height = 0
         if (destroyed) {
@@ -345,6 +348,7 @@
   })
 
   $: percent = Math.round(scale * 100)
+  $: ocrDone = scanned.length > 0 ? Math.min(1, (Math.max(0, ocrProgress - 1) + ocrPageFraction) / scanned.length) : 0
 </script>
 
 <div class="pdfview">
@@ -359,6 +363,9 @@
         {#if ocrState === 'running'}
           <span class="ocr-status">
             {$t('detail.attachments.ocrRunning').replace('{page}', String(ocrProgress)).replace('{count}', String(scanned.length))}
+          </span>
+          <span class="ocr-progress" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow={Math.round(ocrDone * 100)}>
+            <span class="fill" style={`width:${ocrDone * 100}%`}></span>
           </span>
           <button type="button" class="zbtn" title={$t('detail.attachments.ocrStop')} aria-label={$t('detail.attachments.ocrStop')} on:click={() => (ocrStop = true)}>
             <IconPlayerStop size={14} stroke={1.8} />
@@ -480,6 +487,22 @@
     font-size: var(--fz-meta, var(--fz-label));
     color: var(--text-tertiary);
     font-variant-numeric: tabular-nums;
+  }
+
+  .ocr-progress {
+    width: 96px;
+    height: 3px;
+    margin-left: var(--space-2);
+    border-radius: 999px;
+    background: var(--surface-sunken);
+    overflow: hidden;
+  }
+
+  .ocr-progress .fill {
+    display: block;
+    height: 100%;
+    background: var(--accent);
+    transition: width 0.2s linear;
   }
 
   /* recognized words, laid over the page like the text layer. */

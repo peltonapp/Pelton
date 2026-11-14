@@ -33,8 +33,14 @@ export function ocrLanguageList(setting: string, uiLocale: string): string[] {
   return code === 'eng' ? ['eng'] : [code, 'eng']
 }
 
-// recognize reads the words on a rendered page.
-export async function recognize(canvas: HTMLCanvasElement, engine: OCREngine, langs: string[]): Promise<OCRWord[]> {
+// recognize reads the words on a rendered page. onProgress gets how far into
+// the page the recognizer is, from 0 to 1, where the engine reports it.
+export async function recognize(
+  canvas: HTMLCanvasElement,
+  engine: OCREngine,
+  langs: string[],
+  onProgress?: (fraction: number) => void,
+): Promise<OCRWord[]> {
   if (engine === 'native') {
     const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/png'))
     if (!blob) {
@@ -43,7 +49,13 @@ export async function recognize(canvas: HTMLCanvasElement, engine: OCREngine, la
     return recognizeTextNative(bytesToBase64(new Uint8Array(await blob.arrayBuffer())))
   }
   const worker = await tesseractWorker(langs)
-  const { data } = await worker.recognize(canvas, {}, { blocks: true })
+  progressListener = onProgress ?? null
+  let data: Awaited<ReturnType<TesseractWorker['recognize']>>['data']
+  try {
+    ;({ data } = await worker.recognize(canvas, {}, { blocks: true }))
+  } finally {
+    progressListener = null
+  }
   const width = canvas.width
   const height = canvas.height
   const words: OCRWord[] = []
@@ -79,6 +91,7 @@ let worker: Promise<TesseractWorker> | null = null
 let workerLangs = ''
 let idleTimer: ReturnType<typeof setTimeout> | null = null
 const idleMs = 60_000
+let progressListener: ((fraction: number) => void) | null = null
 
 function scheduleIdle(): void {
   if (idleTimer) {
@@ -125,6 +138,11 @@ function tesseractWorker(langs: string[]): Promise<TesseractWorker> {
       workerBlobURL: false,
       cacheMethod: 'none',
       gzip: true,
+      logger: (m) => {
+        if (m.status === 'recognizing text') {
+          progressListener?.(m.progress)
+        }
+      },
     })
   })()
   worker = made
