@@ -464,8 +464,9 @@
 
   async function loadRemote(includeTrackers = false): Promise<void> {
     try {
-      const html = await getMessageHtml(detail.id, true, includeTrackers)
-      setBodyHtml(html)
+      const id = detail.id
+      const html = await getMessageHtml(id, true, includeTrackers)
+      setBodyHtml(id, html)
       remoteLoaded = true
       pixelsBlocked = !includeTrackers && trackers.length > 0
       pixelMenu = null
