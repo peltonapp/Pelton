@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"log/slog"
+	"sync"
 	"time"
 )
 
@@ -21,12 +22,23 @@ type Transmitter interface {
 // Worker drains the queue in the background. It is cancellable via context and
 // survives transient transmit errors by leaving the message queued for a later
 // attempt, so queued mail is never lost to a flaky network.
+//
+// Each account sends one message at a time, in the order they were queued, but
+// accounts send alongside each other: a server that is slow or hangs holds up
+// only the mail going out through it.
 type Worker struct {
 	queue       *Queue
 	transmitter Transmitter
 	log         *slog.Logger
 	interval    time.Duration
 	onChange    func()
+
+	mu       sync.Mutex
+	busy     map[int64]bool
+	inflight sync.WaitGroup
+	// wake is nudged when an account finishes a message, so its next one goes
+	// out straight away instead of at the next poll.
+	wake chan struct{}
 }
 
 // Option configures a Worker.
@@ -66,6 +78,8 @@ func NewWorker(queue *Queue, transmitter Transmitter, opts ...Option) *Worker {
 		log:         slog.New(slog.DiscardHandler),
 		interval:    defaultPollInterval,
 		onChange:    func() {},
+		busy:        map[int64]bool{},
+		wake:        make(chan struct{}, 1),
 	}
 	for _, opt := range opts {
 		opt(w)
@@ -88,7 +102,7 @@ func (w *Worker) Run(ctx context.Context) error {
 	defer ticker.Stop()
 
 	for {
-		if err := w.DrainOnce(ctx); err != nil {
+		if _, err := w.dispatch(ctx); err != nil {
 			if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
 				return err
 			}
@@ -100,31 +114,74 @@ func (w *Worker) Run(ctx context.Context) error {
 		case <-ctx.Done():
 			return ctx.Err()
 		case <-ticker.C:
+		case <-w.wake:
 		}
 	}
 }
 
-// DrainOnce sends every message that is currently due, then returns. Useful for
-// tests and for a one-shot flush. A transmit failure on one message does not
-// stop the others; it is recorded and the message is requeued or failed.
+// DrainOnce sends every message that is currently due and waits for them, then
+// returns. Useful for tests and for a one-shot flush. A transmit failure on one
+// message does not stop the others; it is recorded and the message is requeued
+// or failed.
 func (w *Worker) DrainOnce(ctx context.Context) error {
 	for {
-		if err := ctx.Err(); err != nil {
-			return err
-		}
-		m, err := w.queue.claimDue(ctx, time.Now().UTC())
+		started, err := w.dispatch(ctx)
+		w.inflight.Wait()
 		if err != nil {
 			return err
 		}
-		if m == nil {
+		if started == 0 {
 			return nil
 		}
+	}
+}
+
+// dispatch claims every due message of an account that is not already sending
+// and starts it, returning how many it started. It does not wait for them.
+func (w *Worker) dispatch(ctx context.Context) (int, error) {
+	started := 0
+	for {
+		if err := ctx.Err(); err != nil {
+			return started, err
+		}
+		m, err := w.queue.claimDue(ctx, time.Now().UTC(), w.busyAccounts()...)
+		if err != nil {
+			return started, err
+		}
+		if m == nil {
+			return started, nil
+		}
+		w.mu.Lock()
+		w.busy[m.AccountID] = true
+		w.mu.Unlock()
+		w.inflight.Add(1)
+		started++
 		// the row is now in the sending state; let the ui reflect that, then
 		// reflect the final outcome once process records it.
 		w.onChange()
-		w.process(ctx, *m)
-		w.onChange()
+		go func(m Message) {
+			defer w.inflight.Done()
+			w.process(ctx, m)
+			w.mu.Lock()
+			delete(w.busy, m.AccountID)
+			w.mu.Unlock()
+			w.onChange()
+			select {
+			case w.wake <- struct{}{}:
+			default:
+			}
+		}(*m)
 	}
+}
+
+func (w *Worker) busyAccounts() []int64 {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	ids := make([]int64, 0, len(w.busy))
+	for id := range w.busy {
+		ids = append(ids, id)
+	}
+	return ids
 }
 
 // process transmits one claimed message and records the outcome.

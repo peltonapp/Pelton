@@ -129,8 +129,34 @@ func (t *accountTransmitter) Transmit(ctx context.Context, m outbox.Message) err
 		psmtp.WithSentAppender(func(raw []byte) (string, error) {
 			return t.app.appendToSent(*account, raw)
 		}),
+		psmtp.WithBackground(func(fn func()) {
+			t.app.sentCopies.Add(1)
+			go func() {
+				defer t.app.sentCopies.Done()
+				fn()
+			}()
+		}),
 	)
 	return sender.Transmit(ctx, m)
+}
+
+// sentCopyWait bounds how long the copy to Sent waits for the account's other
+// imap work. Past it the copy is dropped with a warning rather than waiting on
+// a sync that may never let go.
+const sentCopyWait = 10 * time.Minute
+
+// lockWithin takes mu, giving up after d.
+func lockWithin(mu *sync.Mutex, d time.Duration) bool {
+	deadline := time.Now().Add(d)
+	for {
+		if mu.TryLock() {
+			return true
+		}
+		if time.Now().After(deadline) {
+			return false
+		}
+		time.Sleep(200 * time.Millisecond)
+	}
 }
 
 // appendToSent puts a copy of a message that has just been sent in the
@@ -152,7 +178,10 @@ func (a *App) appendToSent(account storage.Account, raw []byte) (string, error) 
 	}
 	// every other imap session in the package takes this, so a send during a
 	// sync waits its turn rather than opening a second login for the account.
-	syncMu.Lock()
+	// It runs after the message is marked sent, so the wait holds up nothing.
+	if !lockWithin(&syncMu, sentCopyWait) {
+		return "", fmt.Errorf("gave up after %s waiting for other mail work to finish", sentCopyWait)
+	}
 	defer syncMu.Unlock()
 	var folder string
 	err = a.withIMAPSession(cfg, func(client mailClient) error {
