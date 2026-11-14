@@ -2,6 +2,7 @@
   // a small info glyph next to a field label. The browser's own title tooltip
   // takes about a second to appear, which is long enough that people give up
   // on it, so the bubble here is drawn by the app and shows in 150ms.
+  import { onDestroy } from 'svelte'
   import { IconInfoCircle } from '@tabler/icons-svelte'
 
   /** The explanation the bubble shows. */
@@ -24,6 +25,14 @@
     clearTimeout(timer)
     open = false
   }
+
+  // a click toggles for good: the focus the click brings would otherwise arm
+  // the hover timer and reopen a bubble that was just dismissed.
+  function toggle(): void {
+    clearTimeout(timer)
+    open = !open
+  }
+  onDestroy(() => clearTimeout(timer))
 </script>
 
 <button
@@ -34,7 +43,7 @@
   on:mouseleave={hide}
   on:focus={show}
   on:blur={hide}
-  on:click|preventDefault|stopPropagation={() => (open = !open)}
+  on:click|preventDefault|stopPropagation={toggle}
 >
   <IconInfoCircle size={13} stroke={1.7} />
   {#if open}
