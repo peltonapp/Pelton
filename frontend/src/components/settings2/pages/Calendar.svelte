@@ -19,13 +19,38 @@
   import { reminderChoices, reminderLabel } from '../../calendar/labels'
   import { prefs } from '../../../stores/prefs'
   import { t } from '../../../lib/i18n'
+  import '../../calendar/controls.css'
+  import { defaultCalendarFileStatus, setDefaultCalendarFileHandler } from '../../../lib/api'
+  import { errorMessage, toastError } from '../../../stores/toast'
   import type { TimeFormat } from '../../../lib/format'
   import type { CalendarView, TimeZoneDisplay } from '../../../lib/types'
+
+  let icsHandler = { known: false, isDefault: false }
 
   onMount(() => {
     void loadCalendarSettings()
     void loadCalendars()
+    void readICSHandler()
   })
+
+  async function readICSHandler(): Promise<void> {
+    try {
+      icsHandler = await defaultCalendarFileStatus()
+    } catch {
+      icsHandler = { known: false, isDefault: false }
+    }
+  }
+
+  // the system asks the user to confirm where it can, so the status is read
+  // again afterwards rather than assumed.
+  async function useForICS(): Promise<void> {
+    try {
+      await setDefaultCalendarFileHandler()
+    } catch (err) {
+      toastError(errorMessage(err))
+    }
+    await readICSHandler()
+  }
 
   $: s = $calendarSettings
 
@@ -162,6 +187,13 @@
       label={$t('calendarSettings.reminders')}
       on:change={(e) => saveCalendarSettings({ remindersEnabled: e.detail })}
     />
+  </Row>
+  <Row id="calendar-ics-handler" label={$t('calendarSettings.icsHandler')} hint={$t('calendarSettings.icsHandler.hint')}>
+    {#if icsHandler.known && icsHandler.isDefault}
+      <span class="to">{$t('calendarSettings.icsHandler.isDefault')}</span>
+    {:else}
+      <button type="button" class="cal-btn" on:click={useForICS}>{$t('calendarSettings.icsHandler.set')}</button>
+    {/if}
   </Row>
 </Card>
 

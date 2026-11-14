@@ -1,9 +1,11 @@
 <script lang="ts">
   // the full event editor: title, when, how it repeats, which calendar, where,
-  // reminders, who is invited and notes. it edits a draft and hands the
-  // finished one back; the screen saves it and asks, for one occurrence of a
-  // series, which occurrences the change is for.
-  import { createEventDispatcher, onMount, tick } from 'svelte'
+  // reminders, who is invited and notes, as one column of hairline rows led by
+  // an icon. it edits a draft and hands the finished one back; the screen
+  // saves it and asks, for one occurrence of a series, which occurrences the
+  // change is for. Cmd or Ctrl+Enter saves; escape asks before it throws edits
+  // away.
+  import { createEventDispatcher, tick } from 'svelte'
   import { slide } from 'svelte/transition'
   import clockIcon from '@phosphor-icons/core/assets/duotone/clock-duotone.svg?raw'
   import repeatIcon from '@phosphor-icons/core/assets/duotone/repeat-duotone.svg?raw'
@@ -13,15 +15,17 @@
   import usersIcon from '@phosphor-icons/core/assets/duotone/users-duotone.svg?raw'
   import notesIcon from '@phosphor-icons/core/assets/duotone/text-align-left-duotone.svg?raw'
   import warningIcon from '@phosphor-icons/core/assets/duotone/warning-duotone.svg?raw'
+  import envelopeIcon from '@phosphor-icons/core/assets/duotone/envelope-simple-duotone.svg?raw'
   import plusIcon from '@phosphor-icons/core/assets/regular/plus.svg?raw'
   import closeIcon from '@phosphor-icons/core/assets/regular/x.svg?raw'
   import './controls.css'
   import Modal from '../common/Modal.svelte'
   import Select from '../common/Select.svelte'
   import ToggleSwitch from '../common/ToggleSwitch.svelte'
+  import AnchoredPopover from '../common/AnchoredPopover.svelte'
   import Ph from '../common/Ph.svelte'
   import DateField from './DateField.svelte'
-  import { addDays, atMinutes, dayKey, minutesOfDay, parseEventTime, startOfDay, toRFC3339 } from '../../lib/caldate'
+  import { addDays, atMinutes, dayKey, daysBetween, minutesOfDay, parseEventTime, startOfDay, toRFC3339 } from '../../lib/caldate'
   import { calendarColor, formatTime } from '../../lib/calformat'
   import {
     buildRRule,
@@ -37,9 +41,11 @@
   } from '../../lib/recurrence'
   import { reminderChoices, reminderLabel, partStatKey } from './labels'
   import { localZone } from './occurrence'
+  import { mailLinks, openMailLink } from '../../lib/maillink'
   import { dur, motion } from '../../lib/motion'
-  import { t } from '../../lib/i18n'
+  import { isMac, t } from '../../lib/i18n'
   import type { TimeFormat } from '../../lib/format'
+  import type { FoundDate } from '../../lib/eventphrase'
   import type { Attendee, Calendar, EventDraft, Reminder } from '../../lib/types'
 
   /** The event being edited; id 0 for a new one. */
@@ -52,6 +58,10 @@
   export let identity: { name: string; email: string } | null = null
   /** True while the save is running. */
   export let saving: boolean = false
+  /** Dates found in a mail the event comes from, offered as chips to switch to. */
+  export let found: FoundDate[] = []
+  /** A quiet line above the form, such as why the time is a guess. */
+  export let note: string = ''
 
   const dispatch = createEventDispatcher<{ close: void; save: EventDraft; remove: void }>()
 
@@ -86,12 +96,7 @@
 
   $: built = currentDraft(summary, location, description, calendarId, allDay, start, end, rrule, reminders, attendees)
   $: dirty = JSON.stringify(built) !== initial
-
-  let titleInput: HTMLInputElement
-  onMount(async () => {
-    await tick()
-    titleInput?.focus()
-  })
+  $: links = mailLinks(description)
 
   function currentDraft(
     s: string,
@@ -134,7 +139,7 @@
       .map((m) => {
         let label = formatTime(atMinutes(startDay, m), timeFormat)
         if (from !== null) {
-          label += `  (${durationLabel(m - from)})`
+          label += `  ${durationLabel(m - from)}`
         }
         return { value: String(m), label }
       })
@@ -144,6 +149,10 @@
     if (minutes < 60) {
       return $t('calendar.duration.minutes').replace('{n}', String(minutes))
     }
+    if (minutes % 1440 === 0) {
+      const days = minutes / 1440
+      return $t(days === 1 ? 'calendar.duration.day' : 'calendar.duration.days').replace('{n}', String(days))
+    }
     const hours = minutes / 60
     return $t('calendar.duration.hours').replace('{n}', Number.isInteger(hours) ? String(hours) : hours.toFixed(1))
   }
@@ -151,28 +160,55 @@
   $: sameDayEnd = dayKey(startDay) === dayKey(endDay)
   $: startItems = timeItems(startMin, null)
   $: endItems = timeItems(endMin, sameDayEnd ? startMin : null)
+  $: length = allDay ? (daysBetween(startDay, endDay) + 1) * 1440 : Math.round((end.getTime() - start.getTime()) / 60000)
 
   // moving the start keeps the length, as every calendar does.
   function setStartDay(day: Date): void {
-    const span = endDay.getTime() - startDay.getTime()
+    const span = daysBetween(startDay, endDay)
     startDay = startOfDay(day)
-    endDay = startOfDay(new Date(startDay.getTime() + span))
+    endDay = addDays(startDay, span)
   }
 
   function setStartMin(m: number): void {
     const before = atMinutes(startDay, startMin)
-    const length = atMinutes(endDay, endMin).getTime() - before.getTime()
+    const span = atMinutes(endDay, endMin).getTime() - before.getTime()
     startMin = m
-    const after = new Date(atMinutes(startDay, m).getTime() + length)
+    const after = new Date(atMinutes(startDay, m).getTime() + span)
     endDay = startOfDay(after)
     endMin = minutesOfDay(after)
   }
 
+  function setEndDay(day: Date): void {
+    endDay = startOfDay(day) < startDay ? startDay : startOfDay(day)
+  }
+
   function setAllDay(next: boolean): void {
     allDay = next
-    if (!next && endMin <= startMin && dayKey(startDay) === dayKey(endDay)) {
+    if (!next && endMin <= startMin && sameDayEnd) {
       endMin = Math.min(24 * 60 - 15, startMin + 60)
     }
+  }
+
+  function useFound(f: FoundDate): void {
+    allDay = f.allDay
+    startDay = startOfDay(f.start)
+    endDay = f.allDay ? addDays(startOfDay(f.end), -1) : startOfDay(f.end)
+    if (!f.allDay) {
+      startMin = minutesOfDay(f.start)
+      endMin = minutesOfDay(f.end)
+    }
+    if (f.location && !location) {
+      location = f.location
+    }
+  }
+
+  function isFound(f: FoundDate, from: Date, to: Date, whole: boolean): boolean {
+    return whole === f.allDay && from.getTime() === (f.allDay ? startOfDay(f.start).getTime() : f.start.getTime()) && (whole || to.getTime() === f.end.getTime())
+  }
+
+  function foundLabel(f: FoundDate): string {
+    const day = f.start.toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short' })
+    return f.allDay ? day : `${day}, ${formatTime(f.start, timeFormat)}`
   }
 
   // --- repeat -------------------------------------------------------------------
@@ -220,20 +256,28 @@
 
   // --- reminders ----------------------------------------------------------------
 
-  function reminderItems(current: number): { value: string; label: string }[] {
-    const list = reminderChoices.includes(current) ? reminderChoices : [...reminderChoices, current].sort((a, b) => a - b)
-    return list.map((m) => ({ value: String(m), label: reminderLabel(m, $t) }))
+  let addingReminder = false
+  let reminderButton: HTMLButtonElement
+
+  $: unusedReminders = reminderChoices.filter((m) => !reminders.some((r) => r.minutesBefore === m && !r.relatedEnd && !r.absolute))
+
+  function addReminder(minutes: number): void {
+    reminders = [...reminders, { minutesBefore: minutes, relatedEnd: false, absolute: '', action: '' }].sort((a, b) => a.minutesBefore - b.minutesBefore)
+    addingReminder = false
+    reminderButton?.focus()
   }
 
-  function addReminder(): void {
-    const used = new Set(reminders.map((r) => r.minutesBefore))
-    const next = reminderChoices.find((m) => m >= 15 && !used.has(m)) ?? 15
-    reminders = [...reminders, { minutesBefore: next, relatedEnd: false, absolute: '', action: '' }]
+  function reminderText(r: Reminder): string {
+    if (r.absolute) {
+      return new Date(r.absolute).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' })
+    }
+    return reminderLabel(r.minutesBefore, $t)
   }
 
   // --- attendees ----------------------------------------------------------------
 
   let guest = ''
+  let guestInput: HTMLInputElement
 
   function addGuests(): void {
     const parts = guest.split(/[,;\n]/).map((s) => s.trim()).filter(Boolean)
@@ -254,15 +298,32 @@
   }
 
   function onGuestKey(event: KeyboardEvent): void {
-    if (event.key === 'Enter' || event.key === ',') {
-      event.preventDefault()
-      addGuests()
+    if (event.key === 'Enter' || event.key === ',' || event.key === ';') {
+      if (guest.trim()) {
+        event.preventDefault()
+        addGuests()
+      }
     } else if (event.key === 'Backspace' && guest === '' && attendees.length > 0) {
       attendees = attendees.slice(0, -1)
     }
   }
 
-  $: calendarItems = calendars.map((c) => ({ value: String(c.id), label: c.name || $t('calendar.defaultName') }))
+  // --- notes --------------------------------------------------------------------
+
+  // the notes grow with what is in them rather than scrolling inside a box;
+  // the text is the parameter so every change refits.
+  function grow(el: HTMLTextAreaElement, _text: string): { update(): void } {
+    const fit = (): void => {
+      el.style.height = 'auto'
+      el.style.height = `${el.scrollHeight}px`
+    }
+    void tick().then(fit)
+    return { update: fit }
+  }
+
+  // --- calendar and saving --------------------------------------------------------
+
+  $: calendarItems = calendars.map((c) => ({ value: String(c.id), label: c.name || $t('calendar.defaultName'), color: calendarColor(c) }))
   $: chosen = calendars.find((c) => c.id === calendarId)
 
   function submit(): void {
@@ -273,46 +334,73 @@
       dispatch('save', currentDraft(summary, location, description, calendarId, allDay, start, end, rrule, reminders, attendees))
     }
   }
+
+  function onKeydown(event: KeyboardEvent): void {
+    if (event.key === 'Enter' && (isMac ? event.metaKey : event.ctrlKey)) {
+      event.preventDefault()
+      submit()
+    }
+  }
+
+  $: saveHint = `${isMac ? '⌘' : 'Ctrl+'}Enter`
 </script>
 
 <Modal title={draft.id === 0 ? $t('calendar.newEvent') : $t('calendar.editEvent')} size="medium" {dirty} on:close>
-  <form id="event-editor" class="editor" style={`--cal:${calendarColor(chosen)}`} on:submit|preventDefault={submit}>
-    <input
-      class="title"
-      bind:this={titleInput}
-      bind:value={summary}
-      placeholder={$t('calendar.addTitle')}
-      aria-label={$t('calendar.title')}
-    />
+  <!-- svelte-ignore a11y-no-noninteractive-element-interactions -->
+  <form id="event-editor" class="editor" style={`--cal:${calendarColor(chosen)}`} on:submit|preventDefault={submit} on:keydown={onKeydown}>
+    <!-- svelte-ignore a11y-autofocus -->
+    <input class="title" bind:value={summary} placeholder={$t('calendar.addTitle')} aria-label={$t('calendar.title')} autofocus />
 
-    <div class="line">
-      <span class="icon"><Ph svg={clockIcon} size={16} /></span>
-      <div class="when">
-        <div class="span">
-          <DateField value={startDay} {weekStart} label={$t('calendar.startDate')} on:change={(e) => setStartDay(e.detail)} />
+    {#if note}
+      <p class="note lead">{note}</p>
+    {/if}
+    {#if found.length > 0}
+      <div class="found" role="group" aria-label={$t('calendar.foundDates')}>
+        <span class="found-label">{$t('calendar.foundDates')}</span>
+        {#each found as f, i (i)}
+          <button type="button" class="pill" class:on={isFound(f, start, end, allDay)} aria-pressed={isFound(f, start, end, allDay)} on:click={() => useFound(f)}>
+            {foundLabel(f)}
+          </button>
+        {/each}
+      </div>
+    {/if}
+
+    <div class="row">
+      <span class="icon" aria-hidden="true"><Ph svg={clockIcon} size={16} /></span>
+      <div class="cell">
+        <div class="when">
+          <DateField class="ctl" value={startDay} {weekStart} label={$t('calendar.startDate')} on:change={(e) => setStartDay(e.detail)} />
           {#if !allDay}
-            <Select value={String(startMin)} items={startItems} ariaLabel={$t('calendar.startTime')} on:change={(e) => setStartMin(Number(e.detail))} />
+            <Select class="ctl time" value={String(startMin)} items={startItems} ariaLabel={$t('calendar.startTime')} on:change={(e) => setStartMin(Number(e.detail))} />
           {/if}
-          <span class="to">{$t('calendar.to')}</span>
-          <DateField value={endDay} {weekStart} label={$t('calendar.endDate')} on:change={(e) => (endDay = startOfDay(e.detail))} />
+          <span class="dash" aria-hidden="true">-</span>
+          {#if allDay || !sameDayEnd}
+            <DateField class="ctl" value={endDay} {weekStart} label={$t('calendar.endDate')} on:change={(e) => setEndDay(e.detail)} />
+          {/if}
           {#if !allDay}
-            <Select value={String(endMin)} items={endItems} ariaLabel={$t('calendar.endTime')} on:change={(e) => (endMin = Number(e.detail))} />
+            <Select class="ctl time" value={String(endMin)} items={endItems} ariaLabel={$t('calendar.endTime')} on:change={(e) => (endMin = Number(e.detail))} />
           {/if}
+          {#if !invalid}
+            <span class="length">{durationLabel(length)}</span>
+          {/if}
+          <label class="allday">
+            <ToggleSwitch checked={allDay} label={$t('calendar.allDay')} on:change={(e) => setAllDay(e.detail)} />
+            <span>{$t('calendar.allDay')}</span>
+          </label>
         </div>
-        <label class="inline">
-          <ToggleSwitch checked={allDay} label={$t('calendar.allDay')} on:change={(e) => setAllDay(e.detail)} />
-          <span>{$t('calendar.allDay')}</span>
-        </label>
+        {#if !allDay && sameDayEnd}
+          <button type="button" class="link" on:click={() => setEndDay(addDays(startDay, 1))}>{$t('calendar.endsLater')}</button>
+        {/if}
         {#if invalid}
           <p class="error"><Ph svg={warningIcon} size={13} />{$t('calendar.endBeforeStart')}</p>
         {/if}
       </div>
     </div>
 
-    <div class="line">
-      <span class="icon"><Ph svg={repeatIcon} size={16} /></span>
-      <div class="stack">
-        <Select value={customOpen ? 'custom' : preset} items={presetItems} ariaLabel={$t('calendar.repeat')} on:change={(e) => pickPreset(e.detail)} />
+    <div class="row">
+      <span class="icon" aria-hidden="true"><Ph svg={repeatIcon} size={16} /></span>
+      <div class="cell">
+        <Select class="ctl" value={customOpen ? 'custom' : preset} items={presetItems} ariaLabel={$t('calendar.repeat')} on:change={(e) => pickPreset(e.detail)} />
         {#if occurrence}
           <p class="note">{$t('calendar.repeat.occurrenceNote')}</p>
         {/if}
@@ -321,10 +409,10 @@
             {#if parseRRule(rrule, start) === null && rrule}
               <p class="note">{$t('calendar.repeat.keptAsIs')}</p>
             {/if}
-            <div class="row">
+            <div class="line">
               <span>{$t('calendar.repeat.every')}</span>
               <input
-                class="cal-field num"
+                class="num"
                 type="number"
                 min="1"
                 max="99"
@@ -332,7 +420,7 @@
                 aria-label={$t('calendar.repeat.interval')}
                 on:change={(e) => updateCustom({ interval: Math.max(1, Number(e.currentTarget.value) || 1) })}
               />
-              <Select value={custom.freq} items={unitItems} ariaLabel={$t('calendar.repeat.unit')} on:change={(e) => updateCustom({ freq: e.detail as Repeat['freq'] })} />
+              <Select class="ctl" value={custom.freq} items={unitItems} ariaLabel={$t('calendar.repeat.unit')} on:change={(e) => updateCustom({ freq: e.detail as Repeat['freq'] })} />
             </div>
             {#if custom.freq === 'WEEKLY'}
               <div class="days" role="group" aria-label={$t('calendar.repeat.onDays')}>
@@ -351,21 +439,21 @@
               </div>
             {/if}
             {#if custom.freq === 'MONTHLY'}
-              <div class="row">
-                <Select
-                  value={custom.monthly}
-                  items={[
-                    { value: 'date', label: $t('calendar.repeat.monthlyOn').replace('{n}', String(start.getDate())) },
-                    { value: 'weekday', label: describeRRule(buildRRule({ ...custom, monthly: 'weekday', interval: 1, end: 'never' }, start), start, $t, navigator.language) },
-                  ]}
-                  ariaLabel={$t('calendar.repeat.monthlyMode')}
-                  on:change={(e) => updateCustom({ monthly: e.detail as Repeat['monthly'] })}
-                />
-              </div>
+              <Select
+                class="ctl"
+                value={custom.monthly}
+                items={[
+                  { value: 'date', label: $t('calendar.repeat.monthlyOn').replace('{n}', String(start.getDate())) },
+                  { value: 'weekday', label: describeRRule(buildRRule({ ...custom, monthly: 'weekday', interval: 1, end: 'never' }, start), start, $t, navigator.language) },
+                ]}
+                ariaLabel={$t('calendar.repeat.monthlyMode')}
+                on:change={(e) => updateCustom({ monthly: e.detail as Repeat['monthly'] })}
+              />
             {/if}
-            <div class="row">
+            <div class="line">
               <span>{$t('calendar.repeat.ends')}</span>
               <Select
+                class="ctl"
                 value={custom.end}
                 items={[
                   { value: 'never', label: $t('calendar.repeat.never') },
@@ -377,7 +465,7 @@
               />
               {#if custom.end === 'count'}
                 <input
-                  class="cal-field num"
+                  class="num"
                   type="number"
                   min="1"
                   max="999"
@@ -388,6 +476,7 @@
                 <span>{$t('calendar.repeat.occurrences')}</span>
               {:else if custom.end === 'until'}
                 <DateField
+                  class="ctl"
                   value={new Date(`${custom.until || defaultUntil(start)}T00:00:00`)}
                   {weekStart}
                   label={$t('calendar.repeat.untilDate')}
@@ -403,45 +492,47 @@
       </div>
     </div>
 
-    <div class="line">
-      <span class="icon"><Ph svg={calendarIcon} size={16} /></span>
-      <div class="pick-cal">
-        <span class="swatch" aria-hidden="true"></span>
-        <Select value={String(calendarId)} items={calendarItems} ariaLabel={$t('calendar.calendar')} on:change={(e) => (calendarId = Number(e.detail))} />
+    <div class="row">
+      <span class="icon" aria-hidden="true"><Ph svg={calendarIcon} size={16} /></span>
+      <div class="cell">
+        <Select class="ctl" value={String(calendarId)} items={calendarItems} ariaLabel={$t('calendar.calendar')} on:change={(e) => (calendarId = Number(e.detail))} />
       </div>
     </div>
 
-    <div class="line">
-      <span class="icon"><Ph svg={mapPinIcon} size={16} /></span>
-      <input class="cal-field grow" bind:value={location} placeholder={$t('calendar.addLocation')} aria-label={$t('calendar.location')} />
+    <div class="row">
+      <span class="icon" aria-hidden="true"><Ph svg={mapPinIcon} size={16} /></span>
+      <input class="field" bind:value={location} placeholder={$t('calendar.addLocation')} aria-label={$t('calendar.location')} />
     </div>
 
-    <div class="line">
-      <span class="icon"><Ph svg={bellIcon} size={16} /></span>
-      <div class="stack">
+    <div class="row">
+      <span class="icon" aria-hidden="true"><Ph svg={bellIcon} size={16} /></span>
+      <div class="chips" role="group" aria-label={$t('calendar.reminder')}>
         {#each reminders as r, i (i)}
-          <div class="row">
-            <Select
-              value={String(r.minutesBefore)}
-              items={reminderItems(r.minutesBefore)}
-              ariaLabel={$t('calendar.reminder')}
-              on:change={(e) => (reminders = reminders.map((x, j) => (j === i ? { ...x, minutesBefore: Number(e.detail), absolute: '' } : x)))}
-            />
-            <button type="button" class="cal-icon" aria-label={$t('calendar.removeReminder')} on:click={() => (reminders = reminders.filter((_, j) => j !== i))}>
-              <Ph svg={closeIcon} size={13} />
+          <span class="chip">
+            {reminderText(r)}
+            <button type="button" aria-label={`${$t('calendar.removeReminder')}: ${reminderText(r)}`} on:click={() => (reminders = reminders.filter((_, j) => j !== i))}>
+              <Ph svg={closeIcon} size={10} />
             </button>
-          </div>
+          </span>
         {/each}
-        <button type="button" class="cal-item add" on:click={addReminder}>
-          <Ph svg={plusIcon} size={13} />{$t('calendar.addReminder')}
+        <button
+          type="button"
+          class="add"
+          bind:this={reminderButton}
+          aria-haspopup="dialog"
+          aria-expanded={addingReminder}
+          on:click={() => (addingReminder = !addingReminder)}
+        >
+          <Ph svg={plusIcon} size={12} />{reminders.length ? $t('calendar.add') : $t('calendar.addReminder')}
         </button>
       </div>
     </div>
 
-    <div class="line">
-      <span class="icon"><Ph svg={usersIcon} size={16} /></span>
-      <div class="stack">
-        <div class="guests cal-field">
+    <div class="row">
+      <span class="icon" aria-hidden="true"><Ph svg={usersIcon} size={16} /></span>
+      <div class="cell">
+        <!-- svelte-ignore a11y-click-events-have-key-events a11y-no-static-element-interactions -->
+        <div class="chips" on:click={() => guestInput?.focus()}>
           {#each attendees as a, i (a.email)}
             <span class="chip" title={`${a.email}, ${$t(partStatKey(a.partStat))}`}>
               <span class="mark {a.partStat.toLowerCase()}" aria-hidden="true"></span>
@@ -452,6 +543,8 @@
             </span>
           {/each}
           <input
+            class="field inline"
+            bind:this={guestInput}
             bind:value={guest}
             placeholder={attendees.length ? '' : $t('calendar.addGuests')}
             aria-label={$t('calendar.guestsLabel')}
@@ -465,9 +558,20 @@
       </div>
     </div>
 
-    <div class="line top">
-      <span class="icon"><Ph svg={notesIcon} size={16} /></span>
-      <textarea class="cal-field grow" rows="4" bind:value={description} placeholder={$t('calendar.addNotes')} aria-label={$t('calendar.notes')}></textarea>
+    <div class="row top">
+      <span class="icon" aria-hidden="true"><Ph svg={notesIcon} size={16} /></span>
+      <div class="cell">
+        <textarea class="field notes" rows="2" bind:value={description} use:grow={description} placeholder={$t('calendar.addNotes')} aria-label={$t('calendar.notes')}></textarea>
+        {#if links.length > 0}
+          <div class="mails">
+            {#each links as link (link)}
+              <button type="button" class="pill" on:click={() => openMailLink(link)}>
+                <Ph svg={envelopeIcon} size={13} />{$t('calendar.openMail')}
+              </button>
+            {/each}
+          </div>
+        {/if}
+      </div>
     </div>
   </form>
 
@@ -477,93 +581,211 @@
         <button type="button" class="cal-btn danger" on:click={() => dispatch('remove')}>{$t('calendar.delete')}</button>
       {/if}
       <span class="spacer"></span>
+      <kbd class="hint" aria-hidden="true">{saveHint}</kbd>
       <button type="button" class="cal-btn" on:click={() => dispatch('close')}>{$t('calendar.cancel')}</button>
       <button type="submit" form="event-editor" class="cal-btn primary" disabled={invalid || saving}>{$t('calendar.save')}</button>
     </div>
   </svelte:fragment>
 </Modal>
 
+{#if addingReminder && reminderButton}
+  <AnchoredPopover anchor={reminderButton} align="start" label={$t('calendar.addReminder')} on:close={() => (addingReminder = false)}>
+    <div class="cal-menu">
+      {#each unusedReminders as m (m)}
+        <button type="button" class="cal-item" on:click={() => addReminder(m)}>{reminderLabel(m, $t)}</button>
+      {/each}
+    </div>
+  </AnchoredPopover>
+{/if}
+
 <style>
   .editor {
     display: flex;
     flex-direction: column;
-    gap: var(--space-4);
   }
 
   .title {
     width: 100%;
     padding: var(--space-2) 0 var(--space-3);
     border: none;
-    border-bottom: var(--hairline) solid var(--border-default);
+    border-bottom: var(--hairline) solid var(--border-subtle);
     background: transparent;
     color: var(--text-primary);
     font: inherit;
     font-size: var(--fz-title);
     font-weight: var(--fw-medium);
-    transition: border-color var(--motion-fast) var(--ease-out);
   }
 
   .title:focus {
     outline: none;
-    border-bottom-color: var(--accent);
   }
 
-  .title::placeholder {
+  .title::placeholder,
+  .field::placeholder {
+    color: var(--text-tertiary);
+    opacity: 1;
+  }
+
+  .found {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--space-2);
+    padding: var(--space-3) 0;
+    border-bottom: var(--hairline) solid var(--border-subtle);
+  }
+
+  .found-label {
+    font-size: var(--fz-label);
     color: var(--text-tertiary);
   }
 
-  .line {
+  /* one row per thing: the icon column, then the value. rows are divided by
+     hairlines instead of each control carrying its own box. */
+  .row {
     display: grid;
     grid-template-columns: var(--space-6) minmax(0, 1fr);
     align-items: center;
-    gap: var(--space-3);
+    column-gap: var(--space-3);
+    min-height: calc(var(--control-height) + var(--space-3));
+    padding: var(--space-2) 0;
+    border-bottom: var(--hairline) solid var(--border-subtle);
   }
 
-  .line.top {
-    align-items: start;
+  .row:last-child {
+    border-bottom: none;
   }
 
-  .line:has(.stack),
-  .line:has(.when) {
+  .row.top,
+  .row:has(.custom),
+  .row:has(.note),
+  .row:has(.error),
+  .row:has(.link) {
     align-items: start;
   }
 
   .icon {
     display: inline-flex;
     justify-content: center;
-    padding-top: var(--space-2);
+    align-items: center;
+    height: var(--control-height);
     color: var(--text-tertiary);
   }
 
-  .when,
-  .stack {
+  .cell {
     display: flex;
     flex-direction: column;
     align-items: flex-start;
-    gap: var(--space-3);
+    gap: var(--space-2);
     min-width: 0;
   }
 
-  .span,
-  .row {
+  .when {
     display: flex;
     flex-wrap: wrap;
     align-items: center;
-    gap: var(--space-2);
+    gap: var(--space-1) var(--space-2);
+    width: 100%;
+  }
+
+  /* every dropdown in the form: flat until pointed at, the same height and
+     the same chevron whether it picks a day, a time or a calendar. */
+  .editor :global(.ctl) {
+    height: var(--control-height);
+    padding: 0 var(--space-2);
+    border-color: transparent;
+    background: transparent;
+    font-size: var(--fz-list);
+    transition:
+      background-color var(--motion-fast) var(--ease-out),
+      border-color var(--motion-fast) var(--ease-out);
+  }
+
+  .editor :global(.ctl:not(:disabled):hover) {
+    border-color: var(--border-default);
+    background: var(--surface-raised);
+  }
+
+  .editor :global(.ctl.open) {
+    border-color: var(--accent);
+  }
+
+  .editor :global(.ctl .chevron) {
+    color: var(--text-tertiary);
+  }
+
+  .editor :global(.ctl.time) {
+    font-variant-numeric: tabular-nums;
+  }
+
+  .dash {
+    color: var(--text-tertiary);
+  }
+
+  .length {
     font-size: var(--fz-label);
-    color: var(--text-secondary);
+    color: var(--text-tertiary);
+    font-variant-numeric: tabular-nums;
   }
 
-  .to {
-    padding-inline: var(--space-1);
-  }
-
-  .inline {
+  .allday {
     display: inline-flex;
     align-items: center;
-    gap: var(--space-3);
+    gap: var(--space-2);
+    margin-inline-start: auto;
     font-size: var(--fz-label);
     color: var(--text-secondary);
+    cursor: var(--cursor-action);
+  }
+
+  .link {
+    padding: 0 var(--space-2);
+    border: none;
+    background: transparent;
+    color: var(--text-tertiary);
+    font: inherit;
+    font-size: var(--fz-label);
+    cursor: var(--cursor-action);
+  }
+
+  .link:hover {
+    color: var(--text-primary);
+  }
+
+  .field {
+    width: 100%;
+    min-width: 0;
+    height: var(--control-height);
+    padding: 0 var(--space-2);
+    border: none;
+    background: transparent;
+    color: var(--text-primary);
+    font: inherit;
+    font-size: var(--fz-list);
+  }
+
+  .field:focus {
+    outline: none;
+  }
+
+  .row:focus-within > .field,
+  .chips:focus-within {
+    box-shadow: inset 0 calc(-1 * var(--hairline)) 0 var(--accent);
+  }
+
+  .notes {
+    height: auto;
+    min-height: calc(var(--control-height) * 2);
+    padding: var(--space-2);
+    line-height: 1.5;
+    resize: none;
+    overflow: hidden;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+  }
+
+  .row:focus-within .notes {
+    box-shadow: inset 0 calc(-1 * var(--hairline)) 0 var(--accent);
   }
 
   .error {
@@ -571,6 +793,7 @@
     align-items: center;
     gap: var(--space-2);
     margin: 0;
+    padding-inline: var(--space-2);
     font-size: var(--fz-label);
     color: var(--danger);
   }
@@ -578,8 +801,14 @@
   .note,
   .summary {
     margin: 0;
+    padding-inline: var(--space-2);
     font-size: var(--fz-label);
+    line-height: 1.45;
     color: var(--text-tertiary);
+  }
+
+  .lead {
+    padding: var(--space-3) 0 0;
   }
 
   .summary {
@@ -589,30 +818,51 @@
   .custom {
     display: flex;
     flex-direction: column;
-    gap: var(--space-3);
-    align-self: stretch;
-    padding: var(--space-3) var(--space-4);
-    border: var(--hairline) solid var(--border-default);
-    border-radius: var(--radius-control);
-    background: var(--surface-sunken);
+    align-items: flex-start;
+    gap: var(--space-2);
+    padding: var(--space-1) 0 var(--space-1) var(--space-2);
+    border-inline-start: var(--hairline) solid var(--border-default);
+    margin-inline-start: var(--space-2);
+  }
+
+  .line {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--space-2);
+    font-size: var(--fz-label);
+    color: var(--text-secondary);
   }
 
   .num {
-    width: calc(var(--control-height) * 2);
+    width: calc(var(--control-height) * 1.6);
+    height: calc(var(--control-height) - 4px);
+    padding: 0 var(--space-2);
+    border: var(--hairline) solid var(--border-default);
+    border-radius: var(--radius-control);
+    background: var(--surface-raised);
+    color: var(--text-primary);
+    font: inherit;
     font-variant-numeric: tabular-nums;
+  }
+
+  .num:focus {
+    outline: none;
+    border-color: var(--accent);
   }
 
   .days {
     display: flex;
-    gap: var(--space-2);
+    flex-wrap: wrap;
+    gap: var(--space-1);
   }
 
   .day {
-    width: calc(var(--control-height) - 2px);
-    height: calc(var(--control-height) - 2px);
+    width: calc(var(--control-height) - 4px);
+    height: calc(var(--control-height) - 4px);
     border: var(--hairline) solid var(--border-default);
-    border-radius: 50%;
-    background: var(--surface-raised);
+    border-radius: var(--radius-control);
+    background: transparent;
     color: var(--text-secondary);
     font: inherit;
     font-size: var(--fz-label);
@@ -628,70 +878,57 @@
     color: var(--accent-fg);
   }
 
-  .pick-cal {
-    display: flex;
-    align-items: center;
-    gap: var(--space-3);
-  }
-
-  .swatch {
-    width: var(--space-4);
-    height: var(--space-4);
-    border-radius: calc(var(--radius-control) - 1px);
-    background: var(--cal);
-  }
-
-  .grow {
-    width: 100%;
-  }
-
-  .add {
-    color: var(--text-secondary);
-    font-size: var(--fz-label);
-  }
-
-  .guests {
+  .chips {
     display: flex;
     flex-wrap: wrap;
     align-items: center;
-    gap: var(--space-2);
+    gap: var(--space-1) var(--space-2);
     width: 100%;
-    height: auto;
     min-height: var(--control-height);
-    padding: var(--space-1) var(--space-2);
+    padding-inline: var(--space-2);
     cursor: text;
   }
 
-  .guests:focus-within {
-    border-color: var(--accent);
-    box-shadow: 0 0 0 1px var(--accent);
-  }
-
-  .guests input {
+  .chips .field.inline {
     flex: 1;
+    width: auto;
     min-width: calc(var(--cal-gutter) * 2);
-    height: calc(var(--control-height) - 2 * var(--space-1) - 2px);
-    border: none;
-    background: transparent;
-    color: var(--text-primary);
-    font: inherit;
-    font-size: var(--fz-list);
+    height: var(--chip-height);
+    padding: 0;
   }
 
-  .guests input:focus {
-    outline: none;
-  }
-
-  .chip {
+  .chip,
+  .pill {
     display: inline-flex;
     align-items: center;
     gap: var(--space-2);
     height: var(--chip-height);
     padding-inline: var(--space-3) var(--space-1);
+    border: var(--hairline) solid var(--border-subtle);
     border-radius: var(--radius-control);
     background: var(--surface-sunken);
     font-size: var(--fz-label);
     color: var(--text-primary);
+    white-space: nowrap;
+  }
+
+  .pill {
+    padding-inline: var(--space-3);
+    font: inherit;
+    font-size: var(--fz-label);
+    cursor: var(--cursor-action);
+    transition:
+      background-color var(--motion-fast) var(--ease-out),
+      border-color var(--motion-fast) var(--ease-out);
+  }
+
+  .pill:hover {
+    background: var(--surface-hover);
+  }
+
+  .pill.on {
+    border-color: var(--accent);
+    background: var(--selection-bg);
   }
 
   .chip button {
@@ -710,6 +947,26 @@
   .chip button:hover {
     background: var(--surface-hover);
     color: var(--text-primary);
+  }
+
+  .add {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-1);
+    height: var(--chip-height);
+    padding-inline: var(--space-2);
+    border: var(--hairline) dashed var(--border-default);
+    border-radius: var(--radius-control);
+    background: transparent;
+    color: var(--text-secondary);
+    font: inherit;
+    font-size: var(--fz-label);
+    cursor: var(--cursor-action);
+  }
+
+  .add:hover {
+    color: var(--text-primary);
+    border-color: var(--border-strong);
   }
 
   .mark {
@@ -733,6 +990,22 @@
     background: var(--danger);
   }
 
+  .mails {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-2);
+    padding-inline: var(--space-2);
+  }
+
+  .day:focus-visible,
+  .chip button:focus-visible,
+  .pill:focus-visible,
+  .add:focus-visible,
+  .link:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 1px;
+  }
+
   .foot {
     display: flex;
     align-items: center;
@@ -742,5 +1015,21 @@
 
   .spacer {
     flex: 1;
+  }
+
+  .hint {
+    font-family: var(--font-mono);
+    font-size: var(--fz-meta);
+    color: var(--text-tertiary);
+  }
+
+  @media (max-width: 520px) {
+    .allday {
+      margin-inline-start: 0;
+    }
+
+    .hint {
+      display: none;
+    }
   }
 </style>

@@ -13,7 +13,8 @@
   import warningIcon from '@phosphor-icons/core/assets/duotone/warning-duotone.svg?raw'
   import repeatIcon from '@phosphor-icons/core/assets/duotone/repeat-duotone.svg?raw'
   import Ph from '../common/Ph.svelte'
-  import { maildrop, mailDrag } from '../../stores/maildrag'
+  import { maildrop, mailDrag, type MailDropOptions } from '../../stores/maildrag'
+  import { mailDropHint } from './maildrop'
   import {
     addDays,
     atMinutes,
@@ -29,7 +30,7 @@
   } from '../../lib/caldate'
   import { formatHour, formatTime, formatTimeRange } from '../../lib/calformat'
   import { occurrenceKey } from './occurrence'
-  import type { MailDropAt } from '../../stores/calendar'
+  import type { CellMenuAt, MailDropAt } from '../../stores/calendar'
   import { t } from '../../lib/i18n'
   import type { TimeFormat } from '../../lib/format'
   import type { Occurrence, TimeZoneDisplay } from '../../lib/types'
@@ -61,6 +62,7 @@
     change: { occ: Occurrence; start: Date; end: Date }
     day: Date
     mailDrop: MailDropAt
+    menu: CellMenuAt
   }>()
 
   const step = 15
@@ -417,25 +419,44 @@
     return { col, minutes: Math.min(dayMinutes - clickMinutes, minutesAtY(y, Math.floor)) }
   }
 
-  function slotDrop(col: number) {
+  function slotDrop(col: number): MailDropOptions {
     return {
-      onDrop: (items: { id: number }[]) => {
+      onDrop: (items, info) => {
         const hit = hintAt(lastMail.x, lastMail.y)
-        if (items[0]) {
-          dispatch('mailDrop', { messageId: items[0].id, at: timeAt(hit?.col ?? col, hit?.minutes ?? workStart), mode: 'time' })
+        if (items.length > 0) {
+          dispatch('mailDrop', { messageIds: items.map((m) => m.id), at: timeAt(hit?.col ?? col, hit?.minutes ?? workStart), mode: 'time', shift: info.shift })
         }
       },
+      hint: (items, shift) => mailDropHint(items.length, shift, true),
     }
   }
 
-  function laneDrop(col: number) {
+  function laneDrop(col: number): MailDropOptions {
     return {
-      onDrop: (items: { id: number }[]) => {
-        if (items[0]) {
-          dispatch('mailDrop', { messageId: items[0].id, at: startOfDay(days[col]), mode: 'allDay' })
+      onDrop: (items, info) => {
+        if (items.length > 0) {
+          dispatch('mailDrop', { messageIds: items.map((m) => m.id), at: startOfDay(days[col]), mode: 'allDay', shift: info.shift })
         }
       },
+      hint: (items, shift) => mailDropHint(items.length, shift, true),
     }
+  }
+
+  // a right click on empty time or the all-day lane asks for the cell menu.
+  function onColumnMenu(event: MouseEvent, col: number): void {
+    if ((event.target as HTMLElement).closest('.ev')) {
+      return
+    }
+    event.preventDefault()
+    dispatch('menu', { at: timeAt(col, Math.min(dayMinutes - step, minutesAtY(event.clientY, Math.floor))), mode: 'time', x: event.clientX, y: event.clientY })
+  }
+
+  function onLaneMenu(event: MouseEvent): void {
+    if ((event.target as HTMLElement).closest('.bar')) {
+      return
+    }
+    event.preventDefault()
+    dispatch('menu', { at: startOfDay(days[columnAt(event.clientX, laneCells)]), mode: 'allDay', x: event.clientX, y: event.clientY })
   }
 
   // --- scrolling ---------------------------------------------------------------
@@ -487,7 +508,7 @@
       <div class="row lane">
         <div class="corner lane-label">{$t('calendar.allDay')}</div>
         <!-- svelte-ignore a11y-no-static-element-interactions -->
-        <div class="lane-grid" style={`--lanes:${laneCount}`} on:pointerdown={onLaneDown}>
+        <div class="lane-grid" style={`--lanes:${laneCount}`} on:pointerdown={onLaneDown} on:contextmenu={onLaneMenu}>
           {#each days as day, i (dayKey(day))}
             <div class="lane-cell" style={`grid-column:${i + 1}`} bind:this={laneCells[i]} use:maildrop={laneDrop(i)}></div>
           {/each}
@@ -545,6 +566,7 @@
             bind:this={colEls[i]}
             use:maildrop={slotDrop(i)}
             on:pointerdown={(e) => onColumnDown(e, i)}
+            on:contextmenu={(e) => onColumnMenu(e, i)}
           >
             {#if workStart > 0}
               <div class="off" style={`top:0;height:${pct(workStart)}`}></div>

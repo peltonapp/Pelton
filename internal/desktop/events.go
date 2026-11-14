@@ -84,6 +84,9 @@ const (
 	// EventCalendarReminder fires when an event's reminder is due, alongside
 	// the desktop notification, so the ui can show it too.
 	EventCalendarReminder = "calendar:reminder"
+	// EventICSOpen fires when the system asks the running app to open .ics
+	// files, such as one double-clicked in the file manager.
+	EventICSOpen = "calendar:open-files"
 )
 
 // CalendarSyncEvent is the payload for EventCalendarSync. Done and Total

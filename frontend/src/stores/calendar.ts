@@ -94,19 +94,34 @@ export const calendarFocus = writable<Date>(new Date())
  */
 export type MailDropMode = 'time' | 'day' | 'allDay'
 
-/** Mail dropped somewhere on the calendar, as the views report it. */
+/**
+ * Mail dropped on the calendar: on the Calendar entry (at is null, the dates
+ * come from the mail) or on a day or slot of a view. shift says Shift was
+ * held, which links the mail into one event instead of reading its dates.
+ */
 export interface MailDropAt {
-  messageId: number
-  at: Date
+  messageIds: number[]
+  at: Date | null
   mode: MailDropMode
+  shift: boolean
 }
 
-/**
- * A message to start a new event from, set by mail dropped on the Calendar
- * entry or on the calendar itself and taken by the calendar screen. at is null
- * for the Calendar entry, where the suggested time stays.
- */
-export const calendarSeed = writable<{ messageId: number; at: Date | null; mode: MailDropMode } | null>(null)
+/** A right click on a day, a time slot or the all-day lane, as the views report it. */
+export interface CellMenuAt {
+  at: Date
+  mode: MailDropMode
+  x: number
+  y: number
+}
+
+/** Mail to start events from, set by a drop and taken by the calendar screen. */
+export const calendarSeed = writable<MailDropAt | null>(null)
+
+/** Asks the calendar screen to open quick add, set by the shortcut from another space. */
+export const calendarQuickAdd = writable<boolean>(false)
+
+/** Calendar files to import, set when the system asks Pelton to open them. */
+export const calendarImport = writable<string[] | null>(null)
 
 /** Loads the calendar preferences once; the screen opens in their default view. */
 export async function loadCalendarSettings(): Promise<void> {

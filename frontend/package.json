@@ -51,6 +51,7 @@
     "@tiptap/pm": "^3.33.0",
     "@tiptap/starter-kit": "^3.33.0",
     "@wailsio/runtime": "3.1.0",
+    "chrono-node": "^2.10.3",
     "codemirror": "^6.0.2",
     "flag-icons": "^7.6.0",
     "marked": "^18.2.0",

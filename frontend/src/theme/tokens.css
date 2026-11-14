@@ -136,11 +136,6 @@
   /* a pressed button sinks by this much. */
   --press-scale: 0.96;
 
-  /* conversations: the column the expand control sits in, which replies are
-     indented by, and the widths the reading column can be capped at. */
-  --thread-twisty: 16px;
-  --reader-width-narrow: 640px;
-  --reader-width-medium: 820px;
   /* the calendar: its sidebar, the gutter the hour labels sit in, one line of
      a month cell or the all-day lane, the width of an event's color edge, and
      the event popover and editor. the hour height follows the density below. */
@@ -161,6 +156,11 @@
   --cal-6: #c9394a;
   --cal-7: #b9428a;
   --cal-8: #7552c4;
+  /* conversations: the column the expand control sits in, which replies are
+     indented by, and the widths the reading column can be capped at. */
+  --thread-twisty: 16px;
+  --reader-width-narrow: 640px;
+  --reader-width-medium: 820px;
 
   /* default density (medium) row + pane spacing. overridden per density below. */
   --row-pad-y: 8px;

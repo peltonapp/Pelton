@@ -13,6 +13,7 @@
   import { t } from '../../lib/i18n'
   import type { TimeFormat } from '../../lib/format'
   import type { Occurrence } from '../../lib/types'
+  import type { CellMenuAt } from '../../stores/calendar'
 
   /** The first day listed and the day after the last. */
   export let from: Date
@@ -23,7 +24,15 @@
   export let timeFormat: TimeFormat = 'auto'
   export let selectedKey: string = ''
 
-  const dispatch = createEventDispatcher<{ open: { occ: Occurrence; anchor: HTMLElement }; day: Date }>()
+  const dispatch = createEventDispatcher<{ open: { occ: Occurrence; anchor: HTMLElement }; day: Date; menu: CellMenuAt }>()
+
+  function onDayMenu(event: MouseEvent, day: Date): void {
+    if ((event.target as HTMLElement).closest('.row')) {
+      return
+    }
+    event.preventDefault()
+    dispatch('menu', { at: startOfDay(day), mode: 'day', x: event.clientX, y: event.clientY })
+  }
 
   $: days = listDays(from, to, placed)
 
@@ -65,7 +74,8 @@
     </div>
   {:else}
     {#each days as { day, items } (dayKey(day))}
-      <section class="day" class:today={sameDay(day, now)}>
+      <!-- svelte-ignore a11y-no-static-element-interactions -->
+      <section class="day" class:today={sameDay(day, now)} on:contextmenu={(e) => onDayMenu(e, day)}>
         <button type="button" class="date" on:click={() => dispatch('day', day)}>
           <span class="num">{day.getDate()}</span>
           <span class="label">{formatLongDay(day)}</span>

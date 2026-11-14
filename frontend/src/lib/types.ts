@@ -1649,3 +1649,40 @@ export interface ICSImportResult {
   updated: number
   skipped: number
 }
+
+/** ICSFile is a calendar file read for import, iCalendar or JSCalendar. */
+export interface ICSFile {
+  name: string
+  data: string
+  /** How many events an import would take, and the titles of the first few. */
+  events: number
+  summaries: string[]
+  /** Set instead of the rest when the file could not be read. */
+  error: string
+}
+
+/** EventBundle is the events a pasted link or JSCalendar text carries, as drafts with no calendar. */
+export interface EventBundle {
+  events: EventDraft[]
+  skipped: number
+}
+
+/** MailEventSource is what the calendar reads from a mail dropped on it. */
+export interface MailEventSource {
+  subject: string
+  text: string
+  /** When the mail was sent, rfc3339; empty when unknown. */
+  date: string
+  fromName: string
+  fromAddress: string
+  /** A mid: link back to the mail, empty when it has no Message-ID. */
+  link: string
+}
+
+/** MessageRef says where a stored message lives. */
+export interface MessageRef {
+  found: boolean
+  id: number
+  accountId: number
+  folderId: number
+}

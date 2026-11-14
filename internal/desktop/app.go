@@ -204,6 +204,9 @@ type App struct {
 	// mailto holds a mailto: draft the app was launched with (or received from a
 	// second launch) until the frontend consumes it. See mailto.go.
 	mailto mailtoState
+	// icsOpen holds .ics files the system asked the app to open before the
+	// page was up. See bind_calendar_icsfile.go.
+	icsOpen icsOpenState
 
 	// badgeMu guards unreadBadge, the last unread count the frontend reported
 	// for the dock or tray icon. Kept so toggling the setting can re-apply it without

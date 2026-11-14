@@ -10,6 +10,7 @@ import type { MailDropOptions } from '../stores/maildrag'
 import { contactSeed } from '../stores/contacts'
 import { calendarSeed } from '../stores/calendar'
 import { openSpace } from '../stores/space'
+import { mailDropHint } from '../components/calendar/maildrop'
 
 /** One entry of the space switcher. */
 export interface SpaceEntry {
@@ -28,17 +29,18 @@ export interface SpaceEntry {
 export function spaceDrop(key: Space): MailDropOptions {
   return {
     accepts: () => key === 'contacts' || key === 'calendar',
-    onDrop: (items) => {
+    onDrop: (items, info) => {
       const first = items[0]
       if (key === 'contacts' && first) {
         contactSeed.set({ name: first.fromName, email: first.fromAddress })
         openSpace('contacts')
       }
       if (key === 'calendar' && first) {
-        calendarSeed.set({ messageId: first.id, at: null, mode: 'time' })
+        calendarSeed.set({ messageIds: items.map((m) => m.id), at: null, mode: 'time', shift: info.shift })
         openSpace('calendar')
       }
     },
+    hint: (items, shift) => (key === 'calendar' ? mailDropHint(items.length, shift, false) : ''),
   }
 }
 

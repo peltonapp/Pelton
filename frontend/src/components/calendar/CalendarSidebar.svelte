@@ -14,7 +14,8 @@
   import MiniMonth from './MiniMonth.svelte'
   import ColorSwatches from './ColorSwatches.svelte'
   import { calendars, calendarAccounts, toggleCalendar, recolorCalendar, loadCalendars, loadOccurrences } from '../../stores/calendar'
-  import { createLocalCalendar, renameCalendar, deleteLocalCalendar, importICS, exportICS } from '../../lib/api'
+  import importIcon from '@phosphor-icons/core/assets/duotone/file-arrow-down-duotone.svg?raw'
+  import { createLocalCalendar, renameCalendar, deleteLocalCalendar, exportCalendar } from '../../lib/api'
   import { errorMessage, toastError, toastSuccess } from '../../stores/toast'
   import { openSettingsAt } from '../../stores/settingsnav'
   import { calendarColor, paletteHex, paletteSize } from '../../lib/calformat'
@@ -31,7 +32,8 @@
   /** Days with events, as yyyy-mm-dd. */
   export let busy: Set<string>
 
-  const dispatch = createEventDispatcher<{ pick: Date; create: void }>()
+  // import names the calendar to import into, 0 to let the import ask.
+  const dispatch = createEventDispatcher<{ pick: Date; create: void; import: number }>()
 
   type Group = { key: string; label: string; error: string; items: Calendar[] }
 
@@ -117,15 +119,12 @@
 
   const runImport = (): Promise<void> =>
     withCalendar(async (cal) => {
-      const r = await importICS(cal.id)
-      if (r.imported + r.updated > 0) {
-        toastSuccess($t('calendar.imported').replace('{n}', String(r.imported + r.updated)))
-      }
+      dispatch('import', cal.id)
     })
 
-  const runExport = (): Promise<void> =>
+  const runExport = (format: 'ics' | 'jscal'): Promise<void> =>
     withCalendar(async (cal) => {
-      if (await exportICS(cal.id)) {
+      if (await exportCalendar(cal.id, format)) {
         toastSuccess($t('calendar.exported'))
       }
     })
@@ -211,6 +210,10 @@
       <Ph svg={plusIcon} size={13} />
       <span>{$t('calendar.addCalendar')}</span>
     </button>
+    <button type="button" class="cal-item" on:click={() => dispatch('import', 0)}>
+      <Ph svg={importIcon} size={13} />
+      <span>{$t('calendar.importFile')}</span>
+    </button>
     <button type="button" class="cal-item" on:click={() => openSettingsAt('calendar')}>
       <Ph svg={plugIcon} size={13} />
       <span>{$t('calendar.connectAccount')}</span>
@@ -236,9 +239,10 @@
           <button type="button" class="cal-item" on:click={() => (renameMode = true)}>{$t('calendar.rename')}</button>
         {/if}
         {#if !menuFor.readOnly}
-          <button type="button" class="cal-item" on:click={runImport}>{$t('calendar.importIcs')}</button>
+          <button type="button" class="cal-item" on:click={runImport}>{$t('calendar.importFile')}</button>
         {/if}
-        <button type="button" class="cal-item" on:click={runExport}>{$t('calendar.exportIcs')}</button>
+        <button type="button" class="cal-item" on:click={() => runExport('ics')}>{$t('calendar.exportIcs')}</button>
+        <button type="button" class="cal-item" on:click={() => runExport('jscal')}>{$t('calendar.exportJscal')}</button>
         {#if menuFor.local}
           <button type="button" class="cal-item danger" on:click={remove}>{$t('calendar.deleteCalendar')}</button>
         {/if}

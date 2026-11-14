@@ -34,7 +34,13 @@ export const EventNames = {
   calendarSync: 'calendar:sync',
   calendarChanged: 'calendar:changed',
   calendarReminder: 'calendar:reminder',
+  icsOpen: 'calendar:open-files',
 } as const
+
+/** onICSOpen fires when the system asks the running app to open .ics files; collect them with consumePendingICS. */
+export function onICSOpen(cb: () => void): () => void {
+  return EventsOn(EventNames.icsOpen, () => cb())
+}
 
 /**
  * CalendarSyncEvent reports a running calendar sync. running is false on the

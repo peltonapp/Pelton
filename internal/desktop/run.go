@@ -59,6 +59,8 @@ func Run(cfg Config) error {
 	if raw := firstMailtoArg(os.Args[1:]); raw != "" {
 		app.setPendingMailto(parseMailto(raw))
 	}
+	// so does an .ics file opened with Pelton.
+	app.deliverICS(firstICSArgs(os.Args[1:]))
 
 	// a dev build (PELTON_DEV) and a nightly both run against their own data and
 	// must not share the single-instance lock with an installed Pelton, or
@@ -111,6 +113,7 @@ func Run(cfg Config) error {
 				if raw := firstMailtoArg(data.Args); raw != "" {
 					app.deliverMailto(raw)
 				}
+				app.deliverICS(firstICSArgs(data.Args))
 				app.showWindow()
 			},
 		},
@@ -134,6 +137,13 @@ func Run(cfg Config) error {
 	wapp.Event.OnApplicationEvent(events.Common.ApplicationLaunchedWithUrl, func(e *application.ApplicationEvent) {
 		app.deliverMailto(e.Context().URL())
 		app.showWindow()
+	})
+	// and an .ics file opened from Finder as an open-file event.
+	wapp.Event.OnApplicationEvent(events.Common.ApplicationOpenedWithFile, func(e *application.ApplicationEvent) {
+		if path := e.Context().Filename(); isICSPath(path) {
+			app.deliverICS([]string{path})
+			app.showWindow()
+		}
 	})
 
 	if menu := app.initialMenu(); menu != nil {
