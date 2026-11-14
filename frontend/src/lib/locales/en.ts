@@ -2331,6 +2331,11 @@ const en: Record<string, string> = {
   'calendarSettings.icsHandler.hint': 'Pelton is offered for .ics files. Make it the app that opens them when you double-click one.',
   'calendarSettings.icsHandler.set': 'Use Pelton',
   'calendarSettings.icsHandler.isDefault': 'Pelton opens .ics files.',
+  'calendar.previousYear': 'Previous year',
+  'calendar.nextYear': 'Next year',
+  'calendar.previousYears': 'Earlier years',
+  'calendar.nextYears': 'Later years',
+  'calendar.zoomOut': 'Choose a month or year',
 }
 
 export default en

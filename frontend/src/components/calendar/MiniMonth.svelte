@@ -41,9 +41,47 @@
   $: heads = Array.from({ length: 7 }, (_, i) => weekdayName((weekStart + i) % 7, navigator.language, 'narrow'))
   $: title = shown.toLocaleDateString(undefined, { month: 'long', year: 'numeric' })
 
-  function page(dir: number): void {
+  // the title zooms out: from the days of a month to the months of a year to
+  // a page of years, so a date far away is a few clicks rather than a click
+  // per month.
+  type Level = 'days' | 'months' | 'years'
+  const yearsPerPage = 12
+  let level: Level = 'days'
+
+  $: yearStart = Math.floor(shown.getFullYear() / yearsPerPage) * yearsPerPage
+  $: years = Array.from({ length: yearsPerPage }, (_, i) => yearStart + i)
+  $: months = Array.from({ length: 12 }, (_, i) =>
+    new Date(shown.getFullYear(), i, 1).toLocaleDateString(undefined, { month: 'short' }),
+  )
+  $: heading =
+    level === 'days' ? title : level === 'months' ? String(shown.getFullYear()) : `${yearStart} - ${yearStart + yearsPerPage - 1}`
+  $: stepLabels =
+    level === 'days'
+      ? [$t('calendar.previousMonth'), $t('calendar.nextMonth')]
+      : level === 'months'
+        ? [$t('calendar.previousYear'), $t('calendar.nextYear')]
+        : [$t('calendar.previousYears'), $t('calendar.nextYears')]
+
+  // the arrows page by what is on screen: a month, a year, or a page of years.
+  // with Shift held, the days view pages by a whole year.
+  function page(dir: number, event?: MouseEvent): void {
     direction = dir
-    shown = addMonths(shown, dir)
+    const monthsBy = level === 'days' ? (event?.shiftKey ? 12 : 1) : level === 'months' ? 12 : 12 * yearsPerPage
+    shown = addMonths(shown, dir * monthsBy)
+  }
+
+  function zoomOut(): void {
+    level = level === 'days' ? 'months' : level === 'months' ? 'years' : 'days'
+  }
+
+  function pickMonth(month: number): void {
+    shown = new Date(shown.getFullYear(), month, 1)
+    level = 'days'
+  }
+
+  function pickYear(year: number): void {
+    shown = new Date(year, shown.getMonth(), 1)
+    level = 'months'
   }
 
   function inRange(d: Date): boolean {
@@ -76,16 +114,51 @@
 
 <div class="mini">
   <div class="head">
-    <span class="title">{title}</span>
+    <button type="button" class="title" title={$t('calendar.zoomOut')} aria-live="polite" on:click={zoomOut}>
+      {heading}
+    </button>
     <div class="nav">
-      <button type="button" class="step" aria-label={$t('calendar.previousMonth')} on:click={() => page(-1)}>
+      <button type="button" class="step" aria-label={stepLabels[0]} title={stepLabels[0]} on:click={(e) => page(-1, e)}>
         <span class="flip"><Ph svg={caretLeft} size={13} /></span>
       </button>
-      <button type="button" class="step" aria-label={$t('calendar.nextMonth')} on:click={() => page(1)}>
+      <button type="button" class="step" aria-label={stepLabels[1]} title={stepLabels[1]} on:click={(e) => page(1, e)}>
         <span class="flip"><Ph svg={caretRight} size={13} /></span>
       </button>
     </div>
   </div>
+  {#if level === 'months'}
+    {#key shown.getFullYear()}
+      <div class="picker" in:fly={{ x: 10 * direction, duration: dur(motion.base) }}>
+        {#each months as name, m (m)}
+          <button
+            type="button"
+            class="cell"
+            class:selected={m === value.getMonth() && shown.getFullYear() === value.getFullYear()}
+            class:today={m === today.getMonth() && shown.getFullYear() === today.getFullYear()}
+            on:click={() => pickMonth(m)}
+          >
+            {name}
+          </button>
+        {/each}
+      </div>
+    {/key}
+  {:else if level === 'years'}
+    {#key yearStart}
+      <div class="picker" in:fly={{ x: 10 * direction, duration: dur(motion.base) }}>
+        {#each years as year (year)}
+          <button
+            type="button"
+            class="cell"
+            class:selected={year === value.getFullYear()}
+            class:today={year === today.getFullYear()}
+            on:click={() => pickYear(year)}
+          >
+            {year}
+          </button>
+        {/each}
+      </div>
+    {/key}
+  {:else}
   <div class="grid heads" aria-hidden="true">
     {#each heads as h, i (i)}
       <span class="wd">{h}</span>
@@ -120,6 +193,7 @@
       {/each}
     </div>
   {/key}
+  {/if}
 </div>
 
 <style>
@@ -137,10 +211,63 @@
     padding-inline-start: var(--space-2);
   }
 
+  .head {
+    padding-inline-start: 0;
+  }
+
   .title {
+    padding: var(--space-1) var(--space-2);
+    border: none;
+    border-radius: var(--radius-control);
+    background: transparent;
+    font: inherit;
     font-size: var(--fz-list);
     font-weight: var(--fw-semibold);
+    font-variant-numeric: tabular-nums;
     color: var(--text-primary);
+    cursor: var(--cursor-action);
+    transition: background-color var(--motion-fast) var(--ease-out);
+  }
+
+  .title:hover {
+    background: var(--surface-hover);
+  }
+
+  /* the months of a year, or a page of years: three across, the same height
+     as the six weeks they stand in for so the picker does not jump. */
+  .picker {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: var(--space-1);
+    min-height: calc(20px + 6 * 26px + 5 * var(--space-1) + var(--space-2));
+  }
+
+  .cell {
+    border: none;
+    border-radius: var(--radius-control);
+    background: transparent;
+    color: var(--text-primary);
+    font: inherit;
+    font-size: var(--fz-label);
+    font-variant-numeric: tabular-nums;
+    cursor: var(--cursor-action);
+    transition:
+      background-color var(--motion-fast) var(--ease-out),
+      color var(--motion-fast) var(--ease-out);
+  }
+
+  .cell:hover {
+    background: var(--surface-hover);
+  }
+
+  .cell.today {
+    color: var(--accent);
+    font-weight: var(--fw-semibold);
+  }
+
+  .cell.selected {
+    background: var(--accent);
+    color: var(--accent-fg);
   }
 
   .nav {
