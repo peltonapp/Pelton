@@ -20,8 +20,6 @@
     setRestoreTabs,
     setCloseAction,
     setStartHidden,
-    setUpdateCheckFrequency,
-    setShortcutHints,
   } from '../../../stores/prefs'
   import { sidebar } from '../../../stores/accounts'
   import { openLocalesFolder, saveLocaleTemplate } from '../../../lib/api'
@@ -97,13 +95,6 @@
     { key: '12', label: $t('settingsPanel.timeFormat.h12') },
     { key: '24', label: $t('settingsPanel.timeFormat.h24') },
   ]
-
-  $: updateCheckOptions = [
-    { key: 'off', label: $t('about.update.off') },
-    { key: 'startup', label: $t('about.update.startup') },
-    { key: 'weekly', label: $t('about.update.weekly') },
-    { key: 'monthly', label: $t('about.update.monthly') },
-  ]
 </script>
 
 <Card title={$t('settings2.general.region')}>
@@ -167,26 +158,6 @@
   </Row>
 </Card>
 
-<Card title={$t('settings2.general.updates')}>
-  <Row id="update-check" label={$t('about.update.label')} hint={$t('about.update.hint')}>
-    <Segmented
-      label={$t('about.update.label')}
-      value={$prefs.updateCheckFrequency}
-      options={updateCheckOptions}
-      on:change={(e) => setUpdateCheckFrequency(e.detail)}
-    />
-  </Row>
-</Card>
-
-<Card title={$t('settings2.general.keyboard')}>
-  <Row id="shortcut-hints" label={$t('settingsPanel.toggle.shortcutHints')}>
-    <ToggleSwitch
-      checked={$prefs.showShortcutHints}
-      label={$t('settingsPanel.toggle.shortcutHints')}
-      on:change={(e) => setShortcutHints(e.detail)}
-    />
-  </Row>
-</Card>
 
 <style>
   .tools {

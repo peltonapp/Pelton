@@ -1862,6 +1862,15 @@ const en: Record<string, string> = {
   'settings2.shortcuts.general': 'General',
   'settings2.sync.sync': 'Sync',
   'settings2.sync.power': 'Power',
+  'settings2.general.region': 'Language and region',
+  'settings2.general.startup': 'Startup and closing',
+  'settings2.theme.colors': 'Colors',
+  'settings2.theme.custom': 'Custom themes',
+  'settings2.theme.shape': 'Shape and size',
+  'settings2.theme.fonts': 'Fonts',
+  'settings2.theme.window': 'Window and reading pane',
+  'settings2.theme.windowMaterial': 'Window material',
+  'settings2.layout.alerts': 'Notifications and badge',
 }
 
 export default en

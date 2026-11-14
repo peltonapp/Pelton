@@ -13,12 +13,8 @@
     setLowPowerMode,
     setAutoSyncInterval,
     setVerboseSync,
-    setSyncProgressBar,
     setSyncMessageLimit,
     setSyncAutoBackfill,
-    setCloseAction,
-    setStartHidden,
-    setShowOfflineIndicator,
     setFlagColorSync,
     setDownloadIncludeAttachments,
     setLogToFile,
@@ -30,7 +26,7 @@
   import { downloadProgress } from '../../../stores/progress'
   import { toastInfo, toastError, errorMessage } from '../../../stores/toast'
   import { isMac, t } from '../../../lib/i18n'
-  import type { CloseAction, LogLevel, LogStatus } from '../../../lib/types'
+  import type { LogLevel, LogStatus } from '../../../lib/types'
   import '../../../theme/settings2-sections-system.css'
 
   // auto-sync interval presets, in seconds (0 = off).
@@ -54,11 +50,6 @@
     { key: '500', label: '500' },
     { key: '1000', label: '1000' },
     { key: '0', label: $t('settingsPanel.syncLimit.all') },
-  ]
-
-  $: closeActionOptions = [
-    { key: 'background', label: $t('settingsPanel.closeAction.background') },
-    { key: 'quit', label: $t('settingsPanel.closeAction.quit') },
   ]
 
   // offline range download state. the start date defaults to one year ago.
@@ -191,23 +182,9 @@
   <Row id="verbose-sync" label={$t('settingsPanel.toggle.verboseSync')} hint={$t('settingsPanel.hint.verboseSyncDetail')}>
     <ToggleSwitch checked={$prefs.verboseSync} label={$t('settingsPanel.toggle.verboseSync')} on:change={(e) => setVerboseSync(e.detail)} />
   </Row>
-  <Row id="sync-progress-bar" label={$t('settingsPanel.toggle.syncProgressBar')} hint={$t('settingsPanel.hint.syncProgressBarDetail')}>
-    <ToggleSwitch
-      checked={$prefs.syncProgressBar}
-      label={$t('settingsPanel.toggle.syncProgressBar')}
-      on:change={(e) => setSyncProgressBar(e.detail)}
-    />
-  </Row>
 </Card>
 
 <Card title={$t('settingsPanel.category.offline')}>
-  <Row id="offline-indicator" label={$t('settingsPanel.toggle.offlineIndicator')} hint={$t('settingsPanel.hint.offlineIndicator')}>
-    <ToggleSwitch
-      checked={$prefs.showOfflineIndicator}
-      label={$t('settingsPanel.toggle.offlineIndicator')}
-      on:change={(e) => setShowOfflineIndicator(e.detail)}
-    />
-  </Row>
   <Row id="flag-color-sync" label={$t('settingsPanel.toggle.flagColorSync')} hint={$t('settingsPanel.hint.flagColorSync')}>
     <ToggleSwitch checked={$prefs.flagColorSync} label={$t('settingsPanel.toggle.flagColorSync')} on:change={(e) => setFlagColorSync(e.detail)} />
   </Row>
@@ -244,21 +221,6 @@
 <Card title={$t('settings2.sync.power')}>
   <Row id="low-power-mode" label={$t('settingsPanel.toggle.lowPowerMode')} hint={$t('settingsPanel.hint.lowPowerDetail')}>
     <ToggleSwitch checked={$prefs.lowPowerMode} label={$t('settingsPanel.toggle.lowPowerMode')} on:change={(e) => setLowPowerMode(e.detail)} />
-  </Row>
-  <Row id="close-action" label={$t('settingsPanel.label.closeAction')} hint={$t('settingsPanel.hint.closeAction')}>
-    <Segmented
-      label={$t('settingsPanel.label.closeAction')}
-      value={$prefs.closeAction}
-      options={closeActionOptions}
-      on:change={(e) => setCloseAction(e.detail as CloseAction)}
-    />
-  </Row>
-  <Row
-    id="start-hidden"
-    label={$t('settingsPanel.toggle.startHidden')}
-    hint={isMac ? $t('settingsPanel.hint.startHiddenMac') : $t('settingsPanel.hint.startHidden')}
-  >
-    <ToggleSwitch checked={$prefs.startHidden} label={$t('settingsPanel.toggle.startHidden')} on:change={(e) => setStartHidden(e.detail)} />
   </Row>
 </Card>
 

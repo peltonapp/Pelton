@@ -8,8 +8,6 @@ const entries: SettingsIndexEntry[] = [
   { page: 'general', id: 'restore-tabs', labelKey: 'settingsPanel.toggle.restoreTabs', keywords: 'reopen tabs launch restore' },
   { page: 'general', id: 'start-hidden', labelKey: 'settingsPanel.toggle.startHidden', keywords: 'start minimized hidden tray background launch login autostart' },
   { page: 'general', id: 'close-action', labelKey: 'settingsPanel.label.closeAction', keywords: 'close button tray background quit exit' },
-  { page: 'general', id: 'update-check', labelKey: 'about.update.label', keywords: 'update version release upgrade' },
-  { page: 'general', id: 'shortcut-hints', labelKey: 'settingsPanel.toggle.shortcutHints', keywords: 'keyboard hints shortcuts' },
 ]
 
 export default entries
