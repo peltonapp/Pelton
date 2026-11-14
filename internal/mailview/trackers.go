@@ -36,10 +36,13 @@ const (
 	SignalLoneImage TrackerSignal = "lone-image"
 )
 
-// strong reports whether one signal is enough on its own.
+// strong reports whether one signal is enough on its own. Hidden is not:
+// responsive newsletters hide the desktop or the mobile copy of an image with
+// display:none and show it again from a media query, so a hidden image is very
+// often an ordinary one.
 func (s TrackerSignal) strong() bool {
 	switch s {
-	case SignalTiny, SignalHidden, SignalKnownHost, SignalRecipient:
+	case SignalTiny, SignalKnownHost, SignalRecipient:
 		return true
 	default:
 		return false
@@ -61,15 +64,23 @@ type TrackedImage struct {
 // LooksLikeTracker reports whether the signals add up. One strong signal is
 // enough; the weak ones only count together, because each of them describes
 // plenty of ordinary images too.
+//
+// An opaque id on the only image from a host is not enough together either:
+// that is a newsletter's one hero picture on its cdn, under a hashed file name,
+// at least as often as it is a pixel.
 func (img TrackedImage) LooksLikeTracker() bool {
 	weak := 0
+	opaqueAndLone := 0
 	for _, s := range img.Signals {
 		if s.strong() {
 			return true
 		}
 		weak++
+		if s == SignalOpaqueID || s == SignalLoneImage {
+			opaqueAndLone++
+		}
 	}
-	return weak >= 2
+	return weak >= 2 && weak > opaqueAndLone
 }
 
 // RemoteScan is what a body's remote images add up to.
@@ -101,15 +112,38 @@ const opaqueIDLen = 16
 
 // emailInURLPattern finds an email address in a url, including the common
 // percent-encoded and base64-ish-looking forms where the @ survives as %40.
-var emailInURLPattern = regexp.MustCompile(`(?i)[a-z0-9._%+-]+(@|%40)[a-z0-9.-]+\.[a-z]{2,}`)
+var emailInURLPattern = regexp.MustCompile(`(?i)[a-z0-9._%+-]+(@|%40)[a-z0-9.-]+\.([a-z]{2,})`)
+
+// fileExtensions end what looks like an address but is a file name: retina
+// images are named logo@2x.png, and that is not anybody's mailbox.
+var fileExtensions = map[string]bool{
+	"png": true, "jpg": true, "jpeg": true, "gif": true, "webp": true, "svg": true,
+	"avif": true, "bmp": true, "ico": true, "tif": true, "tiff": true, "heic": true,
+}
+
+// hasAddress reports whether a url carries an email address.
+func hasAddress(src string) bool {
+	for _, m := range emailInURLPattern.FindAllStringSubmatch(src, -1) {
+		if !fileExtensions[strings.ToLower(m[2])] {
+			return true
+		}
+	}
+	return false
+}
 
 // opaqueIDPattern matches a long run of identifier characters with no word
 // breaks, which is what a campaign or recipient token looks like.
 var opaqueIDPattern = regexp.MustCompile(`^[A-Za-z0-9_-]{` + strconv.Itoa(opaqueIDLen) + `,}$`)
 
 // hiddenStylePattern matches inline styles that load an image without showing
-// it: display:none, visibility:hidden, or a 1px/0 box.
-var hiddenStylePattern = regexp.MustCompile(`(?i)(display\s*:\s*none|visibility\s*:\s*hidden|opacity\s*:\s*0(\.0+)?\b|(width|height)\s*:\s*[01](px)?\s*(;|$))`)
+// it: display:none, visibility:hidden or no opacity. Each has to be a whole
+// declaration, so neither "max-height:0" in a responsive rule nor a property
+// that merely ends in one of these names counts.
+var hiddenStylePattern = regexp.MustCompile(`(?i)(?:^|;)\s*(?:display\s*:\s*none|visibility\s*:\s*hidden|opacity\s*:\s*0(?:\.0+)?)\s*(?:!important\s*)?(?:;|$)`)
+
+// styleSizePattern reads a width or height declaration from an inline style,
+// as a whole declaration: line-height:1 and border-width:0 are not sizes.
+var styleSizePattern = regexp.MustCompile(`(?i)(?:^|;)\s*(width|height)\s*:\s*([^;]*)`)
 
 // ScanRemoteImages walks the html and reports every remote image with the
 // signals that apply to it.
@@ -163,10 +197,12 @@ func ScanRemoteImages(html string) RemoteScan {
 // a usable http(s) src.
 func scanImg(z *htmltok.Tokenizer) (TrackedImage, bool) {
 	var src, style string
-	var tiny bool
+	// the declared sides, by name; the inline style wins over the attribute,
+	// as it does when the page is drawn.
+	sides := map[string]string{}
 	for {
 		key, val, more := z.TagAttr()
-		switch strings.ToLower(string(key)) {
+		switch k := strings.ToLower(string(key)); k {
 		case "src":
 			// the tokenizer has decoded entities already; decoding again read
 			// "&amp;amp;" as "&" here but as "&amp;" when stripping, so the
@@ -175,14 +211,18 @@ func scanImg(z *htmltok.Tokenizer) (TrackedImage, bool) {
 		case "style":
 			style = string(val)
 		case "width", "height":
-			if isTinyDimension(string(val)) {
-				tiny = true
+			if _, set := sides[k]; !set {
+				sides[k] = string(val)
 			}
 		}
 		if !more {
 			break
 		}
 	}
+	for _, m := range styleSizePattern.FindAllStringSubmatch(style, -1) {
+		sides[strings.ToLower(m[1])] = m[2]
+	}
+	tiny := isTiny(sides)
 
 	lower := strings.ToLower(src)
 	if !strings.HasPrefix(lower, "http://") && !strings.HasPrefix(lower, "https://") {
@@ -203,7 +243,7 @@ func scanImg(z *htmltok.Tokenizer) (TrackedImage, bool) {
 	if isKnownTrackerHost(img.Host) {
 		img.Signals = append(img.Signals, SignalKnownHost)
 	}
-	if emailInURLPattern.MatchString(src) {
+	if hasAddress(src) {
 		img.Signals = append(img.Signals, SignalRecipient)
 	} else if hasOpaqueID(parsed) {
 		// only when there is no address: an address is the same observation,
@@ -213,20 +253,41 @@ func scanImg(z *htmltok.Tokenizer) (TrackedImage, bool) {
 	return img, true
 }
 
-// isTinyDimension reports whether a width/height attribute is small enough that
-// the image cannot be meant to be seen. A percentage or an unparsable value is
-// not tiny: "100%" is a full-width banner.
-func isTinyDimension(value string) bool {
+// isTiny reports whether an image is too small to be meant to be seen: a side
+// of a pixel or less, and no side declared larger. A divider is 600 by 1 and is
+// plainly visible, so one thin side is not enough when the other is wide.
+func isTiny(sides map[string]string) bool {
+	tiny := false
+	for _, v := range sides {
+		small, known := isTinyDimension(v)
+		if !known {
+			continue
+		}
+		if !small {
+			return false
+		}
+		tiny = true
+	}
+	return tiny
+}
+
+// isTinyDimension reads one declared side. known is false for something that
+// says nothing about the size, like "auto"; a percentage is known and never
+// tiny, since "100%" is a full-width banner.
+func isTinyDimension(value string) (small, known bool) {
 	v := strings.TrimSpace(strings.ToLower(value))
-	v = strings.TrimSuffix(v, "px")
-	if v == "" || strings.HasSuffix(v, "%") {
-		return false
+	v = strings.TrimSpace(strings.TrimSuffix(strings.TrimSpace(strings.TrimSuffix(v, "!important")), "px"))
+	if v == "" {
+		return false, false
 	}
-	n, err := strconv.Atoi(v)
+	if strings.HasSuffix(v, "%") {
+		return false, true
+	}
+	n, err := strconv.ParseFloat(v, 64)
 	if err != nil {
-		return false
+		return false, false
 	}
-	return n <= tinyThreshold
+	return n <= tinyThreshold, true
 }
 
 // hasOpaqueID reports whether the url carries a long identifier-looking token,
@@ -270,12 +331,18 @@ func isKnownTrackerHost(host string) bool {
 // signals above catch a pixel from a host nobody has heard of, and this list
 // only adds a name to what they already found. Add an entry when a real message
 // makes the case for it, not to pad the list.
+//
+// A domain that also serves a newsletter's ordinary pictures does not belong
+// here, because a match is enough on its own and would take every one of them:
+// mailchimp.com (gallery.mailchimp.com), constantcontact.com
+// (files.constantcontact.com) and iterable.com (library.iterable.com) are left
+// out for that reason. Their pixels are still caught by size, or on the
+// separate tracking domains listed here.
 var trackerDomains = []string{
 	"actv.io",
 	"bananatag.com",
 	"braze.com",
 	"braze.eu",
-	"constantcontact.com",
 	"convertkit-mail.com",
 	"customeriomail.com",
 	"doubleclick.net",
@@ -285,10 +352,8 @@ var trackerDomains = []string{
 	"googletagmanager.com",
 	"hs-analytics.net",
 	"hubspotemail.net",
-	"iterable.com",
 	"klaviyomail.com",
 	"list-manage.com",
-	"mailchimp.com",
 	"mailerlite.com",
 	"mailgun.org",
 	"mailtrack.io",
