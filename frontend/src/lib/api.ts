@@ -62,6 +62,20 @@ import type {
   Contact,
   ContactConflict,
   ContactDraft,
+  CalendarAccount,
+  CalendarAccountDraft,
+  CalendarDiscovery,
+  Calendar,
+  CalendarSettings,
+  Occurrence,
+  CalendarEvent,
+  EventDraft,
+  EventSaveResult,
+  EventScope,
+  Invite,
+  InviteAnswer,
+  InviteAnswerResult,
+  ICSImportResult,
   AttachmentContent,
   ThemeInfo,
   ThemeApply,
@@ -1998,4 +2012,164 @@ export function saveContact(draft: ContactDraft): Promise<ContactConflict> {
 // a conflict the user has already been shown.
 export function deleteContact(id: number, force: boolean): Promise<ContactConflict> {
   return App.DeleteContact(id, force) as unknown as Promise<ContactConflict>
+}
+
+/** listCalendarAccounts returns every CalDAV login. */
+export function listCalendarAccounts(): Promise<CalendarAccount[]> {
+  if (isDemoActive()) {
+    return Promise.resolve([])
+  }
+  return App.ListCalendarAccounts().then((list) => (list ?? []) as unknown as CalendarAccount[])
+}
+
+/**
+ * discoverCalendars asks a server which calendars a login can see. Without a
+ * url it starts from the address book or the mailbox the draft names.
+ */
+export function discoverCalendars(draft: CalendarAccountDraft): Promise<CalendarDiscovery> {
+  return App.DiscoverCalendars(new desktop.CalendarAccountRequest(draft)).then((d) => {
+    const out = d as unknown as CalendarDiscovery
+    return { ...out, calendars: out.calendars ?? [] }
+  })
+}
+
+/** addCalendarAccount stores a CalDAV login; its first sync runs in the background. */
+export function addCalendarAccount(draft: CalendarAccountDraft): Promise<CalendarAccount> {
+  return App.AddCalendarAccount(new desktop.CalendarAccountRequest(draft)) as unknown as Promise<CalendarAccount>
+}
+
+/** updateCalendarAccount saves a login's name, url and username; an empty password keeps the stored one. */
+export function updateCalendarAccount(draft: CalendarAccountDraft): Promise<CalendarAccount> {
+  return App.UpdateCalendarAccount(new desktop.CalendarAccountRequest(draft)) as unknown as Promise<CalendarAccount>
+}
+
+/** removeCalendarAccount forgets a login and its calendars here. Nothing is deleted on the server. */
+export function removeCalendarAccount(id: number): Promise<void> {
+  return App.RemoveCalendarAccount(id)
+}
+
+/** listCalendars returns every calendar, local ones first. */
+export function listCalendars(): Promise<Calendar[]> {
+  if (isDemoActive()) {
+    return Promise.resolve([])
+  }
+  return App.ListCalendars().then((list) => (list ?? []) as unknown as Calendar[])
+}
+
+/** setCalendarColor sets a calendar's #rrggbb color here; empty clears it. */
+export function setCalendarColor(id: number, color: string): Promise<void> {
+  return App.SetCalendarColor(id, color)
+}
+
+/** setCalendarVisible shows or hides a calendar's events and reminders. */
+export function setCalendarVisible(id: number, visible: boolean): Promise<void> {
+  return App.SetCalendarVisible(id, visible)
+}
+
+/** createLocalCalendar adds a calendar that lives only on this device. */
+export function createLocalCalendar(name: string, color: string): Promise<Calendar> {
+  return App.CreateLocalCalendar(name, color) as unknown as Promise<Calendar>
+}
+
+/** renameCalendar renames a local calendar. */
+export function renameCalendar(id: number, name: string): Promise<void> {
+  return App.RenameCalendar(id, name)
+}
+
+/** deleteLocalCalendar removes a local calendar and its events; the last one stays. */
+export function deleteLocalCalendar(id: number): Promise<void> {
+  return App.DeleteLocalCalendar(id)
+}
+
+/** getCalendarSettings returns the calendar preferences. */
+export function getCalendarSettings(): Promise<CalendarSettings> {
+  return App.GetCalendarSettings() as unknown as Promise<CalendarSettings>
+}
+
+/** setCalendarSettings saves the calendar preferences. */
+export function setCalendarSettings(settings: CalendarSettings): Promise<void> {
+  return App.SetCalendarSettings(new desktop.CalendarSettingsDTO(settings))
+}
+
+/**
+ * listOccurrences returns the expanded occurrences overlapping [from, to), both
+ * rfc3339. calendarIds limits them to those calendars; empty means every
+ * visible one.
+ */
+export function listOccurrences(from: string, to: string, calendarIds: number[] = []): Promise<Occurrence[]> {
+  if (isDemoActive()) {
+    return Promise.resolve([])
+  }
+  return App.ListOccurrences(from, to, calendarIds).then((list) => (list ?? []) as unknown as Occurrence[])
+}
+
+/** getEvent returns an event, or with a recurrenceId that one occurrence of it. */
+export function getEvent(id: number, recurrenceId = ''): Promise<CalendarEvent> {
+  return App.GetEvent(id, recurrenceId) as unknown as Promise<CalendarEvent>
+}
+
+/** createEvent stores a new event and writes it to its calendar's server. */
+export function createEvent(draft: EventDraft): Promise<EventSaveResult> {
+  return App.CreateEvent(new desktop.EventRequest(draft)) as unknown as Promise<EventSaveResult>
+}
+
+/** updateEvent saves an edit; for an occurrence, draft.scope says what it applies to. */
+export function updateEvent(draft: EventDraft): Promise<EventSaveResult> {
+  return App.UpdateEvent(new desktop.EventRequest(draft)) as unknown as Promise<EventSaveResult>
+}
+
+/**
+ * deleteEvent deletes an event, or for an occurrence of a series the scope of
+ * it named. force deletes over a newer server copy.
+ */
+export function deleteEvent(id: number, scope: EventScope | '' = '', recurrenceId = '', force = false): Promise<EventSaveResult> {
+  return App.DeleteEvent(id, scope, recurrenceId, force) as unknown as Promise<EventSaveResult>
+}
+
+/** resolveEventConflict keeps the local version (keepMine) or takes the server's. */
+export function resolveEventConflict(id: number, keepMine: boolean): Promise<CalendarEvent> {
+  return App.ResolveEventConflict(id, keepMine) as unknown as Promise<CalendarEvent>
+}
+
+/** syncCalendars syncs every calendar account and resolves when done. */
+export function syncCalendars(): Promise<void> {
+  if (isDemoActive()) {
+    return Promise.resolve()
+  }
+  return App.SyncCalendars()
+}
+
+/** parseInvite reads the invitation a message carries; found is false when there is none. */
+export function parseInvite(messageId: number): Promise<Invite> {
+  return App.ParseInvite(messageId) as unknown as Promise<Invite>
+}
+
+/** answerInvite accepts, tentatively accepts or declines an invitation, optionally replying. */
+export function answerInvite(answer: InviteAnswer): Promise<InviteAnswerResult> {
+  return App.AnswerInvite(new desktop.InviteAnswerRequest(answer)) as unknown as Promise<InviteAnswerResult>
+}
+
+/** applyInvite applies a CANCEL or an attendee's REPLY to the stored event. */
+export function applyInvite(messageId: number): Promise<InviteAnswerResult> {
+  return App.ApplyInvite(messageId) as unknown as Promise<InviteAnswerResult>
+}
+
+/** importICS asks for an .ics file and imports it into a calendar. */
+export function importICS(calendarId: number): Promise<ICSImportResult> {
+  return App.ImportICS(calendarId) as unknown as Promise<ICSImportResult>
+}
+
+/** importICSData imports iCalendar text, such as a dropped file, into a calendar. */
+export function importICSData(calendarId: number, data: string): Promise<ICSImportResult> {
+  return App.ImportICSData(calendarId, data) as unknown as Promise<ICSImportResult>
+}
+
+/** exportICS saves a calendar as an .ics file and returns the path, empty when cancelled. */
+export function exportICS(calendarId: number): Promise<string> {
+  return App.ExportICS(calendarId)
+}
+
+/** createEventDraftFromMessage prefills an event from a mail dropped on the calendar. */
+export function createEventDraftFromMessage(messageId: number): Promise<EventDraft> {
+  return App.CreateEventDraftFromMessage(messageId) as unknown as Promise<EventDraft>
 }

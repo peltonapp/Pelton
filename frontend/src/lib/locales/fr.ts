@@ -1730,6 +1730,8 @@ const fr: Record<string, string> = {
   'contacts.pickOne': 'Choisissez un contact pour le voir.',
   'contacts.deleteConfirm': 'Supprimer ce contact du serveur ?',
   'contacts.deleted': 'Contact supprimé.',
+  'calendar.eventDeleted': 'Événement supprimé.',
+  'calendar.eventQueued': 'Enregistré ici. La modification partira vers le serveur dès qu\'il sera joignable.',
   'contacts.extraFields': 'Cette fiche contient aussi {fields}, conservés tels quels à l\'enregistrement.',
   'contacts.updated': 'Mis à jour {when}',
   'contacts.readOnly': 'Ce carnet d\'adresses est en lecture seule.',

@@ -1723,6 +1723,8 @@ const pt: Record<string, string> = {
   'contacts.pickOne': 'Escolha um contacto para o ver.',
   'contacts.deleteConfirm': 'Eliminar este contacto do servidor?',
   'contacts.deleted': 'Contacto eliminado.',
+  'calendar.eventDeleted': 'Evento eliminado.',
+  'calendar.eventQueued': 'Guardado aqui. Será enviado para o servidor quando estiver acessível.',
   'contacts.extraFields': 'Este cartão também carrega {fields}, mantidos como estão quando guarda.',
   'contacts.updated': 'Atualizado {when}',
   'contacts.readOnly': 'Este livro de endereços é só de leitura.',

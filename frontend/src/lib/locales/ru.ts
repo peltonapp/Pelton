@@ -1730,6 +1730,8 @@ const ru: Record<string, string> = {
   'contacts.pickOne': 'Pick a contact to see it.',
   'contacts.deleteConfirm': 'Delete this contact from the server?',
   'contacts.deleted': 'Контакт удалён.',
+  'calendar.eventDeleted': 'Событие удалено.',
+  'calendar.eventQueued': 'Сохранено здесь. Изменение уйдёт на сервер, когда он станет доступен.',
   'contacts.extraFields': 'This card also carries {fields}, kept as they are when you save.',
   'contacts.updated': 'Обновлено {when}',
   'contacts.readOnly': 'Эта адресная книга только для чтения.',

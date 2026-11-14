@@ -1730,6 +1730,8 @@ const es: Record<string, string> = {
   'contacts.pickOne': 'Elige un contacto para verlo.',
   'contacts.deleteConfirm': '¿Eliminar este contacto del servidor?',
   'contacts.deleted': 'Contacto eliminado.',
+  'calendar.eventDeleted': 'Evento eliminado.',
+  'calendar.eventQueued': 'Guardado aquí. Se enviará al servidor cuando esté disponible.',
   'contacts.extraFields': 'Esta ficha también lleva {fields}, que se conservan tal cual al guardar.',
   'contacts.updated': 'Actualizado {when}',
   'contacts.readOnly': 'Esta libreta es de solo lectura.',

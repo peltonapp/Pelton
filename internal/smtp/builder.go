@@ -70,6 +70,18 @@ type Message struct {
 	// MessageID is used as the Message-ID header when set. Left empty, a fresh
 	// one is generated. Drafts set it so each save replaces the last copy.
 	MessageID string
+
+	// Calendar is an iTIP scheduling part, such as the reply to an
+	// invitation. It goes out as one more alternative of the body, which is
+	// where calendar clients look for it.
+	Calendar *CalendarPart
+}
+
+// CalendarPart is iCalendar data with its iTIP method (REQUEST, REPLY,
+// CANCEL).
+type CalendarPart struct {
+	Method string
+	Data   []byte
 }
 
 // Recipients returns every envelope recipient address, including Bcc. The
@@ -170,6 +182,16 @@ func (m *Message) contentEntity() (*part, error) {
 
 // bodyPart returns the text/html/alternative part for the message body.
 func (m *Message) bodyPart() part {
+	if m.Calendar != nil {
+		alts := []part{textLeaf(m.Text)}
+		if m.HTML != "" {
+			alts = append(alts, htmlLeaf(m.HTML))
+		}
+		alts = append(alts, calendarLeaf(*m.Calendar))
+		if alt, err := newMultipart(mpAlternative, alts); err == nil {
+			return *alt
+		}
+	}
 	switch {
 	case m.Text != "" && m.HTML != "":
 		alt, err := newMultipart(mpAlternative, []part{textLeaf(m.Text), htmlLeaf(m.HTML)})
@@ -210,6 +232,14 @@ func htmlLeaf(html string) part {
 		contentType: ctTextHTML,
 		headers:     [][2]string{{headerContentTransferEncoding, cteQuotedPrintable}},
 		body:        quotedPrintable(html),
+	}
+}
+
+func calendarLeaf(c CalendarPart) part {
+	return part{
+		contentType: "text/calendar; charset=utf-8; method=" + strings.ToUpper(c.Method),
+		headers:     [][2]string{{headerContentTransferEncoding, cteBase64}},
+		body:        base64Body(c.Data),
 	}
 }
 
