@@ -142,6 +142,11 @@
   let activeIndex = -1
   $: activeIndex = highlightId === null ? -1 : items.findIndex((m) => m.id === highlightId)
 
+  // in the new design the selection is one band that slides from row to row,
+  // sitting on the highlighted row or else on the open message.
+  $: bandOn = $prefs.design !== 'classic'
+  $: bandIndex = activeIndex >= 0 ? activeIndex : items.findIndex((m) => m.id === $openMessageId)
+
   // virtualization. the list can hold thousands of rows, so we only render the
   // window around the viewport plus a little overscan, padding the rest with
   // spacers so the scrollbar stays accurate. all rows share a template, so a
@@ -1019,11 +1024,20 @@
       {#if topPad > 0}
         <div class="spacer" style={`height:${topPad}px`} aria-hidden="true"></div>
       {/if}
+      {#if bandOn}
+        <div
+          class="select-band"
+          class:shown={bandIndex >= 0}
+          style={`transform: translateY(${Math.max(bandIndex, 0) * estRowHeight}px); height: ${estRowHeight}px`}
+          aria-hidden="true"
+        ></div>
+      {/if}
       {#each windowItems as item, i (item.id)}
         {@const index = startIndex + i}
         <div id={`msg-${item.id}`} use:maildragSource={() => dragItems(item)}>
           <MessageRow
             message={item}
+            banded={bandOn && index === bandIndex}
             accountColor={mixedAccounts ? (accountColors[item.accountId] ?? '') : ''}
             selected={item.id === $openMessageId || index === activeIndex}
             checked={$selectedIds.has(item.id)}
@@ -1231,6 +1245,32 @@
     min-height: 0;
     overflow-y: auto;
     outline: none;
+    position: relative;
+  }
+
+  /* lies over the rows as a tint, so it can travel between them. */
+  .select-band {
+    position: absolute;
+    top: 0;
+    inset-inline: 0;
+    z-index: 1;
+    background: var(--selection-bg);
+    opacity: 0;
+    pointer-events: none;
+    transition:
+      transform var(--motion-base) var(--ease-out),
+      height var(--motion-fast) var(--ease-out),
+      opacity var(--motion-fast) var(--ease-out);
+  }
+
+  .select-band.shown {
+    opacity: 1;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .select-band {
+      transition: none;
+    }
   }
 
   /* virtualization spacers stand in for the rows outside the rendered window. */

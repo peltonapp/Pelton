@@ -33,6 +33,8 @@
 
   export let message: MessageSummary
   export let selected: boolean = false
+  /** The list draws a sliding band over this row, so the row skips its own selected fill. */
+  export let banded: boolean = false
   // checked reflects membership in the bulk-selection set (modifier-click).
   export let checked: boolean = false
   // accountColor marks which mailbox the message is from in a list that mixes
@@ -214,6 +216,7 @@
   <div
     class="row {template}"
     class:selected
+    class:banded
     class:unread
     class:checked
     class:bar-left={showBar}
@@ -352,6 +355,10 @@
 
   .row.checked {
     background: var(--selection-bg);
+  }
+
+  .row.banded:not(.checked) {
+    background: var(--surface-raised);
   }
 
   /* the left edge bar: warning color for a flag, or the label color when set. */
