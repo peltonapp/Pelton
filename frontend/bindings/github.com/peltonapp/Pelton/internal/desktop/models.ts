@@ -4639,6 +4639,49 @@ export class UIPrefsDTO {
     "cornerStyle": string;
 
     /**
+     * Design picks the interface design: new or classic.
+     */
+    "design": string;
+
+    /**
+     * LayoutMode arranges the mail panes in the new design: columns or stacked.
+     */
+    "layoutMode": string;
+
+    /**
+     * NavStyle places the Mail/Contacts/Calendar switcher: rail, footer, tabs
+     * or hidden.
+     */
+    "navStyle": string;
+
+    /**
+     * RailSide is the window edge the rail sits on: left or right.
+     */
+    "railSide": string;
+
+    /**
+     * PaneStyle draws the panes in the new design: hybrid, flat or soft.
+     */
+    "paneStyle": string;
+
+    /**
+     * AvatarPlacement puts the sender picture in its own column, inline in the
+     * address line, or hides it: column, inline or hidden.
+     */
+    "avatarPlacement": string;
+
+    /**
+     * ListHeight is the message list height in the stacked layout, in pixels.
+     */
+    "listHeight": number;
+
+    /**
+     * NativeTitlebar uses the operating system's title bar instead of the
+     * integrated one.
+     */
+    "nativeTitlebar": boolean;
+
+    /**
      * ThemeID selects an installed custom theme (see bind_themes.go). Empty
      * means the built-in default themes driven by the Theme setting.
      */
@@ -4961,6 +5004,30 @@ export class UIPrefsDTO {
         }
         if (!("cornerStyle" in $$source)) {
             this["cornerStyle"] = "";
+        }
+        if (!("design" in $$source)) {
+            this["design"] = "";
+        }
+        if (!("layoutMode" in $$source)) {
+            this["layoutMode"] = "";
+        }
+        if (!("navStyle" in $$source)) {
+            this["navStyle"] = "";
+        }
+        if (!("railSide" in $$source)) {
+            this["railSide"] = "";
+        }
+        if (!("paneStyle" in $$source)) {
+            this["paneStyle"] = "";
+        }
+        if (!("avatarPlacement" in $$source)) {
+            this["avatarPlacement"] = "";
+        }
+        if (!("listHeight" in $$source)) {
+            this["listHeight"] = 0;
+        }
+        if (!("nativeTitlebar" in $$source)) {
+            this["nativeTitlebar"] = false;
         }
         if (!("themeId" in $$source)) {
             this["themeId"] = "";

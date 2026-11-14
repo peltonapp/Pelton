@@ -16,6 +16,10 @@
   import StatusBar from './components/common/StatusBar.svelte'
   import ContextMenu from './components/common/ContextMenu.svelte'
   import Resizer from './components/common/Resizer.svelte'
+  import TopBar from './components/shell/TopBar.svelte'
+  import Rail from './components/shell/Rail.svelte'
+  import SpaceSwitcher from './components/shell/SpaceSwitcher.svelte'
+  import { space, openSpace } from './stores/space'
   import SnoozeDialog from './components/detail/SnoozeDialog.svelte'
   import ConfirmDialog from './components/common/ConfirmDialog.svelte'
   import SyncFailureDialog from './components/common/SyncFailureDialog.svelte'
@@ -25,7 +29,7 @@
   import MoveDialog from './components/detail/MoveDialog.svelte'
   import CommandPalette from './components/common/CommandPalette.svelte'
 
-  import { initPrefs, prefs, setPaneWidths, setLowPowerMode } from './stores/prefs'
+  import { initPrefs, prefs, setPaneWidths, setListHeight, setLowPowerMode } from './stores/prefs'
   import { applyScale } from './theme/theme'
   import { loadSidebar, refreshSidebar, sidebar } from './stores/accounts'
   import { refreshCountsSoon } from './stores/sidebarcounts'
@@ -200,11 +204,34 @@
   let sidebarW = 264
   let listW = 380
   let dragging = false
+  let listH = 320
   $: if (!dragging) {
     sidebarW = $prefs.sidebarWidth
     listW = $prefs.listWidth
+    listH = $prefs.listHeight
   }
   $: locked = $prefs.paneLocked
+
+  // the new design. classic keeps the shell below it exactly as it was.
+  $: classic = $prefs.design === 'classic'
+  $: stacked = $prefs.layoutMode === 'stacked'
+  // below this window width the rail folds into the top bar as tabs.
+  const railFoldWidth = 760
+  let windowWidth = window.innerWidth
+  $: railFolded = $prefs.navStyle === 'rail' && windowWidth < railFoldWidth
+  $: showRail = $prefs.navStyle === 'rail' && !railFolded
+  $: inboxUnread = $sidebar.data?.views?.find((v) => v.key === 'inbox')?.unreadCount ?? 0
+  // classic shows contacts as an overlay; the new design shows it as a space.
+  function openContacts(): void {
+    if (classic) {
+      contactsOpen = true
+    } else {
+      openSpace('contacts')
+    }
+  }
+  // an overlay covers the top bar, so the window needs another handle to be
+  // dragged by while one is open.
+  $: overlayOpen = settingsOpen || onboardingOpen || wizardOpen || contactsOpen
 
   // the in-app menu bar is the only menu on Windows/Linux (no native menu is
   // created there); on macOS the native bar stays and the in-app one is opt-in.
@@ -789,7 +816,7 @@
         settingsOpen = true
         break
       case 'open-contacts':
-        contactsOpen = true
+        openContacts()
         break
       case 'sync':
         void runSync()
@@ -1500,19 +1527,29 @@
     listW = clamp(listW + event.detail, 260, 720)
   }
 
+  function resizeListHeight(event: CustomEvent<number>): void {
+    dragging = true
+    listH = clamp(listH + event.detail, 140, Math.max(140, window.innerHeight * 0.7))
+  }
+
+  function commitListHeight(): void {
+    dragging = false
+    setListHeight(listH)
+  }
+
   function commitPanes(): void {
     dragging = false
     setPaneWidths(sidebarW, listW)
   }
 </script>
 
-<svelte:window on:keydown={onKeydown} on:contextmenu={onContextMenu} on:resize={refreshFullscreen} />
+<svelte:window on:keydown={onKeydown} on:contextmenu={onContextMenu} on:resize={refreshFullscreen} bind:innerWidth={windowWidth} />
 
 <!-- macOS with no in-app menu bar: an empty top row for the traffic lights, and
      a matching strip above every overlay so the window can still be dragged
      while settings or onboarding is open. with the menu bar on, the bar itself
      is that row and handles both. -->
-{#if macTitlebar && !showMenuBar}
+{#if macTitlebar && (classic ? !showMenuBar : overlayOpen)}
   <!-- svelte-ignore a11y-no-static-element-interactions -->
   <div
     class="titlebar-drag"
@@ -1526,6 +1563,73 @@
   </div>
 {/if}
 
+{#if !classic}
+<div class="frame" class:rail-right={$prefs.railSide === 'right'} class:has-rail={showRail}>
+  <TopBar tabs={$prefs.navStyle === 'tabs' || railFolded} on:search={focusSearch}>
+    <svelte:fragment slot="menu">
+      {#if showMenuBar}
+        <MenuBar on:action={(e) => handleMenu(e.detail)} />
+      {/if}
+    </svelte:fragment>
+  </TopBar>
+
+  <div class="body">
+    {#if showRail}
+      <Rail
+        side={$prefs.railSide}
+        unread={inboxUnread}
+        on:search={focusSearch}
+        on:settings={() => { settingsCategory = null; settingsOpen = true }}
+      />
+    {/if}
+
+    {#if $space === 'mail'}
+      <div class="mail" style={`grid-template-columns: ${sidebarW}px 0 minmax(0, 1fr)`}>
+        <div class="side-col">
+          <Sidebar
+            on:compose={startCompose}
+            on:sync={runSync}
+            on:addMailbox={addMailbox}
+          />
+          {#if $prefs.navStyle === 'footer'}
+            <div class="side-foot">
+              <SpaceSwitcher />
+            </div>
+          {/if}
+        </div>
+        <Resizer disabled={locked} label={$t('app.pane.resizeSidebar')} on:resize={resizeSidebar} on:end={commitPanes} />
+        <div
+          class="surface"
+          class:stacked
+          style={stacked
+            ? `grid-template-rows: ${listH}px 0 minmax(0, 1fr)`
+            : `grid-template-columns: ${listW}px 0 minmax(0, 1fr)`}
+        >
+          <MessageList />
+          {#if stacked}
+            <Resizer orientation="horizontal" disabled={locked} label={$t('app.pane.resizeMessageList')} on:resize={resizeListHeight} on:end={commitListHeight} />
+          {:else}
+            <Resizer disabled={locked} label={$t('app.pane.resizeMessageList')} on:resize={resizeList} on:end={commitPanes} />
+          {/if}
+          <MessageDetail />
+        </div>
+      </div>
+    {:else if $space === 'contacts'}
+      <div class="space-host">
+        {#await import('./components/contacts/ContactsScreen.svelte') then m}
+          <svelte:component
+            this={m.default}
+            on:close={() => openSpace('mail')}
+            on:compose={(e) => { openSpace('mail'); startComposeTo(e.detail) }}
+          />
+        {/await}
+      </div>
+    {/if}
+  </div>
+
+  <StatusBar />
+</div>
+{:else}
 <div class="shell" class:with-topbar={showMenuBar || macTitlebar}>
   {#if showMenuBar}
     <MenuBar on:action={(e) => handleMenu(e.detail)} />
@@ -1546,6 +1650,7 @@
 
   <StatusBar />
 </div>
+{/if}
 
 {#if $composeSessions.length > 0}
   <div class="compose-layer">
@@ -1658,6 +1763,122 @@
 
   .titlebar-space {
     height: var(--titlebar-lights);
+  }
+
+  /* the new design's window: top bar, then the rail beside the current space,
+     then the status bar, all on the chrome surface. */
+  .frame {
+    display: grid;
+    grid-template-rows: auto minmax(0, 1fr) auto;
+    height: 100%;
+    width: 100%;
+    overflow: hidden;
+    background: var(--chrome-bg);
+  }
+
+  :global(html.window-material) .frame {
+    background: transparent;
+  }
+
+  .body {
+    display: flex;
+    min-height: 0;
+    padding-inline-end: var(--pane-gap);
+  }
+
+  .frame.rail-right .body {
+    flex-direction: row-reverse;
+    padding-inline-end: 0;
+  }
+
+  .frame.rail-right:not(.has-rail) .body {
+    padding-inline-end: var(--pane-gap);
+  }
+
+  .mail {
+    display: grid;
+    grid-template-rows: minmax(0, 1fr);
+    flex: 1;
+    min-width: 0;
+    min-height: 0;
+  }
+
+  .side-col {
+    display: grid;
+    grid-template-rows: minmax(0, 1fr) auto;
+    min-width: 0;
+    min-height: 0;
+  }
+
+  .side-foot {
+    padding: var(--space-3);
+  }
+
+  /* the list and the reader. hybrid raises the two as one rounded surface. */
+  .surface {
+    display: grid;
+    grid-template-rows: minmax(0, 1fr);
+    min-width: 0;
+    min-height: 0;
+    overflow: hidden;
+    background: var(--surface-raised);
+    border: var(--hairline) solid var(--border-default);
+    border-radius: var(--pane-radius);
+  }
+
+  .surface.stacked {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .surface.stacked > :global(.list-col) {
+    border-inline-end: none;
+    border-bottom: var(--hairline) solid var(--border-default);
+  }
+
+  /* flat: edge to edge, split by hairlines only. */
+  :global(:root[data-panes='flat']) .surface {
+    border-width: var(--hairline) 0 var(--hairline) var(--hairline);
+  }
+
+  /* soft: every pane is a rounded panel of its own, with a gap between. */
+  :global(:root[data-panes='soft']) .surface {
+    gap: var(--pane-gap);
+    background: transparent;
+    border: none;
+    border-radius: 0;
+    overflow: visible;
+  }
+
+  :global(:root[data-panes='soft']) .surface > :global(.list-col),
+  :global(:root[data-panes='soft']) .surface > :global(.detail),
+  :global(:root[data-panes='soft']) .side-col {
+    border: var(--hairline) solid var(--border-default);
+    border-radius: var(--pane-radius);
+    overflow: hidden;
+  }
+
+  :global(:root[data-panes='soft']) .side-col {
+    background: var(--surface-raised);
+    margin-inline-end: var(--pane-gap);
+  }
+
+  :global(:root[data-panes='soft']) .frame:not(.has-rail) .side-col,
+  :global(:root[data-panes='soft']) .frame.rail-right .side-col {
+    margin-inline-start: var(--pane-gap);
+  }
+
+  /* a space other than mail fills the room beside the rail. its screen was
+     written as a fixed overlay; containing layout makes this box, not the
+     window, what it fills, and it has no traffic lights to keep clear of. */
+  .space-host {
+    position: relative;
+    flex: 1;
+    min-width: 0;
+    contain: layout;
+    overflow: hidden;
+    border: var(--hairline) solid var(--border-default);
+    border-radius: var(--pane-radius);
+    --titlebar-lights: 0px;
   }
 
   /* above every overlay: a window with no native title bar has nothing else to

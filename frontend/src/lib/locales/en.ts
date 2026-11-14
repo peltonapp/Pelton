@@ -1783,6 +1783,16 @@ const en: Record<string, string> = {
   'contacts.books.field.collection': 'Address book path',
   'contacts.harvest.toggle': 'Learn addresses from mail',
   'contacts.harvest.hint': 'Autocomplete remembers every address you write to or hear from. Turned off, it offers only the contacts in your address books.',
+  'space.switcher': 'Switch area',
+  'space.mail': 'Mail',
+  'space.contacts': 'Contacts',
+  'topbar.search': 'Search mail',
+  'topbar.syncing': 'Syncing',
+  'topbar.sending': '{count} waiting to send',
+  'design.label': 'Design',
+  'design.new': 'New',
+  'design.classic': 'Classic',
+  'design.hint': 'Classic brings back the interface and settings screen from before the redesign.',
 }
 
 export default en

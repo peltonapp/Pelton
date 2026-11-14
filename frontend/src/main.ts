@@ -14,6 +14,7 @@ import '@fontsource/spline-sans-mono/700.css'
 // theme tokens must load before the base styles that reference them.
 import './theme/tokens.css'
 import './style.css'
+import './theme/design-new.css'
 
 import { mount } from 'svelte'
 import App from './App.svelte'

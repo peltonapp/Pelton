@@ -135,6 +135,24 @@ const (
 	settingMonoFont = "mono_font"
 	// corner style for controls and cards: default, square, or round (#60).
 	settingCornerStyle = "corner_style"
+	// the interface design: "new" or "classic". classic keeps the shell and
+	// settings screen from before the redesign.
+	settingDesign = "design"
+	// how the mail panes are arranged in the new design: "columns" or "stacked".
+	settingLayoutMode = "layout_mode"
+	// where the Mail/Contacts/Calendar switcher sits in the new design: "rail",
+	// "footer", "tabs" or "hidden"; and which edge the rail is on.
+	settingNavStyle = "nav_style"
+	settingRailSide = "rail_side"
+	// how the panes are drawn in the new design: "hybrid", "flat" or "soft".
+	settingPaneStyle = "pane_style"
+	// where the sender picture goes in a list row and the reading header:
+	// "column", "inline" or "hidden".
+	settingAvatarPlacement = "avatar_placement"
+	// height of the message list in the stacked layout, in pixels.
+	settingListHeight = "list_height"
+	// use the operating system's own title bar instead of the integrated one.
+	settingNativeTitlebar = "native_titlebar"
 	// general new-mail OS notifications (#126). VIP senders are stored
 	// separately in bind_vip.go and notify even when this is off.
 	settingNotifyNewMail = "notify_new_mail"
@@ -356,6 +374,25 @@ type UIPrefsDTO struct {
 	EmptyStateFullscreen bool `json:"emptyStateFullscreen"`
 	// CornerStyle picks the corner radius look: default, square, or round.
 	CornerStyle string `json:"cornerStyle"`
+	// Design picks the interface design: new or classic.
+	Design string `json:"design"`
+	// LayoutMode arranges the mail panes in the new design: columns or stacked.
+	LayoutMode string `json:"layoutMode"`
+	// NavStyle places the Mail/Contacts/Calendar switcher: rail, footer, tabs
+	// or hidden.
+	NavStyle string `json:"navStyle"`
+	// RailSide is the window edge the rail sits on: left or right.
+	RailSide string `json:"railSide"`
+	// PaneStyle draws the panes in the new design: hybrid, flat or soft.
+	PaneStyle string `json:"paneStyle"`
+	// AvatarPlacement puts the sender picture in its own column, inline in the
+	// address line, or hides it: column, inline or hidden.
+	AvatarPlacement string `json:"avatarPlacement"`
+	// ListHeight is the message list height in the stacked layout, in pixels.
+	ListHeight int `json:"listHeight"`
+	// NativeTitlebar uses the operating system's title bar instead of the
+	// integrated one.
+	NativeTitlebar bool `json:"nativeTitlebar"`
 	// ThemeID selects an installed custom theme (see bind_themes.go). Empty
 	// means the built-in default themes driven by the Theme setting.
 	ThemeID string `json:"themeId"`
@@ -505,6 +542,14 @@ func (a *App) GetUIPrefs() (UIPrefsDTO, error) {
 		EmptyStateImage:            a.stringSetting(settingEmptyStateImage, ""),
 		EmptyStateFullscreen:       a.boolSetting(settingEmptyStateFull, false),
 		CornerStyle:                a.stringSetting(settingCornerStyle, "default"),
+		Design:                     a.stringSetting(settingDesign, "new"),
+		LayoutMode:                 a.stringSetting(settingLayoutMode, "columns"),
+		NavStyle:                   a.stringSetting(settingNavStyle, "rail"),
+		RailSide:                   a.stringSetting(settingRailSide, "left"),
+		PaneStyle:                  a.stringSetting(settingPaneStyle, "hybrid"),
+		AvatarPlacement:            a.stringSetting(settingAvatarPlacement, "inline"),
+		ListHeight:                 a.intSetting(settingListHeight, 320),
+		NativeTitlebar:             a.boolSetting(settingNativeTitlebar, false),
 		ThemeID:                    a.stringSetting(settingThemeID, ""),
 		MenuBarInApp:               a.boolSetting(settingMenuBarInApp, false),
 		MenuBarNativeMinimal:       a.boolSetting(settingMenuBarNativeMinimal, false),

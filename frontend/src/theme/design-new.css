@@ -1,0 +1,39 @@
+/*
+  design-new.css restyles the parts of the classic shell that the new design
+  reuses as they are: the sidebar, the status bar and the menu bar. they keep
+  their own component styles for the classic design; here they give up their
+  own background and edges so they sit on the window's chrome surface.
+*/
+
+:root[data-design="new"] .sidebar {
+  background: transparent;
+  border-inline-end: none;
+}
+
+:root[data-design="new"] .sidebar > .top {
+  border-bottom: none;
+  padding-bottom: var(--space-2);
+}
+
+:root[data-design="new"] .statusbar {
+  background: transparent;
+  border-top: none;
+}
+
+/* inside the top bar the menu is one item of the bar, not a row of its own. */
+:root[data-design="new"] .topbar .menubar {
+  height: auto;
+  padding: 0;
+  background: transparent;
+  border-bottom: none;
+}
+
+/* the soft pane style puts the sidebar on a raised panel of its own. */
+:root[data-design="new"][data-panes="soft"] .statusbar {
+  padding-top: var(--space-1);
+}
+
+:root[data-design="new"] .list-col,
+:root[data-design="new"] .detail {
+  transition: background-color var(--motion-base) var(--ease-out);
+}

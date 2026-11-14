@@ -100,6 +100,20 @@ export function applyCorners(pref: string): void {
   }
 }
 
+/**
+ * Writes the interface design and its pane style onto the root element. The
+ * pane style only exists in the new design, so classic drops the attribute.
+ */
+export function applyDesign(design: string, paneStyle: string): void {
+  const root = document.documentElement
+  root.setAttribute('data-design', design === 'classic' ? 'classic' : 'new')
+  if (design === 'classic') {
+    root.removeAttribute('data-panes')
+  } else {
+    root.setAttribute('data-panes', paneStyle === 'flat' || paneStyle === 'soft' ? paneStyle : 'hybrid')
+  }
+}
+
 // applyUIFont / applyMonoFont override the font tokens with the user's chosen
 // stack; null removes the override so the token falls back to the built-in
 // (or active theme's) value. inline styles on the root win over any

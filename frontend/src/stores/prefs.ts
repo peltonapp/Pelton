@@ -5,9 +5,9 @@
 // source of truth.
 
 import { writable } from 'svelte/store'
-import type { UIPrefs, ThemePref, DensityPref, EditorMode, ViewsPlacement, CloseAction, LogLevel, SelectAllScope, SearchKind, SearchSortPref } from '../lib/types'
+import type { UIPrefs, ThemePref, DensityPref, EditorMode, ViewsPlacement, CloseAction, LogLevel, SelectAllScope, SearchKind, SearchSortPref, DesignPref, LayoutMode, NavStyle, RailSide, PaneStyle, AvatarPlacement } from '../lib/types'
 import { getUIPrefs, setSetting, SettingKeys, systemColorScheme, setWindowTheme, getThemeApply } from '../lib/api'
-import { applyTheme, applyDensity, applyAccent, applyScale, applyReduceMotion, applyHandCursor, setThemeSchedule, applyUIFont, applyMonoFont, applyCorners, watchSystemTheme, setSystemSchemeOverride, resolveTheme } from '../theme/theme'
+import { applyTheme, applyDensity, applyAccent, applyScale, applyReduceMotion, applyHandCursor, setThemeSchedule, applyUIFont, applyMonoFont, applyCorners, applyDesign, watchSystemTheme, setSystemSchemeOverride, resolveTheme } from '../theme/theme'
 import { applyUserTheme } from '../theme/usertheme'
 import { uiFontStack, monoFontStack } from '../lib/fonts'
 import { setLocale } from '../lib/i18n'
@@ -72,6 +72,14 @@ const defaults: UIPrefs = {
   emptyStateImage: '',
   emptyStateFullscreen: false,
   cornerStyle: 'default',
+  design: 'new',
+  layoutMode: 'columns',
+  navStyle: 'rail',
+  railSide: 'left',
+  paneStyle: 'hybrid',
+  avatarPlacement: 'inline',
+  listHeight: 320,
+  nativeTitlebar: false,
   themeId: '',
   menuBarInApp: false,
   menuBarNativeMinimal: false,
@@ -127,6 +135,7 @@ function applyAll(p: UIPrefs): void {
   applyUIFont(uiFontStack(p.uiFont))
   applyMonoFont(monoFontStack(p.monoFont))
   applyCorners(p.cornerStyle)
+  applyDesign(p.design, p.paneStyle)
   setLocale(p.language)
 }
 
@@ -226,6 +235,64 @@ export function setCornerStyle(value: string): void {
   prefs.update((p) => ({ ...p, cornerStyle: value }))
   applyCorners(value)
   void setSetting(SettingKeys.cornerStyle, value)
+}
+
+/** Switches between the redesign and the classic interface. */
+export function setDesign(design: DesignPref): void {
+  let pane: PaneStyle = defaults.paneStyle
+  prefs.update((p) => {
+    pane = p.paneStyle
+    return { ...p, design }
+  })
+  applyDesign(design, pane)
+  void setSetting(SettingKeys.design, design)
+}
+
+/** Arranges the mail panes side by side or with the list above the reader. */
+export function setLayoutMode(layoutMode: LayoutMode): void {
+  prefs.update((p) => ({ ...p, layoutMode }))
+  void setSetting(SettingKeys.layoutMode, layoutMode)
+}
+
+/** Places the Mail/Contacts/Calendar switcher. */
+export function setNavStyle(navStyle: NavStyle): void {
+  prefs.update((p) => ({ ...p, navStyle }))
+  void setSetting(SettingKeys.navStyle, navStyle)
+}
+
+/** Moves the rail to the left or right window edge. */
+export function setRailSide(railSide: RailSide): void {
+  prefs.update((p) => ({ ...p, railSide }))
+  void setSetting(SettingKeys.railSide, railSide)
+}
+
+/** Picks how the panes are drawn in the new design. */
+export function setPaneStyle(paneStyle: PaneStyle): void {
+  let design: DesignPref = defaults.design
+  prefs.update((p) => {
+    design = p.design
+    return { ...p, paneStyle }
+  })
+  applyDesign(design, paneStyle)
+  void setSetting(SettingKeys.paneStyle, paneStyle)
+}
+
+/** Puts the sender picture in its own column, inline, or hides it. */
+export function setAvatarPlacement(avatarPlacement: AvatarPlacement): void {
+  prefs.update((p) => ({ ...p, avatarPlacement }))
+  void setSetting(SettingKeys.avatarPlacement, avatarPlacement)
+}
+
+/** Persists the message list height of the stacked layout. */
+export function setListHeight(listHeight: number): void {
+  prefs.update((p) => ({ ...p, listHeight }))
+  void setSetting(SettingKeys.listHeight, String(Math.round(listHeight)))
+}
+
+/** Chooses between the integrated title bar and the operating system's. */
+export function setNativeTitlebar(nativeTitlebar: boolean): void {
+  prefs.update((p) => ({ ...p, nativeTitlebar }))
+  void setSetting(SettingKeys.nativeTitlebar, String(nativeTitlebar))
 }
 
 export function setDensity(density: DensityPref): void {
