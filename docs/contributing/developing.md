@@ -26,8 +26,8 @@ and finding your way around the codebase. For a plain release build, see
 
 Same as building from source, see
 [Build from source](../install/build-from-source.md#prerequisites) for the
-full list: Go 1.25+, Node.js + pnpm, the pinned Wails CLI version, and
-your platform's GTK/WebKitGTK, WebView2, or Xcode toolchain.
+full list: Go 1.27+, Node.js + pnpm, and your platform's GTK3/WebKitGTK,
+WebView2, or Xcode toolchain. No Wails CLI install is needed.
 
 ## Running in dev mode
 
@@ -38,10 +38,11 @@ make run
 ```
 
 `make run` installs Go and pnpm dependencies, regenerates the TypeScript
-bindings from the Go methods, and launches `wails dev` with hot reload for
-both the Go backend and the Svelte frontend. It points Pelton at an
-isolated `PELTON_DEV` config/database directory, so it never touches a
-real install's accounts, mail cache, or settings.
+bindings from the Go methods (`make bindings`), and starts the Vite dev
+server (hot reload for the Svelte frontend) alongside the app. Go changes
+need `make run` restarted. It points Pelton at an isolated `PELTON_DEV`
+config/database directory, so it never touches a real install's accounts,
+mail cache, or settings.
 
 A couple of related targets:
 
@@ -62,7 +63,10 @@ make run-nightly    # dev mode behaving like a nightly build
       `compose`, `wizard`, `common`, `detail`, `list`, `onboarding`.
     - `src/stores/`: app state.
     - `src/theme/`: design tokens and theme/accent logic.
-    - `src/lib/`: Wails API bindings, locales.
+    - `src/lib/`: `api.ts`, `events.ts` and `browser.ts` (the only
+      bridge to Go), locales.
+    - `bindings/`: generated Wails bindings, don't hand-edit (`make
+      bindings` regenerates them).
 - `cmd/`: standalone test/debug binaries (imaptest, smtptest,
   storagetest, synctest), not the main app.
 - `main.go` + `wails.json` wire the backend and frontend together.

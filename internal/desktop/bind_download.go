@@ -13,7 +13,6 @@ import (
 	"time"
 
 	"github.com/emersion/go-imap/v2"
-	"github.com/wailsapp/wails/v2/pkg/runtime"
 
 	"github.com/peltonapp/Pelton/internal/storage"
 )
@@ -94,7 +93,7 @@ func (a *App) SaveAllAttachments(messageID int64) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	dir, err := runtime.OpenDirectoryDialog(a.ctx, runtime.OpenDialogOptions{Title: "Save all attachments to folder"})
+	dir, err := a.openDirectoryDialog(openDialogOptions{Title: "Save all attachments to folder"})
 	if err != nil {
 		return "", err
 	}

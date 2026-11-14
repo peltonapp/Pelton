@@ -20,8 +20,9 @@ Flathub builders have no network access, which means the manifest cannot run
   `-X main.version`
 
 The manifest's only source is that tarball. Inside the sandbox the build is
-`vite build` followed by `go build -mod=vendor -tags webkit2_41`; the Wails
-CLI is never needed, because `main.go` embeds `frontend/dist` with `go:embed`.
+`vite build` followed by `go build -mod=vendor -tags "production gtk3"`; the
+Wails CLI is never needed, because `main.go` embeds `frontend/dist` with
+`go:embed`.
 
 The archive is around 100 MB. That is the cost of a genuinely offline build
 and is normal for Go and Node applications on Flathub.
@@ -36,7 +37,7 @@ and is normal for Go and Node applications on Flathub.
 4. Put `sh.arne.Pelton.yml` at the root of that branch and open a pull request
    against the `new-pr` branch, not `master`.
 5. A bot test-builds the manifest and a reviewer goes through it. Expect
-   questions about `--filesystem=home`: Wails v2 opens GTK file chooser
+   questions about `--filesystem=home`: Wails opens GTK file chooser
    dialogs directly instead of going through the document portal, so a
    narrower permission would make saving attachments and exporting backups
    fail wherever the user pointed the dialog.
@@ -65,6 +66,6 @@ change it here first and copy it over.
 ## Runtime version
 
 `runtime-version` is pinned to a GNOME runtime that still ships
-`webkit2gtk-4.1`, which is what Wails v2 links against. GNOME runtimes go end
+`webkit2gtk-4.1`, which is what Pelton's GTK3 build of Wails links against. GNOME runtimes go end
 of life roughly a year after release and Flathub will email about it; bumping
 is usually a one-line change plus a rebuild.

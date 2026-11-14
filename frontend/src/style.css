@@ -42,6 +42,26 @@ body {
   width: 100%;
 }
 
+/* window material (opt-in): the window behind the page is Liquid Glass on
+   macOS or Mica on Windows. the chrome, meaning the title strip, the sidebar
+   and the status bar, lets it through; the message list and the reading pane
+   stay solid so mail text always sits on an opaque surface. main.ts sets the
+   class. */
+html.window-material,
+html.window-material body {
+  background-color: transparent;
+}
+
+html.window-material .sidebar,
+html.window-material .statusbar {
+  background: transparent;
+}
+
+html.window-material .list-col,
+html.window-material .detail {
+  background-color: var(--surface-base);
+}
+
 code,
 pre,
 .mono {

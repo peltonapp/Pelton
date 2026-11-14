@@ -69,7 +69,7 @@ const ChannelNightly = "nightly"
 
 // DefaultPath returns the database path for a normal build, inside the user
 // config directory: os.UserConfigDir()/Pelton/pelton.db. When the PELTON_DEV
-// environment variable is set (the `make run`/`wails dev` loop sets it), it
+// environment variable is set (the `make run` loop sets it), it
 // uses Pelton-dev instead, so a local dev/test run never touches a real
 // install's accounts, cache or settings.
 func DefaultPath() (string, error) {

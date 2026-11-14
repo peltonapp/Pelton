@@ -9,8 +9,8 @@
 // real messages under the same ids the samples use, so anything that reaches
 // the backend in demo mode acts on somebody's actual mailbox.
 
-import * as App from '../../wailsjs/go/desktop/App'
-import { desktop } from '../../wailsjs/go/models'
+import * as App from '../../bindings/github.com/peltonapp/Pelton/internal/desktop/app'
+import * as desktop from '../../bindings/github.com/peltonapp/Pelton/internal/desktop/models'
 import {
   isDemoActive,
   demoAccounts,
@@ -95,6 +95,12 @@ export function isDemoMode(): Promise<boolean> {
 // isn't pointed at a real install.
 export function isDevMode(): Promise<boolean> {
   return App.IsDevMode()
+}
+
+// windowMaterialActive reports whether the window was created over a native
+// material (Liquid Glass, Mica), so the ui can let it show through.
+export function windowMaterialActive(): Promise<boolean> {
+  return App.WindowMaterialActive()
 }
 
 // isNightly reports whether this is an automated nightly build cut from the dev
@@ -1017,7 +1023,7 @@ export function discoverConfig(email: string): Promise<Discovered> {
 
 // listOAuthProviders returns supported oauth provider keys mapped to labels.
 export function listOAuthProviders(): Promise<Record<string, string>> {
-  return App.ListOAuthProviders()
+  return App.ListOAuthProviders() as Promise<Record<string, string>>
 }
 
 // testConnection verifies imap credentials by logging in. It resolves with the
@@ -1282,11 +1288,61 @@ export function closeWindow(): void {
   void App.CloseWindow()
 }
 
+// closeCurrentWindow closes a message window it is called from; from the main
+// window it does what closeWindow does.
+export function closeCurrentWindow(): void {
+  void App.CloseCurrentWindow()
+}
+
+// openMessageWindow shows a message in a window of its own, or brings forward
+// the one it is already open in. Nothing to open in demo mode, where the ids
+// belong to samples.
+export function openMessageWindow(id: number, title: string): Promise<void> {
+  if (isDemoActive()) {
+    return Promise.resolve()
+  }
+  return App.OpenMessageWindow(id, title)
+}
+
+// openComposeWindow moves a compose pane's state into a window of its own,
+// which picks it up with takeComposeSession.
+export function openComposeWindow(session: unknown): Promise<void> {
+  return App.OpenComposeWindow(JSON.stringify(session))
+}
+
+// takeComposeSession returns the compose pane a compose window was opened
+// for, once, or null when there is none (the window was reloaded).
+export async function takeComposeSession<T>(token: string): Promise<T | null> {
+  const raw = await App.TakeComposeSession(token)
+  return raw ? (JSON.parse(raw) as T) : null
+}
+
 // titleBarDoubleClick runs the system's title-bar double-click action (zoom,
 // minimise or nothing). Needed because the app draws its own title bar on
 // macOS, so the window server never sees the click.
 export function titleBarDoubleClick(): void {
   void App.TitleBarDoubleClick()
+}
+
+// quitApp exits the app, as the Quit menu item does.
+export function quitApp(): void {
+  void App.QuitApp()
+}
+
+// hideApp hides the app the way the close button does when it keeps Pelton
+// running: on macOS the Dock icon brings it back.
+export function hideApp(): void {
+  void App.HideApp()
+}
+
+// isFullscreen reports whether the window is fullscreen.
+export function isFullscreen(): Promise<boolean> {
+  return App.IsFullscreen()
+}
+
+// toggleFullscreen enters or leaves fullscreen.
+export function toggleFullscreen(): Promise<void> {
+  return App.ToggleFullscreen()
 }
 
 // setUnreadBadge puts the unread count on the dock icon on macOS, and the unread
@@ -1394,6 +1450,7 @@ export const SettingKeys = {
   themeId: 'theme_id',
   menuBarInApp: 'menu_bar_in_app',
   menuBarNativeMinimal: 'menu_bar_native_minimal',
+  windowMaterial: 'window_material',
   menuBarIcons: 'menu_bar_icons',
   menuBarLayout: 'menu_bar_layout',
   paletteUsage: 'palette_usage',

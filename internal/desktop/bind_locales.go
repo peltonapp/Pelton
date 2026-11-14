@@ -8,8 +8,6 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
-
-	wailsruntime "github.com/wailsapp/wails/v2/pkg/runtime"
 )
 
 // User-provided localization (#59). Custom languages live in the locales
@@ -203,7 +201,7 @@ func (a *App) SaveLocaleTemplate(content string) (string, error) {
 	if _, err := parseUserLocale([]byte(content)); err != nil {
 		return "", fmt.Errorf("template is not a valid language file: %w", err)
 	}
-	dest, err := wailsruntime.SaveFileDialog(a.ctx, wailsruntime.SaveDialogOptions{
+	dest, err := a.saveFileDialog(saveDialogOptions{
 		DefaultFilename: "my-language.json",
 		Title:           "Save language template",
 	})

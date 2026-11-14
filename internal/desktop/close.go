@@ -1,10 +1,6 @@
 package desktop
 
-import (
-	"context"
-
-	wailsruntime "github.com/wailsapp/wails/v2/pkg/runtime"
-)
+import "github.com/wailsapp/wails/v3/pkg/application"
 
 // close button actions stored under settingCloseAction.
 const (
@@ -15,14 +11,14 @@ const (
 )
 
 // quitApp exits the app from an explicit user action (the Quit menu item, the
-// tray's Quit). It marks the quit as intended so beforeClose lets it through
-// instead of treating it as a window close.
+// tray's Quit). It marks the quit as intended so the closing hook lets the
+// window go instead of treating it as a window close.
 func (a *App) quitApp() {
-	if a.ctx == nil {
+	if a.wapp == nil {
 		return
 	}
 	a.quitRequested.Store(true)
-	wailsruntime.Quit(a.ctx)
+	a.wapp.Quit()
 }
 
 // hideOnClose reports whether closing the window should hide it and leave sync,
@@ -37,28 +33,30 @@ func (a *App) hideOnClose() bool {
 
 // CloseWindow does what the window's close button does, for the Close Window
 // menu item and its Cmd+W accelerator: honour the close action setting, so the
-// two never disagree about what closing means. Hide rather than WindowHide for
-// the reason beforeClose gives below.
+// two never disagree about what closing means.
 func (a *App) CloseWindow() {
-	if a.ctx == nil {
+	if a.wapp == nil {
 		return
 	}
 	if !a.hideOnClose() {
 		a.quitApp()
 		return
 	}
-	wailsruntime.Hide(a.ctx)
+	a.hideApp()
 }
 
-// beforeClose is wails' OnBeforeClose hook. Returning true prevents the quit,
-// which is how the window ends up hidden instead of the app exiting.
-func (a *App) beforeClose(_ context.Context) bool {
-	if !a.hideOnClose() {
-		return false
+// onWindowClosing is the hook on the main window's close. With the background
+// close action it cancels the close and hides the app instead; otherwise it
+// cancels the close and quits, so the shutdown path is the same one the Quit
+// menu item takes. A close that is part of a quit already under way passes.
+func (a *App) onWindowClosing(e *application.WindowEvent) {
+	if a.quitRequested.Load() {
+		return
 	}
-	// Hide, not WindowHide: on macOS this is [NSApp hide:], which the Dock icon
-	// can undo. Ordering the window out instead would strand it, since wails has
-	// no reopen handler. On Windows and Linux the two are the same call.
-	wailsruntime.Hide(a.ctx)
-	return true
+	e.Cancel()
+	if a.hideOnClose() {
+		a.hideApp()
+		return
+	}
+	a.quitApp()
 }

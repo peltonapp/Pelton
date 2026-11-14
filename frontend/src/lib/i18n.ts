@@ -201,6 +201,9 @@ export const t = derived([locale, catalogs, userCatalog], ([$locale, $catalogs, 
 // isMac drives the modifier symbol and is used by shortcut matching.
 export const isMac = /mac/i.test(navigator.userAgent)
 
+// isWindows gates the few settings only Windows has (the Mica material).
+export const isWindows = /windows/i.test(navigator.userAgent)
+
 
 // modSymbol is the display glyph for the primary modifier on this platform.
 export const modSymbol = isMac ? '⌘' : 'Ctrl'

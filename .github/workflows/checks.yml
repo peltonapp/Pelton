@@ -19,10 +19,9 @@ name: Checks
 #     internal/storage/messages.go), so a formatting gate would fail on day one
 #     for reasons unrelated to whatever is being reviewed. Worth adding after a
 #     one-off `gofmt -w` pass.
-#   * `wails build`. The CLI rewrites go.mod when its version does not match the
-#     pinned one, and the three release workflows already cover the real
-#     packaged builds. `go build` with the same tags proves the code compiles,
-#     which is what a pull request needs to know.
+#   * scripts/build.sh. The release and nightly workflows already cover the
+#     real packaged builds. `go build` with the same tags proves the code
+#     compiles, which is what a pull request needs to know.
 
 on:
   pull_request:
@@ -41,7 +40,7 @@ permissions:
   contents: read
 
 env:
-  GO_VERSION: "1.25"
+  GO_VERSION: "1.27"
   # 22 is the floor the test toolchain sets, not a preference: vitest declares
   # ^22.12.0 and jsdom ^22.22.2, and on 20 jsdom fails to load at all, because
   # the undici it pulls in calls a webidl helper that node 20 does not have.
@@ -51,9 +50,8 @@ env:
 
 jobs:
   # ---------------------------------------------------------------------------
-  # svelte-check has to come out clean. The type check is the only thing that
-  # catches a broken hand-maintained wails binding, since those files are
-  # written by hand and nothing generates or verifies them.
+  # svelte-check has to come out clean. It is what catches api.ts calling a
+  # binding with the wrong shape after a Go method changed.
   #
   # This job also produces the dist the Go jobs embed.
   # ---------------------------------------------------------------------------
@@ -99,9 +97,10 @@ jobs:
           if-no-files-found: error
 
   # ---------------------------------------------------------------------------
-  # Linux build, vet and the whole test suite. webkit2_41 matches what the
-  # release and nightly workflows build Linux with, so this compiles the same
-  # code path they do.
+  # Linux build, vet and the whole test suite. gtk3 matches what the release
+  # and nightly workflows build Linux with, so this compiles the same code path
+  # they do. It also checks that the committed frontend bindings match the Go
+  # methods they are generated from.
   # ---------------------------------------------------------------------------
   backend:
     name: Go build, vet and test
@@ -127,17 +126,26 @@ jobs:
           sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.1-dev build-essential pkg-config
 
       - name: Build
-        run: go build -tags webkit2_41 ./...
+        run: go build -tags gtk3 ./...
 
       - name: Vet
-        run: go vet -tags webkit2_41 ./...
+        run: go vet -tags gtk3 ./...
 
       - name: Test
-        run: go test -tags webkit2_41 ./internal/...
+        run: go test -tags gtk3 ./internal/...
+
+      - name: Bindings are up to date
+        run: |
+          go run -tags gtk3 "github.com/wailsapp/wails/v3/cmd/wails3@$(go list -m -f '{{.Version}}' github.com/wailsapp/wails/v3)" \
+            generate bindings -ts -d frontend/bindings -silent -f "-tags=gtk3" ./...
+          if ! git diff --exit-code -- frontend/bindings || [ -n "$(git status --porcelain -- frontend/bindings)" ]; then
+            echo "::error::frontend/bindings is out of date; run make bindings and commit the result"
+            exit 1
+          fi
 
   # ---------------------------------------------------------------------------
-  # Windows compiles from Linux because the Windows backend is pure Go
-  # (go-webview2), no cgo and no toolchain needed. macOS does need cgo and a
+  # Windows compiles from Linux because the Windows backend is pure Go, no cgo
+  # and no toolchain needed. macOS does need cgo and a
   # real SDK, so it gets its own runner.
   # ---------------------------------------------------------------------------
   cross-windows:

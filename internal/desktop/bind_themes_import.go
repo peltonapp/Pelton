@@ -5,8 +5,6 @@ import (
 	"os"
 	"path/filepath"
 
-	wailsruntime "github.com/wailsapp/wails/v2/pkg/runtime"
-
 	"github.com/peltonapp/Pelton/internal/themepack"
 )
 
@@ -38,9 +36,9 @@ func (a *App) PreviewThemeImport() (ThemeImportPreviewDTO, error) {
 	if err := a.ready(); err != nil {
 		return ThemeImportPreviewDTO{}, err
 	}
-	path, err := wailsruntime.OpenFileDialog(a.ctx, wailsruntime.OpenDialogOptions{
+	path, err := a.openFileDialog(openDialogOptions{
 		Title: "Import theme",
-		Filters: []wailsruntime.FileFilter{
+		Filters: []fileFilter{
 			{DisplayName: "Pelton themes (*.peltontheme)", Pattern: "*.peltontheme"},
 		},
 	})

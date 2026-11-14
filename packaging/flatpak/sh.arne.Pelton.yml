@@ -14,8 +14,8 @@ runtime: org.gnome.Platform
 runtime-version: '50'
 sdk: org.gnome.Sdk
 
-# Pelton is a Wails v2 app, so it needs webkit2gtk-4.1 (present in the GNOME
-# runtime) plus a Go toolchain and Node to build the frontend.
+# Pelton is a Wails v3 app built for GTK 3, so it needs webkit2gtk-4.1 (present
+# in the GNOME runtime) plus a Go toolchain and Node to build the frontend.
 sdk-extensions:
   - org.freedesktop.Sdk.Extension.golang
   - org.freedesktop.Sdk.Extension.node22
@@ -66,7 +66,7 @@ modules:
       # The tag is read from the VERSION file the release workflow puts in the
       # tarball, so a version bump here is only ever the url and its checksum
       # and the external data checker can do it unattended.
-      - go build -tags webkit2_41 -ldflags "-s -w -X main.version=$(cat VERSION)" -o pelton .
+      - go build -tags "production gtk3" -trimpath -ldflags "-s -w -X main.version=$(cat VERSION)" -o pelton .
       - install -Dm755 pelton /app/bin/pelton
       - install -Dm644 build/icons/pelton-512.png
         /app/share/icons/hicolor/512x512/apps/sh.arne.Pelton.png

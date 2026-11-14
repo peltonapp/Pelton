@@ -18,27 +18,21 @@ build/run/package commands; this page just walks through using it.
 
 ## Prerequisites
 
-- [Go](https://go.dev) 1.25 or newer
+- [Go](https://go.dev) 1.27 or newer
 - [Node.js](https://nodejs.org) and [pnpm](https://pnpm.io) (the frontend uses pnpm, not npm)
-- The Wails CLI, installed at the exact version this repo pins in `go.mod`:
 
-    ```bash
-    go install github.com/wailsapp/wails/v2/cmd/wails@$(go list -m -f '{{.Version}}' github.com/wailsapp/wails/v2)
-    ```
-
-    Installing a different Wails CLI version than the one pinned in
-    `go.mod` can rewrite `go.mod` and the generated TypeScript bindings out
-    from under you, the command above sidesteps that by matching them.
+No Wails CLI install is needed. The build and the binding generator run
+through `go run` at the version pinned in `go.mod`.
 
 Platform-specific toolchains, only needed for the platform you're building
 *for*:
 
-- **Linux**: the GTK/WebKitGTK development packages Wails needs (see the
-  [Wails Linux guide](https://wails.io/docs/gettingstarted/installation#linux)
-  for your distro's package names).
+- **Linux**: the GTK 3 and WebKitGTK 4.1 development packages, e.g.
+  `libgtk-3-dev libwebkit2gtk-4.1-dev` on Debian/Ubuntu or `gtk3-devel
+  webkit2gtk4.1-devel` on Fedora.
 - **Windows**: WebView2 (preinstalled on most modern Windows) and, if you
   want to build the installer, [NSIS](https://nsis.sourceforge.io/).
-- **macOS**: Xcode command line tools. Building the `.dmg` also needs
+- **macOS**: macOS 13 Ventura or newer and the Xcode command line tools. Building the `.dmg` also needs
   [`create-dmg`](https://github.com/sindresorhus/create-dmg)
   (`brew install create-dmg`).
 
@@ -64,10 +58,10 @@ make run
 ```
 
 This installs Go and pnpm dependencies, regenerates the TypeScript bindings
-from the Go methods, and launches `wails dev` with hot reload for both the
-Go backend and the Svelte frontend. It points Pelton at an isolated
-`PELTON_DEV` config/database directory, so it never touches a real
-install's accounts, mail cache, or settings.
+from the Go methods, and starts the Vite dev server (hot reload for the
+Svelte frontend) alongside the app. Go changes need `make run` restarted.
+It points Pelton at an isolated `PELTON_DEV` config/database directory, so
+it never touches a real install's accounts, mail cache, or settings.
 
 ## Building a release binary
 
@@ -82,10 +76,8 @@ extra packaging step:
 
 - **macOS**: `make dmg` (builds first, then packages `build/bin/Pelton.dmg`
   with a drag-to-Applications drop link).
-- **Windows**: `wails build -platform windows/amd64 -nsis -ldflags "..."`
-  produces an NSIS installer instead of a bare `.exe` (the `Makefile`'s
-  `build-win` target builds the bare `.exe`; add `-nsis` yourself for an
-  installer, matching what the release workflow does).
+- **Windows**: `make build-win` builds the `.exe` and, with NSIS
+  installed, the installer too (it runs `NSIS=1 scripts/build.sh`).
 - **Linux**: `build-linux` also copies `build/linux/pelton.desktop` next to
   the binary in `build/bin/`. Install the binary somewhere on your `PATH`,
   install the `.desktop` file to `~/.local/share/applications/`, and give

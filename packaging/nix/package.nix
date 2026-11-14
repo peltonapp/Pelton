@@ -6,7 +6,6 @@
   pnpmConfigHook,
   pnpm_10,
   nodejs_22,
-  wails,
   gnumake,
   pkg-config,
   gtk3,
@@ -27,20 +26,13 @@ buildGoModule (finalAttrs: {
 
   proxyVendor = true;
 
-  vendorHash = "sha256-CbLUhrekFyM/JZwm8Q0iBzIUC+cOye4hLpCJoAQHO2o=";
-
-  overrideModAttrs = {
-    preBuild = ''
-      make build-nix VERSION=${finalAttrs.version}
-    '';
-  };
+  vendorHash = "sha256-vWQAz/aiuv2gIAooxK1MXY8kBibCfqy1C3VKFDasYrU=";
 
   nativeBuildInputs = [
     pkg-config
     pnpmConfigHook
     pnpm_10
     nodejs_22
-    wails
     gnumake
   ]
   ++ lib.optionals stdenv.hostPlatform.isLinux [
@@ -61,7 +53,7 @@ buildGoModule (finalAttrs: {
       src = "${finalAttrs.src}/frontend";
       pnpm = pnpm_10;
       fetcherVersion = 3;
-      hash = "sha256-0C7IfSZ/hJ2/6SGGHGShsoaZ4C3lIbOklOAtCl8jRVA=";
+      hash = "sha256-3fwWjpehi38zT1K5p3N0awT6T3nYuyc4szUBSq3IME8=";
     };
     pnpmRoot = "frontend";
   };

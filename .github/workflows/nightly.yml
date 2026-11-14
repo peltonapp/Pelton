@@ -42,7 +42,7 @@ permissions:
   contents: write
 
 env:
-  GO_VERSION: "1.25"
+  GO_VERSION: "1.27"
   RETENTION_DAYS: "14"
 
 jobs:
@@ -142,48 +142,21 @@ jobs:
           cache: pnpm
           cache-dependency-path: frontend/pnpm-lock.yaml
 
-      - name: Install wails CLI
-        run: go install github.com/wailsapp/wails/v2/cmd/wails@$(go list -m -f '{{.Version}}' github.com/wailsapp/wails/v2)
-
       - name: Install dependencies
         run: |
           go mod download
           cd frontend && pnpm install --frozen-lockfile
 
-      - name: Brand as nightly
-        env:
-          PRODUCT_VERSION: ${{ needs.check.outputs.product_version }}
-        run: |
-          # the bundle, its display name and its version
-          jq --arg v "$PRODUCT_VERSION" \
-            '.name = "Pelton Nightly" | .outputfilename = "Pelton Nightly" | .info.productName = "Pelton Nightly" | .info.productVersion = $v' \
-            wails.json > wails.json.tmp
-          mv wails.json.tmp wails.json
-
-          # a distinct bundle id, or macOS treats a nightly and a real install
-          # as the same app for defaults, permissions and the Dock.
-          sed -i '' 's|<string>sh.arne.pelton</string>|<string>sh.arne.pelton.nightly</string>|' build/darwin/Info.plist
-
-          # CFBundleIconName points at the Liquid Glass "pelton" asset, which
-          # this job does not compile. Drop it so macOS uses iconfile.icns,
-          # which wails generates from build/appicon.png below.
-          python3 - <<'PY'
-          import re
-          p = 'build/darwin/Info.plist'
-          s = open(p, encoding='utf-8').read()
-          s = re.sub(r'\s*<key>CFBundleIconName</key>\s*<string>pelton</string>', '', s)
-          open(p, 'w', encoding='utf-8').write(s)
-          PY
-
-          cp build/icons/pelton-nightly.png build/appicon.png
-
+      # CHANNEL=nightly makes build.sh brand the bundle: "Pelton Nightly.app",
+      # its own bundle id (or macOS treats a nightly and a real install as the
+      # same app for defaults, permissions and the Dock) and the nightly icon
+      # in place of the Liquid Glass one.
       - name: Build
         env:
           VERSION: ${{ needs.check.outputs.version }}
-        run: wails build -platform darwin/arm64 -ldflags "-X main.version=$VERSION -X main.channel=nightly"
-
-      - name: Use the nightly icon
-        run: cp build/icons/pelton-nightly.icns "build/bin/Pelton Nightly.app/Contents/Resources/iconfile.icns"
+          PRODUCT_VERSION: ${{ needs.check.outputs.product_version }}
+          CHANNEL: nightly
+        run: scripts/build.sh
 
       # Ad-hoc self-sign, same reasoning as the release workflow: not
       # notarization, but it stops the bundle being flagged as "damaged".
@@ -249,9 +222,6 @@ jobs:
           cache: pnpm
           cache-dependency-path: frontend/pnpm-lock.yaml
 
-      - name: Install wails CLI
-        run: go install github.com/wailsapp/wails/v2/cmd/wails@$(go list -m -f '{{.Version}}' github.com/wailsapp/wails/v2)
-
       - name: Install NSIS
         shell: pwsh
         run: |
@@ -264,26 +234,22 @@ jobs:
           cd frontend
           pnpm install --frozen-lockfile
 
+      # the exe and installer get the nightly icon. CHANNEL=nightly then has
+      # build.sh name the exe PeltonNightly (space-free, so NSIS paths need no
+      # quoting), show "Pelton Nightly" as the product name and define
+      # PELTON_NIGHTLY for the installer.
       - name: Brand as nightly
         shell: bash
-        env:
-          PRODUCT_VERSION: ${{ needs.check.outputs.product_version }}
-        run: |
-          # productName is what the user sees (Start Menu, install directory);
-          # name/outputfilename stay space-free so the generated paths do not
-          # need quoting all the way through NSIS.
-          jq --arg v "$PRODUCT_VERSION" \
-            '.name = "PeltonNightly" | .outputfilename = "PeltonNightly" | .info.productName = "Pelton Nightly" | .info.productVersion = $v' \
-            wails.json > wails.json.tmp
-          mv wails.json.tmp wails.json
-
-          cp build/windows/icon-nightly.ico build/windows/icon.ico
-          echo '!define PELTON_NIGHTLY' > build/windows/installer/channel.nsh
+        run: cp build/windows/icon-nightly.ico build/windows/icon.ico
 
       - name: Build + NSIS installer
+        shell: bash
         env:
           VERSION: ${{ needs.check.outputs.version }}
-        run: wails build -platform windows/amd64 -nsis -ldflags "-X main.version=$env:VERSION -X main.channel=nightly"
+          PRODUCT_VERSION: ${{ needs.check.outputs.product_version }}
+          CHANNEL: nightly
+          NSIS: "1"
+        run: scripts/build.sh
 
       - name: Rename installer
         shell: bash
@@ -330,9 +296,6 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.1-dev build-essential pkg-config rpm
 
-      - name: Install wails CLI
-        run: go install github.com/wailsapp/wails/v2/cmd/wails@$(go list -m -f '{{.Version}}' github.com/wailsapp/wails/v2)
-
       - name: Install nfpm
         run: go install github.com/goreleaser/nfpm/v2/cmd/nfpm@latest
 
@@ -344,7 +307,8 @@ jobs:
       - name: Build
         env:
           VERSION: ${{ needs.check.outputs.version }}
-        run: wails build -platform linux/amd64 -tags webkit2_41 -ldflags "-X main.version=$VERSION -X main.channel=nightly"
+          CHANNEL: nightly
+        run: scripts/build.sh
 
       - name: Stage raw binary
         env:

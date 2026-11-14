@@ -63,8 +63,12 @@
     openCrashReport,
     titleBarDoubleClick,
     setUnreadBadge,
+    quitApp,
+    hideApp,
+    isFullscreen,
+    toggleFullscreen as toggleWindowFullscreen,
   } from './lib/api'
-  import { BrowserOpenURL } from '../wailsjs/runtime/runtime'
+  import { openURL } from './lib/browser'
   import { liabilityAccepted } from './lib/liability'
   import { setDemoActive } from './lib/demo'
   import { recordArchived } from './stores/undoarchive'
@@ -72,7 +76,6 @@
   import { loadViews, editingView, closeViewEditor, openViewEditor, views as savedViews } from './stores/views'
   import { selectSavedView } from './stores/selection'
   import { isMac } from './lib/i18n'
-  import { Quit, Hide, WindowIsFullscreen, WindowFullscreen, WindowUnfullscreen } from '../wailsjs/runtime/runtime'
   import { matchShortcut, comboHasModifier, isFunctionKeyCombo, type ShortcutAction } from './lib/shortcuts'
   import { cyclePane, focusPane as focusPaneArea } from './lib/panes'
   import { bindings, recording, initShortcuts } from './stores/shortcuts'
@@ -226,7 +229,7 @@
     if (!isMac) {
       return
     }
-    fullscreen = await WindowIsFullscreen().catch(() => false)
+    fullscreen = await isFullscreen().catch(() => false)
   }
 
   // the native Mail menu's message actions are only usable while a message is
@@ -720,7 +723,7 @@
             break
           }
           if (detail.unsubscribe.kind === 'link') {
-            BrowserOpenURL(detail.unsubscribe.target)
+            openURL(detail.unsubscribe.target)
             break
           }
           await unsubscribeMessage(msg.id)
@@ -868,15 +871,15 @@
         void toggleFullscreen()
         break
       case 'hide-window':
-        // Hide, not WindowHide: on macOS ordering the window out strands it,
-        // because wails has no reopen handler for the dock icon to trigger.
-        Hide()
+        // the app, not just the window: on macOS ordering the window out
+        // strands it, and an app hidden whole comes back from the dock icon.
+        hideApp()
         break
       case 'close-window':
         closeFrontmost()
         break
       case 'quit':
-        Quit()
+        quitApp()
         break
       case 'command-palette':
         togglePalette()
@@ -1165,11 +1168,7 @@
   }
 
   async function toggleFullscreen(): Promise<void> {
-    if (await WindowIsFullscreen()) {
-      WindowUnfullscreen()
-    } else {
-      WindowFullscreen()
-    }
+    await toggleWindowFullscreen()
   }
 
   function handleMenu(action: string): void {

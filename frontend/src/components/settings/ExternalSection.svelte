@@ -4,7 +4,7 @@
   // can connect to on loopback with a bearer token; future external integrations
   // live under the same category.
   import { onMount } from 'svelte'
-  import { BrowserOpenURL } from '../../../wailsjs/runtime/runtime'
+  import { openURL } from '../../lib/browser'
   import { IconCheck, IconCopy, IconRefresh, IconExternalLink } from '@tabler/icons-svelte'
   import ToggleSwitch from '../common/ToggleSwitch.svelte'
   import {
@@ -355,7 +355,7 @@
         </div>
         <p class="hint">
           {$t('virustotal.apiKeyHint')}
-          <button type="button" class="link" on:click={() => BrowserOpenURL(apiKeyPage)}>
+          <button type="button" class="link" on:click={() => openURL(apiKeyPage)}>
             {$t('virustotal.getApiKey')}
             <IconExternalLink size={12} stroke={1.8} />
           </button>

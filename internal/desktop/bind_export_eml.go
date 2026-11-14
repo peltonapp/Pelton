@@ -7,7 +7,6 @@ import (
 	"path/filepath"
 
 	"github.com/emersion/go-imap/v2"
-	"github.com/wailsapp/wails/v2/pkg/runtime"
 
 	"github.com/peltonapp/Pelton/internal/mailexport"
 	"github.com/peltonapp/Pelton/internal/storage"
@@ -55,10 +54,10 @@ func (a *App) ExportMessageEML(id int64) (string, error) {
 		return "", err
 	}
 	name := mailexport.FileName(exportMeta(m), a.emlOptions("", m).Template) + ".eml"
-	path, err := runtime.SaveFileDialog(a.ctx, runtime.SaveDialogOptions{
+	path, err := a.saveFileDialog(saveDialogOptions{
 		Title:           "Export message as .eml",
 		DefaultFilename: name,
-		Filters:         []runtime.FileFilter{{DisplayName: "Email (*.eml)", Pattern: "*.eml"}},
+		Filters:         []fileFilter{{DisplayName: "Email (*.eml)", Pattern: "*.eml"}},
 	})
 	if err != nil {
 		return "", err
@@ -99,7 +98,7 @@ func (a *App) ExportMessagesEML(ids []int64) (EmlExportDTO, error) {
 		}
 		msgs = append(msgs, m)
 	}
-	dir, err := runtime.OpenDirectoryDialog(a.ctx, runtime.OpenDialogOptions{
+	dir, err := a.openDirectoryDialog(openDialogOptions{
 		Title: "Choose where to save the exported messages",
 	})
 	if err != nil {

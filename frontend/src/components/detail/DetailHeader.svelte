@@ -9,7 +9,7 @@
   import { prefs } from '../../stores/prefs'
   import { formatFullDate, displayName, type TimeFormat } from '../../lib/format'
   import { unsubscribeMessage, checkSMIMERevocation } from '../../lib/api'
-  import { BrowserOpenURL } from '../../../wailsjs/runtime/runtime'
+  import { openURL } from '../../lib/browser'
   import { errorMessage, toastError, toastSuccess } from '../../stores/toast'
   import { t } from '../../lib/i18n'
   import { vipSenders, bareAddress, addVIP, removeVIP } from '../../stores/vip'
@@ -116,7 +116,7 @@
     clearTimeout(confirmTimer)
     confirming = false
     if (unsub.kind === 'link') {
-      BrowserOpenURL(unsub.target)
+      openURL(unsub.target)
       return
     }
     working = true
