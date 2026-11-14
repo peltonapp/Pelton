@@ -11,7 +11,7 @@
     IconFileExport,
     IconRefresh,
   } from '@tabler/icons-svelte'
-  import { createEventDispatcher, onMount } from 'svelte'
+  import { createEventDispatcher, onMount, tick } from 'svelte'
   import SegmentedSetting from './SegmentedSetting.svelte'
   import StepSlider from './StepSlider.svelte'
   import AccentPicker from './AccentPicker.svelte'
@@ -311,6 +311,16 @@
   function openResult(cat: string): void {
     active = cat
     settingsQuery = ''
+  }
+
+  // a new category starts at the top: scrolled to the bottom of a long one,
+  // a short one would otherwise open past its end, which on WebKitGTK can
+  // also leave the pane unpainted until it is scrolled.
+  let contentEl: HTMLDivElement | undefined
+  $: void scrollToTop(active, settingsQ)
+  async function scrollToTop(..._deps: unknown[]): Promise<void> {
+    await tick()
+    contentEl?.scrollTo({ top: 0 })
   }
 
   // auto-sync interval presets, in seconds (0 = off).
@@ -841,7 +851,7 @@
       {/if}
     </nav>
 
-    <div class="content">
+    <div class="content" bind:this={contentEl}>
       {#if settingsQ !== ''}
         <section>
           <h3>{$t('settings.search')}</h3>
