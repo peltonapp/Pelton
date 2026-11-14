@@ -203,6 +203,46 @@
   --shadow-overlay: 0 8px 24px rgba(0, 0, 0, 0.5);
 }
 
+/* scoping classes that pin the surface, text and border tokens of one theme
+   onto an element, whatever the live theme is. settings pictures use them to
+   show light and dark side by side. the values below must stay in step with the
+   :root[data-theme] sets above. */
+.theme-light {
+  --surface-base: #f6f6f7;
+  --surface-raised: #ffffff;
+  --surface-overlay: #ffffff;
+  --surface-sunken: #efeff1;
+  --surface-hover: #ececef;
+
+  --text-primary: #1a1b1e;
+  --text-secondary: #4a4d54;
+  --text-tertiary: #797d86;
+
+  --border-subtle: rgba(0, 0, 0, 0.06);
+  --border-default: rgba(0, 0, 0, 0.12);
+  --border-strong: rgba(0, 0, 0, 0.22);
+
+  --selection-bg: color-mix(in srgb, var(--accent) 14%, transparent);
+}
+
+.theme-dark {
+  --surface-base: #111214;
+  --surface-raised: #1a1c1f;
+  --surface-overlay: #222428;
+  --surface-sunken: #161719;
+  --surface-hover: #25282d;
+
+  --text-primary: #ecedee;
+  --text-secondary: #b4b7bd;
+  --text-tertiary: #7e828b;
+
+  --border-subtle: rgba(255, 255, 255, 0.06);
+  --border-default: rgba(255, 255, 255, 0.12);
+  --border-strong: rgba(255, 255, 255, 0.22);
+
+  --selection-bg: color-mix(in srgb, var(--accent) 22%, transparent);
+}
+
 /* density variants. these swap only spacing and line-height tokens, so every
    component stays density-agnostic. medium is the default already on :root. */
 :root[data-density="compact"] {
