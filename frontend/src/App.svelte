@@ -157,6 +157,7 @@
     toggleSpam,
   } from './lib/messageactions'
   import { buildCommands, mailCommands, type CommandContext, type MessageOp, type FolderOp } from './lib/commands'
+  import { extraPaletteCommands } from './lib/palettesources'
   import { catalogByAction } from './lib/menuactions'
   import { shortcutLabel } from './lib/i18n'
   import {
@@ -1208,7 +1209,9 @@
   // rebuilt whenever anything the entries depend on moves, so the open palette
   // never offers a folder that was just deleted or a message action with no
   // message behind it.
-  $: paletteCommands = $paletteOpen ? buildCommands(commandContext) : []
+  $: paletteCommands = $paletteOpen
+    ? [...buildCommands(commandContext), ...(classic ? [] : extraPaletteCommands($t))]
+    : []
 
   // opening a hit also puts the query in the search bar, so the list behind the
   // palette holds the same results the reading pane is showing rather than

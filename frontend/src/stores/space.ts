@@ -71,6 +71,27 @@ export function registerSpaceActions(key: Space, handlers: Record<string, SpaceA
   }
 }
 
+const mountWaitFrames = 180
+
+/**
+ * Shows a space and runs one of its actions there. The space's screen loads
+ * on first use, so the action waits for the screen to register its handlers.
+ */
+export function runInSpace(key: Space, action: string): void {
+  space.set(key)
+  let frames = 0
+  const attempt = (): void => {
+    const handler = spaceActions.get(key)?.get(action)
+    if (handler) {
+      handler()
+    } else if (frames < mountWaitFrames) {
+      frames += 1
+      requestAnimationFrame(attempt)
+    }
+  }
+  attempt()
+}
+
 /**
  * Offers an action to the space on screen. True means it is dealt with: the
  * space handled it, or it is a mail action that has no meaning there.
