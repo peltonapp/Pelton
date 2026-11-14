@@ -39,8 +39,10 @@ export interface MailNewEvent {
   count: number
 }
 
-// MailRepairedEvent reports messages whose stored text was replaced because it
-// had been cached in an encoding nothing could read.
+// MailRepairedEvent reports cached messages that changed underneath an open
+// list: text replaced because it had been cached in an encoding nothing could
+// read, conversations regrouped, or messages marked answered or forwarded.
+// accountId and folderId are 0 when the change spans more than one.
 export interface MailRepairedEvent {
   accountId: number
   folderId: number
@@ -159,8 +161,9 @@ export function onMailNew(cb: (e: MailNewEvent) => void): Unsubscribe {
   return EventsOn(EventNames.mailNew, (e: MailNewEvent) => cb(e))
 }
 
-// onMailRepaired fires when a sync rewrote the text of cached messages, so the
-// list and any open message show the fixed text without a reload.
+// onMailRepaired fires when cached messages changed without new mail arriving
+// (text rewritten, conversations regrouped, reply state changed), so the list
+// and any open message reload.
 export function onMailRepaired(cb: (e: MailRepairedEvent) => void): Unsubscribe {
   return EventsOn(EventNames.mailRepaired, (e: MailRepairedEvent) => cb(e))
 }
