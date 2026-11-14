@@ -223,7 +223,9 @@
   {:else}
     <div class="bar">
       {#if !loading}
-        <span class="count">{$t('detail.attachments.pdfPages').replace('{count}', String(sizes.length))}</span>
+        <span class="count">
+          {sizes.length === 1 ? $t('detail.attachments.pdfPage') : $t('detail.attachments.pdfPages').replace('{count}', String(sizes.length))}
+        </span>
       {/if}
       <span class="spacer"></span>
       <button type="button" class="zbtn" title={$t('detail.attachments.zoomOut')} aria-label={$t('detail.attachments.zoomOut')} disabled={loading || scale <= minZoom} on:click={() => zoom(1 / zoomStep)}>
