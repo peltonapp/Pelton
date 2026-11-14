@@ -1,7 +1,6 @@
 package mailview
 
 import (
-	stdhtml "html"
 	"net/url"
 	"regexp"
 	"slices"
@@ -169,7 +168,10 @@ func scanImg(z *htmltok.Tokenizer) (TrackedImage, bool) {
 		key, val, more := z.TagAttr()
 		switch strings.ToLower(string(key)) {
 		case "src":
-			src = strings.TrimSpace(stdhtml.UnescapeString(string(val)))
+			// the tokenizer has decoded entities already; decoding again read
+			// "&amp;amp;" as "&" here but as "&amp;" when stripping, so the
+			// tracker found was never the tracker removed.
+			src = imageSource(string(val))
 		case "style":
 			style = string(val)
 		case "width", "height":
@@ -300,88 +302,20 @@ var trackerDomains = []string{
 	"yesware.com",
 }
 
-// imgTagPattern matches a whole img element, which is what StripTrackers
-// removes. img is void, so there is no closing tag to worry about.
-var imgTagPattern = regexp.MustCompile(`(?is)<img\b[^>]*>`)
-
-// srcAttrPattern pulls the src out of one img tag, quoted or bare.
-var srcAttrPattern = regexp.MustCompile(`(?is)\bsrc\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>]+))`)
-
 // StripTrackers removes the img elements whose src is in urls, so remote
-// content can be shown without confirming the open.
+// content can be shown without confirming the open. urls comes from
+// ScanRemoteImages over the same html, and both read a src the same way
+// (imageSource), so a tracker found is a tracker removed.
 //
 // Removal happens before sanitizing, not after: the sanitizer's job is to
 // decide what is safe markup, and it has no opinion about which of two equally
-// well-formed images the reader wants.
+// well-formed images the reader wants. See rewrite.go for how it is done.
 func StripTrackers(html string, urls map[string]bool) string {
 	if html == "" || len(urls) == 0 {
 		return html
 	}
-	return imgTagPattern.ReplaceAllStringFunc(html, func(tag string) string {
-		m := srcAttrPattern.FindStringSubmatch(tag)
-		if m == nil {
-			return tag
-		}
-		src := strings.TrimSpace(stdhtml.UnescapeString(m[1] + m[2] + m[3]))
-		if urls[src] {
-			return ""
-		}
-		return tag
-	})
+	return rewrite(html, filter{dropImage: func(src string) bool { return urls[src] }})
 }
-
-// stripRemoteImages removes every img element with an http(s) source, and the
-// legacy background attribute that loads one the same way. It backs the blocked
-// view; see Sanitize for why the policy cannot do this itself.
-func stripRemoteImages(html string) string {
-	if html == "" {
-		return html
-	}
-	out := imgTagPattern.ReplaceAllStringFunc(html, func(tag string) string {
-		m := srcAttrPattern.FindStringSubmatch(tag)
-		if m == nil {
-			return tag
-		}
-		src := strings.ToLower(strings.TrimSpace(stdhtml.UnescapeString(m[1] + m[2] + m[3])))
-		if strings.HasPrefix(src, "http://") || strings.HasPrefix(src, "https://") {
-			return ""
-		}
-		return tag
-	})
-	return remoteBackgroundAttrPattern.ReplaceAllString(out, "")
-}
-
-// mediaElementPattern matches a whole video or audio element, its inner source
-// elements and all. Unlike img these have a closing tag, so the contents go
-// with them rather than being left loose in the body.
-var mediaElementPattern = regexp.MustCompile(`(?is)<video\b[^>]*>.*?</\s*video\s*>|<audio\b[^>]*>.*?</\s*audio\s*>|<(?:video|audio)\b[^>]*/?>`)
-
-// stripRemoteMedia removes a video or audio element that would stream from a
-// remote server, for the same reason stripRemoteImages removes a remote image:
-// until the reader has asked for remote content, nothing in a message may
-// reach out. The whole element goes rather than just its source, since a
-// player with nothing to play is worse than no player.
-//
-// A source inside the element counts as well as the element's own: mail
-// offering the same clip in several formats carries the url on those instead.
-func stripRemoteMedia(html string) string {
-	if html == "" {
-		return html
-	}
-	return mediaElementPattern.ReplaceAllStringFunc(html, func(tag string) string {
-		for _, m := range srcAttrPattern.FindAllStringSubmatch(tag, -1) {
-			src := strings.ToLower(strings.TrimSpace(stdhtml.UnescapeString(m[1] + m[2] + m[3])))
-			if strings.HasPrefix(src, "http://") || strings.HasPrefix(src, "https://") {
-				return ""
-			}
-		}
-		return tag
-	})
-}
-
-// remoteBackgroundAttrPattern matches a background="http(s)://..." attribute,
-// the old table-cell way of loading an image.
-var remoteBackgroundAttrPattern = regexp.MustCompile(`(?i)\sbackground\s*=\s*(?:"https?://[^"]*"|'https?://[^']*'|https?://[^\s>]+)`)
 
 // TrackerURLs is the set of image sources in a scan that look like tracking,
 // ready to hand to StripTrackers.
