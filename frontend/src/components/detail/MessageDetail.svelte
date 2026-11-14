@@ -100,7 +100,9 @@
   $: if ($messageDetail.data && currentVerdictMessage() !== $messageDetail.data.id) {
     resetVerdicts($messageDetail.data.id)
   }
-  $: if (canScan && $messageDetail.data && $messageDetail.data.id !== autoScannedId) {
+  // a scan still running for the previous message holds the next one back
+  // until it ends, which re-runs this block, instead of skipping it.
+  $: if (canScan && !$scanning && $messageDetail.data && $messageDetail.data.id !== autoScannedId) {
     autoScannedId = $messageDetail.data.id
     if ($virusTotal.autoScanLinks || $virusTotal.autoScanAttachments) {
       void runScan($messageDetail.data.id, $virusTotal.autoScanLinks, $virusTotal.autoScanAttachments)
