@@ -93,7 +93,7 @@ func Run(cfg Config) error {
 		Logger:      app.log,
 		Services: []application.Service{
 			application.NewService(app),
-			application.NewService(app.notifier),
+			application.NewService(&notifierService{a: app}),
 			application.NewService(app.dock),
 		},
 		Assets: application.AssetOptions{

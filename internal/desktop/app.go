@@ -51,9 +51,11 @@ type App struct {
 	composeHandoff sync.Map
 	composeWindows sync.Map
 	// notifier posts the new-mail notifications (notify.go) and dock carries
-	// the unread badge on macOS. Both are nil in tests.
-	notifier *notifications.NotificationService
-	dock     *dock.DockService
+	// the unread badge on macOS. Both are nil in tests. notifyReady is set once
+	// the notification service has started (notifier.go).
+	notifier    *notifications.NotificationService
+	notifyReady atomic.Bool
+	dock        *dock.DockService
 	log      *slog.Logger
 	// logWriter is where log lines go. It always writes to stderr and, when
 	// the setting is on, also to a rotating file in the data directory. See
