@@ -197,9 +197,13 @@
     }
   }
 
+  let searchFilter: SearchFilter = emptyFilter
   let lastKey = ''
   $: if ($selection && selectionKey($selection) !== lastKey) {
     lastKey = selectionKey($selection)
+    // the search bar drops its chips with the folder, so the filter they
+    // stood for must go too, or the next search still carries it.
+    searchFilter = emptyFilter
     clearSelection()
     resetScroll()
     void loadList($selection)
@@ -294,8 +298,6 @@
 
   // search handling. the list shows ranked results when there is a query or an
   // active date filter, and the selection's normal list otherwise.
-  let searchFilter: SearchFilter = emptyFilter
-
   function applySearch(query: string, filter: SearchFilter): void {
     clearSelection()
     resetScroll()
@@ -311,9 +313,10 @@
     applySearch(event.detail.trim(), searchFilter)
   }
 
+  // the search bar sends the filter right before the query, so the query
+  // event runs the search for both.
   function onFilter(event: CustomEvent<SearchFilter>): void {
     searchFilter = event.detail
-    applySearch($searchQuery.trim(), searchFilter)
   }
 
   // a sort picked from the search bar is remembered for this kind of search and
@@ -578,8 +581,10 @@
         void remove(item)
         break
       case 'read':
+        void markSeen(item, true)
+        break
       case 'unread':
-        void toggleSeen(item)
+        void markSeen(item, false)
         break
       case 'flag':
         void toggleFlag(item)

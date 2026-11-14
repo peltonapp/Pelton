@@ -5,7 +5,7 @@
   // enter; an autocomplete dropdown suggests keywords as you type; the calendar
   // button inserts before/after date chips. everything is emitted as free text
   // plus a structured SearchFilter so the list re-runs the ranked search.
-  import { createEventDispatcher, tick } from 'svelte'
+  import { createEventDispatcher, onDestroy, tick } from 'svelte'
   import { IconSearch, IconX, IconCalendar, IconBookmarkPlus, IconArrowsSort, IconCheck } from '@tabler/icons-svelte'
   import { prefs } from '../../stores/prefs'
   import { shortcutLabel, t } from '../../lib/i18n'
@@ -24,9 +24,14 @@
   let lastSelection = $selection
   $: if ($selection !== lastSelection) {
     lastSelection = $selection
+    // a search still waiting on the debounce would run against the new folder
+    clearTimeout(timer)
     text = ''
     chips = []
+    afterDate = ''
+    beforeDate = ''
   }
+  onDestroy(() => clearTimeout(timer))
 
   const searchHint = shortcutLabel('mod+f')
   const dispatch = createEventDispatcher<{ search: string; filter: SearchFilter; sort: SearchSortPref }>()
@@ -141,9 +146,11 @@
   // emit debounces and dispatches the current free text and chip filter.
   function emit(): void {
     clearTimeout(timer)
+    // the filter goes first: the list only stores it, and runs the search once
+    // on the query event.
     timer = setTimeout(() => {
-      dispatch('search', text.trim())
       dispatch('filter', buildFilter())
+      dispatch('search', text.trim())
     }, 180)
   }
 
@@ -216,8 +223,8 @@
     // just cleared as though they were still applied.
     afterDate = ''
     beforeDate = ''
-    dispatch('search', '')
     dispatch('filter', { ...emptyFilter })
+    dispatch('search', '')
   }
 
   // applyDates turns the popover's picked dates into before/after chips.
