@@ -18,4 +18,6 @@ here by name, feel free to add yourself in the same PR or a follow-up one.
 - [Dezzzu](https://github.com/Dezzzu) built the Linux tray icon and the unread
   dot on the tray icon.
 - [tchilov](https://github.com/tchilov) worked on UI improvements.
-- [snowlander](https://github.com/snowlander) translated into Russian 100%, bug detection, improvement ideas.
+- [Bitlitas](https://github.com/Bitlitas) fixed sending through servers that
+  only offer SMTP AUTH LOGIN.
+- [snowlander](https://github.com/snowlander) full translated into Russian, bug detection, improvement ideas.
