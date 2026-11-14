@@ -95,9 +95,8 @@
   --accent-fg: #ffffff;
   --selection-bg: color-mix(in srgb, var(--accent) 14%, transparent);
   --selection-bg-strong: color-mix(in srgb, var(--accent) 22%, transparent);
-  /* a hover fill that can lie over content, and the rail's own shade of chrome. */
+  /* a hover fill that can lie over content. */
   --hover-tint: color-mix(in srgb, var(--text-primary) 6%, transparent);
-  --rail-bg: color-mix(in srgb, var(--text-primary) 4%, var(--chrome-bg));
   --link: var(--accent);
 
   /* elevation, used sparingly for overlays and popovers. */
@@ -325,7 +324,10 @@
    as one rounded surface, soft raises every pane on its own, flat keeps them
    edge to edge with hairlines. */
 :root[data-design="new"] {
-  --chrome-bg: var(--surface-sunken);
+  /* the window chrome (top bar, rail, status bar) is a hair off the folder
+     pane, which keeps the sunken surface itself. */
+  --chrome-bg: color-mix(in srgb, var(--text-primary) 2.5%, var(--surface-sunken));
+  --sidebar-bg: var(--surface-sunken);
   --radius-card: 7px;
 }
 
