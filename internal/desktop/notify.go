@@ -55,12 +55,12 @@ func notifyMessageID(data map[string]any) (int64, bool) {
 	return id, id > 0
 }
 
-// deliverNotification posts one notification. Without the service (tests) it
-// does nothing. On macOS the first one asks for permission; after that the
+// deliverNotification posts one notification. Without the service (tests, or
+// a dev build outside an .app on macOS) it does nothing. On macOS the first one asks for permission; after that the
 // stored answer is used without asking again. The sound is off on purpose:
 // what Pelton should make a noise about is its own question (#240).
 func (a *App) deliverNotification(n notification) error {
-	if a.notifier == nil {
+	if a.notifier == nil || !a.notifyReady.Load() {
 		return nil
 	}
 	if ok, err := a.notifier.RequestNotificationAuthorization(); err != nil || !ok {
