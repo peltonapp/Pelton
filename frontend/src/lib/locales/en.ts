@@ -2244,6 +2244,8 @@ const en: Record<string, string> = {
   'calendarSettings.sync.manual': 'Only when asked',
   'calendarSettings.sync.every': 'Every {n} minutes',
   'messageList.noText': 'No text',
+  'composing.smoothCaret': 'Smooth typing',
+  'composing.smoothCaret.hint': 'The text cursor glides to its next position as you type, instead of jumping. Applies to every text field in Pelton.',
   'settings2.search.hint': '{count} found. Arrow keys move, Enter opens the setting.',
   'wizard.email.guessed': 'Not confirmed: {host} is a guess from the address. Check the servers on the next step.',
   'thread.expand': 'Show the whole conversation',
