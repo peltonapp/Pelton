@@ -689,7 +689,7 @@
           on:change={(e) => setBody(e.detail)}
         />
       {:else}
-        <div class="editor-loading">Loading editor…</div>
+        <div class="editor-loading">{$t('compose.editor.loading')}</div>
       {/if}
     </div>
 
