@@ -1586,6 +1586,7 @@ const ar: Record<string, string> = {
   'common.network.offlineError': 'لا يوجد اتصال بالإنترنت. تحقق من شبكة Wi-Fi وحاول مجدداً.',
   'sidebar.unifiedInbox': 'البريد الوارد الموحّد',
   'sidebar.view.inbox': 'البريد الوارد',
+  'sidebar.view.unread': 'غير المقروءة',
   'sidebar.view.flagged': 'المميزة',
   'sidebar.view.drafts': 'المسودات',
   'sidebar.view.sent': 'المرسلة',

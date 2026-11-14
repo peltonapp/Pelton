@@ -1586,6 +1586,7 @@ const tr: Record<string, string> = {
   'common.network.offlineError': 'İnternet bağlantısı yok. Wi-Fi bağlantınızı kontrol edip yeniden deneyin.',
   'sidebar.unifiedInbox': 'Birleşik Gelen Kutusu',
   'sidebar.view.inbox': 'Gelen Kutusu',
+  'sidebar.view.unread': 'Okunmamış',
   'sidebar.view.flagged': 'Bayraklı',
   'sidebar.view.drafts': 'Taslaklar',
   'sidebar.view.sent': 'Gönderilenler',

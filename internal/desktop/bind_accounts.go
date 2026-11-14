@@ -63,6 +63,7 @@ type unifiedView struct {
 // canonical set and the fallback order.
 var unifiedViewOrder = []unifiedView{
 	{viewInbox, "Inbox"},
+	{viewUnread, "Unread"},
 	{viewFlagged, "Flagged"},
 	{viewDrafts, "Drafts"},
 	{viewSent, "Sent"},
@@ -107,6 +108,7 @@ func (a *App) ListUnifiedViews() ([]UnifiedViewDTO, error) {
 // unified view keys, shared with the frontend.
 const (
 	viewInbox   = "inbox"
+	viewUnread  = "unread"
 	viewFlagged = "flagged"
 	viewSent    = "sent"
 	viewDrafts  = "drafts"
@@ -166,16 +168,26 @@ func (a *App) viewQuery(ctx context.Context, key string) (storage.MessageQuery, 
 				if role == roleTrash {
 					folderIDs = append(folderIDs, f.ID)
 				}
-			case viewFlagged:
-				// flagged spans everything except trash and junk.
+			case viewFlagged, viewUnread:
+				// flagged and unread span everything except trash and junk.
 				if role != roleTrash && role != roleJunk {
 					folderIDs = append(folderIDs, f.ID)
 				}
 			}
 		}
 	}
-	if key == viewFlagged {
+	var exclude storage.Flag
+	switch key {
+	case viewFlagged:
 		require = storage.FlagFlagged
+	case viewUnread:
+		exclude = storage.FlagSeen
 	}
-	return storage.MessageQuery{FolderIDs: folderIDs, RequireFlags: require, OneCopy: key == viewFlagged}, nil
+	// the two flag views list a message once however many folders carry it
+	return storage.MessageQuery{
+		FolderIDs:    folderIDs,
+		RequireFlags: require,
+		ExcludeFlags: exclude,
+		OneCopy:      key == viewFlagged || key == viewUnread,
+	}, nil
 }

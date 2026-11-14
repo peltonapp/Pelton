@@ -1580,6 +1580,7 @@ const pt: Record<string, string> = {
   'common.network.offlineError': 'Sem ligação à internet. Verifique o seu Wi-Fi e tente novamente.',
   'sidebar.unifiedInbox': 'Caixa de Entrada Unificada',
   'sidebar.view.inbox': 'Caixa de Entrada',
+  'sidebar.view.unread': 'Não lidas',
   'sidebar.view.flagged': 'Sinalizadas',
   'sidebar.view.drafts': 'Rascunhos',
   'sidebar.view.sent': 'Enviadas',

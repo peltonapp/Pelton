@@ -998,7 +998,7 @@ export type FolderRole =
   | 'normal'
 
 // unified view keys mirror the backend view constants.
-export type ViewKey = 'inbox' | 'flagged' | 'sent' | 'drafts' | 'archive' | 'junk' | 'trash'
+export type ViewKey = 'inbox' | 'unread' | 'flagged' | 'sent' | 'drafts' | 'archive' | 'junk' | 'trash'
 
 // pgp status mirrors mailview.PGPStatus.
 export type PGPStatus = 'none' | 'signed' | 'encrypted'

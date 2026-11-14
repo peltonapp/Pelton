@@ -1586,6 +1586,7 @@ const fr: Record<string, string> = {
   'common.network.offlineError': 'Pas de connexion Internet. Vérifiez votre Wi-Fi et réessayez.',
   'sidebar.unifiedInbox': 'Boîte de réception unifiée',
   'sidebar.view.inbox': 'Boîte de réception',
+  'sidebar.view.unread': 'Non lus',
   'sidebar.view.flagged': 'Suivis',
   'sidebar.view.drafts': 'Brouillons',
   'sidebar.view.sent': 'Envoyés',

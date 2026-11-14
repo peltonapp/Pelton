@@ -1587,6 +1587,7 @@ const zhCN: Record<string, string> = {
   'common.network.offlineError': '无网络连接。请检查 Wi-Fi 后重试。',
   'sidebar.unifiedInbox': '聚合收件箱',
   'sidebar.view.inbox': '收件箱',
+  'sidebar.view.unread': '未读',
   'sidebar.view.flagged': '已标记',
   'sidebar.view.drafts': '草稿',
   'sidebar.view.sent': '已发送',

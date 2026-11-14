@@ -1586,6 +1586,7 @@ const de: Record<string, string> = {
   'common.network.offlineError': 'Keine Internetverbindung. Überprüfe dein WLAN und versuche es erneut.',
   'sidebar.unifiedInbox': 'Vereinter Posteingang',
   'sidebar.view.inbox': 'Posteingang',
+  'sidebar.view.unread': 'Ungelesen',
   'sidebar.view.flagged': 'Markiert',
   'sidebar.view.drafts': 'Entwürfe',
   'sidebar.view.sent': 'Gesendet',
