@@ -214,6 +214,57 @@ func parts(mr *mail.Reader, msg *Message) error {
 	return nil
 }
 
+// CalendarParts returns the decoded content of every iCalendar part in raw:
+// a text/calendar part, which invitations usually carry inline as an
+// alternative of the body and which the body walk above does not keep, and an
+// application/ics or .ics attachment.
+func CalendarParts(raw []byte) ([][]byte, error) {
+	mr, err := reader(raw)
+	if err != nil {
+		return nil, err
+	}
+	var out [][]byte
+	for {
+		part, err := mr.NextPart()
+		if err == io.EOF {
+			break
+		}
+		if err != nil && !message.IsUnknownCharset(err) {
+			return out, fmt.Errorf("rfc822: read part: %w", err)
+		}
+		header := &mail.AttachmentHeader{Header: headerOf(part.Header)}
+		contentType, _, _ := header.ContentType()
+		filename, _ := header.Filename()
+		if !IsCalendar(contentType, filename) {
+			continue
+		}
+		body, err := io.ReadAll(part.Body)
+		if err != nil {
+			return out, fmt.Errorf("rfc822: read calendar part: %w", err)
+		}
+		out = append(out, body)
+	}
+	return out, nil
+}
+
+// IsCalendar reports whether a part's type or filename marks it as iCalendar
+// data.
+func IsCalendar(contentType, filename string) bool {
+	contentType = strings.ToLower(contentType)
+	return contentType == "text/calendar" || contentType == "application/ics" ||
+		strings.HasSuffix(strings.ToLower(filename), ".ics")
+}
+
+func headerOf(h mail.PartHeader) message.Header {
+	switch v := h.(type) {
+	case *mail.InlineHeader:
+		return v.Header
+	case *mail.AttachmentHeader:
+		return v.Header
+	}
+	return message.Header{}
+}
+
 func attachmentFrom(header *mail.AttachmentHeader, content []byte) Attachment {
 	filename, _ := header.Filename()
 	contentType, _, _ := header.ContentType()
