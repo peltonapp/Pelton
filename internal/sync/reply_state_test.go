@@ -102,7 +102,7 @@ func TestSyncPushesReplyStateSetLocally(t *testing.T) {
 			if err := db.RecordOutgoingReply(ctx, folder.AccountID, "<out@example.com>", "orig@example.com", tt.kind); err != nil {
 				t.Fatalf("record: %v", err)
 			}
-			changed, err := db.MarkReplySent(ctx, folder.AccountID, "out@example.com")
+			changed, err := db.MarkReplySent(ctx, "out@example.com")
 			if err != nil || len(changed) != 1 {
 				t.Fatalf("mark sent = %v, %v; want one change", changed, err)
 			}

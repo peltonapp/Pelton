@@ -420,6 +420,24 @@ func TestQueryThreadsPagingIsStable(t *testing.T) {
 	}
 }
 
+func TestGroupThreadsKeepsListOrder(t *testing.T) {
+	ctx := context.Background()
+	f := newThreadFixture(t)
+	a := f.add(Message{MessageID: "a@x", Subject: "s"}, 0)
+	b := f.add(Message{MessageID: "b@x", Subject: "Re: s", FolderID: f.sent, InReplyTo: []string{"a@x"}}, 1)
+	c := f.add(Message{MessageID: "c@x", Subject: "other"}, 2)
+	pages, err := f.db.GroupThreads(ctx, []Message{c, b, a}, nil, []int64{f.inbox})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(pages) != 2 || pages[0].Head.ID != c.ID || pages[1].Head.ID != b.ID {
+		t.Fatalf("got %d pages, want c then the thread headed by b", len(pages))
+	}
+	if len(pages[1].Members) != 2 || pages[1].Members[0].ID != a.ID || pages[1].Members[1].ID != b.ID {
+		t.Fatalf("members = %+v, want a and the head from its own folder", pages[1].Members)
+	}
+}
+
 func TestThreadMessagesListsEachCopyAndHonoursFolders(t *testing.T) {
 	ctx := context.Background()
 	f := newThreadFixture(t)
@@ -459,7 +477,7 @@ func TestMarkReplySentFlagsEveryCopyOnce(t *testing.T) {
 		t.Fatal("an unsent reply is listed")
 	}
 
-	changed, err := f.db.MarkReplySent(ctx, f.account, "reply@me")
+	changed, err := f.db.MarkReplySent(ctx, "reply@me")
 	if err != nil || len(changed) != 2 {
 		t.Fatalf("MarkReplySent = %v, %v; want both copies", changed, err)
 	}
@@ -469,10 +487,10 @@ func TestMarkReplySentFlagsEveryCopyOnce(t *testing.T) {
 			t.Fatalf("copy %d flags = %d, want answered only", m.ID, got.Flags)
 		}
 	}
-	if again, err := f.db.MarkReplySent(ctx, f.account, "reply@me"); err != nil || len(again) != 0 {
+	if again, err := f.db.MarkReplySent(ctx, "reply@me"); err != nil || len(again) != 0 {
 		t.Fatalf("second MarkReplySent = %v, %v; want no change", again, err)
 	}
-	if _, err := f.db.MarkReplySent(ctx, f.account, "<fw@me>"); err != nil {
+	if _, err := f.db.MarkReplySent(ctx, "<fw@me>"); err != nil {
 		t.Fatal(err)
 	}
 	got, _ := f.db.GetMessage(ctx, fwd.ID)
@@ -487,6 +505,36 @@ func TestMarkReplySentFlagsEveryCopyOnce(t *testing.T) {
 	}
 }
 
+func TestReplyFromAnotherAccount(t *testing.T) {
+	ctx := context.Background()
+	f := newThreadFixture(t)
+	g := newThreadFixtureOn(t, f.db, "work@example.com")
+	orig := f.add(Message{MessageID: "o@x", Subject: "s"}, 0)
+
+	owner, ok, err := f.db.MessageAccount(ctx, "<o@x>", g.account)
+	if err != nil || !ok || owner != f.account {
+		t.Fatalf("MessageAccount = %d, %v, %v; want the account holding it", owner, ok, err)
+	}
+	if _, ok, _ := f.db.MessageAccount(ctx, "missing@x", g.account); ok {
+		t.Fatal("MessageAccount found a message nobody has")
+	}
+
+	if err := f.db.RecordOutgoingReply(ctx, owner, "r@work", "o@x", ReplyKindReply); err != nil {
+		t.Fatal(err)
+	}
+	if changed, err := f.db.MarkReplySent(ctx, "r@work"); err != nil || len(changed) != 1 || changed[0].ID != orig.ID {
+		t.Fatalf("MarkReplySent = %v, %v", changed, err)
+	}
+	sentCopy := g.add(Message{MessageID: "r@work", Subject: "Re: s", FolderID: g.sent, InReplyTo: []string{"o@x"}}, 1)
+	replies, _, err := f.db.SentReplies(ctx, f.account, "o@x")
+	if err != nil || len(replies) != 1 || replies[0] != sentCopy.ID {
+		t.Fatalf("SentReplies = %v, %v; want the copy in the other account's Sent", replies, err)
+	}
+	if g.thread(sentCopy) == f.thread(orig) {
+		t.Fatal("the reply joined a thread of another account")
+	}
+}
+
 func TestPruneUnsentReplies(t *testing.T) {
 	ctx := context.Background()
 	f := newThreadFixture(t)
@@ -496,7 +544,7 @@ func TestPruneUnsentReplies(t *testing.T) {
 	if err := f.db.RecordOutgoingReply(ctx, f.account, "kept@me", "o@x", ReplyKindReply); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := f.db.MarkReplySent(ctx, f.account, "kept@me"); err != nil {
+	if _, err := f.db.MarkReplySent(ctx, "kept@me"); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := f.db.sql.Exec(`UPDATE message_replies SET created_at = '2000-01-01T00:00:00Z'`); err != nil {

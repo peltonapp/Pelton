@@ -70,36 +70,65 @@ LIMIT ? OFFSET ?`
 		return nil, nil
 	}
 
-	heads, err := d.messagesByID(ctx, headIDs)
+	byID, err := d.messagesByID(ctx, headIDs)
 	if err != nil {
 		return nil, err
 	}
-	var threadIDs []int64
+	heads := make([]Message, 0, len(headIDs))
 	for _, id := range headIDs {
-		if h, ok := heads[id]; ok && h.ThreadID != 0 {
-			threadIDs = append(threadIDs, h.ThreadID)
+		if h, ok := byID[id]; ok {
+			heads = append(heads, h)
 		}
 	}
-	members, err := d.threadMembers(ctx, threadIDs, append(append([]int64(nil), q.MemberFolderIDs...), q.Query.FolderIDs...))
+	return d.GroupThreads(ctx, heads, q.Query.FolderIDs, q.MemberFolderIDs)
+}
+
+// GroupThreads turns messages that are already in list order into
+// conversations: the first message of each thread is its head and later ones
+// of the same thread are dropped. Members are read from listedFolderIDs and
+// memberFolderIDs, as QueryThreads describes. A message without a thread forms
+// one of its own.
+func (d *DB) GroupThreads(ctx context.Context, messages []Message, listedFolderIDs, memberFolderIDs []int64) ([]ThreadPage, error) {
+	var (
+		heads     []Message
+		threadIDs []int64
+		seen      = make(map[int64]bool, len(messages))
+	)
+	for _, m := range messages {
+		if m.ThreadID == 0 {
+			heads = append(heads, m)
+			continue
+		}
+		if seen[m.ThreadID] {
+			continue
+		}
+		seen[m.ThreadID] = true
+		heads = append(heads, m)
+		threadIDs = append(threadIDs, m.ThreadID)
+	}
+
+	listed := make(map[int64]bool, len(listedFolderIDs))
+	folders := append([]int64(nil), memberFolderIDs...)
+	for _, id := range listedFolderIDs {
+		listed[id] = true
+		folders = append(folders, id)
+	}
+	for _, h := range heads {
+		if !listed[h.FolderID] {
+			folders = append(folders, h.FolderID)
+		}
+	}
+	members, err := d.threadMembers(ctx, threadIDs, folders)
 	if err != nil {
 		return nil, err
 	}
 
-	listed := make(map[int64]bool, len(q.Query.FolderIDs))
-	for _, id := range q.Query.FolderIDs {
-		listed[id] = true
-	}
-	pages := make([]ThreadPage, 0, len(headIDs))
-	for _, id := range headIDs {
-		head, ok := heads[id]
-		if !ok {
-			continue
-		}
+	pages := make([]ThreadPage, 0, len(heads))
+	for _, head := range heads {
 		page := ThreadPage{ThreadID: head.ThreadID, Head: head}
-		if head.ThreadID == 0 {
+		page.Members = dedupeMembers(members[head.ThreadID], head.ID, listed)
+		if head.ThreadID == 0 || len(page.Members) == 0 {
 			page.Members = []ThreadMember{memberOf(head)}
-		} else {
-			page.Members = dedupeMembers(members[head.ThreadID], head.ID, listed)
 		}
 		pages = append(pages, page)
 	}
@@ -182,7 +211,7 @@ FROM messages WHERE id IN (`+marks+`)`, args...)
 // grouped by thread in date order.
 func (d *DB) threadMembers(ctx context.Context, threadIDs, folderIDs []int64) (map[int64][]ThreadMember, error) {
 	out := make(map[int64][]ThreadMember, len(threadIDs))
-	if len(threadIDs) == 0 {
+	if len(threadIDs) == 0 || len(folderIDs) == 0 {
 		return out, nil
 	}
 	threadMarks, args := inClause(threadIDs)

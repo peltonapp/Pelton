@@ -2,6 +2,8 @@ package storage
 
 import (
 	"context"
+	"database/sql"
+	"errors"
 	"fmt"
 	"time"
 )
@@ -13,8 +15,9 @@ const (
 )
 
 // RecordOutgoingReply notes that the outgoing message replyID answers or
-// forwards originalID (kind is ReplyKindReply or ReplyKindForward). It is
-// written before the message is queued and takes effect through
+// forwards originalID (kind is ReplyKindReply or ReplyKindForward). accountID
+// is the account holding the original, which is not always the one sending. It
+// is written before the message is queued and takes effect through
 // MarkReplySent once the server accepted it. Either id may carry angle
 // brackets; an empty one records nothing.
 func (d *DB) RecordOutgoingReply(ctx context.Context, accountID int64, replyID, originalID, kind string) error {
@@ -33,18 +36,40 @@ ON CONFLICT (account_id, reply_message_id, kind) DO UPDATE SET original_message_
 	return nil
 }
 
+// MessageAccount returns the account holding a message with Message-ID
+// messageID, preferring prefer when it has one, and false when no account
+// does.
+func (d *DB) MessageAccount(ctx context.Context, messageID string, prefer int64) (int64, bool, error) {
+	key := threadKey(messageID)
+	if key == "" {
+		return 0, false, nil
+	}
+	var id int64
+	err := d.sql.QueryRowContext(ctx, `
+SELECT account_id FROM messages WHERE message_id IN (?, ?)
+ORDER BY account_id = ? DESC, id LIMIT 1`, key, "<"+key+">", prefer).Scan(&id)
+	if errors.Is(err, sql.ErrNoRows) {
+		return 0, false, nil
+	}
+	if err != nil {
+		return 0, false, fmt.Errorf("storage: account of message %q: %w", key, err)
+	}
+	return id, true, nil
+}
+
 // ReplyStateChange is one original message whose answered or forwarded state
 // MarkReplySent changed.
 type ReplyStateChange struct {
-	ID       int64
-	FolderID int64
+	ID        int64
+	AccountID int64
+	FolderID  int64
 }
 
 // MarkReplySent marks the records of the sent message replyID as sent and sets
 // \Answered or $Forwarded on every copy of the message it answered or
 // forwarded, queued for the next sync to push like a flag the user set. It
 // returns the rows it changed; copies already carrying the flag are left alone.
-func (d *DB) MarkReplySent(ctx context.Context, accountID int64, replyID string) ([]ReplyStateChange, error) {
+func (d *DB) MarkReplySent(ctx context.Context, replyID string) ([]ReplyStateChange, error) {
 	replyID = threadKey(replyID)
 	if replyID == "" {
 		return nil, nil
@@ -56,16 +81,18 @@ func (d *DB) MarkReplySent(ctx context.Context, accountID int64, replyID string)
 	defer tx.Rollback()
 
 	rows, err := tx.QueryContext(ctx, `
-SELECT original_message_id, kind FROM message_replies
-WHERE account_id = ? AND reply_message_id = ?`, accountID, replyID)
+SELECT account_id, original_message_id, kind FROM message_replies WHERE reply_message_id = ?`, replyID)
 	if err != nil {
 		return nil, fmt.Errorf("storage: read reply records: %w", err)
 	}
-	type record struct{ original, kind string }
+	type record struct {
+		account        int64
+		original, kind string
+	}
 	var records []record
 	for rows.Next() {
 		var r record
-		if err := rows.Scan(&r.original, &r.kind); err != nil {
+		if err := rows.Scan(&r.account, &r.original, &r.kind); err != nil {
 			rows.Close()
 			return nil, fmt.Errorf("storage: scan reply record: %w", err)
 		}
@@ -82,7 +109,7 @@ WHERE account_id = ? AND reply_message_id = ?`, accountID, replyID)
 		if r.kind == ReplyKindForward {
 			flag = FlagForwarded
 		}
-		matched, err := copiesWithout(ctx, tx, accountID, r.original, flag)
+		matched, err := copiesWithout(ctx, tx, r.account, r.original, flag)
 		if err != nil {
 			return nil, err
 		}
@@ -96,8 +123,7 @@ WHERE id = ?`, uint8(flag), uint8(flag), c.ID); err != nil {
 		changed = append(changed, matched...)
 	}
 	if _, err := tx.ExecContext(ctx,
-		`UPDATE message_replies SET sent = 1 WHERE account_id = ? AND reply_message_id = ?`,
-		accountID, replyID); err != nil {
+		`UPDATE message_replies SET sent = 1 WHERE reply_message_id = ?`, replyID); err != nil {
 		return nil, fmt.Errorf("storage: mark reply records sent: %w", err)
 	}
 	if err := tx.Commit(); err != nil {
@@ -110,7 +136,7 @@ WHERE id = ?`, uint8(flag), uint8(flag), c.ID); err != nil {
 // have flag set yet.
 func copiesWithout(ctx context.Context, ex execer, accountID int64, messageID string, flag Flag) ([]ReplyStateChange, error) {
 	rows, err := ex.QueryContext(ctx, `
-SELECT id, folder_id FROM messages
+SELECT id, account_id, folder_id FROM messages
 WHERE account_id = ? AND message_id IN (?, ?) AND pending_delete = 0 AND flags & ? = 0`,
 		accountID, messageID, "<"+messageID+">", uint8(flag))
 	if err != nil {
@@ -120,7 +146,7 @@ WHERE account_id = ? AND message_id IN (?, ?) AND pending_delete = 0 AND flags &
 	var out []ReplyStateChange
 	for rows.Next() {
 		var c ReplyStateChange
-		if err := rows.Scan(&c.ID, &c.FolderID); err != nil {
+		if err := rows.Scan(&c.ID, &c.AccountID, &c.FolderID); err != nil {
 			return nil, fmt.Errorf("storage: scan copy: %w", err)
 		}
 		out = append(out, c)
@@ -129,9 +155,10 @@ WHERE account_id = ? AND message_id IN (?, ?) AND pending_delete = 0 AND flags &
 }
 
 // SentReplies returns the stored messages sent from Pelton that answered
-// (replies) or forwarded (forwards) the message with Message-ID originalID,
-// oldest first. A sent message counts once it reached the local cache, which
-// is when the Sent folder next syncs; one copy of each is returned.
+// (replies) or forwarded (forwards) the message with Message-ID originalID in
+// accountID, oldest first. A sent message counts once it reached the local
+// cache, which is when the sending account's Sent folder next syncs; one copy
+// of each is returned.
 func (d *DB) SentReplies(ctx context.Context, accountID int64, originalID string) (replies, forwards []int64, err error) {
 	originalID = threadKey(originalID)
 	if originalID == "" {
@@ -139,8 +166,7 @@ func (d *DB) SentReplies(ctx context.Context, accountID int64, originalID string
 	}
 	rows, err := d.sql.QueryContext(ctx, `
 SELECT r.kind, MIN(m.id) FROM message_replies r
-JOIN messages m ON m.account_id = r.account_id
-  AND m.message_id IN (r.reply_message_id, '<' || r.reply_message_id || '>')
+JOIN messages m ON m.message_id IN (r.reply_message_id, '<' || r.reply_message_id || '>')
   AND m.pending_delete = 0
 WHERE r.account_id = ? AND r.original_message_id = ? AND r.sent = 1
 GROUP BY r.kind, r.reply_message_id
