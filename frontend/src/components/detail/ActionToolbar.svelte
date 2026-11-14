@@ -65,7 +65,7 @@
   <IconButton label={$t('action.archive')} title={$shortcutTitle($t('action.archive'), 'archive')} on:click={() => dispatch('archive')}>
     <IconArchive size={18} stroke={1.6} />
   </IconButton>
-  <IconButton label={flagLabel} title={$shortcutTitle(flagLabel, 'flag')} active={flagged} on:click={() => dispatch('toggleFlag')}>
+  <IconButton label={flagLabel} title={$shortcutTitle(flagLabel, 'flag')} active={flagged} toggle on:click={() => dispatch('toggleFlag')}>
     {#if flagged}
       <IconFlagFilled size={18} />
     {:else}
