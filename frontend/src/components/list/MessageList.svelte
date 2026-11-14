@@ -362,7 +362,11 @@
 
   // onRowClick routes a click to either multi-selection (cmd/ctrl or shift, when
   // enabled) or opening the message.
-  function onRowClick(event: MouseEvent, index: number): void {
+  // the row is found by message id rather than its position when it was drawn,
+  // so a list that changed under the pointer (a sync landing) cannot turn the
+  // click into a different message.
+  function onRowClick(event: MouseEvent, id: number): void {
+    const index = items.findIndex((m) => m.id === id)
     const item = items[index]
     if (!item) {
       return
@@ -862,7 +866,7 @@
             accountColor={mixedAccounts ? (accountColors[item.accountId] ?? '') : ''}
             selected={item.id === $openMessageId || index === activeIndex}
             checked={$selectedIds.has(item.id)}
-            on:click={(e) => onRowClick(e, index)}
+            on:click={(e) => onRowClick(e, item.id)}
             on:auxclick={(e) => onRowAux(e, item)}
             on:dblclick={() => void openMessageWindow(item.id, item.subject)}
             on:contextmenu={(e) => onContext(e, item)}

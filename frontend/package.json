@@ -53,6 +53,7 @@
     "codemirror": "^6.0.2",
     "flag-icons": "^7.6.0",
     "marked": "^18.2.0",
+    "pdfjs-dist": "6.4.299",
     "svelte-dnd-action": "^0.9.80",
     "turndown": "^7.2.5"
   },

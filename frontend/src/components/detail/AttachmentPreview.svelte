@@ -1,6 +1,6 @@
 <script lang="ts">
   // the in-app attachment previewer. it fetches the attachment bytes and renders
-  // pdf (in a sandboxed frame), images, or text/code/markdown source. anything
+  // pdf (with the bundled pdf.js), images, or text/code/markdown source. anything
   // else, or a file over the preview cap, offers "save instead". text is shown as
   // source (never rendered as html) so an untrusted attachment cannot run script.
   import { onDestroy } from 'svelte'
@@ -13,15 +13,16 @@
   import { errorMessage, toastError, toastSuccess } from '../../stores/toast'
   import { t } from '../../lib/i18n'
   import type { AttachmentContent } from '../../lib/types'
+  import PdfView from './PdfView.svelte'
 
   let loading = false
   let content: AttachmentContent | null = null
   let errorText = ''
   let lastKey = ''
-  // pdf and image render from a Blob object url, not a data url: WKWebView and
-  // WebView2 both show a blank page for a data:application/pdf iframe, but load a
-  // blob: url fine. we revoke the previous url whenever it changes.
+  // an image renders from a Blob object url, revoked whenever it changes. a pdf
+  // goes to PdfView as raw bytes.
   let objectUrl = ''
+  let pdfBytes: Uint8Array | null = null
 
   // (re)load whenever the target changes.
   $: if ($previewTarget) {
@@ -33,6 +34,7 @@
   } else {
     lastKey = ''
     content = null
+    pdfBytes = null
     errorText = ''
     releaseUrl()
   }
@@ -44,14 +46,13 @@
     }
   }
 
-  // base64ToBlob decodes the payload into a typed Blob for the object url.
-  function base64ToBlob(b64: string, type: string): Blob {
+  function base64ToBytes(b64: string): Uint8Array<ArrayBuffer> {
     const bin = atob(b64)
     const bytes = new Uint8Array(bin.length)
     for (let i = 0; i < bin.length; i++) {
       bytes[i] = bin.charCodeAt(i)
     }
-    return new Blob([bytes], { type: type || 'application/octet-stream' })
+    return bytes
   }
 
   $: kind = $previewTarget
@@ -65,14 +66,17 @@
     }
     loading = true
     content = null
+    pdfBytes = null
     errorText = ''
     releaseUrl()
     try {
       const c = await readAttachment(target.messageId, target.attachment.id)
       content = c
       const k = previewKind(target.attachment.contentType, target.attachment.filename)
-      if (c.data && (k === 'pdf' || k === 'image')) {
-        objectUrl = URL.createObjectURL(base64ToBlob(c.data, c.contentType))
+      if (c.data && k === 'pdf') {
+        pdfBytes = base64ToBytes(c.data)
+      } else if (c.data && k === 'image') {
+        objectUrl = URL.createObjectURL(new Blob([base64ToBytes(c.data)], { type: c.contentType || 'application/octet-stream' }))
       }
     } catch (err) {
       errorText = errorMessage(err)
@@ -153,8 +157,10 @@
           {$t('detail.attachments.noPreview')}
           <button type="button" class="link" on:click={saveInstead}>{$t('detail.attachments.saveInstead')}</button>
         </div>
-      {:else if kind === 'pdf' && objectUrl}
-        <iframe class="pdf" src={objectUrl} title={$previewTarget.attachment.filename}></iframe>
+      {:else if kind === 'pdf' && pdfBytes}
+        {#key pdfBytes}
+          <PdfView data={pdfBytes} />
+        {/key}
       {:else if kind === 'image' && objectUrl}
         <div class="image-wrap">
           <img src={objectUrl} alt={$previewTarget.attachment.filename} />
@@ -254,13 +260,6 @@
     cursor: var(--cursor-action);
     font: inherit;
     text-decoration: underline;
-  }
-
-  .pdf {
-    width: 100%;
-    height: 100%;
-    border: none;
-    background: #fff;
   }
 
   .image-wrap {
