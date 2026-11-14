@@ -5,6 +5,7 @@ import {
   displayName,
   formatBytes,
   formatRelative,
+  formatStatusClock,
   initials,
   linkifySegments,
 } from './format'
@@ -33,6 +34,14 @@ describe('formatBytes', () => {
   it('treats zero and negatives as no bytes', () => {
     expect(formatBytes(0)).toBe('0 B')
     expect(formatBytes(-5)).toBe('0 B')
+  })
+})
+
+describe('formatStatusClock', () => {
+  it('shows midnight as 00 on the 24 hour clock', () => {
+    const text = formatStatusClock(new Date(2026, 0, 1, 0, 5), '24')
+    expect(text).toContain('00:05')
+    expect(text).not.toContain('24:05')
   })
 })
 
