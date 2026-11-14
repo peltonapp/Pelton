@@ -130,16 +130,27 @@
     return ordered.indexOf(entry)
   }
 
+  // one command at a time: a second Enter while the first is still running
+  // would run it again.
+  let running = false
   async function run(command: PaletteCommand): Promise<void> {
-    recordUse(command.id)
-    const next = await command.run()
-    if (next) {
-      paletteStep.set(next)
-      paletteQuery.set('')
-      await focusInput()
+    if (running) {
       return
     }
-    closePalette()
+    running = true
+    try {
+      recordUse(command.id)
+      const next = await command.run()
+      if (next) {
+        paletteStep.set(next)
+        paletteQuery.set('')
+        await focusInput()
+        return
+      }
+      closePalette()
+    } finally {
+      running = false
+    }
   }
 
   /** Leaves the current step, or closes the palette when at the top level. */
@@ -177,6 +188,11 @@
         void move(-1)
         break
       case 'Enter': {
+        // the Enter that confirms an input method's composition (Chinese,
+        // Japanese, Korean) is not a choice
+        if (event.isComposing || event.keyCode === 229) {
+          break
+        }
         const chosen = ordered[active]
         if (chosen) {
           event.preventDefault()
