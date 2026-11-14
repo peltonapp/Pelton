@@ -57,7 +57,10 @@
 <style>
   .topbar {
     display: grid;
-    grid-template-columns: minmax(0, 1fr) minmax(0, var(--topsearch-width)) minmax(0, 1fr);
+    /* the sides are equal while there is room, which centres the search; in a
+       narrow window they keep what the menu and the window buttons need and
+       the search gives way instead of covering them. */
+    grid-template-columns: minmax(max-content, 1fr) minmax(var(--topsearch-min-width), var(--topsearch-width)) minmax(max-content, 1fr);
     align-items: center;
     gap: var(--space-4);
     height: var(--topbar-height);

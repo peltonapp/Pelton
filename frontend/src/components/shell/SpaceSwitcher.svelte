@@ -3,7 +3,8 @@
   // no rail: at the foot of the sidebar and as tabs in the top bar. a highlight
   // slides under the active segment.
   import Ph from '../common/Ph.svelte'
-  import { spaces } from '../../lib/spaces'
+  import { spaces, spaceDrop } from '../../lib/spaces'
+  import { maildrop } from '../../stores/maildrag'
   import { space, openSpace } from '../../stores/space'
   import { tip } from '../../lib/tip'
   import { t } from '../../lib/i18n'
@@ -31,6 +32,7 @@
       aria-selected={$space === entry.key}
       aria-label={$t(entry.labelKey)}
       use:tip={{ text: labels ? '' : $t(entry.labelKey), side: 'top' }}
+      use:maildrop={spaceDrop(entry.key)}
       on:click={() => openSpace(entry.key)}
     >
       <Ph svg={entry.icon} size={16} />

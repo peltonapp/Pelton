@@ -7,7 +7,8 @@
   import settingsIcon from '@phosphor-icons/core/assets/duotone/gear-six-duotone.svg?raw'
   import userIcon from '@phosphor-icons/core/assets/duotone/user-circle-duotone.svg?raw'
   import Ph from '../common/Ph.svelte'
-  import { spaces } from '../../lib/spaces'
+  import { spaces, spaceDrop } from '../../lib/spaces'
+  import { maildrop } from '../../stores/maildrag'
   import { space, openSpace } from '../../stores/space'
   import { currentProfile, profiles, switchRelative } from '../../stores/profiles'
   import { tip } from '../../lib/tip'
@@ -36,6 +37,7 @@
         aria-label={$t(entry.labelKey)}
         aria-current={$space === entry.key ? 'page' : undefined}
         use:tip={{ text: $t(entry.labelKey), side: tipSide }}
+        use:maildrop={spaceDrop(entry.key)}
         on:click={() => openSpace(entry.key)}
       >
         <Ph svg={entry.icon} size={19} />

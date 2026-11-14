@@ -113,6 +113,7 @@
      pane style below sets them, so the classic design never sees them. */
   --topbar-height: 38px;
   --topsearch-width: 560px;
+  --topsearch-min-width: 140px;
   --suggest-max-height: 420px;
   --popover-width: 256px;
   --chip-height: 20px;

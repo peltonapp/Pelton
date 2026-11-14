@@ -79,6 +79,7 @@
     clearAll,
   } from '../../stores/selectall'
   import { prefs, setSearchSort } from '../../stores/prefs'
+  import { maildragSource } from '../../stores/maildrag'
   import {
     setSeen,
     getMessage,
@@ -296,6 +297,15 @@
   // the live multi-selection, intersected with what is still loaded so bulk
   // actions never act on rows that have scrolled out of the data.
   $: selectedItems = items.filter((m) => $selectedIds.has(m.id))
+
+  // what a drag that starts on a row carries: the whole selection when the row
+  // is part of it, otherwise that row alone. the classic design has no drag.
+  function dragItems(item: MessageSummary): MessageSummary[] {
+    if ($prefs.design === 'classic') {
+      return []
+    }
+    return $selectedIds.has(item.id) ? selectedItems : [item]
+  }
 
   // select-all is not offered in the unified views unless it is asked for: one
   // of those lists spans every account, so "everything in this list" is a much
@@ -1011,7 +1021,7 @@
       {/if}
       {#each windowItems as item, i (item.id)}
         {@const index = startIndex + i}
-        <div id={`msg-${item.id}`}>
+        <div id={`msg-${item.id}`} use:maildragSource={() => dragItems(item)}>
           <MessageRow
             message={item}
             accountColor={mixedAccounts ? (accountColors[item.accountId] ?? '') : ''}

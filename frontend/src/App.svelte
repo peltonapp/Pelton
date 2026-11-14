@@ -23,6 +23,7 @@
   import { frameIntegrated } from './stores/windowframe'
   import { setDraft, submitSearch, searchOpenedId } from './stores/search'
   import SnoozeDialog from './components/detail/SnoozeDialog.svelte'
+  import DragStack from './components/list/DragStack.svelte'
   import ConfirmDialog from './components/common/ConfirmDialog.svelte'
   import SyncFailureDialog from './components/common/SyncFailureDialog.svelte'
   import { loadSyncStates, watchSyncStates } from './stores/syncfailures'
@@ -1747,6 +1748,7 @@
 <Toasts />
 <ContextMenu />
 <ConfirmDialog />
+<DragStack />
 <SnoozeDialog />
 <FolderDialog />
 <AttachmentPreview />
