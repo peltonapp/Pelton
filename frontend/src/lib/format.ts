@@ -140,10 +140,19 @@ export function formatBytes(bytes: number): string {
     return '0 B'
   }
   const units = ['B', 'KB', 'MB', 'GB']
-  const exp = Math.min(Math.floor(Math.log(bytes) / Math.log(1024)), units.length - 1)
-  const value = bytes / Math.pow(1024, exp)
-  const rounded = exp === 0 ? value : Math.round(value * 10) / 10
+  let exp = Math.min(Math.max(0, Math.floor(Math.log(bytes) / Math.log(1024))), units.length - 1)
+  let rounded = round(bytes / Math.pow(1024, exp), exp)
+  // just under a unit rounds up to 1024 of the smaller one, which reads as a
+  // typo; say 1 of the next unit instead.
+  if (rounded >= 1024 && exp < units.length - 1) {
+    exp++
+    rounded = round(bytes / Math.pow(1024, exp), exp)
+  }
   return `${rounded} ${units[exp]}`
+}
+
+function round(value: number, exp: number): number {
+  return exp === 0 ? Math.round(value) : Math.round(value * 10) / 10
 }
 
 // formatRelative renders an epoch-ms timestamp as a short relative time for the

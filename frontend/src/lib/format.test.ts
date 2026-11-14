@@ -26,6 +26,12 @@ describe('formatBytes', () => {
     expect(formatBytes(1024 * 1024 * 2.25)).toBe('2.3 MB')
   })
 
+  it('moves up a unit instead of showing 1024 of the smaller one', () => {
+    expect(formatBytes(1024 * 1024 - 1)).toBe('1 MB')
+    expect(formatBytes(1024 * 1024 * 1024 - 1)).toBe('1 GB')
+    expect(formatBytes(1023)).toBe('1023 B')
+  })
+
   it('stops at GB rather than inventing a larger unit', () => {
     expect(formatBytes(1024 ** 4)).toBe('1024 GB')
   })
