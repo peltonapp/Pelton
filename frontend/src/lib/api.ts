@@ -22,6 +22,8 @@ import {
   demoSearch,
   demoHtml,
   demoSource,
+  demoThreads,
+  demoThread,
 } from './demo'
 import type {
   Account,
@@ -35,6 +37,8 @@ import type {
   MessageList,
   MessageDetail,
   MessageSummary,
+  ThreadList,
+  Thread,
   ComposeRequest,
   Draft,
   OutboxRow,
@@ -337,6 +341,47 @@ export function listSavedViewMessages(
   return App.ListMessages(
     new desktop.ListMessagesRequest({ kind: 'savedView', folderId: 0, view: '', viewId, limit, offset }),
   )
+}
+
+// listFolderThreads reads a page of one folder as conversations. Paging counts
+// conversations, and a conversation is listed when any of its messages is in
+// the folder.
+export function listFolderThreads(folderId: number, limit: number, offset: number): Promise<ThreadList> {
+  if (isDemoActive()) {
+    return Promise.resolve(demoThreads())
+  }
+  return App.ListThreads(
+    new desktop.ListMessagesRequest({ kind: 'folder', folderId, view: '', limit, offset }),
+  )
+}
+
+// listViewThreads reads a page of a unified view as conversations.
+export function listViewThreads(view: ViewKey, limit: number, offset: number): Promise<ThreadList> {
+  if (isDemoActive()) {
+    return Promise.resolve(demoThreads())
+  }
+  return App.ListThreads(
+    new desktop.ListMessagesRequest({ kind: 'view', folderId: 0, view, limit, offset }),
+  )
+}
+
+// listSavedViewThreads reads a page of a saved View as conversations.
+export function listSavedViewThreads(viewId: number, limit: number, offset: number): Promise<ThreadList> {
+  if (isDemoActive()) {
+    return Promise.resolve(demoThreads())
+  }
+  return App.ListThreads(
+    new desktop.ListMessagesRequest({ kind: 'savedView', folderId: 0, view: '', viewId, limit, offset }),
+  )
+}
+
+// getThread returns one conversation's messages, oldest first, with the user's
+// own replies included and marked. Bodies still come from getMessage.
+export function getThread(threadId: number): Promise<Thread> {
+  if (isDemoActive()) {
+    return Promise.resolve(demoThread(threadId))
+  }
+  return App.GetThread(threadId)
 }
 
 // fetchOlderMessages pulls the next batch of older mail from the server for a

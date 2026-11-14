@@ -60,6 +60,9 @@ function summary(id: number, subject: string): MessageSummary {
     snoozeUntil: '',
     senderVip: false,
     smime: { status: '', signer: '', email: '', issuer: '', detail: '' },
+    threadId: id,
+    answered: false,
+    forwarded: false,
   }
 }
 
