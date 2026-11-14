@@ -4,7 +4,7 @@
   // instead of App when the window was opened with ?window=message. It shares
   // the backend with the main window but none of its state, so it loads the
   // preferences it needs to look and behave the same.
-  import { onMount } from 'svelte'
+  import { onDestroy, onMount } from 'svelte'
   import MessageDetail from './components/detail/MessageDetail.svelte'
   import Compose from './components/compose/Compose.svelte'
   import Toasts from './components/common/Toasts.svelte'
@@ -13,8 +13,10 @@
   import AttachmentPreview from './components/detail/AttachmentPreview.svelte'
   import MoveDialog from './components/detail/MoveDialog.svelte'
   import SnoozeDialog from './components/detail/SnoozeDialog.svelte'
-  import { initPrefs } from './stores/prefs'
-  import { initComposePrefs, composeSessions } from './stores/compose'
+  import Composer2 from './components/compose/Composer2.svelte'
+  import { initPrefs, prefs } from './stores/prefs'
+  import { initComposePrefs, composeSessions, setForcedComposeMode } from './stores/compose'
+  import { routeComposeSessions } from './stores/composeroute'
   import { loadSignatures } from './stores/signatures'
   import { loadVIPSenders } from './stores/vip'
   import { loadVirusTotalConfig } from './stores/virustotal'
@@ -26,6 +28,12 @@
   export let messageId: number
 
   let ready = false
+
+  // replies from here follow the compose placement of the new design; there
+  // is no tab bar in a message window, so a tab opens docked instead.
+  $: classic = $prefs.design === 'classic'
+  $: setForcedComposeMode(classic ? null : $prefs.composeVimMode ? 'plaintext' : 'wysiwyg')
+  onDestroy(routeComposeSessions({ tabs: false }))
 
   onMount(async () => {
     if (isMac) {
@@ -78,7 +86,11 @@
 {#if $composeSessions.length > 0}
   <div class="compose-layer">
     {#each $composeSessions as session (session.id)}
-      <Compose {session} />
+      {#if classic}
+        <Compose {session} />
+      {:else if session.placement === 'docked'}
+        <Composer2 {session} layout="docked" />
+      {/if}
     {/each}
   </div>
 {/if}

@@ -243,6 +243,44 @@ func TestDiscardOnlyRemovesFailedMessages(t *testing.T) {
 	}
 }
 
+func TestSendNowMakesAScheduledMessageDue(t *testing.T) {
+	ctx := context.Background()
+	q, accountID := newTestQueue(t)
+
+	m := sampleMessage(accountID)
+	m.NotBefore = time.Now().UTC().Add(24 * time.Hour)
+	id, err := q.Enqueue(ctx, m)
+	if err != nil {
+		t.Fatalf("enqueue: %v", err)
+	}
+	if got, _ := q.claimDue(ctx, time.Now().UTC()); got != nil {
+		t.Fatal("a message scheduled for tomorrow was due already")
+	}
+
+	moved, err := q.SendNow(ctx, id)
+	if err != nil {
+		t.Fatalf("send now: %v", err)
+	}
+	if !moved {
+		t.Fatal("send now did not move a queued message")
+	}
+	got, err := q.claimDue(ctx, time.Now().UTC().Add(time.Second))
+	if err != nil {
+		t.Fatalf("claim: %v", err)
+	}
+	if got == nil || got.ID != id {
+		t.Fatalf("claimed %+v, want message %d due now", got, id)
+	}
+
+	moved, err = q.SendNow(ctx, id)
+	if err != nil {
+		t.Fatalf("send now while sending: %v", err)
+	}
+	if moved {
+		t.Error("send now reported a change on a message already sending")
+	}
+}
+
 func TestRequeueStuckRecoversSendingRows(t *testing.T) {
 	ctx := context.Background()
 	q, accountID := newTestQueue(t)

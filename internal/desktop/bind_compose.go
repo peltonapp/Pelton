@@ -115,6 +115,7 @@ func (a *App) SendMessage(req ComposeRequest) (int64, error) {
 	if err != nil {
 		return 0, err
 	}
+	a.sentRequests.Store(id, req)
 	a.emit(EventOutboxChanged, nil)
 
 	// harvest every recipient into the address book so autocomplete learns from
@@ -739,6 +740,9 @@ type OutboxRowDTO struct {
 	LastError     string   `json:"lastError"`
 	NextAttemptAt string   `json:"nextAttemptAt"`
 	CreatedAt     string   `json:"createdAt"`
+	// Editable is set when the message was sent in this run, so its compose
+	// request is still known and EditOutboxMessage can take it back.
+	Editable bool `json:"editable"`
 }
 
 // ListOutbox returns the current outbox, so the ui can show queued, sending and
@@ -751,9 +755,12 @@ func (a *App) ListOutbox() ([]OutboxRowDTO, error) {
 	if err != nil {
 		return nil, err
 	}
+	a.pruneSentRequests(rows)
 	out := make([]OutboxRowDTO, 0, len(rows))
 	for _, r := range rows {
+		_, editable := a.sentRequests.Load(r.ID)
 		out = append(out, OutboxRowDTO{
+			Editable:      editable,
 			ID:            r.ID,
 			AccountID:     r.AccountID,
 			Recipients:    r.Recipients,

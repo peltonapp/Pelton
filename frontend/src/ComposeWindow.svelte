@@ -6,10 +6,11 @@
   // closes it, and its close button asks the way the pane's own button does.
   import { onDestroy, onMount } from 'svelte'
   import Compose from './components/compose/Compose.svelte'
+  import Composer2 from './components/compose/Composer2.svelte'
   import Toasts from './components/common/Toasts.svelte'
   import ContextMenu from './components/common/ContextMenu.svelte'
   import ConfirmDialog from './components/common/ConfirmDialog.svelte'
-  import { initPrefs } from './stores/prefs'
+  import { initPrefs, prefs } from './stores/prefs'
   import {
     initComposePrefs,
     composeSessions,
@@ -28,6 +29,7 @@
   export let token: string
 
   let ready = false
+  $: classic = $prefs.design === 'classic'
   const stopCloseRequests = onComposeCloseRequest(() => {
     const session = $composeSessions[0]
     if (session) {
@@ -67,7 +69,9 @@
   }
 </script>
 
-{#if isMac}
+<!-- the new composer's toolbar is the title bar of its window, so only the
+     classic pane needs the strip. -->
+{#if isMac && classic}
   <!-- svelte-ignore a11y-no-static-element-interactions -->
   <div
     class="titlebar-drag"
@@ -78,7 +82,11 @@
 {/if}
 
 {#each $composeSessions as session (session.id)}
-  <Compose {session} />
+  {#if classic}
+    <Compose {session} />
+  {:else}
+    <Composer2 {session} layout="window" />
+  {/if}
 {/each}
 
 <Toasts />

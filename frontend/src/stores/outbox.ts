@@ -2,9 +2,10 @@
 // when the backend emits outbox:changed and reflects sync:state so the ui can
 // show sending, queued and failed messages plus a sync indicator.
 
-import { writable } from 'svelte/store'
+import { get, writable } from 'svelte/store'
 import type { OutboxRow } from '../lib/types'
 import { listOutbox, clearSentOutbox } from '../lib/api'
+import { t } from '../lib/i18n'
 import { errorMessage, toastSuccess } from './toast'
 
 export const outbox = writable<OutboxRow[]>([])
@@ -63,7 +64,8 @@ export async function loadOutbox(): Promise<void> {
     const sent = rows.filter((r) => r.state === 'sent')
     outbox.set(rows.filter((r) => r.state !== 'sent'))
     if (sent.length > 0) {
-      toastSuccess(sent.length === 1 ? 'Message sent.' : `${sent.length} messages sent.`)
+      const tr = get(t)
+      toastSuccess(sent.length === 1 ? tr('outbox.toast.sent') : tr('outbox.toast.sentMany').replace('{count}', String(sent.length)))
       // prune the sent rows; the resulting outbox:changed event triggers another
       // load that simply finds them gone.
       void clearSentOutbox()

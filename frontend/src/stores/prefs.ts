@@ -5,7 +5,7 @@
 // source of truth.
 
 import { writable } from 'svelte/store'
-import type { UIPrefs, ThemePref, DensityPref, EditorMode, ViewsPlacement, CloseAction, LogLevel, SelectAllScope, SearchKind, SearchSortPref, DesignPref, LayoutMode, NavStyle, RailSide, PaneStyle, AvatarPlacement } from '../lib/types'
+import type { UIPrefs, ThemePref, DensityPref, EditorMode, ViewsPlacement, CloseAction, LogLevel, SelectAllScope, SearchKind, SearchSortPref, DesignPref, LayoutMode, NavStyle, RailSide, PaneStyle, AvatarPlacement, ComposeOpenIn } from '../lib/types'
 import { getUIPrefs, setSetting, SettingKeys, systemColorScheme, setWindowTheme, getThemeApply } from '../lib/api'
 import { applyTheme, applyDensity, applyAccent, applyScale, applyReduceMotion, applyHandCursor, setThemeSchedule, applyUIFont, applyMonoFont, applyCorners, applyDesign, watchSystemTheme, setSystemSchemeOverride, resolveTheme } from '../theme/theme'
 import { applyUserTheme } from '../theme/usertheme'
@@ -83,6 +83,7 @@ const defaults: UIPrefs = {
   listHeight: 320,
   nativeTitlebar: false,
   quickFilterBar: false,
+  composeOpenIn: 'window',
   themeId: '',
   menuBarInApp: false,
   menuBarNativeMinimal: false,
@@ -305,6 +306,18 @@ export function setQuickFilterBar(quickFilterBar: boolean): void {
   void setSetting(SettingKeys.quickFilterBar, String(quickFilterBar))
 }
 
+/** Picks where a new message, reply or forward opens in the new design. */
+export function setComposeOpenIn(composeOpenIn: ComposeOpenIn): void {
+  prefs.update((p) => ({ ...p, composeOpenIn }))
+  void setSetting(SettingKeys.composeOpenIn, composeOpenIn)
+}
+
+/** Turns Markdown conversion in the compose editor on or off. */
+export function setComposeMarkdown(composeMarkdown: boolean): void {
+  prefs.update((p) => ({ ...p, composeMarkdown }))
+  void setSetting(SettingKeys.composeMarkdown, String(composeMarkdown))
+}
+
 export function setDensity(density: DensityPref): void {
   prefs.update((p) => ({ ...p, density }))
   applyDensity(density)
@@ -476,10 +489,6 @@ export function setComposeChips(value: boolean): void {
 }
 
 /** Sets whether the composer formats Markdown as it is typed. */
-export function setComposeMarkdown(value: boolean): void {
-  prefs.update((p) => ({ ...p, composeMarkdown: value }))
-  void setSetting(SettingKeys.composeMarkdown, String(value))
-}
 
 // setUpdateCheckFrequency persists how often the app checks GitHub releases
 // for a newer version: 'off', 'startup', 'weekly', or 'monthly'.

@@ -156,6 +156,9 @@ const (
 	settingNativeTitlebar = "native_titlebar"
 	// show the quick filter bar above the message list in the new design.
 	settingQuickFilterBar = "quick_filter_bar"
+	// where a new message, reply or forward opens in the new design: "window",
+	// "docked" or "tab".
+	settingComposeOpenIn = "compose_open_in"
 	// general new-mail OS notifications (#126). VIP senders are stored
 	// separately in bind_vip.go and notify even when this is off.
 	settingNotifyNewMail = "notify_new_mail"
@@ -402,6 +405,9 @@ type UIPrefsDTO struct {
 	// QuickFilterBar shows the quick filter bar (unread, flagged, attachments,
 	// contacts, text) above the message list in the new design.
 	QuickFilterBar bool `json:"quickFilterBar"`
+	// ComposeOpenIn is where a new message, reply or forward opens in the new
+	// design: window, docked or tab.
+	ComposeOpenIn string `json:"composeOpenIn"`
 	// ThemeID selects an installed custom theme (see bind_themes.go). Empty
 	// means the built-in default themes driven by the Theme setting.
 	ThemeID string `json:"themeId"`
@@ -561,6 +567,7 @@ func (a *App) GetUIPrefs() (UIPrefsDTO, error) {
 		ListHeight:                 a.intSetting(settingListHeight, 320),
 		NativeTitlebar:             a.boolSetting(settingNativeTitlebar, false),
 		QuickFilterBar:             a.boolSetting(settingQuickFilterBar, false),
+		ComposeOpenIn:              a.stringSetting(settingComposeOpenIn, "window"),
 		ThemeID:                    a.stringSetting(settingThemeID, ""),
 		MenuBarInApp:               a.boolSetting(settingMenuBarInApp, false),
 		MenuBarNativeMinimal:       a.boolSetting(settingMenuBarNativeMinimal, false),

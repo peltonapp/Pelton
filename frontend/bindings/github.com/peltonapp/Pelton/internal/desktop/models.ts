@@ -2904,6 +2904,46 @@ export class MessageSummaryDTO {
 }
 
 /**
+ * OutboxEditDTO is the result of taking a message back out of the outbox.
+ */
+export class OutboxEditDTO {
+    /**
+     * Taken is false when the message could not be taken back: it was already
+     * on its way, or it was not sent in this run.
+     */
+    "taken": boolean;
+
+    /**
+     * Request is the compose request the message was sent with, when Taken.
+     */
+    "request": ComposeRequest;
+
+    /** Creates a new OutboxEditDTO instance. */
+    constructor($$source: Partial<OutboxEditDTO> = {}) {
+        if (!("taken" in $$source)) {
+            this["taken"] = false;
+        }
+        if (!("request" in $$source)) {
+            this["request"] = (new ComposeRequest());
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new OutboxEditDTO instance from a string or object.
+     */
+    static createFrom($$source: any = {}): OutboxEditDTO {
+        const $$createField1_0 = $$createType14;
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        if ("request" in $$parsedSource) {
+            $$parsedSource["request"] = $$createField1_0($$parsedSource["request"]);
+        }
+        return new OutboxEditDTO($$parsedSource as Partial<OutboxEditDTO>);
+    }
+}
+
+/**
  * OutboxRowDTO is one queued or failed message for the outbox view.
  */
 export class OutboxRowDTO {
@@ -2915,6 +2955,12 @@ export class OutboxRowDTO {
     "lastError": string;
     "nextAttemptAt": string;
     "createdAt": string;
+
+    /**
+     * Editable is set when the message was sent in this run, so its compose
+     * request is still known and EditOutboxMessage can take it back.
+     */
+    "editable": boolean;
 
     /** Creates a new OutboxRowDTO instance. */
     constructor($$source: Partial<OutboxRowDTO> = {}) {
@@ -2941,6 +2987,9 @@ export class OutboxRowDTO {
         }
         if (!("createdAt" in $$source)) {
             this["createdAt"] = "";
+        }
+        if (!("editable" in $$source)) {
+            this["editable"] = false;
         }
 
         Object.assign(this, $$source);
@@ -5089,6 +5138,12 @@ export class UIPrefsDTO {
     "quickFilterBar": boolean;
 
     /**
+     * ComposeOpenIn is where a new message, reply or forward opens in the new
+     * design: window, docked or tab.
+     */
+    "composeOpenIn": string;
+
+    /**
      * ThemeID selects an installed custom theme (see bind_themes.go). Empty
      * means the built-in default themes driven by the Theme setting.
      */
@@ -5441,6 +5496,9 @@ export class UIPrefsDTO {
         }
         if (!("quickFilterBar" in $$source)) {
             this["quickFilterBar"] = false;
+        }
+        if (!("composeOpenIn" in $$source)) {
+            this["composeOpenIn"] = "";
         }
         if (!("themeId" in $$source)) {
             this["themeId"] = "";

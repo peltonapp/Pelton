@@ -33,6 +33,55 @@
   padding-top: var(--space-1);
 }
 
+/* a flat toolbar button of the new composer and its popovers: an icon with an
+   optional label, a hover fill, and a slight press. */
+.c2-tool {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  height: var(--control-height);
+  min-width: var(--control-height);
+  padding: 0 var(--space-3);
+  flex-shrink: 0;
+  border: none;
+  border-radius: var(--radius-control);
+  background: transparent;
+  color: var(--text-secondary);
+  font-family: var(--font-ui);
+  font-size: var(--fz-label);
+  white-space: nowrap;
+  cursor: var(--cursor-action);
+  --wails-draggable: no-drag;
+  transition:
+    background-color var(--motion-fast) var(--ease-out),
+    color var(--motion-fast) var(--ease-out),
+    transform var(--motion-fast) var(--ease-press);
+}
+
+.c2-tool.compact {
+  padding: 0;
+}
+
+.c2-tool:hover:not(:disabled) {
+  background: var(--surface-hover);
+  color: var(--text-primary);
+}
+
+.c2-tool:active:not(:disabled) {
+  transform: scale(var(--press-scale));
+}
+
+.c2-tool:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.c2-tool:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
 :root[data-design="new"] .list-col,
 :root[data-design="new"] .detail {
   transition: background-color var(--motion-base) var(--ease-out);

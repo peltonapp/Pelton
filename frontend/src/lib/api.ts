@@ -42,6 +42,7 @@ import type {
   ComposeRequest,
   Draft,
   OutboxRow,
+  OutboxEdit,
   UIPrefs,
   SearchSort,
   ViewKey,
@@ -928,6 +929,19 @@ export function discardFailedSend(id: number): Promise<boolean> {
   return App.DiscardFailedSend(id)
 }
 
+// sendOutboxNow makes a scheduled message due at once. Resolves false when it
+// was already on its way.
+export function sendOutboxNow(id: number): Promise<boolean> {
+  return App.SendOutboxNow(id)
+}
+
+// editOutboxMessage takes a scheduled or failed message back out of the outbox
+// and returns the request it was sent with; taken is false when it could not
+// be taken back.
+export function editOutboxMessage(id: number): Promise<OutboxEdit> {
+  return App.EditOutboxMessage(id) as unknown as Promise<OutboxEdit>
+}
+
 // trustSenderImages permanently allows remote content from a message's sender.
 export function trustSenderImages(messageId: number): Promise<void> {
   if (isDemoActive()) {
@@ -1360,6 +1374,12 @@ export function openComposeWindow(session: unknown): Promise<void> {
   return App.OpenComposeWindow(JSON.stringify(session))
 }
 
+// showMessageInMainWindow brings the main window forward with a message open,
+// for a compose window to show the message it replies to.
+export function showMessageInMainWindow(id: number): Promise<void> {
+  return App.ShowMessageInMainWindow(id)
+}
+
 // takeComposeSession returns the compose pane a compose window was opened
 // for, once, or null when there is none (the window was reloaded).
 export async function takeComposeSession<T>(token: string): Promise<T | null> {
@@ -1531,6 +1551,7 @@ export const SettingKeys = {
   nativeTitlebar: 'native_titlebar',
   quickFilterBar: 'quick_filter_bar',
   recentSearches: 'recent_searches',
+  composeOpenIn: 'compose_open_in',
   themeId: 'theme_id',
   menuBarInApp: 'menu_bar_in_app',
   menuBarNativeMinimal: 'menu_bar_native_minimal',

@@ -317,6 +317,7 @@ export function demoOutbox(): OutboxRow[] {
       lastError: '',
       nextAttemptAt: '',
       createdAt: ago(0),
+      editable: false,
     },
   ]
 }

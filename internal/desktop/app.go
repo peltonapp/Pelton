@@ -53,6 +53,10 @@ type App struct {
 	// compose windows by name. See windows.go.
 	composeHandoff sync.Map
 	composeWindows sync.Map
+	// sentRequests holds the compose request behind each outbox message sent
+	// in this run, by outbox id, so a scheduled or failed send can be taken
+	// back into a composer. Memory only; see bind_outbox_edit.go.
+	sentRequests sync.Map
 	// notifier posts the new-mail notifications (notify.go) and dock carries
 	// the unread badge on macOS. Both are nil in tests. notifyReady is set once
 	// the notification service has started (notifier.go).

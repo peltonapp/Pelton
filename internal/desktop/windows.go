@@ -207,6 +207,13 @@ func (a *App) OpenComposeWindow(session string) error {
 	return nil
 }
 
+// ShowMessageInMainWindow brings the main window forward and opens a message
+// there, in the folder it lives in. A message that is gone only shows the
+// window.
+func (a *App) ShowMessageInMainWindow(id int64) {
+	a.openFromNotification(id)
+}
+
 // TakeComposeSession hands a compose window the pane it was opened for, once.
 func (a *App) TakeComposeSession(token string) string {
 	session, ok := a.composeHandoff.LoadAndDelete(token)

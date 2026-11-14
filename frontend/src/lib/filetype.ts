@@ -15,19 +15,40 @@ import {
 } from '@tabler/icons-svelte'
 import type { ComponentType } from 'svelte'
 
-export function fileIcon(contentType: string, filename: string): ComponentType {
+/** The kinds of file an attachment glyph tells apart. */
+export type FileKind = 'image' | 'audio' | 'video' | 'pdf' | 'doc' | 'sheet' | 'slides' | 'archive' | 'text' | 'other'
+
+/** fileKind classifies a file by content type, falling back to its extension. */
+export function fileKind(contentType: string, filename: string): FileKind {
   const type = (contentType || '').toLowerCase()
   const ext = filename.includes('.') ? filename.split('.').pop()!.toLowerCase() : ''
-  if (type.startsWith('image/') || ['png', 'jpg', 'jpeg', 'gif', 'webp', 'svg', 'heic'].includes(ext)) return IconPhoto
-  if (type.startsWith('audio/') || ['mp3', 'wav', 'm4a', 'flac', 'ogg'].includes(ext)) return IconMusic
-  if (type.startsWith('video/') || ['mp4', 'mov', 'mkv', 'avi', 'webm'].includes(ext)) return IconMovie
-  if (type === 'application/pdf' || ext === 'pdf') return IconFileTypePdf
-  if (['doc', 'docx', 'odt', 'rtf'].includes(ext)) return IconFileTypeDoc
-  if (['xls', 'xlsx', 'ods', 'csv'].includes(ext)) return IconFileTypeXls
-  if (['ppt', 'pptx', 'odp'].includes(ext)) return IconFileTypePpt
-  if (['zip', 'tar', 'gz', 'rar', '7z'].includes(ext)) return IconFileZip
-  if (type.startsWith('text/') || ['txt', 'md', 'log'].includes(ext)) return IconFileText
-  return IconFile
+  if (type.startsWith('image/') || ['png', 'jpg', 'jpeg', 'gif', 'webp', 'svg', 'heic'].includes(ext)) return 'image'
+  if (type.startsWith('audio/') || ['mp3', 'wav', 'm4a', 'flac', 'ogg'].includes(ext)) return 'audio'
+  if (type.startsWith('video/') || ['mp4', 'mov', 'mkv', 'avi', 'webm'].includes(ext)) return 'video'
+  if (type === 'application/pdf' || ext === 'pdf') return 'pdf'
+  if (['doc', 'docx', 'odt', 'rtf'].includes(ext)) return 'doc'
+  if (['xls', 'xlsx', 'ods', 'csv'].includes(ext)) return 'sheet'
+  if (['ppt', 'pptx', 'odp'].includes(ext)) return 'slides'
+  if (['zip', 'tar', 'gz', 'rar', '7z'].includes(ext)) return 'archive'
+  if (type.startsWith('text/') || ['txt', 'md', 'log'].includes(ext)) return 'text'
+  return 'other'
+}
+
+const kindIcons: Record<FileKind, ComponentType> = {
+  image: IconPhoto,
+  audio: IconMusic,
+  video: IconMovie,
+  pdf: IconFileTypePdf,
+  doc: IconFileTypeDoc,
+  sheet: IconFileTypeXls,
+  slides: IconFileTypePpt,
+  archive: IconFileZip,
+  text: IconFileText,
+  other: IconFile,
+}
+
+export function fileIcon(contentType: string, filename: string): ComponentType {
+  return kindIcons[fileKind(contentType, filename)]
 }
 
 // what the in-app previewer can render. Everything else opens externally.

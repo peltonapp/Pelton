@@ -7,7 +7,7 @@
   import { formatBytes } from '../../lib/format'
   import { fileIcon } from '../../lib/filetype'
   import { errorMessage, toastError } from '../../stores/toast'
-  import type { ComposeAttachment } from '../../lib/types'
+  import { readAttachment } from '../../lib/attachments'
   import { t } from '../../lib/i18n'
 
   export let session: ComposeSession
@@ -25,26 +25,6 @@
   let reading: Reading[] = []
   let nextId = 1
 
-  // readAsBase64 returns the base64 payload (without the data-url prefix) and
-  // reports progress to the matching reading card.
-  function readAsBase64(file: File, id: number): Promise<string> {
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader()
-      reader.onprogress = (e) => {
-        if (e.lengthComputable) {
-          setProgress(id, Math.round((e.loaded / e.total) * 100))
-        }
-      }
-      reader.onload = () => {
-        const result = String(reader.result)
-        const comma = result.indexOf(',')
-        resolve(comma >= 0 ? result.slice(comma + 1) : result)
-      }
-      reader.onerror = () => reject(reader.error)
-      reader.readAsDataURL(file)
-    })
-  }
-
   function setProgress(id: number, progress: number): void {
     reading = reading.map((r) => (r.id === id ? { ...r, progress } : r))
   }
@@ -59,8 +39,7 @@
       const type = file.type || 'application/octet-stream'
       reading = [...reading, { id, name: file.name, type, progress: 0 }]
       try {
-        const contentBase64 = await readAsBase64(file, id)
-        const att: ComposeAttachment = { filename: file.name, contentType: type, contentBase64, inline: false, contentId: '' }
+        const att = await readAttachment(file, (progress) => setProgress(id, progress))
         updateCompose(session.id, { attachments: [...session.attachments, att] })
       } catch (err) {
         toastError(errorMessage(err))

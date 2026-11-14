@@ -471,6 +471,14 @@ export interface OutboxRow {
   lastError: string
   nextAttemptAt: string
   createdAt: string
+  // editable is set when the message can be taken back into a composer.
+  editable: boolean
+}
+
+/** A message taken back out of the outbox, or taken false when it could not be. */
+export interface OutboxEdit {
+  taken: boolean
+  request: ComposeRequest
 }
 
 export interface UIPrefs {
@@ -617,6 +625,9 @@ export interface UIPrefs {
   // quickFilterBar shows the quick filter bar above the message list in the
   // new design.
   quickFilterBar: boolean
+  // composeOpenIn is where a new message, reply or forward opens in the new
+  // design.
+  composeOpenIn: ComposeOpenIn
   // themeId selects an installed custom theme; empty means the built-in
   // default themes driven by the theme (light/dark/system) setting.
   themeId: string
@@ -1114,6 +1125,8 @@ export type RailSide = 'left' | 'right'
 export type PaneStyle = 'hybrid' | 'flat' | 'soft'
 /** Where the sender picture goes in a list row and the reading header. */
 export type AvatarPlacement = 'column' | 'inline' | 'hidden'
+/** Where compose opens in the new design: its own window, docked, or a tab. */
+export type ComposeOpenIn = 'window' | 'docked' | 'tab'
 /** One of the top-level areas of the app. */
 export type Space = 'mail' | 'contacts' | 'calendar'
 export type SelectAllScope = 'offer' | 'all' | 'loaded'
