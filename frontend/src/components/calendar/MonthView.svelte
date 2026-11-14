@@ -7,12 +7,13 @@
   // message.
   import { createEventDispatcher, onDestroy, onMount } from 'svelte'
   import AnchoredPopover from '../common/AnchoredPopover.svelte'
-  import { maildrop } from '../../stores/maildrag'
+  import { maildrop, type MailDropOptions } from '../../stores/maildrag'
+  import { mailDropHint } from './maildrop'
   import { dayKey, eventsOnDay, isLaneEvent, layoutRow, rowOverflow, sameDay, startOfDay, type Placed, type RowSpan } from '../../lib/caldate'
   import { weekdayName } from '../../lib/recurrence'
   import { formatLongDay, formatTime } from '../../lib/calformat'
   import { occurrenceKey } from './occurrence'
-  import type { MailDropAt } from '../../stores/calendar'
+  import type { CellMenuAt, MailDropAt } from '../../stores/calendar'
   import { t } from '../../lib/i18n'
   import type { TimeFormat } from '../../lib/format'
   import type { Occurrence } from '../../lib/types'
@@ -36,6 +37,7 @@
     day: Date
     create: { day: Date; anchor: HTMLElement }
     mailDrop: MailDropAt
+    menu: CellMenuAt
   }>()
 
   let grid: HTMLDivElement
@@ -98,14 +100,23 @@
     }
   }
 
-  function dropOn(day: Date) {
+  function dropOn(day: Date): MailDropOptions {
     return {
-      onDrop: (items: { id: number }[]) => {
-        if (items[0]) {
-          dispatch('mailDrop', { messageId: items[0].id, at: startOfDay(day), mode: 'day' })
+      onDrop: (items, info) => {
+        if (items.length > 0) {
+          dispatch('mailDrop', { messageIds: items.map((m) => m.id), at: startOfDay(day), mode: 'day', shift: info.shift })
         }
       },
+      hint: (items, shift) => mailDropHint(items.length, shift, true),
     }
+  }
+
+  function onCellMenu(event: MouseEvent, day: Date): void {
+    if ((event.target as HTMLElement).closest('.item, .more')) {
+      return
+    }
+    event.preventDefault()
+    dispatch('menu', { at: startOfDay(day), mode: 'day', x: event.clientX, y: event.clientY })
   }
 </script>
 
@@ -130,6 +141,7 @@
             use:maildrop={dropOn(day)}
             on:click={() => dispatch('pick', day)}
             on:dblclick={(e) => dispatch('create', { day, anchor: e.currentTarget })}
+            on:contextmenu={(e) => onCellMenu(e, day)}
           >
             <button
               type="button"

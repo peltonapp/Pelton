@@ -16,6 +16,8 @@
   import pencilIcon from '@phosphor-icons/core/assets/duotone/pencil-simple-duotone.svg?raw'
   import trashIcon from '@phosphor-icons/core/assets/duotone/trash-duotone.svg?raw'
   import closeIcon from '@phosphor-icons/core/assets/regular/x.svg?raw'
+  import envelopeIcon from '@phosphor-icons/core/assets/duotone/envelope-simple-duotone.svg?raw'
+  import { mailLinks, openMailLink } from '../../lib/maillink'
   import './controls.css'
   import Ph from '../common/Ph.svelte'
   import PieProgress from '../common/PieProgress.svelte'
@@ -168,6 +170,12 @@
           <dt><Ph svg={notesIcon} size={15} /></dt>
           <dd class="notes">{event.description}</dd>
         </div>
+        {#each mailLinks(event.description) as link (link)}
+          <div class="line">
+            <dt><Ph svg={envelopeIcon} size={15} /></dt>
+            <dd><button type="button" class="cal-btn" on:click={() => openMailLink(link)}>{$t('calendar.openMail')}</button></dd>
+          </div>
+        {/each}
       {/if}
       {#if occ.conflict || event?.syncError}
         <div class="line warn">

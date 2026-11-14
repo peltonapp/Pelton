@@ -20,7 +20,7 @@
   import Rail from './components/shell/Rail.svelte'
   import SpaceSwitcher from './components/shell/SpaceSwitcher.svelte'
   import { space, openSpace, runSpaceAction } from './stores/space'
-  import { calendarFocus } from './stores/calendar'
+  import { calendarFocus, calendarImport, calendarQuickAdd } from './stores/calendar'
   import { formatTime } from './lib/calformat'
   import type { TimeFormat } from './lib/format'
   import { frameIntegrated } from './stores/windowframe'
@@ -71,6 +71,7 @@
     isNightly,
     unsubscribeMessage,
     consumePendingMailto,
+    consumePendingICS,
     closeWindow,
     getLogStatus,
     openCrashReport,
@@ -85,7 +86,7 @@
   import { liabilityAccepted } from './lib/liability'
   import { setDemoActive } from './lib/demo'
   import { recordArchived } from './stores/undoarchive'
-  import { onMailNew, onMailRepaired, onSyncState, onSyncProgress, onOutboxChanged, onMenu, onViewsChanged, onFoldersChanged, onProfileChanged, onMailtoCompose, onAgentProposals, onOpenMessage, onCalendarReminder, type Unsubscribe, type MailtoDraft, type CalendarReminderEvent } from './lib/events'
+  import { onMailNew, onMailRepaired, onSyncState, onSyncProgress, onOutboxChanged, onMenu, onViewsChanged, onFoldersChanged, onProfileChanged, onMailtoCompose, onAgentProposals, onOpenMessage, onCalendarReminder, onICSOpen, type Unsubscribe, type MailtoDraft, type CalendarReminderEvent } from './lib/events'
   import { loadViews, editingView, closeViewEditor, openViewEditor, views as savedViews } from './stores/views'
   import { selectSavedView } from './stores/selection'
   import { isMac } from './lib/i18n'
@@ -517,6 +518,9 @@
       } catch {
         // a failed lookup just means no prefilled compose; not worth surfacing.
       }
+      // .ics files opened with Pelton, at launch and while it runs.
+      unsubscribers.push(onICSOpen(() => void openPendingICS()))
+      void openPendingICS()
     }
 
     // WebKitGTK (Linux) has a known quirk where maximizing the window - a
@@ -581,6 +585,20 @@
       return
     }
     openComposeWith(accountId, editorMode, { to: email, cc: '', bcc: '', subject: '', body: '' })
+  }
+
+  // openPendingICS takes the .ics files the system asked Pelton to open and
+  // hands them to the calendar's import. Classic has no calendar to take them.
+  async function openPendingICS(): Promise<void> {
+    try {
+      const paths = await consumePendingICS()
+      if (paths.length > 0 && !classic) {
+        calendarImport.set(paths)
+        openSpace('calendar')
+      }
+    } catch {
+      // nothing to open is the same as a failed lookup here.
+    }
   }
 
   // a mailto: link waiting for a mailbox to exist. onboarding-first: if the link
@@ -927,6 +945,13 @@
         break
       case 'focus-reader':
         focusPaneArea('reader')
+        break
+      case 'calendar-quick-add':
+        // from another space: go to the calendar, which opens quick add.
+        if (!classic) {
+          calendarQuickAdd.set(true)
+          openSpace('calendar')
+        }
         break
       case 'undo':
         if (!triggerUndo() && !triggerUndoDelete() && !triggerUndoArchive()) {
@@ -1463,6 +1488,11 @@
     // cmd/ctrl+z undoes a pending delayed send, when one is in its window. it
     // takes priority over other shortcuts and is swallowed only if it acted.
     if ((event.metaKey || event.ctrlKey) && !event.shiftKey && event.key.toLowerCase() === 'z') {
+      // another space undoes its own last change, outside a text field.
+      if (!classic && !isEditableTarget(event.target) && runSpaceAction($space, 'undo')) {
+        event.preventDefault()
+        return
+      }
       // undo-send takes priority; otherwise undo the last message deletion.
       if (triggerUndo()) {
         event.preventDefault()

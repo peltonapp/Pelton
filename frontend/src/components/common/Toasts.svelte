@@ -42,6 +42,9 @@
       {#if toast.action}
         <button type="button" class="action" on:click={toast.action.run}>{toast.action.label}</button>
       {/if}
+      {#each toast.more ?? [] as extra (extra.label)}
+        <button type="button" class="action" on:click={extra.run}>{extra.label}</button>
+      {/each}
       <button type="button" class="close" aria-label={$t('common.toasts.dismiss')} on:click={() => dismiss(toast.id)}>
         <IconX size={14} stroke={1.8} />
       </button>

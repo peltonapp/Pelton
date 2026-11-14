@@ -2,9 +2,12 @@
   // the calendar space of the new design: a sidebar with a small month and the
   // calendars, and the month, week, day or agenda view beside it. clicking an
   // event shows its details in a popover; drawing on empty time or double
-  // clicking a day opens a quick create; the full editor does the rest. mail
-  // dropped on the Calendar entry or on a day or slot here becomes a new event.
-  // it is code-split like the contacts screen and only loads when opened.
+  // clicking a day opens a quick create; right clicking a day or slot offers a
+  // new event or quick add there; the full editor does the rest. mail dropped
+  // on the Calendar entry or on a day or slot becomes a new event, calendar
+  // files dropped on it are imported, and the app's shortcuts act on it while
+  // it is on screen. it is code-split like the contacts screen and only loads
+  // when opened.
   import { onDestroy, onMount, tick } from 'svelte'
   import { fly, fade } from 'svelte/transition'
   import caretLeft from '@phosphor-icons/core/assets/regular/caret-left.svg?raw'
@@ -12,6 +15,7 @@
   import syncIcon from '@phosphor-icons/core/assets/duotone/arrows-clockwise-duotone.svg?raw'
   import sidebarIcon from '@phosphor-icons/core/assets/duotone/sidebar-simple-duotone.svg?raw'
   import warningIcon from '@phosphor-icons/core/assets/duotone/warning-duotone.svg?raw'
+  import lightningIcon from '@phosphor-icons/core/assets/duotone/lightning-duotone.svg?raw'
   import './controls.css'
   import Ph from '../common/Ph.svelte'
   import PieProgress from '../common/PieProgress.svelte'
@@ -22,7 +26,9 @@
   import AgendaView from './AgendaView.svelte'
   import EventPopover from './EventPopover.svelte'
   import QuickCreate from './QuickCreate.svelte'
+  import QuickAdd from './QuickAdd.svelte'
   import EventEditor from './EventEditor.svelte'
+  import CalendarImport from './CalendarImport.svelte'
   import ScopeDialog from './ScopeDialog.svelte'
   import ConflictDialog from './ConflictDialog.svelte'
   import {
@@ -32,6 +38,8 @@
     calendarView,
     calendarFocus,
     calendarSeed,
+    calendarQuickAdd,
+    calendarImport,
     calendarSync,
     calendarSyncError,
     eventConflict,
@@ -42,13 +50,16 @@
     saveEvent,
     removeEvent,
     watchCalendar,
+    type CellMenuAt,
     type MailDropAt,
   } from '../../stores/calendar'
-  import { createEventDraftFromMessage, getEvent, listAccounts } from '../../lib/api'
+  import { createEventDraftFromMessage, getEvent, listAccounts, mailEventSource, openICSFile, readICSFiles } from '../../lib/api'
+  import { onFilesDropped } from '../../lib/events'
   import {
     addDays,
     atMinutes,
     dayKey,
+    defaultSlot,
     minutesOfDay,
     monthGrid,
     parseEventTime,
@@ -61,22 +72,33 @@
     weekDays,
   } from '../../lib/caldate'
   import { calendarColor, formatViewTitle } from '../../lib/calformat'
+  import { datesInText, type FoundDate } from '../../lib/eventphrase'
+  import { loadChrono } from '../../lib/chronoload'
+  import { mailLinkLines } from '../../lib/maillink'
   import { draftFromEvent, localZone, newDraft, occurrenceKey, withTimes } from './occurrence'
   import { popupIsOpen } from '../../lib/popups'
+  import { tip } from '../../lib/tip'
+  import { registerSpaceActions } from '../../stores/space'
+  import { openContextMenu } from '../../stores/contextmenu'
+  import { bindings, menuHint } from '../../stores/shortcuts'
   import { prefs } from '../../stores/prefs'
-  import { errorMessage, toastError } from '../../stores/toast'
+  import { errorMessage, pushActions, toastError } from '../../stores/toast'
   import { dur, motion } from '../../lib/motion'
-  import { t } from '../../lib/i18n'
+  import { locale, shortcutLabel, t } from '../../lib/i18n'
   import type { TimeFormat } from '../../lib/format'
-  import type { CalendarView, EventDraft, EventScope, Occurrence } from '../../lib/types'
+  import type { CalendarView, EventDraft, EventScope, ICSFile, MailEventSource, Occurrence } from '../../lib/types'
 
   const narrowWidth = 820
+  const undoLimit = 20
+  const toastMs = 8000
 
   let width = 0
   let sideOpen = false
   let now = new Date()
   let clock: ReturnType<typeof setInterval> | undefined
   let unwatch: (() => void) | undefined
+  let unregister: (() => void) | undefined
+  let stopDrop: (() => void) | undefined
   let identity: { name: string; email: string } | null = null
   let stage: HTMLDivElement
 
@@ -98,6 +120,7 @@
   $: busyDays = daysWithEvents(placed)
   $: title = formatViewTitle(view, range.from, range.to, focus)
   $: rtl = typeof document !== 'undefined' && document.documentElement.dir === 'rtl'
+  $: quickAddKey = $bindings['calendar-quick-add'] ? shortcutLabel($bindings['calendar-quick-add']) : ''
 
   let loadedKey = ''
   function loadRange(key: string): void {
@@ -122,6 +145,21 @@
 
   onMount(async () => {
     unwatch = watchCalendar()
+    unregister = registerSpaceActions('calendar', {
+      compose: () => whenFree(newEvent),
+      search: () => whenFree(() => openQuickAdd()),
+      'calendar-quick-add': () => whenFree(() => openQuickAdd()),
+      'delete-message': () => whenFree(deleteSelected),
+      sync: () => void refreshCalendars(),
+      undo: () => runUndo(),
+      'next-view': () => whenFree(() => go(1)),
+      'prev-view': () => whenFree(() => go(-1)),
+    })
+    stopDrop = onFilesDropped((e) => {
+      if (e.target === 'calendar') {
+        void importPaths(e.paths)
+      }
+    })
     clock = setInterval(() => (now = new Date()), 30000)
     await Promise.all([loadCalendarSettings(), loadCalendars()])
     try {
@@ -136,8 +174,18 @@
 
   onDestroy(() => {
     unwatch?.()
+    unregister?.()
+    stopDrop?.()
     clearInterval(clock)
   })
+
+  // an app shortcut acts only while nothing else of the calendar holds the
+  // keyboard: an open editor, quick add or dialog takes it first.
+  function whenFree(run: () => void): void {
+    if (!editing && !quickAdd && !scopeFor && !importing) {
+      run()
+    }
+  }
 
   // --- moving around ------------------------------------------------------------
 
@@ -181,6 +229,13 @@
     calendarView.set('day')
   }
 
+  function showDay(day: Date): void {
+    if (day < range.from || day >= range.to) {
+      direction = day > focus ? 1 : -1
+      calendarFocus.set(day)
+    }
+  }
+
   $: viewOptions = [
     { key: 'day', label: $t('calendar.view.day') },
     { key: 'week', label: $t('calendar.view.week') },
@@ -209,10 +264,17 @@
     selected = { occ, anchor }
   }
 
-  async function startQuick(start: Date, end: Date, allDay: boolean, anchor: HTMLElement | null = null): Promise<void> {
-    selected = null
+  function canCreate(): boolean {
     if (writable.length === 0) {
       toastError($t('calendar.noWritable'))
+      return false
+    }
+    return true
+  }
+
+  async function startQuick(start: Date, end: Date, allDay: boolean, anchor: HTMLElement | null = null): Promise<void> {
+    selected = null
+    if (!canCreate()) {
       return
     }
     quickPending = { start, end, allDay }
@@ -222,63 +284,189 @@
   }
 
   function startMonthCreate(day: Date, anchor: HTMLElement): void {
-    const at = atMinutes(day, defaultStartMinutes(day))
+    const at = defaultSlot(day, new Date())
     void startQuick(at, new Date(at.getTime() + 3600000), false, anchor)
   }
 
-  function defaultStartMinutes(day: Date): number {
-    const current = new Date()
-    if (dayKey(day) === dayKey(current)) {
-      return Math.min(23 * 60, (current.getHours() + 1) * 60)
+  function quickDraft(summary: string, calendarId: number): EventDraft | null {
+    if (!quick) {
+      return null
     }
-    return $calendarSettings.workDayStart
+    return { ...newDraft(calendarId, quick.start, quick.end, quick.allDay, $calendarSettings.defaultReminderMinutes), summary }
   }
 
   async function saveQuick(summary: string, calendarId: number): Promise<void> {
-    if (!quick) {
-      return
-    }
-    const draft = { ...newDraft(calendarId, quick.start, quick.end, quick.allDay, $calendarSettings.defaultReminderMinutes), summary }
-    const result = await saveEvent(draft)
-    if (result) {
+    const draft = quickDraft(summary, calendarId)
+    if (draft && (await createDrafts([draft]))) {
       closeFloating()
     }
   }
 
   function moreFromQuick(summary: string, calendarId: number): void {
-    if (!quick) {
+    const draft = quickDraft(summary, calendarId)
+    closeFloating()
+    if (draft) {
+      openEditor(draft)
+    }
+  }
+
+  // --- the context menu of a day or slot ------------------------------------------
+
+  function onCellMenu(cell: CellMenuAt): void {
+    closeFloating()
+    openContextMenu(cell.x, cell.y, [
+      { label: $t('calendar.menu.create'), action: () => createAt(cell) },
+      { label: $t('calendar.menu.quickAdd'), action: () => openQuickAdd(cell.at, cell.mode === 'time' ? minutesOfDay(cell.at) : null), hint: menuHint('calendar-quick-add') },
+    ])
+  }
+
+  function createAt(cell: Pick<CellMenuAt, 'at' | 'mode'>): void {
+    if (!canCreate()) {
       return
     }
-    const draft = { ...newDraft(calendarId, quick.start, quick.end, quick.allDay, $calendarSettings.defaultReminderMinutes), summary }
+    const reminder = $calendarSettings.defaultReminderMinutes
+    if (cell.mode === 'allDay') {
+      openEditor(newDraft(defaultCalendar, startOfDay(cell.at), addDays(startOfDay(cell.at), 1), true, reminder))
+      return
+    }
+    const start = cell.mode === 'time' ? cell.at : defaultSlot(cell.at, new Date())
+    openEditor(newDraft(defaultCalendar, start, new Date(start.getTime() + 3600000), false, reminder))
+  }
+
+  // --- quick add ------------------------------------------------------------------
+
+  let quickAdd: { base: Date; minutes: number | null } | null = null
+
+  $: if ($calendarQuickAdd) {
+    calendarQuickAdd.set(false)
+    openQuickAdd()
+  }
+
+  function openQuickAdd(base: Date = focus, minutes: number | null = null): void {
     closeFloating()
-    editing = draft
+    if (canCreate()) {
+      quickAdd = { base, minutes }
+    }
+  }
+
+  async function createFromQuickAdd(drafts: EventDraft[]): Promise<void> {
+    if (await createDrafts(drafts)) {
+      quickAdd = null
+    }
+  }
+
+  function editFromQuickAdd(draft: EventDraft): void {
+    quickAdd = null
+    openEditor(draft)
+  }
+
+  // --- undo -----------------------------------------------------------------------
+
+  let undoStack: (() => Promise<void>)[] = []
+
+  function pushUndo(run: () => Promise<void>): void {
+    undoStack = [...undoStack.slice(-(undoLimit - 1)), run]
+  }
+
+  function runUndo(): boolean {
+    const last = undoStack[undoStack.length - 1]
+    if (!last) {
+      return false
+    }
+    undoStack = undoStack.slice(0, -1)
+    void last()
+    return true
+  }
+
+  // creates events, then says so with Undo and Open. it reports whether any
+  // was created.
+  async function createDrafts(list: EventDraft[]): Promise<boolean> {
+    const ids: number[] = []
+    for (const draft of list) {
+      const result = await saveEvent(draft)
+      if (result) {
+        ids.push(result.event.id)
+      }
+    }
+    if (ids.length === 0) {
+      return false
+    }
+    showDay(parseEventTime(list[0].start, list[0].allDay))
+    let undone = false
+    const undo = async (): Promise<void> => {
+      if (!undone) {
+        undone = true
+        for (const id of ids) {
+          await removeEvent(id)
+        }
+      }
+    }
+    pushUndo(undo)
+    const message = ids.length > 1 ? $t('quickAdd.createdMany').replace('{n}', String(ids.length)) : $t('quickAdd.created')
+    pushActions(
+      'success',
+      message,
+      [
+        { label: $t('quickAdd.undo'), run: () => void undo() },
+        { label: $t('quickAdd.open'), run: () => void openSaved(ids[0]) },
+      ],
+      toastMs,
+    )
+    return true
+  }
+
+  async function openSaved(id: number): Promise<void> {
+    try {
+      const ev = await getEvent(id, '')
+      showDay(parseEventTime(ev.start, ev.allDay))
+      openEditor(draftFromEvent(ev))
+    } catch (err) {
+      toastError(errorMessage(err))
+    }
   }
 
   // --- the editor -----------------------------------------------------------------
 
   let editing: EventDraft | null = null
+  let editorFound: FoundDate[] = []
+  let editorNote = ''
   let saving = false
   let scopeFor: { kind: 'edit' | 'move' | 'delete'; run: (scope: EventScope) => Promise<void> } | null = null
 
+  function openEditor(draft: EventDraft, found: FoundDate[] = [], note = ''): void {
+    editorFound = found
+    editorNote = note
+    editing = draft
+  }
+
+  function closeEditor(): void {
+    editing = null
+    editorFound = []
+    editorNote = ''
+  }
+
   function newEvent(): void {
     closeFloating()
-    if (writable.length === 0) {
-      toastError($t('calendar.noWritable'))
+    if (!canCreate()) {
       return
     }
-    const start = atMinutes(focus, defaultStartMinutes(focus))
-    editing = newDraft(defaultCalendar, start, new Date(start.getTime() + 3600000), false, $calendarSettings.defaultReminderMinutes)
+    const start = defaultSlot(focus, new Date())
+    openEditor(newDraft(defaultCalendar, start, new Date(start.getTime() + 3600000), false, $calendarSettings.defaultReminderMinutes))
   }
 
   function editEvent(ev: Parameters<typeof draftFromEvent>[0]): void {
     selected = null
-    editing = draftFromEvent(ev)
+    openEditor(draftFromEvent(ev))
   }
 
   async function commit(draft: EventDraft): Promise<boolean> {
     saving = true
     const result = await saveEvent(draft)
     saving = false
+    if (result && draft.id === 0) {
+      const id = result.event.id
+      pushUndo(async () => void (await removeEvent(id)))
+    }
     return result !== null || $eventConflict !== null
   }
 
@@ -288,7 +476,7 @@
         kind: 'edit',
         run: async (scope) => {
           if (await commit({ ...draft, scope })) {
-            editing = null
+            closeEditor()
           }
         },
       }
@@ -296,7 +484,7 @@
     }
     void commit(draft).then((done) => {
       if (done) {
-        editing = null
+        closeEditor()
       }
     })
   }
@@ -306,27 +494,52 @@
     if (!draft) {
       return
     }
-    if (draft.recurrenceId) {
-      scopeFor = {
-        kind: 'delete',
-        run: async (scope) => {
-          if (await removeEvent(draft.id, scope, draft.recurrenceId)) {
-            editing = null
-          }
-        },
-      }
-      return
+    void removeWithScope(draft.id, draft.recurrenceId, draft.recurrenceId !== '').then((done) => done && closeEditor())
+  }
+
+  // deletes an event, asking first which occurrences for a repeating one. a
+  // plain event can be brought back with undo.
+  function removeWithScope(id: number, recurrenceId: string, recurring: boolean): Promise<boolean> {
+    if (recurring) {
+      return new Promise((resolve) => {
+        scopeFor = {
+          kind: 'delete',
+          run: async (scope) => resolve(await removeEvent(id, scope, recurrenceId)),
+        }
+      })
     }
-    void removeEvent(draft.id).then((done) => {
-      if (done) {
-        editing = null
+    return (async () => {
+      let before: EventDraft | null = null
+      try {
+        before = draftFromEvent(await getEvent(id, ''))
+      } catch {
+        before = null
       }
-    })
+      const done = await removeEvent(id)
+      if (done && before) {
+        const restore = { ...before, id: 0 }
+        pushUndo(async () => void (await saveEvent(restore)))
+      }
+      return done
+    })()
   }
 
   async function removeFromPopover(occ: Occurrence, scope: EventScope | ''): Promise<void> {
     selected = null
-    await removeEvent(occ.eventId, scope, occ.recurrenceId)
+    if (scope) {
+      await removeEvent(occ.eventId, scope, occ.recurrenceId)
+    } else {
+      await removeWithScope(occ.eventId, occ.recurrenceId, false)
+    }
+  }
+
+  function deleteSelected(): void {
+    const occ = selected?.occ
+    if (!occ || occ.readOnly) {
+      return
+    }
+    selected = null
+    void removeWithScope(occ.eventId, occ.recurrenceId, occ.recurring)
   }
 
   // a drag in the time grid: the occurrence moves at once, then the change is
@@ -344,9 +557,15 @@
       )
       try {
         const ev = await getEvent(occ.eventId, occ.recurrenceId)
-        const result = await saveEvent({ ...withTimes(draftFromEvent(ev), start, end), scope })
+        const old = draftFromEvent(ev)
+        const result = await saveEvent({ ...withTimes(old, start, end), scope })
         if (!result) {
           occurrences.set(before)
+        } else if (!occ.recurring) {
+          pushUndo(async () => {
+            const fresh = draftFromEvent(await getEvent(occ.eventId, ''))
+            await saveEvent({ ...fresh, start: old.start, end: old.end })
+          })
         }
       } catch (err) {
         occurrences.set(before)
@@ -376,33 +595,118 @@
     calendarSeed.set(drop)
   }
 
-  async function takeSeed(seed: NonNullable<typeof $calendarSeed>): Promise<void> {
+  // where a drop with no date of its own goes: the slot it landed on, or the
+  // day on screen at the next half hour.
+  function slotOf(seed: MailDropAt): { start: Date; end: Date; allDay: boolean } {
+    if (seed.at && seed.mode === 'allDay') {
+      return { start: startOfDay(seed.at), end: addDays(startOfDay(seed.at), 1), allDay: true }
+    }
+    const start = seed.at && seed.mode === 'time' ? seed.at : defaultSlot(seed.at ?? focus, new Date())
+    return { start, end: new Date(start.getTime() + 3600000), allDay: false }
+  }
+
+  async function foundIn(mail: MailEventSource): Promise<FoundDate[]> {
+    const chrono = await loadChrono($locale)
+    const sent = mail.date ? new Date(mail.date) : new Date()
+    return datesInText(`${mail.subject}\n${mail.text}`, { ref: sent, now: new Date(), lang: $locale, chrono })
+  }
+
+  // a plain drop: the event takes its date from the mail, or from the slot it
+  // was dropped on, which the user chose.
+  function mailSlot(seed: MailDropAt, found: FoundDate[]): { start: Date; end: Date; allDay: boolean; location: string; guessed: boolean } {
+    const first = found[0]
+    if (seed.at && seed.mode === 'day' && first && !first.allDay) {
+      const start = atMinutes(seed.at, minutesOfDay(first.start))
+      return { start, end: new Date(start.getTime() + (first.end.getTime() - first.start.getTime())), allDay: false, location: first.location, guessed: false }
+    }
+    if (seed.at) {
+      return { ...slotOf(seed), location: first?.location ?? '', guessed: false }
+    }
+    if (first) {
+      return { start: first.start, end: first.end, allDay: first.allDay, location: first.location, guessed: false }
+    }
+    return { ...slotOf(seed), location: '', guessed: true }
+  }
+
+  async function takeSeed(seed: MailDropAt): Promise<void> {
     calendarSeed.set(null)
     closeFloating()
+    if (!canCreate() || seed.messageIds.length === 0) {
+      return
+    }
     try {
-      const draft = await createEventDraftFromMessage(seed.messageId)
-      const suggested = parseEventTime(draft.start, false)
-      const length = Math.max(15 * 60000, parseEventTime(draft.end, false).getTime() - suggested.getTime())
-      let start = suggested
-      let allDay = false
-      if (seed.at && seed.mode === 'time') {
-        start = seed.at
-      } else if (seed.at && seed.mode === 'day') {
-        start = atMinutes(seed.at, minutesOfDay(suggested))
-      } else if (seed.at && seed.mode === 'allDay') {
-        start = startOfDay(seed.at)
-        allDay = true
+      const reminder = $calendarSettings.defaultReminderMinutes
+      if (seed.shift) {
+        const mails = await Promise.all(seed.messageIds.map(mailEventSource))
+        const slot = slotOf(seed)
+        const draft = newDraft(defaultCalendar, slot.start, slot.end, slot.allDay, reminder)
+        draft.summary = mails.length === 1 ? mails[0].subject : ''
+        draft.description = mails.map((m) => mailLinkLines(m, $t)).join('\n\n')
+        showDay(slot.start)
+        openEditor(draft)
+        return
       }
-      const end = allDay ? addDays(start, 1) : new Date(start.getTime() + length)
-      const calendarId = writable.some((c) => c.id === draft.calendarId) ? draft.calendarId : defaultCalendar
-      editing = withTimes({ ...draft, calendarId, allDay, timeZone: allDay ? '' : localZone(), scope: '', recurrenceId: '', force: false }, start, end)
-      if (dayKey(start) !== dayKey(focus)) {
-        direction = start > focus ? 1 : -1
-        calendarFocus.set(start)
+      if (seed.messageIds.length > 1) {
+        const drafts: EventDraft[] = []
+        for (const id of seed.messageIds) {
+          const mail = await mailEventSource(id)
+          const at = mailSlot(seed, await foundIn(mail))
+          drafts.push({ ...newDraft(defaultCalendar, at.start, at.end, at.allDay, reminder), summary: mail.subject, location: at.location, description: mailLinkLines(mail, $t) })
+        }
+        await createDrafts(drafts)
+        return
+      }
+      const [prefill, mail] = await Promise.all([createEventDraftFromMessage(seed.messageIds[0]), mailEventSource(seed.messageIds[0])])
+      const found = await foundIn(mail)
+      const at = mailSlot(seed, found)
+      const calendarId = writable.some((c) => c.id === prefill.calendarId) ? prefill.calendarId : defaultCalendar
+      const draft = withTimes(
+        { ...prefill, calendarId, allDay: at.allDay, location: at.location || prefill.location, timeZone: at.allDay ? '' : localZone(), scope: '', recurrenceId: '', force: false },
+        at.start,
+        at.end,
+      )
+      showDay(at.start)
+      openEditor(draft, found, at.guessed ? $t('calendar.noDateInMail') : '')
+    } catch (err) {
+      toastError(errorMessage(err))
+    }
+  }
+
+  // --- importing calendar files -------------------------------------------------------
+
+  let importing: { files: ICSFile[]; calendarId: number } | null = null
+
+  $: if ($calendarImport) {
+    const paths = $calendarImport
+    calendarImport.set(null)
+    void importPaths(paths)
+  }
+
+  async function importPaths(paths: string[]): Promise<void> {
+    try {
+      startImport(await readICSFiles(paths), 0)
+    } catch (err) {
+      toastError(errorMessage(err))
+    }
+  }
+
+  async function pickImport(calendarId: number): Promise<void> {
+    try {
+      const file = await openICSFile()
+      if (file.name) {
+        startImport([file], calendarId)
       }
     } catch (err) {
       toastError(errorMessage(err))
     }
+  }
+
+  function startImport(files: ICSFile[], calendarId: number): void {
+    if (files.length === 0 || !canCreate()) {
+      return
+    }
+    closeFloating()
+    importing = { files, calendarId: writable.some((c) => c.id === calendarId) ? calendarId : defaultCalendar }
   }
 
   // --- keys -------------------------------------------------------------------------
@@ -413,7 +717,7 @@
   }
 
   function onKeydown(event: KeyboardEvent): void {
-    if (event.metaKey || event.ctrlKey || event.altKey || editableTarget(event.target) || popupIsOpen() || editing || scopeFor) {
+    if (event.metaKey || event.ctrlKey || event.altKey || editableTarget(event.target) || popupIsOpen() || editing || scopeFor || quickAdd || importing) {
       return
     }
     const back = rtl ? 'ArrowRight' : 'ArrowLeft'
@@ -442,7 +746,7 @@
 </script>
 
 <!-- svelte-ignore a11y-no-noninteractive-element-interactions -->
-<section class="screen" aria-label={$t('space.calendar')} bind:clientWidth={width} on:keydown={onKeydown}>
+<section class="screen" aria-label={$t('space.calendar')} data-file-drop-target="calendar" bind:clientWidth={width} on:keydown={onKeydown}>
   {#if !narrow || sideOpen}
     <div class="side" class:drawer={narrow} transition:fly={{ x: narrow ? (rtl ? 24 : -24) : 0, duration: dur(narrow ? motion.base : 0) }}>
       <CalendarSidebar
@@ -453,6 +757,7 @@
         busy={busyDays}
         on:pick={(e) => pickDay(e.detail)}
         on:create={newEvent}
+        on:import={(e) => pickImport(e.detail)}
       />
     </div>
   {/if}
@@ -484,11 +789,15 @@
       {#if $calendarSyncError && !syncing}
         <span class="sync-error" title={$calendarSyncError}><Ph svg={warningIcon} size={15} /></span>
       {/if}
+      <button type="button" class="cal-btn quick-add" aria-label={$t('quickAdd.title')} use:tip={{ text: $t('quickAdd.title'), shortcut: quickAddKey }} on:click={() => openQuickAdd()}>
+        <Ph svg={lightningIcon} size={15} />
+        {#if !narrow}<span>{$t('quickAdd.button')}</span>{/if}
+      </button>
       <button
         type="button"
         class="cal-icon"
         aria-label={$t('calendar.sync')}
-        title={$t('calendar.sync')}
+        use:tip={{ text: $t('calendar.sync') }}
         disabled={syncing !== null}
         on:click={() => void refreshCalendars()}
       >
@@ -520,6 +829,7 @@
               on:day={(e) => openDay(e.detail)}
               on:create={(e) => startMonthCreate(e.detail.day, e.detail.anchor)}
               on:mailDrop={(e) => onMailDrop(e.detail)}
+              on:menu={(e) => onCellMenu(e.detail)}
             />
           {:else if view === 'agenda'}
             <AgendaView
@@ -532,6 +842,7 @@
               {selectedKey}
               on:open={(e) => openOccurrence(e.detail.occ, e.detail.anchor)}
               on:day={(e) => openDay(e.detail)}
+              on:menu={(e) => onCellMenu(e.detail)}
             />
           {:else}
             <TimeGrid
@@ -552,12 +863,15 @@
               on:change={(e) => onChange(e.detail.occ, e.detail.start, e.detail.end)}
               on:day={(e) => openDay(e.detail)}
               on:mailDrop={(e) => onMailDrop(e.detail)}
+              on:menu={(e) => onCellMenu(e.detail)}
             />
           {/if}
         </div>
       {/key}
     </div>
   </div>
+
+  <div class="drop-veil" aria-hidden="true">{$t('calendar.dropFiles')}</div>
 </section>
 
 {#if selected}
@@ -590,6 +904,20 @@
   />
 {/if}
 
+{#if quickAdd}
+  <QuickAdd
+    base={quickAdd.base}
+    baseMinutes={quickAdd.minutes}
+    calendars={writable}
+    calendarId={defaultCalendar}
+    {timeFormat}
+    defaultReminder={$calendarSettings.defaultReminderMinutes}
+    on:close={() => (quickAdd = null)}
+    on:create={(e) => createFromQuickAdd(e.detail)}
+    on:edit={(e) => editFromQuickAdd(e.detail)}
+  />
+{/if}
+
 {#if editing}
   <EventEditor
     draft={editing}
@@ -598,10 +926,16 @@
     {timeFormat}
     {identity}
     {saving}
-    on:close={() => (editing = null)}
+    found={editorFound}
+    note={editorNote}
+    on:close={closeEditor}
     on:save={(e) => onEditorSave(e.detail)}
     on:remove={onEditorRemove}
   />
+{/if}
+
+{#if importing}
+  <CalendarImport files={importing.files} calendars={writable} calendarId={importing.calendarId} on:close={() => (importing = null)} />
 {/if}
 
 {#if scopeFor}
@@ -689,6 +1023,10 @@
     color: var(--warning);
   }
 
+  .quick-add {
+    color: var(--text-secondary);
+  }
+
   .stage {
     position: relative;
     flex: 1;
@@ -699,5 +1037,29 @@
   .page {
     position: absolute;
     inset: 0;
+  }
+
+  /* files held over the calendar: a dashed outline and a line saying they
+     will be imported. */
+  .drop-veil {
+    position: absolute;
+    inset: var(--space-3);
+    z-index: 30;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: var(--hairline) dashed var(--accent);
+    border-radius: var(--radius-card);
+    background: color-mix(in srgb, var(--surface-overlay) 88%, transparent);
+    font-size: var(--fz-list);
+    font-weight: var(--fw-medium);
+    color: var(--accent);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity var(--motion-fast) var(--ease-out);
+  }
+
+  .screen:global(.file-drop-target-active) > .drop-veil {
+    opacity: 1;
   }
 </style>
