@@ -14,6 +14,7 @@
     setComposeAutocomplete,
     setComposeChips,
     setComposeMarkdown,
+    setSmoothCaret,
     setSignatureAboveQuote,
     setComposeVimMode,
     setSendDelay,
@@ -55,6 +56,9 @@
   </Row>
   <Row id="compose-markdown" label={$t('composing.markdown')} hint={$t('composing.markdown.hint')}>
     <ToggleSwitch checked={$prefs.composeMarkdown} label={$t('composing.markdown')} on:change={(e) => setComposeMarkdown(e.detail)} />
+  </Row>
+  <Row id="smooth-caret" label={$t('composing.smoothCaret')} hint={$t('composing.smoothCaret.hint')}>
+    <ToggleSwitch checked={$prefs.smoothCaret} label={$t('composing.smoothCaret')} on:change={(e) => setSmoothCaret(e.detail)} />
   </Row>
   <Row id="autocomplete" label={$t('settingsPanel.toggle.autocomplete')} hint={$t('settingsPanel.hint.autocomplete')}>
     <ToggleSwitch

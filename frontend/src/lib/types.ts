@@ -592,6 +592,8 @@ export interface UIPrefs {
   composeChips: boolean
   // composeMarkdown formats Markdown as it is typed in the composer.
   composeMarkdown: boolean
+  // smoothCaret glides the compose editor's caret between positions.
+  smoothCaret: boolean
   // updateCheckFrequency controls the automatic GitHub-releases update check:
   // 'off' (default), 'startup', 'weekly', or 'monthly'.
   updateCheckFrequency: string

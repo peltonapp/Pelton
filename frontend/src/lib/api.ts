@@ -1551,6 +1551,7 @@ export const SettingKeys = {
   composeAutocomplete: 'compose_autocomplete',
   composeChips: 'compose_chips',
   composeMarkdown: 'compose_markdown',
+  smoothCaret: 'smooth_caret',
   updateCheckFrequency: 'update_check_frequency',
   emptyStateImage: 'empty_state_image',
   emptyStateFullscreen: 'empty_state_fullscreen',

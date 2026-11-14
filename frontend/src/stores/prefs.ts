@@ -70,6 +70,7 @@ const defaults: UIPrefs = {
   composeAutocomplete: true,
   composeChips: true,
   composeMarkdown: false,
+  smoothCaret: true,
   updateCheckFrequency: 'off',
   emptyStateImage: '',
   emptyStateFullscreen: false,
@@ -331,6 +332,12 @@ export function setThreadedList(threadedList: boolean): void {
 export function setReaderWidth(readerWidth: ReaderWidth): void {
   prefs.update((p) => ({ ...p, readerWidth }))
   void setSetting(SettingKeys.readerWidth, readerWidth)
+}
+
+/** Turns the gliding caret of the compose editor on or off. */
+export function setSmoothCaret(smoothCaret: boolean): void {
+  prefs.update((p) => ({ ...p, smoothCaret }))
+  void setSetting(SettingKeys.smoothCaret, String(smoothCaret))
 }
 
 /** Turns Markdown conversion in the compose editor on or off. */
