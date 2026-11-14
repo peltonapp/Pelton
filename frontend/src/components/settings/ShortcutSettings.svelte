@@ -3,6 +3,7 @@
   // be rebound by clicking Change and pressing the new keys; a search box filters
   // the list, and each row (and the whole set) can be reset to the default.
   // capturing is exact: the recorded combo includes every held modifier.
+  import { onDestroy } from 'svelte'
   import { get } from 'svelte/store'
   import { IconSearch, IconX, IconRotateClockwise } from '@tabler/icons-svelte'
   import { shortcuts as registry, eventToCombo, type ShortcutAction } from '../../lib/shortcuts'
@@ -36,6 +37,10 @@
     conflictMsg = ''
     recording.set(false)
   }
+
+  // leaving the section mid-recording must hand the keyboard back, or no
+  // shortcut works until Settings is opened again.
+  onDestroy(stopRecord)
 
   // onKey captures the new combo. Escape cancels; a bare modifier is ignored so
   // the user can build a combo; a duplicate is rejected with an inline message.
