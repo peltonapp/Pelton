@@ -50,6 +50,9 @@
   let loadedId = -1
   $: if ($visibleMessageId !== null && $visibleMessageId !== loadedId) {
     loadedId = $visibleMessageId
+    // a modal left open belongs to the message that is going away
+    infoOpen = false
+    sourceOpen = false
     void loadMessage($visibleMessageId)
   }
   $: if ($visibleMessageId === null && loadedId !== -1) {
