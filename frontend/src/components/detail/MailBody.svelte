@@ -38,6 +38,9 @@
     lastId = detail.id
     remoteLoaded = detail.remoteAllowed
     frameHeight = 320
+    pixelsBlocked = false
+    pixelMenu = null
+    pixelDetails = false
   }
 
   $: senderLabel = displayName(detail.fromName, detail.fromAddress)
@@ -467,6 +470,10 @@
       const id = detail.id
       const html = await getMessageHtml(id, true, includeTrackers)
       setBodyHtml(id, html)
+      // the reader may have moved on while the html was fetched
+      if (detail.id !== id) {
+        return
+      }
       remoteLoaded = true
       pixelsBlocked = !includeTrackers && trackers.length > 0
       pixelMenu = null
