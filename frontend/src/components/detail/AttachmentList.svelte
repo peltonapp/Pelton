@@ -5,7 +5,9 @@
   // shows a file-type icon, the name and size, and downloads via a native save
   // dialog on click.
   import { IconPaperclip, IconDownload, IconEye, IconDownloadOff, IconShieldSearch } from '@tabler/icons-svelte'
+  import { onDestroy } from 'svelte'
   import { saveAttachment, saveAllAttachments, scanAttachment } from '../../lib/api'
+  import { onAttachmentProgress } from '../../lib/events'
   import { formatBytes } from '../../lib/format'
   import { fileIcon, previewKind } from '../../lib/filetype'
   import { openPreview } from '../../stores/preview'
@@ -22,6 +24,18 @@
   let busy = new Set<number>()
   let savingAll = false
   let scanningIds = new Set<number>()
+
+  // the attachment being written to disk and how far it is, from 0 to 1. the
+  // backend writes one file at a time, and its final event ends the run.
+  let saving = new Map<number, number>()
+  const stopProgress = onAttachmentProgress((e) => {
+    if (!e.running) {
+      saving = new Map()
+    } else if (e.attachmentId && e.bytesTotal > 0) {
+      saving = new Map([[e.attachmentId, Math.min(1, e.bytesDone / e.bytesTotal)]])
+    }
+  })
+  onDestroy(stopProgress)
 
   $: canScan = scanEnabled($virusTotal)
 
@@ -150,6 +164,11 @@
               <IconDownload size={15} stroke={1.7} />
             {/if}
           </button>
+          {#if saving.has(att.id)}
+            <span class="progress" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow={Math.round((saving.get(att.id) ?? 0) * 100)}>
+              <span class="fill" style={`width:${(saving.get(att.id) ?? 0) * 100}%`}></span>
+            </span>
+          {/if}
         </div>
       {/each}
     </div>
@@ -201,6 +220,7 @@
   }
 
   .card {
+    position: relative;
     display: flex;
     align-items: stretch;
     width: 248px;
@@ -217,6 +237,22 @@
 
   .card.busy {
     opacity: 0.6;
+  }
+
+  .progress {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    height: 3px;
+    background: var(--surface-sunken);
+  }
+
+  .progress .fill {
+    display: block;
+    height: 100%;
+    background: var(--accent);
+    transition: width 0.1s linear;
   }
 
   .card-main {
