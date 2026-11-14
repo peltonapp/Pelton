@@ -1407,6 +1407,7 @@ const fr: Record<string, string> = {
   'settingsPanel.hint.multiSelect': 'Cmd/Ctrl-clic ou Maj-clic sur les lignes pour en sélectionner plusieurs à la fois. Au clavier, Maj+Haut/Bas étend la sélection et Espace ajoute ou retire la ligne en surbrillance.',
   'settingsPanel.toggle.multiSelect': 'Sélectionner plusieurs messages à la fois',
   'settingsPanel.toggle.markReadOnOpen': 'Marquer les messages comme lus à l\'ouverture',
+  'settingsPanel.toggle.openOnArrow': 'Ouvrir les messages en se déplaçant avec les flèches',
   'settingsPanel.toggle.showSelectedCount': 'Afficher le compteur « N sélectionnés »',
   'settingsPanel.toggle.showSelectedCountAria': 'Afficher le nombre sélectionné',
   'settingsPanel.hint.indentGuides': 'Trace des lignes de guidage verticales reliant les dossiers imbriqués.',

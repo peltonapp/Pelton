@@ -581,6 +581,8 @@ export interface UIPrefs {
   statusUnread: boolean
   // markReadOnOpen marks a message read when it is opened (#517).
   markReadOnOpen: boolean
+  // openOnArrow opens the row the arrow keys move to, instead of waiting for Enter.
+  openOnArrow: boolean
   // signatureAboveQuote puts a reply's footer above the quoted original (#512).
   signatureAboveQuote: boolean
   // closeAction is what the window's close button does: 'background' keeps

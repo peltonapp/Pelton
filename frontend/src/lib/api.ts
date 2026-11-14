@@ -1415,6 +1415,7 @@ export const SettingKeys = {
   statusClock: 'status_clock',
   statusUnread: 'status_unread',
   markReadOnOpen: 'mark_read_on_open',
+  openOnArrow: 'open_on_arrow',
   signatureAboveQuote: 'signature_above_quote',
   closeAction: 'close_button_action',
   startHidden: 'start_hidden',

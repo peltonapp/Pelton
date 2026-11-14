@@ -1360,6 +1360,7 @@ const pl: Record<string, string> = {
   'settingsPanel.hint.multiSelect': 'Kliknij wiersze z Cmd/Ctrl lub Shift, aby zaznaczyć kilka naraz. Z klawiatury Shift+Góra/Dół rozszerza zaznaczenie, a Spacja dodaje lub usuwa podświetlony wiersz.',
   'settingsPanel.toggle.multiSelect': 'Zaznaczaj wiele wiadomości naraz',
   'settingsPanel.toggle.markReadOnOpen': 'Oznaczaj wiadomości jako przeczytane po otwarciu',
+  'settingsPanel.toggle.openOnArrow': 'Otwieraj wiadomości podczas poruszania się strzałkami',
   'settingsPanel.toggle.showSelectedCount': 'Pokazuj licznik „N zaznaczono”',
   'settingsPanel.toggle.showSelectedCountAria': 'Pokazuj licznik zaznaczonych',
   'settingsPanel.hint.indentGuides': 'Rysuj pionowe linie prowadzące łączące zagnieżdżone foldery.',

@@ -1407,6 +1407,7 @@ const ar: Record<string, string> = {
   'settingsPanel.hint.multiSelect': 'انقر مع Cmd/Ctrl أو Shift على الصفوف لتحديد عدة صفوف دفعة واحدة. من لوحة المفاتيح، يوسّع Shift+أعلى/أسفل التحديد، ومفتاح المسافة يضيف الصف المميَّز أو يزيله.',
   'settingsPanel.toggle.multiSelect': 'تحديد عدة رسائل دفعة واحدة',
   'settingsPanel.toggle.markReadOnOpen': 'تعليم الرسائل كمقروءة عند فتحها',
+  'settingsPanel.toggle.openOnArrow': 'فتح الرسائل عند التنقل بمفاتيح الأسهم',
   'settingsPanel.toggle.showSelectedCount': 'إظهار عدد "المحددة N"',
   'settingsPanel.toggle.showSelectedCountAria': 'إظهار عدد المحدد',
   'settingsPanel.hint.indentGuides': 'رسم خطوط إرشادية عمودية تصل المجلدات المتداخلة.',

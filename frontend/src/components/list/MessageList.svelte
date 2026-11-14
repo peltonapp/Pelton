@@ -416,9 +416,12 @@
         event.key === 'ArrowDown' ? Math.min(activeIndex + 1, items.length - 1) : Math.max(activeIndex - 1, 0)
       const id = items[activeIndex].id
       // a plain move makes the row the anchor, so a range started from it
-      // includes it, the way a click does.
+      // includes it, the way a click does. With the setting on it also opens
+      // the row, the way a click does.
       if (extend) {
         selectRange(items.map((m) => m.id), id)
+      } else if ($prefs.openOnArrow) {
+        await open(activeIndex)
       } else {
         anchorAt(id)
       }

@@ -1407,6 +1407,7 @@ const es: Record<string, string> = {
   'settingsPanel.hint.multiSelect': 'Cmd/Ctrl-clic o Mayús-clic en las filas para seleccionar varias a la vez. Con el teclado, Mayús+Arriba/Abajo amplía la selección y Espacio añade o quita la fila resaltada.',
   'settingsPanel.toggle.multiSelect': 'Seleccionar varios mensajes a la vez',
   'settingsPanel.toggle.markReadOnOpen': 'Marcar los mensajes como leídos al abrirlos',
+  'settingsPanel.toggle.openOnArrow': 'Abrir los mensajes al moverse con las flechas',
   'settingsPanel.toggle.showSelectedCount': 'Mostrar el recuento "N seleccionados"',
   'settingsPanel.toggle.showSelectedCountAria': 'Mostrar recuento de seleccionados',
   'settingsPanel.hint.indentGuides': 'Dibuja líneas guía verticales que conectan las carpetas anidadas.',
