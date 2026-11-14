@@ -50,9 +50,11 @@
       return
     }
     if (event.key === 'ArrowLeft') {
+      event.preventDefault()
       dispatch('resize', -16)
       dispatch('end')
     } else if (event.key === 'ArrowRight') {
+      event.preventDefault()
       dispatch('resize', 16)
       dispatch('end')
     }
@@ -73,6 +75,7 @@
   on:pointerdown={onPointerDown}
   on:pointermove={onPointerMove}
   on:pointerup={onPointerUp}
+  on:pointercancel={onPointerUp}
   on:keydown={onKeydown}
 ></div>
 
