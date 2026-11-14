@@ -61,6 +61,18 @@
     dispatch('toggle')
   }
 
+  // hasText tells a message with something to read from one with an empty
+  // body, which says so rather than showing a blank strip.
+  $: textful = detail ? hasText(detail) : false
+
+  function hasText(d: MessageDetail): boolean {
+    if (!d.isHtml) {
+      return d.bodyPlain.trim() !== ''
+    }
+    const body = new DOMParser().parseFromString(d.bodyHtmlSafe, 'text/html').body
+    return (body.textContent ?? '').trim() !== '' || body.querySelector('img, video, table, hr') !== null
+  }
+
   function onMore(event: MouseEvent): void {
     const rect = (event.currentTarget as HTMLElement).getBoundingClientRect()
     dispatch('more', { x: rect.left, y: rect.bottom })
@@ -109,8 +121,10 @@
         {/if}
         {#if detail.pgpState !== '' && detail.pgpState !== 'open'}
           <ProtectedNotice state={detail.pgpState} messageId={detail.id} on:opened={() => dispatch('reload')} />
-        {:else}
+        {:else if textful}
           <MailBody {detail} collapseQuotes />
+        {:else}
+          <p class="no-text">{$t('messageList.noText')}</p>
         {/if}
         <AttachmentStrip messageId={detail.id} attachments={detail.attachments} />
       {:else if error}
@@ -126,7 +140,7 @@
         <span class="sent" title={$t('thread.sent')}><Ph svg={sentIcon} size={12} /></span>
       {/if}
       <span dir="auto" class="name">{sender}</span>
-      <span dir="auto" class="snippet">{message.snippet}</span>
+      <span dir="auto" class="snippet" class:none={!message.snippet}>{message.snippet || $t('messageList.noText')}</span>
       {#if message.hasAttachments}
         <span class="clip" aria-label={$t('detail.infoModal.attachments')}><Ph svg={clipIcon} size={12} /></span>
       {/if}
@@ -250,6 +264,17 @@
     font-size: var(--fz-meta);
     color: var(--text-tertiary);
     font-variant-numeric: tabular-nums;
+  }
+
+  .snippet.none {
+    font-style: italic;
+  }
+
+  .no-text {
+    margin: 0;
+    font-size: var(--fz-body);
+    font-style: italic;
+    color: var(--text-tertiary);
   }
 
   .error {
