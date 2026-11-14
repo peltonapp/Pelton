@@ -593,20 +593,25 @@
 
   <div class="body">
     <div class="content">
-      {#if step !== 'done'}
+      {#if embedded}
+        {#if canBack}
+          <div class="meta">
+            <button type="button" class="link" on:click={back}>{$t('wizard.back')}</button>
+          </div>
+        {/if}
+      {:else if step !== 'done'}
         <div class="meta">
           <span class="counter">{$t('common.stepCounter').replace('{n}', String(stepNumber)).replace('{total}', '3')}</span>
-          {#if embedded && canBack}
-            <button type="button" class="link" on:click={back}>{$t('wizard.back')}</button>
-          {/if}
         </div>
       {/if}
 
       {#key step}
         <div class="pane">
           {#if step === 'email'}
-            <h3>{$t('wizard.step.provider.title')}</h3>
-            <p class="note">{$t('wizard.email.lead')}</p>
+            {#if !embedded}
+              <h3>{$t('wizard.step.provider.title')}</h3>
+              <p class="note">{$t('wizard.email.lead')}</p>
+            {/if}
             <form class="address" on:submit|preventDefault={continueFromAddress}>
               <label class="field">
                 <span>{$t('wizard.field.email')}</span>
