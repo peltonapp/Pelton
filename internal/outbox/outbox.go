@@ -85,10 +85,10 @@ func (q *Queue) Enqueue(ctx context.Context, m Message) (int64, error) {
 	return q.db.InsertOutbox(ctx, row)
 }
 
-// claimDue atomically claims the next due message, moving it to sending. Returns
-// (nil, nil) when nothing is ready.
-func (q *Queue) claimDue(ctx context.Context, now time.Time) (*Message, error) {
-	row, err := q.db.ClaimDueOutbox(ctx, StateQueued, StateSending, now)
+// claimDue atomically claims the next due message, moving it to sending, passing
+// over the accounts in skip. Returns (nil, nil) when nothing is ready.
+func (q *Queue) claimDue(ctx context.Context, now time.Time, skip ...int64) (*Message, error) {
+	row, err := q.db.ClaimDueOutbox(ctx, StateQueued, StateSending, now, skip)
 	if err != nil {
 		return nil, err
 	}

@@ -33,6 +33,9 @@ import (
 type App struct {
 	ctx context.Context
 	log *slog.Logger
+	// sentCopies tracks the copies of sent mail still on their way to the Sent
+	// folder (bind_sync.go), which run after the outbox has moved on.
+	sentCopies sync.WaitGroup
 	// logWriter is where log lines go. It always writes to stderr and, when
 	// the setting is on, also to a rotating file in the data directory. See
 	// logging.go.
@@ -318,6 +321,17 @@ func (a *App) shutdown(ctx context.Context) {
 	a.saveGeometry()
 	a.stopTray()
 	a.stopMCP()
+	// a message sent just before quitting may still be on its way to Sent.
+	copied := make(chan struct{})
+	go func() {
+		a.sentCopies.Wait()
+		close(copied)
+	}()
+	select {
+	case <-copied:
+	case <-time.After(5 * time.Second):
+		a.log.Warn("quit before a sent message was copied to Sent")
+	}
 	if a.index != nil {
 		if err := a.index.Close(); err != nil {
 			a.log.Error("close search index", "err", err)
