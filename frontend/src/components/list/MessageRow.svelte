@@ -283,7 +283,11 @@
         <div dir="auto" class="subject"><Highlight text={message.subject || $t('messageList.noSubject')} terms={$highlightTerms} /></div>
       {/if}
       {#if showSnippet}
-        <div dir="auto" class="snippet" style={`--preview-lines:${previewLines}`}><Highlight text={message.snippet} terms={$highlightTerms} /></div>
+        {#if message.snippet}
+          <div dir="auto" class="snippet" style={`--preview-lines:${previewLines}`}><Highlight text={message.snippet} terms={$highlightTerms} /></div>
+        {:else}
+          <div class="snippet none" style={`--preview-lines:${previewLines}`}>{$t('messageList.noText')}</div>
+        {/if}
       {/if}
     </div>
   </div>
@@ -501,6 +505,10 @@
   :global(:root[data-design='new']) .snippet {
     line-height: 1.4;
     min-height: calc(var(--preview-lines, 1) * 1.4em);
+  }
+
+  .snippet.none {
+    font-style: italic;
   }
 
   /* hover is a band the list slides over the rows. */
