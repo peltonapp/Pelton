@@ -1547,6 +1547,7 @@ export const SettingKeys = {
   railSide: 'rail_side',
   paneStyle: 'pane_style',
   avatarPlacement: 'avatar_placement',
+  contactsView: 'contacts_view',
   listHeight: 'list_height',
   nativeTitlebar: 'native_titlebar',
   quickFilterBar: 'quick_filter_bar',

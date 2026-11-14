@@ -5,7 +5,7 @@
 // source of truth.
 
 import { writable } from 'svelte/store'
-import type { UIPrefs, ThemePref, DensityPref, EditorMode, ViewsPlacement, CloseAction, LogLevel, SelectAllScope, SearchKind, SearchSortPref, DesignPref, LayoutMode, NavStyle, RailSide, PaneStyle, AvatarPlacement, ComposeOpenIn } from '../lib/types'
+import type { UIPrefs, ThemePref, DensityPref, EditorMode, ViewsPlacement, CloseAction, LogLevel, SelectAllScope, SearchKind, SearchSortPref, DesignPref, LayoutMode, NavStyle, RailSide, PaneStyle, AvatarPlacement, ContactsView, ComposeOpenIn } from '../lib/types'
 import { getUIPrefs, setSetting, SettingKeys, systemColorScheme, setWindowTheme, getThemeApply } from '../lib/api'
 import { applyTheme, applyDensity, applyAccent, applyScale, applyReduceMotion, applyHandCursor, setThemeSchedule, applyUIFont, applyMonoFont, applyCorners, applyDesign, watchSystemTheme, setSystemSchemeOverride, resolveTheme } from '../theme/theme'
 import { applyUserTheme } from '../theme/usertheme'
@@ -80,6 +80,7 @@ const defaults: UIPrefs = {
   railSide: 'left',
   paneStyle: 'hybrid',
   avatarPlacement: 'inline',
+  contactsView: 'panes',
   listHeight: 320,
   nativeTitlebar: false,
   quickFilterBar: false,
@@ -304,6 +305,12 @@ export function setNativeTitlebar(nativeTitlebar: boolean): void {
 export function setQuickFilterBar(quickFilterBar: boolean): void {
   prefs.update((p) => ({ ...p, quickFilterBar }))
   void setSetting(SettingKeys.quickFilterBar, String(quickFilterBar))
+}
+
+/** Chooses between the list with a detail pane and the card grid in Contacts. */
+export function setContactsView(contactsView: ContactsView): void {
+  prefs.update((p) => ({ ...p, contactsView }))
+  void setSetting(SettingKeys.contactsView, contactsView)
 }
 
 /** Picks where a new message, reply or forward opens in the new design. */
