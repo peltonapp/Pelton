@@ -1,7 +1,7 @@
 <script lang="ts">
   // the Layout page: how the mail panes are arranged, where the space switcher
   // sits, whether the window uses its own title bar, the menu bar, the status
-  // bar, notification position, the unread badge and the sidebar.
+  // bar and the sidebar.
   import { createEventDispatcher } from 'svelte'
   import Card from '../ui/Card.svelte'
   import Row from '../ui/Row.svelte'
@@ -9,7 +9,6 @@
   import Segmented from '../ui/Segmented.svelte'
   import ShellSkeleton from '../skeletons/ShellSkeleton.svelte'
   import ToggleSwitch from '../../common/ToggleSwitch.svelte'
-  import ToastPositionPicker from '../../settings/ToastPositionPicker.svelte'
   import {
     prefs,
     setLayoutMode,
@@ -23,8 +22,6 @@
     setStatusClock,
     setStatusUnread,
     setSyncProgressBar,
-    setToastPosition,
-    setUnreadBadgeEnabled,
     setSidebarIndentGuides,
     setShowAccountEmail,
     setShowFlaggedCount,
@@ -37,11 +34,6 @@
   import type { LayoutMode, NavStyle, RailSide, ViewsPlacement } from '../../../lib/types'
 
   const dispatch = createEventDispatcher<{ close: void }>()
-
-  // the unread badge setting is a count on the dock tile on macOS and a dot on
-  // the tray icon on Windows and Linux, so its row is labelled for the one at hand.
-  const badgeToggleKey = isMac ? 'settingsPanel.toggle.dockBadge' : 'settingsPanel.toggle.trayBadge'
-  const badgeHintKey = isMac ? 'settingsPanel.hint.dockBadge' : 'settingsPanel.hint.trayBadge'
 
   $: classic = $prefs.design === 'classic'
 
@@ -206,15 +198,6 @@
         on:change={(e) => setSyncProgressBar(e.detail)}
       />
     </span>
-  </Row>
-</Card>
-
-<Card title={$t('settings2.layout.alerts')}>
-  <Row id="toast-position" label={$t('settings.toastPosition')}>
-    <ToastPositionPicker value={$prefs.toastPosition} on:change={(e) => setToastPosition(e.detail)} />
-  </Row>
-  <Row id="unread-badge" label={$t(badgeToggleKey)} hint={$t(badgeHintKey)}>
-    <ToggleSwitch checked={$prefs.unreadBadge} label={$t(badgeToggleKey)} on:change={(e) => setUnreadBadgeEnabled(e.detail)} />
   </Row>
 </Card>
 

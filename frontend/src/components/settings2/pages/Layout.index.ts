@@ -19,8 +19,6 @@ const entries: SettingsIndexEntry[] = [
   { page: 'layout', id: 'status-clock', labelKey: 'settingsPanel.toggle.statusClock', keywords: 'status bar clock time date' },
   { page: 'layout', id: 'status-unread', labelKey: 'settingsPanel.toggle.statusUnread', keywords: 'status bar unread count new mail' },
   { page: 'layout', id: 'sync-progress-bar', labelKey: 'settingsPanel.toggle.syncProgressBar', keywords: 'status bar sync progress bar percent count' },
-  { page: 'layout', id: 'toast-position', labelKey: 'settings.toastPosition', keywords: 'notification toast position corner popup' },
-  { page: 'layout', id: 'unread-badge', labelKey: isMac ? 'settingsPanel.toggle.dockBadge' : 'settingsPanel.toggle.trayBadge', keywords: 'badge dock tray unread count dot icon' },
   { page: 'layout', id: 'indent-guides', labelKey: 'settingsPanel.toggle.indentGuides', keywords: 'sidebar folders nested lines' },
   { page: 'layout', id: 'account-email', labelKey: 'settingsPanel.toggle.showMailboxEmail', keywords: 'sidebar account email name mailbox' },
   { page: 'layout', id: 'flagged-count', labelKey: 'settingsPanel.toggle.flaggedCount', keywords: 'sidebar flagged count starred' },
