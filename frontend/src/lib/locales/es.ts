@@ -1586,6 +1586,7 @@ const es: Record<string, string> = {
   'common.network.offlineError': 'Sin conexión a Internet. Comprueba tu Wi-Fi e inténtalo de nuevo.',
   'sidebar.unifiedInbox': 'Bandeja de entrada unificada',
   'sidebar.view.inbox': 'Bandeja de entrada',
+  'sidebar.view.unread': 'No leídos',
   'sidebar.view.flagged': 'Destacados',
   'sidebar.view.drafts': 'Borradores',
   'sidebar.view.sent': 'Enviados',

@@ -1586,6 +1586,7 @@ const nl: Record<string, string> = {
   'common.network.offlineError': 'Geen internetverbinding. Controleer je wifi en probeer het opnieuw.',
   'sidebar.unifiedInbox': 'Gecombineerd Postvak IN',
   'sidebar.view.inbox': 'Postvak IN',
+  'sidebar.view.unread': 'Ongelezen',
   'sidebar.view.flagged': 'Met vlag',
   'sidebar.view.drafts': 'Concepten',
   'sidebar.view.sent': 'Verzonden',

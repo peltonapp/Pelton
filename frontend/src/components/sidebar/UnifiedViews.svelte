@@ -5,6 +5,7 @@
   // list of view keys, since the views themselves are computed, not rows.
   import {
     IconInbox,
+    IconMail,
     IconFlag,
     IconSend,
     IconFile,
@@ -37,6 +38,7 @@
 
   const viewIcons: Record<string, typeof IconFolder> = {
     inbox: IconInbox,
+    unread: IconMail,
     flagged: IconFlag,
     sent: IconSend,
     drafts: IconFile,

@@ -43,20 +43,20 @@ func TestOrderUnifiedViews(t *testing.T) {
 		{name: "no stored order", stored: "", want: builtin},
 		{
 			name:   "full order",
-			stored: "trash,junk,archive,sent,drafts,flagged,inbox",
-			want:   "trash,junk,archive,sent,drafts,flagged,inbox",
+			stored: "trash,junk,archive,sent,drafts,flagged,unread,inbox",
+			want:   "trash,junk,archive,sent,drafts,flagged,unread,inbox",
 		},
 		// a partial order is what an install written by an older version would
 		// have; the views it never heard of must still show up.
 		{
 			name:   "partial order keeps the rest at the end",
 			stored: "sent,inbox",
-			want:   "sent,inbox,flagged,drafts,archive,junk,trash",
+			want:   "sent,inbox,unread,flagged,drafts,archive,junk,trash",
 		},
 		{
 			name:   "unknown and repeated keys are dropped",
 			stored: "sent,nonsense,sent,inbox",
-			want:   "sent,inbox,flagged,drafts,archive,junk,trash",
+			want:   "sent,inbox,unread,flagged,drafts,archive,junk,trash",
 		},
 	}
 	for _, tt := range tests {
@@ -134,7 +134,7 @@ func TestReorderUnifiedViewsRejectsUnknownKeys(t *testing.T) {
 	if err != nil {
 		t.Fatalf("read stored order: %v", err)
 	}
-	if want := "trash,inbox,flagged,drafts,sent,archive,junk"; stored != want {
+	if want := "trash,inbox,unread,flagged,drafts,sent,archive,junk"; stored != want {
 		t.Errorf("stored order = %q, want %q", stored, want)
 	}
 }

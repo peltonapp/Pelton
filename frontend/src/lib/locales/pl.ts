@@ -1539,6 +1539,7 @@ const pl: Record<string, string> = {
   'common.network.offlineError': 'Brak połączenia z internetem. Sprawdź Wi-Fi i spróbuj ponownie.',
   'sidebar.unifiedInbox': 'Wspólna skrzynka odbiorcza',
   'sidebar.view.inbox': 'Odebrane',
+  'sidebar.view.unread': 'Nieprzeczytane',
   'sidebar.view.flagged': 'Oznaczone',
   'sidebar.view.drafts': 'Robocze',
   'sidebar.view.sent': 'Wysłane',

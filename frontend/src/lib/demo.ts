@@ -120,6 +120,7 @@ const foldersByAccount: Record<number, Folder[]> = {
 
 const views: UnifiedView[] = [
   { key: 'inbox', label: 'Unified Inbox', unreadCount: 8, totalCount: 63 },
+  { key: 'unread', label: 'Unread', unreadCount: 9, totalCount: 9 },
   { key: 'flagged', label: 'Flagged', unreadCount: 0, totalCount: 2 },
   { key: 'drafts', label: 'Drafts', unreadCount: 0, totalCount: 3 },
   { key: 'sent', label: 'Sent', unreadCount: 0, totalCount: 256 },

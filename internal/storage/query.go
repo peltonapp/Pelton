@@ -16,6 +16,9 @@ import (
 type MessageQuery struct {
 	FolderIDs    []int64
 	RequireFlags Flag
+	// ExcludeFlags keeps rows with any of these bits out, which is how the
+	// unified Unread view asks for mail without the seen flag.
+	ExcludeFlags Flag
 	Limit        int
 	Offset       int
 	// OneCopy lists a message once when its Message-ID sits in several of the
@@ -225,12 +228,20 @@ func folderWhere(q MessageQuery, folderIDs []int64) (string, []any) {
 		where += " AND (flags & ?) = ?"
 		args = append(args, uint8(q.RequireFlags), uint8(q.RequireFlags))
 	}
+	if q.ExcludeFlags != 0 {
+		where += " AND (flags & ?) = 0"
+		args = append(args, uint8(q.ExcludeFlags))
+	}
 	if q.OneCopy {
 		all, allArgs := inClause(q.FolderIDs)
 		other := "o.pending_delete = 0 AND o.snooze_hidden = 0 AND o.folder_id IN (" + all + ")"
 		if q.RequireFlags != 0 {
 			other += " AND (o.flags & ?) = ?"
 			allArgs = append(allArgs, uint8(q.RequireFlags), uint8(q.RequireFlags))
+		}
+		if q.ExcludeFlags != 0 {
+			other += " AND (o.flags & ?) = 0"
+			allArgs = append(allArgs, uint8(q.ExcludeFlags))
 		}
 		where += ` AND (message_id = '' OR NOT EXISTS (
 SELECT 1 FROM messages o WHERE o.account_id = messages.account_id

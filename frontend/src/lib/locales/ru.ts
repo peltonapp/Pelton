@@ -1586,6 +1586,7 @@ const ru: Record<string, string> = {
   'common.network.offlineError': 'Нет подключения к Интернету. Проверьте Wi-Fi и повторите попытку.',
   'sidebar.unifiedInbox': 'Все входящие',
   'sidebar.view.inbox': 'Входящие',
+  'sidebar.view.unread': 'Непрочитанные',
   'sidebar.view.flagged': 'Отмеченные',
   'sidebar.view.drafts': 'Черновики',
   'sidebar.view.sent': 'Отправленые',
