@@ -3,7 +3,7 @@
   // compose panes, the settings screen, the outbox status bar and the toast
   // stack. it loads initial data, applies preferences, subscribes to backend and
   // menu events, and handles the app-wide keyboard shortcuts.
-  import { onMount, onDestroy } from 'svelte'
+  import { onMount, onDestroy, type ComponentType } from 'svelte'
   import { get } from 'svelte/store'
   import { t } from './lib/i18n'
 
@@ -174,9 +174,20 @@
   // fails used to leave settingsOpen stuck true with nothing on screen, so every
   // later attempt set it to true again and nothing happened until a restart. It
   // now closes again and says so, and the next attempt starts a fresh load.
-  let settingsPanel: Promise<typeof import('./components/settings/SettingsPanel.svelte') | null> | null = null
-  $: if (settingsOpen && !settingsPanel) {
-    settingsPanel = import('./components/settings/SettingsPanel.svelte').catch((err) => {
+  // each design has its own settings screen. switching design from inside
+  // settings swaps the screen and reopens it on the page that switch lives on.
+  let settingsPanel: Promise<{ default: ComponentType } | null> | null = null
+  let settingsDesign = ''
+  $: if (settingsOpen && (!settingsPanel || settingsDesign !== $prefs.design)) {
+    if (settingsPanel) {
+      settingsCategory = $prefs.design === 'classic' ? 'appearance' : 'design'
+    }
+    settingsDesign = $prefs.design
+    const load: Promise<{ default: ComponentType }> =
+      $prefs.design === 'classic'
+        ? import('./components/settings/SettingsPanel.svelte')
+        : import('./components/settings2/SettingsScreen.svelte')
+    settingsPanel = load.catch((err) => {
       settingsPanel = null
       settingsOpen = false
       toastError(errorMessage(err))
