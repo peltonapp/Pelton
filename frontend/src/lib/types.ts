@@ -411,6 +411,14 @@ export interface OutboxRow {
   lastError: string
   nextAttemptAt: string
   createdAt: string
+  // editable is set when the message can be taken back into a composer.
+  editable: boolean
+}
+
+/** A message taken back out of the outbox, or taken false when it could not be. */
+export interface OutboxEdit {
+  taken: boolean
+  request: ComposeRequest
 }
 
 export interface UIPrefs {

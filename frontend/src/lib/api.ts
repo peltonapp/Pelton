@@ -38,6 +38,7 @@ import type {
   ComposeRequest,
   Draft,
   OutboxRow,
+  OutboxEdit,
   UIPrefs,
   SearchSort,
   ViewKey,
@@ -876,6 +877,19 @@ export function retrySend(id: number): Promise<boolean> {
 // gone afterwards, so the caller confirms first.
 export function discardFailedSend(id: number): Promise<boolean> {
   return App.DiscardFailedSend(id)
+}
+
+// sendOutboxNow makes a scheduled message due at once. Resolves false when it
+// was already on its way.
+export function sendOutboxNow(id: number): Promise<boolean> {
+  return App.SendOutboxNow(id)
+}
+
+// editOutboxMessage takes a scheduled or failed message back out of the outbox
+// and returns the request it was sent with; taken is false when it could not
+// be taken back.
+export function editOutboxMessage(id: number): Promise<OutboxEdit> {
+  return App.EditOutboxMessage(id) as unknown as Promise<OutboxEdit>
 }
 
 // trustSenderImages permanently allows remote content from a message's sender.
