@@ -167,7 +167,17 @@
     return crypto.randomUUID().replace(/-/g, '')
   }
 
-  $: srcdoc = buildSrcdoc(detail.bodyHtmlSafe, remoteLoaded, $prefs.messageFontSize, $prefs.bodyFont, makeNonce(), canScan)
+  // one nonce per message: drawing a fresh one on every update made the
+  // document a new string each time, and the frame reloaded when a flag was
+  // toggled or the pane re-rendered for any other reason.
+  let nonce = makeNonce()
+  let nonceFor = -1
+  $: if (detail.id !== nonceFor) {
+    nonceFor = detail.id
+    nonce = makeNonce()
+  }
+
+  $: srcdoc = buildSrcdoc(detail.bodyHtmlSafe, remoteLoaded, $prefs.messageFontSize, $prefs.bodyFont, nonce, canScan)
 
   // plain-text bodies render in a <pre>, not the sandboxed iframe, so bare
   // urls need their own linkification: nothing upstream turns them into real
