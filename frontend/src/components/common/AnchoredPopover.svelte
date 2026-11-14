@@ -60,9 +60,20 @@
     placed = true
   }
 
+  // a press inside something opened from this panel, such as the list of a
+  // Select in it, is not outside: those are moved to the end of <body> after
+  // the panel, so anything placed after it there belongs to it.
+  function openedFromPanel(target: Node): boolean {
+    let top: Node = target
+    while (top.parentNode && top.parentNode !== document.body) {
+      top = top.parentNode
+    }
+    return top.parentNode === document.body && !!panel && (panel.compareDocumentPosition(top) & Node.DOCUMENT_POSITION_FOLLOWING) !== 0
+  }
+
   function onPointerDown(event: PointerEvent): void {
     const target = event.target as Node | null
-    if (target && !panel?.contains(target) && !anchor?.contains(target)) {
+    if (target && !panel?.contains(target) && !anchor?.contains(target) && !openedFromPanel(target)) {
       dispatch('close')
     }
   }

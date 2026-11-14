@@ -20,6 +20,9 @@
   import Rail from './components/shell/Rail.svelte'
   import SpaceSwitcher from './components/shell/SpaceSwitcher.svelte'
   import { space, openSpace } from './stores/space'
+  import { calendarFocus } from './stores/calendar'
+  import { formatTime } from './lib/calformat'
+  import type { TimeFormat } from './lib/format'
   import { frameIntegrated } from './stores/windowframe'
   import { setDraft, submitSearch, searchOpenedId } from './stores/search'
   import SnoozeDialog from './components/detail/SnoozeDialog.svelte'
@@ -82,7 +85,7 @@
   import { liabilityAccepted } from './lib/liability'
   import { setDemoActive } from './lib/demo'
   import { recordArchived } from './stores/undoarchive'
-  import { onMailNew, onMailRepaired, onSyncState, onSyncProgress, onOutboxChanged, onMenu, onViewsChanged, onFoldersChanged, onProfileChanged, onMailtoCompose, onAgentProposals, onOpenMessage, type Unsubscribe, type MailtoDraft } from './lib/events'
+  import { onMailNew, onMailRepaired, onSyncState, onSyncProgress, onOutboxChanged, onMenu, onViewsChanged, onFoldersChanged, onProfileChanged, onMailtoCompose, onAgentProposals, onOpenMessage, onCalendarReminder, type Unsubscribe, type MailtoDraft, type CalendarReminderEvent } from './lib/events'
   import { loadViews, editingView, closeViewEditor, openViewEditor, views as savedViews } from './stores/views'
   import { selectSavedView } from './stores/selection'
   import { isMac } from './lib/i18n'
@@ -343,6 +346,20 @@
     )
   }
 
+  // the toast line of a calendar reminder: the title and when it starts.
+  function reminderText(e: CalendarReminderEvent): string {
+    const title = e.summary || $t('calendar.untitled')
+    if (e.allDay) {
+      return `${title}, ${$t('calendar.allDay')}`
+    }
+    return `${title}, ${formatTime(new Date(e.start), $prefs.timeFormat as TimeFormat)}`
+  }
+
+  function showReminder(e: CalendarReminderEvent): void {
+    calendarFocus.set(e.allDay ? new Date(`${e.start}T00:00:00`) : new Date(e.start))
+    openSpace('calendar')
+  }
+
   onMount(async () => {
     // cosmetic demo mode (--potatoes-are-nice). main.ts has normally answered
     // this before the first component mounted; this is the backstop for a
@@ -469,6 +486,15 @@
     unsubscribers.push(onFoldersChanged(() => void refreshSidebar()))
     unsubscribers.push(onProfileChanged(() => void reloadForProfile()))
     unsubscribers.push(onAgentProposals(() => void loadProposals()))
+    // the system notification already went out; in the new design the reminder
+    // also shows here with a way to the event.
+    unsubscribers.push(
+      onCalendarReminder((e) => {
+        if (!classic) {
+          pushAction('info', reminderText(e), { label: $t('calendar.show'), run: () => showReminder(e) }, 10000)
+        }
+      }),
+    )
     void loadProposals()
     unsubscribers.push(onMenu(handleMenu))
     // a mailto: link opened while the app is already running.
@@ -1649,6 +1675,12 @@
             on:close={() => openSpace('mail')}
             on:compose={(e) => { openSpace('mail'); startComposeTo(e.detail) }}
           />
+        {/await}
+      </div>
+    {:else if $space === 'calendar'}
+      <div class="space-host">
+        {#await import('./components/calendar/CalendarScreen.svelte') then m}
+          <svelte:component this={m.default} />
         {/await}
       </div>
     {/if}

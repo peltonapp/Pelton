@@ -17,6 +17,8 @@ import {
   resolveEventConflict,
   setCalendarVisible,
   setCalendarColor,
+  getCalendarSettings,
+  setCalendarSettings,
 } from '../lib/api'
 import { onCalendarChanged, onCalendarSync, type CalendarSyncEvent, type Unsubscribe } from '../lib/events'
 import { errorMessage, toastError, toastInfo, toastSuccess } from './toast'
@@ -24,6 +26,8 @@ import { t } from '../lib/i18n'
 import type {
   Calendar,
   CalendarAccount,
+  CalendarSettings,
+  CalendarView,
   EventDraft,
   EventSaveResult,
   EventScope,
@@ -56,6 +60,80 @@ export const calendarSyncError = writable<string>('')
  * or null. It carries both versions; resolveConflict settles it.
  */
 export const eventConflict = writable<EventSaveResult | null>(null)
+
+/** The settings the screen works with until the stored ones have loaded. */
+export const defaultCalendarSettings: CalendarSettings = {
+  syncIntervalMinutes: 15,
+  remindersEnabled: true,
+  defaultReminderMinutes: 15,
+  defaultCalendarId: 0,
+  defaultView: 'week',
+  weekStart: -1,
+  workDayStart: 9 * 60,
+  workDayEnd: 17 * 60,
+  timeZoneDisplay: 'off',
+  secondaryTimeZone: '',
+}
+
+/** The calendar preferences. */
+export const calendarSettings = writable<CalendarSettings>(defaultCalendarSettings)
+
+/** True once the stored calendar preferences have loaded. */
+export const calendarSettingsLoaded = writable<boolean>(false)
+
+/** The view the calendar screen shows. */
+export const calendarView = writable<CalendarView>('week')
+
+/** The day the calendar screen is on; its view shows the page holding it. */
+export const calendarFocus = writable<Date>(new Date())
+
+/**
+ * Where mail was dropped on the calendar: on a time slot (the event starts
+ * there), on a day (it keeps the suggested time of day on that day), or in the
+ * all-day lane (it becomes an all-day event).
+ */
+export type MailDropMode = 'time' | 'day' | 'allDay'
+
+/** Mail dropped somewhere on the calendar, as the views report it. */
+export interface MailDropAt {
+  messageId: number
+  at: Date
+  mode: MailDropMode
+}
+
+/**
+ * A message to start a new event from, set by mail dropped on the Calendar
+ * entry or on the calendar itself and taken by the calendar screen. at is null
+ * for the Calendar entry, where the suggested time stays.
+ */
+export const calendarSeed = writable<{ messageId: number; at: Date | null; mode: MailDropMode } | null>(null)
+
+/** Loads the calendar preferences once; the screen opens in their default view. */
+export async function loadCalendarSettings(): Promise<void> {
+  try {
+    const s = await getCalendarSettings()
+    calendarSettings.set({ ...defaultCalendarSettings, ...s })
+    if (!get(calendarSettingsLoaded)) {
+      calendarView.set(s.defaultView || 'week')
+    }
+    calendarSettingsLoaded.set(true)
+  } catch (err) {
+    toastError(errorMessage(err))
+  }
+}
+
+/** Changes some calendar preferences and saves them. A refused save puts the old ones back. */
+export async function saveCalendarSettings(patch: Partial<CalendarSettings>): Promise<void> {
+  const before = get(calendarSettings)
+  const next = { ...before, ...patch }
+  calendarSettings.set(next)
+  try {
+    await setCalendarSettings(next)
+  } catch (err) {
+    calendarSettings.set(before)
+    toastError(errorMessage(err))
+  }
+}
 
 /** Loads the calendars and the CalDAV logins. */
 export async function loadCalendars(): Promise<void> {
@@ -167,9 +245,11 @@ export function dismissEventConflict(): void {
 
 /** Shows or hides a calendar. */
 export async function toggleCalendar(id: number, visible: boolean): Promise<void> {
+  calendars.update((list) => list.map((c) => (c.id === id ? { ...c, visible } : c)))
   try {
     await setCalendarVisible(id, visible)
   } catch (err) {
+    calendars.update((list) => list.map((c) => (c.id === id ? { ...c, visible: !visible } : c)))
     toastError(errorMessage(err))
   }
 }
