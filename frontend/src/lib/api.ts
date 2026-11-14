@@ -1552,6 +1552,8 @@ export const SettingKeys = {
   quickFilterBar: 'quick_filter_bar',
   recentSearches: 'recent_searches',
   composeOpenIn: 'compose_open_in',
+  threadedList: 'threaded_list',
+  readerWidth: 'reader_width',
   themeId: 'theme_id',
   menuBarInApp: 'menu_bar_in_app',
   menuBarNativeMinimal: 'menu_bar_native_minimal',

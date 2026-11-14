@@ -5144,6 +5144,17 @@ export class UIPrefsDTO {
     "composeOpenIn": string;
 
     /**
+     * ThreadedList shows the message list as conversations in the new design.
+     */
+    "threadedList": boolean;
+
+    /**
+     * ReaderWidth caps the reading column in the new design: narrow, medium
+     * or full.
+     */
+    "readerWidth": string;
+
+    /**
      * ThemeID selects an installed custom theme (see bind_themes.go). Empty
      * means the built-in default themes driven by the Theme setting.
      */
@@ -5499,6 +5510,12 @@ export class UIPrefsDTO {
         }
         if (!("composeOpenIn" in $$source)) {
             this["composeOpenIn"] = "";
+        }
+        if (!("threadedList" in $$source)) {
+            this["threadedList"] = false;
+        }
+        if (!("readerWidth" in $$source)) {
+            this["readerWidth"] = "";
         }
         if (!("themeId" in $$source)) {
             this["themeId"] = "";

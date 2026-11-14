@@ -30,6 +30,7 @@
     setSwipeEnabled,
     setSwipeLeftAction,
     setSwipeRightAction,
+    setThreadedList,
   } from '../../../stores/prefs'
   import { t } from '../../../lib/i18n'
   import { pfpDataUri, type PfpStyle } from '../../../lib/pfp'
@@ -189,6 +190,17 @@
     >
       <FlagSkeleton mode={option.key as 'flag' | 'left' | 'both' | 'off'} />
     </ChoiceCards>
+  </Row>
+</Card>
+
+<Card title={$t('list.card.conversations')}>
+  <Row id="threaded-list" label={$t('list.threaded.label')} hint={$t('list.threaded.hint')}>
+    <ListPreview slot="preview" />
+    <ToggleSwitch
+      checked={$prefs.threadedList}
+      label={$t('list.threaded.label')}
+      on:change={(e) => setThreadedList(e.detail)}
+    />
   </Row>
 </Card>
 

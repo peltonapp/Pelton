@@ -25,10 +25,15 @@
   import { formatListDate, displayName, type TimeFormat } from '../../lib/format'
   import { flagColorHex } from '../../theme/flagcolors'
   import { viewColorCss } from '../../lib/viewicons'
-  import type { MessageSummary, RowTemplate, SwipeAction } from '../../lib/types'
+  import type { MessageSummary, RowTemplate, SwipeAction, ThreadSummary } from '../../lib/types'
   import { t } from '../../lib/i18n'
   import { vipSenders, bareAddress } from '../../stores/vip'
   import Highlight from '../common/Highlight.svelte'
+  import Ph from '../common/Ph.svelte'
+  import caretIcon from '@phosphor-icons/core/assets/duotone/caret-right-duotone.svg?raw'
+  import repliedIcon from '@phosphor-icons/core/assets/duotone/arrow-bend-up-left-duotone.svg?raw'
+  import forwardedIcon from '@phosphor-icons/core/assets/duotone/arrow-bend-up-right-duotone.svg?raw'
+  import sentIcon from '@phosphor-icons/core/assets/duotone/paper-plane-tilt-duotone.svg?raw'
   import { highlightTerms } from '../../stores/search'
 
   export let message: MessageSummary
@@ -40,8 +45,39 @@
   // accountColor marks which mailbox the message is from in a list that mixes
   // them (#486); '' shows nothing.
   export let accountColor: string = ''
+  /** The conversation this row stands for in a grouped list, null for a lone message row. */
+  export let thread: ThreadSummary | null = null
+  /** The conversation's other messages are shown beneath this row. */
+  export let expanded: boolean = false
+  /** The row is one of an expanded conversation's messages, drawn indented. */
+  export let child: boolean = false
+  /** The message was sent by the user, shown as theirs inside a conversation. */
+  export let fromMe: boolean = false
+  /** The row has just been revealed by expanding its conversation. */
+  export let entering: boolean = false
 
-  const dispatch = createEventDispatcher<{ swipe: 'left' | 'right' }>()
+  const dispatch = createEventDispatcher<{ swipe: 'left' | 'right'; toggle: void }>()
+
+  $: newDesign = $prefs.design !== 'classic'
+  $: threadCount = thread?.count ?? 0
+  $: expandable = threadCount > 1
+  // the conversation holds unread mail this row's own message does not show.
+  $: threadUnread = (thread?.unreadCount ?? 0) > 0 && message.seen
+  $: answered = newDesign && (thread ? thread.answered : message.answered)
+  $: forwarded = newDesign && (thread ? thread.forwarded : message.forwarded)
+
+  // a reply under its conversation repeats the subject above it, so it shows
+  // what it says instead.
+  $: secondLine = child && !showSnippet && message.snippet ? message.snippet : message.subject || $t('messageList.noSubject')
+  $: countLabel =
+    thread && thread.unreadCount > 0
+      ? $t('thread.countUnread').replace('{count}', String(threadCount)).replace('{unread}', String(thread.unreadCount))
+      : $t('thread.count').replace('{count}', String(threadCount))
+
+  function onToggle(event: MouseEvent): void {
+    event.stopPropagation()
+    dispatch('toggle')
+  }
 
   $: unread = !message.seen
   $: template = $prefs.rowTemplate as RowTemplate
@@ -224,6 +260,9 @@
     class:bar-left={showBar}
     class:account-mark={accountColor !== ''}
     class:settling
+    class:child
+    class:entering
+    class:threaded={thread !== null}
     style={`transform:translateX(${offset}px);--bar-color:${barColor};--account-color:${viewColorCss(accountColor)}`}
     role="option"
     tabindex="-1"
@@ -238,10 +277,35 @@
       <Avatar name={message.fromName} email={message.fromAddress} size={avatarSize} />
     {/if}
 
+    {#if child}
+      <span class="guide" aria-hidden="true"></span>
+    {/if}
     <div class="content">
       <div class="line top">
+        {#if expandable && !child}
+          <button
+            type="button"
+            class="twisty"
+            class:open={expanded}
+            tabindex="-1"
+            aria-expanded={expanded}
+            aria-label={expanded ? $t('thread.collapse') : $t('thread.expand')}
+            title={expanded ? $t('thread.collapse') : $t('thread.expand')}
+            on:click={onToggle}
+            on:dblclick|stopPropagation
+          >
+            <Ph svg={caretIcon} size={12} />
+          </button>
+        {:else if thread !== null && !child}
+          <span class="twisty-space" aria-hidden="true"></span>
+        {/if}
         {#if unread}
           <span class="dot" aria-hidden="true"></span>
+        {:else if threadUnread}
+          <span class="dot ring" aria-hidden="true"></span>
+        {/if}
+        {#if fromMe}
+          <span class="sent" title={$t('thread.sent')}><Ph svg={sentIcon} size={12} /></span>
         {/if}
         {#if isVip}
           <IconStarFilled size={12} class="vip-star" aria-label={$t('vip.star')} />
@@ -253,11 +317,25 @@
         {#if inlineAvatar}
           <Avatar name={message.fromName} email={message.fromAddress} size={16} />
         {/if}
-        <span dir="auto" class="sender"><Highlight text={displayName(message.fromName, message.fromAddress)} terms={$highlightTerms} /></span>
+        <span dir="auto" class="sender"><Highlight text={fromMe ? $t('thread.me') : displayName(message.fromName, message.fromAddress)} terms={$highlightTerms} /></span>
         {#if template === 'single'}
-          <span dir="auto" class="subject inline"><Highlight text={message.subject || $t('messageList.noSubject')} terms={$highlightTerms} /></span>
+          <span dir="auto" class="subject inline"><Highlight text={secondLine} terms={$highlightTerms} /></span>
         {/if}
         <span class="meta">
+          {#if expandable && !child && thread}
+            <span
+              class="count"
+              class:has-unread={thread.unreadCount > 0}
+              title={countLabel}
+              aria-label={countLabel}
+            >{threadCount}</span>
+          {/if}
+          {#if answered}
+            <span class="marker" title={$t('thread.replied')} aria-label={$t('thread.replied')}><Ph svg={repliedIcon} size={12} /></span>
+          {/if}
+          {#if forwarded}
+            <span class="marker" title={$t('thread.forwarded')} aria-label={$t('thread.forwarded')}><Ph svg={forwardedIcon} size={12} /></span>
+          {/if}
           {#if message.flagColor > 0}
             <span class="color-dot" style={`background:${colorHex}`} aria-hidden="true"></span>
           {/if}
@@ -280,7 +358,7 @@
       </div>
 
       {#if template !== 'single'}
-        <div dir="auto" class="subject"><Highlight text={message.subject || $t('messageList.noSubject')} terms={$highlightTerms} /></div>
+        <div dir="auto" class="subject" class:reply-text={child}><Highlight text={secondLine} terms={$highlightTerms} /></div>
       {/if}
       {#if showSnippet}
         {#if message.snippet}
@@ -488,6 +566,124 @@
 
   .unread .subject {
     font-weight: var(--fw-medium);
+  }
+
+  /* conversations. the expand control takes a fixed column so rows with and
+     without one keep their senders lined up, and replies indent by it. */
+  .twisty,
+  .twisty-space {
+    flex-shrink: 0;
+    width: var(--thread-twisty);
+    height: var(--thread-twisty);
+    margin-inline-start: calc(var(--space-2) * -1);
+  }
+
+  .twisty {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+    border: none;
+    border-radius: var(--radius-control);
+    background: transparent;
+    color: var(--text-tertiary);
+    cursor: var(--cursor-action);
+    transition:
+      background-color var(--motion-fast) var(--ease-out),
+      color var(--motion-fast) var(--ease-out);
+  }
+
+  .twisty:hover {
+    background: var(--surface-sunken);
+    color: var(--text-primary);
+  }
+
+  .twisty :global(.ph) {
+    transition: transform var(--motion-base) var(--ease-out);
+  }
+
+  .twisty.open :global(.ph) {
+    transform: rotate(90deg);
+  }
+
+  :global([dir='rtl']) .twisty:not(.open) :global(.ph) {
+    transform: scaleX(-1);
+  }
+
+  .row.child .content {
+    padding-inline-start: calc(var(--thread-twisty) + var(--space-2));
+  }
+
+  /* a hairline down the reply column ties the replies to their conversation. */
+  .guide {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    inset-inline-start: calc(var(--row-pad-x) + var(--thread-twisty) / 2 - var(--space-2));
+    border-inline-start: var(--hairline) solid var(--border-strong);
+    pointer-events: none;
+  }
+
+  .row.child .sender {
+    font-size: var(--fz-label);
+  }
+
+  .row.entering {
+    animation: reply-in var(--motion-base) var(--ease-out) both;
+  }
+
+  @keyframes reply-in {
+    from {
+      opacity: 0;
+      transform: translateY(calc(var(--space-2) * -1));
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .row.entering,
+    .twisty :global(.ph) {
+      animation: none;
+      transition: none;
+    }
+  }
+
+  .dot.ring {
+    background: transparent;
+    box-shadow: inset 0 0 0 calc(var(--hairline) * 3) var(--text-secondary);
+  }
+
+  .sent {
+    display: inline-flex;
+    flex-shrink: 0;
+    color: var(--text-tertiary);
+  }
+
+  .count {
+    flex-shrink: 0;
+    min-width: var(--chip-height);
+    padding: 0 var(--space-2);
+    border: var(--hairline) solid var(--border-default);
+    border-radius: var(--radius-control);
+    font-size: var(--fz-meta);
+    line-height: 1.5;
+    text-align: center;
+    font-variant-numeric: tabular-nums;
+    color: var(--text-tertiary);
+  }
+
+  .count.has-unread {
+    color: var(--text-primary);
+    font-weight: var(--fw-semibold);
+    border-color: var(--border-strong);
+  }
+
+  .marker {
+    display: inline-flex;
+    color: var(--text-tertiary);
+  }
+
+  .subject.reply-text {
+    color: var(--text-secondary);
   }
 
   .snippet {

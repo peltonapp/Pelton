@@ -5,6 +5,7 @@ const entries: SettingsIndexEntry[] = [
   { page: 'list', id: 'row-template', labelKey: 'settingsPanel.label.rowLayout', keywords: 'rows template relaxed comfortable compact single line density height' },
   { page: 'list', id: 'snippet', labelKey: 'settingsPanel.toggle.showMessagePreview', keywords: 'preview snippet excerpt text body' },
   { page: 'list', id: 'preview-lines', labelKey: 'settingsPanel.label.previewLines', keywords: 'preview snippet lines one two three' },
+  { page: 'list', id: 'threaded-list', labelKey: 'list.threaded.label', keywords: 'threads threaded conversation group replies thread view' },
   { page: 'list', id: 'flag-highlight', labelKey: 'settingsPanel.label.flaggedHighlight', keywords: 'flag flagged highlight bar icon star mark' },
   { page: 'list', id: 'date-time', labelKey: 'settingsPanel.dateTime', keywords: 'date time timestamp show hide' },
   { page: 'list', id: 'multi-select', labelKey: 'settingsPanel.toggle.multiSelect', keywords: 'select multiple bulk checkbox' },
