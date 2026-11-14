@@ -223,6 +223,24 @@ export class ProtectionWatch {
   }
 }
 
+/** isSigning reports whether a protection value signs. */
+export function isSigning(protection: string): boolean {
+  return protection === 'sign' || protection === 'signencrypt'
+}
+
+/** isEncrypting reports whether a protection value encrypts. */
+export function isEncrypting(protection: string): boolean {
+  return protection === 'encrypt' || protection === 'signencrypt'
+}
+
+/** combineProtection turns the sign and encrypt switches into one value. */
+export function combineProtection(sign: boolean, encrypt: boolean): string {
+  if (sign && encrypt) return 'signencrypt'
+  if (sign) return 'sign'
+  if (encrypt) return 'encrypt'
+  return 'none'
+}
+
 /** One entry of the send-later menu. */
 export interface SendPreset {
   /** Which preset this is, for the icon the menu draws beside it. */

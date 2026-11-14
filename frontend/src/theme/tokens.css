@@ -117,6 +117,18 @@
   --pane-radius: 0px;
   --chrome-bg: var(--surface-base);
 
+  /* the new composer: the docked panel's size, the label column the header
+     fields line up on, the send button's width (fixed so it does not jump as
+     it turns into a loader and a check) and the popovers' width. */
+  --compose-dock-width: 640px;
+  --compose-dock-height: 620px;
+  --compose-label-width: 64px;
+  --compose-send-width: 92px;
+  --popover-width: 340px;
+  --popover-max-height: 440px;
+  /* a pressed button sinks by this much. */
+  --press-scale: 0.96;
+
   /* default density (medium) row + pane spacing. overridden per density below. */
   --row-pad-y: 8px;
   --row-pad-x: 12px;
