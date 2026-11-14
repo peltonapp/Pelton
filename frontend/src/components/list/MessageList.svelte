@@ -146,6 +146,53 @@
   // sitting on the highlighted row or else on the open message.
   $: bandOn = $prefs.design !== 'classic'
   $: bandIndex = activeIndex >= 0 ? activeIndex : items.findIndex((m) => m.id === $openMessageId)
+  $: bandId = bandIndex >= 0 ? items[bandIndex].id : null
+
+  let bandTop = 0
+  let bandHeight = 0
+  let hoverTop = 0
+  let hoverHeight = 0
+  let hoverShown = false
+
+  $: if (bandOn) {
+    void placeBand(bandId, bandIndex, estRowHeight, windowItems)
+  }
+
+  // the band takes the place of the row it marks. a rendered row is measured;
+  // one outside the rendered window gets the place its index gives it.
+  async function placeBand(id: number | null, index: number, height: number, _rendered: unknown): Promise<void> {
+    if (id === null) {
+      return
+    }
+    await tick()
+    const el = listEl?.querySelector<HTMLElement>(`[id="msg-${id}"]`)
+    if (el) {
+      bandTop = el.offsetTop
+      bandHeight = el.offsetHeight
+    } else {
+      bandTop = index * height
+      bandHeight = height
+    }
+  }
+
+  // a second, fainter band follows the pointer from row to row.
+  function onRowsPointerMove(event: PointerEvent): void {
+    if (!bandOn || event.pointerType !== 'mouse') {
+      return
+    }
+    const el = (event.target as HTMLElement).closest<HTMLElement>('[id^="msg-"]')
+    if (!el) {
+      hoverShown = false
+      return
+    }
+    hoverTop = el.offsetTop
+    hoverHeight = el.offsetHeight
+    hoverShown = true
+  }
+
+  function hideHover(): void {
+    hoverShown = false
+  }
 
   // virtualization. the list can hold thousands of rows, so we only render the
   // window around the viewport plus a little overscan, padding the rest with
@@ -1001,6 +1048,9 @@
     bind:this={listEl}
     on:keydown={onKeydown}
     on:scroll={onScroll}
+    on:scroll={hideHover}
+    on:pointermove={onRowsPointerMove}
+    on:pointerleave={hideHover}
   >
     {#if $messageList.status === 'loading' && items.length === 0}
       <!-- placeholders rather than a spinner, and only once the load has taken
@@ -1026,9 +1076,15 @@
       {/if}
       {#if bandOn}
         <div
+          class="hover-band"
+          class:shown={hoverShown}
+          style={`transform: translateY(${hoverTop}px); height: ${hoverHeight}px`}
+          aria-hidden="true"
+        ></div>
+        <div
           class="select-band"
           class:shown={bandIndex >= 0}
-          style={`transform: translateY(${Math.max(bandIndex, 0) * estRowHeight}px); height: ${estRowHeight}px`}
+          style={`transform: translateY(${bandTop}px); height: ${bandHeight}px`}
           aria-hidden="true"
         ></div>
       {/if}
@@ -1263,11 +1319,27 @@
       opacity var(--motion-fast) var(--ease-out);
   }
 
-  .select-band.shown {
+  .select-band.shown,
+  .hover-band.shown {
     opacity: 1;
   }
 
+  .hover-band {
+    position: absolute;
+    top: 0;
+    inset-inline: 0;
+    z-index: 1;
+    background: var(--hover-tint);
+    opacity: 0;
+    pointer-events: none;
+    transition:
+      transform var(--motion-fast) var(--ease-out),
+      height var(--motion-fast) var(--ease-out),
+      opacity var(--motion-fast) var(--ease-out);
+  }
+
   @media (prefers-reduced-motion: reduce) {
+    .hover-band,
     .select-band {
       transition: none;
     }

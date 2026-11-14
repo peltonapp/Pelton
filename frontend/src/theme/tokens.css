@@ -95,6 +95,9 @@
   --accent-fg: #ffffff;
   --selection-bg: color-mix(in srgb, var(--accent) 14%, transparent);
   --selection-bg-strong: color-mix(in srgb, var(--accent) 22%, transparent);
+  /* a hover fill that can lie over content, and the rail's own shade of chrome. */
+  --hover-tint: color-mix(in srgb, var(--text-primary) 6%, transparent);
+  --rail-bg: color-mix(in srgb, var(--text-primary) 4%, var(--chrome-bg));
   --link: var(--accent);
 
   /* elevation, used sparingly for overlays and popovers. */

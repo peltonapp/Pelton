@@ -95,6 +95,7 @@
     width: var(--rail-width);
     padding: var(--space-2) 0 var(--space-3);
     min-height: 0;
+    background: var(--rail-bg);
   }
 
   .group {
