@@ -9,7 +9,7 @@ import { prefs } from '../stores/prefs'
 
 // how quickly the caret closes the distance to where it should be: after this
 // many milliseconds it has covered about two thirds of the way.
-const followMs = 70
+const followMs = 32
 const idleMs = 520
 const settledPx = 0.15
 const textTypes = new Set(['text', 'search', 'url', 'tel', 'password'])
@@ -242,8 +242,10 @@ function update(): void {
     shown = { ...spot }
     paint(shown, scale)
   } else if (!frame) {
-    last = performance.now()
-    frame = requestAnimationFrame(step)
+    // the first stretch is covered at once, as if a frame had already passed,
+    // so the caret leaves with the keystroke instead of a frame after it.
+    last = performance.now() - 16
+    step(performance.now())
   }
   caret.classList.add('shown')
   // it holds steady while it moves and blinks once typing rests.
@@ -259,6 +261,12 @@ function queue(): void {
   }
 }
 
+// typing and caret moves are measured in the same turn they happen, before
+// the frame is painted, so the caret is never a frame behind the text.
+function now(): void {
+  queueMicrotask(update)
+}
+
 /** Starts the gliding caret for this window. Call once, at startup. */
 export function initSmoothCaret(): void {
   if (caret) {
@@ -268,7 +276,10 @@ export function initSmoothCaret(): void {
   caret.className = 'smooth-caret'
   caret.setAttribute('aria-hidden', 'true')
   document.body.appendChild(caret)
-  for (const type of ['selectionchange', 'input', 'focusin', 'focusout', 'keyup', 'pointerup', 'compositionend']) {
+  for (const type of ['selectionchange', 'input', 'compositionend']) {
+    document.addEventListener(type, now, true)
+  }
+  for (const type of ['focusin', 'focusout', 'keyup', 'pointerup']) {
     document.addEventListener(type, queue, true)
   }
   document.addEventListener('scroll', queue, true)
