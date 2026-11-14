@@ -707,8 +707,6 @@ const nl: Record<string, string> = {
   'detail.attachments.ocrFailed': 'Tekstherkenning mislukt: {error}',
   'settingsPanel.ocr.heading': 'Tekstherkenning',
   'settingsPanel.ocr.hint': 'Leest de tekst in gescande pdf\'s wanneer je in de viewer op Tekst herkennen klikt. Alles gebeurt op dit apparaat.',
-  'settingsPanel.ocr.engine': 'Engine',
-  'settingsPanel.ocr.engineHint': 'Vision zit in macOS en is meestal nauwkeuriger. Tesseract leest met de talen die je kiest.',
   'settingsPanel.ocr.languages': 'Talen',
   'settingsPanel.ocr.languagesHint': 'Kies de talen waarin je documenten geschreven zijn. Met minder talen gaat het lezen sneller.',
   'settingsPanel.ocr.addHint': 'Meer talen zijn .traineddata-bestanden van het Tesseract-project. Download er zelf een en voeg hem hier toe:',

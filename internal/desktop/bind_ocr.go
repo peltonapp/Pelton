@@ -14,10 +14,9 @@ import (
 // Text recognition for scanned pdfs (the viewer's "Recognize text" button).
 // Tesseract runs in the frontend with the languages bundled there; this file
 // holds the language files a user adds on their own, in an "ocr" folder next
-// to the database, and the native engine (Vision on macOS, ocr_darwin.go).
+// to the database.
 
 const (
-	settingOCREngine    = "ocr_engine"
 	settingOCRLanguages = "ocr_languages"
 	// a tesseract language file is a few MB; the largest official ones are
 	// around 60 MB.
@@ -27,18 +26,6 @@ const (
 // ocrCodePattern is what a tesseract language code looks like: eng, chi_sim,
 // Latin. It doubles as the file name, so nothing else is let through.
 var ocrCodePattern = regexp.MustCompile(`^[A-Za-z0-9_]{2,40}$`)
-
-// OCRWordDTO is one recognized word. The box is a fraction of the image,
-// measured from its top left corner; Line numbers the text lines in reading
-// order.
-type OCRWordDTO struct {
-	Text string  `json:"text"`
-	X    float64 `json:"x"`
-	Y    float64 `json:"y"`
-	W    float64 `json:"w"`
-	H    float64 `json:"h"`
-	Line int     `json:"line"`
-}
 
 func (a *App) ocrDir() (string, error) {
 	if a.dataDir == "" {
@@ -188,23 +175,6 @@ func (a *App) OpenOCRFolder() error {
 		return err
 	}
 	return openPath(dir)
-}
-
-// NativeOCRAvailable reports whether the platform has a text recognizer of
-// its own (Vision on macOS).
-func (a *App) NativeOCRAvailable() bool {
-	return nativeOCRAvailable()
-}
-
-// RecognizeTextNative reads the words in a png with the platform recognizer.
-func (a *App) RecognizeTextNative(png []byte) ([]OCRWordDTO, error) {
-	if !nativeOCRAvailable() {
-		return nil, errors.New("text recognition is not available on this system")
-	}
-	if len(png) == 0 {
-		return []OCRWordDTO{}, nil
-	}
-	return nativeOCR(png)
 }
 
 func copyFile(from, to string) error {

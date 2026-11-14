@@ -103,20 +103,7 @@ export function windowMaterialActive(): Promise<boolean> {
   return App.WindowMaterialActive()
 }
 
-// text recognition for the pdf viewer (bind_ocr.go). word boxes are fractions
-// of the image, from its top left; line numbers the text lines in reading order.
-export type OCRWord = { text: string; x: number; y: number; w: number; h: number; line: number }
-
-export function nativeOCRAvailable(): Promise<boolean> {
-  return App.NativeOCRAvailable()
-}
-
-// recognizeTextNative takes the png as base64, the way the binding carries bytes.
-export async function recognizeTextNative(pngBase64: string): Promise<OCRWord[]> {
-  return (await App.RecognizeTextNative(pngBase64)) ?? []
-}
-
-// the tesseract language files the user added, by code.
+// the tesseract language files the user added, by code (bind_ocr.go).
 export async function listOCRLanguages(): Promise<string[]> {
   return (await App.ListOCRLanguages()) ?? []
 }
@@ -1486,7 +1473,6 @@ export const SettingKeys = {
   menuBarInApp: 'menu_bar_in_app',
   menuBarNativeMinimal: 'menu_bar_native_minimal',
   windowMaterial: 'window_material',
-  ocrEngine: 'ocr_engine',
   ocrLanguages: 'ocr_languages',
   menuBarIcons: 'menu_bar_icons',
   menuBarLayout: 'menu_bar_layout',

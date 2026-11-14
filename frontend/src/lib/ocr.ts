@@ -1,26 +1,13 @@
-// text recognition for scanned pdf pages. "native" is the platform's own
-// recognizer (Vision on macOS, through the backend); "tesseract" is the bundled
-// tesseract.js, which runs in a worker with every file served by the app, so
-// nothing leaves the device either way.
+// text recognition for scanned pdf pages with the bundled tesseract.js, which
+// runs in a worker with every file served by the app, so nothing leaves the
+// device.
 import type { Worker as TesseractWorker } from 'tesseract.js'
-import { nativeOCRAvailable, readOCRLanguage, recognizeTextNative, type OCRWord } from './api'
+import { readOCRLanguage } from './api'
 import { bundledOCRCodes, bundledOCRLanguages } from './ocrlanguages'
 
-export type { OCRWord }
-export type OCREngine = 'native' | 'tesseract'
-
-let nativeAvailable: Promise<boolean> | null = null
-
-// hasNativeOCR reports, once per session, whether a native recognizer exists.
-export function hasNativeOCR(): Promise<boolean> {
-  nativeAvailable ??= nativeOCRAvailable().catch(() => false)
-  return nativeAvailable
-}
-
-// ocrEngine resolves the preference against what this platform has.
-export async function ocrEngine(pref: string): Promise<OCREngine> {
-  return pref !== 'tesseract' && (await hasNativeOCR()) ? 'native' : 'tesseract'
-}
+// OCRWord is one recognized word. The box is a fraction of the page, from its
+// top left; line numbers the text lines in reading order.
+export type OCRWord = { text: string; x: number; y: number; w: number; h: number; line: number }
 
 // ocrLanguageList is the tesseract languages to read with: the chosen ones,
 // or the ui language plus English.
@@ -34,20 +21,8 @@ export function ocrLanguageList(setting: string, uiLocale: string): string[] {
 }
 
 // recognize reads the words on a rendered page. onProgress gets how far into
-// the page the recognizer is, from 0 to 1, where the engine reports it.
-export async function recognize(
-  canvas: HTMLCanvasElement,
-  engine: OCREngine,
-  langs: string[],
-  onProgress?: (fraction: number) => void,
-): Promise<OCRWord[]> {
-  if (engine === 'native') {
-    const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/png'))
-    if (!blob) {
-      return []
-    }
-    return recognizeTextNative(bytesToBase64(new Uint8Array(await blob.arrayBuffer())))
-  }
+// the page the recognizer is, from 0 to 1.
+export async function recognize(canvas: HTMLCanvasElement, langs: string[], onProgress?: (fraction: number) => void): Promise<OCRWord[]> {
   const worker = await tesseractWorker(langs)
   progressListener = onProgress ?? null
   let data: Awaited<ReturnType<TesseractWorker['recognize']>>['data']
@@ -165,15 +140,6 @@ function wasmSimd(): boolean {
   } catch {
     return false
   }
-}
-
-function bytesToBase64(bytes: Uint8Array): string {
-  let bin = ''
-  const chunk = 0x8000
-  for (let i = 0; i < bytes.length; i += chunk) {
-    bin += String.fromCharCode(...bytes.subarray(i, i + chunk))
-  }
-  return btoa(bin)
 }
 
 function base64ToBytes(b64: string): Uint8Array {

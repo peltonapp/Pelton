@@ -1279,14 +1279,6 @@ export function MoveMessage(id: number, destFolderID: number): $CancellablePromi
 }
 
 /**
- * NativeOCRAvailable reports whether the platform has a text recognizer of
- * its own (Vision on macOS).
- */
-export function NativeOCRAvailable(): $CancellablePromise<boolean> {
-    return $Call.ByID(1722797850);
-}
-
-/**
  * OpenComposeWindow moves a compose pane into a window of its own (#573).
  * session is the pane's state as the frontend keeps it; the new window picks
  * it up once with TakeComposeSession, so it never travels in a url.
@@ -1443,15 +1435,6 @@ export function ReauthorizeOAuthAccount(accountID: number): $CancellablePromise<
  */
 export function RebuildMenu(): $CancellablePromise<void> {
     return $Call.ByID(4201434270);
-}
-
-/**
- * RecognizeTextNative reads the words in a png with the platform recognizer.
- */
-export function RecognizeTextNative(png: string): $CancellablePromise<$models.OCRWordDTO[]> {
-    return $Call.ByID(3009276254, png).then(($result: any) => {
-        return $$createType77($result);
-    });
 }
 
 /**
@@ -1691,7 +1674,7 @@ export function SaveView(dto: $models.ViewDTO): $CancellablePromise<$models.View
  */
 export function ScanAttachment(messageID: number, attachmentID: number): $CancellablePromise<$models.VerdictDTO> {
     return $Call.ByID(453863286, messageID, attachmentID).then(($result: any) => {
-        return $$createType78($result);
+        return $$createType76($result);
     });
 }
 
@@ -1703,7 +1686,7 @@ export function ScanAttachment(messageID: number, attachmentID: number): $Cancel
  */
 export function ScanMessage(messageID: number, links: boolean, attachments: boolean): $CancellablePromise<$models.MessageScanDTO> {
     return $Call.ByID(300497314, messageID, links, attachments).then(($result: any) => {
-        return $$createType79($result);
+        return $$createType77($result);
     });
 }
 
@@ -1714,7 +1697,7 @@ export function ScanMessage(messageID: number, links: boolean, attachments: bool
  */
 export function ScanURL(rawURL: string): $CancellablePromise<$models.VerdictDTO> {
     return $Call.ByID(3387403308, rawURL).then(($result: any) => {
-        return $$createType78($result);
+        return $$createType76($result);
     });
 }
 
@@ -1725,7 +1708,7 @@ export function ScanURL(rawURL: string): $CancellablePromise<$models.VerdictDTO>
  */
 export function Search(req: $models.SearchRequestDTO): $CancellablePromise<$models.SearchResultDTO> {
     return $Call.ByID(2859382430, req).then(($result: any) => {
-        return $$createType80($result);
+        return $$createType78($result);
     });
 }
 
@@ -2129,7 +2112,7 @@ export function TestAccountRoute(req: $models.RouteTestRequest): $CancellablePro
  */
 export function TestConnection(req: $models.TestConnectionRequest): $CancellablePromise<$models.ConnectionTestDTO> {
     return $Call.ByID(1152861202, req).then(($result: any) => {
-        return $$createType81($result);
+        return $$createType79($result);
     });
 }
 
@@ -2382,9 +2365,7 @@ const $$createType72 = $models.ThemeImportPreviewDTO.createFrom;
 const $$createType73 = $models.UntrustedCertDTO.createFrom;
 const $$createType74 = $Create.Array($$createType73);
 const $$createType75 = $models.AttachmentContentDTO.createFrom;
-const $$createType76 = $models.OCRWordDTO.createFrom;
-const $$createType77 = $Create.Array($$createType76);
-const $$createType78 = $models.VerdictDTO.createFrom;
-const $$createType79 = $models.MessageScanDTO.createFrom;
-const $$createType80 = $models.SearchResultDTO.createFrom;
-const $$createType81 = $models.ConnectionTestDTO.createFrom;
+const $$createType76 = $models.VerdictDTO.createFrom;
+const $$createType77 = $models.MessageScanDTO.createFrom;
+const $$createType78 = $models.SearchResultDTO.createFrom;
+const $$createType79 = $models.ConnectionTestDTO.createFrom;

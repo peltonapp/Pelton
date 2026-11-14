@@ -707,8 +707,6 @@ const en: Record<string, string> = {
   'detail.attachments.ocrFailed': 'Text recognition failed: {error}',
   'settingsPanel.ocr.heading': 'Text recognition',
   'settingsPanel.ocr.hint': 'Reads the text in scanned PDFs when you click Recognize text in the viewer. It runs entirely on this device.',
-  'settingsPanel.ocr.engine': 'Engine',
-  'settingsPanel.ocr.engineHint': 'Vision is built into macOS and is usually the more accurate. Tesseract reads with the languages you choose.',
   'settingsPanel.ocr.languages': 'Languages',
   'settingsPanel.ocr.languagesHint': 'Pick the languages your documents are written in. Fewer languages read faster.',
   'settingsPanel.ocr.addHint': 'More languages are .traineddata files from the Tesseract project. Download one yourself and add it here:',

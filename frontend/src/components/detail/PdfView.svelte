@@ -12,7 +12,7 @@
   import { t, locale } from '../../lib/i18n'
   import { prefs } from '../../stores/prefs'
   import { errorMessage, toastError } from '../../stores/toast'
-  import { ocrEngine, ocrLanguageList, recognize, type OCRWord } from '../../lib/ocr'
+  import { ocrLanguageList, recognize, type OCRWord } from '../../lib/ocr'
 
   export let data: Uint8Array
 
@@ -132,7 +132,6 @@
     ocrStop = false
     ocrProgress = 0
     try {
-      const engine = await ocrEngine($prefs.ocrEngine)
       const langs = ocrLanguageList($prefs.ocrLanguages, $locale)
       for (const n of scanned) {
         if (ocrStop || destroyed) {
@@ -152,7 +151,7 @@
         canvas.width = Math.floor(viewport.width)
         canvas.height = Math.floor(viewport.height)
         await page.render({ canvas, viewport, background: '#ffffff' }).promise
-        const words = await recognize(canvas, engine, langs, (f) => (ocrPageFraction = f))
+        const words = await recognize(canvas, langs,(f) => (ocrPageFraction = f))
         ocrPageFraction = 1
         canvas.width = 0
         canvas.height = 0

@@ -707,8 +707,6 @@ const tr: Record<string, string> = {
   'detail.attachments.ocrFailed': 'Metin tanıma başarısız oldu: {error}',
   'settingsPanel.ocr.heading': 'Metin tanıma',
   'settingsPanel.ocr.hint': 'Görüntüleyicide Metni tanı\'ya tıkladığınızda taranmış PDF\'lerdeki metni okur. Her şey bu cihazda çalışır.',
-  'settingsPanel.ocr.engine': 'Motor',
-  'settingsPanel.ocr.engineHint': 'Vision macOS\'te yerleşiktir ve genellikle daha doğrudur. Tesseract seçtiğiniz dillerle okur.',
   'settingsPanel.ocr.languages': 'Diller',
   'settingsPanel.ocr.languagesHint': 'Belgelerinizin yazıldığı dilleri seçin. Daha az dil daha hızlı okur.',
   'settingsPanel.ocr.addHint': 'Daha fazla dil, Tesseract projesinin .traineddata dosyalarıdır. Bir tanesini kendiniz indirip buraya ekleyin:',

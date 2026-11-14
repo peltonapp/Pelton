@@ -367,10 +367,8 @@ type UIPrefsDTO struct {
 	// on macOS, Mica on Windows); whether the running window has it is
 	// WindowMaterialActive.
 	WindowMaterial bool `json:"windowMaterial"`
-	// OCREngine is the pdf viewer's text recognizer: "native" (Vision on
-	// macOS) or "tesseract". OCRLanguages is the "+" joined list of tesseract
-	// languages to read with; empty follows the ui language.
-	OCREngine    string `json:"ocrEngine"`
+	// OCRLanguages is the "+" joined list of tesseract languages the pdf
+	// viewer reads with; empty follows the ui language.
 	OCRLanguages string `json:"ocrLanguages"`
 	// MenuBarIcons shows icons next to the in-app menu bar's dropdown items.
 	MenuBarIcons bool `json:"menuBarIcons"`
@@ -510,7 +508,6 @@ func (a *App) GetUIPrefs() (UIPrefsDTO, error) {
 		MenuBarInApp:               a.boolSetting(settingMenuBarInApp, false),
 		MenuBarNativeMinimal:       a.boolSetting(settingMenuBarNativeMinimal, false),
 		WindowMaterial:             a.boolSetting(settingWindowMaterial, false),
-		OCREngine:                  a.stringSetting(settingOCREngine, "native"),
 		OCRLanguages:               a.stringSetting(settingOCRLanguages, ""),
 		MenuBarIcons:               a.boolSetting(settingMenuBarIcons, false),
 		TimeFormat:                 a.stringSetting(settingTimeFormat, "auto"),

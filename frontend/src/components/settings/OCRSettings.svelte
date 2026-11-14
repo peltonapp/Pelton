@@ -1,21 +1,19 @@
 <script lang="ts">
-  // text recognition settings for the pdf viewer: the engine (on macOS, Vision
-  // or tesseract) and the tesseract languages, bundled or added from disk.
-  // added languages are files the user brings; the app never downloads them.
+  // text recognition settings for the pdf viewer: the tesseract languages,
+  // bundled or added from disk. added languages are files the user brings; the
+  // app never downloads them.
   import { onMount } from 'svelte'
   import { IconPlus, IconFolderOpen, IconX } from '@tabler/icons-svelte'
-  import SegmentedSetting from './SegmentedSetting.svelte'
-  import { prefs, setOCREngine, setOCRLanguages } from '../../stores/prefs'
+  import { prefs, setOCRLanguages } from '../../stores/prefs'
   import { t, locale, localeNames, type Locale } from '../../lib/i18n'
   import { addOCRLanguage, listOCRLanguages, openOCRFolder, removeOCRLanguage } from '../../lib/api'
   import { openURL } from '../../lib/browser'
   import { bundledOCRCodes, bundledOCRLanguages } from '../../lib/ocrlanguages'
-  import { hasNativeOCR, ocrLanguageList, stopTesseract } from '../../lib/ocr'
+  import { ocrLanguageList, stopTesseract } from '../../lib/ocr'
   import { errorMessage, toastError } from '../../stores/toast'
 
   const tessdataURL = 'https://github.com/tesseract-ocr/tessdata'
 
-  let native = false
   let userLangs: string[] = []
 
   // a bundled language is named the way the ui names that language.
@@ -23,10 +21,7 @@
     Object.entries(bundledOCRLanguages).map(([loc, code]) => [code, localeNames[loc as Locale]]),
   )
 
-  onMount(async () => {
-    native = await hasNativeOCR()
-    await refresh()
-  })
+  onMount(refresh)
 
   async function refresh(): Promise<void> {
     try {
@@ -93,52 +88,37 @@
 
 <p class="hint">{$t('settingsPanel.ocr.hint')}</p>
 
-{#if native}
-  <SegmentedSetting
-    label={$t('settingsPanel.ocr.engine')}
-    value={$prefs.ocrEngine === 'tesseract' ? 'tesseract' : 'native'}
-    options={[
-      { key: 'native', label: 'Vision' },
-      { key: 'tesseract', label: 'Tesseract' },
-    ]}
-    on:change={(e) => setOCREngine(e.detail)}
-  />
-  <p class="hint">{$t('settingsPanel.ocr.engineHint')}</p>
-{/if}
-
-{#if !native || $prefs.ocrEngine === 'tesseract'}
-  <div class="label">{$t('settingsPanel.ocr.languages')}</div>
-  <p class="hint">{$t('settingsPanel.ocr.languagesHint')}</p>
-  <div class="chips" role="group" aria-label={$t('settingsPanel.ocr.languages')}>
-    {#each bundledOCRCodes as code (code)}
-      <button type="button" class="chip" class:on={selected.includes(code)} aria-pressed={selected.includes(code)} on:click={() => toggle(code)}>
-        {names[code] ?? code}
+<div class="label">{$t('settingsPanel.ocr.languages')}</div>
+<p class="hint">{$t('settingsPanel.ocr.languagesHint')}</p>
+<div class="chips" role="group" aria-label={$t('settingsPanel.ocr.languages')}>
+  {#each bundledOCRCodes as code (code)}
+    <button type="button" class="chip" class:on={selected.includes(code)} aria-pressed={selected.includes(code)} on:click={() => toggle(code)}>
+      {names[code] ?? code}
+    </button>
+  {/each}
+  {#each userLangs as code (code)}
+    <span class="chip user" class:on={selected.includes(code)}>
+      <button type="button" class="chip-main" aria-pressed={selected.includes(code)} on:click={() => toggle(code)}>{code}</button>
+      <button type="button" class="chip-x" title={$t('settingsPanel.ocr.remove')} aria-label={`${$t('settingsPanel.ocr.remove')} ${code}`} on:click={() => remove(code)}>
+        <IconX size={12} stroke={1.8} />
       </button>
-    {/each}
-    {#each userLangs as code (code)}
-      <span class="chip user" class:on={selected.includes(code)}>
-        <button type="button" class="chip-main" aria-pressed={selected.includes(code)} on:click={() => toggle(code)}>{code}</button>
-        <button type="button" class="chip-x" title={$t('settingsPanel.ocr.remove')} aria-label={`${$t('settingsPanel.ocr.remove')} ${code}`} on:click={() => remove(code)}>
-          <IconX size={12} stroke={1.8} />
-        </button>
-      </span>
-    {/each}
-  </div>
-  <p class="hint">
-    {$t('settingsPanel.ocr.addHint')}
-    <button type="button" class="link" on:click={() => openURL(tessdataURL)}>{$t('settingsPanel.ocr.addLink')}</button>
-  </p>
-  <div class="tools">
-    <button type="button" class="tool-btn" on:click={add}>
-      <IconPlus size={15} stroke={1.6} />
-      {$t('settingsPanel.ocr.add')}
-    </button>
-    <button type="button" class="tool-btn" on:click={openFolder}>
-      <IconFolderOpen size={15} stroke={1.6} />
-      {$t('language.openFolder')}
-    </button>
-  </div>
-{/if}
+    </span>
+  {/each}
+</div>
+<p class="hint">
+  {$t('settingsPanel.ocr.addHint')}
+  <button type="button" class="link" on:click={() => openURL(tessdataURL)}>{$t('settingsPanel.ocr.addLink')}</button>
+</p>
+<div class="tools">
+  <button type="button" class="tool-btn" on:click={add}>
+    <IconPlus size={15} stroke={1.6} />
+    {$t('settingsPanel.ocr.add')}
+  </button>
+  <button type="button" class="tool-btn" on:click={openFolder}>
+    <IconFolderOpen size={15} stroke={1.6} />
+    {$t('language.openFolder')}
+  </button>
+</div>
 
 <style>
   .hint {

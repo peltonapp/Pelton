@@ -714,8 +714,6 @@ const zhCN: Record<string, string> = {
   'detail.attachments.ocrFailed': '文字识别失败：{error}',
   'settingsPanel.ocr.heading': '文字识别',
   'settingsPanel.ocr.hint': '在查看器中点击“识别文字”时读取扫描 PDF 中的文字。全部在本设备上运行。',
-  'settingsPanel.ocr.engine': '引擎',
-  'settingsPanel.ocr.engineHint': 'Vision 内置于 macOS，通常更准确。Tesseract 使用你选择的语言进行识别。',
   'settingsPanel.ocr.languages': '语言',
   'settingsPanel.ocr.languagesHint': '选择文档所使用的语言。语言越少，识别越快。',
   'settingsPanel.ocr.addHint': '更多语言以 Tesseract 项目的 .traineddata 文件提供。请自行下载并在此添加：',

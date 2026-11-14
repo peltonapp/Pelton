@@ -77,7 +77,6 @@ const defaults: UIPrefs = {
   menuBarNativeMinimal: false,
   menuBarIcons: false,
   windowMaterial: false,
-  ocrEngine: 'native',
   ocrLanguages: '',
   timeFormat: 'auto',
   reduceMotion: false,
@@ -469,14 +468,8 @@ export function setWindowMaterial(value: boolean): void {
   void setSetting(SettingKeys.windowMaterial, String(value))
 }
 
-// setOCREngine picks the pdf viewer's text recognizer ("native" or
-// "tesseract"); setOCRLanguages the tesseract languages, "+" joined, where ""
-// follows the ui language.
-export function setOCREngine(value: string): void {
-  prefs.update((p) => ({ ...p, ocrEngine: value }))
-  void setSetting(SettingKeys.ocrEngine, value)
-}
-
+// setOCRLanguages picks the pdf viewer's tesseract languages, "+" joined,
+// where "" follows the ui language.
 export function setOCRLanguages(value: string): void {
   prefs.update((p) => ({ ...p, ocrLanguages: value }))
   void setSetting(SettingKeys.ocrLanguages, value)

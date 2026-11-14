@@ -707,8 +707,6 @@ const ar: Record<string, string> = {
   'detail.attachments.ocrFailed': 'فشل التعرّف على النص: {error}',
   'settingsPanel.ocr.heading': 'التعرّف على النص',
   'settingsPanel.ocr.hint': 'يقرأ النص في ملفات PDF الممسوحة ضوئيًا عند النقر على التعرّف على النص في العارض. يعمل كل شيء على هذا الجهاز.',
-  'settingsPanel.ocr.engine': 'المحرك',
-  'settingsPanel.ocr.engineHint': 'Vision مدمج في macOS وعادةً ما يكون أدق. يقرأ Tesseract باللغات التي تختارها.',
   'settingsPanel.ocr.languages': 'اللغات',
   'settingsPanel.ocr.languagesHint': 'اختر اللغات التي كُتبت بها مستنداتك. كلما قلّت اللغات كانت القراءة أسرع.',
   'settingsPanel.ocr.addHint': 'تتوفر لغات أخرى كملفات ‎.traineddata من مشروع Tesseract. نزّل ملفًا بنفسك وأضفه هنا:',

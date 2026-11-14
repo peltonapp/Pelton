@@ -545,10 +545,8 @@ export interface UIPrefs {
   // windowMaterial puts the window over a native material (Liquid Glass on
   // macOS, Mica on Windows) from the next launch on.
   windowMaterial: boolean
-  // ocrEngine is the pdf viewer's text recognizer: "native" (Vision on macOS)
-  // or "tesseract". ocrLanguages is the "+" joined tesseract language list;
-  // empty follows the ui language.
-  ocrEngine: string
+  // ocrLanguages is the "+" joined tesseract language list the pdf viewer
+  // reads with; empty follows the ui language.
   ocrLanguages: string
   // timeFormat picks the clock for rendered times: auto (locale), 12, or 24.
   timeFormat: string
