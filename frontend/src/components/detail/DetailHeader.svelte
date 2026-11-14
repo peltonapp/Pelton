@@ -25,10 +25,12 @@
   let revocation: SMIMERevocation | undefined
   let checkedId = 0
 
-  $: if (detail.smime.status !== '' && detail.id !== checkedId) {
+  $: if (detail.id !== checkedId) {
     checkedId = detail.id
     revocation = undefined
-    void loadRevocation(detail.id)
+    if (detail.smime.status !== '') {
+      void loadRevocation(detail.id)
+    }
   }
 
   // a failed check is not a verdict, so a rejection leaves the badge as the
