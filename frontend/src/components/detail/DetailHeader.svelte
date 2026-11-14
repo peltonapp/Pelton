@@ -16,6 +16,8 @@
   import type { MessageDetail, UnsubscribeInfo, SMIMERevocation } from '../../lib/types'
 
   export let detail: MessageDetail
+  /** Drops the subject and sets sender, recipients and date on one address line, for a conversation card. */
+  export let compact: boolean = false
 
   $: avatarPlacement = $prefs.design === 'classic' ? 'column' : $prefs.avatarPlacement
 
@@ -54,6 +56,9 @@
   // removed sender would stay lit.
   $: isVip = $vipSenders.has(bareAddress(detail.fromAddress))
 
+  // pop plays the star's grow and settle once, as the sender is starred.
+  let pop = false
+
   // toggleVip stars or unstars the sender; failures surface as a toast and the
   // store reverts via the reload path.
   async function toggleVip(): Promise<void> {
@@ -62,6 +67,7 @@
         await removeVIP(detail.fromAddress)
         toastSuccess($t('vip.removed').replace('{who}', displayName(detail.fromName, detail.fromAddress)))
       } else {
+        pop = compact
         await addVIP(detail.fromAddress)
         toastSuccess($t('vip.added').replace('{who}', displayName(detail.fromName, detail.fromAddress)))
       }
@@ -144,10 +150,12 @@
   }
 </script>
 
-<header class="head">
+<header class="head" class:compact>
   <!-- the subject is the sender's words, so it reads in its own direction
        whatever the interface is set to (#356). -->
-  <h1 dir="auto" class="subject">{detail.subject || $t('detail.noSubject')}</h1>
+  {#if !compact}
+    <h1 dir="auto" class="subject">{detail.subject || $t('detail.noSubject')}</h1>
+  {/if}
 
   <div class="from-row">
     {#if avatarPlacement === 'column'}
@@ -162,7 +170,9 @@
           type="button"
           class="vip-toggle"
           class:active={isVip}
+          class:pop
           on:click={toggleVip}
+          on:animationend={() => (pop = false)}
           title={isVip ? $t('vip.unmark') : $t('vip.mark')}
           aria-pressed={isVip}
         >
@@ -176,15 +186,23 @@
         {#if detail.fromName}
           <span class="from-addr">&lt;{detail.fromAddress}&gt;</span>
         {/if}
+        {#if compact}
+          <span class="to-line" title={[detail.toAddresses, detail.ccAddresses].filter(Boolean).join(', ')}>
+            {$t('detail.header.to')} {[detail.toAddresses, detail.ccAddresses].filter(Boolean).join(', ')}
+          </span>
+        {/if}
       </div>
+      {#if !compact}
       <div class="recipients">
         {#if detail.toAddresses}<span>{$t('detail.header.to')} {detail.toAddresses}</span>{/if}
         {#if detail.ccAddresses}<span class="cc">{$t('detail.header.cc')} {detail.ccAddresses}</span>{/if}
       </div>
+      {/if}
     </div>
     {#if $prefs.showDateTime}
       <time class="date">{formatFullDate(detail.date, $prefs.timeFormat as TimeFormat)}</time>
     {/if}
+    <slot name="actions" />
   </div>
 
   <div class="badges-row">
@@ -337,5 +355,62 @@
     color: var(--text-tertiary);
     flex-shrink: 0;
     white-space: nowrap;
+  }
+
+  /* the conversation card's address line: sender, address and recipients on
+     one line that truncates, with the date and the card's actions after it. */
+  .head.compact {
+    gap: var(--space-2);
+    padding-bottom: 0;
+    border-bottom: none;
+  }
+
+  .compact .from-row {
+    align-items: center;
+  }
+
+  .compact .from-line {
+    flex-wrap: nowrap;
+    align-items: center;
+    min-width: 0;
+  }
+
+  .compact .from-name,
+  .compact .from-addr {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    min-width: 0;
+  }
+
+  .compact .from-name {
+    flex-shrink: 0;
+    max-width: 50%;
+  }
+
+  .to-line {
+    min-width: 0;
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: var(--fz-label);
+    color: var(--text-tertiary);
+  }
+
+  .compact .vip-toggle.pop :global(svg) {
+    animation: star-pop var(--motion-slow) var(--ease-out);
+  }
+
+  @keyframes star-pop {
+    40% {
+      transform: scale(1.3);
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .compact .vip-toggle.pop :global(svg) {
+      animation: none;
+    }
   }
 </style>

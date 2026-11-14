@@ -630,6 +630,11 @@ export interface UIPrefs {
   // composeOpenIn is where a new message, reply or forward opens in the new
   // design.
   composeOpenIn: ComposeOpenIn
+  // threadedList groups the message list into conversations in the new
+  // design.
+  threadedList: boolean
+  // readerWidth caps the reading column in the new design.
+  readerWidth: ReaderWidth
   // themeId selects an installed custom theme; empty means the built-in
   // default themes driven by the theme (light/dark/system) setting.
   themeId: string
@@ -1131,6 +1136,8 @@ export type AvatarPlacement = 'column' | 'inline' | 'hidden'
 export type ContactsView = 'panes' | 'grid'
 /** Where compose opens in the new design: its own window, docked, or a tab. */
 export type ComposeOpenIn = 'window' | 'docked' | 'tab'
+/** How wide the reading column runs in the new design. */
+export type ReaderWidth = 'narrow' | 'medium' | 'full'
 /** One of the top-level areas of the app. */
 export type Space = 'mail' | 'contacts' | 'calendar'
 export type SelectAllScope = 'offer' | 'all' | 'loaded'

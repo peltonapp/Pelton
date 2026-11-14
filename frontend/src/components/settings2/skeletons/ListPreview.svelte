@@ -99,7 +99,6 @@
 
 <style>
   .list {
-    margin-bottom: var(--space-6);
     border: var(--hairline) solid var(--border-default);
     border-radius: var(--radius-card);
     background: var(--surface-raised);

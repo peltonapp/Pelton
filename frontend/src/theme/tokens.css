@@ -95,6 +95,8 @@
   --accent-fg: #ffffff;
   --selection-bg: color-mix(in srgb, var(--accent) 14%, transparent);
   --selection-bg-strong: color-mix(in srgb, var(--accent) 22%, transparent);
+  /* a hover fill that can lie over content. */
+  --hover-tint: color-mix(in srgb, var(--text-primary) 6%, transparent);
   --link: var(--accent);
 
   /* elevation, used sparingly for overlays and popovers. */
@@ -133,6 +135,12 @@
   --popover-max-height: 440px;
   /* a pressed button sinks by this much. */
   --press-scale: 0.96;
+
+  /* conversations: the column the expand control sits in, which replies are
+     indented by, and the widths the reading column can be capped at. */
+  --thread-twisty: 16px;
+  --reader-width-narrow: 640px;
+  --reader-width-medium: 820px;
 
   /* default density (medium) row + pane spacing. overridden per density below. */
   --row-pad-y: 8px;
@@ -316,7 +324,10 @@
    as one rounded surface, soft raises every pane on its own, flat keeps them
    edge to edge with hairlines. */
 :root[data-design="new"] {
-  --chrome-bg: var(--surface-sunken);
+  /* the window chrome (top bar, rail, status bar) is a hair off the folder
+     pane, which keeps the sunken surface itself. */
+  --chrome-bg: color-mix(in srgb, var(--text-primary) 2.5%, var(--surface-sunken));
+  --sidebar-bg: var(--surface-sunken);
   --radius-card: 7px;
 }
 
