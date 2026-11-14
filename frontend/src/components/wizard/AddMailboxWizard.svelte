@@ -635,7 +635,9 @@
                       {detection.preset.custom ? detection.email.split('@')[1] : detection.preset.label}
                     </span>
                     <span class="muted">
-                      {#if detection.preset.custom && detection.discovered}
+                      {#if detection.preset.custom && detection.discovered?.source === 'guess'}
+                        <span class="unsure">{$t('wizard.email.guessed').replace('{host}', detection.discovered.imapHost)}</span>
+                      {:else if detection.preset.custom && detection.discovered}
                         {detection.discovered.imapHost}
                       {:else if detection.preset.custom}
                         {$t('wizard.email.notFound')}
@@ -1168,6 +1170,10 @@
     display: flex;
     flex-direction: column;
     min-width: 0;
+  }
+
+  .unsure {
+    color: var(--warning);
   }
 
   .det-name {

@@ -89,7 +89,9 @@
   $: showAvatar = avatarPlacement === 'column' && template !== 'single'
   $: inlineAvatar = avatarPlacement === 'inline'
   $: showSnippet =
-    $prefs.rowShowSnippet && (template === 'relaxed' || template === 'comfortable') && !!message.snippet
+    $prefs.rowShowSnippet &&
+    (template === 'relaxed' || template === 'comfortable') &&
+    (!!message.snippet || $prefs.design !== 'classic')
   $: avatarSize = template === 'relaxed' ? 36 : 30
   $: previewLines = $prefs.previewLines
 
@@ -359,7 +361,11 @@
         <div dir="auto" class="subject" class:reply-text={child}><Highlight text={secondLine} terms={$highlightTerms} /></div>
       {/if}
       {#if showSnippet}
-        <div dir="auto" class="snippet" style={`--preview-lines:${previewLines}`}><Highlight text={message.snippet} terms={$highlightTerms} /></div>
+        {#if message.snippet}
+          <div dir="auto" class="snippet" style={`--preview-lines:${previewLines}`}><Highlight text={message.snippet} terms={$highlightTerms} /></div>
+        {:else}
+          <div class="snippet none" style={`--preview-lines:${previewLines}`}>{$t('messageList.noText')}</div>
+        {/if}
       {/if}
     </div>
   </div>
@@ -688,5 +694,21 @@
     -webkit-line-clamp: var(--preview-lines, 1);
     line-clamp: var(--preview-lines, 1);
     -webkit-box-orient: vertical;
+  }
+
+  /* the new design keeps every row the same height, so a message with a short
+     or missing preview still takes the lines the others do. */
+  :global(:root[data-design='new']) .snippet {
+    line-height: 1.4;
+    min-height: calc(var(--preview-lines, 1) * 1.4em);
+  }
+
+  .snippet.none {
+    font-style: italic;
+  }
+
+  /* hover is a band the list slides over the rows. */
+  :global(:root[data-design='new']) .row:hover:not(.selected):not(.checked) {
+    background: var(--surface-raised);
   }
 </style>

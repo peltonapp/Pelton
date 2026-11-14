@@ -2018,6 +2018,8 @@ const en: Record<string, string> = {
   'composing.openIn.docked.hint': 'A panel in the corner, over your mail.',
   'composing.openIn.tab': 'Tab',
   'composing.openIn.tab.hint': 'A tab that fills the reading area.',
+  'messageList.noText': 'No text',
+  'wizard.email.guessed': 'Not confirmed: {host} is a guess from the address. Check the servers on the next step.',
   'thread.expand': 'Show the whole conversation',
   'thread.collapse': 'Hide the conversation',
   'thread.count': '{count} messages in this conversation',
