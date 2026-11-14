@@ -22,6 +22,8 @@ import {
   demoSearch,
   demoHtml,
   demoSource,
+  demoThreads,
+  demoThread,
 } from './demo'
 import type {
   Account,
@@ -35,9 +37,12 @@ import type {
   MessageList,
   MessageDetail,
   MessageSummary,
+  ThreadList,
+  Thread,
   ComposeRequest,
   Draft,
   OutboxRow,
+  OutboxEdit,
   UIPrefs,
   SearchSort,
   ViewKey,
@@ -351,6 +356,47 @@ export function listSavedViewMessages(
   return App.ListMessages(
     new desktop.ListMessagesRequest({ kind: 'savedView', folderId: 0, view: '', viewId, limit, offset }),
   )
+}
+
+// listFolderThreads reads a page of one folder as conversations. Paging counts
+// conversations, and a conversation is listed when any of its messages is in
+// the folder.
+export function listFolderThreads(folderId: number, limit: number, offset: number): Promise<ThreadList> {
+  if (isDemoActive()) {
+    return Promise.resolve(demoThreads())
+  }
+  return App.ListThreads(
+    new desktop.ListMessagesRequest({ kind: 'folder', folderId, view: '', limit, offset }),
+  )
+}
+
+// listViewThreads reads a page of a unified view as conversations.
+export function listViewThreads(view: ViewKey, limit: number, offset: number): Promise<ThreadList> {
+  if (isDemoActive()) {
+    return Promise.resolve(demoThreads())
+  }
+  return App.ListThreads(
+    new desktop.ListMessagesRequest({ kind: 'view', folderId: 0, view, limit, offset }),
+  )
+}
+
+// listSavedViewThreads reads a page of a saved View as conversations.
+export function listSavedViewThreads(viewId: number, limit: number, offset: number): Promise<ThreadList> {
+  if (isDemoActive()) {
+    return Promise.resolve(demoThreads())
+  }
+  return App.ListThreads(
+    new desktop.ListMessagesRequest({ kind: 'savedView', folderId: 0, view: '', viewId, limit, offset }),
+  )
+}
+
+// getThread returns one conversation's messages, oldest first, with the user's
+// own replies included and marked. Bodies still come from getMessage.
+export function getThread(threadId: number): Promise<Thread> {
+  if (isDemoActive()) {
+    return Promise.resolve(demoThread(threadId))
+  }
+  return App.GetThread(threadId)
 }
 
 // fetchOlderMessages pulls the next batch of older mail from the server for a
@@ -683,6 +729,11 @@ export interface SearchRequest {
   subject: string
   hasAttachment: boolean
   unreadOnly: boolean
+  flaggedOnly?: boolean
+  // accountId and folderId scope the search to one account or folder; 0 or
+  // absent searches everywhere.
+  accountId?: number
+  folderId?: number
   // the order results come back in, already resolved from the "automatic"
   // setting: the backend is told an order, never asked to guess one.
   sort: SearchSort
@@ -890,6 +941,19 @@ export function retrySend(id: number): Promise<boolean> {
 // gone afterwards, so the caller confirms first.
 export function discardFailedSend(id: number): Promise<boolean> {
   return App.DiscardFailedSend(id)
+}
+
+// sendOutboxNow makes a scheduled message due at once. Resolves false when it
+// was already on its way.
+export function sendOutboxNow(id: number): Promise<boolean> {
+  return App.SendOutboxNow(id)
+}
+
+// editOutboxMessage takes a scheduled or failed message back out of the outbox
+// and returns the request it was sent with; taken is false when it could not
+// be taken back.
+export function editOutboxMessage(id: number): Promise<OutboxEdit> {
+  return App.EditOutboxMessage(id) as unknown as Promise<OutboxEdit>
 }
 
 // trustSenderImages permanently allows remote content from a message's sender.
@@ -1324,6 +1388,12 @@ export function openComposeWindow(session: unknown): Promise<void> {
   return App.OpenComposeWindow(JSON.stringify(session))
 }
 
+// showMessageInMainWindow brings the main window forward with a message open,
+// for a compose window to show the message it replies to.
+export function showMessageInMainWindow(id: number): Promise<void> {
+  return App.ShowMessageInMainWindow(id)
+}
+
 // takeComposeSession returns the compose pane a compose window was opened
 // for, once, or null when there is none (the window was reloaded).
 export async function takeComposeSession<T>(token: string): Promise<T | null> {
@@ -1352,6 +1422,29 @@ export function hideApp(): void {
 // isFullscreen reports whether the window is fullscreen.
 export function isFullscreen(): Promise<boolean> {
   return App.IsFullscreen()
+}
+
+/**
+ * Reports whether the main window draws its own title bar, in which case the
+ * interface supplies the window buttons and the drag region.
+ */
+export function windowFrameIntegrated(): Promise<boolean> {
+  return App.WindowFrameIntegrated()
+}
+
+/** Minimises the main window. */
+export function minimiseWindow(): void {
+  void App.MinimiseWindow()
+}
+
+/** Maximises the main window, or restores it. */
+export function toggleMaximiseWindow(): Promise<void> {
+  return App.ToggleMaximiseWindow()
+}
+
+/** Reports whether the main window is maximised. */
+export function isWindowMaximised(): Promise<boolean> {
+  return App.IsWindowMaximised()
 }
 
 // toggleFullscreen enters or leaves fullscreen.
@@ -1457,10 +1550,22 @@ export const SettingKeys = {
   defaultEditorMode: 'default_editor_mode',
   composeAutocomplete: 'compose_autocomplete',
   composeChips: 'compose_chips',
+  composeMarkdown: 'compose_markdown',
   updateCheckFrequency: 'update_check_frequency',
   emptyStateImage: 'empty_state_image',
   emptyStateFullscreen: 'empty_state_fullscreen',
   cornerStyle: 'corner_style',
+  design: 'design',
+  layoutMode: 'layout_mode',
+  navStyle: 'nav_style',
+  railSide: 'rail_side',
+  paneStyle: 'pane_style',
+  avatarPlacement: 'avatar_placement',
+  listHeight: 'list_height',
+  nativeTitlebar: 'native_titlebar',
+  quickFilterBar: 'quick_filter_bar',
+  recentSearches: 'recent_searches',
+  composeOpenIn: 'compose_open_in',
   themeId: 'theme_id',
   menuBarInApp: 'menu_bar_in_app',
   menuBarNativeMinimal: 'menu_bar_native_minimal',

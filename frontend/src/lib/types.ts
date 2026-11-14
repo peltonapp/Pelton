@@ -168,6 +168,58 @@ export interface MessageSummary {
   senderVip: boolean
   // smime is the signature verdict recorded when the message synced.
   smime: SMIMESignature
+  // threadId is the conversation the message belongs to within its account,
+  // 0 until the background threading pass reaches mail cached before
+  // threading existed.
+  threadId: number
+  // answered and forwarded mirror \Answered and $Forwarded, from the server
+  // or from a reply or forward sent through Pelton.
+  answered: boolean
+  forwarded: boolean
+}
+
+/** ThreadSummary is one conversation row in the threaded list. head is the
+ * newest message of the conversation in the listed folders, which the list is
+ * ordered by. count, unreadCount, participants, hasAttachments and flagged
+ * cover every member, the user's replies in Sent included; Trash and Junk only
+ * count when they are what is listed. answered and forwarded are the head's.
+ * messageIds are the members, oldest first, each message once. threadId is 0
+ * for a message not threaded yet, which is then the only member. */
+export interface ThreadSummary {
+  threadId: number
+  head: MessageSummary
+  count: number
+  unreadCount: number
+  // distinct sender names, newest first, at most four.
+  participants: string[]
+  hasAttachments: boolean
+  flagged: boolean
+  answered: boolean
+  forwarded: boolean
+  messageIds: number[]
+}
+
+/** ThreadList is a page of conversations; total and paging count
+ * conversations, not messages. */
+export interface ThreadList {
+  threads: ThreadSummary[]
+  total: number
+  hasOlder: boolean
+}
+
+/** ThreadMessage is one message of an open conversation. folderRole is the
+ * role of its folder ('inbox', 'sent', 'archive', 'normal' and so on) and
+ * fromMe is true when the user sent it. */
+export interface ThreadMessage extends MessageSummary {
+  folderRole: string
+  fromMe: boolean
+}
+
+/** Thread is an open conversation, oldest message first. Bodies come from
+ * getMessage per message. */
+export interface Thread {
+  threadId: number
+  messages: ThreadMessage[]
 }
 
 // SMIMESignature is a message's s/mime signature verdict. An empty status means
@@ -296,6 +348,11 @@ export interface MessageDetail extends MessageSummary {
   // when it was opened, so the pane can offer the right next step rather than
   // one generic error.
   pgpState: PGPState
+  // replyIds and forwardIds are the cached copies of what the user sent from
+  // Pelton in reply to or as a forward of this message, oldest first. A sent
+  // message appears once its Sent folder has synced.
+  replyIds: number[]
+  forwardIds: number[]
 }
 
 export type PGPState = '' | 'open' | 'locked' | 'nokey' | 'failed'
@@ -374,6 +431,9 @@ export interface ComposeRequest {
   // draftMessageId is the Message-ID of this draft's copy in the server Drafts
   // folder, '' until it has been uploaded.
   draftMessageId: string
+  // forwardOf is the id of the message this one forwards; once sent, that
+  // message is marked forwarded. Leave it out (or 0) for anything else.
+  forwardOf?: number
 }
 
 // ProtectionStatus is what the compose window needs to offer the pgp controls
@@ -411,6 +471,14 @@ export interface OutboxRow {
   lastError: string
   nextAttemptAt: string
   createdAt: string
+  // editable is set when the message can be taken back into a composer.
+  editable: boolean
+}
+
+/** A message taken back out of the outbox, or taken false when it could not be. */
+export interface OutboxEdit {
+  taken: boolean
+  request: ComposeRequest
 }
 
 export interface UIPrefs {
@@ -522,6 +590,8 @@ export interface UIPrefs {
   // the recipient fields fall back to a plain comma-separated text input.
   composeAutocomplete: boolean
   composeChips: boolean
+  // composeMarkdown formats Markdown as it is typed in the composer.
+  composeMarkdown: boolean
   // updateCheckFrequency controls the automatic GitHub-releases update check:
   // 'off' (default), 'startup', 'weekly', or 'monthly'.
   updateCheckFrequency: string
@@ -533,6 +603,31 @@ export interface UIPrefs {
   emptyStateFullscreen: boolean
   // cornerStyle picks the corner radius look: default, square, or round.
   cornerStyle: string
+  // design picks the interface design; classic is the shell and settings
+  // screen from before the redesign.
+  design: DesignPref
+  // layoutMode arranges the mail panes in the new design.
+  layoutMode: LayoutMode
+  // navStyle places the Mail/Contacts/Calendar switcher in the new design.
+  navStyle: NavStyle
+  // railSide is the window edge the rail sits on.
+  railSide: RailSide
+  // paneStyle draws the panes in the new design.
+  paneStyle: PaneStyle
+  // avatarPlacement puts the sender picture in its own column, inline in the
+  // address line, or hides it.
+  avatarPlacement: AvatarPlacement
+  // listHeight is the message list height in the stacked layout, in px.
+  listHeight: number
+  // nativeTitlebar uses the operating system's title bar instead of the
+  // integrated one.
+  nativeTitlebar: boolean
+  // quickFilterBar shows the quick filter bar above the message list in the
+  // new design.
+  quickFilterBar: boolean
+  // composeOpenIn is where a new message, reply or forward opens in the new
+  // design.
+  composeOpenIn: ComposeOpenIn
   // themeId selects an installed custom theme; empty means the built-in
   // default themes driven by the theme (light/dark/system) setting.
   themeId: string
@@ -1018,6 +1113,22 @@ export type EditorMode = 'plaintext' | 'markdown' | 'wysiwyg'
 // theme and density preference values.
 export type ThemePref = 'system' | 'light' | 'dark' | 'schedule'
 export type DensityPref = 'compact' | 'medium' | 'luxe'
+/** The interface design: the redesign or the shell from before it. */
+export type DesignPref = 'new' | 'classic'
+/** How the mail panes are arranged in the new design. */
+export type LayoutMode = 'columns' | 'stacked'
+/** Where the Mail/Contacts/Calendar switcher sits in the new design. */
+export type NavStyle = 'rail' | 'footer' | 'tabs' | 'hidden'
+/** The window edge the rail sits on. */
+export type RailSide = 'left' | 'right'
+/** How the panes are drawn in the new design. */
+export type PaneStyle = 'hybrid' | 'flat' | 'soft'
+/** Where the sender picture goes in a list row and the reading header. */
+export type AvatarPlacement = 'column' | 'inline' | 'hidden'
+/** Where compose opens in the new design: its own window, docked, or a tab. */
+export type ComposeOpenIn = 'window' | 'docked' | 'tab'
+/** One of the top-level areas of the app. */
+export type Space = 'mail' | 'contacts' | 'calendar'
 export type SelectAllScope = 'offer' | 'all' | 'loaded'
 
 // SearchSort is an order search results can actually come back in. The backend

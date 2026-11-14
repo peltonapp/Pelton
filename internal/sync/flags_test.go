@@ -32,8 +32,14 @@ func TestSyncPushesFlagRemoval(t *testing.T) {
 		{
 			name:       "unflag keeps flags pelton does not model",
 			serverHas:  []imap.Flag{imap.FlagFlagged, imap.FlagAnswered, "$Label1"},
-			localAfter: 0,
+			localAfter: storage.FlagAnswered,
 			wantServer: []imap.Flag{imap.FlagAnswered, "$Label1"},
+		},
+		{
+			name:       "clear answered and forwarded",
+			serverHas:  []imap.Flag{imap.FlagSeen, imap.FlagAnswered, imap.FlagForwarded},
+			localAfter: storage.FlagSeen,
+			wantServer: []imap.Flag{imap.FlagSeen},
 		},
 	}
 	for _, tt := range tests {

@@ -49,6 +49,7 @@
     setTheme,
     setDensity,
     setCornerStyle,
+    setDesign,
     setUIScale,
     setMessageFontSize,
     setToastPosition,
@@ -913,6 +914,16 @@
       {:else if active === 'appearance'}
         <section>
           <h3>{$t('settingsPanel.category.appearance')}</h3>
+          <SegmentedSetting
+            label={$t('design.label')}
+            value={$prefs.design}
+            options={[
+              { key: 'new', label: $t('design.new') },
+              { key: 'classic', label: $t('design.classic') },
+            ]}
+            on:change={(e) => setDesign(e.detail === 'classic' ? 'classic' : 'new')}
+          />
+          <p class="hint">{$t('design.hint')}</p>
           {#if $prefs.themeId}
             <p class="hint">{$t('themes.baseLockedHint')}</p>
           {:else}

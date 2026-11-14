@@ -14,15 +14,26 @@
 import { derived, get, writable } from 'svelte/store'
 import { openMessageId } from './selection'
 import { setSetting, getSetting, SettingKeys } from '../lib/api'
+import { requestComposeClose } from './compose'
 
-/** One parked message. */
+/** One parked message, or a message being written. */
 export interface ReadingTab {
-  /** The message id. The tab shows whatever that message currently is. */
+  /**
+   * The message id. The tab shows whatever that message currently is. A
+   * compose tab has the negated session id instead, so the two never meet.
+   */
   id: number
   /** Subject at the time it was opened, for the tab label. */
   label: string
   /** The message is gone (deleted, or its folder removed). */
   stale: boolean
+  /** The compose session the tab shows, for a compose tab. */
+  compose?: number
+}
+
+/** composeTabId is the tab id of a compose session's tab. */
+export function composeTabId(sessionId: number): number {
+  return -sessionId
 }
 
 /** The open tabs, in the order they were opened. */
@@ -40,7 +51,12 @@ export const activeTabId = writable<number | null>(null)
  */
 export const visibleMessageId = derived(
   [activeTabId, openMessageId],
-  ([$activeTabId, $openMessageId]) => $activeTabId ?? $openMessageId,
+  ([$activeTabId, $openMessageId]) => ($activeTabId !== null && $activeTabId > 0 ? $activeTabId : $openMessageId),
+)
+
+/** The compose session the active tab shows, or null when it shows a message. */
+export const activeComposeId = derived([tabs, activeTabId], ([$tabs, $activeTabId]) =>
+  $activeTabId === null ? null : ($tabs.find((tab) => tab.id === $activeTabId)?.compose ?? null),
 )
 
 /** Whether the tab bar should be on screen at all. */
@@ -69,6 +85,18 @@ export function openInTab(id: number, label: string): void {
  * the untabbed pane when it was the first.
  */
 export function closeTab(id: number): void {
+  const compose = get(tabs).find((tab) => tab.id === id)?.compose
+  if (compose !== undefined) {
+    // the composer asks about unsaved text first; its tab goes with it.
+    requestComposeClose(compose)
+    return
+  }
+  removeTab(id)
+}
+
+// removeTab takes a tab out of the bar, handing the pane to its left
+// neighbour when it was showing.
+function removeTab(id: number): void {
   const open = get(tabs)
   const index = open.findIndex((tab) => tab.id === id)
   if (index < 0) {
@@ -88,9 +116,24 @@ export function closeTab(id: number): void {
  * parked messages belong to accounts the new profile may not even show.
  */
 export function clearAllTabs(): void {
-  tabs.set([])
+  // a message being written stays: the text in it is not parked, it is work.
+  tabs.update((open) => open.filter((tab) => tab.compose !== undefined))
   activeTabId.set(null)
   persist()
+}
+
+/** Opens a compose session in a tab of its own and switches to it. */
+export function openComposeTab(sessionId: number): void {
+  const id = composeTabId(sessionId)
+  if (!get(tabs).some((tab) => tab.id === id)) {
+    tabs.update((open) => [...open, { id, label: '', stale: false, compose: sessionId }])
+  }
+  activeTabId.set(id)
+}
+
+/** Takes the tab of a compose session that has closed out of the bar. */
+export function dropComposeTab(sessionId: number): void {
+  removeTab(composeTabId(sessionId))
 }
 
 /** Closes the tab currently showing, if the pane is showing one. */
@@ -116,7 +159,7 @@ export function focusPane(): void {
  * vanish from under you, and a stale tab is closed the same way as any other.
  */
 export function markTabStale(id: number): void {
-  tabs.update((open) => open.map((tab) => (tab.id === id ? { ...tab, stale: true } : tab)))
+  tabs.update((open) => open.map((tab) => (tab.id === id && tab.compose === undefined ? { ...tab, stale: true } : tab)))
 }
 
 /**
@@ -145,14 +188,14 @@ export function labelTab(id: number, label: string): void {
   if (label === '') {
     return
   }
-  tabs.update((open) => open.map((tab) => (tab.id === id ? { ...tab, label } : tab)))
+  tabs.update((open) => open.map((tab) => (tab.id === id && tab.compose === undefined ? { ...tab, label } : tab)))
 }
 
 // persist writes the open tab ids so the restore setting has something to
 // restore. Fire and forget: a failed write only costs the restore.
 function persist(): void {
   const ids = get(tabs)
-    .filter((tab) => !tab.stale)
+    .filter((tab) => !tab.stale && tab.compose === undefined)
     .map((tab) => tab.id)
     .join(',')
   void setSetting(SettingKeys.openTabs, ids)

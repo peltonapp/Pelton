@@ -97,6 +97,7 @@ const (
 	settingDefaultEditor       = "default_editor_mode"
 	settingComposeAutocomplete = "compose_autocomplete"
 	settingComposeChips        = "compose_chips"
+	settingComposeMarkdown     = "compose_markdown"
 	settingEmptyStateImage     = "empty_state_image"
 	settingEmptyStateFull      = "empty_state_fullscreen"
 	// menu bar settings only matter on macOS: Windows/Linux always use the
@@ -135,6 +136,29 @@ const (
 	settingMonoFont = "mono_font"
 	// corner style for controls and cards: default, square, or round (#60).
 	settingCornerStyle = "corner_style"
+	// the interface design: "new" or "classic". classic keeps the shell and
+	// settings screen from before the redesign.
+	settingDesign = "design"
+	// how the mail panes are arranged in the new design: "columns" or "stacked".
+	settingLayoutMode = "layout_mode"
+	// where the Mail/Contacts/Calendar switcher sits in the new design: "rail",
+	// "footer", "tabs" or "hidden"; and which edge the rail is on.
+	settingNavStyle = "nav_style"
+	settingRailSide = "rail_side"
+	// how the panes are drawn in the new design: "hybrid", "flat" or "soft".
+	settingPaneStyle = "pane_style"
+	// where the sender picture goes in a list row and the reading header:
+	// "column", "inline" or "hidden".
+	settingAvatarPlacement = "avatar_placement"
+	// height of the message list in the stacked layout, in pixels.
+	settingListHeight = "list_height"
+	// use the operating system's own title bar instead of the integrated one.
+	settingNativeTitlebar = "native_titlebar"
+	// show the quick filter bar above the message list in the new design.
+	settingQuickFilterBar = "quick_filter_bar"
+	// where a new message, reply or forward opens in the new design: "window",
+	// "docked" or "tab".
+	settingComposeOpenIn = "compose_open_in"
 	// general new-mail OS notifications (#126). VIP senders are stored
 	// separately in bind_vip.go and notify even when this is off.
 	settingNotifyNewMail = "notify_new_mail"
@@ -344,6 +368,9 @@ type UIPrefsDTO struct {
 	// ComposeChips renders recipients as removable chips. When off, the
 	// recipient fields fall back to a plain comma-separated text input.
 	ComposeChips bool `json:"composeChips"`
+	// ComposeMarkdown formats Markdown as it is typed in the composer. Off by
+	// default.
+	ComposeMarkdown bool `json:"composeMarkdown"`
 	// UpdateCheckFrequency controls the automatic GitHub-releases update
 	// check: off (default), startup (every launch), weekly, or monthly. A
 	// manual check ("Check now" in settings) always runs regardless.
@@ -356,6 +383,31 @@ type UIPrefsDTO struct {
 	EmptyStateFullscreen bool `json:"emptyStateFullscreen"`
 	// CornerStyle picks the corner radius look: default, square, or round.
 	CornerStyle string `json:"cornerStyle"`
+	// Design picks the interface design: new or classic.
+	Design string `json:"design"`
+	// LayoutMode arranges the mail panes in the new design: columns or stacked.
+	LayoutMode string `json:"layoutMode"`
+	// NavStyle places the Mail/Contacts/Calendar switcher: rail, footer, tabs
+	// or hidden.
+	NavStyle string `json:"navStyle"`
+	// RailSide is the window edge the rail sits on: left or right.
+	RailSide string `json:"railSide"`
+	// PaneStyle draws the panes in the new design: hybrid, flat or soft.
+	PaneStyle string `json:"paneStyle"`
+	// AvatarPlacement puts the sender picture in its own column, inline in the
+	// address line, or hides it: column, inline or hidden.
+	AvatarPlacement string `json:"avatarPlacement"`
+	// ListHeight is the message list height in the stacked layout, in pixels.
+	ListHeight int `json:"listHeight"`
+	// NativeTitlebar uses the operating system's title bar instead of the
+	// integrated one.
+	NativeTitlebar bool `json:"nativeTitlebar"`
+	// QuickFilterBar shows the quick filter bar (unread, flagged, attachments,
+	// contacts, text) above the message list in the new design.
+	QuickFilterBar bool `json:"quickFilterBar"`
+	// ComposeOpenIn is where a new message, reply or forward opens in the new
+	// design: window, docked or tab.
+	ComposeOpenIn string `json:"composeOpenIn"`
 	// ThemeID selects an installed custom theme (see bind_themes.go). Empty
 	// means the built-in default themes driven by the Theme setting.
 	ThemeID string `json:"themeId"`
@@ -501,10 +553,21 @@ func (a *App) GetUIPrefs() (UIPrefsDTO, error) {
 		DefaultEditorMode:          a.stringSetting(settingDefaultEditor, "plaintext"),
 		ComposeAutocomplete:        a.boolSetting(settingComposeAutocomplete, true),
 		ComposeChips:               a.boolSetting(settingComposeChips, true),
+		ComposeMarkdown:            a.boolSetting(settingComposeMarkdown, false),
 		UpdateCheckFrequency:       a.stringSetting(settingUpdateCheckFreq, defaultUpdateCheckFrequency),
 		EmptyStateImage:            a.stringSetting(settingEmptyStateImage, ""),
 		EmptyStateFullscreen:       a.boolSetting(settingEmptyStateFull, false),
 		CornerStyle:                a.stringSetting(settingCornerStyle, "default"),
+		Design:                     a.stringSetting(settingDesign, "new"),
+		LayoutMode:                 a.stringSetting(settingLayoutMode, "columns"),
+		NavStyle:                   a.stringSetting(settingNavStyle, "rail"),
+		RailSide:                   a.stringSetting(settingRailSide, "left"),
+		PaneStyle:                  a.stringSetting(settingPaneStyle, "hybrid"),
+		AvatarPlacement:            a.stringSetting(settingAvatarPlacement, "inline"),
+		ListHeight:                 a.intSetting(settingListHeight, 320),
+		NativeTitlebar:             a.boolSetting(settingNativeTitlebar, false),
+		QuickFilterBar:             a.boolSetting(settingQuickFilterBar, false),
+		ComposeOpenIn:              a.stringSetting(settingComposeOpenIn, "window"),
 		ThemeID:                    a.stringSetting(settingThemeID, ""),
 		MenuBarInApp:               a.boolSetting(settingMenuBarInApp, false),
 		MenuBarNativeMinimal:       a.boolSetting(settingMenuBarNativeMinimal, false),
@@ -573,6 +636,9 @@ func (a *App) SetSetting(key, value string) error {
 	}
 	if key == settingLogToFile || key == settingLogLevel || key == settingLogMessageMetadata || key == settingCrashLogs {
 		a.applyLogSettings()
+	}
+	if key == settingDesign || key == settingNativeTitlebar {
+		a.refreshWindowFrame()
 	}
 	if key == settingCharsetFallback {
 		a.applyCharsetFallback()

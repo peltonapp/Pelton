@@ -257,12 +257,67 @@ type SearchRequestDTO struct {
 	HasAttachment bool `json:"hasAttachment"`
 	// UnreadOnly filters to messages that have not been read.
 	UnreadOnly bool `json:"unreadOnly"`
+	// FlaggedOnly filters to flagged (starred) messages.
+	FlaggedOnly bool `json:"flaggedOnly"`
+	// AccountID limits results to one account; 0 searches every account.
+	AccountID int64 `json:"accountId"`
+	// FolderID limits results to one folder, from an in: chip; 0 searches every
+	// folder.
+	FolderID int64 `json:"folderId"`
 	// Sort is the order results come back in: relevance, newest, oldest,
 	// subjectAsc or subjectDesc. Empty means relevance. The ui resolves its
 	// "automatic" setting to one of these before asking, so the choice of what
 	// suits a given query stays in one place rather than being split across the
 	// two sides.
 	Sort string `json:"sort"`
+}
+
+// hasStoredFilter reports whether the request filters on a stored message field
+// (attachments, read and flag state, account, folder). Those are not indexed,
+// so they are applied to each hit after ranking.
+func (r SearchRequestDTO) hasStoredFilter() bool {
+	return r.HasAttachment || r.UnreadOnly || r.FlaggedOnly || r.AccountID > 0 || r.FolderID > 0
+}
+
+// keeps reports whether a stored message passes the request's stored-field
+// filters.
+func (r SearchRequestDTO) keeps(m *storage.Message) bool {
+	switch {
+	case r.HasAttachment && !m.HasAttachments:
+		return false
+	case r.UnreadOnly && m.Flags.Has(storage.FlagSeen):
+		return false
+	case r.FlaggedOnly && !m.Flags.Has(storage.FlagFlagged):
+		return false
+	case r.AccountID > 0 && m.AccountID != r.AccountID:
+		return false
+	case r.FolderID > 0 && m.FolderID != r.FolderID:
+		return false
+	}
+	return true
+}
+
+// searchQuery builds the index query for a request, and reports false when the
+// request carries no constraint at all, which means "show the normal list".
+func (r SearchRequestDTO) searchQuery(limit int) (search.Query, bool) {
+	q := search.Query{
+		Text:    strings.TrimSpace(r.Query),
+		From:    strings.TrimSpace(r.From),
+		To:      strings.TrimSpace(r.To),
+		Subject: strings.TrimSpace(r.Subject),
+		Limit:   limit,
+		Offset:  r.Offset,
+		Sort:    searchSort(r.Sort),
+	}
+	if r.AfterUnix > 0 {
+		q.After = time.Unix(r.AfterUnix, 0)
+	}
+	if r.BeforeUnix > 0 {
+		q.Before = time.Unix(r.BeforeUnix, 0)
+	}
+	empty := q.Text == "" && q.From == "" && q.To == "" && q.Subject == "" &&
+		q.After.IsZero() && q.Before.IsZero() && !r.hasStoredFilter()
+	return q, !empty
 }
 
 // searchSort maps the ui's sort name onto the index's. An unknown name is left
@@ -295,25 +350,8 @@ func (a *App) Search(req SearchRequestDTO) (SearchResultDTO, error) {
 	if a.index == nil {
 		return empty, errSearchUnavailable
 	}
-	q := search.Query{
-		Text:    strings.TrimSpace(req.Query),
-		From:    strings.TrimSpace(req.From),
-		To:      strings.TrimSpace(req.To),
-		Subject: strings.TrimSpace(req.Subject),
-		Limit:   req.Limit,
-		Offset:  req.Offset,
-		Sort:    searchSort(req.Sort),
-	}
-	if req.AfterUnix > 0 {
-		q.After = time.Unix(req.AfterUnix, 0)
-	}
-	if req.BeforeUnix > 0 {
-		q.Before = time.Unix(req.BeforeUnix, 0)
-	}
-	// an empty request (no text, no field chip, no date, no flag filter) means
-	// "show the normal list", so return nothing here.
-	if q.Text == "" && q.From == "" && q.To == "" && q.Subject == "" &&
-		q.After.IsZero() && q.Before.IsZero() && !req.HasAttachment && !req.UnreadOnly {
+	q, ok := req.searchQuery(req.Limit)
+	if !ok {
 		return empty, nil
 	}
 
@@ -325,8 +363,8 @@ func (a *App) Search(req SearchRequestDTO) (SearchResultDTO, error) {
 	// hits are ranked; fetch each full message so rows render like the normal
 	// list. a missing message (deleted since indexing) is simply skipped, which
 	// also covers stale index entries without a separate cleanup pass. the
-	// has:attachment and is:unread chips are applied here: attachments and read
-	// state are stored message fields, not indexed ones. Read state is also the
+	// attachment, read, flag, account and folder filters are applied here:
+	// they are stored message fields, not indexed ones. Read state is also the
 	// one filter that goes stale the moment it is used, since opening a result
 	// marks it read, so reading it from the store rather than the index is what
 	// keeps it honest.
@@ -337,10 +375,7 @@ func (a *App) Search(req SearchRequestDTO) (SearchResultDTO, error) {
 		if err != nil {
 			continue
 		}
-		if req.HasAttachment && !m.HasAttachments {
-			continue
-		}
-		if req.UnreadOnly && m.Flags.Has(storage.FlagSeen) {
+		if !req.keeps(m) {
 			continue
 		}
 		email, folderName := a.lookupContext(a.ctx, m.AccountID, m.FolderID)

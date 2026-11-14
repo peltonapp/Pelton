@@ -123,6 +123,69 @@ a:hover {
   user-select: text;
 }
 
+/* the tooltip bubble lib/tip.ts appends to the body. */
+.tip {
+  position: fixed;
+  z-index: 900;
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-3);
+  border: var(--hairline) solid var(--border-default);
+  border-radius: var(--radius-control);
+  background: var(--surface-overlay);
+  box-shadow: var(--shadow-overlay);
+  color: var(--text-primary);
+  font-size: var(--fz-label);
+  line-height: 1.3;
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0;
+  transform: translateY(2px);
+  transition:
+    opacity var(--motion-fast) var(--ease-out),
+    transform var(--motion-fast) var(--ease-out);
+}
+
+.tip[data-side="right"] {
+  transform: translateX(-2px);
+}
+
+.tip[data-side="left"] {
+  transform: translateX(2px);
+}
+
+.tip.shown {
+  opacity: 1;
+  transform: none;
+}
+
+.tip kbd {
+  font-family: var(--font-mono);
+  font-size: var(--fz-meta);
+  color: var(--text-tertiary);
+}
+
+/* while mail is being dragged (stores/maildrag.ts) the pointer is a closed
+   hand everywhere, and the place it would land in says so. */
+.mail-dragging,
+.mail-dragging * {
+  cursor: grabbing !important;
+}
+
+.maildrop-over {
+  background: var(--selection-bg-strong) !important;
+  box-shadow: inset 0 0 0 1.5px var(--accent);
+  border-radius: var(--radius-control);
+  animation: maildrop-pulse 0.9s var(--ease-in-out) infinite alternate;
+}
+
+@keyframes maildrop-pulse {
+  to {
+    box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--accent) 45%, transparent);
+  }
+}
+
 /* reduce motion: freeze animations and transitions when the user asked for it,
    either through the in-app setting (data-reduce-motion on the root) or the
    os-level preference. near-zero durations instead of `none` so animation and

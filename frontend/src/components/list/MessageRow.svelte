@@ -28,9 +28,13 @@
   import type { MessageSummary, RowTemplate, SwipeAction } from '../../lib/types'
   import { t } from '../../lib/i18n'
   import { vipSenders, bareAddress } from '../../stores/vip'
+  import Highlight from '../common/Highlight.svelte'
+  import { highlightTerms } from '../../stores/search'
 
   export let message: MessageSummary
   export let selected: boolean = false
+  /** The list draws a sliding band over this row, so the row skips its own selected fill. */
+  export let banded: boolean = false
   // checked reflects membership in the bulk-selection set (modifier-click).
   export let checked: boolean = false
   // accountColor marks which mailbox the message is from in a list that mixes
@@ -42,7 +46,12 @@
   $: unread = !message.seen
   $: template = $prefs.rowTemplate as RowTemplate
 
-  $: showAvatar = $prefs.rowShowAvatar && template !== 'single'
+  // the classic design only knows a picture column that is on or off; the new
+  // one can also set a small picture into the sender line.
+  $: avatarPlacement =
+    $prefs.design === 'classic' ? ($prefs.rowShowAvatar ? 'column' : 'hidden') : $prefs.avatarPlacement
+  $: showAvatar = avatarPlacement === 'column' && template !== 'single'
+  $: inlineAvatar = avatarPlacement === 'inline'
   $: showSnippet =
     $prefs.rowShowSnippet && (template === 'relaxed' || template === 'comfortable') && !!message.snippet
   $: avatarSize = template === 'relaxed' ? 36 : 30
@@ -207,6 +216,7 @@
   <div
     class="row {template}"
     class:selected
+    class:banded
     class:unread
     class:checked
     class:bar-left={showBar}
@@ -238,9 +248,12 @@
              interface's, so each reads in its own direction (#356). The row
              around them keeps the interface direction, so the layout stays put
              while an Arabic subject reads right to left inside it. -->
-        <span dir="auto" class="sender">{displayName(message.fromName, message.fromAddress)}</span>
+        {#if inlineAvatar}
+          <Avatar name={message.fromName} email={message.fromAddress} size={16} />
+        {/if}
+        <span dir="auto" class="sender"><Highlight text={displayName(message.fromName, message.fromAddress)} terms={$highlightTerms} /></span>
         {#if template === 'single'}
-          <span dir="auto" class="subject inline">{message.subject || $t('messageList.noSubject')}</span>
+          <span dir="auto" class="subject inline"><Highlight text={message.subject || $t('messageList.noSubject')} terms={$highlightTerms} /></span>
         {/if}
         <span class="meta">
           {#if message.flagColor > 0}
@@ -265,10 +278,10 @@
       </div>
 
       {#if template !== 'single'}
-        <div dir="auto" class="subject">{message.subject || $t('messageList.noSubject')}</div>
+        <div dir="auto" class="subject"><Highlight text={message.subject || $t('messageList.noSubject')} terms={$highlightTerms} /></div>
       {/if}
       {#if showSnippet}
-        <div dir="auto" class="snippet" style={`--preview-lines:${previewLines}`}>{message.snippet}</div>
+        <div dir="auto" class="snippet" style={`--preview-lines:${previewLines}`}><Highlight text={message.snippet} terms={$highlightTerms} /></div>
       {/if}
     </div>
   </div>
@@ -342,6 +355,10 @@
 
   .row.checked {
     background: var(--selection-bg);
+  }
+
+  .row.banded:not(.checked) {
+    background: var(--surface-raised);
   }
 
   /* the left edge bar: warning color for a flag, or the label color when set. */

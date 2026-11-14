@@ -6,6 +6,8 @@
   // the whole node (row plus children) is one element so the parent's reorder
   // container sees exactly one child per folder. this node's own children are a
   // separate container, which is what keeps a drag inside its sibling group.
+  import { slide } from 'svelte/transition'
+  import { dur, motion } from '../../lib/motion'
   import {
     IconInbox,
     IconSend,
@@ -23,6 +25,9 @@
     IconRefreshOff,
   } from '@tabler/icons-svelte'
   import SidebarRow from './SidebarRow.svelte'
+  import { maildrop } from '../../stores/maildrag'
+  import { moveToFolder } from '../../lib/messageactions'
+  import type { MessageSummary } from '../../lib/types'
   import Self from './FolderNode.svelte'
   import type { Folder } from '../../lib/types'
   import { reorder, type ReorderDetail } from '../../lib/reorder'
@@ -168,9 +173,18 @@
   // a setting because a mailbox with many excluded folders does not need a row
   // of icons repeating what its owner already knows.
   $: unsynced = folder.syncExcluded && $prefs.showUnsyncedFolder
+
+  // mail dragged from the list lands here when it belongs to this folder's
+  // account and is not all in the folder already.
+  $: mailDrop = {
+    accepts: (items: MessageSummary[]) =>
+      items.every((m) => m.accountId === folder.accountId) && items.some((m) => m.folderId !== folder.id),
+    onDrop: (items: MessageSummary[]) => void moveToFolder(items, folder),
+  }
 </script>
 
 <div class="node" data-reorder-id={folder.id}>
+  <div use:maildrop={mailDrop}>
   <SidebarRow
     label={folder.name}
     title={unsynced ? $t('folders.notSyncing') : ''}
@@ -191,9 +205,11 @@
       {/if}
     </span>
   </SidebarRow>
+  </div>
 
   {#if expanded && children.length > 0}
     <div
+      transition:slide|local={{ duration: dur(motion.base) }}
       use:reorder
       on:reorderstart={() => startFolderDrag(folder.accountId)}
       on:reorderend={endFolderDrag}

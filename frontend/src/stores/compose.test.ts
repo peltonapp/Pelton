@@ -3,7 +3,7 @@ import { get } from 'svelte/store'
 
 vi.mock('../lib/api', () => ({ getSetting: vi.fn(async () => ({ value: '', found: false })), setSetting: vi.fn() }))
 
-import { closeCompose, composeSessions, getSession, openCompose, openDraftSession, openForward, openReply, reopenSession, restoreSession } from './compose'
+import { closeCompose, composeSessions, getSession, openCompose, openDraftSession, openForward, openReply, reopenSession, restoreSession, switchReplyKind, typedPart, updateCompose } from './compose'
 import { buildRequest } from '../lib/mailcompose'
 import { defaultSelection, openMessageId, searchQuery, selection } from './selection'
 import type { ComposeRequest, Draft, EditorMode, MessageDetail, Selection } from '../lib/types'
@@ -35,6 +35,11 @@ function detail(overrides: Partial<MessageDetail>): MessageDetail {
     snoozeUntil: '',
     senderVip: false,
     smime: { status: '', signer: '', email: '', issuer: '', detail: '' },
+    threadId: 7,
+    answered: false,
+    forwarded: false,
+    replyIds: [],
+    forwardIds: [],
     bodyPlain: 'hello',
     bodyQuote: 'hello',
     bodyHtmlSafe: '',
@@ -76,8 +81,63 @@ describe('reply recipients', () => {
   })
 
   it('quotes a comma name in the reply-all cc', () => {
-    openReply(detail({ ccAddresses: 'Doe, Jane <jane@example.com>, bob@example.com' }), 'plaintext', true)
+    openReply(detail({ toAddresses: 'me@example.com', ccAddresses: 'Doe, Jane <jane@example.com>, bob@example.com' }), 'plaintext', true)
     expect(last().cc).toBe('"Doe, Jane" <jane@example.com>, bob@example.com')
+  })
+
+  it('keeps the original To recipients on reply all', () => {
+    openReply(detail({ toAddresses: 'me@example.com, Bob <bob@example.com>, dave@example.com' }), 'plaintext', true)
+    expect(last().to).toBe('Ann <ann@example.com>, Bob <bob@example.com>, dave@example.com')
+    expect(last().cc).toBe('carol@example.com')
+  })
+
+  it('leaves the own address and duplicates out of reply all', () => {
+    openReply(detail({ toAddresses: 'ME@example.com, ann@example.com', ccAddresses: 'me@example.com, Ann <ann@example.com>, carol@example.com' }), 'plaintext', true)
+    expect(last().to).toBe('Ann <ann@example.com>')
+    expect(last().cc).toBe('carol@example.com')
+  })
+
+  it('replies all to the recipients of a message the account sent', () => {
+    openReply(detail({ fromAddress: 'me@example.com', fromName: 'Me', toAddresses: 'bob@example.com', ccAddresses: '' }), 'plaintext', true)
+    expect(last().to).toBe('bob@example.com')
+  })
+
+  it('addresses only the sender on a plain reply', () => {
+    openReply(detail({}), 'plaintext', false)
+    expect(last().cc).toBe('')
+  })
+})
+
+describe('switching the reply type', () => {
+  beforeEach(() => composeSessions.set([]))
+
+  it('keeps the typed text and swaps recipients and quote', () => {
+    const id = openReply(detail({ messageId: '<m1@x>' }), 'wysiwyg', false)
+    const session = getSession(id)!
+    updateCompose(id, { body: '<p>Thanks</p>' + session.fold })
+    switchReplyKind(id, 'replyAll')
+    expect(getSession(id)!.to).toBe('Ann <ann@example.com>, bob@example.com')
+    expect(getSession(id)!.body.startsWith('<p>Thanks</p>')).toBe(true)
+
+    switchReplyKind(id, 'forward')
+    const forward = getSession(id)!
+    expect(forward.to).toBe('')
+    expect(forward.subject).toBe('Fwd: Plans')
+    expect(forward.inReplyTo).toBe('')
+    expect(forward.body.startsWith('<p>Thanks</p>')).toBe(true)
+    expect(forward.body).toContain('Forwarded message')
+    expect(typedPart(forward)).toBe('<p>Thanks</p>')
+
+    switchReplyKind(id, 'reply')
+    expect(getSession(id)!.subject).toBe('Re: Plans')
+    expect(getSession(id)!.inReplyTo).toBe('<m1@x>')
+  })
+
+  it('keeps a subject the user changed', () => {
+    const id = openReply(detail({}), 'plaintext', false)
+    updateCompose(id, { subject: 'New topic' })
+    switchReplyKind(id, 'forward')
+    expect(getSession(id)!.subject).toBe('New topic')
   })
 })
 

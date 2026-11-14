@@ -139,6 +139,16 @@ func (a *App) GetMessage(id int64) (MessageDetailDTO, error) {
 		CharsetGuess:      m.CharsetGuess,
 	}
 	detail.BodyHTMLSafe = a.renderHTML(m.BodyHTML, atts, autoAllow)
+	detail.ReplyIDs, detail.ForwardIDs, err = a.store.SentReplies(a.ctx, m.AccountID, m.MessageID)
+	if err != nil {
+		return MessageDetailDTO{}, err
+	}
+	if detail.ReplyIDs == nil {
+		detail.ReplyIDs = []int64{}
+	}
+	if detail.ForwardIDs == nil {
+		detail.ForwardIDs = []int64{}
+	}
 
 	// protected mail is decrypted here and only here: the plaintext replaces the
 	// armor for this response and is never written back. The stored body stays

@@ -64,6 +64,9 @@ type ComposeRequest struct {
 	// until one has been uploaded. It is only for replacing that copy: a sent
 	// message gets a Message-ID of its own.
 	DraftMessageID string `json:"draftMessageId"`
+	// ForwardOf is the local id of the message this one forwards, 0 when it
+	// forwards nothing. Once sent, that message is marked forwarded.
+	ForwardOf int64 `json:"forwardOf"`
 }
 
 // SendMessage builds the mime message and enqueues it in the durable outbox. The
@@ -101,10 +104,18 @@ func (a *App) SendMessage(req ComposeRequest) (int64, error) {
 		return 0, err
 	}
 
+	if msg.MessageID, err = smtp.NewMessageID(account.Email); err != nil {
+		return 0, err
+	}
+	if err := a.recordReplySources(req, msg.MessageID); err != nil {
+		return 0, err
+	}
+
 	id, err := smtp.Enqueue(a.ctx, a.queue, req.AccountID, msg, engine, mode, opts, notBefore)
 	if err != nil {
 		return 0, err
 	}
+	a.sentRequests.Store(id, req)
 	a.emit(EventOutboxChanged, nil)
 
 	// harvest every recipient into the address book so autocomplete learns from
@@ -729,6 +740,9 @@ type OutboxRowDTO struct {
 	LastError     string   `json:"lastError"`
 	NextAttemptAt string   `json:"nextAttemptAt"`
 	CreatedAt     string   `json:"createdAt"`
+	// Editable is set when the message was sent in this run, so its compose
+	// request is still known and EditOutboxMessage can take it back.
+	Editable bool `json:"editable"`
 }
 
 // ListOutbox returns the current outbox, so the ui can show queued, sending and
@@ -741,9 +755,12 @@ func (a *App) ListOutbox() ([]OutboxRowDTO, error) {
 	if err != nil {
 		return nil, err
 	}
+	a.pruneSentRequests(rows)
 	out := make([]OutboxRowDTO, 0, len(rows))
 	for _, r := range rows {
+		_, editable := a.sentRequests.Load(r.ID)
 		out = append(out, OutboxRowDTO{
+			Editable:      editable,
 			ID:            r.ID,
 			AccountID:     r.AccountID,
 			Recipients:    r.Recipients,

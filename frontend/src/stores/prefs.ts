@@ -5,12 +5,13 @@
 // source of truth.
 
 import { writable } from 'svelte/store'
-import type { UIPrefs, ThemePref, DensityPref, EditorMode, ViewsPlacement, CloseAction, LogLevel, SelectAllScope, SearchKind, SearchSortPref } from '../lib/types'
+import type { UIPrefs, ThemePref, DensityPref, EditorMode, ViewsPlacement, CloseAction, LogLevel, SelectAllScope, SearchKind, SearchSortPref, DesignPref, LayoutMode, NavStyle, RailSide, PaneStyle, AvatarPlacement, ComposeOpenIn } from '../lib/types'
 import { getUIPrefs, setSetting, SettingKeys, systemColorScheme, setWindowTheme, getThemeApply } from '../lib/api'
-import { applyTheme, applyDensity, applyAccent, applyScale, applyReduceMotion, applyHandCursor, setThemeSchedule, applyUIFont, applyMonoFont, applyCorners, watchSystemTheme, setSystemSchemeOverride, resolveTheme } from '../theme/theme'
+import { applyTheme, applyDensity, applyAccent, applyScale, applyReduceMotion, applyHandCursor, setThemeSchedule, applyUIFont, applyMonoFont, applyCorners, applyDesign, watchSystemTheme, setSystemSchemeOverride, resolveTheme } from '../theme/theme'
 import { applyUserTheme } from '../theme/usertheme'
 import { uiFontStack, monoFontStack } from '../lib/fonts'
 import { setLocale } from '../lib/i18n'
+import { refreshWindowFrame } from './windowframe'
 
 // defaults match the backend defaults so the ui renders sanely even before the
 // first load resolves.
@@ -68,10 +69,21 @@ const defaults: UIPrefs = {
   defaultEditorMode: 'plaintext',
   composeAutocomplete: true,
   composeChips: true,
+  composeMarkdown: false,
   updateCheckFrequency: 'off',
   emptyStateImage: '',
   emptyStateFullscreen: false,
   cornerStyle: 'default',
+  design: 'new',
+  layoutMode: 'columns',
+  navStyle: 'rail',
+  railSide: 'left',
+  paneStyle: 'hybrid',
+  avatarPlacement: 'inline',
+  listHeight: 320,
+  nativeTitlebar: false,
+  quickFilterBar: false,
+  composeOpenIn: 'window',
   themeId: '',
   menuBarInApp: false,
   menuBarNativeMinimal: false,
@@ -127,6 +139,7 @@ function applyAll(p: UIPrefs): void {
   applyUIFont(uiFontStack(p.uiFont))
   applyMonoFont(monoFontStack(p.monoFont))
   applyCorners(p.cornerStyle)
+  applyDesign(p.design, p.paneStyle)
   setLocale(p.language)
 }
 
@@ -149,6 +162,7 @@ export async function initPrefs(): Promise<void> {
   }
 
   applyAll(loaded)
+  void refreshWindowFrame()
 
   // a persisted custom theme applies after the base prefs so its base wins.
   // a missing or broken theme folder falls back to the default silently; the
@@ -226,6 +240,82 @@ export function setCornerStyle(value: string): void {
   prefs.update((p) => ({ ...p, cornerStyle: value }))
   applyCorners(value)
   void setSetting(SettingKeys.cornerStyle, value)
+}
+
+/** Switches between the redesign and the classic interface. */
+export function setDesign(design: DesignPref): void {
+  let pane: PaneStyle = defaults.paneStyle
+  prefs.update((p) => {
+    pane = p.paneStyle
+    return { ...p, design }
+  })
+  applyDesign(design, pane)
+  void setSetting(SettingKeys.design, design).then(refreshWindowFrame)
+}
+
+/** Arranges the mail panes side by side or with the list above the reader. */
+export function setLayoutMode(layoutMode: LayoutMode): void {
+  prefs.update((p) => ({ ...p, layoutMode }))
+  void setSetting(SettingKeys.layoutMode, layoutMode)
+}
+
+/** Places the Mail/Contacts/Calendar switcher. */
+export function setNavStyle(navStyle: NavStyle): void {
+  prefs.update((p) => ({ ...p, navStyle }))
+  void setSetting(SettingKeys.navStyle, navStyle)
+}
+
+/** Moves the rail to the left or right window edge. */
+export function setRailSide(railSide: RailSide): void {
+  prefs.update((p) => ({ ...p, railSide }))
+  void setSetting(SettingKeys.railSide, railSide)
+}
+
+/** Picks how the panes are drawn in the new design. */
+export function setPaneStyle(paneStyle: PaneStyle): void {
+  let design: DesignPref = defaults.design
+  prefs.update((p) => {
+    design = p.design
+    return { ...p, paneStyle }
+  })
+  applyDesign(design, paneStyle)
+  void setSetting(SettingKeys.paneStyle, paneStyle)
+}
+
+/** Puts the sender picture in its own column, inline, or hides it. */
+export function setAvatarPlacement(avatarPlacement: AvatarPlacement): void {
+  prefs.update((p) => ({ ...p, avatarPlacement }))
+  void setSetting(SettingKeys.avatarPlacement, avatarPlacement)
+}
+
+/** Persists the message list height of the stacked layout. */
+export function setListHeight(listHeight: number): void {
+  prefs.update((p) => ({ ...p, listHeight }))
+  void setSetting(SettingKeys.listHeight, String(Math.round(listHeight)))
+}
+
+/** Chooses between the integrated title bar and the operating system's. */
+export function setNativeTitlebar(nativeTitlebar: boolean): void {
+  prefs.update((p) => ({ ...p, nativeTitlebar }))
+  void setSetting(SettingKeys.nativeTitlebar, String(nativeTitlebar)).then(refreshWindowFrame)
+}
+
+/** Shows or hides the quick filter bar above the message list. */
+export function setQuickFilterBar(quickFilterBar: boolean): void {
+  prefs.update((p) => ({ ...p, quickFilterBar }))
+  void setSetting(SettingKeys.quickFilterBar, String(quickFilterBar))
+}
+
+/** Picks where a new message, reply or forward opens in the new design. */
+export function setComposeOpenIn(composeOpenIn: ComposeOpenIn): void {
+  prefs.update((p) => ({ ...p, composeOpenIn }))
+  void setSetting(SettingKeys.composeOpenIn, composeOpenIn)
+}
+
+/** Turns Markdown conversion in the compose editor on or off. */
+export function setComposeMarkdown(composeMarkdown: boolean): void {
+  prefs.update((p) => ({ ...p, composeMarkdown }))
+  void setSetting(SettingKeys.composeMarkdown, String(composeMarkdown))
 }
 
 export function setDensity(density: DensityPref): void {
@@ -397,6 +487,8 @@ export function setComposeChips(value: boolean): void {
   prefs.update((p) => ({ ...p, composeChips: value }))
   void setSetting(SettingKeys.composeChips, String(value))
 }
+
+/** Sets whether the composer formats Markdown as it is typed. */
 
 // setUpdateCheckFrequency persists how often the app checks GitHub releases
 // for a newer version: 'off', 'startup', 'weekly', or 'monthly'.

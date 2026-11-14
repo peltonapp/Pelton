@@ -60,6 +60,9 @@ function summary(id: number, subject: string): MessageSummary {
     snoozeUntil: '',
     senderVip: false,
     smime: { status: '', signer: '', email: '', issuer: '', detail: '' },
+    threadId: id,
+    answered: false,
+    forwarded: false,
   }
 }
 
@@ -78,7 +81,7 @@ beforeEach(() => {
   searchQuery.set('')
   openMessageId.set(null)
   clearSelection()
-  prefs.update((p) => ({ ...p, rowShowAvatar: false, appVimMode: false, multiSelectEnabled: true }))
+  prefs.update((p) => ({ ...p, rowShowAvatar: false, appVimMode: false, multiSelectEnabled: true, design: 'classic' }))
   bindings.set(defaultBindings)
 })
 

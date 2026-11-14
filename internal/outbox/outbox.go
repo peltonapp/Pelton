@@ -148,6 +148,13 @@ func (q *Queue) Retry(ctx context.Context, id int64) (bool, error) {
 	return q.db.UpdateOutboxStateIf(ctx, id, StateFailed, StateQueued, 0, "", time.Now().UTC())
 }
 
+// SendNow makes a queued message due immediately, for a scheduled send the
+// user wants out now, and reports whether it was still queued. The attempt
+// count starts over, as on Retry.
+func (q *Queue) SendNow(ctx context.Context, id int64) (bool, error) {
+	return q.db.UpdateOutboxStateIf(ctx, id, StateQueued, StateQueued, 0, "", time.Now().UTC())
+}
+
 // Discard removes a failed message and reports whether it was removed. Only a
 // failed message can be discarded: anything still queued or sending is either
 // going to be sent or can be cancelled, and neither should be droppable by

@@ -7,11 +7,9 @@
   import { fade, scale } from 'svelte/transition'
   import { IconX, IconFolder, IconSearch } from '@tabler/icons-svelte'
   import { moveTargets, closeMove } from '../../stores/move'
-  import { listFolders, moveMessage } from '../../lib/api'
-  import { removeFromList } from '../../stores/messages'
-  import { archivedEntry, recordArchivedBatch, type ArchivedMessage } from '../../stores/undoarchive'
-  import { openMessageId } from '../../stores/selection'
-  import { errorMessage, toastError, toastInfo } from '../../stores/toast'
+  import { listFolders } from '../../lib/api'
+  import { moveToFolder } from '../../lib/messageactions'
+  import { errorMessage, toastError } from '../../stores/toast'
   import { t } from '../../lib/i18n'
   import type { Folder } from '../../lib/types'
 
@@ -76,45 +74,11 @@
     if (busy) {
       return
     }
-    const targets = $moveTargets.filter((m) => m.folderId !== folder.id)
-    if (targets.length === 0) {
-      closeMove()
-      return
-    }
+    const targets = $moveTargets
     busy = true
-    // optimistic: the rows leave the list right away.
-    for (const target of targets) {
-      removeFromList(target.id)
-      if ($openMessageId === target.id) {
-        openMessageId.set(null)
-      }
-    }
     closeMove()
-    // the whole batch is one undo step, so one press moves all of them back.
-    const undone: ArchivedMessage[] = []
-    let failure = ''
-    for (const target of targets) {
-      try {
-        const undo = await moveMessage(target.id, folder.id)
-        const entry = archivedEntry(target, undo)
-        if (entry) {
-          undone.push(entry)
-        }
-      } catch (err) {
-        failure = errorMessage(err)
-      }
-    }
-    recordArchivedBatch(undone)
+    await moveToFolder(targets, folder)
     busy = false
-    if (failure !== '') {
-      toastError(failure)
-      return
-    }
-    toastInfo(
-      targets.length === 1
-        ? $t('detail.moveDialog.moved').replace('{folder}', folder.name)
-        : $t('detail.moveDialog.movedCount').replace('{n}', String(targets.length)).replace('{folder}', folder.name),
-    )
   }
 
   function onKeydown(event: KeyboardEvent): void {

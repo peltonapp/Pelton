@@ -8,6 +8,9 @@
 
   export let disabled: boolean = false
   export let label: string = ''
+  // horizontal is a bar between two rows that reports vertical movement.
+  export let orientation: 'vertical' | 'horizontal' = 'vertical'
+  $: horizontal = orientation === 'horizontal'
 
   const dispatch = createEventDispatcher<{ resize: number; end: void }>()
   $: resolvedLabel = label || $t('common.resizer.default')
@@ -15,12 +18,16 @@
   let dragging = false
   let lastX = 0
 
+  function position(event: PointerEvent): number {
+    return horizontal ? event.clientY : event.clientX
+  }
+
   function onPointerDown(event: PointerEvent): void {
     if (disabled) {
       return
     }
     dragging = true
-    lastX = event.clientX
+    lastX = position(event)
     ;(event.currentTarget as HTMLElement).setPointerCapture(event.pointerId)
   }
 
@@ -28,8 +35,8 @@
     if (!dragging) {
       return
     }
-    const dx = event.clientX - lastX
-    lastX = event.clientX
+    const dx = position(event) - lastX
+    lastX = position(event)
     if (dx !== 0) {
       dispatch('resize', dx)
     }
@@ -49,11 +56,11 @@
     if (disabled) {
       return
     }
-    if (event.key === 'ArrowLeft') {
+    if (event.key === (horizontal ? 'ArrowUp' : 'ArrowLeft')) {
       event.preventDefault()
       dispatch('resize', -16)
       dispatch('end')
-    } else if (event.key === 'ArrowRight') {
+    } else if (event.key === (horizontal ? 'ArrowDown' : 'ArrowRight')) {
       event.preventDefault()
       dispatch('resize', 16)
       dispatch('end')
@@ -68,8 +75,9 @@
   class="resizer"
   class:disabled
   class:dragging
+  class:horizontal
   role="separator"
-  aria-orientation="vertical"
+  aria-orientation={orientation}
   aria-label={resolvedLabel}
   tabindex={disabled ? -1 : 0}
   on:pointerdown={onPointerDown}
@@ -101,6 +109,17 @@
   .resizer:hover::after,
   .resizer.dragging::after {
     background: var(--accent);
+  }
+
+  .resizer.horizontal {
+    width: auto;
+    height: 5px;
+    margin: -2px 0;
+    cursor: row-resize;
+  }
+
+  .resizer.horizontal::after {
+    inset: 2px 0;
   }
 
   .resizer.disabled {

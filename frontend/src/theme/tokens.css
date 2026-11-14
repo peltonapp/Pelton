@@ -100,6 +100,40 @@
   /* elevation, used sparingly for overlays and popovers. */
   --shadow-overlay: 0 8px 24px rgba(0, 0, 0, 0.18);
 
+  /* motion. every transition and animation takes its duration and curve from
+     here; reduce motion collapses them in style.css. */
+  --motion-fast: 110ms;
+  --motion-base: 170ms;
+  --motion-slow: 260ms;
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+  --ease-press: cubic-bezier(0.3, 0, 0.5, 1);
+
+  /* shell geometry of the new design. the pane gap and radius are zero unless a
+     pane style below sets them, so the classic design never sees them. */
+  --topbar-height: 38px;
+  --topsearch-width: 560px;
+  --topsearch-min-width: 140px;
+  --suggest-max-height: 420px;
+  --popover-width: 256px;
+  --chip-height: 20px;
+  --rail-width: 40px;
+  --pane-gap: 0px;
+  --pane-radius: 0px;
+  --chrome-bg: var(--surface-base);
+
+  /* the new composer: the docked panel's size, the label column the header
+     fields line up on, the send button's width (fixed so it does not jump as
+     it turns into a loader and a check) and the popovers' width. */
+  --compose-dock-width: 640px;
+  --compose-dock-height: 620px;
+  --compose-label-width: 64px;
+  --compose-send-width: 92px;
+  --popover-width: 340px;
+  --popover-max-height: 440px;
+  /* a pressed button sinks by this much. */
+  --press-scale: 0.96;
+
   /* default density (medium) row + pane spacing. overridden per density below. */
   --row-pad-y: 8px;
   --row-pad-x: 12px;
@@ -145,6 +179,10 @@
 
   /* the dim behind a modal. */
   --scrim: rgba(0, 0, 0, 0.4);
+
+  /* search matches marked in list rows and the reading pane. */
+  --highlight-bg: color-mix(in srgb, var(--accent) 24%, transparent);
+  --highlight-fg: inherit;
 }
 
 /* dark theme. every token has a dark value so the toggle never leaves a gap. */
@@ -183,7 +221,50 @@
 
   --scrim: rgba(0, 0, 0, 0.55);
 
+  --highlight-bg: color-mix(in srgb, var(--accent) 40%, transparent);
+  --highlight-fg: var(--text-primary);
+
   --shadow-overlay: 0 8px 24px rgba(0, 0, 0, 0.5);
+}
+
+/* scoping classes that pin the surface, text and border tokens of one theme
+   onto an element, whatever the live theme is. settings pictures use them to
+   show light and dark side by side. the values below must stay in step with the
+   :root[data-theme] sets above. */
+.theme-light {
+  --surface-base: #f6f6f7;
+  --surface-raised: #ffffff;
+  --surface-overlay: #ffffff;
+  --surface-sunken: #efeff1;
+  --surface-hover: #ececef;
+
+  --text-primary: #1a1b1e;
+  --text-secondary: #4a4d54;
+  --text-tertiary: #797d86;
+
+  --border-subtle: rgba(0, 0, 0, 0.06);
+  --border-default: rgba(0, 0, 0, 0.12);
+  --border-strong: rgba(0, 0, 0, 0.22);
+
+  --selection-bg: color-mix(in srgb, var(--accent) 14%, transparent);
+}
+
+.theme-dark {
+  --surface-base: #111214;
+  --surface-raised: #1a1c1f;
+  --surface-overlay: #222428;
+  --surface-sunken: #161719;
+  --surface-hover: #25282d;
+
+  --text-primary: #ecedee;
+  --text-secondary: #b4b7bd;
+  --text-tertiary: #7e828b;
+
+  --border-subtle: rgba(255, 255, 255, 0.06);
+  --border-default: rgba(255, 255, 255, 0.12);
+  --border-strong: rgba(255, 255, 255, 0.22);
+
+  --selection-bg: color-mix(in srgb, var(--accent) 22%, transparent);
 }
 
 /* density variants. these swap only spacing and line-height tokens, so every
@@ -228,6 +309,29 @@
 :root[data-corners="round"] {
   --radius-control: 10px;
   --radius-card: 12px;
+}
+
+/* the new design. the window itself is the sunken surface and the panes sit on
+   it; how they sit there is the pane style: hybrid raises the list and reader
+   as one rounded surface, soft raises every pane on its own, flat keeps them
+   edge to edge with hairlines. */
+:root[data-design="new"] {
+  --chrome-bg: var(--surface-sunken);
+  --radius-card: 7px;
+}
+
+:root[data-design="new"][data-panes="hybrid"],
+:root[data-design="new"][data-panes="soft"] {
+  --pane-gap: 6px;
+  --pane-radius: 9px;
+}
+
+:root[data-design="new"][data-corners="square"] {
+  --pane-radius: 0px;
+}
+
+:root[data-design="new"][data-corners="round"] {
+  --pane-radius: 14px;
 }
 
 /* cursor variant. the default is the arrow on every platform, matching native

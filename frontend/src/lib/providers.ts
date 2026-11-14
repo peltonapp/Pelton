@@ -42,6 +42,9 @@ export interface ProviderPreset {
   // requireClientSecret shows the client-secret field up front and requires
   // it: Google's token endpoint rejects a Desktop app client that omits it.
   requireClientSecret?: boolean
+  // domains are the address domains the provider hosts, so an address typed
+  // into the wizard picks its preset without asking.
+  domains?: string[]
 }
 
 export const providerPresets: ProviderPreset[] = [
@@ -62,6 +65,7 @@ export const providerPresets: ProviderPreset[] = [
     appPasswordUrl: 'https://myaccount.google.com/apppasswords',
     oauthOptional: true,
     requireClientSecret: true,
+    domains: ['gmail.com', 'googlemail.com'],
   },
   {
     id: 'outlook',
@@ -75,6 +79,10 @@ export const providerPresets: ProviderPreset[] = [
     smtpPort: 587,
     smtpTls: 'starttls',
     allowClientSecret: true,
+    domains: [
+      'outlook.com', 'outlook.de', 'outlook.fr', 'hotmail.com', 'hotmail.de', 'hotmail.fr', 'hotmail.it', 'hotmail.es',
+      'hotmail.co.uk', 'live.com', 'live.de', 'live.fr', 'live.nl', 'live.co.uk', 'msn.com',
+    ],
   },
   {
     id: 'icloud',
@@ -87,6 +95,7 @@ export const providerPresets: ProviderPreset[] = [
     smtpPort: 587,
     smtpTls: 'starttls',
     appPasswordUrl: 'https://appleid.apple.com',
+    domains: ['icloud.com', 'me.com', 'mac.com'],
   },
   {
     id: 'yahoo',
@@ -99,6 +108,7 @@ export const providerPresets: ProviderPreset[] = [
     smtpPort: 465,
     smtpTls: 'ssl',
     noteKey: 'wizard.provider.yahoo.note',
+    domains: ['yahoo.com', 'yahoo.de', 'yahoo.fr', 'yahoo.es', 'yahoo.it', 'yahoo.co.uk', 'ymail.com', 'rocketmail.com'],
   },
   {
     id: 'fastmail',
@@ -111,6 +121,7 @@ export const providerPresets: ProviderPreset[] = [
     smtpPort: 465,
     smtpTls: 'ssl',
     noteKey: 'wizard.provider.fastmail.note',
+    domains: ['fastmail.com', 'fastmail.fm'],
   },
   {
     id: 'purelymail',
@@ -123,6 +134,7 @@ export const providerPresets: ProviderPreset[] = [
     smtpPort: 465,
     smtpTls: 'ssl',
     noteKey: 'wizard.provider.purelymail.note',
+    domains: ['purelymail.com'],
   },
   {
     id: 'custom',
@@ -133,3 +145,23 @@ export const providerPresets: ProviderPreset[] = [
     noteKey: 'wizard.provider.custom.note',
   },
 ]
+
+/** isEmailAddress reports whether text looks like a whole address: a local part, an @ and a dotted domain. */
+export function isEmailAddress(text: string): boolean {
+  return /^[^\s@]+@[^\s@]+\.[^\s@.]{2,}$/.test(text.trim())
+}
+
+/** presetForEmail returns the preset hosting the address's domain, or null when no preset names it. */
+export function presetForEmail(email: string): ProviderPreset | null {
+  const at = email.trim().lastIndexOf('@')
+  if (at < 0) {
+    return null
+  }
+  const domain = email.trim().slice(at + 1).toLowerCase()
+  return providerPresets.find((p) => p.domains?.includes(domain)) ?? null
+}
+
+/** presetById returns the preset with that id, or null. */
+export function presetById(id: string): ProviderPreset | null {
+  return providerPresets.find((p) => p.id === id) ?? null
+}
