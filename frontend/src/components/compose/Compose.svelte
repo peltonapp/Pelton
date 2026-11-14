@@ -589,7 +589,9 @@
   <!-- svelte-ignore a11y-click-events-have-key-events a11y-no-static-element-interactions -->
   <header class="head" on:dblclick={toggleMinimize}>
     <span class="title">{session.subject || $t('compose.title.untitled')}</span>
-    <div class="win">
+    <!-- a quick second click on a window button must not also count as a
+         double-click on the bar -->
+    <div class="win" on:dblclick|stopPropagation role="presentation">
       <button type="button" class="win-btn" aria-label={$t('compose.window.minimize')} title={$t('compose.window.minimize')} on:click={toggleMinimize}>
         <IconMinus size={15} stroke={1.8} />
       </button>
