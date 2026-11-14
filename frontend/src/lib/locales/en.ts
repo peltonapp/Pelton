@@ -1856,6 +1856,12 @@ const en: Record<string, string> = {
   'window.maximise': 'Maximize',
   'window.restore': 'Restore',
   'window.close': 'Close',
+  'composing.markdown': 'Markdown in the composer',
+  'composing.markdown.hint': 'Type Markdown and it is formatted as you write. Off, the composer is plain rich text with formatting buttons and shortcuts.',
+  'settings2.privacy.remote': 'Remote content',
+  'settings2.shortcuts.general': 'General',
+  'settings2.sync.sync': 'Sync',
+  'settings2.sync.power': 'Power',
 }
 
 export default en
