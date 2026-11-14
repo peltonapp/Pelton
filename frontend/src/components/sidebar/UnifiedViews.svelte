@@ -19,7 +19,9 @@
   import { selection, selectView } from '../../stores/selection'
   import { prefs } from '../../stores/prefs'
   import { reorder, type ReorderDetail } from '../../lib/reorder'
-  import { refreshSidebar } from '../../stores/accounts'
+  import { refreshSidebar, sidebar } from '../../stores/accounts'
+  import { openContextMenu } from '../../stores/contextmenu'
+  import { openEmptyAllTrash } from '../../stores/folderdialog'
   import { reorderUnifiedViews } from '../../lib/api'
   import { toastError, errorMessage } from '../../stores/toast'
   import { t } from '../../lib/i18n'
@@ -75,6 +77,23 @@
   function choose(view: UnifiedView): void {
     selectView(view.key as ViewKey, viewLabel(view))
   }
+
+  // the unified Bin offers to empty the trash of every account at once, the
+  // way each account's own trash folder does.
+  function onContext(event: MouseEvent, view: UnifiedView): void {
+    if (view.key !== 'trash') {
+      return
+    }
+    const trashes = Object.values($sidebar.data?.foldersByAccount ?? {})
+      .flat()
+      .filter((f) => f.role === 'trash' && f.totalCount > 0)
+    if (trashes.length === 0) {
+      return
+    }
+    openContextMenu(event.clientX, event.clientY, [
+      { label: $t('folders.emptyTrash'), icon: IconTrash, danger: true, action: () => openEmptyAllTrash(trashes) },
+    ])
+  }
 </script>
 
 <nav class="views" aria-label={$t('sidebar.unifiedViews.ariaLabel')}>
@@ -88,6 +107,7 @@
         reorderable
         reorderId={view.key}
         on:select={() => choose(view)}
+        on:contextmenu={(e) => onContext(e.detail, view)}
       >
         <svelte:component this={viewIcons[view.key] ?? IconFolder} size={15} stroke={1.6} />
       </SidebarRow>
