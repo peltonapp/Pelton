@@ -268,6 +268,13 @@
   .suggest-item.active {
     background: var(--surface-hover);
   }
+  .s-name,
+  .s-addr {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
   .s-name {
     font-size: var(--fz-label);
     color: var(--text-primary);
