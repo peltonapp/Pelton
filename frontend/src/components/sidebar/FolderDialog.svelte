@@ -91,12 +91,18 @@
                 .replace('{role}', $t(`folders.role.${role}`)),
         )
       } else if (request.mode === 'empty') {
-        const emptied = request.folder!
-        const removed = await emptyTrash(emptied.id)
+        const emptied = request.folders ?? [request.folder!]
+        let removed = 0
+        for (const folder of emptied) {
+          removed += await emptyTrash(folder.id)
+        }
         // the rows are hidden from the store's queries the moment they are
         // marked, but the list already in memory still holds them, so a trash
         // the user is looking at has to be re-read rather than left stale.
-        if ($selection.kind === 'folder' && $selection.folderId === emptied.id) {
+        const looking =
+          ($selection.kind === 'folder' && emptied.some((f) => f.id === $selection.folderId)) ||
+          ($selection.kind === 'view' && $selection.view === 'trash')
+        if (looking) {
           // anything open came from the folder just emptied, so the reading
           // pane would be showing a message that no longer exists.
           openMessageId.set(null)
@@ -166,8 +172,8 @@
         <span class="warn-icon"><IconAlertTriangle size={17} stroke={1.8} /></span>
         <p>
           {$t('folders.emptyTrashWarning')
-            .replace('{count}', String(request.folder?.totalCount ?? 0))
-            .replace('{name}', request.folder?.name ?? '')}
+            .replace('{count}', String((request.folders ?? [request.folder]).reduce((n, f) => n + (f?.totalCount ?? 0), 0)))
+            .replace('{name}', request.folders ? $t('sidebar.view.trash') : (request.folder?.name ?? ''))}
         </p>
       </div>
     {:else if request.mode === 'role'}
