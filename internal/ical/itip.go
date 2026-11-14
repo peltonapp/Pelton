@@ -6,12 +6,11 @@ import (
 	"time"
 )
 
-// The iTIP (RFC 5546) methods an invitation mail carries.
+// The iTIP (RFC 5546) methods Pelton acts on.
 const (
 	MethodRequest = "REQUEST"
 	MethodReply   = "REPLY"
 	MethodCancel  = "CANCEL"
-	MethodPublish = "PUBLISH"
 )
 
 // Invite is the scheduling message in a text/calendar part.

@@ -443,16 +443,6 @@ func (d *DB) DeleteCalendarEventByPath(ctx context.Context, calendarID int64, pa
 	return nil
 }
 
-// ClearCalendarEvents drops the synced events of a calendar ahead of a full
-// reread, keeping the ones with a change still waiting to be written.
-func (d *DB) ClearCalendarEvents(ctx context.Context, calendarID int64) error {
-	if _, err := d.sql.ExecContext(ctx,
-		`DELETE FROM calendar_events WHERE calendar_id = ? AND pending = ''`, calendarID); err != nil {
-		return fmt.Errorf("storage: clear calendar %d: %w", calendarID, err)
-	}
-	return nil
-}
-
 func scanCalendarAccount(row rowScanner) (*CalendarAccount, error) {
 	var a CalendarAccount
 	if err := row.Scan(&a.ID, &a.AccountID, &a.AddressBookID, &a.Name, &a.URL, &a.Username,
