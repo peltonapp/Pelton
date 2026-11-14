@@ -33,7 +33,9 @@
   import { sidebar } from '../../stores/accounts'
   import { askConfirm } from '../../stores/confirm'
   import { openSettingsAt } from '../../stores/settingsnav'
-  import { openSpace } from '../../stores/space'
+  import { openSpace, registerSpaceActions } from '../../stores/space'
+
+  let root: HTMLElement | undefined
   import { revealMessage } from '../../stores/selection'
   import { prefs, setContactsView } from '../../stores/prefs'
   import { organizationCounts } from '../../lib/contactlist'
@@ -81,9 +83,21 @@
 
   $: layout = view === 'grid' ? `grid-${mode}` : `panes-${mode}`
 
-  onMount(async () => {
-    await loadContacts()
-    ready = true
+  onMount(() => {
+    void loadContacts().then(() => (ready = true))
+    // while contacts is on screen the app's "new" key makes a contact and its
+    // search key goes to the contact search.
+    return registerSpaceActions('contacts', {
+      compose: () => void startCreate(),
+      search: () => {
+        const input = root?.querySelector<HTMLInputElement>('input[type="search"]')
+        if (!input) {
+          return false
+        }
+        input.focus()
+        input.select()
+      },
+    })
   })
 
   // a person handed over from elsewhere opens the editor already filled in.
@@ -201,7 +215,7 @@
 </script>
 
 <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
-<section class="space" aria-label={$t('contacts.title')} bind:clientWidth={width} on:keydown={onKeydown}>
+<section class="space" aria-label={$t('contacts.title')} bind:this={root} bind:clientWidth={width} on:keydown={onKeydown}>
   <header class="head">
     {#if mode !== 'wide' && $addressBooks.length > 0}
       <button

@@ -19,7 +19,7 @@
   import TopBar from './components/shell/TopBar.svelte'
   import Rail from './components/shell/Rail.svelte'
   import SpaceSwitcher from './components/shell/SpaceSwitcher.svelte'
-  import { space, openSpace } from './stores/space'
+  import { space, openSpace, runSpaceAction } from './stores/space'
   import { calendarFocus } from './stores/calendar'
   import { formatTime } from './lib/calformat'
   import type { TimeFormat } from './lib/format'
@@ -838,6 +838,11 @@
 
   // dispatch maps an action (from a shortcut or a menu item) to its handler.
   function dispatchAction(action: MenuAction): void {
+    // the space on screen gets the first say, so the same key makes a new
+    // event in the calendar and a new message in mail.
+    if (!classic && !overlayOpen && runSpaceAction($space, action)) {
+      return
+    }
     switch (action) {
       case 'compose':
         startCompose()
