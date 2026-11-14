@@ -1443,6 +1443,7 @@ export const SettingKeys = {
   defaultEditorMode: 'default_editor_mode',
   composeAutocomplete: 'compose_autocomplete',
   composeChips: 'compose_chips',
+  composeMarkdown: 'compose_markdown',
   updateCheckFrequency: 'update_check_frequency',
   emptyStateImage: 'empty_state_image',
   emptyStateFullscreen: 'empty_state_fullscreen',

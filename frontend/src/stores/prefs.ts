@@ -68,6 +68,7 @@ const defaults: UIPrefs = {
   defaultEditorMode: 'plaintext',
   composeAutocomplete: true,
   composeChips: true,
+  composeMarkdown: false,
   updateCheckFrequency: 'off',
   emptyStateImage: '',
   emptyStateFullscreen: false,
@@ -463,6 +464,12 @@ export function setComposeAutocomplete(value: boolean): void {
 export function setComposeChips(value: boolean): void {
   prefs.update((p) => ({ ...p, composeChips: value }))
   void setSetting(SettingKeys.composeChips, String(value))
+}
+
+/** Sets whether the composer formats Markdown as it is typed. */
+export function setComposeMarkdown(value: boolean): void {
+  prefs.update((p) => ({ ...p, composeMarkdown: value }))
+  void setSetting(SettingKeys.composeMarkdown, String(value))
 }
 
 // setUpdateCheckFrequency persists how often the app checks GitHub releases
