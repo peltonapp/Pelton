@@ -1427,7 +1427,24 @@ export interface CalendarSettings {
   defaultReminderMinutes: number
   // where new events go, 0 for the first writable calendar.
   defaultCalendarId: number
+  // the view the calendar opens in.
+  defaultView: CalendarView
+  // first day of the week, 0 for Sunday through 6, -1 to follow the locale.
+  weekStart: number
+  // working hours as minutes after midnight.
+  workDayStart: number
+  workDayEnd: number
+  // off, the zone's name over the hours, or a second column of hours.
+  timeZoneDisplay: TimeZoneDisplay
+  // IANA zone of the second column, empty for none.
+  secondaryTimeZone: string
 }
+
+/** The views of the calendar screen. */
+export type CalendarView = 'month' | 'week' | 'day' | 'agenda'
+
+/** How the time grid names time zones. */
+export type TimeZoneDisplay = 'off' | 'label' | 'dual'
 
 /** The scope an edit or delete of one occurrence of a series applies to. */
 export type EventScope = 'this' | 'future' | 'all'

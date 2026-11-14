@@ -2050,7 +2050,9 @@ export function SetCalendarColor(id: number, color: string): $CancellablePromise
 }
 
 /**
- * SetCalendarSettings saves the calendar preferences.
+ * SetCalendarSettings saves the calendar preferences. An unknown view or zone
+ * display, a week start outside -1..6, working hours that do not fit in a day
+ * or end before they start, and a secondary zone Go cannot load are refused.
  */
 export function SetCalendarSettings(s: $models.CalendarSettingsDTO): $CancellablePromise<void> {
     return $Call.ByID(3379478981, s);

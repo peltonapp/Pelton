@@ -56,6 +56,43 @@ END:VCALENDAR
 	}
 }
 
+// An inline text/calendar part is kept as an invite.ics attachment, so the
+// invitation is stored with the message and never read as its body, even when
+// it comes before the text part.
+func TestParseKeepsInlineCalendar(t *testing.T) {
+	raw := strings.ReplaceAll(`From: Org <org@example.com>
+To: me@example.com
+Subject: Invitation
+MIME-Version: 1.0
+Content-Type: multipart/alternative; boundary="alt"
+
+--alt
+Content-Type: text/calendar; charset=utf-8; method=REQUEST
+
+BEGIN:VCALENDAR
+END:VCALENDAR
+--alt
+Content-Type: text/plain; charset=utf-8
+
+You are invited.
+--alt--
+`, "\n", "\r\n")
+	msg, err := Parse([]byte(raw))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.TrimSpace(msg.Text) != "You are invited." {
+		t.Errorf("text = %q", msg.Text)
+	}
+	if len(msg.Attachments) != 1 {
+		t.Fatalf("attachments = %d, want 1", len(msg.Attachments))
+	}
+	att := msg.Attachments[0]
+	if att.Filename != "invite.ics" || att.ContentType != "text/calendar" || !strings.HasPrefix(string(att.Content), "BEGIN:VCALENDAR") {
+		t.Errorf("attachment = %q %q %q", att.Filename, att.ContentType, att.Content)
+	}
+}
+
 func TestIsCalendar(t *testing.T) {
 	for _, tt := range []struct {
 		ct, name string

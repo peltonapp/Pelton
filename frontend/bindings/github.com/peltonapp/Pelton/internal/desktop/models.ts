@@ -1347,6 +1347,32 @@ export class CalendarSettingsDTO {
      */
     "defaultCalendarId": number;
 
+    /**
+     * DefaultView is the view the calendar opens in: month, week, day or
+     * agenda.
+     */
+    "defaultView": string;
+
+    /**
+     * WeekStart is the first day of the week, 0 for Sunday through 6, or -1
+     * to follow the locale.
+     */
+    "weekStart": number;
+
+    /**
+     * WorkDayStart and WorkDayEnd are the working hours as minutes after
+     * midnight; the time grid shades the hours outside them.
+     */
+    "workDayStart": number;
+    "workDayEnd": number;
+
+    /**
+     * TimeZoneDisplay is off, label (the zone's name over the hours) or dual
+     * (a second column of hours in SecondaryTimeZone).
+     */
+    "timeZoneDisplay": string;
+    "secondaryTimeZone": string;
+
     /** Creates a new CalendarSettingsDTO instance. */
     constructor($$source: Partial<CalendarSettingsDTO> = {}) {
         if (!("syncIntervalMinutes" in $$source)) {
@@ -1360,6 +1386,24 @@ export class CalendarSettingsDTO {
         }
         if (!("defaultCalendarId" in $$source)) {
             this["defaultCalendarId"] = 0;
+        }
+        if (!("defaultView" in $$source)) {
+            this["defaultView"] = "";
+        }
+        if (!("weekStart" in $$source)) {
+            this["weekStart"] = 0;
+        }
+        if (!("workDayStart" in $$source)) {
+            this["workDayStart"] = 0;
+        }
+        if (!("workDayEnd" in $$source)) {
+            this["workDayEnd"] = 0;
+        }
+        if (!("timeZoneDisplay" in $$source)) {
+            this["timeZoneDisplay"] = "";
+        }
+        if (!("secondaryTimeZone" in $$source)) {
+            this["secondaryTimeZone"] = "";
         }
 
         Object.assign(this, $$source);

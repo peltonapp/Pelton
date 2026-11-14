@@ -3,6 +3,7 @@ package desktop
 import (
 	"bytes"
 	"context"
+	"errors"
 	"log/slog"
 	"net/http/httptest"
 	"path/filepath"
@@ -582,5 +583,59 @@ func TestCreateEventDraftFromMessage(t *testing.T) {
 	}
 	if strings.Join(emails, ",") != "ann@example.com,bob@example.com" {
 		t.Errorf("attendees = %v", emails)
+	}
+}
+
+func TestCalendarSettingsRoundTrip(t *testing.T) {
+	a := newCalendarTestApp(t)
+	got, err := a.GetCalendarSettings()
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := CalendarSettingsDTO{
+		SyncIntervalMinutes: 15, RemindersEnabled: true, DefaultReminderMinutes: 15,
+		DefaultView: "week", WeekStart: -1, WorkDayStart: 9 * 60, WorkDayEnd: 17 * 60, TimeZoneDisplay: "off",
+	}
+	if got != want {
+		t.Fatalf("defaults = %+v, want %+v", got, want)
+	}
+
+	want = CalendarSettingsDTO{
+		SyncIntervalMinutes: 30, RemindersEnabled: false, DefaultReminderMinutes: -1, DefaultView: "agenda",
+		WeekStart: 1, WorkDayStart: 8*60 + 30, WorkDayEnd: 18 * 60, TimeZoneDisplay: "dual", SecondaryTimeZone: "Asia/Tokyo",
+	}
+	if err := a.SetCalendarSettings(want); err != nil {
+		t.Fatal(err)
+	}
+	if got, _ := a.GetCalendarSettings(); got != want {
+		t.Errorf("saved = %+v, want %+v", got, want)
+	}
+}
+
+func TestCalendarSettingsRefusesInvalid(t *testing.T) {
+	a := newCalendarTestApp(t)
+	valid, _ := a.GetCalendarSettings()
+	tests := []struct {
+		name   string
+		change func(*CalendarSettingsDTO)
+	}{
+		{"unknown view", func(s *CalendarSettingsDTO) { s.DefaultView = "year" }},
+		{"week start", func(s *CalendarSettingsDTO) { s.WeekStart = 7 }},
+		{"end before start", func(s *CalendarSettingsDTO) { s.WorkDayStart, s.WorkDayEnd = 600, 540 }},
+		{"past midnight", func(s *CalendarSettingsDTO) { s.WorkDayEnd = 25 * 60 }},
+		{"zone display", func(s *CalendarSettingsDTO) { s.TimeZoneDisplay = "both" }},
+		{"unknown zone", func(s *CalendarSettingsDTO) { s.SecondaryTimeZone = "Mars/Olympus" }},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			s := valid
+			tt.change(&s)
+			if err := a.SetCalendarSettings(s); !errors.Is(err, errCalendarSettings) {
+				t.Errorf("err = %v", err)
+			}
+		})
+	}
+	if got, _ := a.GetCalendarSettings(); got != valid {
+		t.Errorf("a refused save changed the settings: %+v", got)
 	}
 }

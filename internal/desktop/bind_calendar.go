@@ -8,6 +8,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 	"time"
 
@@ -24,6 +25,25 @@ const (
 	settingCalendarReminders = "calendar_reminders"
 	settingCalendarDefault   = "calendar_default_reminder_minutes"
 	settingCalendarDefaultID = "calendar_default_id"
+	settingCalendarView      = "calendar_default_view"
+	settingCalendarWeekStart = "calendar_week_start"
+	settingCalendarWorkStart = "calendar_work_start_minutes"
+	settingCalendarWorkEnd   = "calendar_work_end_minutes"
+	settingCalendarZoneShow  = "calendar_zone_display"
+	settingCalendarZoneAlt   = "calendar_secondary_zone"
+)
+
+// The calendar views, the week starts and the time zone displays the settings
+// accept. A week start of -1 follows the locale.
+var (
+	calendarViews        = []string{"month", "week", "day", "agenda"}
+	calendarZoneDisplays = []string{"off", "label", "dual"}
+)
+
+const (
+	defaultWorkStart = 9 * 60
+	defaultWorkEnd   = 17 * 60
+	minutesPerDay    = 24 * 60
 )
 
 var (
@@ -39,6 +59,7 @@ var (
 	errInviteNotFound        = errors.New("pelton: this message carries no invitation")
 	errInviteNoOrganizer     = errors.New("pelton: the invitation names no organizer to answer")
 	errInviteUnknownResponse = errors.New("pelton: answer with accepted, tentative or declined")
+	errCalendarSettings      = errors.New("pelton: these calendar settings are not valid")
 )
 
 // CalendarAccountDTO is one CalDAV login for the ui.
@@ -125,6 +146,20 @@ type CalendarSettingsDTO struct {
 	DefaultReminderMinutes int `json:"defaultReminderMinutes"`
 	// DefaultCalendarID is where new events go, 0 for the first writable one.
 	DefaultCalendarID int64 `json:"defaultCalendarId"`
+	// DefaultView is the view the calendar opens in: month, week, day or
+	// agenda.
+	DefaultView string `json:"defaultView"`
+	// WeekStart is the first day of the week, 0 for Sunday through 6, or -1
+	// to follow the locale.
+	WeekStart int `json:"weekStart"`
+	// WorkDayStart and WorkDayEnd are the working hours as minutes after
+	// midnight; the time grid shades the hours outside them.
+	WorkDayStart int `json:"workDayStart"`
+	WorkDayEnd   int `json:"workDayEnd"`
+	// TimeZoneDisplay is off, label (the zone's name over the hours) or dual
+	// (a second column of hours in SecondaryTimeZone).
+	TimeZoneDisplay   string `json:"timeZoneDisplay"`
+	SecondaryTimeZone string `json:"secondaryTimeZone"`
 }
 
 // ListCalendarAccounts returns every CalDAV login.
@@ -440,12 +475,41 @@ func (a *App) GetCalendarSettings() (CalendarSettingsDTO, error) {
 		RemindersEnabled:       a.boolSetting(settingCalendarReminders, true),
 		DefaultReminderMinutes: a.intSetting(settingCalendarDefault, 15),
 		DefaultCalendarID:      int64(a.intSetting(settingCalendarDefaultID, 0)),
+		DefaultView:            oneOf(a.stringSetting(settingCalendarView, "week"), calendarViews, "week"),
+		WeekStart:              a.intSetting(settingCalendarWeekStart, -1),
+		WorkDayStart:           a.intSetting(settingCalendarWorkStart, defaultWorkStart),
+		WorkDayEnd:             a.intSetting(settingCalendarWorkEnd, defaultWorkEnd),
+		TimeZoneDisplay:        oneOf(a.stringSetting(settingCalendarZoneShow, "off"), calendarZoneDisplays, "off"),
+		SecondaryTimeZone:      a.stringSetting(settingCalendarZoneAlt, ""),
 	}, nil
 }
 
-// SetCalendarSettings saves the calendar preferences.
+// SetCalendarSettings saves the calendar preferences. An unknown view or zone
+// display, a week start outside -1..6, working hours that do not fit in a day
+// or end before they start, and a secondary zone Go cannot load are refused.
 func (a *App) SetCalendarSettings(s CalendarSettingsDTO) error {
 	if err := a.ready(); err != nil {
+		return err
+	}
+	if err := validCalendarView(s); err != nil {
+		return err
+	}
+	if err := a.store.Set(a.ctx, settingCalendarView, s.DefaultView); err != nil {
+		return err
+	}
+	if err := a.store.SetInt(a.ctx, settingCalendarWeekStart, s.WeekStart); err != nil {
+		return err
+	}
+	if err := a.store.SetInt(a.ctx, settingCalendarWorkStart, s.WorkDayStart); err != nil {
+		return err
+	}
+	if err := a.store.SetInt(a.ctx, settingCalendarWorkEnd, s.WorkDayEnd); err != nil {
+		return err
+	}
+	if err := a.store.Set(a.ctx, settingCalendarZoneShow, s.TimeZoneDisplay); err != nil {
+		return err
+	}
+	if err := a.store.Set(a.ctx, settingCalendarZoneAlt, s.SecondaryTimeZone); err != nil {
 		return err
 	}
 	if err := a.store.SetInt(a.ctx, settingCalendarSync, max(s.SyncIntervalMinutes, 0)); err != nil {
@@ -573,6 +637,31 @@ func toCalendarDTO(c storage.Calendar, accountName string, isDefault bool) Calen
 		LastError:   c.LastError,
 		Default:     isDefault,
 	}
+}
+
+// oneOf returns value when it is in allowed, else def.
+func oneOf(value string, allowed []string, def string) string {
+	if slices.Contains(allowed, value) {
+		return value
+	}
+	return def
+}
+
+// validCalendarView checks the view settings of a CalendarSettingsDTO.
+func validCalendarView(s CalendarSettingsDTO) error {
+	switch {
+	case !slices.Contains(calendarViews, s.DefaultView),
+		!slices.Contains(calendarZoneDisplays, s.TimeZoneDisplay),
+		s.WeekStart < -1 || s.WeekStart > 6,
+		s.WorkDayStart < 0 || s.WorkDayEnd > minutesPerDay || s.WorkDayEnd <= s.WorkDayStart:
+		return errCalendarSettings
+	}
+	if s.SecondaryTimeZone != "" {
+		if _, err := time.LoadLocation(s.SecondaryTimeZone); err != nil {
+			return fmt.Errorf("%w: %v", errCalendarSettings, err)
+		}
+	}
+	return nil
 }
 
 // calendarIndex maps calendar ids to their rows.
