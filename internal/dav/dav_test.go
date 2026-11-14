@@ -87,9 +87,8 @@ func TestParseMultistatus(t *testing.T) {
 	if first.Has("DAV:", "getetag") {
 		t.Error("a 404 propstat was reported as present")
 	}
-	types := Elements(first.Inner("DAV:", "resourcetype"))
-	if len(types) != 2 || types[1].Local != "calendar" {
-		t.Errorf("resourcetype = %v", types)
+	if len(first.Prop("DAV:", "resourcetype").Find("urn:ietf:params:xml:ns:caldav", "calendar")) != 1 {
+		t.Errorf("resourcetype = %+v", first.Prop("DAV:", "resourcetype"))
 	}
 	second := ms.Responses[1]
 	if second.Href != "/cal/home/gone.ics" || second.Status != 404 {
@@ -97,8 +96,17 @@ func TestParseMultistatus(t *testing.T) {
 	}
 }
 
-func TestHrefs(t *testing.T) {
-	got := Hrefs([]byte(`<d:href xmlns:d="DAV:">/principals/me/</d:href>`))
+// The prefix of a nested element is declared on the root, far from the
+// property; the namespace has to survive anyway.
+func TestNestedHrefKeepsNamespace(t *testing.T) {
+	body := `<x:multistatus xmlns:x="DAV:"><x:response><x:href>/</x:href><x:propstat><x:prop>
+<x:current-user-principal><x:href>/principals/me/</x:href></x:current-user-principal>
+</x:prop><x:status>HTTP/1.1 200 OK</x:status></x:propstat></x:response></x:multistatus>`
+	ms, err := ParseMultistatus(strings.NewReader(body))
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := ms.Responses[0].Prop("DAV:", "current-user-principal").Hrefs()
 	if len(got) != 1 || got[0] != "/principals/me/" {
 		t.Errorf("hrefs = %v", got)
 	}

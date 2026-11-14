@@ -57,12 +57,10 @@ type Conn struct {
 	User, Pass string
 }
 
-// Request builds an authenticated request against a server path.
+// Request builds an authenticated request against a server path. The path is
+// unescaped, as multistatus hrefs are once parsed, and escaped here.
 func (c *Conn) Request(ctx context.Context, method, path string, body io.Reader) (*http.Request, error) {
-	target, err := c.Base.Parse(path)
-	if err != nil {
-		return nil, fmt.Errorf("dav: bad path %q: %w", path, err)
-	}
+	target := c.Base.ResolveReference(&url.URL{Path: path})
 	req, err := http.NewRequestWithContext(ctx, method, target.String(), body)
 	if err != nil {
 		return nil, err

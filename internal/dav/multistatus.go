@@ -12,6 +12,50 @@ import (
 	"strings"
 )
 
+// Node is one xml element of a property value, with its namespace resolved,
+// which raw inner xml loses once it is cut out of the document that declared
+// the prefixes.
+type Node struct {
+	XMLName  xml.Name
+	Attrs    []xml.Attr `xml:",any,attr"`
+	Children []Node     `xml:",any"`
+	Text     string     `xml:",chardata"`
+}
+
+// Find returns every element below n, at any depth, with the given name.
+func (n Node) Find(space, local string) []Node {
+	var out []Node
+	for _, child := range n.Children {
+		if child.XMLName.Space == space && child.XMLName.Local == local {
+			out = append(out, child)
+		}
+		out = append(out, child.Find(space, local)...)
+	}
+	return out
+}
+
+// Hrefs returns the DAV:href values below n, unescaped, for properties like
+// current-user-principal whose value is a nested href.
+func (n Node) Hrefs() []string {
+	var out []string
+	for _, h := range n.Find("DAV:", "href") {
+		if v := strings.TrimSpace(h.Text); v != "" {
+			out = append(out, unescapeHref(v))
+		}
+	}
+	return out
+}
+
+// Attr returns the value of an attribute by local name.
+func (n Node) Attr(local string) string {
+	for _, a := range n.Attrs {
+		if a.Name.Local == local {
+			return a.Value
+		}
+	}
+	return ""
+}
+
 // Response is one <response> of a 207 multistatus reply.
 type Response struct {
 	// Href is the resource path, unescaped.
@@ -21,14 +65,7 @@ type Response struct {
 	Status int
 	// Props holds the properties reported with a 2xx propstat, keyed by
 	// namespace and local name.
-	Props map[xml.Name]Prop
-}
-
-// Prop is one reported property: its text and the raw inner xml, for the
-// properties whose value is a nested element (resourcetype, an href).
-type Prop struct {
-	Text  string
-	Inner []byte
+	Props map[xml.Name]Node
 }
 
 // Has reports whether the response carries the property.
@@ -42,9 +79,9 @@ func (r Response) Text(space, local string) string {
 	return strings.TrimSpace(r.Props[xml.Name{Space: space, Local: local}].Text)
 }
 
-// Inner returns a property's raw inner xml.
-func (r Response) Inner(space, local string) []byte {
-	return r.Props[xml.Name{Space: space, Local: local}].Inner
+// Prop returns a property's element.
+func (r Response) Prop(space, local string) Node {
+	return r.Props[xml.Name{Space: space, Local: local}]
 }
 
 // Multistatus is a parsed 207 reply plus the sync token a sync-collection
@@ -66,18 +103,8 @@ type rawResponse struct {
 }
 
 type rawPropstat struct {
-	Prop   rawProp `xml:"DAV: prop"`
-	Status string  `xml:"DAV: status"`
-}
-
-type rawProp struct {
-	Items []rawItem `xml:",any"`
-}
-
-type rawItem struct {
-	XMLName  xml.Name
-	Inner    []byte `xml:",innerxml"`
-	CharData string `xml:",chardata"`
+	Prop   Node   `xml:"DAV: prop"`
+	Status string `xml:"DAV: status"`
 }
 
 // ParseMultistatus decodes a multistatus body.
@@ -91,74 +118,25 @@ func ParseMultistatus(body io.Reader) (Multistatus, error) {
 		if len(r.Hrefs) == 0 {
 			continue
 		}
-		resp := Response{Status: statusCode(r.Status), Props: map[xml.Name]Prop{}}
+		resp := Response{Status: statusCode(r.Status), Props: map[xml.Name]Node{}}
 		resp.Href = unescapeHref(r.Hrefs[0])
 		for _, ps := range r.Propstats {
 			code := statusCode(ps.Status)
 			if code != 0 && (code < 200 || code > 299) {
 				continue
 			}
-			for _, item := range ps.Prop.Items {
-				resp.Props[item.XMLName] = Prop{Text: item.CharData, Inner: item.Inner}
+			for _, item := range ps.Prop.Children {
+				resp.Props[item.XMLName] = item
 			}
 		}
 		out.Responses = append(out.Responses, resp)
 		// a server may list several hrefs in one response for the same status,
 		// which sync-collection uses for deletions.
 		for _, extra := range r.Hrefs[1:] {
-			out.Responses = append(out.Responses, Response{Href: unescapeHref(extra), Status: resp.Status, Props: map[xml.Name]Prop{}})
+			out.Responses = append(out.Responses, Response{Href: unescapeHref(extra), Status: resp.Status, Props: map[xml.Name]Node{}})
 		}
 	}
 	return out, nil
-}
-
-// Hrefs returns every <href> inside raw inner xml, unescaped, for properties
-// like current-user-principal whose value is a nested href.
-func Hrefs(inner []byte) []string {
-	dec := xml.NewDecoder(bytes.NewReader(inner))
-	var out []string
-	inHref := false
-	for {
-		tok, err := dec.Token()
-		if err != nil {
-			return out
-		}
-		switch t := tok.(type) {
-		case xml.StartElement:
-			inHref = t.Name.Local == "href"
-		case xml.EndElement:
-			inHref = false
-		case xml.CharData:
-			if inHref {
-				if v := strings.TrimSpace(string(t)); v != "" {
-					out = append(out, unescapeHref(v))
-				}
-			}
-		}
-	}
-}
-
-// Elements returns the names of the direct child elements in raw inner xml,
-// for properties like resourcetype whose value is a set of empty elements.
-func Elements(inner []byte) []xml.Name {
-	dec := xml.NewDecoder(bytes.NewReader(inner))
-	var out []xml.Name
-	depth := 0
-	for {
-		tok, err := dec.Token()
-		if err != nil {
-			return out
-		}
-		switch t := tok.(type) {
-		case xml.StartElement:
-			if depth == 0 {
-				out = append(out, t.Name)
-			}
-			depth++
-		case xml.EndElement:
-			depth--
-		}
-	}
 }
 
 // statusCode reads the code out of a status line like "HTTP/1.1 404 Not Found".
@@ -175,10 +153,8 @@ func statusCode(line string) int {
 // path, since everything is resolved against the connection's endpoint.
 func unescapeHref(href string) string {
 	href = strings.TrimSpace(href)
-	if u, err := url.Parse(href); err == nil {
-		if u.Path != "" {
-			return u.Path
-		}
+	if u, err := url.Parse(href); err == nil && u.Path != "" {
+		return u.Path
 	}
 	if p, err := url.PathUnescape(href); err == nil {
 		return p
