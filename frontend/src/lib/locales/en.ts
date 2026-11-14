@@ -1852,6 +1852,8 @@ const en: Record<string, string> = {
   'settings2.page.shortcuts': 'Shortcuts',
   'settings2.page.sync': 'Sync and power',
   'settings2.page.about': 'About',
+  'outbox.toast.sent': 'Message sent.',
+  'outbox.toast.sentMany': '{count} messages sent.',
 }
 
 export default en
