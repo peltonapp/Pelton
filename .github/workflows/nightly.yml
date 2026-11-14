@@ -42,7 +42,7 @@ permissions:
   contents: write
 
 env:
-  GO_VERSION: "1.25"
+  GO_VERSION: "1.27"
   RETENTION_DAYS: "14"
 
 jobs:

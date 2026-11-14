@@ -40,7 +40,7 @@ permissions:
   contents: write
 
 env:
-  GO_VERSION: "1.25"
+  GO_VERSION: "1.27"
   # The release these installers belong to, empty when the run is only
   # exercising the build steps. Job-level `if:` cannot read env, so the same
   # condition is spelled out on the jobs that need it.

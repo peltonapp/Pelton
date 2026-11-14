@@ -41,7 +41,7 @@ permissions:
   contents: read
 
 env:
-  GO_VERSION: "1.25"
+  GO_VERSION: "1.27"
   # 22 is the floor the test toolchain sets, not a preference: vitest declares
   # ^22.12.0 and jsdom ^22.22.2, and on 20 jsdom fails to load at all, because
   # the undici it pulls in calls a webidl helper that node 20 does not have.
