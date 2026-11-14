@@ -11,6 +11,7 @@ import { prefs } from '../stores/prefs'
 // many milliseconds it has covered about two thirds of the way.
 const followMs = 32
 const idleMs = 520
+const recheckMs = 200
 const settledPx = 0.15
 const textTypes = new Set(['text', 'search', 'url', 'tel', 'password'])
 
@@ -166,7 +167,12 @@ function visible(el: HTMLElement, spot: Spot): boolean {
       return false
     }
   }
-  return true
+  // something laid over the field (settings, a dialog) hides its caret too,
+  // even though the field underneath still has focus.
+  const own = el.getBoundingClientRect()
+  const x = Math.min(Math.max(spot.x, own.left + 1), own.right - 1)
+  const top = document.elementFromPoint(x, middle)
+  return top === null || el.contains(top)
 }
 
 function hide(): void {
@@ -235,6 +241,12 @@ function update(): void {
     hide()
     return
   }
+  // a look that finds the caret where it already was changes nothing, so the
+  // blink is left running.
+  const moved = !target || Math.abs(target.x - spot.x) > settledPx || Math.abs(target.y - spot.y) > settledPx
+  if (!moved && caret.classList.contains('shown')) {
+    return
+  }
   target = spot
   const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches || get(prefs).reduceMotion === true
   if (!shown || reduce) {
@@ -285,5 +297,13 @@ export function initSmoothCaret(): void {
   document.addEventListener('scroll', queue, true)
   window.addEventListener('resize', queue)
   window.addEventListener('blur', queue)
+  document.addEventListener('keydown', queue, true)
+  // nothing announces a screen opening over the focused field, so while a
+  // field holds the caret its place is looked at again a few times a second.
+  setInterval(() => {
+    if (owner) {
+      queue()
+    }
+  }, recheckMs)
   prefs.subscribe(queue)
 }
