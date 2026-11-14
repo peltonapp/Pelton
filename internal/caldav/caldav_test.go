@@ -3,217 +3,24 @@ package caldav
 import (
 	"context"
 	"errors"
-	"fmt"
-	"io"
-	"net/http"
 	"net/http/httptest"
-	"net/url"
-	"regexp"
-	"sort"
-	"strconv"
 	"strings"
-	"sync"
 	"testing"
 
+	"github.com/peltonapp/Pelton/internal/caldav/caldavtest"
 	"github.com/peltonapp/Pelton/internal/dav"
 )
 
-// fakeServer is a small in-memory CalDAV server: one principal, one home and
-// two collections, one of them a task list that must not be offered.
-type fakeServer struct {
-	mu        sync.Mutex
-	resources map[string]fakeResource
-	version   int
-	// deleted records what went away after each version, for sync-collection.
-	deleted map[string]int
-	// rejectToken makes sync-collection refuse any token.
-	rejectToken bool
-	user, pass  string
-	lastAuthOK  bool
-}
-
-type fakeResource struct {
-	etag    string
-	data    string
-	version int
-}
-
-const (
-	principalPath = "/dav/principals/me/"
-	homePath      = "/dav/calendars/me/"
-	workPath      = "/dav/calendars/me/work cal/"
-	tasksPath     = "/dav/calendars/me/tasks/"
-)
-
-func newFakeServer() *fakeServer {
-	return &fakeServer{resources: map[string]fakeResource{}, deleted: map[string]int{}, user: "me", pass: "secret"}
-}
-
-func (f *fakeServer) put(p, data string) string {
-	f.version++
-	etag := `"e` + strconv.Itoa(f.version) + `"`
-	f.resources[p] = fakeResource{etag: etag, data: data, version: f.version}
-	delete(f.deleted, p)
-	return etag
-}
-
-func (f *fakeServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-	user, pass, ok := r.BasicAuth()
-	f.lastAuthOK = ok && user == f.user && pass == f.pass
-	if !f.lastAuthOK {
-		w.WriteHeader(http.StatusUnauthorized)
-		return
-	}
-	body, _ := io.ReadAll(r.Body)
-	p := r.URL.Path
-	switch r.Method {
-	case dav.MethodPropfind:
-		f.propfind(w, r, p, string(body))
-	case dav.MethodReport:
-		f.report(w, p, string(body))
-	case http.MethodGet:
-		res, ok := f.resources[p]
-		if !ok {
-			w.WriteHeader(http.StatusNotFound)
-			return
-		}
-		w.Header().Set("ETag", res.etag)
-		io.WriteString(w, res.data)
-	case http.MethodPut:
-		res, exists := f.resources[p]
-		if m := r.Header.Get("If-Match"); m != "" && (!exists || m != res.etag) {
-			w.WriteHeader(http.StatusPreconditionFailed)
-			return
-		}
-		if r.Header.Get("If-None-Match") == "*" && exists {
-			w.WriteHeader(http.StatusPreconditionFailed)
-			return
-		}
-		w.Header().Set("ETag", f.put(p, string(body)))
-		w.WriteHeader(http.StatusCreated)
-	case http.MethodDelete:
-		res, exists := f.resources[p]
-		if !exists {
-			w.WriteHeader(http.StatusNotFound)
-			return
-		}
-		if m := r.Header.Get("If-Match"); m != "" && m != res.etag {
-			w.WriteHeader(http.StatusPreconditionFailed)
-			return
-		}
-		f.version++
-		delete(f.resources, p)
-		f.deleted[p] = f.version
-		w.WriteHeader(http.StatusNoContent)
-	default:
-		w.WriteHeader(http.StatusMethodNotAllowed)
-	}
-}
-
-func multistatus(w http.ResponseWriter, inner string) {
-	w.Header().Set("Content-Type", "application/xml")
-	w.WriteHeader(http.StatusMultiStatus)
-	fmt.Fprintf(w, `<?xml version="1.0"?><d:multistatus xmlns:d="DAV:" xmlns:c="urn:ietf:params:xml:ns:caldav" xmlns:cs="http://calendarserver.org/ns/" xmlns:a="http://apple.com/ns/ical/">%s</d:multistatus>`, inner)
-}
-
-func href(p string) string {
-	return "<d:href>" + (&url.URL{Path: p}).EscapedPath() + "</d:href>"
-}
-
-func ok(props string) string {
-	return "<d:propstat><d:prop>" + props + "</d:prop><d:status>HTTP/1.1 200 OK</d:status></d:propstat>"
-}
-
-func (f *fakeServer) propfind(w http.ResponseWriter, r *http.Request, p, body string) {
-	switch {
-	case p == "/" || p == "/dav/":
-		multistatus(w, "<d:response>"+href(p)+ok("<d:current-user-principal>"+href(principalPath)+"</d:current-user-principal><d:resourcetype><d:collection/></d:resourcetype>")+"</d:response>")
-	case p == principalPath:
-		multistatus(w, "<d:response>"+href(p)+ok("<c:calendar-home-set>"+href(homePath)+"</c:calendar-home-set>")+"</d:response>")
-	case p == homePath && r.Header.Get("Depth") == "1":
-		multistatus(w,
-			"<d:response>"+href(homePath)+ok("<d:resourcetype><d:collection/></d:resourcetype>")+"</d:response>"+
-				"<d:response>"+href(workPath)+ok(`<d:resourcetype><d:collection/><c:calendar/></d:resourcetype>
-<d:displayname>Work</d:displayname><a:calendar-color>#FF8800FF</a:calendar-color>
-<cs:getctag>`+strconv.Itoa(f.version)+`</cs:getctag><d:sync-token>tok-`+strconv.Itoa(f.version)+`</d:sync-token>
-<c:supported-calendar-component-set><c:comp name="VEVENT"/></c:supported-calendar-component-set>
-<d:current-user-privilege-set><d:privilege><d:read/></d:privilege><d:privilege><d:write/></d:privilege></d:current-user-privilege-set>`)+"</d:response>"+
-				"<d:response>"+href(tasksPath)+ok(`<d:resourcetype><d:collection/><c:calendar/></d:resourcetype>
-<d:displayname>Tasks</d:displayname><c:supported-calendar-component-set><c:comp name="VTODO"/></c:supported-calendar-component-set>`)+"</d:response>")
-	case p == workPath:
-		multistatus(w, "<d:response>"+href(p)+ok("<cs:getctag>"+strconv.Itoa(f.version)+"</cs:getctag><d:sync-token>tok-"+strconv.Itoa(f.version)+"</d:sync-token><d:resourcetype><d:collection/><c:calendar/></d:resourcetype>")+"</d:response>")
-	default:
-		w.WriteHeader(http.StatusNotFound)
-	}
-	_ = body
-}
-
-var hrefPattern = regexp.MustCompile(`<d:href>([^<]+)</d:href>`)
-var tokenPattern = regexp.MustCompile(`<d:sync-token>([^<]*)</d:sync-token>`)
-
-func (f *fakeServer) report(w http.ResponseWriter, p, body string) {
-	var out strings.Builder
-	switch {
-	case strings.Contains(body, "sync-collection"):
-		token := tokenPattern.FindStringSubmatch(body)[1]
-		since := 0
-		if token != "" {
-			if f.rejectToken {
-				w.WriteHeader(http.StatusForbidden)
-				return
-			}
-			since, _ = strconv.Atoi(strings.TrimPrefix(token, "tok-"))
-		}
-		for _, rp := range f.sortedPaths(p) {
-			if res := f.resources[rp]; res.version > since {
-				out.WriteString("<d:response>" + href(rp) + ok("<d:getetag>"+res.etag+"</d:getetag>") + "</d:response>")
-			}
-		}
-		for rp, v := range f.deleted {
-			if v > since && strings.HasPrefix(rp, p) && token != "" {
-				out.WriteString("<d:response>" + href(rp) + "<d:status>HTTP/1.1 404 Not Found</d:status></d:response>")
-			}
-		}
-		out.WriteString("<d:sync-token>tok-" + strconv.Itoa(f.version) + "</d:sync-token>")
-	case strings.Contains(body, "calendar-query"):
-		for _, rp := range f.sortedPaths(p) {
-			out.WriteString("<d:response>" + href(rp) + ok("<d:getetag>"+f.resources[rp].etag+"</d:getetag>") + "</d:response>")
-		}
-	case strings.Contains(body, "calendar-multiget"):
-		for _, m := range hrefPattern.FindAllStringSubmatch(body, -1) {
-			rp, _ := url.PathUnescape(m[1])
-			res, ok2 := f.resources[rp]
-			if !ok2 {
-				out.WriteString("<d:response>" + href(rp) + "<d:status>HTTP/1.1 404 Not Found</d:status></d:response>")
-				continue
-			}
-			out.WriteString("<d:response>" + href(rp) + ok("<d:getetag>"+res.etag+"</d:getetag><c:calendar-data><![CDATA["+res.data+"]]></c:calendar-data>") + "</d:response>")
-		}
-	}
-	multistatus(w, out.String())
-}
-
-func (f *fakeServer) sortedPaths(prefix string) []string {
-	var out []string
-	for rp := range f.resources {
-		if strings.HasPrefix(rp, prefix) {
-			out = append(out, rp)
-		}
-	}
-	sort.Strings(out)
-	return out
-}
+const workPath = caldavtest.WorkPath
 
 func event(uid, summary string) string {
 	return "BEGIN:VCALENDAR\r\nVERSION:2.0\r\nPRODID:test\r\nBEGIN:VEVENT\r\nUID:" + uid +
 		"\r\nDTSTART:20260301T090000Z\r\nSUMMARY:" + summary + "\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n"
 }
 
-func setup(t *testing.T) (*fakeServer, *Client) {
+func setup(t *testing.T) (*caldavtest.Server, *Client) {
 	t.Helper()
-	f := newFakeServer()
+	f := caldavtest.NewServer("me", "secret")
 	srv := httptest.NewServer(f)
 	t.Cleanup(srv.Close)
 	client, err := Connect(Config{URL: srv.URL + "/dav/", Username: "me", Password: "secret", HTTP: srv.Client()})
@@ -238,11 +45,26 @@ func TestCalendarsFollowsPrincipalAndHome(t *testing.T) {
 	}
 }
 
+// A url pointing at the collection itself is that one calendar.
+func TestCalendarsFromCollectionURL(t *testing.T) {
+	f := caldavtest.NewServer("me", "secret")
+	srv := httptest.NewServer(f)
+	defer srv.Close()
+	client, _ := Connect(Config{URL: srv.URL + workPath, Username: "me", Password: "secret", HTTP: srv.Client()})
+	cals, err := client.Calendars(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(cals) != 1 || cals[0].Path != workPath {
+		t.Errorf("calendars = %+v", cals)
+	}
+}
+
 func TestSyncThenIncremental(t *testing.T) {
 	f, client := setup(t)
 	ctx := context.Background()
-	f.put(workPath+"a.ics", event("a", "First"))
-	f.put(workPath+"b b.ics", event("b", "Second"))
+	f.Put(workPath+"a.ics", event("a", "First"))
+	f.Put(workPath+"b b.ics", event("b", "Second"))
 
 	first, err := client.Sync(ctx, workPath, "")
 	if err != nil {
@@ -255,12 +77,8 @@ func TestSyncThenIncremental(t *testing.T) {
 		t.Errorf("resource = %+v", first.Updated[1])
 	}
 
-	f.mu.Lock()
-	f.put(workPath+"a.ics", event("a", "First, edited"))
-	f.version++
-	delete(f.resources, workPath+"b b.ics")
-	f.deleted[workPath+"b b.ics"] = f.version
-	f.mu.Unlock()
+	f.Put(workPath+"a.ics", event("a", "First, edited"))
+	f.Remove(workPath + "b b.ics")
 
 	next, err := client.Sync(ctx, workPath, first.Token)
 	if err != nil {
@@ -276,7 +94,7 @@ func TestSyncThenIncremental(t *testing.T) {
 
 func TestSyncReportsInvalidToken(t *testing.T) {
 	f, client := setup(t)
-	f.rejectToken = true
+	f.RejectToken = true
 	if _, err := client.Sync(context.Background(), workPath, "tok-stale"); !errors.Is(err, ErrSyncTokenInvalid) {
 		t.Errorf("err = %v, want ErrSyncTokenInvalid", err)
 	}
@@ -285,7 +103,7 @@ func TestSyncReportsInvalidToken(t *testing.T) {
 func TestListAndMultiget(t *testing.T) {
 	f, client := setup(t)
 	ctx := context.Background()
-	f.put(workPath+"a.ics", event("a", "A"))
+	f.Put(workPath+"a.ics", event("a", "A"))
 	etags, err := client.List(ctx, workPath)
 	if err != nil {
 		t.Fatal(err)
@@ -315,9 +133,7 @@ func TestWritesAreConditional(t *testing.T) {
 		t.Errorf("create over existing = %v", err)
 	}
 
-	f.mu.Lock()
-	f.put(p, event("new", "Changed on the phone"))
-	f.mu.Unlock()
+	f.Put(p, event("new", "Changed on the phone"))
 	if _, err := client.Put(ctx, p, []byte(event("new", "Mine")), dav.PreconditionMatch, etag); !errors.Is(err, ErrConflict) {
 		t.Errorf("stale update = %v, want ErrConflict", err)
 	}
@@ -337,7 +153,7 @@ func TestWritesAreConditional(t *testing.T) {
 }
 
 func TestWrongPasswordIsAnError(t *testing.T) {
-	f := newFakeServer()
+	f := caldavtest.NewServer("me", "secret")
 	srv := httptest.NewServer(f)
 	defer srv.Close()
 	client, _ := Connect(Config{URL: srv.URL, Username: "me", Password: "wrong", HTTP: srv.Client()})

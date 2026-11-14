@@ -70,7 +70,45 @@ const (
 	// It carries the folder as well as the message so the list can move to
 	// where the message actually lives rather than opening it out of context.
 	EventOpenMessage = "message:open"
+	// EventCalendarSync fires as calendars sync, and once more with Running
+	// false when the run ends, carrying any error.
+	EventCalendarSync = "calendar:sync"
+	// EventCalendarChanged fires when events or calendars changed, from a sync
+	// or an edit, so the calendar view reloads the window it shows.
+	EventCalendarChanged = "calendar:changed"
+	// EventCalendarReminder fires when an event's reminder is due, alongside
+	// the desktop notification, so the ui can show it too.
+	EventCalendarReminder = "calendar:reminder"
 )
+
+// CalendarSyncEvent is the payload for EventCalendarSync. Done and Total
+// count calendars in the run; Calendar names the one being synced.
+type CalendarSyncEvent struct {
+	Running    bool   `json:"running"`
+	CalendarID int64  `json:"calendarId"`
+	Calendar   string `json:"calendar"`
+	Done       int    `json:"done"`
+	Total      int    `json:"total"`
+	Error      string `json:"error"`
+}
+
+// CalendarChangedEvent is the payload for EventCalendarChanged. An empty list
+// means anything may have changed.
+type CalendarChangedEvent struct {
+	CalendarIDs []int64 `json:"calendarIds"`
+}
+
+// CalendarReminderEvent is the payload for EventCalendarReminder.
+type CalendarReminderEvent struct {
+	EventID      int64  `json:"eventId"`
+	CalendarID   int64  `json:"calendarId"`
+	RecurrenceID string `json:"recurrenceId"`
+	Summary      string `json:"summary"`
+	Location     string `json:"location"`
+	Start        string `json:"start"`
+	End          string `json:"end"`
+	AllDay       bool   `json:"allDay"`
+}
 
 // OpenMessageEvent is the payload for EventOpenMessage.
 type OpenMessageEvent struct {

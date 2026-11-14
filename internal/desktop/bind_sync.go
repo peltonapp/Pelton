@@ -52,6 +52,8 @@ func (a *App) startBackgroundServices() {
 	goSafe("waking snoozed mail", a.runSnoozePoller)
 	goSafe("collecting addresses", a.harvestAddressBook)
 	goSafe("the periodic sync", a.runAutoSyncLoop)
+	goSafe("the calendar sync", a.runCalendarSyncLoop)
+	goSafe("calendar reminders", a.runReminderLoop)
 	a.startMCPIfEnabled()
 	goSafe("counting unread mail", a.refreshViewCounts)
 }
