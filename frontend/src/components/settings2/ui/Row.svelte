@@ -65,7 +65,6 @@
     on:pointerenter={onEnter}
     on:pointermove={onMove}
     on:pointerleave={onLeave}
-    on:pointerdown={onLeave}
     on:focusin={onFocusIn}
     on:focusout={onLeave}
   >

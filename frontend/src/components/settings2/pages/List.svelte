@@ -126,10 +126,9 @@
   }
 </script>
 
-<ListPreview />
-
 <Card title={$t('list.card.layout')}>
   <Row id="avatar-placement" label={$t('list.avatarPlacement.label')} hint={$t('list.avatarPlacement.hint')} stacked>
+    <ListPreview slot="preview" />
     <div class="fill">
       <ChoiceCards
         label={$t('list.avatarPlacement.label')}
@@ -146,6 +145,7 @@
     {/if}
   </Row>
   <Row id="row-template" label={$t('settingsPanel.label.rowLayout')} stacked>
+    <ListPreview slot="preview" />
     <div class="fill">
       <ChoiceCards
         label={$t('settingsPanel.label.rowLayout')}
@@ -160,9 +160,7 @@
     </div>
   </Row>
   <Row id="snippet" label={$t('settingsPanel.toggle.showMessagePreview')} hint={$t('settingsPanel.hint.previewShowsOn')} disabled={!snippetCapable}>
-    <span slot="preview">
-      <RowSkeleton avatar={$prefs.avatarPlacement} template="relaxed" height={84} />
-    </span>
+    <ListPreview slot="preview" />
     <ToggleSwitch
       checked={$prefs.rowShowSnippet}
       disabled={!snippetCapable}
@@ -171,11 +169,7 @@
     />
   </Row>
   <Row id="preview-lines" label={$t('settingsPanel.label.previewLines')} disabled={!snippetCapable || !$prefs.rowShowSnippet}>
-    <span slot="preview" class="lines-pic">
-      {#each Array($prefs.previewLines) as _, i (i)}
-        <span class="bar" class:short={i === $prefs.previewLines - 1}></span>
-      {/each}
-    </span>
+    <ListPreview slot="preview" />
     <Segmented
       label={$t('settingsPanel.label.previewLines')}
       value={String($prefs.previewLines)}
@@ -183,10 +177,8 @@
       on:change={(e) => setPreviewLines(Number(e.detail))}
     />
   </Row>
-</Card>
-
-<Card title={$t('settingsPanel.label.flaggedHighlight')} description={$t('settingsPanel.hint.barIconFlag')} bare>
-  <div data-setting="flag-highlight">
+  <Row id="flag-highlight" label={$t('settingsPanel.label.flaggedHighlight')} hint={$t('settingsPanel.hint.barIconFlag')} stacked>
+    <ListPreview slot="preview" />
     <ChoiceCards
       label={$t('settingsPanel.label.flaggedHighlight')}
       value={$prefs.flagHighlight}
@@ -197,11 +189,12 @@
     >
       <FlagSkeleton mode={option.key as 'flag' | 'left' | 'both' | 'off'} />
     </ChoiceCards>
-  </div>
+  </Row>
 </Card>
 
 <Card title={$t('list.card.dateTime')}>
   <Row id="date-time" label={$t('settingsPanel.dateTime')} hint={$t('settingsPanel.dateTimeNote')}>
+    <ListPreview slot="preview" />
     <ToggleSwitch
       checked={$prefs.showDateTime}
       label={$t('settingsPanel.dateTime')}
@@ -357,20 +350,4 @@
     border-radius: 50%;
   }
 
-  .lines-pic {
-    display: flex;
-    flex-direction: column;
-    gap: var(--space-2);
-  }
-
-  .bar {
-    display: block;
-    height: 6px;
-    border-radius: 3px;
-    background: var(--border-strong);
-  }
-
-  .bar.short {
-    width: 60%;
-  }
 </style>
