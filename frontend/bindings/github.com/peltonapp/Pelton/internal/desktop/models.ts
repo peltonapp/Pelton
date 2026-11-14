@@ -6255,6 +6255,12 @@ export class UIPrefsDTO {
     "composeMarkdown": boolean;
 
     /**
+     * SmoothCaret glides the text caret of the compose editor between
+     * positions in the new design. On by default.
+     */
+    "smoothCaret": boolean;
+
+    /**
      * UpdateCheckFrequency controls the automatic GitHub-releases update
      * check: off (default), startup (every launch), weekly, or monthly. A
      * manual check ("Check now" in settings) always runs regardless.
@@ -6663,6 +6669,9 @@ export class UIPrefsDTO {
         }
         if (!("composeMarkdown" in $$source)) {
             this["composeMarkdown"] = false;
+        }
+        if (!("smoothCaret" in $$source)) {
+            this["smoothCaret"] = false;
         }
         if (!("updateCheckFrequency" in $$source)) {
             this["updateCheckFrequency"] = "";
