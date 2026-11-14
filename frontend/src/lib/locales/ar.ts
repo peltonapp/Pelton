@@ -693,6 +693,7 @@ const ar: Record<string, string> = {
   'detail.attachments.save': 'حفظ',
   'detail.attachments.close': 'إغلاق',
   'detail.attachments.previewDialogLabel': 'معاينة المرفق',
+  'detail.attachments.pdfPage': 'صفحة واحدة',
   'detail.attachments.pdfPages': '{count} صفحات',
   'detail.attachments.pdfLocked': 'ملف PDF هذا محمي بكلمة مرور. احفظه لفتحه في مكان آخر.',
   'detail.attachments.pdfFailed': 'تعذر عرض ملف PDF هذا.',

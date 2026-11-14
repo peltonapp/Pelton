@@ -693,6 +693,7 @@ const de: Record<string, string> = {
   'detail.attachments.save': 'Speichern',
   'detail.attachments.close': 'Schließen',
   'detail.attachments.previewDialogLabel': 'Anhang-Vorschau',
+  'detail.attachments.pdfPage': '1 Seite',
   'detail.attachments.pdfPages': '{count} Seiten',
   'detail.attachments.pdfLocked': 'Dieses PDF ist passwortgeschützt. Speichere es, um es anderswo zu öffnen.',
   'detail.attachments.pdfFailed': 'Dieses PDF kann nicht angezeigt werden.',

@@ -700,6 +700,7 @@ const zhCN: Record<string, string> = {
   'detail.attachments.save': '保存',
   'detail.attachments.close': '关闭',
   'detail.attachments.previewDialogLabel': '附件预览',
+  'detail.attachments.pdfPage': '共 1 页',
   'detail.attachments.pdfPages': '共 {count} 页',
   'detail.attachments.pdfLocked': '此 PDF 受密码保护。请保存后在其他应用中打开。',
   'detail.attachments.pdfFailed': '无法显示此 PDF。',
