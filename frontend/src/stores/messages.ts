@@ -14,7 +14,9 @@ import {
   messageIds,
   searchMessageIds,
   type MessageIDs,
+  type SearchRequest,
 } from '../lib/api'
+import { emptyFilter, type SearchFilter } from '../lib/searchquery'
 import { type AsyncState, idle, loading, ready, failed } from '../lib/async'
 import { searchKind, resolveSort } from '../lib/searchsort'
 import { errorMessage, push, toastError } from './toast'
@@ -234,47 +236,26 @@ export async function loadOlder(): Promise<void> {
   }
 }
 
-// SearchFilter carries the structured constraints from the search chips: an
-// optional date window (0 on a side leaves it open), field-scoped terms, and
-// the attachment toggle. Free text is passed separately to runSearch.
-export interface SearchFilter {
-  afterUnix: number
-  beforeUnix: number
-  from: string
-  to: string
-  subject: string
-  hasAttachment: boolean
-  unreadOnly: boolean
-}
-
-export const emptyFilter: SearchFilter = {
-  afterUnix: 0,
-  beforeUnix: 0,
-  from: '',
-  to: '',
-  subject: '',
-  hasAttachment: false,
-  unreadOnly: false,
-}
-
 // datesActive reports whether the filter carries a date window, which is what
 // separates a 'dated' search from a 'filtered' one.
 function datesActive(f: SearchFilter): boolean {
   return f.afterUnix > 0 || f.beforeUnix > 0
 }
 
-// filterActive reports whether any chip constraint is set (used to decide
-// between the ranked search and the plain folder list).
-export function filterActive(f: SearchFilter): boolean {
-  return (
-    f.afterUnix > 0 ||
-    f.beforeUnix > 0 ||
-    f.from !== '' ||
-    f.to !== '' ||
-    f.subject !== '' ||
-    f.hasAttachment ||
-    f.unreadOnly
-  )
+// requestFilter is the part of a search request the filter supplies.
+function requestFilter(f: SearchFilter): Omit<SearchRequest, 'query' | 'limit' | 'offset' | 'sort'> {
+  return {
+    afterUnix: f.afterUnix,
+    beforeUnix: f.beforeUnix,
+    from: f.from,
+    to: f.to,
+    subject: f.subject,
+    hasAttachment: f.hasAttachment,
+    unreadOnly: f.unreadOnly,
+    flaggedOnly: f.flaggedOnly,
+    accountId: f.accountId,
+    folderId: f.folderId,
+  }
 }
 
 // searchPageSize is how many ranked hits one search page holds. It matches what
@@ -317,13 +298,7 @@ export function allMatchingIds(): Promise<MessageIDs> {
   if (active) {
     return searchMessageIds({
       query: active.query,
-      afterUnix: active.filter.afterUnix,
-      beforeUnix: active.filter.beforeUnix,
-      from: active.filter.from,
-      to: active.filter.to,
-      subject: active.filter.subject,
-      hasAttachment: active.filter.hasAttachment,
-      unreadOnly: active.filter.unreadOnly,
+      ...requestFilter(active.filter),
       limit: 0,
       offset: 0,
       // the same order the list is in: the backend caps how many ids it
@@ -347,13 +322,7 @@ function searchPage(
 ): Promise<{ messages: MessageSummary[]; total: number }> {
   return search({
     query,
-    afterUnix: filter.afterUnix,
-    beforeUnix: filter.beforeUnix,
-    from: filter.from,
-    to: filter.to,
-    subject: filter.subject,
-    hasAttachment: filter.hasAttachment,
-    unreadOnly: filter.unreadOnly,
+    ...requestFilter(filter),
     limit: searchPageSize,
     offset,
     sort,

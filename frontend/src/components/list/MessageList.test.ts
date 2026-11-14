@@ -78,7 +78,7 @@ beforeEach(() => {
   searchQuery.set('')
   openMessageId.set(null)
   clearSelection()
-  prefs.update((p) => ({ ...p, rowShowAvatar: false, appVimMode: false, multiSelectEnabled: true }))
+  prefs.update((p) => ({ ...p, rowShowAvatar: false, appVimMode: false, multiSelectEnabled: true, design: 'classic' }))
   bindings.set(defaultBindings)
 })
 

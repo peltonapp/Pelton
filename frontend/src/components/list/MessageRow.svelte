@@ -28,6 +28,8 @@
   import type { MessageSummary, RowTemplate, SwipeAction } from '../../lib/types'
   import { t } from '../../lib/i18n'
   import { vipSenders, bareAddress } from '../../stores/vip'
+  import Highlight from '../common/Highlight.svelte'
+  import { highlightTerms } from '../../stores/search'
 
   export let message: MessageSummary
   export let selected: boolean = false
@@ -246,9 +248,9 @@
         {#if inlineAvatar}
           <Avatar name={message.fromName} email={message.fromAddress} size={16} />
         {/if}
-        <span dir="auto" class="sender">{displayName(message.fromName, message.fromAddress)}</span>
+        <span dir="auto" class="sender"><Highlight text={displayName(message.fromName, message.fromAddress)} terms={$highlightTerms} /></span>
         {#if template === 'single'}
-          <span dir="auto" class="subject inline">{message.subject || $t('messageList.noSubject')}</span>
+          <span dir="auto" class="subject inline"><Highlight text={message.subject || $t('messageList.noSubject')} terms={$highlightTerms} /></span>
         {/if}
         <span class="meta">
           {#if message.flagColor > 0}
@@ -273,10 +275,10 @@
       </div>
 
       {#if template !== 'single'}
-        <div dir="auto" class="subject">{message.subject || $t('messageList.noSubject')}</div>
+        <div dir="auto" class="subject"><Highlight text={message.subject || $t('messageList.noSubject')} terms={$highlightTerms} /></div>
       {/if}
       {#if showSnippet}
-        <div dir="auto" class="snippet" style={`--preview-lines:${previewLines}`}>{message.snippet}</div>
+        <div dir="auto" class="snippet" style={`--preview-lines:${previewLines}`}><Highlight text={message.snippet} terms={$highlightTerms} /></div>
       {/if}
     </div>
   </div>

@@ -112,6 +112,10 @@
   /* shell geometry of the new design. the pane gap and radius are zero unless a
      pane style below sets them, so the classic design never sees them. */
   --topbar-height: 38px;
+  --topsearch-width: 560px;
+  --suggest-max-height: 420px;
+  --popover-width: 256px;
+  --chip-height: 20px;
   --rail-width: 40px;
   --pane-gap: 0px;
   --pane-radius: 0px;
@@ -162,6 +166,10 @@
 
   /* the dim behind a modal. */
   --scrim: rgba(0, 0, 0, 0.4);
+
+  /* search matches marked in list rows and the reading pane. */
+  --highlight-bg: color-mix(in srgb, var(--accent) 24%, transparent);
+  --highlight-fg: inherit;
 }
 
 /* dark theme. every token has a dark value so the toggle never leaves a gap. */
@@ -199,6 +207,9 @@
   --nightly-bg: color-mix(in srgb, #b965e2 22%, transparent);
 
   --scrim: rgba(0, 0, 0, 0.55);
+
+  --highlight-bg: color-mix(in srgb, var(--accent) 40%, transparent);
+  --highlight-fg: var(--text-primary);
 
   --shadow-overlay: 0 8px 24px rgba(0, 0, 0, 0.5);
 }
