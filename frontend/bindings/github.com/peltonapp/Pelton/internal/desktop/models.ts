@@ -4615,6 +4615,12 @@ export class UIPrefsDTO {
     "composeChips": boolean;
 
     /**
+     * ComposeMarkdown formats Markdown as it is typed in the composer. Off by
+     * default.
+     */
+    "composeMarkdown": boolean;
+
+    /**
      * UpdateCheckFrequency controls the automatic GitHub-releases update
      * check: off (default), startup (every launch), weekly, or monthly. A
      * manual check ("Check now" in settings) always runs regardless.
@@ -4992,6 +4998,9 @@ export class UIPrefsDTO {
         }
         if (!("composeChips" in $$source)) {
             this["composeChips"] = false;
+        }
+        if (!("composeMarkdown" in $$source)) {
+            this["composeMarkdown"] = false;
         }
         if (!("updateCheckFrequency" in $$source)) {
             this["updateCheckFrequency"] = "";

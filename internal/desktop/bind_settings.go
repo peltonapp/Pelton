@@ -97,6 +97,7 @@ const (
 	settingDefaultEditor       = "default_editor_mode"
 	settingComposeAutocomplete = "compose_autocomplete"
 	settingComposeChips        = "compose_chips"
+	settingComposeMarkdown     = "compose_markdown"
 	settingEmptyStateImage     = "empty_state_image"
 	settingEmptyStateFull      = "empty_state_fullscreen"
 	// menu bar settings only matter on macOS: Windows/Linux always use the
@@ -362,6 +363,9 @@ type UIPrefsDTO struct {
 	// ComposeChips renders recipients as removable chips. When off, the
 	// recipient fields fall back to a plain comma-separated text input.
 	ComposeChips bool `json:"composeChips"`
+	// ComposeMarkdown formats Markdown as it is typed in the composer. Off by
+	// default.
+	ComposeMarkdown bool `json:"composeMarkdown"`
 	// UpdateCheckFrequency controls the automatic GitHub-releases update
 	// check: off (default), startup (every launch), weekly, or monthly. A
 	// manual check ("Check now" in settings) always runs regardless.
@@ -538,6 +542,7 @@ func (a *App) GetUIPrefs() (UIPrefsDTO, error) {
 		DefaultEditorMode:          a.stringSetting(settingDefaultEditor, "plaintext"),
 		ComposeAutocomplete:        a.boolSetting(settingComposeAutocomplete, true),
 		ComposeChips:               a.boolSetting(settingComposeChips, true),
+		ComposeMarkdown:            a.boolSetting(settingComposeMarkdown, false),
 		UpdateCheckFrequency:       a.stringSetting(settingUpdateCheckFreq, defaultUpdateCheckFrequency),
 		EmptyStateImage:            a.stringSetting(settingEmptyStateImage, ""),
 		EmptyStateFullscreen:       a.boolSetting(settingEmptyStateFull, false),

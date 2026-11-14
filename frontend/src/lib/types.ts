@@ -522,6 +522,8 @@ export interface UIPrefs {
   // the recipient fields fall back to a plain comma-separated text input.
   composeAutocomplete: boolean
   composeChips: boolean
+  // composeMarkdown formats Markdown as it is typed in the composer.
+  composeMarkdown: boolean
   // updateCheckFrequency controls the automatic GitHub-releases update check:
   // 'off' (default), 'startup', 'weekly', or 'monthly'.
   updateCheckFrequency: string
