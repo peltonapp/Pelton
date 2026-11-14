@@ -1407,6 +1407,7 @@ const nl: Record<string, string> = {
   'settingsPanel.hint.multiSelect': 'Cmd/Ctrl-klik of Shift-klik op rijen om er meerdere tegelijk te selecteren. Met het toetsenbord breidt Shift+Omhoog/Omlaag de selectie uit en voegt Spatie de gemarkeerde rij toe of verwijdert die.',
   'settingsPanel.toggle.multiSelect': 'Meerdere berichten tegelijk selecteren',
   'settingsPanel.toggle.markReadOnOpen': 'Berichten als gelezen markeren bij openen',
+  'settingsPanel.toggle.openOnArrow': 'Berichten openen bij navigeren met de pijltjestoetsen',
   'settingsPanel.toggle.showSelectedCount': 'Aantal "N geselecteerd" tonen',
   'settingsPanel.toggle.showSelectedCountAria': 'Aantal geselecteerde items tonen',
   'settingsPanel.hint.indentGuides': 'Teken verticale hulplijnen die geneste mappen verbinden.',

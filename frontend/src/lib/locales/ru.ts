@@ -1407,6 +1407,7 @@ const ru: Record<string, string> = {
   'settingsPanel.hint.multiSelect': 'Cmd/Ctrl-клик или Shift-клик, чтобы выбрать сразу несколько строк. С клавиатуры Shift+Вверх/Вниз расширяет выделение, а Пробел добавляет или убирает подсвеченную строку.',
   'settingsPanel.toggle.multiSelect': 'Выбор нескольких сообщений одновременно',
   'settingsPanel.toggle.markReadOnOpen': 'Отмечать сообщения прочитанными при открытии',
+  'settingsPanel.toggle.openOnArrow': 'Открывать письма при перемещении стрелками',
   'settingsPanel.toggle.showSelectedCount': 'Показывать счётчик "N выбрано"',
   'settingsPanel.toggle.showSelectedCountAria': 'Показывает счётчик выбранных сообщений',
   'settingsPanel.hint.indentGuides': 'Рисует вертикальную линию, соединяющую вложенные папки одного аккаунта.',

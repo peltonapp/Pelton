@@ -1408,6 +1408,7 @@ const zhCN: Record<string, string> = {
   'settingsPanel.hint.multiSelect': '按住 Cmd/Ctrl 点击或按住 Shift 点击可一次选中多行。使用键盘时,Shift+上/下方向键可扩展选择,空格键可添加或移除高亮的行。',
   'settingsPanel.toggle.multiSelect': '允许一次选中多封邮件',
   'settingsPanel.toggle.markReadOnOpen': '打开邮件时标记为已读',
+  'settingsPanel.toggle.openOnArrow': '用方向键移动时打开邮件',
   'settingsPanel.toggle.showSelectedCount': '显示“已选中 N 封”计数',
   'settingsPanel.toggle.showSelectedCountAria': '显示已选中计数',
   'settingsPanel.hint.indentGuides': '绘制连接嵌套文件夹的竖向辅助线。',

@@ -1407,6 +1407,7 @@ const tr: Record<string, string> = {
   'settingsPanel.hint.multiSelect': 'Aynı anda birkaç satır seçmek için satırlara Cmd/Ctrl ile veya Shift ile tıklayın. Klavyede Shift+Yukarı/Aşağı seçimi genişletir, Boşluk ise vurgulanan satırı ekler veya çıkarır.',
   'settingsPanel.toggle.multiSelect': 'Aynı anda birden çok ileti seç',
   'settingsPanel.toggle.markReadOnOpen': 'İletileri açıldığında okundu olarak işaretle',
+  'settingsPanel.toggle.openOnArrow': 'Ok tuşlarıyla gezinirken iletileri aç',
   'settingsPanel.toggle.showSelectedCount': '"N seçili" sayısını göster',
   'settingsPanel.toggle.showSelectedCountAria': 'Seçili sayısını göster',
   'settingsPanel.hint.indentGuides': 'İç içe klasörleri birbirine bağlayan dikey kılavuz çizgileri çizer.',

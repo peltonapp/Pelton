@@ -2319,6 +2319,7 @@ export namespace desktop {
 	    statusClock: boolean;
 	    statusUnread: boolean;
 	    markReadOnOpen: boolean;
+	    openOnArrow: boolean;
 	    signatureAboveQuote: boolean;
 	    closeAction: string;
 	    startHidden: boolean;
@@ -2413,6 +2414,7 @@ export namespace desktop {
 	        this.statusClock = source["statusClock"];
 	        this.statusUnread = source["statusUnread"];
 	        this.markReadOnOpen = source["markReadOnOpen"];
+	        this.openOnArrow = source["openOnArrow"];
 	        this.signatureAboveQuote = source["signatureAboveQuote"];
 	        this.closeAction = source["closeAction"];
 	        this.startHidden = source["startHidden"];

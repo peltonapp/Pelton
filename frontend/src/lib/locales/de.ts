@@ -1407,6 +1407,7 @@ const de: Record<string, string> = {
   'settingsPanel.hint.multiSelect': 'Cmd/Strg-Klick oder Umschalt-Klick auf Zeilen, um mehrere gleichzeitig auszuwählen. Per Tastatur erweitert Umschalt+Auf/Ab die Auswahl, und die Leertaste fügt die markierte Zeile hinzu oder entfernt sie.',
   'settingsPanel.toggle.multiSelect': 'Mehrere Nachrichten gleichzeitig auswählen',
   'settingsPanel.toggle.markReadOnOpen': 'Nachrichten beim Öffnen als gelesen markieren',
+  'settingsPanel.toggle.openOnArrow': 'Nachrichten beim Bewegen mit den Pfeiltasten öffnen',
   'settingsPanel.toggle.showSelectedCount': 'Anzahl „N ausgewählt" anzeigen',
   'settingsPanel.toggle.showSelectedCountAria': 'Anzahl der Auswahl anzeigen',
   'settingsPanel.hint.indentGuides': 'Zeichnet vertikale Hilfslinien, die verschachtelte Ordner verbinden.',

@@ -1401,6 +1401,7 @@ const pt: Record<string, string> = {
   'settingsPanel.hint.multiSelect': 'Cmd/Ctrl-clique ou Shift-clique linhas para selecionar várias de uma vez. Pelo teclado, Shift+Cima/Baixo estende a seleção e Espaço adiciona ou remove a linha destacada.',
   'settingsPanel.toggle.multiSelect': 'Selecionar múltiplas mensagens de uma vez',
   'settingsPanel.toggle.markReadOnOpen': 'Marcar as mensagens como lidas ao abrir',
+  'settingsPanel.toggle.openOnArrow': 'Abrir as mensagens ao mover com as setas',
   'settingsPanel.toggle.showSelectedCount': 'Mostrar contagem "N selecionadas"',
   'settingsPanel.toggle.showSelectedCountAria': 'Mostrar contagem selecionada',
   'settingsPanel.hint.indentGuides': 'Desenhar linhas de guia verticais ligando pastas aninhadas.',

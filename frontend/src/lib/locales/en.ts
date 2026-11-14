@@ -1407,6 +1407,7 @@ const en: Record<string, string> = {
   'settingsPanel.hint.multiSelect': 'Cmd/Ctrl-click or Shift-click rows to select several at once. From the keyboard, Shift+Up/Down extends the selection and Space adds or removes the highlighted row.',
   'settingsPanel.toggle.multiSelect': 'Select multiple messages at once',
   'settingsPanel.toggle.markReadOnOpen': 'Mark messages as read when opened',
+  'settingsPanel.toggle.openOnArrow': 'Open messages as the arrow keys move',
   'settingsPanel.toggle.showSelectedCount': 'Show "N selected" count',
   'settingsPanel.toggle.showSelectedCountAria': 'Show selected count',
   'settingsPanel.hint.indentGuides': 'Draw vertical guide lines connecting nested folders.',

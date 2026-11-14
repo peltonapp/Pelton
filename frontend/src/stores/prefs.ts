@@ -92,6 +92,7 @@ const defaults: UIPrefs = {
   statusClock: true,
   statusUnread: true,
   markReadOnOpen: true,
+  openOnArrow: false,
   signatureAboveQuote: false,
   closeAction: 'background',
   startHidden: false,
@@ -551,6 +552,12 @@ export function setStatusUnread(value: boolean): void {
 export function setMarkReadOnOpen(value: boolean): void {
   prefs.update((p) => ({ ...p, markReadOnOpen: value }))
   void setSetting(SettingKeys.markReadOnOpen, String(value))
+}
+
+// setOpenOnArrow picks whether the arrow keys open the row they move to.
+export function setOpenOnArrow(value: boolean): void {
+  prefs.update((p) => ({ ...p, openOnArrow: value }))
+  void setSetting(SettingKeys.openOnArrow, String(value))
 }
 
 // setSignatureAboveQuote picks whether a reply's footer goes above the quote.
