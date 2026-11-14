@@ -1730,6 +1730,8 @@ const en: Record<string, string> = {
   'contacts.pickOne': 'Pick a contact to see it.',
   'contacts.deleteConfirm': 'Delete this contact from the server?',
   'contacts.deleted': 'Contact deleted.',
+  'calendar.eventDeleted': 'Event deleted.',
+  'calendar.eventQueued': 'Saved here. It goes to the server once it can be reached.',
   'contacts.extraFields': 'This card also carries {fields}, kept as they are when you save.',
   'contacts.updated': 'Updated {when}',
   'contacts.readOnly': 'This address book is read-only.',

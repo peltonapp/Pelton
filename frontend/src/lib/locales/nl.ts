@@ -1730,6 +1730,8 @@ const nl: Record<string, string> = {
   'contacts.pickOne': 'Kies een contact om het te zien.',
   'contacts.deleteConfirm': 'Dit contact van de server verwijderen?',
   'contacts.deleted': 'Contact verwijderd.',
+  'calendar.eventDeleted': 'Afspraak verwijderd.',
+  'calendar.eventQueued': 'Hier opgeslagen. Het gaat naar de server zodra die bereikbaar is.',
   'contacts.extraFields': 'Deze kaart bevat ook {fields}, die bij het opslaan onaangeroerd blijven.',
   'contacts.updated': 'Bijgewerkt {when}',
   'contacts.readOnly': 'Dit adresboek is alleen-lezen.',

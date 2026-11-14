@@ -1730,6 +1730,8 @@ const tr: Record<string, string> = {
   'contacts.pickOne': 'Görmek için bir kişi seçin.',
   'contacts.deleteConfirm': 'Bu kişi sunucudan silinsin mi?',
   'contacts.deleted': 'Kişi silindi.',
+  'calendar.eventDeleted': 'Etkinlik silindi.',
+  'calendar.eventQueued': 'Burada kaydedildi. Sunucuya ulaşılabildiğinde gönderilecek.',
   'contacts.extraFields': 'Bu kartta ayrıca {fields} var; kaydettiğinizde oldukları gibi tutulur.',
   'contacts.updated': 'Güncellendi: {when}',
   'contacts.readOnly': 'Bu adres defteri salt okunur.',

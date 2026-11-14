@@ -1738,6 +1738,8 @@ const it: Record<string, string> = {
   'contacts.pickOne': 'Seleziona un contatto per visualizzarlo.',
   'contacts.deleteConfirm': 'Eliminare questo contatto dal server?',
   'contacts.deleted': 'Contatto eliminato.',
+  'calendar.eventDeleted': 'Evento eliminato.',
+  'calendar.eventQueued': 'Salvato qui. Verrà inviato al server quando sarà raggiungibile.',
   'contacts.extraFields': 'Questa scheda contiene anche {fields}, che verranno mantenuti così come sono al momento del salvataggio.',
   'contacts.updated': 'Aggiornato il {when}',
   'contacts.readOnly': 'Questa rubrica è di sola lettura.',

@@ -928,6 +928,48 @@ export class AttachmentVerdictDTO {
 }
 
 /**
+ * AttendeeDTO is an attendee or the organizer. PartStat is NEEDS-ACTION,
+ * ACCEPTED, TENTATIVE, DECLINED or DELEGATED; Role is REQ-PARTICIPANT,
+ * OPT-PARTICIPANT, NON-PARTICIPANT or CHAIR.
+ */
+export class AttendeeDTO {
+    "email": string;
+    "name": string;
+    "role": string;
+    "partStat": string;
+    "rsvp": boolean;
+
+    /** Creates a new AttendeeDTO instance. */
+    constructor($$source: Partial<AttendeeDTO> = {}) {
+        if (!("email" in $$source)) {
+            this["email"] = "";
+        }
+        if (!("name" in $$source)) {
+            this["name"] = "";
+        }
+        if (!("role" in $$source)) {
+            this["role"] = "";
+        }
+        if (!("partStat" in $$source)) {
+            this["partStat"] = "";
+        }
+        if (!("rsvp" in $$source)) {
+            this["rsvp"] = false;
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new AttendeeDTO instance from a string or object.
+     */
+    static createFrom($$source: any = {}): AttendeeDTO {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new AttendeeDTO($$parsedSource as Partial<AttendeeDTO>);
+    }
+}
+
+/**
  * BackupInfoDTO describes a picked backup file so the import ui can show what it
  * holds (and when it was made) before the user commits to importing.
  */
@@ -1022,6 +1064,313 @@ export class CAFileDTO {
             $$parsedSource["subjects"] = $$createField1_0($$parsedSource["subjects"]);
         }
         return new CAFileDTO($$parsedSource as Partial<CAFileDTO>);
+    }
+}
+
+/**
+ * CalendarAccountDTO is one CalDAV login for the ui.
+ */
+export class CalendarAccountDTO {
+    "id": number;
+
+    /**
+     * AccountID is the mail account it was discovered from, 0 for none.
+     */
+    "accountId": number;
+
+    /**
+     * AddressBookID is the address book whose login it shares, 0 for none.
+     */
+    "addressBookId": number;
+    "name": string;
+    "url": string;
+    "username": string;
+
+    /**
+     * LastSync is rfc3339, empty when it never synced. LastError is the last
+     * failure in the server's own words.
+     */
+    "lastSync": string;
+    "lastError": string;
+    "hasPassword": boolean;
+    "calendarCount": number;
+
+    /** Creates a new CalendarAccountDTO instance. */
+    constructor($$source: Partial<CalendarAccountDTO> = {}) {
+        if (!("id" in $$source)) {
+            this["id"] = 0;
+        }
+        if (!("accountId" in $$source)) {
+            this["accountId"] = 0;
+        }
+        if (!("addressBookId" in $$source)) {
+            this["addressBookId"] = 0;
+        }
+        if (!("name" in $$source)) {
+            this["name"] = "";
+        }
+        if (!("url" in $$source)) {
+            this["url"] = "";
+        }
+        if (!("username" in $$source)) {
+            this["username"] = "";
+        }
+        if (!("lastSync" in $$source)) {
+            this["lastSync"] = "";
+        }
+        if (!("lastError" in $$source)) {
+            this["lastError"] = "";
+        }
+        if (!("hasPassword" in $$source)) {
+            this["hasPassword"] = false;
+        }
+        if (!("calendarCount" in $$source)) {
+            this["calendarCount"] = 0;
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new CalendarAccountDTO instance from a string or object.
+     */
+    static createFrom($$source: any = {}): CalendarAccountDTO {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new CalendarAccountDTO($$parsedSource as Partial<CalendarAccountDTO>);
+    }
+}
+
+/**
+ * CalendarAccountRequest creates or updates a calendar account, and is what
+ * discovery starts from. An empty Password on update leaves the stored one
+ * alone. With an AddressBookID, the url, username and password default to
+ * that address book's.
+ */
+export class CalendarAccountRequest {
+    "id": number;
+    "accountId": number;
+    "addressBookId": number;
+    "name": string;
+    "url": string;
+    "username": string;
+    "password": string;
+
+    /** Creates a new CalendarAccountRequest instance. */
+    constructor($$source: Partial<CalendarAccountRequest> = {}) {
+        if (!("id" in $$source)) {
+            this["id"] = 0;
+        }
+        if (!("accountId" in $$source)) {
+            this["accountId"] = 0;
+        }
+        if (!("addressBookId" in $$source)) {
+            this["addressBookId"] = 0;
+        }
+        if (!("name" in $$source)) {
+            this["name"] = "";
+        }
+        if (!("url" in $$source)) {
+            this["url"] = "";
+        }
+        if (!("username" in $$source)) {
+            this["username"] = "";
+        }
+        if (!("password" in $$source)) {
+            this["password"] = "";
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new CalendarAccountRequest instance from a string or object.
+     */
+    static createFrom($$source: any = {}): CalendarAccountRequest {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new CalendarAccountRequest($$parsedSource as Partial<CalendarAccountRequest>);
+    }
+}
+
+/**
+ * CalendarDTO is one calendar for the sidebar and pickers.
+ */
+export class CalendarDTO {
+    "id": number;
+
+    /**
+     * AccountID is the calendar account, 0 for a local calendar.
+     */
+    "accountId": number;
+    "accountName": string;
+
+    /**
+     * Name is empty for the local calendar the app starts with, which the ui
+     * labels itself.
+     */
+    "name": string;
+    "description": string;
+
+    /**
+     * Color is #rrggbb, or empty for the ui to choose.
+     */
+    "color": string;
+    "local": boolean;
+    "readOnly": boolean;
+    "visible": boolean;
+    "lastSync": string;
+    "lastError": string;
+
+    /**
+     * Default marks the calendar new events go to unless another is chosen.
+     */
+    "default": boolean;
+
+    /** Creates a new CalendarDTO instance. */
+    constructor($$source: Partial<CalendarDTO> = {}) {
+        if (!("id" in $$source)) {
+            this["id"] = 0;
+        }
+        if (!("accountId" in $$source)) {
+            this["accountId"] = 0;
+        }
+        if (!("accountName" in $$source)) {
+            this["accountName"] = "";
+        }
+        if (!("name" in $$source)) {
+            this["name"] = "";
+        }
+        if (!("description" in $$source)) {
+            this["description"] = "";
+        }
+        if (!("color" in $$source)) {
+            this["color"] = "";
+        }
+        if (!("local" in $$source)) {
+            this["local"] = false;
+        }
+        if (!("readOnly" in $$source)) {
+            this["readOnly"] = false;
+        }
+        if (!("visible" in $$source)) {
+            this["visible"] = false;
+        }
+        if (!("lastSync" in $$source)) {
+            this["lastSync"] = "";
+        }
+        if (!("lastError" in $$source)) {
+            this["lastError"] = "";
+        }
+        if (!("default" in $$source)) {
+            this["default"] = false;
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new CalendarDTO instance from a string or object.
+     */
+    static createFrom($$source: any = {}): CalendarDTO {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new CalendarDTO($$parsedSource as Partial<CalendarDTO>);
+    }
+}
+
+/**
+ * CalendarDiscoveryDTO is what discovery found: the endpoint it resolved to,
+ * which is the url to add the account with, and the calendars there.
+ */
+export class CalendarDiscoveryDTO {
+    "url": string;
+    "username": string;
+    "calendars": DiscoveredCalendarDTO[];
+
+    /**
+     * Exists is true when an account for this url and login is already
+     * configured.
+     */
+    "exists": boolean;
+
+    /** Creates a new CalendarDiscoveryDTO instance. */
+    constructor($$source: Partial<CalendarDiscoveryDTO> = {}) {
+        if (!("url" in $$source)) {
+            this["url"] = "";
+        }
+        if (!("username" in $$source)) {
+            this["username"] = "";
+        }
+        if (!("calendars" in $$source)) {
+            this["calendars"] = [];
+        }
+        if (!("exists" in $$source)) {
+            this["exists"] = false;
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new CalendarDiscoveryDTO instance from a string or object.
+     */
+    static createFrom($$source: any = {}): CalendarDiscoveryDTO {
+        const $$createField2_0 = $$createType4;
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        if ("calendars" in $$parsedSource) {
+            $$parsedSource["calendars"] = $$createField2_0($$parsedSource["calendars"]);
+        }
+        return new CalendarDiscoveryDTO($$parsedSource as Partial<CalendarDiscoveryDTO>);
+    }
+}
+
+/**
+ * CalendarSettingsDTO holds the calendar preferences.
+ */
+export class CalendarSettingsDTO {
+    /**
+     * SyncIntervalMinutes is how often calendars sync in the background; 0
+     * turns the periodic sync off.
+     */
+    "syncIntervalMinutes": number;
+
+    /**
+     * RemindersEnabled turns reminder notifications on or off.
+     */
+    "remindersEnabled": boolean;
+
+    /**
+     * DefaultReminderMinutes is the reminder a new event gets, -1 for none.
+     */
+    "defaultReminderMinutes": number;
+
+    /**
+     * DefaultCalendarID is where new events go, 0 for the first writable one.
+     */
+    "defaultCalendarId": number;
+
+    /** Creates a new CalendarSettingsDTO instance. */
+    constructor($$source: Partial<CalendarSettingsDTO> = {}) {
+        if (!("syncIntervalMinutes" in $$source)) {
+            this["syncIntervalMinutes"] = 0;
+        }
+        if (!("remindersEnabled" in $$source)) {
+            this["remindersEnabled"] = false;
+        }
+        if (!("defaultReminderMinutes" in $$source)) {
+            this["defaultReminderMinutes"] = 0;
+        }
+        if (!("defaultCalendarId" in $$source)) {
+            this["defaultCalendarId"] = 0;
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new CalendarSettingsDTO instance from a string or object.
+     */
+    static createFrom($$source: any = {}): CalendarSettingsDTO {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new CalendarSettingsDTO($$parsedSource as Partial<CalendarSettingsDTO>);
     }
 }
 
@@ -1156,11 +1505,11 @@ export class ComposeRequest {
      * Creates a new ComposeRequest instance from a string or object.
      */
     static createFrom($$source: any = {}): ComposeRequest {
-        const $$createField1_0 = $$createType4;
-        const $$createField2_0 = $$createType4;
-        const $$createField3_0 = $$createType4;
+        const $$createField1_0 = $$createType6;
+        const $$createField2_0 = $$createType6;
+        const $$createField3_0 = $$createType6;
         const $$createField8_0 = $$createType0;
-        const $$createField9_0 = $$createType6;
+        const $$createField9_0 = $$createType8;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("to" in $$parsedSource) {
             $$parsedSource["to"] = $$createField1_0($$parsedSource["to"]);
@@ -1202,7 +1551,7 @@ export class ConnectionTestDTO {
      * Creates a new ConnectionTestDTO instance from a string or object.
      */
     static createFrom($$source: any = {}): ConnectionTestDTO {
-        const $$createField0_0 = $$createType8;
+        const $$createField0_0 = $$createType10;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("untrusted" in $$parsedSource) {
             $$parsedSource["untrusted"] = $$createField0_0($$parsedSource["untrusted"]);
@@ -1248,9 +1597,9 @@ export class ContactConflictDTO {
      * Creates a new ContactConflictDTO instance from a string or object.
      */
     static createFrom($$source: any = {}): ContactConflictDTO {
-        const $$createField1_0 = $$createType9;
-        const $$createField2_0 = $$createType9;
-        const $$createField3_0 = $$createType9;
+        const $$createField1_0 = $$createType11;
+        const $$createField2_0 = $$createType11;
+        const $$createField3_0 = $$createType11;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("server" in $$parsedSource) {
             $$parsedSource["server"] = $$createField1_0($$parsedSource["server"]);
@@ -1341,8 +1690,8 @@ export class ContactDTO {
      * Creates a new ContactDTO instance from a string or object.
      */
     static createFrom($$source: any = {}): ContactDTO {
-        const $$createField8_0 = $$createType11;
-        const $$createField9_0 = $$createType11;
+        const $$createField8_0 = $$createType13;
+        const $$createField9_0 = $$createType13;
         const $$createField12_0 = $$createType0;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("emails" in $$parsedSource) {
@@ -1417,8 +1766,8 @@ export class ContactRequest {
      * Creates a new ContactRequest instance from a string or object.
      */
     static createFrom($$source: any = {}): ContactRequest {
-        const $$createField6_0 = $$createType11;
-        const $$createField7_0 = $$createType11;
+        const $$createField6_0 = $$createType13;
+        const $$createField7_0 = $$createType13;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("emails" in $$parsedSource) {
             $$parsedSource["emails"] = $$createField6_0($$parsedSource["emails"]);
@@ -1555,7 +1904,7 @@ export class DevActivityDTO {
      * Creates a new DevActivityDTO instance from a string or object.
      */
     static createFrom($$source: any = {}): DevActivityDTO {
-        const $$createField0_0 = $$createType13;
+        const $$createField0_0 = $$createType15;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("lines" in $$parsedSource) {
             $$parsedSource["lines"] = $$createField0_0($$parsedSource["lines"]);
@@ -1705,6 +2054,43 @@ export class DiscoveredBookDTO {
 }
 
 /**
+ * DiscoveredCalendarDTO is one calendar a login can see, offered before the
+ * account is added.
+ */
+export class DiscoveredCalendarDTO {
+    "name": string;
+    "path": string;
+    "color": string;
+    "readOnly": boolean;
+
+    /** Creates a new DiscoveredCalendarDTO instance. */
+    constructor($$source: Partial<DiscoveredCalendarDTO> = {}) {
+        if (!("name" in $$source)) {
+            this["name"] = "";
+        }
+        if (!("path" in $$source)) {
+            this["path"] = "";
+        }
+        if (!("color" in $$source)) {
+            this["color"] = "";
+        }
+        if (!("readOnly" in $$source)) {
+            this["readOnly"] = false;
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new DiscoveredCalendarDTO instance from a string or object.
+     */
+    static createFrom($$source: any = {}): DiscoveredCalendarDTO {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new DiscoveredCalendarDTO($$parsedSource as Partial<DiscoveredCalendarDTO>);
+    }
+}
+
+/**
  * DiscoveredDTO is the autodiscovery result for the wizard.
  */
 export class DiscoveredDTO {
@@ -1828,7 +2214,7 @@ export class DraftDTO {
      * Creates a new DraftDTO instance from a string or object.
      */
     static createFrom($$source: any = {}): DraftDTO {
-        const $$createField2_0 = $$createType14;
+        const $$createField2_0 = $$createType16;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("request" in $$parsedSource) {
             $$parsedSource["request"] = $$createField2_0($$parsedSource["request"]);
@@ -1872,6 +2258,371 @@ export class EmlExportDTO {
     static createFrom($$source: any = {}): EmlExportDTO {
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         return new EmlExportDTO($$parsedSource as Partial<EmlExportDTO>);
+    }
+}
+
+/**
+ * EventDTO is one event, or one occurrence of a recurring one, for the editor.
+ */
+export class EventDTO {
+    "id": number;
+    "calendarId": number;
+    "calendarName": string;
+    "calendarColor": string;
+    "uid": string;
+    "summary": string;
+    "description": string;
+    "location": string;
+    "url": string;
+    "status": string;
+    "transparency": string;
+    "categories": string[];
+
+    /**
+     * Start and End are rfc3339, or dates for an all-day event with End
+     * exclusive.
+     */
+    "start": string;
+    "end": string;
+    "allDay": boolean;
+
+    /**
+     * TimeZone is the IANA zone the event was written in, empty for UTC or a
+     * floating time.
+     */
+    "timeZone": string;
+
+    /**
+     * RRule is the series' rule as an RRULE value, empty for none.
+     */
+    "rrule": string;
+    "recurring": boolean;
+
+    /**
+     * ExDates are the rfc3339 starts of occurrences removed from the series.
+     */
+    "exDates": string[];
+
+    /**
+     * RecurrenceID is set when this is one occurrence of a series.
+     */
+    "recurrenceId": string;
+    "reminders": ReminderDTO[];
+    "organizer": AttendeeDTO;
+    "attendees": AttendeeDTO[];
+    "readOnly": boolean;
+    "pending": boolean;
+    "conflict": boolean;
+    "syncError": string;
+
+    /**
+     * Extra lists the iCalendar properties Pelton keeps but has no field for,
+     * so the editor can say the event carries more than the form.
+     */
+    "extra": string[];
+
+    /** Creates a new EventDTO instance. */
+    constructor($$source: Partial<EventDTO> = {}) {
+        if (!("id" in $$source)) {
+            this["id"] = 0;
+        }
+        if (!("calendarId" in $$source)) {
+            this["calendarId"] = 0;
+        }
+        if (!("calendarName" in $$source)) {
+            this["calendarName"] = "";
+        }
+        if (!("calendarColor" in $$source)) {
+            this["calendarColor"] = "";
+        }
+        if (!("uid" in $$source)) {
+            this["uid"] = "";
+        }
+        if (!("summary" in $$source)) {
+            this["summary"] = "";
+        }
+        if (!("description" in $$source)) {
+            this["description"] = "";
+        }
+        if (!("location" in $$source)) {
+            this["location"] = "";
+        }
+        if (!("url" in $$source)) {
+            this["url"] = "";
+        }
+        if (!("status" in $$source)) {
+            this["status"] = "";
+        }
+        if (!("transparency" in $$source)) {
+            this["transparency"] = "";
+        }
+        if (!("categories" in $$source)) {
+            this["categories"] = [];
+        }
+        if (!("start" in $$source)) {
+            this["start"] = "";
+        }
+        if (!("end" in $$source)) {
+            this["end"] = "";
+        }
+        if (!("allDay" in $$source)) {
+            this["allDay"] = false;
+        }
+        if (!("timeZone" in $$source)) {
+            this["timeZone"] = "";
+        }
+        if (!("rrule" in $$source)) {
+            this["rrule"] = "";
+        }
+        if (!("recurring" in $$source)) {
+            this["recurring"] = false;
+        }
+        if (!("exDates" in $$source)) {
+            this["exDates"] = [];
+        }
+        if (!("recurrenceId" in $$source)) {
+            this["recurrenceId"] = "";
+        }
+        if (!("reminders" in $$source)) {
+            this["reminders"] = [];
+        }
+        if (!("organizer" in $$source)) {
+            this["organizer"] = (new AttendeeDTO());
+        }
+        if (!("attendees" in $$source)) {
+            this["attendees"] = [];
+        }
+        if (!("readOnly" in $$source)) {
+            this["readOnly"] = false;
+        }
+        if (!("pending" in $$source)) {
+            this["pending"] = false;
+        }
+        if (!("conflict" in $$source)) {
+            this["conflict"] = false;
+        }
+        if (!("syncError" in $$source)) {
+            this["syncError"] = "";
+        }
+        if (!("extra" in $$source)) {
+            this["extra"] = [];
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new EventDTO instance from a string or object.
+     */
+    static createFrom($$source: any = {}): EventDTO {
+        const $$createField11_0 = $$createType0;
+        const $$createField18_0 = $$createType0;
+        const $$createField20_0 = $$createType18;
+        const $$createField21_0 = $$createType19;
+        const $$createField22_0 = $$createType20;
+        const $$createField27_0 = $$createType0;
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        if ("categories" in $$parsedSource) {
+            $$parsedSource["categories"] = $$createField11_0($$parsedSource["categories"]);
+        }
+        if ("exDates" in $$parsedSource) {
+            $$parsedSource["exDates"] = $$createField18_0($$parsedSource["exDates"]);
+        }
+        if ("reminders" in $$parsedSource) {
+            $$parsedSource["reminders"] = $$createField20_0($$parsedSource["reminders"]);
+        }
+        if ("organizer" in $$parsedSource) {
+            $$parsedSource["organizer"] = $$createField21_0($$parsedSource["organizer"]);
+        }
+        if ("attendees" in $$parsedSource) {
+            $$parsedSource["attendees"] = $$createField22_0($$parsedSource["attendees"]);
+        }
+        if ("extra" in $$parsedSource) {
+            $$parsedSource["extra"] = $$createField27_0($$parsedSource["extra"]);
+        }
+        return new EventDTO($$parsedSource as Partial<EventDTO>);
+    }
+}
+
+/**
+ * EventRequest is the editor's event. An ID of 0 creates one in CalendarID.
+ * For an occurrence of a recurring event, RecurrenceID names it and Scope says
+ * whether the change is for this occurrence, this and the following ones, or
+ * the whole series.
+ */
+export class EventRequest {
+    "id": number;
+    "calendarId": number;
+    "summary": string;
+    "description": string;
+    "location": string;
+    "url": string;
+    "status": string;
+    "transparency": string;
+    "categories": string[];
+    "start": string;
+    "end": string;
+    "allDay": boolean;
+    "timeZone": string;
+    "rrule": string;
+    "reminders": ReminderDTO[];
+    "organizer": AttendeeDTO;
+    "attendees": AttendeeDTO[];
+    "scope": string;
+    "recurrenceId": string;
+
+    /**
+     * Force writes over the server's copy. Only the "keep mine" choice on a
+     * conflict sets it.
+     */
+    "force": boolean;
+
+    /** Creates a new EventRequest instance. */
+    constructor($$source: Partial<EventRequest> = {}) {
+        if (!("id" in $$source)) {
+            this["id"] = 0;
+        }
+        if (!("calendarId" in $$source)) {
+            this["calendarId"] = 0;
+        }
+        if (!("summary" in $$source)) {
+            this["summary"] = "";
+        }
+        if (!("description" in $$source)) {
+            this["description"] = "";
+        }
+        if (!("location" in $$source)) {
+            this["location"] = "";
+        }
+        if (!("url" in $$source)) {
+            this["url"] = "";
+        }
+        if (!("status" in $$source)) {
+            this["status"] = "";
+        }
+        if (!("transparency" in $$source)) {
+            this["transparency"] = "";
+        }
+        if (!("categories" in $$source)) {
+            this["categories"] = [];
+        }
+        if (!("start" in $$source)) {
+            this["start"] = "";
+        }
+        if (!("end" in $$source)) {
+            this["end"] = "";
+        }
+        if (!("allDay" in $$source)) {
+            this["allDay"] = false;
+        }
+        if (!("timeZone" in $$source)) {
+            this["timeZone"] = "";
+        }
+        if (!("rrule" in $$source)) {
+            this["rrule"] = "";
+        }
+        if (!("reminders" in $$source)) {
+            this["reminders"] = [];
+        }
+        if (!("organizer" in $$source)) {
+            this["organizer"] = (new AttendeeDTO());
+        }
+        if (!("attendees" in $$source)) {
+            this["attendees"] = [];
+        }
+        if (!("scope" in $$source)) {
+            this["scope"] = "";
+        }
+        if (!("recurrenceId" in $$source)) {
+            this["recurrenceId"] = "";
+        }
+        if (!("force" in $$source)) {
+            this["force"] = false;
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new EventRequest instance from a string or object.
+     */
+    static createFrom($$source: any = {}): EventRequest {
+        const $$createField8_0 = $$createType0;
+        const $$createField14_0 = $$createType18;
+        const $$createField15_0 = $$createType19;
+        const $$createField16_0 = $$createType20;
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        if ("categories" in $$parsedSource) {
+            $$parsedSource["categories"] = $$createField8_0($$parsedSource["categories"]);
+        }
+        if ("reminders" in $$parsedSource) {
+            $$parsedSource["reminders"] = $$createField14_0($$parsedSource["reminders"]);
+        }
+        if ("organizer" in $$parsedSource) {
+            $$parsedSource["organizer"] = $$createField15_0($$parsedSource["organizer"]);
+        }
+        if ("attendees" in $$parsedSource) {
+            $$parsedSource["attendees"] = $$createField16_0($$parsedSource["attendees"]);
+        }
+        return new EventRequest($$parsedSource as Partial<EventRequest>);
+    }
+}
+
+/**
+ * EventSaveResultDTO is the outcome of a save or delete.
+ */
+export class EventSaveResultDTO {
+    /**
+     * Event is the saved event, or the edited occurrence of it.
+     */
+    "event": EventDTO;
+
+    /**
+     * Queued is true when the server could not be reached and the change
+     * waits for the next sync.
+     */
+    "queued": boolean;
+
+    /**
+     * Conflict is true when the server refused the change because its copy
+     * moved on. The change is kept, Server holds the server's version, and
+     * ResolveEventConflict settles it.
+     */
+    "conflict": boolean;
+    "server": EventDTO;
+
+    /** Creates a new EventSaveResultDTO instance. */
+    constructor($$source: Partial<EventSaveResultDTO> = {}) {
+        if (!("event" in $$source)) {
+            this["event"] = (new EventDTO());
+        }
+        if (!("queued" in $$source)) {
+            this["queued"] = false;
+        }
+        if (!("conflict" in $$source)) {
+            this["conflict"] = false;
+        }
+        if (!("server" in $$source)) {
+            this["server"] = (new EventDTO());
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new EventSaveResultDTO instance from a string or object.
+     */
+    static createFrom($$source: any = {}): EventSaveResultDTO {
+        const $$createField0_0 = $$createType21;
+        const $$createField3_0 = $$createType21;
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        if ("event" in $$parsedSource) {
+            $$parsedSource["event"] = $$createField0_0($$parsedSource["event"]);
+        }
+        if ("server" in $$parsedSource) {
+            $$parsedSource["server"] = $$createField3_0($$parsedSource["server"]);
+        }
+        return new EventSaveResultDTO($$parsedSource as Partial<EventSaveResultDTO>);
     }
 }
 
@@ -2000,6 +2751,42 @@ export class FolderDTO {
 }
 
 /**
+ * ICSImportResultDTO counts what an .ics import did.
+ */
+export class ICSImportResultDTO {
+    /**
+     * Imported are new events, Updated ones that replaced an event with the
+     * same UID, Skipped ones that could not be read.
+     */
+    "imported": number;
+    "updated": number;
+    "skipped": number;
+
+    /** Creates a new ICSImportResultDTO instance. */
+    constructor($$source: Partial<ICSImportResultDTO> = {}) {
+        if (!("imported" in $$source)) {
+            this["imported"] = 0;
+        }
+        if (!("updated" in $$source)) {
+            this["updated"] = 0;
+        }
+        if (!("skipped" in $$source)) {
+            this["skipped"] = 0;
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new ICSImportResultDTO instance from a string or object.
+     */
+    static createFrom($$source: any = {}): ICSImportResultDTO {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new ICSImportResultDTO($$parsedSource as Partial<ICSImportResultDTO>);
+    }
+}
+
+/**
  * ImageAllowEntryDTO is one entry in the remote-image allowlist: a trusted
  * sender address or sender domain, with an example cached message (if any) so
  * the ui can show the user which mail the entry came from.
@@ -2042,6 +2829,215 @@ export class ImageAllowEntryDTO {
     static createFrom($$source: any = {}): ImageAllowEntryDTO {
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         return new ImageAllowEntryDTO($$parsedSource as Partial<ImageAllowEntryDTO>);
+    }
+}
+
+/**
+ * InviteAnswerRequest answers an invitation. Response is accepted, tentative
+ * or declined. CalendarID is where an accepted event goes when no copy is
+ * stored yet; 0 means the default calendar.
+ */
+export class InviteAnswerRequest {
+    "messageId": number;
+    "calendarId": number;
+    "response": string;
+    "sendReply": boolean;
+
+    /** Creates a new InviteAnswerRequest instance. */
+    constructor($$source: Partial<InviteAnswerRequest> = {}) {
+        if (!("messageId" in $$source)) {
+            this["messageId"] = 0;
+        }
+        if (!("calendarId" in $$source)) {
+            this["calendarId"] = 0;
+        }
+        if (!("response" in $$source)) {
+            this["response"] = "";
+        }
+        if (!("sendReply" in $$source)) {
+            this["sendReply"] = false;
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new InviteAnswerRequest instance from a string or object.
+     */
+    static createFrom($$source: any = {}): InviteAnswerRequest {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new InviteAnswerRequest($$parsedSource as Partial<InviteAnswerRequest>);
+    }
+}
+
+/**
+ * InviteAnswerResultDTO is what answering or applying did.
+ */
+export class InviteAnswerResultDTO {
+    /**
+     * EventID is the stored event, 0 when the answer removed it.
+     */
+    "eventId": number;
+
+    /**
+     * OutboxID is the queued reply, 0 when none was sent.
+     */
+    "outboxId": number;
+
+    /** Creates a new InviteAnswerResultDTO instance. */
+    constructor($$source: Partial<InviteAnswerResultDTO> = {}) {
+        if (!("eventId" in $$source)) {
+            this["eventId"] = 0;
+        }
+        if (!("outboxId" in $$source)) {
+            this["outboxId"] = 0;
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new InviteAnswerResultDTO instance from a string or object.
+     */
+    static createFrom($$source: any = {}): InviteAnswerResultDTO {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new InviteAnswerResultDTO($$parsedSource as Partial<InviteAnswerResultDTO>);
+    }
+}
+
+/**
+ * InviteDTO is the invitation a message carries, for the banner above it.
+ */
+export class InviteDTO {
+    /**
+     * Found is false for a message without calendar data; nothing else is set
+     * then.
+     */
+    "found": boolean;
+
+    /**
+     * Method is REQUEST, CANCEL, REPLY or PUBLISH, or empty for an event
+     * shared without one.
+     */
+    "method": string;
+    "uid": string;
+    "sequence": number;
+    "summary": string;
+    "description": string;
+    "location": string;
+    "start": string;
+    "end": string;
+    "allDay": boolean;
+    "timeZone": string;
+    "recurring": boolean;
+    "rrule": string;
+    "recurrenceId": string;
+    "organizer": AttendeeDTO;
+    "attendees": AttendeeDTO[];
+
+    /**
+     * MyEmail is the mailbox address the invitation is read for, and
+     * MyPartStat that attendee's answer so far, as stored or as invited.
+     */
+    "myEmail": string;
+    "myPartStat": string;
+
+    /**
+     * ExistingEventID and ExistingCalendarID name the copy an earlier answer
+     * stored, 0 when there is none.
+     */
+    "existingEventId": number;
+    "existingCalendarId": number;
+
+    /**
+     * Outdated is true when the stored copy is newer than this invitation, as
+     * an older mail in the thread is.
+     */
+    "outdated": boolean;
+
+    /** Creates a new InviteDTO instance. */
+    constructor($$source: Partial<InviteDTO> = {}) {
+        if (!("found" in $$source)) {
+            this["found"] = false;
+        }
+        if (!("method" in $$source)) {
+            this["method"] = "";
+        }
+        if (!("uid" in $$source)) {
+            this["uid"] = "";
+        }
+        if (!("sequence" in $$source)) {
+            this["sequence"] = 0;
+        }
+        if (!("summary" in $$source)) {
+            this["summary"] = "";
+        }
+        if (!("description" in $$source)) {
+            this["description"] = "";
+        }
+        if (!("location" in $$source)) {
+            this["location"] = "";
+        }
+        if (!("start" in $$source)) {
+            this["start"] = "";
+        }
+        if (!("end" in $$source)) {
+            this["end"] = "";
+        }
+        if (!("allDay" in $$source)) {
+            this["allDay"] = false;
+        }
+        if (!("timeZone" in $$source)) {
+            this["timeZone"] = "";
+        }
+        if (!("recurring" in $$source)) {
+            this["recurring"] = false;
+        }
+        if (!("rrule" in $$source)) {
+            this["rrule"] = "";
+        }
+        if (!("recurrenceId" in $$source)) {
+            this["recurrenceId"] = "";
+        }
+        if (!("organizer" in $$source)) {
+            this["organizer"] = (new AttendeeDTO());
+        }
+        if (!("attendees" in $$source)) {
+            this["attendees"] = [];
+        }
+        if (!("myEmail" in $$source)) {
+            this["myEmail"] = "";
+        }
+        if (!("myPartStat" in $$source)) {
+            this["myPartStat"] = "";
+        }
+        if (!("existingEventId" in $$source)) {
+            this["existingEventId"] = 0;
+        }
+        if (!("existingCalendarId" in $$source)) {
+            this["existingCalendarId"] = 0;
+        }
+        if (!("outdated" in $$source)) {
+            this["outdated"] = false;
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new InviteDTO instance from a string or object.
+     */
+    static createFrom($$source: any = {}): InviteDTO {
+        const $$createField14_0 = $$createType19;
+        const $$createField15_0 = $$createType20;
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        if ("organizer" in $$parsedSource) {
+            $$parsedSource["organizer"] = $$createField14_0($$parsedSource["organizer"]);
+        }
+        if ("attendees" in $$parsedSource) {
+            $$parsedSource["attendees"] = $$createField15_0($$parsedSource["attendees"]);
+        }
+        return new InviteDTO($$parsedSource as Partial<InviteDTO>);
     }
 }
 
@@ -2555,14 +3551,14 @@ export class MessageDetailDTO {
      * Creates a new MessageDetailDTO instance from a string or object.
      */
     static createFrom($$source: any = {}): MessageDetailDTO {
-        const $$createField19_0 = $$createType15;
+        const $$createField19_0 = $$createType22;
         const $$createField21_0 = $$createType0;
         const $$createField22_0 = $$createType0;
         const $$createField31_0 = $$createType0;
-        const $$createField32_0 = $$createType17;
-        const $$createField33_0 = $$createType19;
-        const $$createField34_0 = $$createType20;
-        const $$createField36_0 = $$createType22;
+        const $$createField32_0 = $$createType24;
+        const $$createField33_0 = $$createType26;
+        const $$createField34_0 = $$createType27;
+        const $$createField36_0 = $$createType29;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("smime" in $$parsedSource) {
             $$parsedSource["smime"] = $$createField19_0($$parsedSource["smime"]);
@@ -2621,7 +3617,7 @@ export class MessageIDsDTO {
      * Creates a new MessageIDsDTO instance from a string or object.
      */
     static createFrom($$source: any = {}): MessageIDsDTO {
-        const $$createField0_0 = $$createType23;
+        const $$createField0_0 = $$createType30;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("ids" in $$parsedSource) {
             $$parsedSource["ids"] = $$createField0_0($$parsedSource["ids"]);
@@ -2663,7 +3659,7 @@ export class MessageListDTO {
      * Creates a new MessageListDTO instance from a string or object.
      */
     static createFrom($$source: any = {}): MessageListDTO {
-        const $$createField0_0 = $$createType25;
+        const $$createField0_0 = $$createType32;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("messages" in $$parsedSource) {
             $$parsedSource["messages"] = $$createField0_0($$parsedSource["messages"]);
@@ -2696,8 +3692,8 @@ export class MessageScanDTO {
      * Creates a new MessageScanDTO instance from a string or object.
      */
     static createFrom($$source: any = {}): MessageScanDTO {
-        const $$createField0_0 = $$createType27;
-        const $$createField1_0 = $$createType29;
+        const $$createField0_0 = $$createType34;
+        const $$createField1_0 = $$createType36;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("links" in $$parsedSource) {
             $$parsedSource["links"] = $$createField0_0($$parsedSource["links"]);
@@ -2822,12 +3818,120 @@ export class MessageSummaryDTO {
      * Creates a new MessageSummaryDTO instance from a string or object.
      */
     static createFrom($$source: any = {}): MessageSummaryDTO {
-        const $$createField19_0 = $$createType15;
+        const $$createField19_0 = $$createType22;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("smime" in $$parsedSource) {
             $$parsedSource["smime"] = $$createField19_0($$parsedSource["smime"]);
         }
         return new MessageSummaryDTO($$parsedSource as Partial<MessageSummaryDTO>);
+    }
+}
+
+/**
+ * OccurrenceDTO is one occurrence in a window, already expanded, with the
+ * calendar's color so the ui can draw it without a second lookup. Start and
+ * End are rfc3339; for an all-day occurrence they are dates, End exclusive.
+ */
+export class OccurrenceDTO {
+    "eventId": number;
+    "calendarId": number;
+    "calendarColor": string;
+    "uid": string;
+    "summary": string;
+    "location": string;
+    "start": string;
+    "end": string;
+    "allDay": boolean;
+    "recurring": boolean;
+
+    /**
+     * RecurrenceID names the occurrence for GetEvent, UpdateEvent and
+     * DeleteEvent: the rfc3339 instant it originally started at. Empty for an
+     * event that does not repeat.
+     */
+    "recurrenceId": string;
+
+    /**
+     * Override is true when this occurrence was edited on its own.
+     */
+    "override": boolean;
+    "status": string;
+    "transparency": string;
+    "readOnly": boolean;
+    "hasReminders": boolean;
+
+    /**
+     * Pending is true while a change made here has not reached the server.
+     */
+    "pending": boolean;
+    "conflict": boolean;
+
+    /** Creates a new OccurrenceDTO instance. */
+    constructor($$source: Partial<OccurrenceDTO> = {}) {
+        if (!("eventId" in $$source)) {
+            this["eventId"] = 0;
+        }
+        if (!("calendarId" in $$source)) {
+            this["calendarId"] = 0;
+        }
+        if (!("calendarColor" in $$source)) {
+            this["calendarColor"] = "";
+        }
+        if (!("uid" in $$source)) {
+            this["uid"] = "";
+        }
+        if (!("summary" in $$source)) {
+            this["summary"] = "";
+        }
+        if (!("location" in $$source)) {
+            this["location"] = "";
+        }
+        if (!("start" in $$source)) {
+            this["start"] = "";
+        }
+        if (!("end" in $$source)) {
+            this["end"] = "";
+        }
+        if (!("allDay" in $$source)) {
+            this["allDay"] = false;
+        }
+        if (!("recurring" in $$source)) {
+            this["recurring"] = false;
+        }
+        if (!("recurrenceId" in $$source)) {
+            this["recurrenceId"] = "";
+        }
+        if (!("override" in $$source)) {
+            this["override"] = false;
+        }
+        if (!("status" in $$source)) {
+            this["status"] = "";
+        }
+        if (!("transparency" in $$source)) {
+            this["transparency"] = "";
+        }
+        if (!("readOnly" in $$source)) {
+            this["readOnly"] = false;
+        }
+        if (!("hasReminders" in $$source)) {
+            this["hasReminders"] = false;
+        }
+        if (!("pending" in $$source)) {
+            this["pending"] = false;
+        }
+        if (!("conflict" in $$source)) {
+            this["conflict"] = false;
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new OccurrenceDTO instance from a string or object.
+     */
+    static createFrom($$source: any = {}): OccurrenceDTO {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new OccurrenceDTO($$parsedSource as Partial<OccurrenceDTO>);
     }
 }
 
@@ -3040,7 +4144,7 @@ export class PendingMailtoDTO {
      * Creates a new PendingMailtoDTO instance from a string or object.
      */
     static createFrom($$source: any = {}): PendingMailtoDTO {
-        const $$createField1_0 = $$createType30;
+        const $$createField1_0 = $$createType37;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("draft" in $$parsedSource) {
             $$parsedSource["draft"] = $$createField1_0($$parsedSource["draft"]);
@@ -3072,7 +4176,7 @@ export class PhishingDTO {
      * Creates a new PhishingDTO instance from a string or object.
      */
     static createFrom($$source: any = {}): PhishingDTO {
-        const $$createField1_0 = $$createType32;
+        const $$createField1_0 = $$createType39;
         const $$createField2_0 = $$createType0;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("signals" in $$parsedSource) {
@@ -3189,7 +4293,7 @@ export class ProfileDTO {
      * Creates a new ProfileDTO instance from a string or object.
      */
     static createFrom($$source: any = {}): ProfileDTO {
-        const $$createField9_0 = $$createType23;
+        const $$createField9_0 = $$createType30;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("accountIds" in $$parsedSource) {
             $$parsedSource["accountIds"] = $$createField9_0($$parsedSource["accountIds"]);
@@ -3254,7 +4358,7 @@ export class ProfileRequest {
      * Creates a new ProfileRequest instance from a string or object.
      */
     static createFrom($$source: any = {}): ProfileRequest {
-        const $$createField3_0 = $$createType23;
+        const $$createField3_0 = $$createType30;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("accountIds" in $$parsedSource) {
             $$parsedSource["accountIds"] = $$createField3_0($$parsedSource["accountIds"]);
@@ -3332,7 +4436,7 @@ export class ProtectionStatusDTO {
      * Creates a new ProtectionStatusDTO instance from a string or object.
      */
     static createFrom($$source: any = {}): ProtectionStatusDTO {
-        const $$createField3_0 = $$createType34;
+        const $$createField3_0 = $$createType41;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("recipients" in $$parsedSource) {
             $$parsedSource["recipients"] = $$createField3_0($$parsedSource["recipients"]);
@@ -3420,6 +4524,48 @@ export class RecipientKeyDTO {
     static createFrom($$source: any = {}): RecipientKeyDTO {
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         return new RecipientKeyDTO($$parsedSource as Partial<RecipientKeyDTO>);
+    }
+}
+
+/**
+ * ReminderDTO is one reminder. MinutesBefore counts back from the start, or
+ * from the end with RelatedEnd; negative means after. Absolute, when set, is
+ * an rfc3339 time that replaces both.
+ */
+export class ReminderDTO {
+    "minutesBefore": number;
+    "relatedEnd": boolean;
+    "absolute": string;
+
+    /**
+     * Action is DISPLAY, AUDIO or EMAIL; empty means DISPLAY.
+     */
+    "action": string;
+
+    /** Creates a new ReminderDTO instance. */
+    constructor($$source: Partial<ReminderDTO> = {}) {
+        if (!("minutesBefore" in $$source)) {
+            this["minutesBefore"] = 0;
+        }
+        if (!("relatedEnd" in $$source)) {
+            this["relatedEnd"] = false;
+        }
+        if (!("absolute" in $$source)) {
+            this["absolute"] = "";
+        }
+        if (!("action" in $$source)) {
+            this["action"] = "";
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new ReminderDTO instance from a string or object.
+     */
+    static createFrom($$source: any = {}): ReminderDTO {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new ReminderDTO($$parsedSource as Partial<ReminderDTO>);
     }
 }
 
@@ -3616,7 +4762,7 @@ export class SaveThemeRequest {
      * Creates a new SaveThemeRequest instance from a string or object.
      */
     static createFrom($$source: any = {}): SaveThemeRequest {
-        const $$createField5_0 = $$createType35;
+        const $$createField5_0 = $$createType42;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("tokens" in $$parsedSource) {
             $$parsedSource["tokens"] = $$createField5_0($$parsedSource["tokens"]);
@@ -3745,7 +4891,7 @@ export class SearchResultDTO {
      * Creates a new SearchResultDTO instance from a string or object.
      */
     static createFrom($$source: any = {}): SearchResultDTO {
-        const $$createField0_0 = $$createType25;
+        const $$createField0_0 = $$createType32;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("messages" in $$parsedSource) {
             $$parsedSource["messages"] = $$createField0_0($$parsedSource["messages"]);
@@ -3963,8 +5109,8 @@ export class ThemeApplyDTO {
      * Creates a new ThemeApplyDTO instance from a string or object.
      */
     static createFrom($$source: any = {}): ThemeApplyDTO {
-        const $$createField2_0 = $$createType35;
-        const $$createField4_0 = $$createType35;
+        const $$createField2_0 = $$createType42;
+        const $$createField4_0 = $$createType42;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("tokens" in $$parsedSource) {
             $$parsedSource["tokens"] = $$createField2_0($$parsedSource["tokens"]);
@@ -4021,7 +5167,7 @@ export class ThemeDraftDTO {
      * Creates a new ThemeDraftDTO instance from a string or object.
      */
     static createFrom($$source: any = {}): ThemeDraftDTO {
-        const $$createField5_0 = $$createType35;
+        const $$createField5_0 = $$createType42;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("tokens" in $$parsedSource) {
             $$parsedSource["tokens"] = $$createField5_0($$parsedSource["tokens"]);
@@ -4093,8 +5239,8 @@ export class ThemeImportPreviewDTO {
      * Creates a new ThemeImportPreviewDTO instance from a string or object.
      */
     static createFrom($$source: any = {}): ThemeImportPreviewDTO {
-        const $$createField2_0 = $$createType36;
-        const $$createField3_0 = $$createType38;
+        const $$createField2_0 = $$createType43;
+        const $$createField3_0 = $$createType45;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("info" in $$parsedSource) {
             $$parsedSource["info"] = $$createField2_0($$parsedSource["info"]);
@@ -4328,8 +5474,8 @@ export class ThunderbirdProfileDTO {
      * Creates a new ThunderbirdProfileDTO instance from a string or object.
      */
     static createFrom($$source: any = {}): ThunderbirdProfileDTO {
-        const $$createField2_0 = $$createType40;
-        const $$createField3_0 = $$createType42;
+        const $$createField2_0 = $$createType47;
+        const $$createField3_0 = $$createType49;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("accounts" in $$parsedSource) {
             $$parsedSource["accounts"] = $$createField2_0($$parsedSource["accounts"]);
@@ -5442,7 +6588,7 @@ export class UserLocaleApplyDTO {
      * Creates a new UserLocaleApplyDTO instance from a string or object.
      */
     static createFrom($$source: any = {}): UserLocaleApplyDTO {
-        const $$createField3_0 = $$createType35;
+        const $$createField3_0 = $$createType42;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("strings" in $$parsedSource) {
             $$parsedSource["strings"] = $$createField3_0($$parsedSource["strings"]);
@@ -5690,43 +6836,50 @@ export class VirusTotalConfigDTO {
 const $$createType0 = $Create.Array($Create.Any);
 const $$createType1 = AccountProxyDTO.createFrom;
 const $$createType2 = VerdictDTO.createFrom;
-const $$createType3 = AddressDTO.createFrom;
+const $$createType3 = DiscoveredCalendarDTO.createFrom;
 const $$createType4 = $Create.Array($$createType3);
-const $$createType5 = ComposeAttachment.createFrom;
+const $$createType5 = AddressDTO.createFrom;
 const $$createType6 = $Create.Array($$createType5);
-const $$createType7 = UntrustedCertDTO.createFrom;
+const $$createType7 = ComposeAttachment.createFrom;
 const $$createType8 = $Create.Array($$createType7);
-const $$createType9 = ContactDTO.createFrom;
-const $$createType10 = ContactValueDTO.createFrom;
-const $$createType11 = $Create.Array($$createType10);
-const $$createType12 = DevLogLineDTO.createFrom;
+const $$createType9 = UntrustedCertDTO.createFrom;
+const $$createType10 = $Create.Array($$createType9);
+const $$createType11 = ContactDTO.createFrom;
+const $$createType12 = ContactValueDTO.createFrom;
 const $$createType13 = $Create.Array($$createType12);
-const $$createType14 = ComposeRequest.createFrom;
-const $$createType15 = SMIMEDTO.createFrom;
-const $$createType16 = TrackingPixelDTO.createFrom;
-const $$createType17 = $Create.Array($$createType16);
-const $$createType18 = AttachmentDTO.createFrom;
-const $$createType19 = $Create.Array($$createType18);
-const $$createType20 = PhishingDTO.createFrom;
-const $$createType21 = UnsubscribeDTO.createFrom;
-const $$createType22 = $Create.Nullable($$createType21);
-const $$createType23 = $Create.Array($Create.Any);
-const $$createType24 = MessageSummaryDTO.createFrom;
-const $$createType25 = $Create.Array($$createType24);
-const $$createType26 = LinkVerdictDTO.createFrom;
-const $$createType27 = $Create.Array($$createType26);
-const $$createType28 = AttachmentVerdictDTO.createFrom;
-const $$createType29 = $Create.Array($$createType28);
-const $$createType30 = MailtoDraft.createFrom;
-const $$createType31 = PhishingSignalDTO.createFrom;
+const $$createType14 = DevLogLineDTO.createFrom;
+const $$createType15 = $Create.Array($$createType14);
+const $$createType16 = ComposeRequest.createFrom;
+const $$createType17 = ReminderDTO.createFrom;
+const $$createType18 = $Create.Array($$createType17);
+const $$createType19 = AttendeeDTO.createFrom;
+const $$createType20 = $Create.Array($$createType19);
+const $$createType21 = EventDTO.createFrom;
+const $$createType22 = SMIMEDTO.createFrom;
+const $$createType23 = TrackingPixelDTO.createFrom;
+const $$createType24 = $Create.Array($$createType23);
+const $$createType25 = AttachmentDTO.createFrom;
+const $$createType26 = $Create.Array($$createType25);
+const $$createType27 = PhishingDTO.createFrom;
+const $$createType28 = UnsubscribeDTO.createFrom;
+const $$createType29 = $Create.Nullable($$createType28);
+const $$createType30 = $Create.Array($Create.Any);
+const $$createType31 = MessageSummaryDTO.createFrom;
 const $$createType32 = $Create.Array($$createType31);
-const $$createType33 = RecipientKeyDTO.createFrom;
+const $$createType33 = LinkVerdictDTO.createFrom;
 const $$createType34 = $Create.Array($$createType33);
-const $$createType35 = $Create.Map($Create.Any, $Create.Any);
-const $$createType36 = ThemeInfoDTO.createFrom;
-const $$createType37 = themepack$0.CSSFile.createFrom;
-const $$createType38 = $Create.Array($$createType37);
-const $$createType39 = ThunderbirdAccountDTO.createFrom;
-const $$createType40 = $Create.Array($$createType39);
-const $$createType41 = ThunderbirdFolderDTO.createFrom;
-const $$createType42 = $Create.Array($$createType41);
+const $$createType35 = AttachmentVerdictDTO.createFrom;
+const $$createType36 = $Create.Array($$createType35);
+const $$createType37 = MailtoDraft.createFrom;
+const $$createType38 = PhishingSignalDTO.createFrom;
+const $$createType39 = $Create.Array($$createType38);
+const $$createType40 = RecipientKeyDTO.createFrom;
+const $$createType41 = $Create.Array($$createType40);
+const $$createType42 = $Create.Map($Create.Any, $Create.Any);
+const $$createType43 = ThemeInfoDTO.createFrom;
+const $$createType44 = themepack$0.CSSFile.createFrom;
+const $$createType45 = $Create.Array($$createType44);
+const $$createType46 = ThunderbirdAccountDTO.createFrom;
+const $$createType47 = $Create.Array($$createType46);
+const $$createType48 = ThunderbirdFolderDTO.createFrom;
+const $$createType49 = $Create.Array($$createType48);
