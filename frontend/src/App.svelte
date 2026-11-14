@@ -1584,8 +1584,11 @@
     on:dblclick={titleBarDoubleClick}
   >
     <!-- the app mark sits where a native title bar would put the title, just
-         past the traffic lights -->
-    <img class="titlebar-logo" src={peltonLogo} alt="" draggable="false" />
+         past the traffic lights. the new design's overlays have headers of
+         their own there. -->
+    {#if classic}
+      <img class="titlebar-logo" src={peltonLogo} alt="" draggable="false" />
+    {/if}
   </div>
 {/if}
 
