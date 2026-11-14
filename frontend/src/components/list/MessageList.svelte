@@ -191,9 +191,13 @@
     }
   }
 
+  let searchFilter: SearchFilter = emptyFilter
   let lastKey = ''
   $: if ($selection && selectionKey($selection) !== lastKey) {
     lastKey = selectionKey($selection)
+    // the search bar drops its chips with the folder, so the filter they
+    // stood for must go too, or the next search still carries it.
+    searchFilter = emptyFilter
     activeIndex = -1
     clearSelection()
     resetScroll()
@@ -288,8 +292,6 @@
 
   // search handling. the list shows ranked results when there is a query or an
   // active date filter, and the selection's normal list otherwise.
-  let searchFilter: SearchFilter = emptyFilter
-
   function applySearch(query: string, filter: SearchFilter): void {
     activeIndex = -1
     clearSelection()
