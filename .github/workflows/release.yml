@@ -76,8 +76,11 @@ jobs:
           gh release create "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --draft --title "$RELEASE_TAG" --notes ""
 
   # ---------------------------------------------------------------------------
-  # macOS: Apple Silicon only. Intel builds were dropped (no runner coverage
-  # to keep validating them, and the target audience has moved to arm64).
+  # macOS: Apple Silicon, plus an Intel build. The Intel one is cross-compiled
+  # on the same Apple Silicon runner (go, clang and the macOS SDK all target
+  # x86_64 from there) and is untested: nobody on the project has an Intel Mac
+  # to try it on, which is why it was dropped once and why the release notes
+  # say so.
   # ---------------------------------------------------------------------------
   macos:
     needs: draft
@@ -89,6 +92,9 @@ jobs:
           - arch: arm64
             runner: macos-15
             label: applesilicon
+          - arch: amd64
+            runner: macos-15
+            label: intel
     runs-on: ${{ matrix.runner }}
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
