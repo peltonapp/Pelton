@@ -15,6 +15,7 @@
   import { views, openViewEditor, editViewInEditor } from '../../stores/views'
   import { syncing } from '../../stores/outbox'
   import { prefs } from '../../stores/prefs'
+  import { selection } from '../../stores/selection'
   import { reorder, type ReorderDetail } from '../../lib/reorder'
   import { reorderAccounts } from '../../lib/api'
   import { toastError, errorMessage } from '../../stores/toast'
@@ -26,8 +27,13 @@
   // saved-Views placement: 'hidden' (off), 'sidebar' (a group), or 'tab' (a
   // Mail/Views toggle swapping the sidebar body).
   $: placement = $prefs.viewsPlacement
-  // in tab mode, which pane the sidebar body shows.
+  // in tab mode, which pane the sidebar body shows. It follows where the
+  // selection lands, so a saved view opened from the command palette or a
+  // shortcut shows up under Views and a folder under Mail.
   let tab: 'mail' | 'views' = 'mail'
+  $: if (placement === 'tab') {
+    tab = $selection.kind === 'savedView' ? 'views' : 'mail'
+  }
 
   // account email by id, so the Pinned group can say which mailbox a folder
   // belongs to.

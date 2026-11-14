@@ -12,6 +12,9 @@
     IconRefresh,
   } from '@tabler/icons-svelte'
   import { createEventDispatcher, onMount, tick } from 'svelte'
+  import { get } from 'svelte/store'
+  import { popupIsOpen } from '../../lib/popups'
+  import { recording } from '../../stores/shortcuts'
   import SegmentedSetting from './SegmentedSetting.svelte'
   import StepSlider from './StepSlider.svelte'
   import AccentPicker from './AccentPicker.svelte'
@@ -790,8 +793,10 @@
     setDensity(event.detail as DensityPref)
   }
 
+  // escape closes the panel, unless an open dropdown or a shortcut being
+  // recorded wants it first.
   function onKeydown(event: KeyboardEvent): void {
-    if (event.key === 'Escape') {
+    if (event.key === 'Escape' && !popupIsOpen() && !get(recording)) {
       dispatch('close')
     }
   }

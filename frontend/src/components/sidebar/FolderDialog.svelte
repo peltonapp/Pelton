@@ -123,10 +123,14 @@
   }
 
   function onKeydown(event: KeyboardEvent): void {
+    if (busy) {
+      return
+    }
     if (event.key === 'Escape') {
       close()
     }
-    if (event.key === 'Enter' && canSubmit) {
+    // enter on a button presses that button; it only submits from elsewhere
+    if (event.key === 'Enter' && canSubmit && !(event.target instanceof HTMLButtonElement)) {
       void submit()
     }
   }

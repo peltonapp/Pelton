@@ -100,7 +100,9 @@
   $: if ($messageDetail.data && currentVerdictMessage() !== $messageDetail.data.id) {
     resetVerdicts($messageDetail.data.id)
   }
-  $: if (canScan && $messageDetail.data && $messageDetail.data.id !== autoScannedId) {
+  // a scan still running for the previous message holds the next one back
+  // until it ends, which re-runs this block, instead of skipping it.
+  $: if (canScan && !$scanning && $messageDetail.data && $messageDetail.data.id !== autoScannedId) {
     autoScannedId = $messageDetail.data.id
     if ($virusTotal.autoScanLinks || $virusTotal.autoScanAttachments) {
       void runScan($messageDetail.data.id, $virusTotal.autoScanLinks, $virusTotal.autoScanAttachments)
@@ -132,11 +134,15 @@
 
   async function toggleFlag(detail: MessageDetail): Promise<void> {
     const next = !detail.flagged
-    messageDetail.update((s) => (s.data ? { ...s, data: { ...s.data, flagged: next } } : s))
-    patchInList(detail.id, { flagged: next })
+    const apply = (flagged: boolean) => {
+      messageDetail.update((s) => (s.data?.id === detail.id ? { ...s, data: { ...s.data, flagged } } : s))
+      patchInList(detail.id, { flagged })
+    }
+    apply(next)
     try {
       await setFlagged(detail.id, next)
     } catch (err) {
+      apply(!next)
       toastError(errorMessage(err))
     }
   }
