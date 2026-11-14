@@ -125,7 +125,13 @@
   }
 
   let listEl: HTMLDivElement
+  // highlightId is the row the keyboard highlight sits on; activeIndex is its
+  // position in the current list. Keeping the id rather than the index means a
+  // sync or a flag change that rewrites the list leaves the highlight where
+  // the user put it.
+  let highlightId: number | null = null
   let activeIndex = -1
+  $: activeIndex = highlightId === null ? -1 : items.findIndex((m) => m.id === highlightId)
 
   // virtualization. the list can hold thousands of rows, so we only render the
   // window around the viewport plus a little overscan, padding the rest with
@@ -198,7 +204,6 @@
     // the search bar drops its chips with the folder, so the filter they
     // stood for must go too, or the next search still carries it.
     searchFilter = emptyFilter
-    activeIndex = -1
     clearSelection()
     resetScroll()
     void loadList($selection)
@@ -273,11 +278,12 @@
   // While app vim mode extends a range its cursor leaves the open message
   // behind, and the highlight goes with the cursor.
   $: cursorId = $rangeCursor ?? $openMessageId
-  $: if (cursorId !== null) {
-    // -1 is a real result: changing from search results back to the mailbox can
-    // leave the open message outside the new list, so its old numeric position
-    // must not highlight whichever row replaced it.
-    activeIndex = items.findIndex((m) => m.id === cursorId)
+  let lastCursorId: number | null = null
+  $: if (cursorId !== lastCursorId) {
+    lastCursorId = cursorId
+    if (cursorId !== null) {
+      highlightId = cursorId
+    }
   }
 
   // a range cursor is moved from App.svelte, which cannot scroll this list.
@@ -293,7 +299,6 @@
   // search handling. the list shows ranked results when there is a query or an
   // active date filter, and the selection's normal list otherwise.
   function applySearch(query: string, filter: SearchFilter): void {
-    activeIndex = -1
     clearSelection()
     resetScroll()
     if (query === '' && !filterActive(filter)) {
@@ -346,7 +351,7 @@
         toastError(errorMessage(err))
       }
     }
-    activeIndex = index
+    highlightId = item.id
     clearSelection()
     // the row that was opened is where a following shift-click measures from.
     anchorAt(item.id)
@@ -374,12 +379,12 @@
     }
     if ($prefs.multiSelectEnabled && (event.metaKey || event.ctrlKey)) {
       toggleSelect(item.id)
-      activeIndex = index
+      highlightId = item.id
       return
     }
     if ($prefs.multiSelectEnabled && event.shiftKey) {
       selectRange(items.map((m) => m.id), item.id)
-      activeIndex = index
+      highlightId = item.id
       return
     }
     void open(index)
@@ -415,9 +420,10 @@
       if (extend && activeIndex >= 0) {
         ensureAnchor(items[activeIndex].id)
       }
-      activeIndex =
-        event.key === 'ArrowDown' ? Math.min(activeIndex + 1, items.length - 1) : Math.max(activeIndex - 1, 0)
-      const id = items[activeIndex].id
+      const next = event.key === 'ArrowDown' ? Math.min(activeIndex + 1, items.length - 1) : Math.max(activeIndex - 1, 0)
+      const id = items[next].id
+      highlightId = id
+      await tick()
       // a plain move makes the row the anchor, so a range started from it
       // includes it, the way a click does.
       if (extend) {
