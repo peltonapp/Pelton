@@ -3659,6 +3659,22 @@ export class SearchRequestDTO {
     "unreadOnly": boolean;
 
     /**
+     * FlaggedOnly filters to flagged (starred) messages.
+     */
+    "flaggedOnly": boolean;
+
+    /**
+     * AccountID limits results to one account; 0 searches every account.
+     */
+    "accountId": number;
+
+    /**
+     * FolderID limits results to one folder, from an in: chip; 0 searches every
+     * folder.
+     */
+    "folderId": number;
+
+    /**
      * Sort is the order results come back in: relevance, newest, oldest,
      * subjectAsc or subjectDesc. Empty means relevance. The ui resolves its
      * "automatic" setting to one of these before asking, so the choice of what
@@ -3698,6 +3714,15 @@ export class SearchRequestDTO {
         }
         if (!("unreadOnly" in $$source)) {
             this["unreadOnly"] = false;
+        }
+        if (!("flaggedOnly" in $$source)) {
+            this["flaggedOnly"] = false;
+        }
+        if (!("accountId" in $$source)) {
+            this["accountId"] = 0;
+        }
+        if (!("folderId" in $$source)) {
+            this["folderId"] = 0;
         }
         if (!("sort" in $$source)) {
             this["sort"] = "";
@@ -4682,6 +4707,12 @@ export class UIPrefsDTO {
     "nativeTitlebar": boolean;
 
     /**
+     * QuickFilterBar shows the quick filter bar (unread, flagged, attachments,
+     * contacts, text) above the message list in the new design.
+     */
+    "quickFilterBar": boolean;
+
+    /**
      * ThemeID selects an installed custom theme (see bind_themes.go). Empty
      * means the built-in default themes driven by the Theme setting.
      */
@@ -5028,6 +5059,9 @@ export class UIPrefsDTO {
         }
         if (!("nativeTitlebar" in $$source)) {
             this["nativeTitlebar"] = false;
+        }
+        if (!("quickFilterBar" in $$source)) {
+            this["quickFilterBar"] = false;
         }
         if (!("themeId" in $$source)) {
             this["themeId"] = "";
