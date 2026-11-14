@@ -60,6 +60,9 @@ const (
 	// EventImportProgress fires while mail is being imported from files, and
 	// once more with Running false when the job ends.
 	EventImportProgress = "import:progress"
+	// EventFilesDropped fires when files from the system are dropped onto an
+	// element of the page marked as a drop target. The payload says which.
+	EventFilesDropped = "files:dropped"
 	// EventProfileChanged fires when the app switches profile, or when the
 	// profile it is in is edited. Everything the ui holds is scoped to a profile,
 	// so the frontend reloads its preferences, sidebar, list and views rather
@@ -121,6 +124,14 @@ type ImportProgressEvent struct {
 	FileTotal int      `json:"fileTotal"`
 	Folders   []string `json:"folders"`
 	Error     string   `json:"error"`
+}
+
+// FilesDroppedEvent is the payload for EventFilesDropped. Target is the value
+// of the drop target's data-file-drop-target attribute, so the page can tell
+// its drop targets apart; Paths are the dropped files.
+type FilesDroppedEvent struct {
+	Target string   `json:"target"`
+	Paths  []string `json:"paths"`
 }
 
 // MailNewEvent is the payload for EventMailNew.
