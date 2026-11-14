@@ -49,11 +49,16 @@
     patchInList,
     removeFromList,
     restoreToList,
-    emptyFilter,
-    filterActive,
     searchSortKind,
-    type SearchFilter,
   } from '../../stores/messages'
+  import { emptyFilter, filterActive, buildFilter, type SearchFilter } from '../../lib/searchquery'
+  import { applyQuickFilter, quickFilterActive } from '../../lib/quickfilter'
+  import ListHeader from './ListHeader.svelte'
+  import ResultsFilters from './ResultsFilters.svelte'
+  import QuickFilterBar from './QuickFilterBar.svelte'
+  import { activeSearch, clearSearch, searchOpenedId, type SearchState } from '../../stores/search'
+  import { quickFilter, contactAddresses, resetQuickFilter } from '../../stores/quickfilter'
+  import { views as savedViews } from '../../stores/views'
   import {
     selectedIds,
     clearSelection,
@@ -63,6 +68,7 @@
     selectOnly,
     toggleSelect,
     selectRange,
+    selectAll,
   } from '../../stores/listselect'
   import {
     expandOffer,
@@ -199,19 +205,61 @@
     }
   }
 
+  // the new design searches from the top bar; classic keeps its own bar here.
+  $: classic = $prefs.design === 'classic'
+  $: inSearch = !classic && $activeSearch !== null
+
   let searchFilter: SearchFilter = emptyFilter
   let lastKey = ''
-  $: if ($selection && selectionKey($selection) !== lastKey) {
-    lastKey = selectionKey($selection)
-    // the search bar drops its chips with the folder, so the filter they
-    // stood for must go too, or the next search still carries it.
-    searchFilter = emptyFilter
-    clearSelection()
-    resetScroll()
-    void loadList($selection)
+  let lastActive: SearchState | null = null
+  $: if ($selection) {
+    syncList($selection, $activeSearch, classic)
   }
 
-  $: items = $messageList.data?.items ?? []
+  // syncList keeps the list on whatever it should show: the selection's list,
+  // or in the new design the top bar's search while one is running. Moving to
+  // another folder ends a running search.
+  function syncList(sel: Selection, active: SearchState | null, isClassic: boolean): void {
+    const key = selectionKey(sel)
+    if (key !== lastKey) {
+      const first = lastKey === ''
+      lastKey = key
+      // the search bar drops its chips with the folder, so the filter they
+      // stood for must go too, or the next search still carries it.
+      searchFilter = emptyFilter
+      clearSelection()
+      resetScroll()
+      resetQuickFilter()
+      if (!isClassic && active && first) {
+        lastActive = active
+        applySearch(active.text, buildFilter(active.chips))
+        return
+      }
+      lastActive = null
+      if (!isClassic && active) {
+        clearSearch()
+      }
+      void loadList(sel)
+      return
+    }
+    if (isClassic || active === lastActive) {
+      return
+    }
+    lastActive = active
+    if (active) {
+      searchQuery.set(active.text)
+      applySearch(active.text, buildFilter(active.chips))
+    } else {
+      searchQuery.set('')
+      applySearch('', emptyFilter)
+    }
+  }
+
+  $: loadedItems = $messageList.data?.items ?? []
+  // the quick filter narrows what is loaded; paging still follows the
+  // unfiltered list underneath.
+  $: quickOn = !classic && $prefs.quickFilterBar && quickFilterActive($quickFilter)
+  $: items = quickOn ? applyQuickFilter(loadedItems, $quickFilter, $contactAddresses) : loadedItems
   // each account's colour (#486), shown only while the list mixes accounts.
   $: accountColors = Object.fromEntries(($sidebar.data?.accounts ?? []).map((a) => [a.id, a.color ?? '']))
   $: mixedAccounts = items.some((m) => m.accountId !== items[0].accountId)
@@ -221,8 +269,8 @@
   $: searching = $messageList.data?.searching ?? false
   $: hasMore = searching
     ? !($messageList.data?.exhausted ?? false) &&
-      ($messageList.data?.loadedHits ?? items.length) < ($messageList.data?.total ?? 0)
-    : items.length < ($messageList.data?.total ?? 0)
+      ($messageList.data?.loadedHits ?? loadedItems.length) < ($messageList.data?.total ?? 0)
+    : loadedItems.length < ($messageList.data?.total ?? 0)
   // the cache is exhausted but the server still has older mail. hasMore covers
   // paging what is cached; this covers going back to the server for the rest.
   $: backfilling = $messageList.data?.backfilling ?? false
@@ -268,6 +316,17 @@
   async function onSelectAllClick(): Promise<void> {
     if (allLoadedSelected && selectionCount > 0) {
       clearAll()
+      return
+    }
+    await selectEveryRow()
+  }
+
+  // a quick-filtered list selects only the rows it shows: widening to the
+  // whole mailbox would take in the messages the filter hides.
+  async function selectEveryRow(): Promise<void> {
+    if (quickOn) {
+      clearExpandOffer()
+      selectAll(items.map((m) => m.id))
       return
     }
     await selectAllInList(items.map((m) => m.id))
@@ -330,7 +389,45 @@
       return
     }
     setSearchSort($searchSortKind, event.detail)
+    if (!classic && $activeSearch) {
+      applySearch($activeSearch.text, buildFilter($activeSearch.chips))
+      return
+    }
     applySearch($searchQuery.trim(), searchFilter)
+  }
+
+  // listTitle names what the new design's header shows.
+  function listTitle(sel: Selection, isSearching: boolean): string {
+    return isSearching ? $t('search.results.title') : viewTitle(sel)
+  }
+
+  // unreadFor reads the selection's unread count from the sidebar, which keeps
+  // it current as mail is read.
+  function unreadFor(sel: Selection): number {
+    if (sel.kind === 'view') {
+      return $sidebar.data?.views.find((v) => v.key === sel.view)?.unreadCount ?? 0
+    }
+    if (sel.kind === 'savedView') {
+      return $savedViews.find((v) => v.id === sel.viewId)?.unreadCount ?? 0
+    }
+    return $sidebar.data?.foldersByAccount[sel.accountId]?.find((f) => f.id === sel.folderId)?.unreadCount ?? 0
+  }
+
+  // countText words the count beside the title.
+  function countText(data: typeof $messageList.data, shown: number, quick: boolean): string {
+    if (!data) {
+      return ''
+    }
+    if (quick) {
+      return $t('list.header.shown').replace('{shown}', String(shown)).replace('{total}', String(data.items.length))
+    }
+    if (data.searching) {
+      if (data.items.length < data.total) {
+        return $t('messageList.resultsOf').replace('{loaded}', String(data.items.length)).replace('{total}', String(data.total))
+      }
+      return `${data.items.length} ${data.items.length === 1 ? $t('messageList.result') : $t('messageList.results')}`
+    }
+    return `${data.total.toLocaleString()} ${data.total === 1 ? $t('messageList.message') : $t('messageList.messages')}`
   }
 
   // open marks the message seen if needed (and wanted) and shows it in the detail pane. a
@@ -357,6 +454,7 @@
     clearSelection()
     // the row that was opened is where a following shift-click measures from.
     anchorAt(item.id)
+    searchOpenedId.set(!classic && searching ? item.id : null)
     openMessage(item.id)
     if (!item.seen && $prefs.markReadOnOpen) {
       patchInList(item.id, { seen: true })
@@ -410,7 +508,7 @@
     // loaded (#320).
     if (selectAllAvailable && (event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'a') {
       event.preventDefault()
-      await selectAllInList(items.map((m) => m.id))
+      await selectEveryRow()
       return
     }
     if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
@@ -731,10 +829,12 @@
 
 <svelte:window on:resize={onResize} />
 
-<section class="list-col">
-  <div class="header">
-    <SearchBar value={$searchQuery} on:search={onSearch} on:filter={onFilter} on:sort={onSort} />
-  </div>
+<section class="list-col" class:new={!classic}>
+  {#if classic}
+    <div class="header">
+      <SearchBar value={$searchQuery} on:search={onSearch} on:filter={onFilter} on:sort={onSort} />
+    </div>
+  {/if}
 
   {#if selectionCount > 0}
     <div class="select-bar">
@@ -793,6 +893,31 @@
         <IconTrash size={16} stroke={1.7} />
       </button>
     </div>
+  {:else if !classic}
+    <ListHeader
+      title={listTitle($selection, inSearch)}
+      count={countText($messageList.data, items.length, quickOn)}
+      unread={unreadFor($selection)}
+      searching={inSearch}
+      backLabel={viewTitle($selection)}
+      on:sort={onSort}
+    >
+      <svelte:fragment slot="lead">
+        {#if selectAllAvailable && items.length > 0}
+          <button
+            type="button"
+            class="select-all quiet"
+            role="checkbox"
+            aria-checked="false"
+            aria-label={$t('list.selectAll.label')}
+            title={$t('list.selectAll.label')}
+            on:click={onSelectAllClick}
+          >
+            <IconSquare size={16} stroke={1.7} />
+          </button>
+        {/if}
+      </svelte:fragment>
+    </ListHeader>
   {:else}
     <div class="meta-bar">
       {#if selectAllAvailable && items.length > 0}
@@ -829,6 +954,13 @@
     </div>
   {/if}
 
+  {#if inSearch}
+    <ResultsFilters on:sort={onSort} />
+  {/if}
+  {#if !classic && $prefs.quickFilterBar}
+    <QuickFilterBar />
+  {/if}
+
   <!-- selecting the loaded rows is not the same as selecting the mailbox, so
        the difference is offered rather than assumed (#320). -->
   {#if $expandOffer}
@@ -861,10 +993,15 @@
       <MessageSkeleton active rows={10} />
     {:else if $messageList.status === 'error'}
       <ErrorState message={$messageList.error} onRetry={() => loadList($selection)} />
+    {:else if items.length === 0 && quickOn && loadedItems.length > 0}
+      <EmptyState title={$t('quickFilter.empty')} detail={$t('quickFilter.emptyDetail')}>
+        <IconMail size={28} stroke={1.4} />
+        <button slot="action" type="button" class="load-older-btn" on:click={resetQuickFilter}>{$t('quickFilter.clear')}</button>
+      </EmptyState>
     {:else if items.length === 0}
       <EmptyState
-        title={$searchQuery ? $t('messageList.empty.noMatch') : $t('messageList.empty.noMessages')}
-        detail={$searchQuery ? $t('messageList.empty.tryDifferentSearch') : $t('messageList.empty.viewEmpty')}
+        title={$searchQuery || inSearch ? $t('messageList.empty.noMatch') : $t('messageList.empty.noMessages')}
+        detail={$searchQuery || inSearch ? $t('messageList.empty.tryDifferentSearch') : $t('messageList.empty.viewEmpty')}
       >
         <IconMail size={28} stroke={1.4} />
       </EmptyState>
@@ -917,6 +1054,20 @@
     background: var(--surface-raised);
     border-inline-end: var(--hairline) solid var(--border-default);
     min-width: 0;
+  }
+
+  .list-col.new {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .list-col.new .rows {
+    flex: 1;
+  }
+
+  .select-all.quiet {
+    padding: var(--space-1);
+    color: var(--text-tertiary);
   }
 
   .header {

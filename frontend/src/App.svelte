@@ -20,6 +20,7 @@
   import Rail from './components/shell/Rail.svelte'
   import SpaceSwitcher from './components/shell/SpaceSwitcher.svelte'
   import { space, openSpace } from './stores/space'
+  import { setDraft, submitSearch, searchOpenedId } from './stores/search'
   import SnoozeDialog from './components/detail/SnoozeDialog.svelte'
   import ConfirmDialog from './components/common/ConfirmDialog.svelte'
   import SyncFailureDialog from './components/common/SyncFailureDialog.svelte'
@@ -609,7 +610,7 @@
   }
 
   function focusSearch(): void {
-    const input = document.querySelector<HTMLInputElement>('input[type="search"]')
+    const input = document.querySelector<HTMLInputElement>(classic ? 'input[type="search"]' : 'input[data-top-search]')
     input?.focus()
   }
 
@@ -1139,7 +1140,14 @@
   // palette holds the same results the reading pane is showing rather than
   // whatever folder happened to be open.
   function openMailHit(item: MessageSummary): void {
-    searchQuery.set(parseQuery(get(paletteQuery)).text)
+    const query = parseQuery(get(paletteQuery)).text
+    searchQuery.set(query)
+    if (!classic && query.trim() !== '') {
+      setDraft({ text: query, chips: [] })
+      submitSearch()
+      openSpace('mail')
+      searchOpenedId.set(item.id)
+    }
     openMessage(item.id)
   }
 
@@ -1565,7 +1573,7 @@
 
 {#if !classic}
 <div class="frame" class:rail-right={$prefs.railSide === 'right'} class:has-rail={showRail}>
-  <TopBar tabs={$prefs.navStyle === 'tabs' || railFolded} on:search={focusSearch}>
+  <TopBar tabs={$prefs.navStyle === 'tabs' || railFolded}>
     <svelte:fragment slot="menu">
       {#if showMenuBar}
         <MenuBar on:action={(e) => handleMenu(e.detail)} />

@@ -23,6 +23,9 @@
   import { frameKeyRelay, relayedKey, replayKey } from '../../lib/framekeys'
   import { t } from '../../lib/i18n'
   import type { MessageDetail, Verdict } from '../../lib/types'
+  import { markClass, markDocument } from '../../lib/highlight'
+  import { highlightTerms, searchOpenedId } from '../../stores/search'
+  import Highlight from '../common/Highlight.svelte'
 
   export let detail: MessageDetail
 
@@ -111,7 +114,8 @@
   .pelton-vt-flagged{color:#c0392b;}
   .pelton-vt-unknown{color:#6b7280;}
   .pelton-vt-error{color:#9a6700;}
-  .pelton-phish{display:inline-block;margin-inline-start:3px;font-weight:700;font-size:0.85em;color:#c0392b;cursor:default;}`
+  .pelton-phish{display:inline-block;margin-inline-start:3px;font-weight:700;font-size:0.85em;color:#c0392b;cursor:default;}
+  .${markClass}{background:color-mix(in srgb, ${readVar('--accent') || '#465af2'} 32%, #ffffff);color:inherit;border-radius:2px;}`
     const imgSrc = allowRemote ? 'data: https: http:' : 'data:'
     // media rides on the same choice as images: a message that embeds a video
     // can only reach out once the reader has allowed remote content for it.
@@ -250,6 +254,24 @@
     // a fresh srcdoc replaces the document, so any badges from the previous
     // render are gone and have to be put back.
     decorateLinks(get(linkVerdicts), suspectLinks)
+    markMatches(markTerms)
+  }
+
+  // the words of the search this message was opened from, marked in the body.
+  $: markTerms = $searchOpenedId === detail.id ? $highlightTerms : []
+
+  // markMatches wraps the search words in mark elements inside the iframe's
+  // own document, the same way decorateLinks adds its badges: built with
+  // createElement over text nodes, so nothing from the mail is parsed again.
+  function markMatches(terms: readonly string[]): void {
+    const doc = frame?.contentDocument
+    if (readyBody() && doc) {
+      markDocument(doc, terms)
+    }
+  }
+
+  $: if (frame && detail.isHtml) {
+    markMatches(markTerms)
   }
 
   // onFrameLoad fires when the iframe's srcdoc finishes loading. It is the
@@ -659,7 +681,7 @@
         on:contextmenu={(e) => onPlainContext(e, segment.href ?? '')}
         on:mouseenter={() => showHover(segment.href ?? '')}
         on:mouseleave={() => showHover('')}
-      >{segment.text}</a>{#if $linkVerdicts.has(segment.href ?? '')}<VerdictBadge verdict={$linkVerdicts.get(segment.href ?? '')!} size={12} />{/if}{:else}{segment.text}{/if}{/each}</pre>
+      >{segment.text}</a>{#if $linkVerdicts.has(segment.href ?? '')}<VerdictBadge verdict={$linkVerdicts.get(segment.href ?? '')!} size={12} />{/if}{:else}<Highlight text={segment.text} terms={markTerms} />{/if}{/each}</pre>
 {/if}
 
 {#if hoverUrl}
