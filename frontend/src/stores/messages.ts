@@ -460,6 +460,11 @@ export function removeFromList(id: number): void {
     // the detail view for a message outside the currently loaded page must
     // not desync total from the real remaining count).
     const removed = items.length !== s.data.items.length
+    // the rows behind it move up one on the server, so the next page starts
+    // one earlier than it would have.
+    if (removed) {
+      currentOffset = Math.max(0, currentOffset - 1)
+    }
     return ready({
       ...s.data,
       items,
@@ -506,6 +511,7 @@ export function restoreToList(summary: MessageSummary): void {
       return s
     }
     const items = [...s.data.items, summary].sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0))
+    currentOffset += 1
     return ready({ ...s.data, items, total: s.data.total + 1 })
   })
   // an undone delete puts the message back where it was, badge included.
