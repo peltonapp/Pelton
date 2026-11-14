@@ -184,7 +184,9 @@ func Sanitize(html string, allowRemote, allowFonts bool) string {
 	if allowRemote {
 		return p.Sanitize(html)
 	}
-	return p.Sanitize(stripRemoteMedia(stripRemoteImages(html)))
+	// filtered before and after: before, so the policy never sees a remote
+	// source; after, so nothing the policy wrote back can be one either.
+	return stripRemote(p.Sanitize(stripRemote(html)))
 }
 
 // HasRemoteContent reports whether the raw html references any remote http(s)
