@@ -1,17 +1,24 @@
 <script lang="ts">
-  // a small picture of two message list rows, drawn from the theme tokens, that
-  // shows where the sender picture goes.
-  import type { AvatarPlacement } from '../../../lib/types'
+  // a small picture of message list rows, drawn from the theme tokens, that
+  // shows where the sender picture goes and how tall a row template is.
+  import type { AvatarPlacement, RowTemplate } from '../../../lib/types'
 
+  /** Where the sender picture sits. */
   export let avatar: AvatarPlacement = 'inline'
+  /** Row template; sets the number of lines per row and how many rows fit. */
+  export let template: RowTemplate = 'compact'
   /** Height of the picture in px. */
   export let height: number = 72
+
+  $: count = template === 'single' ? 4 : template === 'compact' ? 3 : 2
+  $: snippet = template === 'relaxed' || template === 'comfortable'
+  $: column = avatar === 'column' && template !== 'single'
 </script>
 
-<div class="rows" style={`height:${height}px`} aria-hidden="true">
-  {#each [0, 1] as i (i)}
+<div class="rows {template}" style={`height:${height}px`} aria-hidden="true">
+  {#each Array(count) as _, i (i)}
     <div class="row" class:on={i === 0}>
-      {#if avatar === 'column'}
+      {#if column}
         <span class="pic big"></span>
       {/if}
       <span class="lines">
@@ -20,9 +27,17 @@
             <span class="pic"></span>
           {/if}
           <span class="bar w45 strong"></span>
+          {#if template === 'single'}
+            <span class="bar w30"></span>
+          {/if}
           <span class="bar time"></span>
         </span>
-        <span class="bar w80"></span>
+        {#if template !== 'single'}
+          <span class="bar w80"></span>
+        {/if}
+        {#if snippet}
+          <span class="bar w60 faint"></span>
+        {/if}
       </span>
     </div>
   {/each}
@@ -63,6 +78,15 @@
     min-width: 0;
   }
 
+  .relaxed .lines {
+    gap: 4px;
+  }
+
+  .comfortable .lines,
+  .compact .lines {
+    gap: 3px;
+  }
+
   .line {
     display: flex;
     align-items: center;
@@ -95,11 +119,17 @@
     background: var(--text-tertiary);
   }
 
+  .bar.faint {
+    opacity: 0.5;
+  }
+
   .bar.time {
     width: 12%;
     margin-inline-start: auto;
   }
 
+  .w30 { width: 30%; }
   .w45 { width: 45%; }
+  .w60 { width: 60%; }
   .w80 { width: 80%; }
 </style>
