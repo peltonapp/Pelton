@@ -2018,6 +2018,17 @@ const en: Record<string, string> = {
   'composing.openIn.docked.hint': 'A panel in the corner, over your mail.',
   'composing.openIn.tab': 'Tab',
   'composing.openIn.tab.hint': 'A tab that fills the reading area.',
+  'thread.expand': 'Show the whole conversation',
+  'thread.collapse': 'Hide the conversation',
+  'thread.count': '{count} messages in this conversation',
+  'thread.countUnread': '{count} messages, {unread} unread',
+  'thread.me': 'Me',
+  'thread.sent': 'Sent by you',
+  'thread.replied': 'Replied',
+  'thread.forwarded': 'Forwarded',
+  'list.card.conversations': 'Conversations',
+  'list.threaded.label': 'Group into conversations',
+  'list.threaded.hint': 'Show each conversation as one row with its replies beneath, and open it as a conversation.',
 }
 
 export default en

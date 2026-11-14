@@ -5,7 +5,7 @@
 // source of truth.
 
 import { writable } from 'svelte/store'
-import type { UIPrefs, ThemePref, DensityPref, EditorMode, ViewsPlacement, CloseAction, LogLevel, SelectAllScope, SearchKind, SearchSortPref, DesignPref, LayoutMode, NavStyle, RailSide, PaneStyle, AvatarPlacement, ComposeOpenIn } from '../lib/types'
+import type { UIPrefs, ThemePref, DensityPref, EditorMode, ViewsPlacement, CloseAction, LogLevel, SelectAllScope, SearchKind, SearchSortPref, DesignPref, LayoutMode, NavStyle, RailSide, PaneStyle, AvatarPlacement, ComposeOpenIn, ReaderWidth } from '../lib/types'
 import { getUIPrefs, setSetting, SettingKeys, systemColorScheme, setWindowTheme, getThemeApply } from '../lib/api'
 import { applyTheme, applyDensity, applyAccent, applyScale, applyReduceMotion, applyHandCursor, setThemeSchedule, applyUIFont, applyMonoFont, applyCorners, applyDesign, watchSystemTheme, setSystemSchemeOverride, resolveTheme } from '../theme/theme'
 import { applyUserTheme } from '../theme/usertheme'
@@ -84,6 +84,8 @@ const defaults: UIPrefs = {
   nativeTitlebar: false,
   quickFilterBar: false,
   composeOpenIn: 'window',
+  threadedList: true,
+  readerWidth: 'full',
   themeId: '',
   menuBarInApp: false,
   menuBarNativeMinimal: false,
@@ -310,6 +312,18 @@ export function setQuickFilterBar(quickFilterBar: boolean): void {
 export function setComposeOpenIn(composeOpenIn: ComposeOpenIn): void {
   prefs.update((p) => ({ ...p, composeOpenIn }))
   void setSetting(SettingKeys.composeOpenIn, composeOpenIn)
+}
+
+/** Groups the message list into conversations, or lists every message. */
+export function setThreadedList(threadedList: boolean): void {
+  prefs.update((p) => ({ ...p, threadedList }))
+  void setSetting(SettingKeys.threadedList, String(threadedList))
+}
+
+/** Picks how wide the reading column runs in the new design. */
+export function setReaderWidth(readerWidth: ReaderWidth): void {
+  prefs.update((p) => ({ ...p, readerWidth }))
+  void setSetting(SettingKeys.readerWidth, readerWidth)
 }
 
 /** Turns Markdown conversion in the compose editor on or off. */

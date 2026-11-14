@@ -159,6 +159,11 @@ const (
 	// where a new message, reply or forward opens in the new design: "window",
 	// "docked" or "tab".
 	settingComposeOpenIn = "compose_open_in"
+	// group the message list into conversations in the new design.
+	settingThreadedList = "threaded_list"
+	// how wide the reading column runs in the new design: "narrow", "medium"
+	// or "full".
+	settingReaderWidth = "reader_width"
 	// general new-mail OS notifications (#126). VIP senders are stored
 	// separately in bind_vip.go and notify even when this is off.
 	settingNotifyNewMail = "notify_new_mail"
@@ -408,6 +413,11 @@ type UIPrefsDTO struct {
 	// ComposeOpenIn is where a new message, reply or forward opens in the new
 	// design: window, docked or tab.
 	ComposeOpenIn string `json:"composeOpenIn"`
+	// ThreadedList shows the message list as conversations in the new design.
+	ThreadedList bool `json:"threadedList"`
+	// ReaderWidth caps the reading column in the new design: narrow, medium
+	// or full.
+	ReaderWidth string `json:"readerWidth"`
 	// ThemeID selects an installed custom theme (see bind_themes.go). Empty
 	// means the built-in default themes driven by the Theme setting.
 	ThemeID string `json:"themeId"`
@@ -568,6 +578,8 @@ func (a *App) GetUIPrefs() (UIPrefsDTO, error) {
 		NativeTitlebar:             a.boolSetting(settingNativeTitlebar, false),
 		QuickFilterBar:             a.boolSetting(settingQuickFilterBar, false),
 		ComposeOpenIn:              a.stringSetting(settingComposeOpenIn, "window"),
+		ThreadedList:               a.boolSetting(settingThreadedList, true),
+		ReaderWidth:                a.stringSetting(settingReaderWidth, "full"),
 		ThemeID:                    a.stringSetting(settingThemeID, ""),
 		MenuBarInApp:               a.boolSetting(settingMenuBarInApp, false),
 		MenuBarNativeMinimal:       a.boolSetting(settingMenuBarNativeMinimal, false),

@@ -80,6 +80,9 @@
   } from '../../stores/selectall'
   import { prefs, setSearchSort } from '../../stores/prefs'
   import { maildragSource } from '../../stores/maildrag'
+  import { threadedOn, threadMessages, loadThread } from '../../stores/threads'
+  import { listRows, threadAware, type ListRow } from '../../lib/threadrows'
+  import { motion } from '../../lib/motion'
   import {
     setSeen,
     getMessage,
@@ -233,6 +236,7 @@
       // the search bar drops its chips with the folder, so the filter they
       // stood for must go too, or the next search still carries it.
       searchFilter = emptyFilter
+      expanded = new Set()
       clearSelection()
       resetScroll()
       resetQuickFilter()
@@ -262,10 +266,75 @@
   }
 
   $: loadedItems = $messageList.data?.items ?? []
+  $: threads = $messageList.data?.threads
   // the quick filter narrows what is loaded; paging still follows the
-  // unfiltered list underneath.
+  // unfiltered list underneath. A conversation passes on what any of its
+  // messages has, not only its newest.
   $: quickOn = !classic && $prefs.quickFilterBar && quickFilterActive($quickFilter)
-  $: items = quickOn ? applyQuickFilter(loadedItems, $quickFilter, $contactAddresses) : loadedItems
+  $: heads = quickOn ? filterHeads(loadedItems, threads) : loadedItems
+
+  function filterHeads(list: MessageSummary[], groups: typeof threads): MessageSummary[] {
+    const kept = new Set(applyQuickFilter(threadAware(list, groups), $quickFilter, $contactAddresses).map((m) => m.id))
+    return list.filter((m) => kept.has(m.id))
+  }
+
+  // the conversations shown open, by thread id. They stay open while the list
+  // reloads under them and close when the list moves elsewhere.
+  let expanded = new Set<number>()
+  // the conversation just opened, whose replies slide in; only that one, so a
+  // reply scrolled back into view does not animate again.
+  let entering = 0
+  let enteringTimer: ReturnType<typeof setTimeout> | undefined
+
+  // a grouped list is one row per conversation with the open ones' replies
+  // beneath. items is what is on screen in order, so selection, keyboard and
+  // the virtual window work on replies the way they do on any row.
+  $: rows = listRows(heads, threads, expanded, $threadMessages)
+  $: items = rows.map((r) => r.message)
+
+  // an open conversation whose replies were dropped by a reload reads them
+  // again.
+  $: for (const threadId of expanded) {
+    if (!$threadMessages.has(threadId)) {
+      loadThread(threadId).catch((err) => toastError(errorMessage(err)))
+    }
+  }
+
+  // toggleThread opens or closes a conversation's replies. Closing one with
+  // the highlight on a reply moves the highlight up to the conversation.
+  function toggleThread(row: ListRow): void {
+    const thread = row.thread
+    if (!thread || thread.count < 2) {
+      return
+    }
+    const next = new Set(expanded)
+    if (next.has(thread.threadId)) {
+      next.delete(thread.threadId)
+      const lit = rows.find((r) => r.message.id === highlightId)
+      if (lit?.parentId === row.message.id) {
+        highlightId = row.message.id
+      }
+    } else {
+      next.add(thread.threadId)
+      entering = thread.threadId
+      clearTimeout(enteringTimer)
+      enteringTimer = setTimeout(() => (entering = 0), motion.slow)
+    }
+    expanded = next
+  }
+
+  // the grouping follows the preference: turning it on or off reads the
+  // list again in the other shape.
+  $: threaded = threadedOn($prefs)
+  let lastThreaded: boolean | null = null
+  $: if (threaded !== lastThreaded) {
+    const changed = lastThreaded !== null
+    lastThreaded = threaded
+    expanded = new Set()
+    if (changed && !inSearch && lastKey !== '') {
+      void loadList($selection)
+    }
+  }
   // each account's colour (#486), shown only while the list mixes accounts.
   $: accountColors = Object.fromEntries(($sidebar.data?.accounts ?? []).map((a) => [a.id, a.color ?? '']))
   $: mixedAccounts = items.some((m) => m.accountId !== items[0].accountId)
@@ -295,7 +364,7 @@
   $: startIndex = Math.max(0, Math.floor(scrollTop / estRowHeight) - OVERSCAN)
   $: visibleCount = Math.ceil(viewportHeight / estRowHeight) + OVERSCAN * 2
   $: endIndex = Math.min(items.length, startIndex + visibleCount)
-  $: windowItems = items.slice(startIndex, endIndex)
+  $: windowRows = rows.slice(startIndex, endIndex)
   $: topPad = startIndex * estRowHeight
   $: bottomPad = Math.max(0, (items.length - endIndex) * estRowHeight)
 
@@ -550,6 +619,24 @@
         anchorAt(id)
       }
       await scrollActiveIntoView()
+    } else if ((event.key === 'ArrowRight' || event.key === 'ArrowLeft') && activeIndex >= 0 && threads) {
+      // right opens a conversation and left closes it, or steps from a reply
+      // up to its conversation; mirrored for a right to left interface.
+      const row = rows[activeIndex]
+      const rtl = getComputedStyle(listEl).direction === 'rtl'
+      const opening = (event.key === 'ArrowRight') !== rtl
+      if (row.parentId !== 0) {
+        if (!opening) {
+          event.preventDefault()
+          highlightId = row.parentId
+          anchorAt(row.parentId)
+          await tick()
+          await scrollActiveIntoView()
+        }
+      } else if (row.thread && row.thread.count > 1 && opening !== expanded.has(row.thread.threadId)) {
+        event.preventDefault()
+        toggleThread(row)
+      }
     } else if (event.key === 'Enter' && activeIndex >= 0) {
       event.preventDefault()
       await open(activeIndex)
@@ -911,7 +998,7 @@
   {:else if !classic}
     <ListHeader
       title={listTitle($selection, inSearch)}
-      count={countText($messageList.data, items.length, quickOn)}
+      count={countText($messageList.data, heads.length, quickOn)}
       unread={unreadFor($selection)}
       searching={inSearch}
       backLabel={viewTitle($selection)}
@@ -1032,11 +1119,17 @@
           aria-hidden="true"
         ></div>
       {/if}
-      {#each windowItems as item, i (item.id)}
+      {#each windowRows as row, i (row.key)}
         {@const index = startIndex + i}
+        {@const item = row.message}
         <div id={`msg-${item.id}`} use:maildragSource={() => dragItems(item)}>
           <MessageRow
             message={item}
+            thread={row.thread}
+            expanded={row.thread !== null && expanded.has(row.thread.threadId)}
+            child={row.parentId !== 0}
+            fromMe={row.fromMe}
+            entering={row.threadId !== 0 && row.threadId === entering}
             banded={bandOn && index === bandIndex}
             accountColor={mixedAccounts ? (accountColors[item.accountId] ?? '') : ''}
             selected={item.id === $openMessageId || index === activeIndex}
@@ -1046,6 +1139,7 @@
             on:dblclick={() => void openMessageWindow(item.id, item.subject)}
             on:contextmenu={(e) => onContext(e, item)}
             on:swipe={(e) => performSwipe(item, e.detail)}
+            on:toggle={() => toggleThread(row)}
           />
         </div>
       {/each}
