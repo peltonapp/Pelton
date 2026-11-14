@@ -6,12 +6,23 @@
   // the list always lands. After it come the parked messages, oldest first.
   import { fly } from 'svelte/transition'
   import { flip } from 'svelte/animate'
-  import { IconX, IconMail, IconAlertTriangle } from '@tabler/icons-svelte'
+  import { IconX, IconMail, IconAlertTriangle, IconPencil } from '@tabler/icons-svelte'
   import { tabs, activeTabId, closeTab, focusTab, focusPane, reorderTabs } from '../../stores/tabs'
   import { prefs } from '../../stores/prefs'
   import { shortcutTitle } from '../../stores/shortcuts'
   import { reorder, type ReorderDetail, type TearOffDetail } from '../../lib/reorder'
-  import { openMessageWindow } from '../../lib/api'
+  import { openComposeWindow, openMessageWindow } from '../../lib/api'
+  import { isDemoActive } from '../../lib/demo'
+  import { closeCompose, composeSessions, getSession } from '../../stores/compose'
+
+  // tabLabel is a message tab's subject, or the live subject of the message a
+  // compose tab is writing.
+  function tabLabel(tab: { label: string; compose?: number }, untitled: string, compose: string): string {
+    if (tab.compose === undefined) {
+      return tab.label || untitled
+    }
+    return $composeSessions.find((s) => s.id === tab.compose)?.subject || compose
+  }
   import { errorMessage, toastError } from '../../stores/toast'
   import { t } from '../../lib/i18n'
 
@@ -44,6 +55,14 @@
       return
     }
     try {
+      if (tab.compose !== undefined) {
+        const session = getSession(tab.compose)
+        if (!isDemoActive() && session) {
+          await openComposeWindow(session)
+          closeCompose(tab.compose)
+        }
+        return
+      }
       await openMessageWindow(id, tab.label)
       closeTab(id)
     } catch (err) {
@@ -94,14 +113,16 @@
           class="label"
           data-reorder-handle
           aria-selected={$activeTabId === tab.id}
-          title={tab.stale ? $t('tabs.stale') : tab.label}
+          title={tab.stale ? $t('tabs.stale') : tabLabel(tab, $t('tabs.untitled'), $t('compose.title.untitled'))}
           on:click={() => focusTab(tab.id)}
           on:auxclick={(e) => onAux(e, tab.id)}
         >
           {#if tab.stale}
             <span class="warn"><IconAlertTriangle size={12} stroke={1.9} /></span>
+          {:else if tab.compose !== undefined}
+            <span class="pen"><IconPencil size={12} stroke={1.8} /></span>
           {/if}
-          <span class="text">{tab.label || $t('tabs.untitled')}</span>
+          <span class="text">{tabLabel(tab, $t('tabs.untitled'), $t('compose.title.untitled'))}</span>
         </button>
         <button
           type="button"
@@ -222,6 +243,12 @@
     text-overflow: ellipsis;
     white-space: nowrap;
     text-align: start;
+  }
+
+  .pen {
+    display: inline-flex;
+    flex-shrink: 0;
+    color: var(--accent);
   }
 
   .warn {

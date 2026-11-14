@@ -41,7 +41,10 @@
   import { selection, applyStartupSelection, searchQuery } from './stores/selection'
   import { loadList, messageList } from './stores/messages'
   import { initProgress } from './stores/progress'
-  import { composeSessions, openCompose, openComposeWith, initComposePrefs, openReply, openForward, requestComposeClose } from './stores/compose'
+  import { composeSessions, openCompose, openComposeWith, initComposePrefs, openReply, openForward, requestComposeClose, setForcedComposeMode } from './stores/compose'
+  import { routeComposeSessions } from './stores/composeroute'
+  import Composer2 from './components/compose/Composer2.svelte'
+  import ComposeTabLayer from './components/compose/ComposeTabLayer.svelte'
   import { openSnooze, openSnoozeMany } from './stores/snooze'
   import { patchInList, removeFromList } from './stores/messages'
   import {
@@ -225,6 +228,8 @@
 
   // the new design. classic keeps the shell below it exactly as it was.
   $: classic = $prefs.design === 'classic'
+  $: setForcedComposeMode(classic ? null : $prefs.composeVimMode ? 'plaintext' : 'wysiwyg')
+  unsubscribers.push(routeComposeSessions({ tabs: true }))
   $: stacked = $prefs.layoutMode === 'stacked'
   // below this window width the rail folds into the top bar as tabs.
   const railFoldWidth = 760
@@ -1623,6 +1628,7 @@
             <Resizer disabled={locked} label={$t('app.pane.resizeMessageList')} on:resize={resizeList} on:end={commitPanes} />
           {/if}
           <MessageDetail />
+          <ComposeTabLayer />
         </div>
       </div>
     {:else if $space === 'contacts'}
@@ -1666,7 +1672,11 @@
 {#if $composeSessions.length > 0}
   <div class="compose-layer">
     {#each $composeSessions as session (session.id)}
-      <Compose {session} />
+      {#if classic}
+        <Compose {session} />
+      {:else if session.placement === 'docked'}
+        <Composer2 {session} layout="docked" mainWindow />
+      {/if}
     {/each}
   </div>
 {/if}
@@ -1827,6 +1837,7 @@
 
   /* the list and the reader. hybrid raises the two as one rounded surface. */
   .surface {
+    position: relative;
     display: grid;
     grid-template-rows: minmax(0, 1fr);
     min-width: 0;
