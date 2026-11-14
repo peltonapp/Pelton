@@ -5,12 +5,10 @@
   import { createEventDispatcher } from 'svelte'
   import searchIcon from '@phosphor-icons/core/assets/duotone/magnifying-glass-duotone.svg?raw'
   import Ph from '../common/Ph.svelte'
-  import PieProgress from '../common/PieProgress.svelte'
   import SpaceSwitcher from './SpaceSwitcher.svelte'
-  import { outbox, syncing, syncCounts } from '../../stores/outbox'
+  import ActivityButton from './ActivityButton.svelte'
   import { shortcutTitle, bindings, menuHint } from '../../stores/shortcuts'
   import { titleBarDoubleClick } from '../../lib/api'
-  import { tip } from '../../lib/tip'
   import { t } from '../../lib/i18n'
 
   /** Shows the space switcher as tabs in the bar. */
@@ -18,8 +16,6 @@
 
   const dispatch = createEventDispatcher<{ search: void }>()
 
-  $: pending = $outbox.length
-  $: syncShare = $syncCounts.total > 0 ? $syncCounts.done / $syncCounts.total : null
   $: searchKeys = $bindings.search ? menuHint('search') : ''
 </script>
 
@@ -46,17 +42,7 @@
   </button>
 
   <div class="side end">
-    {#if $syncing || pending > 0}
-      <span
-        class="activity"
-        use:tip={{ text: $syncing ? $t('topbar.syncing') : $t('topbar.sending').replace('{count}', String(pending)), side: 'bottom' }}
-      >
-        <PieProgress value={$syncing ? syncShare : null} size={14} label={$syncing ? $t('topbar.syncing') : $t('topbar.sending').replace('{count}', String(pending))} />
-        {#if pending > 0}
-          <span class="count">{pending}</span>
-        {/if}
-      </span>
-    {/if}
+    <ActivityButton />
     <slot name="end" />
   </div>
 </header>
@@ -118,17 +104,5 @@
     font-family: var(--font-mono);
     font-size: var(--fz-meta);
     color: var(--text-tertiary);
-  }
-
-  .activity {
-    display: inline-flex;
-    align-items: center;
-    gap: var(--space-2);
-    height: calc(var(--control-height) - 4px);
-    padding: 0 var(--space-3);
-    color: var(--text-secondary);
-    font-size: var(--fz-meta);
-    font-variant-numeric: tabular-nums;
-    --wails-draggable: no-drag;
   }
 </style>
