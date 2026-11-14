@@ -25,6 +25,10 @@ import (
 // never write the same calendar at once.
 var calendarSyncMu sync.Mutex
 
+// calendarPushMu serializes writes of single events to the server; see
+// pushEvent.
+var calendarPushMu sync.Mutex
+
 // calendarAccountBudget bounds one account's sync run as a whole.
 const calendarAccountBudget = 5 * time.Minute
 
@@ -390,8 +394,25 @@ func (a *App) storeResource(ctx context.Context, cal storage.Calendar, res calda
 // started from, or regardless when force is set. A refusal marks the event as
 // a conflict and returns caldav.ErrConflict; any other failure is recorded on
 // the event and returned, and the change stays queued.
+//
+// Pushes are serialized and the row is read again under the lock, so an edit
+// written straight away and a sync draining the queue never send the same
+// change twice, the second time against an etag the first one replaced.
 func (a *App) pushEvent(ctx context.Context, client *caldav.Client, cal storage.Calendar, row *storage.CalendarEvent, force bool) error {
-	if row.Pending == storage.PendingDelete {
+	calendarPushMu.Lock()
+	defer calendarPushMu.Unlock()
+	current, err := a.store.GetCalendarEvent(ctx, row.ID)
+	if errors.Is(err, storage.ErrCalendarEventNotFound) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	*row = *current
+	switch {
+	case row.Pending == "":
+		return nil
+	case row.Pending == storage.PendingDelete:
 		ifMatch := row.ETag
 		if force {
 			ifMatch = ""
