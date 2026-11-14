@@ -80,6 +80,7 @@ const defaults: UIPrefs = {
   avatarPlacement: 'inline',
   listHeight: 320,
   nativeTitlebar: false,
+  quickFilterBar: false,
   themeId: '',
   menuBarInApp: false,
   menuBarNativeMinimal: false,
@@ -293,6 +294,12 @@ export function setListHeight(listHeight: number): void {
 export function setNativeTitlebar(nativeTitlebar: boolean): void {
   prefs.update((p) => ({ ...p, nativeTitlebar }))
   void setSetting(SettingKeys.nativeTitlebar, String(nativeTitlebar))
+}
+
+/** Shows or hides the quick filter bar above the message list. */
+export function setQuickFilterBar(quickFilterBar: boolean): void {
+  prefs.update((p) => ({ ...p, quickFilterBar }))
+  void setSetting(SettingKeys.quickFilterBar, String(quickFilterBar))
 }
 
 export function setDensity(density: DensityPref): void {

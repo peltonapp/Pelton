@@ -669,6 +669,11 @@ export interface SearchRequest {
   subject: string
   hasAttachment: boolean
   unreadOnly: boolean
+  flaggedOnly?: boolean
+  // accountId and folderId scope the search to one account or folder; 0 or
+  // absent searches everywhere.
+  accountId?: number
+  folderId?: number
   // the order results come back in, already resolved from the "automatic"
   // setting: the backend is told an order, never asked to guess one.
   sort: SearchSort
@@ -1455,6 +1460,8 @@ export const SettingKeys = {
   avatarPlacement: 'avatar_placement',
   listHeight: 'list_height',
   nativeTitlebar: 'native_titlebar',
+  quickFilterBar: 'quick_filter_bar',
+  recentSearches: 'recent_searches',
   themeId: 'theme_id',
   menuBarInApp: 'menu_bar_in_app',
   menuBarNativeMinimal: 'menu_bar_native_minimal',

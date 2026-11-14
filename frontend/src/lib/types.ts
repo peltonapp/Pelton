@@ -552,6 +552,9 @@ export interface UIPrefs {
   // nativeTitlebar uses the operating system's title bar instead of the
   // integrated one.
   nativeTitlebar: boolean
+  // quickFilterBar shows the quick filter bar above the message list in the
+  // new design.
+  quickFilterBar: boolean
   // themeId selects an installed custom theme; empty means the built-in
   // default themes driven by the theme (light/dark/system) setting.
   themeId: string
