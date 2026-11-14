@@ -306,9 +306,10 @@
     applySearch(event.detail.trim(), searchFilter)
   }
 
+  // the search bar sends the filter right before the query, so the query
+  // event runs the search for both.
   function onFilter(event: CustomEvent<SearchFilter>): void {
     searchFilter = event.detail
-    applySearch($searchQuery.trim(), searchFilter)
   }
 
   // a sort picked from the search bar is remembered for this kind of search and
