@@ -57,6 +57,9 @@ function summary(id: number, subject: string, patch: Partial<MessageSummary> = {
     offline: false,
     snoozeUntil: '',
     senderVip: false,
+    threadId: 0,
+    answered: false,
+    forwarded: false,
     smime: { status: '', signer: '', email: '', issuer: '', detail: '' },
     ...patch,
   }

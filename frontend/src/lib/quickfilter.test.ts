@@ -23,6 +23,9 @@ function row(id: number, patch: Partial<MessageSummary>): MessageSummary {
     offline: false,
     snoozeUntil: '',
     senderVip: false,
+    threadId: 0,
+    answered: false,
+    forwarded: false,
     smime: { status: '', signer: '', email: '', issuer: '', detail: '' },
     ...patch,
   }
