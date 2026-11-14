@@ -26,10 +26,32 @@
   import { markClass, markDocument } from '../../lib/highlight'
   import { highlightTerms, searchOpenedId } from '../../stores/search'
   import Highlight from '../common/Highlight.svelte'
+  import Ph from '../common/Ph.svelte'
+  import dotsIcon from '@phosphor-icons/core/assets/duotone/dots-three-duotone.svg?raw'
+  import { splitHtmlQuote, splitPlainQuote } from '../../lib/quotes'
 
   export let detail: MessageDetail
+  /** Folds the quoted original at the end of a reply behind a toggle. */
+  export let collapseQuotes: boolean = false
 
   $: canScan = scanEnabled($virusTotal)
+
+  // the quoted original, split off when it is folded. showQuote resets with
+  // the message.
+  let showQuote = false
+  let quoteFor = -1
+  $: if (detail.id !== quoteFor) {
+    quoteFor = detail.id
+    showQuote = false
+  }
+  $: quoteSplit = !collapseQuotes
+    ? null
+    : detail.isHtml
+      ? splitHtmlQuote(detail.bodyHtmlSafe)
+      : splitPlainQuote(detail.bodyPlain)
+  $: folded = quoteSplit?.hasQuote === true && !showQuote
+  $: shownHtml = folded && detail.isHtml && quoteSplit ? quoteSplit.head : detail.bodyHtmlSafe
+  $: shownPlain = folded && !detail.isHtml && quoteSplit ? quoteSplit.head : detail.bodyPlain
 
   // remoteLoaded starts true when the backend already rendered remote content
   // because the sender/domain is trusted (or the global override is on).
@@ -184,12 +206,12 @@
     nonce = makeNonce()
   }
 
-  $: srcdoc = buildSrcdoc(detail.bodyHtmlSafe, remoteLoaded, $prefs.messageFontSize, $prefs.bodyFont, nonce, canScan)
+  $: srcdoc = buildSrcdoc(shownHtml, remoteLoaded, $prefs.messageFontSize, $prefs.bodyFont, nonce, canScan)
 
   // plain-text bodies render in a <pre>, not the sandboxed iframe, so bare
   // urls need their own linkification: nothing upstream turns them into real
   // links the way html mail's own <a> tags already are.
-  $: plainSegments = detail.isHtml ? [] : linkifySegments(detail.bodyPlain)
+  $: plainSegments = detail.isHtml ? [] : linkifySegments(shownPlain)
 
   // the iframe is sized to its content height so the reading pane has a single
   // scrollbar instead of a nested one (which the interface zoom made worse).
@@ -684,6 +706,19 @@
       >{segment.text}</a>{#if $linkVerdicts.has(segment.href ?? '')}<VerdictBadge verdict={$linkVerdicts.get(segment.href ?? '')!} size={12} />{/if}{:else}<Highlight text={segment.text} terms={markTerms} />{/if}{/each}</pre>
 {/if}
 
+{#if quoteSplit?.hasQuote}
+  <button
+    type="button"
+    class="quote-toggle"
+    aria-expanded={showQuote}
+    aria-label={showQuote ? $t('reader.quote.hide') : $t('reader.quote.show')}
+    title={showQuote ? $t('reader.quote.hide') : $t('reader.quote.show')}
+    on:click={() => (showQuote = !showQuote)}
+  >
+    <Ph svg={dotsIcon} size={16} />
+  </button>
+{/if}
+
 {#if hoverUrl}
   <div class="link-hover mono" aria-hidden="true" bind:this={hoverBox}>
     <span
@@ -696,6 +731,34 @@
 {/if}
 
 <style>
+  .quote-toggle {
+    align-self: flex-start;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    margin-top: var(--space-2);
+    padding: 0 var(--space-2);
+    height: var(--chip-height);
+    border: var(--hairline) solid var(--border-default);
+    border-radius: var(--radius-control);
+    background: var(--surface-sunken);
+    color: var(--text-secondary);
+    cursor: var(--cursor-action);
+    transition:
+      background-color var(--motion-fast) var(--ease-out),
+      border-color var(--motion-fast) var(--ease-out);
+  }
+
+  .quote-toggle:hover {
+    background: var(--surface-hover);
+    border-color: var(--border-strong);
+    color: var(--text-primary);
+  }
+
+  .quote-toggle[aria-expanded='true'] {
+    background: var(--surface-hover);
+  }
+
   .link-hover {
     position: absolute;
     right: 0;

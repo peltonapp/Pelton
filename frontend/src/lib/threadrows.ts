@@ -22,7 +22,7 @@ export interface ListRow {
  * sameMessage tells whether a conversation member is the row's own message,
  * which the thread can return as a copy from another folder under another id.
  */
-function sameMessage(a: MessageSummary, b: MessageSummary): boolean {
+export function sameMessage(a: MessageSummary, b: MessageSummary): boolean {
   return a.id === b.id || (a.date === b.date && a.fromAddress === b.fromAddress && a.subject === b.subject)
 }
 

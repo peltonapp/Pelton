@@ -119,6 +119,11 @@ export function dropThreadMessage(id: number): void {
     }
     return changed ? next : map
   })
+  forgetCard(id)
+}
+
+/** forgetCard drops a card's cached message, so it is read again. */
+export function forgetCard(id: number): void {
   cardDetails.update((map) => {
     if (!map.has(id)) {
       return map
