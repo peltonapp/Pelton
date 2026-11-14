@@ -22,6 +22,7 @@ import MessageWindow from './MessageWindow.svelte'
 import ComposeWindow from './ComposeWindow.svelte'
 import { isDemoMode, windowMaterialActive } from './lib/api'
 import { setDemoActive } from './lib/demo'
+import { initSmoothCaret } from './lib/smoothcaret'
 
 const target = document.getElementById('app')
 if (!target) {
@@ -60,6 +61,8 @@ const app =
     : params.get('window') === 'compose' && composeToken
       ? mount(ComposeWindow, { target, props: { token: composeToken } })
       : mount(App, { target })
+
+initSmoothCaret()
 
 // remove the pre-mount splash now that svelte has taken over.
 document.getElementById('splash')?.remove()

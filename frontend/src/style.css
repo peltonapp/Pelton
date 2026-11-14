@@ -199,6 +199,63 @@ a:hover {
   scroll-behavior: auto !important;
 }
 
+/* the gliding caret (lib/smoothcaret.ts). one element for the window, placed
+   over whichever text field has focus; that field gives up its own caret. */
+[data-smooth-caret],
+[data-smooth-caret] * {
+  caret-color: transparent;
+}
+
+.smooth-caret {
+  position: fixed;
+  top: 0;
+  left: 0;
+  z-index: 2000;
+  width: 2px;
+  margin-left: -1px;
+  border-radius: 1px;
+  background: var(--accent);
+  opacity: 0;
+  pointer-events: none;
+  will-change: transform;
+  transition: opacity var(--motion-fast) var(--ease-out);
+}
+
+.smooth-caret.shown {
+  opacity: 1;
+}
+
+.smooth-caret.blink {
+  animation: smooth-caret-blink 1.2s ease-in-out infinite;
+}
+
+/* the blink fades in and out rather than switching. */
+@keyframes smooth-caret-blink {
+  0%,
+  35% {
+    opacity: 1;
+  }
+  60%,
+  80% {
+    opacity: 0;
+  }
+  100% {
+    opacity: 1;
+  }
+}
+
+/* the hidden copy of a field's text that the caret is measured against. */
+.smooth-caret-mirror {
+  position: absolute;
+  top: 0;
+  left: -9999px;
+  visibility: hidden;
+  overflow: hidden;
+  pointer-events: none;
+  border-style: solid;
+  border-color: transparent;
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,

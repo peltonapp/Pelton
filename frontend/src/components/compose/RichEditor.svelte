@@ -20,8 +20,6 @@
   } from '@tabler/icons-svelte'
   import { t } from '../../lib/i18n'
   import { caretMark } from '../../lib/richtext'
-  import { smoothCaret } from '../../lib/smoothcaret'
-  import { prefs } from '../../stores/prefs'
   import { looksLikeMarkdown, renderMarkdown } from '../../lib/markdown'
 
   // the initial html to seed the editor with (a draft or reply body).
@@ -85,14 +83,6 @@
     }
   })
 
-  // the gliding caret of the new design, on while its setting is.
-  let dropCaret: (() => void) | null = null
-  $: glide = $prefs.smoothCaret && $prefs.design !== 'classic'
-  $: if (editor) {
-    dropCaret?.()
-    dropCaret = glide ? smoothCaret(editor, element) : null
-  }
-
   $: if (editor && content !== lastContent) {
     lastContent = content
     if (content !== editor.getHTML()) {
@@ -125,7 +115,6 @@
   }
 
   onDestroy(() => {
-    dropCaret?.()
     editor?.destroy()
   })
 
@@ -344,66 +333,9 @@
   }
 
   .surface {
-    position: relative;
     flex: 1;
     min-height: 0;
     overflow-y: auto;
-  }
-
-  /* the gliding caret (lib/smoothcaret.ts) stands in for the native one. */
-  .surface:global(.smooth-caret-on) :global(.ProseMirror) {
-    caret-color: transparent;
-  }
-
-  .surface :global(.smooth-caret) {
-    position: absolute;
-    top: 0;
-    left: 0;
-    width: 2px;
-    margin-left: -1px;
-    border-radius: 1px;
-    background: var(--accent);
-    opacity: 0;
-    pointer-events: none;
-    will-change: transform;
-    /* long enough to read as a glide at typing speed, with a curve that
-       starts at once and settles slowly so each key runs into the next. */
-    transition:
-      transform var(--motion-caret) cubic-bezier(0.16, 1, 0.3, 1),
-      opacity var(--motion-fast) var(--ease-out);
-  }
-
-  .surface :global(.smooth-caret.shown) {
-    opacity: 1;
-  }
-
-  .surface :global(.smooth-caret.jump) {
-    transition: none;
-  }
-
-  .surface :global(.smooth-caret.blink) {
-    animation: caret-blink 1.2s ease-in-out infinite;
-  }
-
-  /* the blink fades in and out rather than switching. */
-  @keyframes -global-caret-blink {
-    0%,
-    35% {
-      opacity: 1;
-    }
-    60%,
-    80% {
-      opacity: 0;
-    }
-    100% {
-      opacity: 1;
-    }
-  }
-
-  @media (prefers-reduced-motion: reduce) {
-    .surface :global(.smooth-caret) {
-      transition: none;
-    }
   }
 
   /* the prosemirror editable area. tokens only; the editor injects .ProseMirror.
