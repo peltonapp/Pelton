@@ -365,9 +365,12 @@
     background: var(--accent);
     opacity: 0;
     pointer-events: none;
+    will-change: transform;
+    /* long enough to read as a glide at typing speed, with a curve that
+       starts at once and settles slowly so each key runs into the next. */
     transition:
-      transform var(--motion-fast) var(--ease-out),
-      height var(--motion-fast) var(--ease-out);
+      transform var(--motion-caret) cubic-bezier(0.16, 1, 0.3, 1),
+      opacity var(--motion-fast) var(--ease-out);
   }
 
   .surface :global(.smooth-caret.shown) {
@@ -379,12 +382,21 @@
   }
 
   .surface :global(.smooth-caret.blink) {
-    animation: caret-blink 1.1s steps(1) infinite;
+    animation: caret-blink 1.2s ease-in-out infinite;
   }
 
+  /* the blink fades in and out rather than switching. */
   @keyframes -global-caret-blink {
-    50% {
+    0%,
+    35% {
+      opacity: 1;
+    }
+    60%,
+    80% {
       opacity: 0;
+    }
+    100% {
+      opacity: 1;
     }
   }
 

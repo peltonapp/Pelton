@@ -95,6 +95,8 @@
   --accent-fg: #ffffff;
   --selection-bg: color-mix(in srgb, var(--accent) 14%, transparent);
   --selection-bg-strong: color-mix(in srgb, var(--accent) 22%, transparent);
+  /* how long the compose caret takes to glide to its next position. */
+  --motion-caret: 220ms;
   /* a hover fill that can lie over content. */
   --hover-tint: color-mix(in srgb, var(--text-primary) 6%, transparent);
   --link: var(--accent);
