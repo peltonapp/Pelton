@@ -534,7 +534,8 @@
       session.cc.trim().length > 0 ||
       session.bcc.trim().length > 0 ||
       session.subject.trim().length > 0 ||
-      session.body.trim().length > 0
+      session.body.trim().length > 0 ||
+      session.attachments.length > 0
     )
   }
 
