@@ -693,6 +693,7 @@ const ru: Record<string, string> = {
   'detail.attachments.save': 'Сохранить',
   'detail.attachments.close': 'Закрыть',
   'detail.attachments.previewDialogLabel': 'Просмотр вложения',
+  'detail.attachments.pdfPage': '1 страница',
   'detail.attachments.pdfPages': 'Страниц: {count}',
   'detail.attachments.pdfLocked': 'Этот PDF защищён паролем. Сохраните его, чтобы открыть в другой программе.',
   'detail.attachments.pdfFailed': 'Не удалось показать этот PDF.',

@@ -701,6 +701,7 @@ const it: Record<string, string> = {
   'detail.attachments.save': 'Salva',
   'detail.attachments.close': 'Chiudi',
   'detail.attachments.previewDialogLabel': 'Anteprima allegato',
+  'detail.attachments.pdfPage': '1 pagina',
   'detail.attachments.pdfPages': '{count} pagine',
   'detail.attachments.pdfLocked': 'Questo PDF è protetto da password. Salvalo per aprirlo altrove.',
   'detail.attachments.pdfFailed': 'Impossibile mostrare questo PDF.',

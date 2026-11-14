@@ -693,6 +693,7 @@ const tr: Record<string, string> = {
   'detail.attachments.save': 'Kaydet',
   'detail.attachments.close': 'Kapat',
   'detail.attachments.previewDialogLabel': 'Ek önizlemesi',
+  'detail.attachments.pdfPage': '1 sayfa',
   'detail.attachments.pdfPages': '{count} sayfa',
   'detail.attachments.pdfLocked': 'Bu PDF parola korumalı. Başka bir yerde açmak için kaydedin.',
   'detail.attachments.pdfFailed': 'Bu PDF gösterilemedi.',

@@ -693,6 +693,7 @@ const nl: Record<string, string> = {
   'detail.attachments.save': 'Opslaan',
   'detail.attachments.close': 'Sluiten',
   'detail.attachments.previewDialogLabel': 'Bijlagevoorbeeld',
+  'detail.attachments.pdfPage': '1 pagina',
   'detail.attachments.pdfPages': '{count} pagina\'s',
   'detail.attachments.pdfLocked': 'Deze pdf is met een wachtwoord beveiligd. Sla hem op om hem elders te openen.',
   'detail.attachments.pdfFailed': 'Deze pdf kan niet worden weergegeven.',

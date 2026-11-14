@@ -693,6 +693,7 @@ const pl: Record<string, string> = {
   'detail.attachments.save': 'Zapisz',
   'detail.attachments.close': 'Zamknij',
   'detail.attachments.previewDialogLabel': 'Podgląd załącznika',
+  'detail.attachments.pdfPage': '1 strona',
   'detail.attachments.pdfPages': 'Strony: {count}',
   'detail.attachments.pdfLocked': 'Ten plik PDF jest chroniony hasłem. Zapisz go, aby otworzyć go gdzie indziej.',
   'detail.attachments.pdfFailed': 'Nie można wyświetlić tego pliku PDF.',
