@@ -3,13 +3,14 @@
   // are entered, signature placement, vim keys, and the undo-send window.
   import Card from '../ui/Card.svelte'
   import Row from '../ui/Row.svelte'
-  import Segmented from '../ui/Segmented.svelte'
+  import ChoiceCards from '../ui/ChoiceCards.svelte'
+  import ComposeSkeleton from '../skeletons/ComposeSkeleton.svelte'
   import ToggleSwitch from '../../common/ToggleSwitch.svelte'
   import Select from '../../common/Select.svelte'
   import VimPreview from '../skeletons/VimPreview.svelte'
   import {
     prefs,
-    setDefaultEditorMode,
+    setComposeOpenIn,
     setComposeAutocomplete,
     setComposeChips,
     setComposeMarkdown,
@@ -18,12 +19,12 @@
     setSendDelay,
   } from '../../../stores/prefs'
   import { t } from '../../../lib/i18n'
-  import type { EditorMode } from '../../../lib/types'
+  import type { ComposeOpenIn } from '../../../lib/types'
 
-  $: editorModes = [
-    { key: 'plaintext', label: $t('settingsPanel.editorMode.plaintext') },
-    { key: 'markdown', label: $t('settingsPanel.editorMode.markdown') },
-    { key: 'wysiwyg', label: $t('settingsPanel.editorMode.wysiwyg') },
+  $: openInOptions = [
+    { key: 'window', label: $t('composing.openIn.window'), hint: $t('composing.openIn.window.hint') },
+    { key: 'docked', label: $t('composing.openIn.docked'), hint: $t('composing.openIn.docked.hint') },
+    { key: 'tab', label: $t('composing.openIn.tab'), hint: $t('composing.openIn.tab.hint') },
   ]
 
   $: sendDelays = [
@@ -40,13 +41,17 @@
 </script>
 
 <Card title={$t('settingsPanel.category.composingSending')}>
-  <Row id="default-editor" label={$t('settingsPanel.label.defaultEditor')} hint={$t('settingsPanel.hint.defaultEditor')}>
-    <Segmented
-      label={$t('settingsPanel.label.defaultEditor')}
-      value={$prefs.defaultEditorMode}
-      options={editorModes}
-      on:change={(e) => setDefaultEditorMode(e.detail as EditorMode)}
-    />
+  <Row id="compose-open-in" label={$t('composing.openIn')} hint={$t('composing.openIn.hint')} stacked>
+    <ChoiceCards
+      label={$t('composing.openIn')}
+      value={$prefs.composeOpenIn}
+      options={openInOptions}
+      minWidth={170}
+      on:change={(e) => setComposeOpenIn(e.detail as ComposeOpenIn)}
+      let:option
+    >
+      <ComposeSkeleton mode={option.key as ComposeOpenIn} />
+    </ChoiceCards>
   </Row>
   <Row id="compose-markdown" label={$t('composing.markdown')} hint={$t('composing.markdown.hint')}>
     <ToggleSwitch checked={$prefs.composeMarkdown} label={$t('composing.markdown')} on:change={(e) => setComposeMarkdown(e.detail)} />
