@@ -4,6 +4,9 @@
   export let label: string
   export let title: string = label
   export let active: boolean = false
+  // toggle marks a button that stays pressed (flag), which is the only kind
+  // assistive tech should hear a pressed state for.
+  export let toggle: boolean = false
   export let danger: boolean = false
   export let disabled: boolean = false
 </script>
@@ -14,7 +17,7 @@
   class:active
   class:danger
   aria-label={label}
-  aria-pressed={active}
+  aria-pressed={toggle ? active : undefined}
   {title}
   {disabled}
   on:click
