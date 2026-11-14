@@ -3,11 +3,16 @@
   // which WebKitGTK does not have. every support file is served from the app
   // itself under /pdfjs/, so opening a pdf makes no network request. pages are
   // drawn as they scroll into view, each with a text layer for selecting and
-  // copying. scripts and forms in the pdf are never run.
+  // copying. scripts and forms in the pdf are never run. pages that carry no
+  // text (scans) can be read with text recognition (lib/ocr.ts), which lays the
+  // words it finds over the page the same way.
   import { onDestroy, onMount, tick } from 'svelte'
-  import { IconMinus, IconPlus, IconArrowsHorizontal } from '@tabler/icons-svelte'
+  import { IconMinus, IconPlus, IconArrowsHorizontal, IconTextRecognition, IconPlayerStop, IconCheck } from '@tabler/icons-svelte'
   import type { PDFDocumentProxy, PDFPageProxy, RenderTask, TextLayer } from 'pdfjs-dist/legacy/build/pdf.mjs'
-  import { t } from '../../lib/i18n'
+  import { t, locale } from '../../lib/i18n'
+  import { prefs } from '../../stores/prefs'
+  import { errorMessage, toastError } from '../../stores/toast'
+  import { ocrEngine, ocrLanguageList, recognize, type OCRWord } from '../../lib/ocr'
 
   export let data: Uint8Array
 
@@ -35,6 +40,16 @@
   let observer: IntersectionObserver | null = null
   let resizeObserver: ResizeObserver | null = null
   const visible = new Set<number>()
+
+  // text recognition: the pages with (almost) no text of their own, the words
+  // read on each, and where a run is.
+  const scanThreshold = 20
+  const ocrLongSide = 3000
+  let scanned: number[] = []
+  const ocrWords = new Map<number, OCRWord[]>()
+  let ocrState: 'idle' | 'running' | 'done' = 'idle'
+  let ocrProgress = 0
+  let ocrStop = false
 
   onMount(() => {
     void open()
@@ -74,11 +89,125 @@
       await tick()
       fitWidth()
       watch()
+      void findScanned(d)
     } catch (err) {
       loading = false
       const name = (err as { name?: string })?.name
       errorText = name === 'PasswordException' ? $t('detail.attachments.pdfLocked') : $t('detail.attachments.pdfFailed')
     }
+  }
+
+  // findScanned looks for pages without a text layer of their own, after the
+  // pages are on screen so it never holds them up.
+  async function findScanned(d: PDFDocumentProxy): Promise<void> {
+    const found: number[] = []
+    for (let i = 1; i <= d.numPages; i++) {
+      if (destroyed) {
+        return
+      }
+      try {
+        const content = await (await d.getPage(i)).getTextContent()
+        let chars = 0
+        for (const item of content.items) {
+          if ('str' in item) {
+            chars += item.str.trim().length
+          }
+        }
+        if (chars < scanThreshold) {
+          found.push(i)
+        }
+      } catch {
+        found.push(i)
+      }
+    }
+    scanned = found
+  }
+
+  async function runOCR(): Promise<void> {
+    if (!doc || ocrState === 'running') {
+      return
+    }
+    ocrState = 'running'
+    ocrStop = false
+    ocrProgress = 0
+    try {
+      const engine = await ocrEngine($prefs.ocrEngine)
+      const langs = ocrLanguageList($prefs.ocrLanguages, $locale)
+      for (const n of scanned) {
+        if (ocrStop || destroyed) {
+          break
+        }
+        ocrProgress++
+        if (ocrWords.has(n)) {
+          continue
+        }
+        // drawn large enough for the recognizer, around 300 dpi for a4.
+        const page = await doc.getPage(n)
+        const base = page.getViewport({ scale: 1 })
+        const s = Math.min(5, ocrLongSide / Math.max(base.width, base.height))
+        const viewport = page.getViewport({ scale: s })
+        const canvas = document.createElement('canvas')
+        canvas.width = Math.floor(viewport.width)
+        canvas.height = Math.floor(viewport.height)
+        await page.render({ canvas, viewport, background: '#ffffff' }).promise
+        const words = await recognize(canvas, engine, langs)
+        canvas.width = 0
+        canvas.height = 0
+        if (destroyed) {
+          return
+        }
+        ocrWords.set(n, words)
+        const el = pageEls[n - 1]
+        if (el && drawn.has(n)) {
+          applyOCR(n, el)
+        }
+      }
+      ocrState = ocrStop ? 'idle' : 'done'
+    } catch (err) {
+      ocrState = 'idle'
+      if (!destroyed) {
+        toastError($t('detail.attachments.ocrFailed').replace('{error}', errorMessage(err)))
+      }
+    }
+  }
+
+  let measureCtx: CanvasRenderingContext2D | null = null
+
+  // applyOCR lays the recognized words over a drawn page as invisible,
+  // selectable text, each stretched to the box it was read from. the boxes are
+  // fractions of the page, so only the font size follows the zoom.
+  function applyOCR(n: number, el: HTMLDivElement): void {
+    const words = ocrWords.get(n)
+    el.querySelector('.ocrLayer')?.remove()
+    if (!words || words.length === 0) {
+      return
+    }
+    measureCtx ??= document.createElement('canvas').getContext('2d')
+    const width = el.clientWidth
+    const height = el.clientHeight
+    const layer = document.createElement('div')
+    layer.className = 'ocrLayer'
+    words.forEach((w, i) => {
+      const span = document.createElement('span')
+      const size = Math.max(1, w.h * height)
+      const next = words[i + 1]
+      span.textContent = next && next.line === w.line ? `${w.text} ` : w.text
+      span.style.left = `${w.x * 100}%`
+      span.style.top = `${w.y * 100}%`
+      span.style.fontSize = `${size}px`
+      if (measureCtx) {
+        measureCtx.font = `${size}px sans-serif`
+        const natural = measureCtx.measureText(w.text).width
+        if (natural > 0) {
+          span.style.transform = `scaleX(${(w.w * width) / natural})`
+        }
+      }
+      layer.append(span)
+      if (next && next.line !== w.line) {
+        layer.append(document.createElement('br'))
+      }
+    })
+    el.append(layer)
   }
 
   function watch(): void {
@@ -192,6 +321,7 @@
     }
     if (tasks.get(n) === job) {
       tasks.delete(n)
+      applyOCR(n, el)
     }
   }
 
@@ -224,6 +354,23 @@
     <div class="bar">
       {#if !loading}
         <span class="count">{$t('detail.attachments.pdfPages').replace('{count}', String(sizes.length))}</span>
+      {/if}
+      {#if scanned.length > 0}
+        {#if ocrState === 'running'}
+          <span class="ocr-status">
+            {$t('detail.attachments.ocrRunning').replace('{page}', String(ocrProgress)).replace('{count}', String(scanned.length))}
+          </span>
+          <button type="button" class="zbtn" title={$t('detail.attachments.ocrStop')} aria-label={$t('detail.attachments.ocrStop')} on:click={() => (ocrStop = true)}>
+            <IconPlayerStop size={14} stroke={1.8} />
+          </button>
+        {:else if ocrState === 'done'}
+          <span class="ocr-status"><IconCheck size={14} stroke={1.8} />{$t('detail.attachments.ocrDone')}</span>
+        {:else}
+          <button type="button" class="tbtn" title={$t('detail.attachments.ocrHint')} on:click={runOCR}>
+            <IconTextRecognition size={14} stroke={1.8} />
+            {$t('detail.attachments.ocr')}
+          </button>
+        {/if}
       {/if}
       <span class="spacer"></span>
       <button type="button" class="zbtn" title={$t('detail.attachments.zoomOut')} aria-label={$t('detail.attachments.zoomOut')} disabled={loading || scale <= minZoom} on:click={() => zoom(1 / zoomStep)}>
@@ -304,6 +451,58 @@
   .zbtn:disabled {
     opacity: 0.4;
     cursor: default;
+  }
+
+  .tbtn {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-1);
+    margin-left: var(--space-2);
+    border: var(--hairline) solid var(--border-default);
+    background: transparent;
+    color: var(--text-secondary);
+    cursor: var(--cursor-action);
+    padding: 2px var(--space-2);
+    border-radius: var(--radius-control);
+    font: inherit;
+    font-size: var(--fz-meta, var(--fz-label));
+  }
+  .tbtn:hover {
+    background: var(--surface-hover);
+    color: var(--text-primary);
+  }
+
+  .ocr-status {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-1);
+    margin-left: var(--space-2);
+    font-size: var(--fz-meta, var(--fz-label));
+    color: var(--text-tertiary);
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* recognized words, laid over the page like the text layer. */
+  .page :global(.ocrLayer) {
+    position: absolute;
+    inset: 0;
+    overflow: clip;
+    line-height: 1;
+    z-index: 1;
+  }
+  .page :global(.ocrLayer span) {
+    position: absolute;
+    color: transparent;
+    white-space: pre;
+    cursor: text;
+    font-family: sans-serif;
+    transform-origin: 0 0;
+    user-select: text;
+    -webkit-user-select: text;
+  }
+  .page :global(.ocrLayer ::selection) {
+    background: color-mix(in srgb, var(--accent) 35%, transparent);
+    color: transparent;
   }
 
   .pages {

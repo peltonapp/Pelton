@@ -94,6 +94,15 @@ export function AddOAuthAccount(req: $models.AddAccountRequest): $CancellablePro
 }
 
 /**
+ * AddOCRLanguage asks for a tesseract language file (.traineddata, optionally
+ * gzipped) and copies it into the ocr folder. Returns its code, or "" if the
+ * user canceled. A file with the same code replaces the old one.
+ */
+export function AddOCRLanguage(): $CancellablePromise<string> {
+    return $Call.ByID(2447172345);
+}
+
+/**
  * AddPasswordAccount creates a password-authenticated account: it stores the
  * metadata, files the password in the keyring, discovers the folder tree and
  * runs an initial sync.
@@ -1088,6 +1097,15 @@ export function ListOAuthProviders(): $CancellablePromise<{ [_ in string]?: stri
 }
 
 /**
+ * ListOCRLanguages returns the codes of the language files the user added.
+ */
+export function ListOCRLanguages(): $CancellablePromise<string[]> {
+    return $Call.ByID(2208958617).then(($result: any) => {
+        return $$createType15($result);
+    });
+}
+
+/**
  * ListOutbox returns the current outbox, so the ui can show queued, sending and
  * failed messages and surface send failures explicitly.
  */
@@ -1261,6 +1279,14 @@ export function MoveMessage(id: number, destFolderID: number): $CancellablePromi
 }
 
 /**
+ * NativeOCRAvailable reports whether the platform has a text recognizer of
+ * its own (Vision on macOS).
+ */
+export function NativeOCRAvailable(): $CancellablePromise<boolean> {
+    return $Call.ByID(1722797850);
+}
+
+/**
  * OpenComposeWindow moves a compose pane into a window of its own (#573).
  * session is the pane's state as the frontend keeps it; the new window picks
  * it up once with TakeComposeSession, so it never travels in a url.
@@ -1314,6 +1340,13 @@ export function OpenLogFolder(): $CancellablePromise<void> {
  */
 export function OpenMessageWindow(id: number, title: string): $CancellablePromise<void> {
     return $Call.ByID(3214634389, id, title);
+}
+
+/**
+ * OpenOCRFolder shows the ocr folder in the system file manager.
+ */
+export function OpenOCRFolder(): $CancellablePromise<void> {
+    return $Call.ByID(1452344790);
 }
 
 /**
@@ -1382,6 +1415,15 @@ export function ReadAttachment(messageID: number, attachmentID: number): $Cancel
 }
 
 /**
+ * ReadOCRLanguage returns a user-added language file for tesseract to load.
+ */
+export function ReadOCRLanguage(code: string): $CancellablePromise<string> {
+    return $Call.ByID(3311324412, code).then(($result: any) => {
+        return $Create.ByteSlice($result);
+    });
+}
+
+/**
  * ReauthorizeOAuthAccount runs the consent flow again for an oauth account with
  * the client it was set up with, and replaces its tokens. It is the way back
  * once the provider revoked or expired the refresh token, without deleting the
@@ -1401,6 +1443,15 @@ export function ReauthorizeOAuthAccount(accountID: number): $CancellablePromise<
  */
 export function RebuildMenu(): $CancellablePromise<void> {
     return $Call.ByID(4201434270);
+}
+
+/**
+ * RecognizeTextNative reads the words in a png with the platform recognizer.
+ */
+export function RecognizeTextNative(png: string): $CancellablePromise<$models.OCRWordDTO[]> {
+    return $Call.ByID(3009276254, png).then(($result: any) => {
+        return $$createType77($result);
+    });
 }
 
 /**
@@ -1433,6 +1484,13 @@ export function RemoveAddressBook(id: number): $CancellablePromise<void> {
  */
 export function RemoveImageAllow(kind: string, value: string): $CancellablePromise<void> {
     return $Call.ByID(3954120632, kind, value);
+}
+
+/**
+ * RemoveOCRLanguage deletes a language file the user added.
+ */
+export function RemoveOCRLanguage(code: string): $CancellablePromise<void> {
+    return $Call.ByID(3747166912, code);
 }
 
 /**
@@ -1633,7 +1691,7 @@ export function SaveView(dto: $models.ViewDTO): $CancellablePromise<$models.View
  */
 export function ScanAttachment(messageID: number, attachmentID: number): $CancellablePromise<$models.VerdictDTO> {
     return $Call.ByID(453863286, messageID, attachmentID).then(($result: any) => {
-        return $$createType76($result);
+        return $$createType78($result);
     });
 }
 
@@ -1645,7 +1703,7 @@ export function ScanAttachment(messageID: number, attachmentID: number): $Cancel
  */
 export function ScanMessage(messageID: number, links: boolean, attachments: boolean): $CancellablePromise<$models.MessageScanDTO> {
     return $Call.ByID(300497314, messageID, links, attachments).then(($result: any) => {
-        return $$createType77($result);
+        return $$createType79($result);
     });
 }
 
@@ -1656,7 +1714,7 @@ export function ScanMessage(messageID: number, links: boolean, attachments: bool
  */
 export function ScanURL(rawURL: string): $CancellablePromise<$models.VerdictDTO> {
     return $Call.ByID(3387403308, rawURL).then(($result: any) => {
-        return $$createType76($result);
+        return $$createType78($result);
     });
 }
 
@@ -1667,7 +1725,7 @@ export function ScanURL(rawURL: string): $CancellablePromise<$models.VerdictDTO>
  */
 export function Search(req: $models.SearchRequestDTO): $CancellablePromise<$models.SearchResultDTO> {
     return $Call.ByID(2859382430, req).then(($result: any) => {
-        return $$createType78($result);
+        return $$createType80($result);
     });
 }
 
@@ -2071,7 +2129,7 @@ export function TestAccountRoute(req: $models.RouteTestRequest): $CancellablePro
  */
 export function TestConnection(req: $models.TestConnectionRequest): $CancellablePromise<$models.ConnectionTestDTO> {
     return $Call.ByID(1152861202, req).then(($result: any) => {
-        return $$createType79($result);
+        return $$createType81($result);
     });
 }
 
@@ -2324,7 +2382,9 @@ const $$createType72 = $models.ThemeImportPreviewDTO.createFrom;
 const $$createType73 = $models.UntrustedCertDTO.createFrom;
 const $$createType74 = $Create.Array($$createType73);
 const $$createType75 = $models.AttachmentContentDTO.createFrom;
-const $$createType76 = $models.VerdictDTO.createFrom;
-const $$createType77 = $models.MessageScanDTO.createFrom;
-const $$createType78 = $models.SearchResultDTO.createFrom;
-const $$createType79 = $models.ConnectionTestDTO.createFrom;
+const $$createType76 = $models.OCRWordDTO.createFrom;
+const $$createType77 = $Create.Array($$createType76);
+const $$createType78 = $models.VerdictDTO.createFrom;
+const $$createType79 = $models.MessageScanDTO.createFrom;
+const $$createType80 = $models.SearchResultDTO.createFrom;
+const $$createType81 = $models.ConnectionTestDTO.createFrom;

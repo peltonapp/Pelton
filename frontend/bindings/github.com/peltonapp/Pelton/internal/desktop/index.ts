@@ -54,6 +54,7 @@ export {
     MessageListDTO,
     MessageScanDTO,
     MessageSummaryDTO,
+    OCRWordDTO,
     OutboxRowDTO,
     PGPKeyDTO,
     PasswordCheckDTO,

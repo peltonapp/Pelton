@@ -77,6 +77,8 @@ const defaults: UIPrefs = {
   menuBarNativeMinimal: false,
   menuBarIcons: false,
   windowMaterial: false,
+  ocrEngine: 'native',
+  ocrLanguages: '',
   timeFormat: 'auto',
   reduceMotion: false,
   handCursor: false,
@@ -460,9 +462,6 @@ export function setThemeDarkTimes(start: string, end: string): void {
   void setSetting(SettingKeys.themeDarkEnd, end)
 }
 
-// setMenuBarInApp shows the in-app menu bar on macOS. setMenuBarNativeMinimal
-// reduces the native macOS menu to the app menu while the in-app bar is on;
-// the backend rebuilds the native menu when either setting is written.
 // setWindowMaterial stores the native window material preference (Liquid
 // Glass on macOS, Mica on Windows). The window takes it at the next launch.
 export function setWindowMaterial(value: boolean): void {
@@ -470,6 +469,22 @@ export function setWindowMaterial(value: boolean): void {
   void setSetting(SettingKeys.windowMaterial, String(value))
 }
 
+// setOCREngine picks the pdf viewer's text recognizer ("native" or
+// "tesseract"); setOCRLanguages the tesseract languages, "+" joined, where ""
+// follows the ui language.
+export function setOCREngine(value: string): void {
+  prefs.update((p) => ({ ...p, ocrEngine: value }))
+  void setSetting(SettingKeys.ocrEngine, value)
+}
+
+export function setOCRLanguages(value: string): void {
+  prefs.update((p) => ({ ...p, ocrLanguages: value }))
+  void setSetting(SettingKeys.ocrLanguages, value)
+}
+
+// setMenuBarInApp shows the in-app menu bar on macOS. setMenuBarNativeMinimal
+// reduces the native macOS menu to the app menu while the in-app bar is on;
+// the backend rebuilds the native menu when either setting is written.
 export function setMenuBarInApp(value: boolean): void {
   prefs.update((p) => ({ ...p, menuBarInApp: value }))
   void setSetting(SettingKeys.menuBarInApp, String(value))

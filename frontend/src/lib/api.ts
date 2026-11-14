@@ -103,6 +103,41 @@ export function windowMaterialActive(): Promise<boolean> {
   return App.WindowMaterialActive()
 }
 
+// text recognition for the pdf viewer (bind_ocr.go). word boxes are fractions
+// of the image, from its top left; line numbers the text lines in reading order.
+export type OCRWord = { text: string; x: number; y: number; w: number; h: number; line: number }
+
+export function nativeOCRAvailable(): Promise<boolean> {
+  return App.NativeOCRAvailable()
+}
+
+// recognizeTextNative takes the png as base64, the way the binding carries bytes.
+export async function recognizeTextNative(pngBase64: string): Promise<OCRWord[]> {
+  return (await App.RecognizeTextNative(pngBase64)) ?? []
+}
+
+// the tesseract language files the user added, by code.
+export async function listOCRLanguages(): Promise<string[]> {
+  return (await App.ListOCRLanguages()) ?? []
+}
+
+export function addOCRLanguage(): Promise<string> {
+  return App.AddOCRLanguage()
+}
+
+export function removeOCRLanguage(code: string): Promise<void> {
+  return App.RemoveOCRLanguage(code)
+}
+
+// readOCRLanguage returns a user-added language file as base64.
+export function readOCRLanguage(code: string): Promise<string> {
+  return App.ReadOCRLanguage(code)
+}
+
+export function openOCRFolder(): Promise<void> {
+  return App.OpenOCRFolder()
+}
+
 // isNightly reports whether this is an automated nightly build cut from the dev
 // branch. Nightlies are untested and keep their own separate data directory, so
 // the ui warns about it at every launch and marks the status bar.
@@ -1451,6 +1486,8 @@ export const SettingKeys = {
   menuBarInApp: 'menu_bar_in_app',
   menuBarNativeMinimal: 'menu_bar_native_minimal',
   windowMaterial: 'window_material',
+  ocrEngine: 'ocr_engine',
+  ocrLanguages: 'ocr_languages',
   menuBarIcons: 'menu_bar_icons',
   menuBarLayout: 'menu_bar_layout',
   paletteUsage: 'palette_usage',

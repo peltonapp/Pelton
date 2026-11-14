@@ -2832,6 +2832,52 @@ export class MessageSummaryDTO {
 }
 
 /**
+ * OCRWordDTO is one recognized word. The box is a fraction of the image,
+ * measured from its top left corner; Line numbers the text lines in reading
+ * order.
+ */
+export class OCRWordDTO {
+    "text": string;
+    "x": number;
+    "y": number;
+    "w": number;
+    "h": number;
+    "line": number;
+
+    /** Creates a new OCRWordDTO instance. */
+    constructor($$source: Partial<OCRWordDTO> = {}) {
+        if (!("text" in $$source)) {
+            this["text"] = "";
+        }
+        if (!("x" in $$source)) {
+            this["x"] = 0;
+        }
+        if (!("y" in $$source)) {
+            this["y"] = 0;
+        }
+        if (!("w" in $$source)) {
+            this["w"] = 0;
+        }
+        if (!("h" in $$source)) {
+            this["h"] = 0;
+        }
+        if (!("line" in $$source)) {
+            this["line"] = 0;
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new OCRWordDTO instance from a string or object.
+     */
+    static createFrom($$source: any = {}): OCRWordDTO {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new OCRWordDTO($$parsedSource as Partial<OCRWordDTO>);
+    }
+}
+
+/**
  * OutboxRowDTO is one queued or failed message for the outbox view.
  */
 export class OutboxRowDTO {
@@ -4660,6 +4706,14 @@ export class UIPrefsDTO {
     "windowMaterial": boolean;
 
     /**
+     * OCREngine is the pdf viewer's text recognizer: "native" (Vision on
+     * macOS) or "tesseract". OCRLanguages is the "+" joined list of tesseract
+     * languages to read with; empty follows the ui language.
+     */
+    "ocrEngine": string;
+    "ocrLanguages": string;
+
+    /**
      * MenuBarIcons shows icons next to the in-app menu bar's dropdown items.
      */
     "menuBarIcons": boolean;
@@ -4967,6 +5021,12 @@ export class UIPrefsDTO {
         }
         if (!("windowMaterial" in $$source)) {
             this["windowMaterial"] = false;
+        }
+        if (!("ocrEngine" in $$source)) {
+            this["ocrEngine"] = "";
+        }
+        if (!("ocrLanguages" in $$source)) {
+            this["ocrLanguages"] = "";
         }
         if (!("menuBarIcons" in $$source)) {
             this["menuBarIcons"] = false;
