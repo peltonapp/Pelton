@@ -1876,6 +1876,11 @@
     border-width: var(--hairline) 0 var(--hairline) var(--hairline);
   }
 
+  .frame .side-col {
+    background: var(--sidebar-bg);
+    border-radius: var(--pane-radius);
+  }
+
   /* soft: every pane is a rounded panel of its own, with a gap between. */
   :global(:root[data-panes='soft']) .surface {
     gap: var(--pane-gap);
