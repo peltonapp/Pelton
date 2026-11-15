@@ -17,12 +17,19 @@
   import { errorMessage, toastError } from '../../stores/toast'
   import { isScheduled } from '../../lib/outboxactions'
   import { openOutboxWindow } from '../../lib/api'
-  import { formatRelative } from '../../lib/format'
+  import { formatRelative, formatWeekdayTime, type TimeFormat } from '../../lib/format'
+  import bellIcon from '@phosphor-icons/core/assets/duotone/bell-ringing-duotone.svg?raw'
+  import { followUps, dropFollowUp } from '../../stores/followups'
+  import { prefs } from '../../stores/prefs'
   import { tip } from '../../lib/tip'
   import { t } from '../../lib/i18n'
 
   let button: HTMLButtonElement
   let open = false
+
+  function when(iso: string): string {
+    return formatWeekdayTime(new Date(iso), $prefs.timeFormat as TimeFormat)
+  }
 
   // a slow tick keeps "scheduled" and "last synced" honest while open.
   let now = Date.now()
@@ -105,6 +112,34 @@
 
       <div class="body">
         <OutboxList rows={$outbox} {now} on:opened={() => (open = false)} />
+
+        {#if $followUps.length > 0}
+          <section class="follow" aria-label={$t('followUp.section')}>
+            <h3>{$t('followUp.section')}</h3>
+            {#each $followUps as item (item.id)}
+              <div class="fu-row" class:due={item.firedAt !== ''}>
+                <span class="fu-glyph"><Ph svg={bellIcon} size={15} /></span>
+                <span class="fu-main">
+                  <span class="fu-subject">{item.subject || $t('messageList.noSubject')}</span>
+                  <span class="fu-meta">
+                    {item.firedAt !== ''
+                      ? $t('followUp.notice.fired')
+                      : $t('followUp.remindsAt').replace('{when}', when(item.dueAt))}
+                  </span>
+                </span>
+                <button
+                  type="button"
+                  class="c2-tool compact"
+                  aria-label={item.firedAt !== '' ? $t('followUp.dismiss') : $t('followUp.cancel')}
+                  use:tip={{ text: item.firedAt !== '' ? $t('followUp.dismiss') : $t('followUp.cancel') }}
+                  on:click={() => void dropFollowUp(item.id)}
+                >
+                  <Ph svg={xIcon} size={13} />
+                </button>
+              </div>
+            {/each}
+          </section>
+        {/if}
       </div>
 
       {#if syncLine}
@@ -200,6 +235,63 @@
     min-height: 0;
     overflow-y: auto;
     padding: var(--space-2) 0;
+  }
+
+  .follow {
+    margin-top: var(--space-2);
+    padding-top: var(--space-2);
+    border-top: var(--hairline) solid var(--border-subtle);
+  }
+
+  .follow h3 {
+    margin: 0;
+    padding: var(--space-2) var(--space-4);
+    font-size: var(--fz-meta);
+    font-weight: var(--fw-semibold);
+    color: var(--text-tertiary);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+
+  .fu-row {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--space-3);
+    padding: var(--space-2) var(--space-4);
+  }
+
+  .fu-row:hover {
+    background: var(--surface-hover);
+  }
+
+  .fu-glyph {
+    display: inline-flex;
+    padding-top: var(--space-1);
+    color: var(--text-tertiary);
+  }
+
+  .fu-row.due .fu-glyph {
+    color: var(--warning);
+  }
+
+  .fu-main {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    gap: var(--space-1);
+    min-width: 0;
+  }
+
+  .fu-subject {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: var(--fz-label);
+  }
+
+  .fu-meta {
+    font-size: var(--fz-meta);
+    color: var(--text-tertiary);
   }
 
   footer {

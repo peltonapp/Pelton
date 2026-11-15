@@ -126,6 +126,11 @@ export async function sendSession(id: number, fallback: ComposeSession, options:
     return false
   }
   const { scheduledAt, beforeClose } = options
+  const followUp = (getSession(id) ?? fallback).followUpAt
+  if (followUp && Date.parse(followUp) <= (scheduledAt ?? new Date()).getTime()) {
+    toastError(tr('followUp.tooEarly'))
+    return false
+  }
   try {
     const current = await settled(id, fallback)
     const snapshot: ComposeSession = { ...current }
@@ -239,6 +244,26 @@ export function combineProtection(sign: boolean, encrypt: boolean): string {
   if (sign) return 'sign'
   if (encrypt) return 'encrypt'
   return 'none'
+}
+
+/** One entry of the follow-up reminder menu. */
+export interface FollowUpPreset {
+  key: 'tomorrow' | 'threeDays' | 'week'
+  label: string
+  when: Date
+}
+
+/**
+ * buildFollowUpPresets is the reminder menu's choices: tomorrow, in three days
+ * and in a week, each at nine in the morning so the reminder lands at the
+ * start of a working day rather than at the minute the mail went out.
+ */
+export function buildFollowUpPresets(now: Date, tr: (key: string) => string): FollowUpPreset[] {
+  return [
+    { key: 'tomorrow', label: tr('followUp.tomorrow'), when: atTime(addDays(now, 1), 9, 0) },
+    { key: 'threeDays', label: tr('followUp.threeDays'), when: atTime(addDays(now, 3), 9, 0) },
+    { key: 'week', label: tr('followUp.week'), when: atTime(addDays(now, 7), 9, 0) },
+  ]
 }
 
 /** One entry of the send-later menu. */

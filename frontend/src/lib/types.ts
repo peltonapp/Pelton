@@ -434,6 +434,44 @@ export interface ComposeRequest {
   // forwardOf is the id of the message this one forwards; once sent, that
   // message is marked forwarded. Leave it out (or 0) for anything else.
   forwardOf?: number
+  // followUpAt is an optional RFC3339 time to be reminded at when nobody has
+  // replied by then. Empty or left out sets no reminder.
+  followUpAt?: string
+}
+
+/**
+ * Snippet is a reusable text block for the composer. body is plain text with
+ * {placeholders}; subject, to and cc fill only empty fields; trigger is the
+ * word typed after ";" to insert it, '' for none.
+ */
+export interface Snippet {
+  id: number
+  name: string
+  body: string
+  subject: string
+  to: string
+  cc: string
+  trigger: string
+  position: number
+}
+
+/**
+ * FollowUp is a "remind me if nobody replies" reminder on a sent message.
+ * Times are RFC3339; firedAt is empty while it waits. localId, folderId and
+ * threadId point at the cached copy of the sent message, 0 until one synced.
+ */
+export interface FollowUp {
+  id: number
+  accountId: number
+  messageId: string
+  subject: string
+  recipients: string
+  sentAt: string
+  dueAt: string
+  firedAt: string
+  localId: number
+  folderId: number
+  threadId: number
 }
 
 // ProtectionStatus is what the compose window needs to offer the pgp controls
@@ -660,6 +698,14 @@ export interface UIPrefs {
   // threadedList groups the message list into conversations in the new
   // design.
   threadedList: boolean
+  // afterMove is what the reader opens once the open message is archived,
+  // deleted or moved in the new design.
+  afterMove: AfterMove
+  // warnMissingAttachment asks before sending a message whose text speaks of
+  // an attachment it does not carry.
+  warnMissingAttachment: boolean
+  // warnEmptySubject asks before sending a message without a subject.
+  warnEmptySubject: boolean
   // readerWidth caps the reading column in the new design.
   readerWidth: ReaderWidth
   // senderPanel shows the panel about the open message's sender beside the
@@ -1228,6 +1274,11 @@ export type ContactsView = 'panes' | 'grid'
 export type ComposeOpenIn = 'window' | 'docked' | 'tab'
 /** How wide the reading column runs in the new design. */
 export type ReaderWidth = 'narrow' | 'medium' | 'full'
+/**
+ * What the reader opens once the open message leaves the list by archive,
+ * delete or move: the older neighbour, the newer one, or nothing.
+ */
+export type AfterMove = 'older' | 'newer' | 'list'
 /** One of the top-level areas of the app. */
 export type Space = 'mail' | 'contacts' | 'calendar' | 'tasks'
 export type SelectAllScope = 'offer' | 'all' | 'loaded'

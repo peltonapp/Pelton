@@ -24,7 +24,10 @@
     setSignatureAboveQuote,
     setComposeVimMode,
     setSendDelay,
+    setWarnMissingAttachment,
+    setWarnEmptySubject,
   } from '../../../stores/prefs'
+  import SendCheckSkeleton from '../skeletons/SendCheckSkeleton.svelte'
   import { t } from '../../../lib/i18n'
   import type { ComposeOpenIn } from '../../../lib/types'
 
@@ -117,6 +120,22 @@
       ariaLabel={$t('settingsPanel.label.undoSendWindow')}
       items={sendDelays}
       on:change={(e) => setSendDelay(Number(e.detail))}
+    />
+  </Row>
+  <Row id="warn-missing-attachment" label={$t('sendCheck.setting.attachment')} hint={$t('sendCheck.setting.attachmentHint')}>
+    <SendCheckSkeleton slot="preview" issue="missingAttachment" />
+    <ToggleSwitch
+      checked={$prefs.warnMissingAttachment}
+      label={$t('sendCheck.setting.attachment')}
+      on:change={(e) => setWarnMissingAttachment(e.detail)}
+    />
+  </Row>
+  <Row id="warn-empty-subject" label={$t('sendCheck.setting.subject')} hint={$t('sendCheck.setting.subjectHint')}>
+    <SendCheckSkeleton slot="preview" issue="emptySubject" />
+    <ToggleSwitch
+      checked={$prefs.warnEmptySubject}
+      label={$t('sendCheck.setting.subject')}
+      on:change={(e) => setWarnEmptySubject(e.detail)}
     />
   </Row>
 </Card>

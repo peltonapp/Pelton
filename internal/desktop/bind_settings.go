@@ -168,6 +168,13 @@ const (
 	settingComposeOpenIn = "compose_open_in"
 	// group the message list into conversations in the new design.
 	settingThreadedList = "threaded_list"
+	// what the reader shows after the open message is archived, deleted or
+	// moved in the new design: "older", "newer" or "list".
+	settingAfterMove = "after_move"
+	// the checks the new composer runs before sending: a text that speaks of
+	// an attachment it does not carry, and an empty subject.
+	settingWarnMissingAttachment = "warn_missing_attachment"
+	settingWarnEmptySubject      = "warn_empty_subject"
 	// how wide the reading column runs in the new design: "narrow", "medium"
 	// or "full".
 	settingReaderWidth = "reader_width"
@@ -432,6 +439,15 @@ type UIPrefsDTO struct {
 	ComposeOpenIn string `json:"composeOpenIn"`
 	// ThreadedList shows the message list as conversations in the new design.
 	ThreadedList bool `json:"threadedList"`
+	// AfterMove is what the reader opens once the open message is archived,
+	// deleted or moved in the new design: older, newer or list.
+	AfterMove string `json:"afterMove"`
+	// WarnMissingAttachment asks before sending a message whose text speaks of
+	// an attachment it does not carry. On by default.
+	WarnMissingAttachment bool `json:"warnMissingAttachment"`
+	// WarnEmptySubject asks before sending a message without a subject. On by
+	// default.
+	WarnEmptySubject bool `json:"warnEmptySubject"`
 	// ReaderWidth caps the reading column in the new design: narrow, medium
 	// or full.
 	ReaderWidth string `json:"readerWidth"`
@@ -602,6 +618,9 @@ func (a *App) GetUIPrefs() (UIPrefsDTO, error) {
 		QuickFilterBar:             a.boolSetting(settingQuickFilterBar, false),
 		ComposeOpenIn:              a.stringSetting(settingComposeOpenIn, "window"),
 		ThreadedList:               a.boolSetting(settingThreadedList, true),
+		AfterMove:                  a.stringSetting(settingAfterMove, "older"),
+		WarnMissingAttachment:      a.boolSetting(settingWarnMissingAttachment, true),
+		WarnEmptySubject:           a.boolSetting(settingWarnEmptySubject, true),
 		ReaderWidth:                a.stringSetting(settingReaderWidth, "full"),
 		SenderPanel:                a.boolSetting(settingSenderPanel, false),
 		ThemeID:                    a.stringSetting(settingThemeID, ""),

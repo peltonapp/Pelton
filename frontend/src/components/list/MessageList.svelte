@@ -38,7 +38,12 @@
     IconFileExport,
     IconAlertTriangle,
     IconMailCheck,
+    IconCircleCheck,
   } from '@tabler/icons-svelte'
+  import InboxZero from './InboxZero.svelte'
+  import FollowUpBand from './FollowUpBand.svelte'
+  import { dueFollowUps, followUpsIn } from '../../stores/followups'
+  import { markDone } from '../../lib/triage'
   import { selection, searchQuery, openMessageId, openMessage } from '../../stores/selection'
   import {
     messageList,
@@ -124,6 +129,7 @@
     reportArchiveExport,
     spamState,
     toggleSpam,
+    leaveList,
   } from '../../lib/messageactions'
 
   // the meta-bar title. built-in unified views are localized by key (matching the
@@ -137,6 +143,25 @@
     const translated = $t(key)
     return translated === key ? sel.label : translated
   }
+
+  // isInbox reports whether the list is an inbox: the unified one, or an
+  // account's own. An empty inbox says so in its own quiet way.
+  function isInbox(sel: Selection): boolean {
+    if (sel.kind === 'view') {
+      return sel.view === 'inbox'
+    }
+    if (sel.kind !== 'folder') {
+      return false
+    }
+    return ($sidebar.data?.foldersByAccount[sel.accountId] ?? []).some((f) => f.id === sel.folderId && f.role === 'inbox')
+  }
+
+  // an inbox of the new design, outside a search, carries the follow-ups that
+  // came due on top and says so when it is empty.
+  $: inboxShown = !classic && !inSearch && !$searchQuery && isInbox($selection)
+  $: inboxFollowUps = inboxShown
+    ? followUpsIn($dueFollowUps, $selection.kind === 'folder' ? $selection.accountId : 0)
+    : []
 
   let listEl: HTMLDivElement
   // highlightId is the row the keyboard highlight sits on; activeIndex is its
@@ -808,10 +833,7 @@
   // archive moves a row to the account's Archive folder, removing it from the
   // current view optimistically.
   async function archive(item: MessageSummary): Promise<void> {
-    removeFromList(item.id)
-    if ($openMessageId === item.id) {
-      openMessageId.set(null)
-    }
+    leaveList([item.id])
     try {
       const undo = await archiveMessage(item.id)
       reportArchiveExport(undo)
@@ -882,6 +904,7 @@
           : [{ label: $t('tasks.createFromMailCount').replace('{n}', n), icon: IconChecklist, hint: menuHint('create-task'), action: () => void createTasksFromMail(selectedItems.map((m) => m.id)) }]),
         { label: $t('messageList.bulk.moveCount').replace('{n}', n), icon: IconFolderSymlink, hint: menuHint('move-to'), action: bulkMove },
         { label: $t('messageList.bulk.archiveCount').replace('{n}', n), icon: IconArchive, hint: menuHint('archive'), action: () => void bulkArchiveSelection() },
+        ...(classic ? [] : [{ label: $t('palette.bulk.doneCount').replace('{n}', n), icon: IconCircleCheck, hint: menuHint('done'), action: () => void markDone(selectedItems) }]),
         anyOnline
           ? { label: $t('messageList.bulk.downloadCount').replace('{n}', n), icon: IconDownload, action: () => void bulkSetOfflineCopies(true) }
           : { label: $t('messageList.bulk.removeOfflineCount').replace('{n}', n), icon: IconDownloadOff, action: () => void bulkSetOfflineCopies(false) },
@@ -921,6 +944,7 @@
       { label: $t('messageList.menu.snooze'), icon: IconClockPause, hint: menuHint('snooze'), action: () => openSnooze(item.id, item.subject) },
       ...(classic ? [] : [{ label: $t('shortcut.createTask'), icon: IconChecklist, hint: menuHint('create-task'), action: () => void createTasksFromMail([item.id]) }]),
       { label: $t('messageList.menu.moveTo'), icon: IconFolderSymlink, hint: menuHint('move-to'), action: () => openMove(item) },
+      ...(classic ? [] : [{ label: $t('shortcut.done'), icon: IconCircleCheck, hint: menuHint('done'), action: () => void markDone([item]) }]),
       ...spamEntry(item),
       item.offline
         ? { label: $t('messageList.menu.removeOffline'), icon: IconDownloadOff, hint: menuHint('remove-offline'), action: () => void toggleOffline(item) }
@@ -1039,6 +1063,17 @@
       <button type="button" class="act" title={$shortcutTitle($t('action.archive'), 'archive')} on:click={bulkArchiveSelection}>
         <IconArchive size={16} stroke={1.7} />
       </button>
+      {#if !classic}
+        <button
+          type="button"
+          class="act"
+          title={$shortcutTitle($t('shortcut.done'), 'done')}
+          aria-label={$t('shortcut.done')}
+          on:click={() => void markDone(selectedItems)}
+        >
+          <IconCircleCheck size={16} stroke={1.7} />
+        </button>
+      {/if}
       <button type="button" class="act" title={$shortcutTitle($t('messageList.menu.moveTo'), 'move-to')} on:click={bulkMove}>
         <IconFolderSymlink size={16} stroke={1.7} />
       </button>
@@ -1132,6 +1167,10 @@
     </div>
   {/if}
 
+  {#if inboxShown}
+    <FollowUpBand items={inboxFollowUps} />
+  {/if}
+
   <div
     class="rows"
     role="listbox"
@@ -1157,6 +1196,10 @@
         <IconMail size={28} stroke={1.4} />
         <button slot="action" type="button" class="load-older-btn" on:click={resetQuickFilter}>{$t('quickFilter.clear')}</button>
       </EmptyState>
+    {:else if items.length === 0 && inboxShown}
+      {#if inboxFollowUps.length === 0}
+        <InboxZero />
+      {/if}
     {:else if items.length === 0}
       <EmptyState
         title={$searchQuery || inSearch ? $t('messageList.empty.noMatch') : $t('messageList.empty.noMessages')}

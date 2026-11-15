@@ -18,6 +18,7 @@
   import { initComposePrefs, composeSessions, setForcedComposeMode } from './stores/compose'
   import { routeComposeSessions } from './stores/composeroute'
   import { loadSignatures } from './stores/signatures'
+  import { loadSnippets } from './stores/snippets'
   import { loadVIPSenders } from './stores/vip'
   import { loadVirusTotalConfig } from './stores/virustotal'
   import { openMessageId } from './stores/selection'
@@ -42,6 +43,7 @@
     await initPrefs()
     await initComposePrefs()
     void loadSignatures()
+    void loadSnippets()
     void loadVIPSenders()
     void loadVirusTotalConfig()
     openMessageId.set(messageId)

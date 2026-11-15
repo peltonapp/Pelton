@@ -93,7 +93,8 @@
   import { loadViews, editingView, closeViewEditor, openViewEditor, views as savedViews } from './stores/views'
   import { selectSavedView } from './stores/selection'
   import { isMac } from './lib/i18n'
-  import { matchShortcut, comboHasModifier, isFunctionKeyCombo, type ShortcutAction } from './lib/shortcuts'
+  import { matchShortcut, comboHasModifier, isFunctionKeyCombo, isComposeAction, chipActions, type ShortcutAction } from './lib/shortcuts'
+  import { runComposeCommand } from './stores/composecommands'
   import { cyclePane, focusPane as focusPaneArea } from './lib/panes'
   import { bindings, recording, initShortcuts } from './stores/shortcuts'
   import { initMenuBar } from './stores/menubar'
@@ -157,8 +158,12 @@
     exportEml,
     reportArchiveExport,
     dropDeleted,
+    leaveList,
     toggleSpam,
   } from './lib/messageactions'
+  import { markDone } from './lib/triage'
+  import { watchFollowUps } from './stores/followups'
+  import { loadSnippets } from './stores/snippets'
   import { buildCommands, mailCommands, type CommandContext, type MessageOp, type FolderOp } from './lib/commands'
   import { extraPaletteCommands } from './lib/palettesources'
   import './lib/palette-calendar'
@@ -444,6 +449,7 @@
     void initMenuBar()
     void initPalette()
     void loadSignatures()
+    void loadSnippets()
     void loadVIPSenders()
     void loadVirusTotalConfig()
     // the sidebar marks mailboxes with no stored password, so the markers have
@@ -575,6 +581,7 @@
       }),
     )
     void loadProposals()
+    unsubscribers.push(watchFollowUps())
     unsubscribers.push(onMenu(handleMenu))
     // a mailto: link opened while the app is already running.
     unsubscribers.push(onMailtoCompose((draft) => openMailtoDraft(draft)))
@@ -821,6 +828,9 @@
       case 'archive':
         void bulkArchive(items)
         return true
+      case 'done':
+        void markDone(items)
+        return true
       case 'download-offline':
         void bulkSetOffline(items, true)
         return true
@@ -903,17 +913,17 @@
           const undo = await archiveMessage(msg.id)
           reportArchiveExport(undo)
           recordArchived(msg, undo)
-          removeFromList(msg.id)
           closeTab(msg.id)
-          if (get(openMessageId) === msg.id) {
-            openMessageId.set(null)
-          }
+          leaveList([msg.id])
           break
         }
         case 'toggle-spam':
           if (await toggleSpam(msg)) {
             closeTab(msg.id)
           }
+          break
+        case 'done':
+          await markDone([msg])
           break
       }
     } catch (err) {
@@ -937,6 +947,10 @@
     // the space on screen gets the first say, so the same key makes a new
     // event in the calendar and a new message in mail.
     if (!classic && !overlayOpen && runSpaceAction($space, action)) {
+      return
+    }
+    if (isComposeAction(action)) {
+      runComposeCommand(action)
       return
     }
     switch (action) {
@@ -987,6 +1001,7 @@
       case 'download-offline':
       case 'delete-message':
       case 'archive':
+      case 'done':
       case 'toggle-spam':
       case 'unsubscribe':
         void messageAction(action)
@@ -1200,6 +1215,9 @@
       case 'archive':
         void archiveOne(item)
         break
+      case 'done':
+        void markDone([item])
+        break
       case 'download-offline':
         void setOffline(item, true)
         break
@@ -1231,6 +1249,9 @@
         break
       case 'archive':
         void bulkArchive(items)
+        break
+      case 'done':
+        void markDone(items)
         break
       case 'download-offline':
         void bulkSetOffline(items, true)
@@ -1642,6 +1663,11 @@
     if (action) {
       // a modifier-less custom binding must not hijack typing in a field.
       if (!comboHasModifier($bindings[action]) && !isFunctionKeyCombo($bindings[action]) && isEditableTarget(event.target)) {
+        return
+      }
+      // a recipient move only means something on a focused recipient chip;
+      // anywhere else its keys keep their own meaning.
+      if ((chipActions as readonly string[]).includes(action) &&!(event.target as HTMLElement | null)?.closest?.('[data-chip]')) {
         return
       }
       event.preventDefault()

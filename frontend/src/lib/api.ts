@@ -41,6 +41,8 @@ import type {
   Thread,
   ComposeRequest,
   Draft,
+  FollowUp,
+  Snippet,
   OutboxRow,
   OutboxEdit,
   OutboxCancel,
@@ -943,6 +945,43 @@ export function cancelSend(id: number): Promise<boolean> {
   return App.CancelSend(id)
 }
 
+// listFollowUps returns every follow-up reminder, waiting and fired, the
+// soonest due first.
+export function listFollowUps(): Promise<FollowUp[]> {
+  if (isDemoActive()) {
+    return Promise.resolve([])
+  }
+  return App.ListFollowUps().then((list) => list ?? [])
+}
+
+// listSnippets returns every snippet in the user's order.
+export function listSnippets(): Promise<Snippet[]> {
+  if (isDemoActive()) {
+    return Promise.resolve([])
+  }
+  return App.ListSnippets().then((list) => list ?? [])
+}
+
+// saveSnippet creates a snippet (id 0) or updates one, returning it as stored.
+export function saveSnippet(snippet: Snippet): Promise<Snippet> {
+  return App.SaveSnippet(snippet) as Promise<Snippet>
+}
+
+// deleteSnippet removes a snippet.
+export function deleteSnippet(id: number): Promise<void> {
+  return App.DeleteSnippet(id)
+}
+
+// reorderSnippets stores the order the snippets are listed in.
+export function reorderSnippets(ids: number[]): Promise<void> {
+  return App.ReorderSnippets(ids)
+}
+
+// cancelFollowUp drops a reminder, waiting or fired.
+export function cancelFollowUp(id: number): Promise<void> {
+  return App.CancelFollowUp(id)
+}
+
 // clearSentOutbox prunes rows already marked sent after the ui has shown the
 // brief sent confirmation.
 export function clearSentOutbox(): Promise<void> {
@@ -1690,6 +1729,9 @@ export const SettingKeys = {
   recentSearches: 'recent_searches',
   composeOpenIn: 'compose_open_in',
   threadedList: 'threaded_list',
+  afterMove: 'after_move',
+  warnMissingAttachment: 'warn_missing_attachment',
+  warnEmptySubject: 'warn_empty_subject',
   readerWidth: 'reader_width',
   senderPanel: 'sender_panel',
   themeId: 'theme_id',

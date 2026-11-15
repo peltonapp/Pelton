@@ -500,10 +500,39 @@ function withoutMember(
 // messages, so the loaded pages are read again shortly after to bring it back
 // under its next newest message.
 let regroupTimer: ReturnType<typeof setTimeout> | undefined
+// while a hold is out, a regroup waits for its release: a conversation whose
+// members are still being moved away one by one would otherwise come back
+// under a member that is about to go too.
+let regroupHolds = 0
+let regroupPending = false
 
 function regroupSoon(): void {
+  if (regroupHolds > 0) {
+    regroupPending = true
+    return
+  }
   clearTimeout(regroupTimer)
   regroupTimer = setTimeout(() => void regroup(), 400)
+}
+
+/**
+ * holdRegroup keeps conversations that lost their row from being read back
+ * until the returned release is called, which then regroups if one was due.
+ */
+export function holdRegroup(): () => void {
+  regroupHolds++
+  let released = false
+  return () => {
+    if (released) {
+      return
+    }
+    released = true
+    regroupHolds--
+    if (regroupHolds === 0 && regroupPending) {
+      regroupPending = false
+      regroupSoon()
+    }
+  }
 }
 
 // regroup reads the conversations loaded so far again in one request, without
@@ -569,11 +598,16 @@ export function removeFromList(id: number): void {
 }
 
 // neighbourInList returns the row that should take id's place when it leaves
-// the list: the one below it, or the one above when it was the last. skip holds
+// the list: the one below it, or the one above when it was the last. toward
+// 'above' prefers the row above and falls back to the one below. skip holds
 // rows that are going too, so a bulk action does not land on one of its own
 // casualties. null when the list holds nothing else, is not loaded, or does not
 // have id at all (a message opened from outside the current page).
-export function neighbourInList(id: number, skip: ReadonlySet<number> = new Set()): number | null {
+export function neighbourInList(
+  id: number,
+  skip: ReadonlySet<number> = new Set(),
+  toward: 'below' | 'above' = 'below',
+): number | null {
   const state = get(messageList)
   if (state.status !== 'ready' || !state.data) {
     return null
@@ -584,11 +618,21 @@ export function neighbourInList(id: number, skip: ReadonlySet<number> = new Set(
     return null
   }
   const survives = (m: MessageSummary): boolean => m.id !== id && !skip.has(m.id)
-  const below = items.slice(at + 1).find(survives)
-  if (below) {
-    return below.id
+  const below = items.slice(at + 1).find(survives)?.id ?? null
+  const above = items.slice(0, at).findLast(survives)?.id ?? null
+  return toward === 'below' ? (below ?? above) : (above ?? below)
+}
+
+/**
+ * newestFirst reports whether the loaded list runs from newest to oldest,
+ * which is what every folder does and what a search sorted by date may not.
+ */
+export function newestFirst(): boolean {
+  const items = get(messageList).data?.items ?? []
+  if (items.length < 2) {
+    return true
   }
-  return items.slice(0, at).findLast(survives)?.id ?? null
+  return Date.parse(items[0].date) >= Date.parse(items[items.length - 1].date)
 }
 
 // restoreToList re-inserts a previously removed row (used by undo-delete),

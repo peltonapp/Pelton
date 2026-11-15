@@ -37,6 +37,7 @@ export const EventNames = {
   calendarReminder: 'calendar:reminder',
   icsOpen: 'calendar:open-files',
   taskReminder: 'tasks:reminder',
+  followUpsChanged: 'followups:changed',
 } as const
 
 /** TaskReminderEvent is a task reminder that came due, alongside its notification. */
@@ -249,6 +250,12 @@ export function onOutboxChanged(cb: () => void): Unsubscribe {
 // onOutboxLog fires with each new line of the send activity log.
 export function onOutboxLog(cb: (e: OutboxLogEntry) => void): Unsubscribe {
   return EventsOn(EventNames.outboxLog, (e: OutboxLogEntry) => cb(e))
+}
+
+// onFollowUpsChanged fires when a follow-up reminder is set, comes due, is
+// answered or is cancelled. It carries no payload; subscribers refetch.
+export function onFollowUpsChanged(cb: () => void): Unsubscribe {
+  return EventsOn(EventNames.followUpsChanged, () => cb())
 }
 
 // onMenu fires when a native menubar item is chosen. the payload is a short

@@ -37,6 +37,9 @@ export type ShortcutAction =
   | 'download-offline'
   | 'delete-message'
   | 'archive'
+  // archives the open or selected conversations whole and moves the reader on
+  // to the next one.
+  | 'done'
   // marks the message as spam, or rescues it when it is already in the spam
   // folder: one key, since only one of the two ever applies.
   | 'toggle-spam'
@@ -86,6 +89,40 @@ export type ShortcutAction =
   | 'go-tasks'
   // makes a task from the open message, or from each selected one.
   | 'create-task'
+  // composer actions of the new design. They act on the composer that last
+  // had focus, so they carry a modifier and work while typing.
+  | ComposeAction
+
+/** The shortcut actions that act on a composer rather than on mail. */
+export type ComposeAction =
+  | 'compose-follow-up'
+  | 'compose-insert-snippet'
+  | 'compose-intro-bcc'
+  | 'compose-toggle-reply-all'
+  | 'compose-cc-sender'
+  // move the recipient chip that has focus to the next field down (To, Cc,
+  // Bcc) or up.
+  | 'compose-recipient-down'
+  | 'compose-recipient-up'
+
+/** Every composer action, in the order Settings and the palette list them. */
+export const composeActions: readonly ComposeAction[] = [
+  'compose-follow-up',
+  'compose-insert-snippet',
+  'compose-intro-bcc',
+  'compose-toggle-reply-all',
+  'compose-cc-sender',
+  'compose-recipient-down',
+  'compose-recipient-up',
+]
+
+/** The composer actions that act on a focused recipient chip. */
+export const chipActions: readonly ComposeAction[] = ['compose-recipient-down', 'compose-recipient-up']
+
+/** isComposeAction reports whether an action belongs to a composer. */
+export function isComposeAction(action: string): action is ComposeAction {
+  return (composeActions as readonly string[]).includes(action)
+}
 
 // Shortcut pairs an action with its default combo and the label key for display.
 export interface Shortcut {
@@ -143,6 +180,7 @@ export const shortcuts: Shortcut[] = [
   // move to trash with one undo behind it (#329).
   { action: 'delete-message', combo: 'backspace', alt: 'delete', labelKey: 'shortcut.deleteMessage' },
   { action: 'archive', combo: 'e', labelKey: 'shortcut.archive' },
+  { action: 'done', combo: 'd', labelKey: 'shortcut.done' },
   { action: 'toggle-spam', combo: '', labelKey: 'shortcut.toggleSpam' },
   { action: 'unsubscribe', combo: '', labelKey: 'shortcut.unsubscribe' },
   // saved views (preset searches), unbound by default so the user opts in.
@@ -189,6 +227,14 @@ export const shortcuts: Shortcut[] = [
   { action: 'go-tasks', combo: 'mod+shift+d', labelKey: 'shortcut.goTasks' },
   // t for task, free among the message letters.
   { action: 'create-task', combo: 't', labelKey: 'shortcut.createTask' },
+  { action: 'compose-follow-up', combo: 'mod+shift+u', labelKey: 'followUp.menu' },
+  { action: 'compose-insert-snippet', combo: 'mod+shift+i', labelKey: 'snippets.insert' },
+  { action: 'compose-intro-bcc', combo: 'mod+shift+b', labelKey: 'recipients.introBcc' },
+  { action: 'compose-toggle-reply-all', combo: 'mod+shift+e', labelKey: 'recipients.toggleReplyAll' },
+  { action: 'compose-cc-sender', combo: 'mod+shift+o', labelKey: 'recipients.ccSender' },
+  // alt with an arrow, since a focused chip has no text to move through.
+  { action: 'compose-recipient-down', combo: 'alt+arrowdown', labelKey: 'recipients.moveDown' },
+  { action: 'compose-recipient-up', combo: 'alt+arrowup', labelKey: 'recipients.moveUp' },
 ]
 
 // ParsedCombo is a combo broken into its modifier flags and final key.

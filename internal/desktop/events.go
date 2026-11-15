@@ -93,6 +93,9 @@ const (
 	// EventICSOpen fires when the system asks the running app to open .ics
 	// files, such as one double-clicked in the file manager.
 	EventICSOpen = "calendar:open-files"
+	// EventFollowUpsChanged fires when a follow-up reminder is set, comes due,
+	// is answered or is cancelled, so the reminder lists reload.
+	EventFollowUpsChanged = "followups:changed"
 )
 
 // CalendarSyncEvent is the payload for EventCalendarSync. Done and Total

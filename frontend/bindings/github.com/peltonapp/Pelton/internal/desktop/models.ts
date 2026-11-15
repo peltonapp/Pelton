@@ -1189,6 +1189,7 @@ export class BackupInfoDTO {
     "settingCount": number;
     "mailboxCount": number;
     "signatureCount": number;
+    "snippetCount": number;
 
     /** Creates a new BackupInfoDTO instance. */
     constructor($$source: Partial<BackupInfoDTO> = {}) {
@@ -1224,6 +1225,9 @@ export class BackupInfoDTO {
         }
         if (!("signatureCount" in $$source)) {
             this["signatureCount"] = 0;
+        }
+        if (!("snippetCount" in $$source)) {
+            this["snippetCount"] = 0;
         }
 
         Object.assign(this, $$source);
@@ -1710,6 +1714,12 @@ export class ComposeRequest {
      */
     "forwardOf": number;
 
+    /**
+     * FollowUpAt is an optional RFC3339 time to be reminded at if nobody has
+     * replied by then. Empty sets no reminder. It must come after the send.
+     */
+    "followUpAt": string;
+
     /** Creates a new ComposeRequest instance. */
     constructor($$source: Partial<ComposeRequest> = {}) {
         if (!("accountId" in $$source)) {
@@ -1753,6 +1763,9 @@ export class ComposeRequest {
         }
         if (!("forwardOf" in $$source)) {
             this["forwardOf"] = 0;
+        }
+        if (!("followUpAt" in $$source)) {
+            this["followUpAt"] = "";
         }
 
         Object.assign(this, $$source);
@@ -3079,6 +3092,73 @@ export class FolderDTO {
             $$parsedSource["attributes"] = $$createField9_0($$parsedSource["attributes"]);
         }
         return new FolderDTO($$parsedSource as Partial<FolderDTO>);
+    }
+}
+
+/**
+ * FollowUpDTO is one reminder for the frontend. Times are RFC3339; FiredAt is
+ * empty while the reminder is waiting. LocalID, FolderID and ThreadID point
+ * at the cached copy of the sent message, the one in Sent when there is one,
+ * and are 0 until a copy has synced.
+ */
+export class FollowUpDTO {
+    "id": number;
+    "accountId": number;
+    "messageId": string;
+    "subject": string;
+    "recipients": string;
+    "sentAt": string;
+    "dueAt": string;
+    "firedAt": string;
+    "localId": number;
+    "folderId": number;
+    "threadId": number;
+
+    /** Creates a new FollowUpDTO instance. */
+    constructor($$source: Partial<FollowUpDTO> = {}) {
+        if (!("id" in $$source)) {
+            this["id"] = 0;
+        }
+        if (!("accountId" in $$source)) {
+            this["accountId"] = 0;
+        }
+        if (!("messageId" in $$source)) {
+            this["messageId"] = "";
+        }
+        if (!("subject" in $$source)) {
+            this["subject"] = "";
+        }
+        if (!("recipients" in $$source)) {
+            this["recipients"] = "";
+        }
+        if (!("sentAt" in $$source)) {
+            this["sentAt"] = "";
+        }
+        if (!("dueAt" in $$source)) {
+            this["dueAt"] = "";
+        }
+        if (!("firedAt" in $$source)) {
+            this["firedAt"] = "";
+        }
+        if (!("localId" in $$source)) {
+            this["localId"] = 0;
+        }
+        if (!("folderId" in $$source)) {
+            this["folderId"] = 0;
+        }
+        if (!("threadId" in $$source)) {
+            this["threadId"] = 0;
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new FollowUpDTO instance from a string or object.
+     */
+    static createFrom($$source: any = {}): FollowUpDTO {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new FollowUpDTO($$parsedSource as Partial<FollowUpDTO>);
     }
 }
 
@@ -5794,6 +5874,59 @@ export class SignatureDTO {
 }
 
 /**
+ * SnippetDTO mirrors storage.Snippet for the frontend. To and Cc are address
+ * lists as typed; Trigger is stored without its prefix.
+ */
+export class SnippetDTO {
+    "id": number;
+    "name": string;
+    "body": string;
+    "subject": string;
+    "to": string;
+    "cc": string;
+    "trigger": string;
+    "position": number;
+
+    /** Creates a new SnippetDTO instance. */
+    constructor($$source: Partial<SnippetDTO> = {}) {
+        if (!("id" in $$source)) {
+            this["id"] = 0;
+        }
+        if (!("name" in $$source)) {
+            this["name"] = "";
+        }
+        if (!("body" in $$source)) {
+            this["body"] = "";
+        }
+        if (!("subject" in $$source)) {
+            this["subject"] = "";
+        }
+        if (!("to" in $$source)) {
+            this["to"] = "";
+        }
+        if (!("cc" in $$source)) {
+            this["cc"] = "";
+        }
+        if (!("trigger" in $$source)) {
+            this["trigger"] = "";
+        }
+        if (!("position" in $$source)) {
+            this["position"] = 0;
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new SnippetDTO instance from a string or object.
+     */
+    static createFrom($$source: any = {}): SnippetDTO {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new SnippetDTO($$parsedSource as Partial<SnippetDTO>);
+    }
+}
+
+/**
  * TaskContactDTO is a person a task is for or about.
  */
 export class TaskContactDTO {
@@ -7628,6 +7761,24 @@ export class UIPrefsDTO {
     "threadedList": boolean;
 
     /**
+     * AfterMove is what the reader opens once the open message is archived,
+     * deleted or moved in the new design: older, newer or list.
+     */
+    "afterMove": string;
+
+    /**
+     * WarnMissingAttachment asks before sending a message whose text speaks of
+     * an attachment it does not carry. On by default.
+     */
+    "warnMissingAttachment": boolean;
+
+    /**
+     * WarnEmptySubject asks before sending a message without a subject. On by
+     * default.
+     */
+    "warnEmptySubject": boolean;
+
+    /**
      * ReaderWidth caps the reading column in the new design: narrow, medium
      * or full.
      */
@@ -8007,6 +8158,15 @@ export class UIPrefsDTO {
         }
         if (!("threadedList" in $$source)) {
             this["threadedList"] = false;
+        }
+        if (!("afterMove" in $$source)) {
+            this["afterMove"] = "";
+        }
+        if (!("warnMissingAttachment" in $$source)) {
+            this["warnMissingAttachment"] = false;
+        }
+        if (!("warnEmptySubject" in $$source)) {
+            this["warnEmptySubject"] = false;
         }
         if (!("readerWidth" in $$source)) {
             this["readerWidth"] = "";

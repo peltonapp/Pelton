@@ -86,6 +86,9 @@ export interface ComposeSession {
   // placement is where the new design shows this session in the main window,
   // unset until it has been placed.
   placement?: ComposePlacement
+  // followUpAt is when to be reminded if nobody has replied, as an ISO time,
+  // unset for no reminder.
+  followUpAt?: string
 }
 
 /** The three reply types a reply can be switched between. */
@@ -430,6 +433,7 @@ function requestSession(accountId: number, req: ComposeRequest): ComposeSession 
     protection: req.protection,
     draftMessageId: req.draftMessageId ?? '',
     signaturesApplied: true,
+    followUpAt: req.followUpAt || undefined,
   })
   return session
 }

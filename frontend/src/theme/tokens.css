@@ -173,6 +173,10 @@
   --attachments-preview-width: 380px;
   --attachments-tile: 132px;
   --sender-avatar: 48px;
+  /* triage and writing: the empty inbox's mark and the snippet picker's
+     list. */
+  --inbox-zero-mark: 40px;
+  --snippet-list-height: 280px;
 
   /* default density (medium) row + pane spacing. overridden per density below. */
   --row-pad-y: 8px;

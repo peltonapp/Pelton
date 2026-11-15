@@ -10,7 +10,7 @@
   // CodeMirror, so with it on the body is plain text in that editor instead.
   // send, save and the close prompt share their logic with the classic pane
   // through lib/composeactions.ts.
-  import { onMount, tick } from 'svelte'
+  import { onDestroy, onMount, tick } from 'svelte'
   import { get } from 'svelte/store'
   import paperclipIcon from '@phosphor-icons/core/assets/duotone/paperclip-duotone.svg?raw'
   import floppyIcon from '@phosphor-icons/core/assets/duotone/floppy-disk-duotone.svg?raw'
@@ -28,6 +28,26 @@
   import AttachmentStrip from './v2/AttachmentStrip.svelte'
   import FormatBar from './v2/FormatBar.svelte'
   import ReplyContext from './v2/ReplyContext.svelte'
+  import FollowUpMenu from './v2/FollowUpMenu.svelte'
+  import SnippetPicker from './v2/SnippetPicker.svelte'
+  import SendCheckBar from './v2/SendCheckBar.svelte'
+  import { sendIssues, type SendIssue } from '../../lib/sendcheck'
+  import { parseAddressList } from '../../lib/mailcompose'
+  import { snippets } from '../../stores/snippets'
+  import { expandPlaceholders, matchTrigger, recipientNames, snippetFields } from '../../lib/snippets'
+  import { textToHtml } from '../../lib/richtext'
+  import { activeComposer, composeCommand, releaseComposer, type ChipRef } from '../../stores/composecommands'
+  import {
+    fieldBeside,
+    introducerToBcc,
+    moveRecipient,
+    recipientFields,
+    senderToCc,
+    withLeadLine,
+    type RecipientField,
+    type RecipientFields,
+  } from '../../lib/recipientmoves'
+  import { registerComposePalette } from '../../lib/composepalette'
   import {
     closeCompose,
     closeRequest,
@@ -44,18 +64,18 @@
   import { convertEditorBody, htmlToText } from '../../lib/richtext'
   import { withSignatureBlock } from '../../lib/signatureblock'
   import { bodyFontStack } from '../../lib/fonts'
-  import { comboMatches } from '../../lib/shortcuts'
+  import { chipActions, comboMatches, composeActions, type ComposeAction } from '../../lib/shortcuts'
   import { formatStatusClock, type TimeFormat } from '../../lib/format'
   import { tip } from '../../lib/tip'
   import { t } from '../../lib/i18n'
-  import { prefs } from '../../stores/prefs'
+  import { prefs, setWarnMissingAttachment } from '../../stores/prefs'
   import { bindings, shortcutTitle } from '../../stores/shortcuts'
   import { signatures, signatureById, getAccountSignatures } from '../../stores/signatures'
   import { sidebar } from '../../stores/accounts'
   import { revealMessage } from '../../stores/selection'
   import { focusPane } from '../../stores/tabs'
-  import { errorMessage, toastError } from '../../stores/toast'
-  import type { ProtectionStatus, Signature } from '../../lib/types'
+  import { errorMessage, toastError, toastInfo } from '../../stores/toast'
+  import type { ProtectionStatus, Signature, Snippet } from '../../lib/types'
   import type CodeMirrorEditor from './CodeMirrorEditor.svelte'
   import type RichEditorView from './RichEditor.svelte'
 
@@ -78,6 +98,16 @@
   const protectionWatch = new ProtectionWatch(session.id, session.saved)
 
   let strip: AttachmentStrip
+  let followMenu: FollowUpMenu | null = null
+  let snippetPicker: SnippetPicker | null = null
+  let cmEditor: CodeMirrorEditor | null = null
+
+  /** What inserting a snippet needs from either editor. */
+  interface SnippetEditor {
+    textBeforeCaret(): string
+    insertBeforeCaret(count: number, content: string): { from: number; tail: number }
+    selectNextPlaceholder(tail: number, from?: number): boolean
+  }
   let moreButton: HTMLButtonElement
   let moreOpen = false
   let sigChoice = ''
@@ -193,10 +223,70 @@
 
   // send morphs the button: a pie loader while the message is queued, then a
   // check that is left to draw before the composer closes.
-  async function send(scheduledAt?: Date): Promise<void> {
+  // the question a send stopped on, the ones already answered "send anyway",
+  // and the send-later time it was asked with.
+  let checkIssue: SendIssue | null = null
+  let checkSkip = new Set<SendIssue>()
+  let checkAt: Date | undefined
+
+  // issuesOf lists what to ask about before the session's message goes out.
+  function issuesOf(s: ComposeSession): SendIssue[] {
+    const recipients = [s.to, s.cc, s.bcc].reduce((n, field) => n + parseAddressList(field).length, 0)
+    return sendIssues(
+      {
+        recipients,
+        subject: s.subject,
+        originalSubject: s.origin?.subject,
+        body: typedPart(s),
+        mode: s.mode,
+        attachments: s.attachments,
+      },
+      { missingAttachment: $prefs.warnMissingAttachment, emptySubject: $prefs.warnEmptySubject },
+    )
+  }
+
+  // a question goes away by itself once what it asked about is fixed.
+  $: if (checkIssue && !issuesOf(session).includes(checkIssue)) {
+    checkIssue = null
+  }
+
+  function sendAnyway(): void {
+    if (!checkIssue) {
+      return
+    }
+    const skip = new Set([...checkSkip, checkIssue])
+    checkIssue = null
+    void send(checkAt, skip)
+  }
+
+  function neverAskAttachment(): void {
+    setWarnMissingAttachment(false)
+    sendAnyway()
+  }
+
+  function attachFromCheck(): void {
+    checkIssue = null
+    strip.pick()
+  }
+
+  function fixFromCheck(): void {
+    const field = checkIssue === 'emptySubject' ? `#subject-${session.id}` : `#to-${session.id}`
+    checkIssue = null
+    document.querySelector<HTMLInputElement>(field)?.focus()
+  }
+
+  async function send(scheduledAt?: Date, skip: Set<SendIssue> = new Set()): Promise<void> {
     if (sendState !== 'idle') {
       return
     }
+    const issues = issuesOf(getSession(session.id) ?? session).filter((issue) => !skip.has(issue))
+    if (issues.length > 0) {
+      checkIssue = issues[0]
+      checkSkip = skip
+      checkAt = scheduledAt
+      return
+    }
+    checkIssue = null
     sendState = 'sending'
     const sent = await sendSession(session.id, session, {
       scheduledAt,
@@ -210,11 +300,29 @@
     }
   }
 
-  // onSendKey sends on the send shortcut from anywhere in the composer. It
-  // listens on the way down, because both editors bind the same key.
-  async function onSendKey(event: KeyboardEvent): Promise<void> {
+  // onComposerKey answers the send shortcut and the composer actions from
+  // anywhere in the composer. It listens on the way down, because both editors
+  // bind the same keys.
+  async function onComposerKey(event: KeyboardEvent): Promise<void> {
+    if (confirmClose || session.minimized) {
+      return
+    }
+    if (onEditorKey(event)) {
+      event.preventDefault()
+      event.stopPropagation()
+      return
+    }
+    const action = composeActions.find((a) => $bindings[a] && comboMatches(event, $bindings[a]))
+    // a chip move only answers on a focused chip; elsewhere its keys keep
+    // what they do in a text field.
+    if (action && (!chipActions.includes(action) || focusedChip() !== null)) {
+      event.preventDefault()
+      event.stopPropagation()
+      runAction(action)
+      return
+    }
     const combo = $bindings.send
-    if (!combo || !comboMatches(event, combo) || sendState !== 'idle' || confirmClose || session.minimized) {
+    if (!combo || !comboMatches(event, combo) || sendState !== 'idle') {
       return
     }
     event.preventDefault()
@@ -224,6 +332,194 @@
     await tick()
     await send()
   }
+
+  // runAction carries out a composer action, from a key or the palette. A
+  // snippet named with it is inserted straight away.
+  function runAction(action: ComposeAction, snippetId?: number, recipient?: ChipRef): void {
+    if (docked && session.minimized) {
+      updateCompose(session.id, { minimized: false })
+    }
+    switch (action) {
+      case 'compose-follow-up':
+        followMenu?.open()
+        break
+      case 'compose-insert-snippet': {
+        const chosen = snippetId === undefined ? undefined : $snippets.find((s) => s.id === snippetId)
+        if (chosen) {
+          void insertSnippet(chosen, 0)
+        } else {
+          void snippetPicker?.show()
+        }
+        break
+      }
+      case 'compose-intro-bcc':
+        introToBcc()
+        break
+      case 'compose-toggle-reply-all':
+        toggleReplyAll()
+        break
+      case 'compose-cc-sender':
+        ccSender()
+        break
+      case 'compose-recipient-down':
+      case 'compose-recipient-up':
+        void moveChip(recipient ?? focusedChip(), action === 'compose-recipient-down' ? 'down' : 'up')
+        break
+    }
+  }
+
+  // the recipient chip that has focus in this composer, or null.
+  function focusedChip(): ChipRef | null {
+    const el = (document.activeElement as HTMLElement | null)?.closest<HTMLElement>('[data-chip]')
+    if (!el || !el.closest(`[data-compose-id="${session.id}"]`)) {
+      return null
+    }
+    const field = el.dataset.chipField as RecipientField | undefined
+    return field && recipientFields.includes(field) ? { value: el.dataset.chip ?? '', field } : null
+  }
+
+  function fieldsOf(s: ComposeSession): RecipientFields {
+    return { to: s.to, cc: s.cc, bcc: s.bcc }
+  }
+
+  // moveChip moves a recipient one field down or up and keeps focus on it.
+  async function moveChip(chip: ChipRef | null, dir: 'down' | 'up'): Promise<void> {
+    const to = chip ? fieldBeside(chip.field, dir) : null
+    if (!chip || !to) {
+      return
+    }
+    const current = getSession(session.id) ?? session
+    updateCompose(session.id, {
+      ...moveRecipient(fieldsOf(current), chip.value, chip.field, to),
+      showCc: current.showCc || to === 'cc',
+      showBcc: current.showBcc || to === 'bcc',
+    })
+    await tick()
+    const moved = Array.from(document.querySelectorAll<HTMLElement>(`[data-compose-id="${session.id}"] [data-chip-field="${to}"]`)).find(
+      (el) => el.dataset.chip === chip.value,
+    )
+    moved?.focus()
+  }
+
+  // introToBcc moves the person a reply answers to Bcc and thanks them for the
+  // introduction at the top of the message.
+  function introToBcc(): void {
+    const current = getSession(session.id) ?? session
+    const origin = current.origin
+    const moved = origin ? introducerToBcc(fieldsOf(current), { name: origin.fromName, email: origin.fromAddress }) : null
+    if (!moved) {
+      toastInfo($t('recipients.noIntroducer'))
+      return
+    }
+    updateCompose(session.id, {
+      ...moved,
+      showCc: moved.cc !== '',
+      showBcc: true,
+      body: withLeadLine(current.body, $t('recipients.introLine'), current.mode),
+    })
+  }
+
+  // toggleReplyAll turns a reply into a reply all and back.
+  function toggleReplyAll(): void {
+    const kind = session.origin?.kind
+    if (kind !== 'reply' && kind !== 'replyAll') {
+      toastInfo($t('recipients.notAReply'))
+      return
+    }
+    switchReplyKind(session.id, kind === 'reply' ? 'replyAll' : 'reply')
+    folded = Boolean(getSession(session.id)?.fold)
+  }
+
+  // ccSender copies the sender of the original into Cc.
+  function ccSender(): void {
+    const current = getSession(session.id) ?? session
+    const origin = current.origin
+    if (!origin) {
+      toastInfo($t('recipients.noOriginal'))
+      return
+    }
+    const moved = senderToCc(fieldsOf(current), { name: origin.fromName, email: origin.fromAddress })
+    if (!moved) {
+      toastInfo($t('recipients.senderThere'))
+      return
+    }
+    updateCompose(session.id, { ...moved, showCc: true })
+  }
+
+  // commands from the palette or a key pressed outside the composer reach the
+  // composer that last had focus.
+  let handledCommand = 0
+  $: if ($composeCommand && $composeCommand.sessionId === session.id && $composeCommand.seq !== handledCommand) {
+    handledCommand = $composeCommand.seq
+    runAction($composeCommand.action, $composeCommand.snippetId, $composeCommand.recipient)
+  }
+
+  // the editor that takes a snippet: the rich one, or CodeMirror in vim mode.
+  $: textEditor = (rich ? richEditor : cmEditor) as SnippetEditor | null
+
+  // after a snippet went in, Tab walks its placeholders. tail is how far its
+  // end lies from the end of the document, so the walk stays inside it.
+  let placeholderTail: number | null = null
+
+  // insertSnippet puts a snippet into the body at the caret, replacing count
+  // characters before it (a typed trigger), fills the header fields that are
+  // still empty, and selects its first placeholder when it has one.
+  async function insertSnippet(snippet: Snippet, count: number): Promise<void> {
+    const current = getSession(session.id) ?? session
+    const names = recipientNames(current.to)
+    const account = ($sidebar.data?.accounts ?? []).find((a) => a.id === current.accountId)
+    const text = expandPlaceholders(snippet.body, {
+      ...names,
+      myName: account?.displayName || account?.email || '',
+      date: new Date().toLocaleDateString(),
+    })
+    const fields = snippetFields(snippet, current)
+    if (Object.keys(fields).length > 0) {
+      updateCompose(session.id, fields)
+    }
+    await tick()
+    const editor = textEditor
+    if (!editor) {
+      return
+    }
+    const content = rich ? textToHtml(text) : text
+    const placed = editor.insertBeforeCaret(count, content)
+    placeholderTail = editor.selectNextPlaceholder(placed.tail, placed.from) ? placed.tail : null
+  }
+
+  // onEditorKey runs the snippet keys inside the editor: Tab moves to the next
+  // placeholder of a snippet just inserted, and Tab or Space right after a
+  // trigger word puts its snippet in.
+  function onEditorKey(event: KeyboardEvent): boolean {
+    if ((event.key !== 'Tab' && event.key !== ' ') || event.metaKey || event.ctrlKey || event.altKey) {
+      return false
+    }
+    const editor = textEditor
+    if (!editor || !(event.target as HTMLElement | null)?.closest?.('.editor')) {
+      return false
+    }
+    if (event.key === 'Tab' && !event.shiftKey && placeholderTail !== null) {
+      if (editor.selectNextPlaceholder(placeholderTail)) {
+        return true
+      }
+      placeholderTail = null
+    }
+    if (event.shiftKey) {
+      return false
+    }
+    const found = matchTrigger(editor.textBeforeCaret(), $snippets)
+    if (!found) {
+      return false
+    }
+    void insertSnippet(found.snippet, found.length)
+    return true
+  }
+
+  onMount(() => {
+    registerComposePalette()
+    activeComposer.set(session.id)
+  })
+  onDestroy(() => releaseComposer(session.id))
 
   async function save(after?: () => void): Promise<void> {
     saving = true
@@ -333,7 +629,8 @@
   data-compose-id={session.id}
   role="dialog"
   aria-label={$t('compose.dialog.ariaLabel')}
-  on:keydown|capture={onSendKey}
+  on:keydown|capture={onComposerKey}
+  on:focusin={() => activeComposer.set(session.id)}
   on:dragover|preventDefault
   on:drop|preventDefault={onDrop}
 >
@@ -373,6 +670,14 @@
         <span>{$t('compose.attach.button')}</span>
       </button>
       <ProtectionMenu protection={session.protection} status={protectionStatus} on:change={(e) => updateCompose(session.id, { protection: e.detail })} />
+      <FollowUpMenu
+        bind:this={followMenu}
+        compact={!session.followUpAt}
+        id={`compose-${session.id}`}
+        value={session.followUpAt ?? ''}
+        on:change={(e) => updateCompose(session.id, { followUpAt: e.detail || undefined })}
+      />
+      <SnippetPicker bind:this={snippetPicker} id={`compose-${session.id}`} canManage={mainWindow} on:pick={(e) => void insertSnippet(e.detail, 0)} />
       <button type="button" class="c2-tool" disabled={saving} on:click={() => save()}>
         <Ph svg={floppyIcon} size={16} />
         <span>{$t('action.saveDraft')}</span>
@@ -409,6 +714,17 @@
     <HeaderFields {session} />
     <AttachmentStrip bind:this={strip} {session} />
 
+    {#if checkIssue}
+      <SendCheckBar
+        issue={checkIssue}
+        on:sendAnyway={sendAnyway}
+        on:attach={attachFromCheck}
+        on:fix={fixFromCheck}
+        on:neverAsk={neverAskAttachment}
+        on:dismiss={() => (checkIssue = null)}
+      />
+    {/if}
+
     {#if rich}
       <FormatBar editor={richEditor} {revision} />
     {/if}
@@ -436,6 +752,7 @@
       {:else if CMEditor}
         <svelte:component
           this={CMEditor}
+          bind:this={cmEditor}
           content={typed}
           placeholder={$t('compose.editor.placeholderPlain')}
           vimEnabled={$prefs.composeVimMode}
@@ -462,6 +779,21 @@
           <Ph svg={paperclipIcon} size={16} />
         </button>
         <ProtectionMenu compact menuAbove protection={session.protection} status={protectionStatus} on:change={(e) => updateCompose(session.id, { protection: e.detail })} />
+        <FollowUpMenu
+          bind:this={followMenu}
+          compact
+          menuAbove
+          id={`compose-${session.id}`}
+          value={session.followUpAt ?? ''}
+          on:change={(e) => updateCompose(session.id, { followUpAt: e.detail || undefined })}
+        />
+        <SnippetPicker
+          bind:this={snippetPicker}
+          menuAbove
+          id={`compose-${session.id}`}
+          canManage={mainWindow}
+          on:pick={(e) => void insertSnippet(e.detail, 0)}
+        />
         <button type="button" class="c2-tool compact" disabled={saving} aria-label={$t('action.saveDraft')} use:tip={{ text: $t('action.saveDraft'), side: 'top' }} on:click={() => save()}>
           <Ph svg={floppyIcon} size={16} />
         </button>

@@ -17,10 +17,9 @@
   import ErrorState from '../common/ErrorState.svelte'
   import TabBar from './TabBar.svelte'
   import { visibleMessageId, hasTabs, activeTabId, tabs, markTabStale, labelTab, closeTab } from '../../stores/tabs'
-  import { openMessageId } from '../../stores/selection'
   import { messageDetail, loadMessage, clearMessage } from '../../stores/message'
   import { setFlagged, deleteMessage, archiveMessage, scanMessage, openMessageWindow } from '../../lib/api'
-  import { reportArchiveExport, dropDeleted, exportEml, markSeen } from '../../lib/messageactions'
+  import { reportArchiveExport, dropDeleted, leaveList, exportEml, markSeen } from '../../lib/messageactions'
   import {
     virusTotal,
     scanning,
@@ -30,7 +29,7 @@
     putAttachmentVerdict,
     currentVerdictMessage,
   } from '../../stores/virustotal'
-  import { removeFromList, patchInList } from '../../stores/messages'
+  import { patchInList } from '../../stores/messages'
   import { recordDeleted } from '../../stores/undodelete'
   import { recordArchived } from '../../stores/undoarchive'
   import { openReply, openForward } from '../../stores/compose'
@@ -254,25 +253,16 @@
     }
   }
 
-  // dismiss clears a message out of the pane after acting on it. A tab holding
-  // it closes, since acting on a message is done with it; the untabbed pane
-  // only empties if it was showing that message and not something else.
-  function dismiss(id: number): void {
-    closeTab(id)
-    if (get(openMessageId) === id) {
-      openMessageId.set(null)
-    }
-  }
-
   // archive moves the message to the account's Archive folder via the imap move
-  // binding, then closes the pane and drops it from the list.
+  // binding, closes a tab holding it and drops it from the list, moving the
+  // pane on the way a delete does.
   async function archive(detail: MessageDetail): Promise<void> {
     try {
       const undo = await archiveMessage(detail.id)
       reportArchiveExport(undo)
       recordArchived(detail, undo)
-      removeFromList(detail.id)
-      dismiss(detail.id)
+      closeTab(detail.id)
+      leaveList([detail.id])
     } catch (err) {
       toastError(errorMessage(err))
     }
