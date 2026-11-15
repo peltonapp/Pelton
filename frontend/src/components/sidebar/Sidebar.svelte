@@ -18,6 +18,9 @@
   import { openContextMenu } from '../../stores/contextmenu'
   import { openSettingsAt } from '../../stores/settingsnav'
   import moreIcon from '@phosphor-icons/core/assets/regular/dots-three.svg?raw'
+  import newspaperIcon from '@phosphor-icons/core/assets/duotone/newspaper-duotone.svg?raw'
+  import SidebarRow from './SidebarRow.svelte'
+  import { mailScreen, openMailScreen, closeMailScreen } from '../../stores/mailscreen'
   import Ph from '../common/Ph.svelte'
   import { tip } from '../../lib/tip'
   import { selection } from '../../stores/selection'
@@ -141,6 +144,17 @@
         {:else}
           <PinnedFolders folders={$sidebar.data.pinned} {accountEmails} />
           <UnifiedViews views={$sidebar.data.views} />
+          {#if $prefs.design !== 'classic'}
+            <nav class="tools" aria-label={$t('sidebar.tools')}>
+              <SidebarRow
+                label={$t('newsletters.title')}
+                active={$mailScreen === 'newsletters'}
+                on:select={() => ($mailScreen === 'newsletters' ? closeMailScreen() : openMailScreen('newsletters'))}
+              >
+                <Ph svg={newspaperIcon} size={15} />
+              </SidebarRow>
+            </nav>
+          {/if}
           {#if placement === 'sidebar'}
             <SavedViews views={$views} on:new={openNew} on:edit={(e) => openEdit(e.detail)} />
           {/if}
@@ -163,6 +177,12 @@
     background: var(--surface-base);
     border-inline-end: var(--hairline) solid var(--border-default);
     min-width: 0;
+  }
+
+  .tools {
+    display: flex;
+    flex-direction: column;
+    margin-top: var(--space-2);
   }
 
   .top {

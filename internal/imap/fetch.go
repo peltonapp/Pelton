@@ -71,7 +71,7 @@ type Message struct {
 	// support via List-Unsubscribe-Post.
 	ListUnsubscribe     string
 	ListUnsubscribePost bool
-	// ListID is the raw List-Id header value.
+	// ListID is the List-Id header value, '' when there is none.
 	ListID string
 	// ReplyTo is the Reply-To header value ('' when there is none), and
 	// AuthResults every Authentication-Results header in the order they appear.

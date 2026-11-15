@@ -96,6 +96,9 @@ export type ShortcutAction =
   | 'toggle-pin'
   | 'toggle-mute'
   | 'edit-note'
+  // the newsletter manager on the mail surface, and the insights page.
+  | 'open-newsletters'
+  | 'open-insights'
   // composer actions of the new design. They act on the composer that last
   // had focus, so they carry a modifier and work while typing.
   | ComposeAction
@@ -241,6 +244,8 @@ export const shortcuts: Shortcut[] = [
   { action: 'toggle-pin', combo: 'shift+p', labelKey: 'shortcut.togglePin' },
   { action: 'toggle-mute', combo: 'shift+m', labelKey: 'shortcut.toggleMute' },
   { action: 'edit-note', combo: 'shift+n', labelKey: 'shortcut.editNote' },
+  { action: 'open-newsletters', combo: 'mod+shift+l', labelKey: 'shortcut.openNewsletters' },
+  { action: 'open-insights', combo: '', labelKey: 'shortcut.openInsights' },
   { action: 'compose-follow-up', combo: 'mod+shift+u', labelKey: 'followUp.menu' },
   { action: 'compose-insert-snippet', combo: 'mod+shift+i', labelKey: 'snippets.insert' },
   { action: 'compose-intro-bcc', combo: 'mod+shift+b', labelKey: 'recipients.introBcc' },

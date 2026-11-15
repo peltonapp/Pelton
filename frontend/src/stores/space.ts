@@ -56,7 +56,16 @@ const mailOnlyActions = new Set<string>([
   'delete-folder',
   'toggle-sender-panel',
   'create-task',
+  'done',
+  'toggle-pin',
+  'toggle-mute',
+  'edit-note',
 ])
+
+/** Reports whether an action only means something with the mail panes on screen. */
+export function isMailOnlyAction(action: string): boolean {
+  return mailOnlyActions.has(action)
+}
 
 /**
  * Lets a space answer app actions while it is on screen: compose becomes "new

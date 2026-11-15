@@ -62,6 +62,10 @@ type Message struct {
 	// ListUnsubscribePost marks RFC 8058 one-click support.
 	ListUnsubscribe     string
 	ListUnsubscribePost bool
+	// ListID is the List-Id header value. It is written on insert, classifies
+	// the message for the split inbox, and is read only by the newsletter
+	// aggregates, never by a message read.
+	ListID string
 	// SMIME describes the message's s/mime signature as verified when it was
 	// synced. The zero value means no signature, which is most mail.
 	SMIME SMIMESignature
@@ -86,9 +90,6 @@ type Message struct {
 	// assigned on insert; 0 means the row predates threading and the background
 	// backfill has not reached it yet.
 	ThreadID int64
-	// ListID is the raw List-Id header. It is read on insert to classify the
-	// message and is not stored.
-	ListID string
 	// MailKind is the split inbox classification worked out on insert, a mask
 	// of MailKindList and MailKindAutomated.
 	MailKind MailKind
@@ -112,7 +113,7 @@ type MessageAuth struct {
 	DKIMDomain string
 }
 
-// SMIMESignature is a stored verification verdict. Status is '' for unsigned
+// SMIMESignature is a stored verification verdict. Status is empty for unsigned
 // mail, otherwise valid, untrusted or invalid; Detail explains anything that is
 // not valid, in a sentence fit to show the reader.
 type SMIMESignature struct {
@@ -240,8 +241,8 @@ INSERT INTO messages (
     smime_certs, smime_fingerprint,
     reply_to, auth_spf, auth_dkim, auth_dmarc, auth_spf_domain, auth_dkim_domain,
     charset_guess, in_reply_to, [references], thread_id, thread_subject, thread_loose,
-    mail_kind, pinned
-) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+    mail_kind, pinned, list_id
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
 	res, err := ex.ExecContext(ctx, query,
 		m.AccountID, m.FolderID, m.UID, m.MessageID, m.Subject, m.FromAddress,
 		m.FromName, m.ToAddresses, m.CcAddresses, formatTime(m.Date), uint8(m.Flags),
@@ -252,7 +253,7 @@ INSERT INTO messages (
 		m.ReplyTo, m.Auth.SPF, m.Auth.DKIM, m.Auth.DMARC, m.Auth.SPFDomain, m.Auth.DKIMDomain,
 		m.CharsetGuess, encodeThreadingIDs(m.InReplyTo), encodeThreadingIDs(m.References),
 		assigned.threadID, assigned.subject, boolToInt(assigned.loose),
-		int(m.MailKind), boolToInt(m.Pinned))
+		int(m.MailKind), boolToInt(m.Pinned), m.ListID)
 	if err != nil {
 		return 0, fmt.Errorf("storage: insert message uid %d: %w", m.UID, err)
 	}
