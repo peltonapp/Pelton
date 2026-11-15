@@ -6,6 +6,7 @@
   import { fly, fade } from 'svelte/transition'
   import { IconCircleCheck, IconAlertCircle, IconInfoCircle, IconX } from '@tabler/icons-svelte'
   import { toasts, dismiss } from '../../stores/toast'
+  import PieProgress from './PieProgress.svelte'
   import { prefs } from '../../stores/prefs'
   import { t } from '../../lib/i18n'
   import type { ToastKind } from '../../stores/toast'
@@ -36,7 +37,11 @@
       out:fade={{ duration: 150 }}
     >
       <span class="icon" aria-hidden="true">
-        <svelte:component this={iconFor(toast.kind)} size={17} stroke={1.7} />
+        {#if toast.busy}
+          <PieProgress size={15} label={toast.message} />
+        {:else}
+          <svelte:component this={iconFor(toast.kind)} size={17} stroke={1.7} />
+        {/if}
       </span>
       <span class="message">{toast.message}</span>
       {#if toast.action}

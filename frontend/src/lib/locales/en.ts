@@ -1671,6 +1671,7 @@ const en: Record<string, string> = {
   'palette.group.mail': 'Mail',
   'calendar.search.placeholder': 'Search events',
   'calendar.search.none': 'No event matches that.',
+  'export.working': 'Exporting',
   'settingsPanel.bodyFont.system': 'System font',
   'about.section.project': 'Project',
   'about.section.updates': 'Updates',
