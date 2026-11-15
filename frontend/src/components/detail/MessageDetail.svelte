@@ -3,6 +3,7 @@
   // action toolbar, sanitized body and attachments, and performs the toolbar
   // actions. empty, loading and error states are explicit.
   import peltonLogo from '../../assets/images/icons/pelton-logo.png'
+  import { seasonalImage } from '../../lib/seasonalmarkimages'
   import DetailHeader from './DetailHeader.svelte'
   import ActionToolbar from './ActionToolbar.svelte'
   import MailBody from './MailBody.svelte'
@@ -62,6 +63,7 @@
 
   // the message whose info or source is shown, null while closed. In the
   // conversation reader it can be any card's.
+  const season = seasonalImage()
   let infoFor: MessageDetail | null = null
   let sourceFor: number | null = null
 
@@ -348,7 +350,11 @@ ${bodyHtml}
       ></div>
     {:else}
       <div class="placeholder">
-        <img class="placeholder-logo" src={$prefs.emptyStateImage || peltonLogo} alt="Pelton" draggable="false" />
+        {#if !$prefs.emptyStateImage && season}
+          <img class="placeholder-logo seasonal" class:tile={season.tile} src={season.src} alt="Pelton" draggable="false" />
+        {:else}
+          <img class="placeholder-logo" src={$prefs.emptyStateImage || peltonLogo} alt="Pelton" draggable="false" />
+        {/if}
       </div>
     {/if}
   {:else if activeTabStale}
@@ -472,6 +478,18 @@ ${bodyHtml}
     filter: grayscale(1);
     user-select: none;
     -webkit-user-select: none;
+  }
+
+  .placeholder-logo.seasonal {
+    width: auto;
+    height: 148px;
+    opacity: 0.9;
+    filter: none;
+  }
+
+  .placeholder-logo.seasonal.tile {
+    border-radius: var(--radius-card);
+    background: #000;
   }
 
   /* full-bleed variant: the chosen image covers the whole empty pane. */
