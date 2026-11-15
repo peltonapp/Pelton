@@ -18,6 +18,7 @@
   import Spinner from '../common/Spinner.svelte'
   import ContactEditor from './ContactEditor.svelte'
   import ContactConflictDialog from './ContactConflictDialog.svelte'
+  import { prefs } from '../../stores/prefs'
   import {
     addressBooks,
     contacts,

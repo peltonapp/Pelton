@@ -82,6 +82,14 @@ import type {
   EventBundle,
   MailEventSource,
   MessageRef,
+  TaskList,
+  Task,
+  TaskDraft,
+  TaskSaveResult,
+  TaskDeleteResult,
+  RemovedTask,
+  TaskMailMark,
+  TaskSettings,
   AttachmentContent,
   AttachmentEntry,
   AttachmentPage,
@@ -2323,6 +2331,100 @@ export function defaultCalendarFileStatus(): Promise<desktop.DefaultMailStatusDT
 /** setDefaultCalendarFileHandler asks the OS to open .ics files with Pelton. */
 export function setDefaultCalendarFileHandler(): Promise<void> {
   return App.SetDefaultCalendarFileHandler()
+}
+
+/** listTaskLists returns every list that takes tasks, local ones first. */
+export function listTaskLists(): Promise<TaskList[]> {
+  if (isDemoActive()) {
+    return Promise.resolve([])
+  }
+  return App.ListTaskLists().then((list) => (list ?? []) as unknown as TaskList[])
+}
+
+/** createTaskList adds a task list that lives only on this device. */
+export function createTaskList(name: string, color: string): Promise<TaskList> {
+  return App.CreateTaskList(name, color) as unknown as Promise<TaskList>
+}
+
+/** deleteTaskList removes a local task list and its tasks; the last one stays. */
+export function deleteTaskList(id: number): Promise<void> {
+  return App.DeleteTaskList(id)
+}
+
+/** listTasks returns every task, completed ones only as long as the settings keep them. */
+export function listTasks(): Promise<Task[]> {
+  if (isDemoActive()) {
+    return Promise.resolve([])
+  }
+  return App.ListTasks().then((list) => (list ?? []) as unknown as Task[])
+}
+
+/** getTask returns one task. */
+export function getTask(id: number): Promise<Task> {
+  return App.GetTask(id) as unknown as Promise<Task>
+}
+
+/** createTask stores a new task and writes it to its list's server. */
+export function createTask(draft: TaskDraft): Promise<TaskSaveResult> {
+  return App.CreateTask(new desktop.TaskRequest(draft)) as unknown as Promise<TaskSaveResult>
+}
+
+/** updateTask saves an edit; another listId moves the task with its subtasks. */
+export function updateTask(draft: TaskDraft): Promise<TaskSaveResult> {
+  return App.UpdateTask(new desktop.TaskRequest(draft)) as unknown as Promise<TaskSaveResult>
+}
+
+/** setTaskDone completes a task or opens it again; a repeating one moves on instead. */
+export function setTaskDone(id: number, done: boolean): Promise<TaskSaveResult> {
+  return App.SetTaskDone(id, done) as unknown as Promise<TaskSaveResult>
+}
+
+/** setTaskDue moves a task's due date; empty clears it. */
+export function setTaskDue(id: number, due: string): Promise<TaskSaveResult> {
+  return App.SetTaskDue(id, due) as unknown as Promise<TaskSaveResult>
+}
+
+/** reorderTasks gives tasks the manual order they are listed in. */
+export function reorderTasks(ids: number[]): Promise<void> {
+  return App.ReorderTasks(ids)
+}
+
+/** deleteTask deletes a task with its subtasks and returns what went, for undo. */
+export function deleteTask(id: number, force = false): Promise<TaskDeleteResult> {
+  return App.DeleteTask(id, force) as unknown as Promise<TaskDeleteResult>
+}
+
+/** restoreTasks brings deleted tasks back as they were. */
+export function restoreTasks(items: RemovedTask[]): Promise<void> {
+  return App.RestoreTasks(items.map((i) => new desktop.RemovedTaskDTO(i)))
+}
+
+/** resolveTaskConflict keeps the local version (keepMine) or takes the server's. */
+export function resolveTaskConflict(id: number, keepMine: boolean): Promise<Task> {
+  return App.ResolveTaskConflict(id, keepMine) as unknown as Promise<Task>
+}
+
+/** listTaskMailMarks returns the stored messages that tasks link to. */
+export function listTaskMailMarks(): Promise<TaskMailMark[]> {
+  if (isDemoActive()) {
+    return Promise.resolve([])
+  }
+  return App.ListTaskMailMarks().then((list) => (list ?? []) as unknown as TaskMailMark[])
+}
+
+/** findEventByUID finds the event a task links to; found is false when it is gone. */
+export function findEventByUID(uid: string): Promise<{ found: boolean; eventId: number; start: string; allDay: boolean; summary: string }> {
+  return App.FindEventByUID(uid)
+}
+
+/** getTaskSettings returns the task preferences. */
+export function getTaskSettings(): Promise<TaskSettings> {
+  return App.GetTaskSettings() as unknown as Promise<TaskSettings>
+}
+
+/** setTaskSettings saves the task preferences. */
+export function setTaskSettings(settings: TaskSettings): Promise<void> {
+  return App.SetTaskSettings(new desktop.TaskSettingsDTO(settings))
 }
 
 /** createEventDraftFromMessage prefills an event from a mail dropped on the calendar. */

@@ -26,26 +26,28 @@ const reminderReach = 8 * 24 * time.Hour
 // calendar: reminder notifications and the subject of an invitation reply.
 // Like notifyStrings it is keyed by the language setting.
 type calendarText struct {
-	untitled  string
-	allDay    string
-	accepted  string
-	tentative string
-	declined  string
+	untitled     string
+	allDay       string
+	accepted     string
+	tentative    string
+	declined     string
+	untitledTask string
+	dueAt        string
 }
 
 var calendarLocales = map[string]calendarText{
-	"en":    {untitled: "(untitled event)", allDay: "All day", accepted: "Accepted: %s", tentative: "Tentative: %s", declined: "Declined: %s"},
-	"de":    {untitled: "(Termin ohne Titel)", allDay: "Ganztägig", accepted: "Angenommen: %s", tentative: "Vorläufig: %s", declined: "Abgelehnt: %s"},
-	"fr":    {untitled: "(événement sans titre)", allDay: "Toute la journée", accepted: "Accepté : %s", tentative: "Provisoire : %s", declined: "Refusé : %s"},
-	"nl":    {untitled: "(afspraak zonder titel)", allDay: "Hele dag", accepted: "Geaccepteerd: %s", tentative: "Voorlopig: %s", declined: "Afgewezen: %s"},
-	"es":    {untitled: "(evento sin título)", allDay: "Todo el día", accepted: "Aceptado: %s", tentative: "Provisional: %s", declined: "Rechazado: %s"},
-	"it":    {untitled: "(evento senza titolo)", allDay: "Tutto il giorno", accepted: "Accettato: %s", tentative: "Provvisorio: %s", declined: "Rifiutato: %s"},
-	"pl":    {untitled: "(wydarzenie bez tytułu)", allDay: "Cały dzień", accepted: "Zaakceptowano: %s", tentative: "Wstępnie: %s", declined: "Odrzucono: %s"},
-	"ru":    {untitled: "(событие без названия)", allDay: "Весь день", accepted: "Принято: %s", tentative: "Под вопросом: %s", declined: "Отклонено: %s"},
-	"tr":    {untitled: "(başlıksız etkinlik)", allDay: "Tüm gün", accepted: "Kabul edildi: %s", tentative: "Belirsiz: %s", declined: "Reddedildi: %s"},
-	"pt":    {untitled: "(evento sem título)", allDay: "Dia inteiro", accepted: "Aceite: %s", tentative: "Provisório: %s", declined: "Recusado: %s"},
-	"ar":    {untitled: "(حدث بلا عنوان)", allDay: "طوال اليوم", accepted: "مقبول: %s", tentative: "مبدئي: %s", declined: "مرفوض: %s"},
-	"zh-CN": {untitled: "（无标题日程）", allDay: "全天", accepted: "已接受：%s", tentative: "暂定：%s", declined: "已拒绝：%s"},
+	"en":    {untitled: "(untitled event)", allDay: "All day", accepted: "Accepted: %s", tentative: "Tentative: %s", declined: "Declined: %s", untitledTask: "(untitled task)", dueAt: "Due at %s"},
+	"de":    {untitled: "(Termin ohne Titel)", allDay: "Ganztägig", accepted: "Angenommen: %s", tentative: "Vorläufig: %s", declined: "Abgelehnt: %s", untitledTask: "(Aufgabe ohne Titel)", dueAt: "Fällig um %s"},
+	"fr":    {untitled: "(événement sans titre)", allDay: "Toute la journée", accepted: "Accepté : %s", tentative: "Provisoire : %s", declined: "Refusé : %s", untitledTask: "(tâche sans titre)", dueAt: "Échéance à %s"},
+	"nl":    {untitled: "(afspraak zonder titel)", allDay: "Hele dag", accepted: "Geaccepteerd: %s", tentative: "Voorlopig: %s", declined: "Afgewezen: %s", untitledTask: "(taak zonder titel)", dueAt: "Vervalt om %s"},
+	"es":    {untitled: "(evento sin título)", allDay: "Todo el día", accepted: "Aceptado: %s", tentative: "Provisional: %s", declined: "Rechazado: %s", untitledTask: "(tarea sin título)", dueAt: "Vence a las %s"},
+	"it":    {untitled: "(evento senza titolo)", allDay: "Tutto il giorno", accepted: "Accettato: %s", tentative: "Provvisorio: %s", declined: "Rifiutato: %s", untitledTask: "(attività senza titolo)", dueAt: "Scade alle %s"},
+	"pl":    {untitled: "(wydarzenie bez tytułu)", allDay: "Cały dzień", accepted: "Zaakceptowano: %s", tentative: "Wstępnie: %s", declined: "Odrzucono: %s", untitledTask: "(zadanie bez tytułu)", dueAt: "Termin o %s"},
+	"ru":    {untitled: "(событие без названия)", allDay: "Весь день", accepted: "Принято: %s", tentative: "Под вопросом: %s", declined: "Отклонено: %s", untitledTask: "(задача без названия)", dueAt: "Срок в %s"},
+	"tr":    {untitled: "(başlıksız etkinlik)", allDay: "Tüm gün", accepted: "Kabul edildi: %s", tentative: "Belirsiz: %s", declined: "Reddedildi: %s", untitledTask: "(başlıksız görev)", dueAt: "Son saat %s"},
+	"pt":    {untitled: "(evento sem título)", allDay: "Dia inteiro", accepted: "Aceite: %s", tentative: "Provisório: %s", declined: "Recusado: %s", untitledTask: "(tarefa sem título)", dueAt: "Prazo às %s"},
+	"ar":    {untitled: "(حدث بلا عنوان)", allDay: "طوال اليوم", accepted: "مقبول: %s", tentative: "مبدئي: %s", declined: "مرفوض: %s", untitledTask: "(مهمة بلا عنوان)", dueAt: "مستحقة عند %s"},
+	"zh-CN": {untitled: "（无标题日程）", allDay: "全天", accepted: "已接受：%s", tentative: "暂定：%s", declined: "已拒绝：%s", untitledTask: "（无标题任务）", dueAt: "截止于 %s"},
 }
 
 // calendarTextFor returns the calendar text for lang, English for an unknown
@@ -89,6 +91,13 @@ func (a *App) runReminderLoop() {
 				}
 				fired[r.key()] = now
 				a.raiseReminder(r)
+			}
+			for _, r := range a.dueTaskReminders(last, now) {
+				if _, done := fired[r.key()]; done {
+					continue
+				}
+				fired[r.key()] = now
+				a.raiseTaskReminder(r)
 			}
 		}
 		last = now
@@ -164,6 +173,85 @@ func (a *App) raiseReminder(r dueReminder) {
 		Start:        formatEventTime(r.occ.Start, r.occ.AllDay),
 		End:          formatEventTime(r.occ.End, r.occ.AllDay),
 		AllDay:       r.occ.AllDay,
+	})
+}
+
+// dueTaskReminder is one task alarm whose trigger has come.
+type dueTaskReminder struct {
+	row storage.CalendarEvent
+	obj *ical.TodoObject
+	at  time.Time
+}
+
+func (r dueTaskReminder) key() string {
+	return fmt.Sprintf("task|%d|%d", r.row.ID, r.at.Unix())
+}
+
+// dueTaskReminders returns the alarms of open tasks that trigger in (from,
+// to]. A trigger counts from DTSTART, or from DUE when it is RELATED=END; a
+// task without the date its alarm counts from does not remind.
+func (a *App) dueTaskReminders(from, to time.Time) []dueTaskReminder {
+	rows, err := a.store.QueryTasks(a.ctx, storage.TaskQuery{OpenOnly: true, AlarmsOnly: true})
+	if err != nil {
+		a.log.Warn("look for task reminders", "err", err)
+		return nil
+	}
+	var out []dueTaskReminder
+	for _, row := range rows {
+		obj, err := ical.ParseTodoObject([]byte(row.Data), time.Local)
+		if err != nil {
+			continue
+		}
+		for _, alarm := range obj.Todo.Alarms {
+			if alarm.Action == "EMAIL" || alarm.Action == "PROCEDURE" {
+				continue
+			}
+			at, ok := taskTriggerTime(obj, alarm)
+			if ok && at.After(from) && !at.After(to) {
+				out = append(out, dueTaskReminder{row: row, obj: obj, at: at})
+			}
+		}
+	}
+	return out
+}
+
+// taskTriggerTime is when a task's alarm fires.
+func taskTriggerTime(obj *ical.TodoObject, alarm ical.Alarm) (time.Time, bool) {
+	if !alarm.Absolute.IsZero() {
+		return obj.Zones.Instant(alarm.Absolute), true
+	}
+	base := obj.Todo.Start
+	if alarm.RelatedEnd || base.IsZero() {
+		base = obj.Todo.Due
+	}
+	if base.IsZero() {
+		return time.Time{}, false
+	}
+	return obj.Zones.Instant(base).Add(alarm.Trigger), true
+}
+
+// raiseTaskReminder posts the notification and tells the ui.
+func (a *App) raiseTaskReminder(r dueTaskReminder) {
+	text := calendarTextFor(a.stringSetting(settingLanguage, "en"))
+	t := r.obj.Todo
+	title := strings.TrimSpace(t.Summary)
+	if title == "" {
+		title = text.untitledTask
+	}
+	body := ""
+	if !t.Due.IsZero() && !t.Due.AllDay {
+		layout := "15:04"
+		if a.stringSetting(settingTimeFormat, "auto") == "12" {
+			layout = "3:04 PM"
+		}
+		body = fmt.Sprintf(text.dueAt, r.obj.Zones.Instant(t.Due).In(time.Local).Format(layout))
+	}
+	a.sendNotification(notification{title: title, body: body})
+	a.emit(EventTaskReminder, TaskReminderEvent{
+		TaskID:  r.row.ID,
+		ListID:  r.row.CalendarID,
+		Summary: t.Summary,
+		Due:     taskTimeText(r.obj, t.Due),
 	})
 }
 

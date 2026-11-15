@@ -229,7 +229,14 @@ func (s *Server) report(w http.ResponseWriter, p, body string) {
 		}
 		out.WriteString("<d:sync-token>tok-" + strconv.Itoa(s.version) + "</d:sync-token>")
 	case strings.Contains(body, "calendar-query"):
+		comp := "VEVENT"
+		if strings.Contains(body, `name="VTODO"`) {
+			comp = "VTODO"
+		}
 		for _, rp := range s.sortedPaths(p) {
+			if !strings.Contains(s.resources[rp].data, "BEGIN:"+comp) {
+				continue
+			}
 			out.WriteString("<d:response>" + href(rp) + ok("<d:getetag>"+s.resources[rp].etag+"</d:getetag>") + "</d:response>")
 		}
 	case strings.Contains(body, "calendar-multiget"):

@@ -26,6 +26,7 @@
     IconSquareCheck,
     IconSquareMinus,
     IconClockPause,
+    IconChecklist,
     IconDownload,
     IconDownloadOff,
     IconFolderSymlink,
@@ -79,6 +80,7 @@
     clearAll,
   } from '../../stores/selectall'
   import { prefs, setSearchSort } from '../../stores/prefs'
+  import { createTasksFromMail } from '../../lib/taskmail'
   import { maildragSource } from '../../stores/maildrag'
   import { threadedOn, threadMessages, loadThread } from '../../stores/threads'
   import { listRows, threadAware, type ListRow } from '../../lib/threadrows'
@@ -875,6 +877,9 @@
         { kind: 'colors', current: 0, onPick: (color) => void bulkSetColor(color) },
         'separator',
         { label: $t('messageList.bulk.snoozeCount').replace('{n}', n), icon: IconClockPause, hint: menuHint('snooze'), action: bulkSnooze },
+        ...(classic
+          ? []
+          : [{ label: $t('tasks.createFromMailCount').replace('{n}', n), icon: IconChecklist, hint: menuHint('create-task'), action: () => void createTasksFromMail(selectedItems.map((m) => m.id)) }]),
         { label: $t('messageList.bulk.moveCount').replace('{n}', n), icon: IconFolderSymlink, hint: menuHint('move-to'), action: bulkMove },
         { label: $t('messageList.bulk.archiveCount').replace('{n}', n), icon: IconArchive, hint: menuHint('archive'), action: () => void bulkArchiveSelection() },
         anyOnline
@@ -914,6 +919,7 @@
         : { label: $t('vip.mark'), icon: IconStarFilled, action: () => void toggleVIP(item) },
       'separator',
       { label: $t('messageList.menu.snooze'), icon: IconClockPause, hint: menuHint('snooze'), action: () => openSnooze(item.id, item.subject) },
+      ...(classic ? [] : [{ label: $t('shortcut.createTask'), icon: IconChecklist, hint: menuHint('create-task'), action: () => void createTasksFromMail([item.id]) }]),
       { label: $t('messageList.menu.moveTo'), icon: IconFolderSymlink, hint: menuHint('move-to'), action: () => openMove(item) },
       ...spamEntry(item),
       item.offline

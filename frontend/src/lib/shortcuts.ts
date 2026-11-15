@@ -82,6 +82,10 @@ export type ShortcutAction =
   // the attachments browser and the reader's sender panel, new design only.
   | 'open-attachments'
   | 'toggle-sender-panel'
+  // shows the Tasks space.
+  | 'go-tasks'
+  // makes a task from the open message, or from each selected one.
+  | 'create-task'
 
 // Shortcut pairs an action with its default combo and the label key for display.
 export interface Shortcut {
@@ -181,6 +185,10 @@ export const shortcuts: Shortcut[] = [
   // mod+shift+i opens the web inspector in development builds.
   { action: 'open-attachments', combo: 'mod+shift+f', labelKey: 'shortcut.openAttachments' },
   { action: 'toggle-sender-panel', combo: 'i', labelKey: 'shortcut.toggleSenderPanel' },
+  // the key Thunderbird shows its task list with.
+  { action: 'go-tasks', combo: 'mod+shift+d', labelKey: 'shortcut.goTasks' },
+  // t for task, free among the message letters.
+  { action: 'create-task', combo: 't', labelKey: 'shortcut.createTask' },
 ]
 
 // ParsedCombo is a combo broken into its modifier flags and final key.

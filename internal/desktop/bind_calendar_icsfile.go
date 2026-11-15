@@ -30,6 +30,8 @@ type ICSFileDTO struct {
 	// few of them.
 	Events    int      `json:"events"`
 	Summaries []string `json:"summaries"`
+	// Tasks counts the tasks it holds, which an import puts in a task list.
+	Tasks int `json:"tasks"`
 	// Error is set instead of the rest when the file could not be read.
 	Error string `json:"error"`
 }
@@ -80,12 +82,12 @@ func readICSFile(path string) ICSFileDTO {
 		file.Error = errNotICS.Error()
 		return file
 	}
-	count, summaries, err := inspectICS(data)
+	count, summaries, tasks, err := inspectICS(data)
 	if err != nil {
 		file.Error = err.Error()
 		return file
 	}
-	file.Data, file.Events, file.Summaries = string(data), count, summaries
+	file.Data, file.Events, file.Summaries, file.Tasks = string(data), count, summaries, tasks
 	return file
 }
 
@@ -94,15 +96,16 @@ func isICSPath(path string) bool {
 }
 
 // inspectICS counts the events of an iCalendar text that an import would take,
-// and names the first five.
-func inspectICS(data []byte) (int, []string, error) {
+// names the first five, and counts the tasks.
+func inspectICS(data []byte) (int, []string, int, error) {
 	parsed, _, err := parseCalendarData(data)
 	if err != nil {
-		return 0, nil, err
+		return 0, nil, 0, err
 	}
+	tasks := len(ical.SplitTodos(parsed, time.Local))
 	objs, err := ical.Split(parsed, time.Local)
-	if err != nil {
-		return 0, nil, err
+	if err != nil && !(errors.Is(err, ical.ErrNoEvent) && tasks > 0) {
+		return 0, nil, 0, err
 	}
 	count := 0
 	summaries := []string{}
@@ -116,7 +119,7 @@ func inspectICS(data []byte) (int, []string, error) {
 			summaries = append(summaries, first.Summary)
 		}
 	}
-	return count, summaries, nil
+	return count, summaries, tasks, nil
 }
 
 // DecodeJSCalendar reads pasted JSCalendar text into event drafts with no
@@ -128,7 +131,8 @@ func (a *App) DecodeJSCalendar(text string) (EventLinkResultDTO, error) {
 		return out, ical.ErrNotJSCalendar
 	}
 	cal, report, err := ical.FromJSCalendar(data, time.Local)
-	out.Skipped = len(report.Skipped)
+	// tasks have no place among event drafts.
+	out.Skipped = len(report.Skipped) + report.Tasks
 	if err != nil {
 		return out, err
 	}
