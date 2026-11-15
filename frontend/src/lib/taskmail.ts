@@ -42,10 +42,11 @@ export function openTask(id: number): void {
 }
 
 /**
- * Makes a task from each message and says so, with Undo and Open. Returns the
- * ids of the tasks made.
+ * Makes a task from each message and says so, with Undo and Open. due, a date
+ * or an rfc3339 time, is when the tasks are due instead of the first date each
+ * mail names. Returns the ids of the tasks made.
  */
-export async function createTasksFromMail(messageIds: number[]): Promise<number[]> {
+export async function createTasksFromMail(messageIds: number[], due?: string): Promise<number[]> {
   const tr = get(t)
   if (get(taskLists).length === 0) {
     await loadTasks()
@@ -59,6 +60,9 @@ export async function createTasksFromMail(messageIds: number[]): Promise<number[
   for (const id of messageIds) {
     try {
       const draft = await draftFromMail(await mailEventSource(id), listId)
+      if (due !== undefined) {
+        draft.due = due
+      }
       const result = await createTask(draft)
       made.push(result.task.id)
     } catch (err) {

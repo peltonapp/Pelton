@@ -17,6 +17,7 @@
     setSenderFonts,
     setMarkReadOnOpen,
     setOpenOnArrow,
+    setMailDates,
   } from '../../../stores/prefs'
   import { bodyFonts, bodyFontStack } from '../../../lib/fonts'
   import { listSystemFonts, getSetting, setSetting } from '../../../lib/api'
@@ -157,6 +158,12 @@
   <Row id="open-on-arrow" label={$t('settingsPanel.toggle.openOnArrow')}>
     <OpeningPreview slot="preview" markRead={$prefs.markReadOnOpen} openOnArrow={$prefs.openOnArrow} />
     <ToggleSwitch checked={$prefs.openOnArrow} label={$t('settingsPanel.toggle.openOnArrow')} on:change={(e) => setOpenOnArrow(e.detail)} />
+  </Row>
+</Card>
+
+<Card title={$t('reading.card.dates')}>
+  <Row id="mail-dates" label={$t('reading.mailDates')} hint={$t('reading.mailDates.hint')}>
+    <ToggleSwitch checked={$prefs.mailDates} label={$t('reading.mailDates')} on:change={(e) => setMailDates(e.detail)} />
   </Row>
 </Card>
 
