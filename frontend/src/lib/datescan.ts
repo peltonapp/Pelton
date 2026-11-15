@@ -23,8 +23,8 @@ export interface ScanReply {
   error?: string
 }
 
-/** The longest text read; a mail longer than this is read up to here. */
-export const scanLimit = 60_000
+// the longest text read; a mail longer than this is read up to here.
+const scanLimit = 60_000
 
 let worker: Worker | null = null
 let workerFailed = false

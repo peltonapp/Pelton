@@ -147,6 +147,13 @@
     }
   }
 
+  // the date moves away from under it when the reader scrolls.
+  function onScroll(event: Event): void {
+    if (card && !card.contains(event.target as Node)) {
+      dispatch('close', false)
+    }
+  }
+
   let offChanged: (() => void) | null = null
 
   onMount(() => {
@@ -156,6 +163,7 @@
     offChanged = onCalendarChanged(() => void load(day))
     window.addEventListener('pointerdown', onPointerDown, true)
     window.addEventListener('blur', onBlur)
+    window.addEventListener('scroll', onScroll, true)
   })
 
   // pinned, it holds Escape for itself and takes the focus.
@@ -170,6 +178,7 @@
     offChanged?.()
     window.removeEventListener('pointerdown', onPointerDown, true)
     window.removeEventListener('blur', onBlur)
+    window.removeEventListener('scroll', onScroll, true)
     if (held) {
       popPopup()
     }

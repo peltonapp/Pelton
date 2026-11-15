@@ -6,8 +6,8 @@ import { dayKey, sameDay } from './caldate'
 import { dueDate, dueDay, dueHasTime, isOverdue } from './tasklogic'
 import type { Task } from './types'
 
-/** The narrowest the reader may get with the panel beside it, in css pixels. */
-export const myDayMinReader = 440
+// the narrowest the reader may get with the panel beside it, in css pixels.
+const myDayMinReader = 440
 
 /**
  * Whether the panel fits beside the mail: what is left for the reader once
