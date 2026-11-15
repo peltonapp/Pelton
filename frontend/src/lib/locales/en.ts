@@ -1812,6 +1812,8 @@ const en: Record<string, string> = {
   'outbox.log.step.cancelled': 'Cancelled',
   'outbox.log.step.prioritised': 'Moved to the front',
   'split.tabs': 'Inbox splits',
+  'split.empty': 'Nothing in this split',
+  'split.emptyDetail': 'Mail that matches it will show up here.',
   'split.tab.important': 'Important',
   'split.tab.newsletters': 'Newsletters',
   'split.tab.notifications': 'Notifications',

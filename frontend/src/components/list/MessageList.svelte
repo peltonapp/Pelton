@@ -1303,6 +1303,10 @@
         <IconMail size={28} stroke={1.4} />
         <button slot="action" type="button" class="load-older-btn" on:click={resetQuickFilter}>{$t('quickFilter.clear')}</button>
       </EmptyState>
+    {:else if items.length === 0 && inboxShown && splitKey !== ''}
+      <EmptyState title={$t('split.empty')} detail={$t('split.emptyDetail')}>
+        <IconMail size={28} stroke={1.4} />
+      </EmptyState>
     {:else if items.length === 0 && inboxShown}
       {#if inboxFollowUps.length === 0}
         <InboxZero />
