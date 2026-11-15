@@ -77,6 +77,23 @@ type Calendar struct {
 	// ReadOnly is set when the user's privileges on it do not include writing,
 	// which is what a shared or subscribed calendar usually looks like.
 	ReadOnly bool
+	// Events and Tasks say whether it takes VEVENTs and VTODOs, from
+	// supported-calendar-component-set.
+	Events bool
+	Tasks  bool
+}
+
+// Components lists what the calendar takes as the comma separated names the
+// store keeps.
+func (c Calendar) Components() string {
+	var parts []string
+	if c.Events {
+		parts = append(parts, "VEVENT")
+	}
+	if c.Tasks {
+		parts = append(parts, "VTODO")
+	}
+	return strings.Join(parts, ",")
 }
 
 // Resource is one calendar object resource as the server holds it.
@@ -209,7 +226,11 @@ func (c *Client) listCalendars(ctx context.Context, home, depth string) ([]Calen
 	}
 	var out []Calendar
 	for _, r := range ms.Responses {
-		if !isCalendarType(r) || !supportsEvents(r) {
+		if !isCalendarType(r) {
+			continue
+		}
+		events, tasks := supportedComponents(r)
+		if !events && !tasks {
 			continue
 		}
 		out = append(out, Calendar{
@@ -220,6 +241,8 @@ func (c *Client) listCalendars(ctx context.Context, home, depth string) ([]Calen
 			CTag:        r.Text(nsCS, "getctag"),
 			SyncToken:   r.Text(nsDAV, "sync-token"),
 			ReadOnly:    readOnly(r),
+			Events:      events,
+			Tasks:       tasks,
 		})
 	}
 	return out, nil
@@ -229,18 +252,22 @@ func isCalendarType(r dav.Response) bool {
 	return len(r.Prop(nsDAV, "resourcetype").Find(nsCalDAV, "calendar")) > 0
 }
 
-// supportsEvents reads supported-calendar-component-set. A calendar that does
-// not say supports everything, as RFC 4791 has it.
-func supportsEvents(r dav.Response) bool {
+// supportedComponents reads supported-calendar-component-set for events and
+// tasks. A calendar that does not say supports everything, as RFC 4791 has
+// it.
+func supportedComponents(r dav.Response) (events, tasks bool) {
 	if !r.Has(nsCalDAV, "supported-calendar-component-set") {
-		return true
+		return true, true
 	}
 	for _, comp := range r.Prop(nsCalDAV, "supported-calendar-component-set").Find(nsCalDAV, "comp") {
-		if strings.EqualFold(comp.Attr("name"), "VEVENT") {
-			return true
+		switch strings.ToUpper(comp.Attr("name")) {
+		case "VEVENT":
+			events = true
+		case "VTODO":
+			tasks = true
 		}
 	}
-	return false
+	return events, tasks
 }
 
 // readOnly reads current-user-privilege-set. A server that does not report it
@@ -334,14 +361,17 @@ func (c *Client) Sync(ctx context.Context, calendarPath, token string) (Changes,
 const queryETags = `<?xml version="1.0" encoding="utf-8"?>
 <c:calendar-query xmlns:d="DAV:" xmlns:c="urn:ietf:params:xml:ns:caldav">
   <d:prop><d:getetag/></d:prop>
-  <c:filter><c:comp-filter name="VCALENDAR"><c:comp-filter name="VEVENT"/></c:comp-filter></c:filter>
+  <c:filter><c:comp-filter name="VCALENDAR"><c:comp-filter name="%s"/></c:comp-filter></c:filter>
 </c:calendar-query>`
 
-// List returns the etag of every event resource in a calendar, by path, for a
-// server without sync-collection: the caller compares it with what it has and
-// fetches only what differs.
-func (c *Client) List(ctx context.Context, calendarPath string) (map[string]string, error) {
-	ms, err := c.conn.Do(ctx, dav.MethodReport, calendarPath, "1", []byte(queryETags))
+// List returns the etag of every resource in a calendar holding the given
+// component (VEVENT or VTODO), by path, for a server without sync-collection:
+// the caller compares it with what it has and fetches only what differs.
+func (c *Client) List(ctx context.Context, calendarPath, component string) (map[string]string, error) {
+	if component != "VTODO" {
+		component = "VEVENT"
+	}
+	ms, err := c.conn.Do(ctx, dav.MethodReport, calendarPath, "1", []byte(fmt.Sprintf(queryETags, component)))
 	if err != nil {
 		return nil, fmt.Errorf("caldav: list %s: %w", calendarPath, err)
 	}

@@ -19,6 +19,9 @@ type ICSImportResultDTO struct {
 	Imported int `json:"imported"`
 	Updated  int `json:"updated"`
 	Skipped  int `json:"skipped"`
+	// Tasks counts the tasks the file carried, new or updated. They go to the
+	// calendar itself when it takes tasks, else to the default task list.
+	Tasks int `json:"tasks"`
 }
 
 // exportFormatJSCal asks ExportCalendar for JSCalendar instead of iCalendar.
@@ -100,8 +103,28 @@ func (a *App) importICS(ctx context.Context, calendarID int64, data []byte) (ICS
 	result.Skipped = skipped
 	parsed.Remove("METHOD")
 	objs, err := ical.Split(parsed, time.Local)
-	if err != nil {
+	if err != nil && !errors.Is(err, ical.ErrNoEvent) {
 		return result, err
+	}
+	todos := ical.SplitTodos(parsed, time.Local)
+	if len(objs) == 0 && len(todos) == 0 {
+		return result, ical.ErrNoEvent
+	}
+	if len(todos) > 0 {
+		n, err := a.importTodos(ctx, *cal, todos)
+		result.Tasks = n
+		if err != nil {
+			return result, err
+		}
+	}
+	if len(objs) > 0 && !cal.HoldsEvents() {
+		cals, err := a.store.ListCalendars(ctx)
+		if err != nil {
+			return result, err
+		}
+		if cal, err = a.store.GetCalendar(ctx, a.defaultCalendarID(cals)); err != nil {
+			return result, err
+		}
 	}
 	for _, obj := range objs {
 		if obj.UID() == "" || obj.First() == nil || obj.First().Start.IsZero() {
@@ -138,8 +161,71 @@ func (a *App) importICS(ctx context.Context, calendarID int64, data []byte) (ICS
 	return result, nil
 }
 
-// calendarObjects reads the stored events of a calendar, skipping deleted and
+// importTodos stores imported tasks in the calendar when it takes them, else
+// in the default task list, replacing a task with the same UID. It returns
+// how many it stored.
+func (a *App) importTodos(ctx context.Context, cal storage.Calendar, todos []*ical.TodoObject) (int, error) {
+	list := &cal
+	if !cal.HoldsTasks() {
+		var err error
+		if list, err = a.writableTaskList(0); err != nil {
+			return 0, err
+		}
+	}
+	n := 0
+	for _, obj := range todos {
+		if obj.Todo.UID == "" {
+			continue
+		}
+		obj.EnsureTimezones()
+		row, err := a.store.GetCalendarEventByUID(ctx, list.ID, obj.Todo.UID)
+		switch {
+		case errors.Is(err, storage.ErrCalendarEventNotFound):
+			row = &storage.CalendarEvent{CalendarID: list.ID}
+		case err != nil:
+			return n, err
+		}
+		fillTaskRow(row, obj)
+		row.Pending, row.Conflict, row.SyncError = "", false, ""
+		if !list.Local() {
+			row.Pending = storage.PendingUpdate
+			if row.Path == "" {
+				row.Pending = storage.PendingCreate
+			}
+		}
+		if err := a.store.SaveCalendarEvent(ctx, row); err != nil {
+			return n, err
+		}
+		n++
+	}
+	a.emit(EventCalendarChanged, CalendarChangedEvent{CalendarIDs: []int64{list.ID}})
+	if !list.Local() {
+		a.syncCalendarsInBackground()
+	}
+	return n, nil
+}
+
+// calendarTodos reads the stored tasks of a calendar, skipping deleted and
 // unreadable ones.
+func (a *App) calendarTodos(ctx context.Context, cal storage.Calendar) ([]*ical.TodoObject, error) {
+	rows, err := a.store.QueryTasks(ctx, storage.TaskQuery{CalendarIDs: []int64{cal.ID}})
+	if err != nil {
+		return nil, err
+	}
+	var out []*ical.TodoObject
+	for _, row := range rows {
+		obj, err := ical.ParseTodoObject([]byte(row.Data), time.Local)
+		if err != nil {
+			a.log.Warn("skip unreadable task on export", "task", row.ID, "err", err)
+			continue
+		}
+		out = append(out, obj)
+	}
+	return out, nil
+}
+
+// calendarObjects reads the stored events of a calendar, skipping deleted and
+// unreadable ones, and tasks.
 func (a *App) calendarObjects(ctx context.Context, cal storage.Calendar) ([]*ical.Object, error) {
 	rows, err := a.store.ListCalendarEvents(ctx, cal.ID)
 	if err != nil {
@@ -147,7 +233,7 @@ func (a *App) calendarObjects(ctx context.Context, cal storage.Calendar) ([]*ica
 	}
 	var objs []*ical.Object
 	for _, row := range rows {
-		if row.Pending == storage.PendingDelete {
+		if row.Pending == storage.PendingDelete || row.IsTask() {
 			continue
 		}
 		obj, err := parseStoredEvent(row)
@@ -160,10 +246,14 @@ func (a *App) calendarObjects(ctx context.Context, cal storage.Calendar) ([]*ica
 	return objs, nil
 }
 
-// exportICS renders a calendar as one VCALENDAR, each time zone definition
-// once.
+// exportICS renders a calendar as one VCALENDAR, its events and tasks, each
+// time zone definition once.
 func (a *App) exportICS(ctx context.Context, cal storage.Calendar) ([]byte, error) {
 	objs, err := a.calendarObjects(ctx, cal)
+	if err != nil {
+		return nil, err
+	}
+	todos, err := a.calendarTodos(ctx, cal)
 	if err != nil {
 		return nil, err
 	}
@@ -186,15 +276,31 @@ func (a *App) exportICS(ctx context.Context, cal storage.Calendar) ([]byte, erro
 			events = append(events, ev.Component)
 		}
 	}
+	for _, todo := range todos {
+		for _, child := range todo.Calendar.Children {
+			if child.Name != "VTIMEZONE" {
+				events = append(events, child)
+				continue
+			}
+			if id := child.Text("TZID"); !zones[id] {
+				zones[id] = true
+				out.Children = append(out.Children, child)
+			}
+		}
+	}
 	out.Children = append(out.Children, events...)
 	return []byte(out.String()), nil
 }
 
-// exportJSCal renders a calendar as one JSCalendar Group.
+// exportJSCal renders a calendar's events and tasks as one JSCalendar Group.
 func (a *App) exportJSCal(ctx context.Context, cal storage.Calendar) ([]byte, error) {
 	objs, err := a.calendarObjects(ctx, cal)
 	if err != nil {
 		return nil, err
 	}
-	return ical.ToJSCalendar(objs, cal.Name)
+	todos, err := a.calendarTodos(ctx, cal)
+	if err != nil {
+		return nil, err
+	}
+	return ical.ToJSCalendar(objs, todos, cal.Name)
 }

@@ -2852,6 +2852,11 @@ export class ICSFileDTO {
     "summaries": string[];
 
     /**
+     * Tasks counts the tasks it holds, which an import puts in a task list.
+     */
+    "tasks": number;
+
+    /**
      * Error is set instead of the rest when the file could not be read.
      */
     "error": string;
@@ -2869,6 +2874,9 @@ export class ICSFileDTO {
         }
         if (!("summaries" in $$source)) {
             this["summaries"] = [];
+        }
+        if (!("tasks" in $$source)) {
+            this["tasks"] = 0;
         }
         if (!("error" in $$source)) {
             this["error"] = "";
@@ -2902,6 +2910,12 @@ export class ICSImportResultDTO {
     "updated": number;
     "skipped": number;
 
+    /**
+     * Tasks counts the tasks the file carried, new or updated. They go to the
+     * calendar itself when it takes tasks, else to the default task list.
+     */
+    "tasks": number;
+
     /** Creates a new ICSImportResultDTO instance. */
     constructor($$source: Partial<ICSImportResultDTO> = {}) {
         if (!("imported" in $$source)) {
@@ -2912,6 +2926,9 @@ export class ICSImportResultDTO {
         }
         if (!("skipped" in $$source)) {
             this["skipped"] = 0;
+        }
+        if (!("tasks" in $$source)) {
+            this["tasks"] = 0;
         }
 
         Object.assign(this, $$source);
@@ -4909,6 +4926,34 @@ export class ReminderDTO {
 }
 
 /**
+ * RemovedTaskDTO is a deleted task as it was, which RestoreTasks takes back.
+ */
+export class RemovedTaskDTO {
+    "listId": number;
+    "data": string;
+
+    /** Creates a new RemovedTaskDTO instance. */
+    constructor($$source: Partial<RemovedTaskDTO> = {}) {
+        if (!("listId" in $$source)) {
+            this["listId"] = 0;
+        }
+        if (!("data" in $$source)) {
+            this["data"] = "";
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new RemovedTaskDTO instance from a string or object.
+     */
+    static createFrom($$source: any = {}): RemovedTaskDTO {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new RemovedTaskDTO($$parsedSource as Partial<RemovedTaskDTO>);
+    }
+}
+
+/**
  * RouteTestRequest is a route to try and the servers to try it against, as
  * the mailbox editor holds them, saved or not.
  */
@@ -5334,6 +5379,607 @@ export class SignatureDTO {
 }
 
 /**
+ * TaskContactDTO is a person a task is for or about.
+ */
+export class TaskContactDTO {
+    "name": string;
+    "email": string;
+
+    /** Creates a new TaskContactDTO instance. */
+    constructor($$source: Partial<TaskContactDTO> = {}) {
+        if (!("name" in $$source)) {
+            this["name"] = "";
+        }
+        if (!("email" in $$source)) {
+            this["email"] = "";
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new TaskContactDTO instance from a string or object.
+     */
+    static createFrom($$source: any = {}): TaskContactDTO {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new TaskContactDTO($$parsedSource as Partial<TaskContactDTO>);
+    }
+}
+
+/**
+ * TaskDTO is one task. Due and Start are a date (2006-01-02), rfc3339 in the
+ * user's zone for a task with a time, or empty.
+ */
+export class TaskDTO {
+    "id": number;
+    "listId": number;
+    "listName": string;
+    "listColor": string;
+    "uid": string;
+    "title": string;
+    "notes": string;
+    "url": string;
+    "due": string;
+    "start": string;
+
+    /**
+     * TimeZone is the IANA zone a timed due date was written in, empty for
+     * UTC, floating and date-only tasks.
+     */
+    "timeZone": string;
+    "done": boolean;
+
+    /**
+     * Completed is rfc3339, empty while open.
+     */
+    "completed": string;
+
+    /**
+     * Status is NEEDS-ACTION, IN-PROCESS, COMPLETED or CANCELLED, or empty.
+     */
+    "status": string;
+
+    /**
+     * Percent is 0 to 100. Priority is 0 for none, 1 highest through 9.
+     */
+    "percent": number;
+    "priority": number;
+    "rrule": string;
+    "reminders": ReminderDTO[];
+    "parent": string;
+    "categories": string[];
+
+    /**
+     * MailLinks are mid: links to mails, EventUIDs the events it points at.
+     */
+    "mailLinks": string[];
+    "contacts": TaskContactDTO[];
+    "eventUids": string[];
+
+    /**
+     * SortOrder is the manual position, shared with other task apps.
+     */
+    "sortOrder": number;
+
+    /**
+     * Created is rfc3339 from the task's CREATED, empty when it has none.
+     */
+    "created": string;
+    "readOnly": boolean;
+    "pending": boolean;
+    "conflict": boolean;
+    "syncError": string;
+
+    /** Creates a new TaskDTO instance. */
+    constructor($$source: Partial<TaskDTO> = {}) {
+        if (!("id" in $$source)) {
+            this["id"] = 0;
+        }
+        if (!("listId" in $$source)) {
+            this["listId"] = 0;
+        }
+        if (!("listName" in $$source)) {
+            this["listName"] = "";
+        }
+        if (!("listColor" in $$source)) {
+            this["listColor"] = "";
+        }
+        if (!("uid" in $$source)) {
+            this["uid"] = "";
+        }
+        if (!("title" in $$source)) {
+            this["title"] = "";
+        }
+        if (!("notes" in $$source)) {
+            this["notes"] = "";
+        }
+        if (!("url" in $$source)) {
+            this["url"] = "";
+        }
+        if (!("due" in $$source)) {
+            this["due"] = "";
+        }
+        if (!("start" in $$source)) {
+            this["start"] = "";
+        }
+        if (!("timeZone" in $$source)) {
+            this["timeZone"] = "";
+        }
+        if (!("done" in $$source)) {
+            this["done"] = false;
+        }
+        if (!("completed" in $$source)) {
+            this["completed"] = "";
+        }
+        if (!("status" in $$source)) {
+            this["status"] = "";
+        }
+        if (!("percent" in $$source)) {
+            this["percent"] = 0;
+        }
+        if (!("priority" in $$source)) {
+            this["priority"] = 0;
+        }
+        if (!("rrule" in $$source)) {
+            this["rrule"] = "";
+        }
+        if (!("reminders" in $$source)) {
+            this["reminders"] = [];
+        }
+        if (!("parent" in $$source)) {
+            this["parent"] = "";
+        }
+        if (!("categories" in $$source)) {
+            this["categories"] = [];
+        }
+        if (!("mailLinks" in $$source)) {
+            this["mailLinks"] = [];
+        }
+        if (!("contacts" in $$source)) {
+            this["contacts"] = [];
+        }
+        if (!("eventUids" in $$source)) {
+            this["eventUids"] = [];
+        }
+        if (!("sortOrder" in $$source)) {
+            this["sortOrder"] = 0;
+        }
+        if (!("created" in $$source)) {
+            this["created"] = "";
+        }
+        if (!("readOnly" in $$source)) {
+            this["readOnly"] = false;
+        }
+        if (!("pending" in $$source)) {
+            this["pending"] = false;
+        }
+        if (!("conflict" in $$source)) {
+            this["conflict"] = false;
+        }
+        if (!("syncError" in $$source)) {
+            this["syncError"] = "";
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new TaskDTO instance from a string or object.
+     */
+    static createFrom($$source: any = {}): TaskDTO {
+        const $$createField17_0 = $$createType18;
+        const $$createField19_0 = $$createType0;
+        const $$createField20_0 = $$createType0;
+        const $$createField21_0 = $$createType46;
+        const $$createField22_0 = $$createType0;
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        if ("reminders" in $$parsedSource) {
+            $$parsedSource["reminders"] = $$createField17_0($$parsedSource["reminders"]);
+        }
+        if ("categories" in $$parsedSource) {
+            $$parsedSource["categories"] = $$createField19_0($$parsedSource["categories"]);
+        }
+        if ("mailLinks" in $$parsedSource) {
+            $$parsedSource["mailLinks"] = $$createField20_0($$parsedSource["mailLinks"]);
+        }
+        if ("contacts" in $$parsedSource) {
+            $$parsedSource["contacts"] = $$createField21_0($$parsedSource["contacts"]);
+        }
+        if ("eventUids" in $$parsedSource) {
+            $$parsedSource["eventUids"] = $$createField22_0($$parsedSource["eventUids"]);
+        }
+        return new TaskDTO($$parsedSource as Partial<TaskDTO>);
+    }
+}
+
+/**
+ * TaskDeleteResultDTO is the outcome of a deletion: the tasks that went, the
+ * subtasks included, for undo.
+ */
+export class TaskDeleteResultDTO {
+    "removed": RemovedTaskDTO[];
+    "queued": boolean;
+
+    /** Creates a new TaskDeleteResultDTO instance. */
+    constructor($$source: Partial<TaskDeleteResultDTO> = {}) {
+        if (!("removed" in $$source)) {
+            this["removed"] = [];
+        }
+        if (!("queued" in $$source)) {
+            this["queued"] = false;
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new TaskDeleteResultDTO instance from a string or object.
+     */
+    static createFrom($$source: any = {}): TaskDeleteResultDTO {
+        const $$createField0_0 = $$createType48;
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        if ("removed" in $$parsedSource) {
+            $$parsedSource["removed"] = $$createField0_0($$parsedSource["removed"]);
+        }
+        return new TaskDeleteResultDTO($$parsedSource as Partial<TaskDeleteResultDTO>);
+    }
+}
+
+/**
+ * TaskListDTO is one task list for the sidebar and pickers: a local list or a
+ * CalDAV collection that takes VTODOs.
+ */
+export class TaskListDTO {
+    "id": number;
+    "accountId": number;
+    "accountName": string;
+
+    /**
+     * Name is empty for the local list the app starts with, which the ui
+     * labels itself.
+     */
+    "name": string;
+    "color": string;
+    "local": boolean;
+    "readOnly": boolean;
+
+    /**
+     * Events is true for a collection that holds events too.
+     */
+    "events": boolean;
+    "lastError": string;
+
+    /**
+     * Default marks the list new tasks go to unless another is chosen.
+     */
+    "default": boolean;
+
+    /** Creates a new TaskListDTO instance. */
+    constructor($$source: Partial<TaskListDTO> = {}) {
+        if (!("id" in $$source)) {
+            this["id"] = 0;
+        }
+        if (!("accountId" in $$source)) {
+            this["accountId"] = 0;
+        }
+        if (!("accountName" in $$source)) {
+            this["accountName"] = "";
+        }
+        if (!("name" in $$source)) {
+            this["name"] = "";
+        }
+        if (!("color" in $$source)) {
+            this["color"] = "";
+        }
+        if (!("local" in $$source)) {
+            this["local"] = false;
+        }
+        if (!("readOnly" in $$source)) {
+            this["readOnly"] = false;
+        }
+        if (!("events" in $$source)) {
+            this["events"] = false;
+        }
+        if (!("lastError" in $$source)) {
+            this["lastError"] = "";
+        }
+        if (!("default" in $$source)) {
+            this["default"] = false;
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new TaskListDTO instance from a string or object.
+     */
+    static createFrom($$source: any = {}): TaskListDTO {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new TaskListDTO($$parsedSource as Partial<TaskListDTO>);
+    }
+}
+
+/**
+ * TaskMailMarkDTO says a stored message has a task: Done is true when every
+ * task linking to it is completed.
+ */
+export class TaskMailMarkDTO {
+    "messageId": number;
+    "done": boolean;
+
+    /** Creates a new TaskMailMarkDTO instance. */
+    constructor($$source: Partial<TaskMailMarkDTO> = {}) {
+        if (!("messageId" in $$source)) {
+            this["messageId"] = 0;
+        }
+        if (!("done" in $$source)) {
+            this["done"] = false;
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new TaskMailMarkDTO instance from a string or object.
+     */
+    static createFrom($$source: any = {}): TaskMailMarkDTO {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new TaskMailMarkDTO($$parsedSource as Partial<TaskMailMarkDTO>);
+    }
+}
+
+/**
+ * TaskRequest is the editor's task. An ID of 0 creates one in ListID; UID is
+ * only read then, to bring a task back under the id it had.
+ */
+export class TaskRequest {
+    "id": number;
+    "listId": number;
+    "uid": string;
+    "title": string;
+    "notes": string;
+    "url": string;
+    "due": string;
+    "start": string;
+    "timeZone": string;
+    "status": string;
+    "percent": number;
+    "priority": number;
+    "rrule": string;
+    "reminders": ReminderDTO[];
+    "parent": string;
+    "categories": string[];
+    "mailLinks": string[];
+    "contacts": TaskContactDTO[];
+    "eventUids": string[];
+    "sortOrder": number;
+
+    /**
+     * Force writes over the server's copy, for "keep mine" on a conflict.
+     */
+    "force": boolean;
+
+    /** Creates a new TaskRequest instance. */
+    constructor($$source: Partial<TaskRequest> = {}) {
+        if (!("id" in $$source)) {
+            this["id"] = 0;
+        }
+        if (!("listId" in $$source)) {
+            this["listId"] = 0;
+        }
+        if (!("uid" in $$source)) {
+            this["uid"] = "";
+        }
+        if (!("title" in $$source)) {
+            this["title"] = "";
+        }
+        if (!("notes" in $$source)) {
+            this["notes"] = "";
+        }
+        if (!("url" in $$source)) {
+            this["url"] = "";
+        }
+        if (!("due" in $$source)) {
+            this["due"] = "";
+        }
+        if (!("start" in $$source)) {
+            this["start"] = "";
+        }
+        if (!("timeZone" in $$source)) {
+            this["timeZone"] = "";
+        }
+        if (!("status" in $$source)) {
+            this["status"] = "";
+        }
+        if (!("percent" in $$source)) {
+            this["percent"] = 0;
+        }
+        if (!("priority" in $$source)) {
+            this["priority"] = 0;
+        }
+        if (!("rrule" in $$source)) {
+            this["rrule"] = "";
+        }
+        if (!("reminders" in $$source)) {
+            this["reminders"] = [];
+        }
+        if (!("parent" in $$source)) {
+            this["parent"] = "";
+        }
+        if (!("categories" in $$source)) {
+            this["categories"] = [];
+        }
+        if (!("mailLinks" in $$source)) {
+            this["mailLinks"] = [];
+        }
+        if (!("contacts" in $$source)) {
+            this["contacts"] = [];
+        }
+        if (!("eventUids" in $$source)) {
+            this["eventUids"] = [];
+        }
+        if (!("sortOrder" in $$source)) {
+            this["sortOrder"] = 0;
+        }
+        if (!("force" in $$source)) {
+            this["force"] = false;
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new TaskRequest instance from a string or object.
+     */
+    static createFrom($$source: any = {}): TaskRequest {
+        const $$createField13_0 = $$createType18;
+        const $$createField15_0 = $$createType0;
+        const $$createField16_0 = $$createType0;
+        const $$createField17_0 = $$createType46;
+        const $$createField18_0 = $$createType0;
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        if ("reminders" in $$parsedSource) {
+            $$parsedSource["reminders"] = $$createField13_0($$parsedSource["reminders"]);
+        }
+        if ("categories" in $$parsedSource) {
+            $$parsedSource["categories"] = $$createField15_0($$parsedSource["categories"]);
+        }
+        if ("mailLinks" in $$parsedSource) {
+            $$parsedSource["mailLinks"] = $$createField16_0($$parsedSource["mailLinks"]);
+        }
+        if ("contacts" in $$parsedSource) {
+            $$parsedSource["contacts"] = $$createField17_0($$parsedSource["contacts"]);
+        }
+        if ("eventUids" in $$parsedSource) {
+            $$parsedSource["eventUids"] = $$createField18_0($$parsedSource["eventUids"]);
+        }
+        return new TaskRequest($$parsedSource as Partial<TaskRequest>);
+    }
+}
+
+/**
+ * TaskSaveResultDTO is the outcome of a save, like EventSaveResultDTO.
+ */
+export class TaskSaveResultDTO {
+    "task": TaskDTO;
+    "queued": boolean;
+    "conflict": boolean;
+    "server": TaskDTO;
+
+    /**
+     * Advanced is true when completing a repeating task moved it on to its
+     * next occurrence instead of closing it.
+     */
+    "advanced": boolean;
+
+    /** Creates a new TaskSaveResultDTO instance. */
+    constructor($$source: Partial<TaskSaveResultDTO> = {}) {
+        if (!("task" in $$source)) {
+            this["task"] = (new TaskDTO());
+        }
+        if (!("queued" in $$source)) {
+            this["queued"] = false;
+        }
+        if (!("conflict" in $$source)) {
+            this["conflict"] = false;
+        }
+        if (!("server" in $$source)) {
+            this["server"] = (new TaskDTO());
+        }
+        if (!("advanced" in $$source)) {
+            this["advanced"] = false;
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new TaskSaveResultDTO instance from a string or object.
+     */
+    static createFrom($$source: any = {}): TaskSaveResultDTO {
+        const $$createField0_0 = $$createType49;
+        const $$createField3_0 = $$createType49;
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        if ("task" in $$parsedSource) {
+            $$parsedSource["task"] = $$createField0_0($$parsedSource["task"]);
+        }
+        if ("server" in $$parsedSource) {
+            $$parsedSource["server"] = $$createField3_0($$parsedSource["server"]);
+        }
+        return new TaskSaveResultDTO($$parsedSource as Partial<TaskSaveResultDTO>);
+    }
+}
+
+/**
+ * TaskSettingsDTO holds the task preferences.
+ */
+export class TaskSettingsDTO {
+    /**
+     * DefaultListID is where new tasks go, 0 for the first writable list.
+     */
+    "defaultListId": number;
+
+    /**
+     * DefaultDueMinutes is the time of day a due date picked without one
+     * gets, as minutes after midnight, or -1 to keep it a date.
+     */
+    "defaultDueMinutes": number;
+
+    /**
+     * Badge is what the rail counts: overdue, today (due today or overdue)
+     * or off.
+     */
+    "badge": string;
+
+    /**
+     * ShowInCalendar puts tasks with a due date in the calendar views.
+     */
+    "showInCalendar": boolean;
+
+    /**
+     * CompletedDays is how long a completed task stays listed, -1 for good.
+     */
+    "completedDays": number;
+
+    /**
+     * Sort is the order of a list: manual, due, priority, title or created.
+     */
+    "sort": string;
+
+    /** Creates a new TaskSettingsDTO instance. */
+    constructor($$source: Partial<TaskSettingsDTO> = {}) {
+        if (!("defaultListId" in $$source)) {
+            this["defaultListId"] = 0;
+        }
+        if (!("defaultDueMinutes" in $$source)) {
+            this["defaultDueMinutes"] = 0;
+        }
+        if (!("badge" in $$source)) {
+            this["badge"] = "";
+        }
+        if (!("showInCalendar" in $$source)) {
+            this["showInCalendar"] = false;
+        }
+        if (!("completedDays" in $$source)) {
+            this["completedDays"] = 0;
+        }
+        if (!("sort" in $$source)) {
+            this["sort"] = "";
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new TaskSettingsDTO instance from a string or object.
+     */
+    static createFrom($$source: any = {}): TaskSettingsDTO {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new TaskSettingsDTO($$parsedSource as Partial<TaskSettingsDTO>);
+    }
+}
+
+/**
  * TestConnectionRequest carries the settings to verify before saving (password
  * auth). OAuth is verified by the sign-in flow itself, so it is not tested here.
  */
@@ -5603,8 +6249,8 @@ export class ThemeImportPreviewDTO {
      * Creates a new ThemeImportPreviewDTO instance from a string or object.
      */
     static createFrom($$source: any = {}): ThemeImportPreviewDTO {
-        const $$createField2_0 = $$createType45;
-        const $$createField3_0 = $$createType47;
+        const $$createField2_0 = $$createType50;
+        const $$createField3_0 = $$createType52;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("info" in $$parsedSource) {
             $$parsedSource["info"] = $$createField2_0($$parsedSource["info"]);
@@ -5730,7 +6376,7 @@ export class ThreadDTO {
      * Creates a new ThreadDTO instance from a string or object.
      */
     static createFrom($$source: any = {}): ThreadDTO {
-        const $$createField1_0 = $$createType49;
+        const $$createField1_0 = $$createType54;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("messages" in $$parsedSource) {
             $$parsedSource["messages"] = $$createField1_0($$parsedSource["messages"]);
@@ -5767,7 +6413,7 @@ export class ThreadListDTO {
      * Creates a new ThreadListDTO instance from a string or object.
      */
     static createFrom($$source: any = {}): ThreadListDTO {
-        const $$createField0_0 = $$createType51;
+        const $$createField0_0 = $$createType56;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("threads" in $$parsedSource) {
             $$parsedSource["threads"] = $$createField0_0($$parsedSource["threads"]);
@@ -6136,8 +6782,8 @@ export class ThunderbirdProfileDTO {
      * Creates a new ThunderbirdProfileDTO instance from a string or object.
      */
     static createFrom($$source: any = {}): ThunderbirdProfileDTO {
-        const $$createField2_0 = $$createType53;
-        const $$createField3_0 = $$createType55;
+        const $$createField2_0 = $$createType58;
+        const $$createField3_0 = $$createType60;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("accounts" in $$parsedSource) {
             $$parsedSource["accounts"] = $$createField2_0($$parsedSource["accounts"]);
@@ -7660,14 +8306,19 @@ const $$createType41 = $Create.Array($$createType40);
 const $$createType42 = RecipientKeyDTO.createFrom;
 const $$createType43 = $Create.Array($$createType42);
 const $$createType44 = $Create.Map($Create.Any, $Create.Any);
-const $$createType45 = ThemeInfoDTO.createFrom;
-const $$createType46 = themepack$0.CSSFile.createFrom;
-const $$createType47 = $Create.Array($$createType46);
-const $$createType48 = ThreadMessageDTO.createFrom;
-const $$createType49 = $Create.Array($$createType48);
-const $$createType50 = ThreadSummaryDTO.createFrom;
-const $$createType51 = $Create.Array($$createType50);
-const $$createType52 = ThunderbirdAccountDTO.createFrom;
-const $$createType53 = $Create.Array($$createType52);
-const $$createType54 = ThunderbirdFolderDTO.createFrom;
-const $$createType55 = $Create.Array($$createType54);
+const $$createType45 = TaskContactDTO.createFrom;
+const $$createType46 = $Create.Array($$createType45);
+const $$createType47 = RemovedTaskDTO.createFrom;
+const $$createType48 = $Create.Array($$createType47);
+const $$createType49 = TaskDTO.createFrom;
+const $$createType50 = ThemeInfoDTO.createFrom;
+const $$createType51 = themepack$0.CSSFile.createFrom;
+const $$createType52 = $Create.Array($$createType51);
+const $$createType53 = ThreadMessageDTO.createFrom;
+const $$createType54 = $Create.Array($$createType53);
+const $$createType55 = ThreadSummaryDTO.createFrom;
+const $$createType56 = $Create.Array($$createType55);
+const $$createType57 = ThunderbirdAccountDTO.createFrom;
+const $$createType58 = $Create.Array($$createType57);
+const $$createType59 = ThunderbirdFolderDTO.createFrom;
+const $$createType60 = $Create.Array($$createType59);

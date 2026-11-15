@@ -11,16 +11,23 @@ func day(d int) time.Time {
 	return time.Date(2026, 3, d, 0, 0, 0, 0, time.UTC)
 }
 
-// The migration leaves one local calendar, so an install with no server has
-// somewhere to put an event.
+// The migrations leave one local calendar and one local task list, so an
+// install with no server has somewhere to put an event and a task.
 func TestMigrationSeedsLocalCalendar(t *testing.T) {
 	db := newTestDB(t)
 	cals, err := db.ListCalendars(context.Background())
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(cals) != 1 || !cals[0].Local() || !cals[0].Visible {
+	if len(cals) != 2 {
 		t.Fatalf("calendars = %+v", cals)
+	}
+	events, tasks := cals[0], cals[1]
+	if !events.Local() || !events.Visible || !events.HoldsEvents() || events.HoldsTasks() {
+		t.Errorf("event calendar = %+v", events)
+	}
+	if !tasks.Local() || !tasks.HoldsTasks() || tasks.HoldsEvents() {
+		t.Errorf("task list = %+v", tasks)
 	}
 }
 

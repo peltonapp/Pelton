@@ -84,6 +84,9 @@ const (
 	// EventCalendarReminder fires when an event's reminder is due, alongside
 	// the desktop notification, so the ui can show it too.
 	EventCalendarReminder = "calendar:reminder"
+	// EventTaskReminder fires when a task's reminder is due, alongside the
+	// desktop notification, so the ui can offer to complete or open it.
+	EventTaskReminder = "tasks:reminder"
 	// EventICSOpen fires when the system asks the running app to open .ics
 	// files, such as one double-clicked in the file manager.
 	EventICSOpen = "calendar:open-files"
@@ -116,6 +119,15 @@ type CalendarReminderEvent struct {
 	Start        string `json:"start"`
 	End          string `json:"end"`
 	AllDay       bool   `json:"allDay"`
+}
+
+// TaskReminderEvent is the payload for EventTaskReminder. Due is a date
+// (2006-01-02), rfc3339 in the user's zone, or empty for a task with none.
+type TaskReminderEvent struct {
+	TaskID  int64  `json:"taskId"`
+	ListID  int64  `json:"listId"`
+	Summary string `json:"summary"`
+	Due     string `json:"due"`
 }
 
 // OpenMessageEvent is the payload for EventOpenMessage.
