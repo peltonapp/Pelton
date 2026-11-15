@@ -77,6 +77,9 @@ export type ShortcutAction =
   | 'go-mail'
   | 'go-calendar'
   | 'go-contacts'
+  // the newsletter manager on the mail surface, and the insights page.
+  | 'open-newsletters'
+  | 'open-insights'
 
 // Shortcut pairs an action with its default combo and the label key for display.
 export interface Shortcut {
@@ -169,6 +172,8 @@ export const shortcuts: Shortcut[] = [
   { action: 'go-mail', combo: 'mod+shift+m', labelKey: 'shortcut.goMail' },
   { action: 'go-calendar', combo: 'mod+shift+c', labelKey: 'shortcut.goCalendar' },
   { action: 'go-contacts', combo: 'mod+shift+a', labelKey: 'shortcut.goContacts' },
+  { action: 'open-newsletters', combo: 'mod+shift+l', labelKey: 'shortcut.openNewsletters' },
+  { action: 'open-insights', combo: '', labelKey: 'shortcut.openInsights' },
 ]
 
 // ParsedCombo is a combo broken into its modifier flags and final key.

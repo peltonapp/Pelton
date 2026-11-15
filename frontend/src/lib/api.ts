@@ -11,6 +11,7 @@
 
 import * as App from '../../bindings/github.com/peltonapp/Pelton/internal/desktop/app'
 import * as desktop from '../../bindings/github.com/peltonapp/Pelton/internal/desktop/models'
+import type { NewsletterSender, InsightsStorage, InsightsVolume, InsightsPeople } from './mailstats'
 import {
   isDemoActive,
   demoAccounts,
@@ -697,6 +698,96 @@ export function markNotSpam(id: number): Promise<ArchiveUndo> {
     return Promise.resolve(noUndo)
   }
   return App.MarkNotSpam(id)
+}
+
+/** What a bulk action did: the ids it acted on, and the first failure. */
+export interface BulkResult {
+  done: number[]
+  failed: number
+  firstError: string
+}
+
+/** A bulk archive: BulkResult plus the undo record of every moved message. */
+export interface BulkArchive extends BulkResult {
+  undo: ArchiveUndo[]
+}
+
+const noBulk = (): BulkResult => ({ done: [], failed: 0, firstError: '' })
+
+/** Deletes many messages at once; undoDeletes brings them back until the next sync. */
+export function deleteMessages(ids: number[]): Promise<BulkResult> {
+  if (isDemoActive()) {
+    return Promise.resolve({ ...noBulk(), done: ids })
+  }
+  return App.DeleteMessages(ids) as unknown as Promise<BulkResult>
+}
+
+/** Reverses deleteMessages for the messages still cached. */
+export function undoDeletes(ids: number[]): Promise<BulkResult> {
+  if (isDemoActive()) {
+    return Promise.resolve({ ...noBulk(), done: ids })
+  }
+  return App.UndoDeletes(ids) as unknown as Promise<BulkResult>
+}
+
+/** Archives many messages with one server session per account. */
+export function archiveMessages(ids: number[]): Promise<BulkArchive> {
+  if (isDemoActive()) {
+    return Promise.resolve({ ...noBulk(), undo: [] })
+  }
+  return App.ArchiveMessages(ids) as unknown as Promise<BulkArchive>
+}
+
+/** Picks the newsletter mail of some senders for a bulk action. */
+export interface NewsletterSelection {
+  emails: string[]
+  /** Above 0 keeps only mail older than that many days. */
+  olderThanDays: number
+  /** Leaves each sender's newest message out. */
+  keepLatest: boolean
+  /** Leaves out mail already in an archive folder. */
+  forArchive: boolean
+}
+
+/** Every sender whose mail offers List-Unsubscribe, aggregated in the store. */
+export function listNewsletters(): Promise<NewsletterSender[]> {
+  if (isDemoActive()) {
+    return Promise.resolve([])
+  }
+  return App.ListNewsletters() as unknown as Promise<NewsletterSender[]>
+}
+
+/** The ids of the newsletter mail a selection picks. */
+export function newsletterMessageIds(sel: NewsletterSelection): Promise<number[]> {
+  if (isDemoActive()) {
+    return Promise.resolve([])
+  }
+  return App.NewsletterMessageIDs(new desktop.NewsletterSelectionDTO(sel))
+}
+
+/** The storage section of the insights page, computed from the local store. */
+export function insightsStorage(): Promise<InsightsStorage> {
+  if (isDemoActive()) {
+    return Promise.resolve({ accounts: [], senders: [], attachments: [] })
+  }
+  return App.InsightsStorage() as unknown as Promise<InsightsStorage>
+}
+
+/** The volume section over the last `days` days, 0 for all mail. */
+export function insightsVolume(days: number): Promise<InsightsVolume> {
+  if (isDemoActive()) {
+    return Promise.resolve({ since: '', days: [], hours: [], hasSent: false })
+  }
+  return App.InsightsVolume(days) as unknown as Promise<InsightsVolume>
+}
+
+/** The people section over the last `days` days, 0 for all mail. */
+export function insightsPeople(days: number): Promise<InsightsPeople> {
+  if (isDemoActive()) {
+    const none = { available: false, count: 0, medianSeconds: 0 }
+    return Promise.resolve({ writesTo: [], writesYou: [], myReplies: none, theirReplies: none })
+  }
+  return App.InsightsPeople(days) as unknown as Promise<InsightsPeople>
 }
 
 // SearchRequest is a ranked search over cached mail: free text plus an optional

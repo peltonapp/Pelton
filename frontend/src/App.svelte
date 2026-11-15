@@ -19,7 +19,9 @@
   import TopBar from './components/shell/TopBar.svelte'
   import Rail from './components/shell/Rail.svelte'
   import SpaceSwitcher from './components/shell/SpaceSwitcher.svelte'
-  import { space, openSpace, runSpaceAction } from './stores/space'
+  import { space, openSpace, runSpaceAction, isMailOnlyAction } from './stores/space'
+  import { mailScreen, openMailScreen, closeMailScreen } from './stores/mailscreen'
+  import { IconMailX, IconChartBar } from '@tabler/icons-svelte'
   import { spaces } from './lib/spaces'
   import { popupIsOpen } from './lib/popups'
   import { frameIntegrated } from './stores/windowframe'
@@ -112,7 +114,7 @@
   import { messageDetail } from './stores/message'
   import { profiles, currentProfile, loadProfiles, switchTo, switchRelative } from './stores/profiles'
   import { loadProposals } from './stores/agent'
-  import { settingsRequest, clearSettingsRequest } from './stores/settingsnav'
+  import { settingsRequest, clearSettingsRequest, openSettingsAt } from './stores/settingsnav'
   import { errorMessage, toastError, toastInfo, pushAction, withBusyToast } from './stores/toast'
   import { friendlyError } from './lib/errors'
   import { setOnline } from './stores/network'
@@ -156,7 +158,7 @@
     toggleSpam,
   } from './lib/messageactions'
   import { buildCommands, mailCommands, type CommandContext, type MessageOp, type FolderOp } from './lib/commands'
-  import { extraPaletteCommands } from './lib/palettesources'
+  import { extraPaletteCommands, registerPaletteSource } from './lib/palettesources'
   import { catalogByAction } from './lib/menuactions'
   import { shortcutLabel } from './lib/i18n'
   import {
@@ -348,6 +350,41 @@
       },
       0,
     )
+  }
+
+  // the newsletter manager and the insights page in the palette, with their
+  // live shortcut as the hint.
+  registerPaletteSource('mailtools', (tr) => {
+    const hint = (action: 'open-newsletters' | 'open-insights'): string => {
+      const combo = get(bindings)[action]
+      return combo ? shortcutLabel(combo) : ''
+    }
+    return [
+      {
+        id: 'open-newsletters',
+        group: 'navigate',
+        label: tr('newsletters.title'),
+        keywords: tr('newsletters.keywords'),
+        hint: hint('open-newsletters'),
+        icon: IconMailX,
+        run: () => openMailScreen('newsletters'),
+      },
+      {
+        id: 'open-insights',
+        group: 'navigate',
+        label: tr('settings2.page.insights'),
+        keywords: tr('insights.keywords'),
+        hint: hint('open-insights'),
+        icon: IconChartBar,
+        run: () => openSettingsAt('insights'),
+      },
+    ]
+  })
+
+  // picking a folder, view or search in the sidebar puts the list back.
+  $: closeScreenOn($selection)
+  function closeScreenOn(_sel: unknown): void {
+    closeMailScreen()
   }
 
   onMount(async () => {
@@ -824,7 +861,22 @@
     if (!classic && !overlayOpen && runSpaceAction($space, action)) {
       return
     }
+    // a screen in place of the list and the reader leaves no message on show
+    // for a message shortcut to act on.
+    if (!classic && $mailScreen !== null && isMailOnlyAction(action)) {
+      return
+    }
     switch (action) {
+      case 'open-newsletters':
+        if (!classic) {
+          openMailScreen('newsletters')
+        }
+        break
+      case 'open-insights':
+        if (!classic) {
+          openSettingsAt('insights')
+        }
+        break
       case 'compose':
         startCompose()
         break
@@ -1389,7 +1441,7 @@
     if (!$prefs.appVimMode || event.metaKey || event.ctrlKey || event.altKey) {
       return false
     }
-    if (isEditableTarget(event.target) || inSidebar(event.target) || anyDialogOpen()) {
+    if (isEditableTarget(event.target) || inSidebar(event.target) || anyDialogOpen() || (!classic && $mailScreen !== null)) {
       return false
     }
     // shift is part of G itself; with anything else it can only be extending
@@ -1671,6 +1723,13 @@
           {/if}
         </div>
         <Resizer disabled={locked} label={$t('app.pane.resizeSidebar')} on:resize={resizeSidebar} on:end={commitPanes} />
+        {#if $mailScreen === 'newsletters'}
+          <div class="screen">
+            {#await import('./components/newsletters/NewsletterManager.svelte') then m}
+              <svelte:component this={m.default} on:close={closeMailScreen} />
+            {/await}
+          </div>
+        {:else}
         <div
           class="surface"
           class:stacked
@@ -1687,6 +1746,7 @@
           <MessageDetail />
           <ComposeTabLayer />
         </div>
+        {/if}
       </div>
     {:else if $space === 'contacts'}
       <div class="space-host">
@@ -1908,6 +1968,20 @@
 
   .surface.stacked {
     grid-template-columns: minmax(0, 1fr);
+  }
+
+  /* a mail-level screen in place of the list and the reader. */
+  .screen {
+    min-width: 0;
+    min-height: 0;
+    overflow: hidden;
+    border: var(--hairline) solid var(--border-default);
+    border-radius: var(--pane-radius);
+    background: var(--surface-base);
+  }
+
+  :global(:root[data-panes='flat']) .screen {
+    border-width: var(--hairline) 0 var(--hairline) var(--hairline);
   }
 
   .surface.stacked > :global(.list-col) {

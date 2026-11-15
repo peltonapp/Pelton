@@ -56,6 +56,11 @@ const mailOnlyActions = new Set<string>([
   'delete-folder',
 ])
 
+/** Reports whether an action only means something with the mail panes on screen. */
+export function isMailOnlyAction(action: string): boolean {
+  return mailOnlyActions.has(action)
+}
+
 /**
  * Lets a space answer app actions while it is on screen: compose becomes "new
  * event" in the calendar, search focuses the space's own search, and so on.

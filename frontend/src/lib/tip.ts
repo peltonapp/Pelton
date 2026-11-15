@@ -27,7 +27,7 @@ function hide(): void {
   }
 }
 
-function show(node: HTMLElement, options: TipOptions): void {
+function show(node: Element, options: TipOptions): void {
   hide()
   if (!options.text) {
     return
@@ -71,8 +71,8 @@ function show(node: HTMLElement, options: TipOptions): void {
   el.classList.add('shown')
 }
 
-/** Shows a tooltip beside the element on hover and keyboard focus. */
-export function tip(node: HTMLElement, options: TipOptions): { update(next: TipOptions): void; destroy(): void } {
+/** Shows a tooltip beside the element on hover and keyboard focus; svg shapes take one too. */
+export function tip(node: HTMLElement | SVGElement, options: TipOptions): { update(next: TipOptions): void; destroy(): void } {
   let current = options
 
   function onEnter(): void {
