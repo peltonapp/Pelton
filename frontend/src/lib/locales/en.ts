@@ -2134,7 +2134,6 @@ const en: Record<string, string> = {
   'snippets.field.body': 'Text',
   'snippets.placeholders': 'Placeholders',
   'snippets.placeholders.hint': 'These are filled in when the snippet goes in. Any other word in braces, like {date of call}, is left for you: Tab moves from one to the next.',
-  'snippets.button': 'Snippets',
   'snippets.insert': 'Insert snippet',
   'snippets.search': 'Search snippets',
   'snippets.manage': 'Manage snippets',
@@ -2152,6 +2151,19 @@ const en: Record<string, string> = {
   'sendCheck.setting.attachmentHint': 'Before sending, ask when your text or subject mentions an attachment and none is attached. Quoted text and your signature are not checked, and phrases in every language Pelton speaks count.',
   'sendCheck.setting.subject': 'Warn about an empty subject',
   'sendCheck.setting.subjectHint': 'Before sending, ask when the message has no subject.',
+  'recipients.introBcc': 'Move the introducer to Bcc',
+  'recipients.introLine': 'Thanks for the intro, moving you to Bcc.',
+  'recipients.toggleReplyAll': 'Switch between reply and reply all',
+  'recipients.ccSender': 'Add the original sender to Cc',
+  'recipients.moveDown': 'Move recipient down (To, Cc, Bcc)',
+  'recipients.moveUp': 'Move recipient up (Bcc, Cc, To)',
+  'recipients.keywords': 'recipient to cc bcc move intro introduction reply all sender',
+  'recipients.pick': 'Pick a recipient',
+  'recipients.chip': '{who} in {field}. Drag it or use the move recipient keys to put it in another field.',
+  'recipients.noIntroducer': 'There is no introducer among the recipients to move.',
+  'recipients.notAReply': 'Only a reply can switch between reply and reply all.',
+  'recipients.noOriginal': 'This message answers no original to take the sender from.',
+  'recipients.senderThere': 'The original sender already gets this message.',
 }
 
 export default en

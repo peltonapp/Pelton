@@ -16,8 +16,6 @@
 
   /** Unique id base for the list. */
   export let id: string
-  /** Shows only the icon, for the docked footer. */
-  export let compact = false
   /** Opens the list above the button rather than below. */
   export let menuAbove = false
   /** Offers a way to the settings page, which only the main window can open. */
@@ -73,8 +71,7 @@
 
 <button
   type="button"
-  class="c2-tool"
-  class:compact
+  class="c2-tool compact"
   bind:this={button}
   aria-label={$t('snippets.insert')}
   aria-haspopup="dialog"
@@ -83,9 +80,6 @@
   on:click={() => (open ? (open = false) : void show())}
 >
   <Ph svg={snippetIcon} size={16} />
-  {#if !compact}
-    <span>{$t('snippets.button')}</span>
-  {/if}
 </button>
 
 {#if open}

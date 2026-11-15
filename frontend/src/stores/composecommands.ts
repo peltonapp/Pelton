@@ -5,6 +5,7 @@
 
 import { get, writable } from 'svelte/store'
 import type { ComposeAction } from '../lib/shortcuts'
+import type { RecipientField } from '../lib/recipientmoves'
 
 /** A command on its way to a composer; seq tells two equal commands apart. */
 export interface ComposeCommand {
@@ -13,6 +14,14 @@ export interface ComposeCommand {
   seq: number
   /** The snippet to insert, for an insert picked in the palette. */
   snippetId?: number
+  /** The recipient to move, for a move picked in the palette. */
+  recipient?: ChipRef
+}
+
+/** A recipient as it stands in one field of the composer. */
+export interface ChipRef {
+  value: string
+  field: RecipientField
 }
 
 /** The session of the composer in this window that last had focus. */
@@ -27,12 +36,12 @@ let seq = 0
  * runComposeCommand sends an action to the active composer and reports
  * whether there was one to send it to.
  */
-export function runComposeCommand(action: ComposeAction, snippetId?: number): boolean {
+export function runComposeCommand(action: ComposeAction, snippetId?: number, recipient?: ChipRef): boolean {
   const sessionId = get(activeComposer)
   if (sessionId === null) {
     return false
   }
-  composeCommand.set({ sessionId, action, seq: ++seq, snippetId })
+  composeCommand.set({ sessionId, action, seq: ++seq, snippetId, recipient })
   return true
 }
 

@@ -89,7 +89,7 @@
   import { loadViews, editingView, closeViewEditor, openViewEditor, views as savedViews } from './stores/views'
   import { selectSavedView } from './stores/selection'
   import { isMac } from './lib/i18n'
-  import { matchShortcut, comboHasModifier, isFunctionKeyCombo, isComposeAction, type ShortcutAction } from './lib/shortcuts'
+  import { matchShortcut, comboHasModifier, isFunctionKeyCombo, isComposeAction, chipActions, type ShortcutAction } from './lib/shortcuts'
   import { runComposeCommand } from './stores/composecommands'
   import { cyclePane, focusPane as focusPaneArea } from './lib/panes'
   import { bindings, recording, initShortcuts } from './stores/shortcuts'
@@ -1515,6 +1515,11 @@
     if (action) {
       // a modifier-less custom binding must not hijack typing in a field.
       if (!comboHasModifier($bindings[action]) && !isFunctionKeyCombo($bindings[action]) && isEditableTarget(event.target)) {
+        return
+      }
+      // a recipient move only means something on a focused recipient chip;
+      // anywhere else its keys keep their own meaning.
+      if ((chipActions as readonly string[]).includes(action) &&!(event.target as HTMLElement | null)?.closest?.('[data-chip]')) {
         return
       }
       event.preventDefault()

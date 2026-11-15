@@ -36,7 +36,17 @@
   import { snippets } from '../../stores/snippets'
   import { expandPlaceholders, matchTrigger, recipientNames, snippetFields } from '../../lib/snippets'
   import { textToHtml } from '../../lib/richtext'
-  import { activeComposer, composeCommand, releaseComposer } from '../../stores/composecommands'
+  import { activeComposer, composeCommand, releaseComposer, type ChipRef } from '../../stores/composecommands'
+  import {
+    fieldBeside,
+    introducerToBcc,
+    moveRecipient,
+    recipientFields,
+    senderToCc,
+    withLeadLine,
+    type RecipientField,
+    type RecipientFields,
+  } from '../../lib/recipientmoves'
   import { registerComposePalette } from '../../lib/composepalette'
   import {
     closeCompose,
@@ -54,7 +64,7 @@
   import { convertEditorBody, htmlToText } from '../../lib/richtext'
   import { withSignatureBlock } from '../../lib/signatureblock'
   import { bodyFontStack } from '../../lib/fonts'
-  import { comboMatches, composeActions, type ComposeAction } from '../../lib/shortcuts'
+  import { chipActions, comboMatches, composeActions, type ComposeAction } from '../../lib/shortcuts'
   import { formatStatusClock, type TimeFormat } from '../../lib/format'
   import { tip } from '../../lib/tip'
   import { t } from '../../lib/i18n'
@@ -64,7 +74,7 @@
   import { sidebar } from '../../stores/accounts'
   import { revealMessage } from '../../stores/selection'
   import { focusPane } from '../../stores/tabs'
-  import { errorMessage, toastError } from '../../stores/toast'
+  import { errorMessage, toastError, toastInfo } from '../../stores/toast'
   import type { ProtectionStatus, Signature, Snippet } from '../../lib/types'
   import type CodeMirrorEditor from './CodeMirrorEditor.svelte'
   import type RichEditorView from './RichEditor.svelte'
@@ -303,7 +313,9 @@
       return
     }
     const action = composeActions.find((a) => $bindings[a] && comboMatches(event, $bindings[a]))
-    if (action) {
+    // a chip move only answers on a focused chip; elsewhere its keys keep
+    // what they do in a text field.
+    if (action && (!chipActions.includes(action) || focusedChip() !== null)) {
       event.preventDefault()
       event.stopPropagation()
       runAction(action)
@@ -323,7 +335,7 @@
 
   // runAction carries out a composer action, from a key or the palette. A
   // snippet named with it is inserted straight away.
-  function runAction(action: ComposeAction, snippetId?: number): void {
+  function runAction(action: ComposeAction, snippetId?: number, recipient?: ChipRef): void {
     if (docked && session.minimized) {
       updateCompose(session.id, { minimized: false })
     }
@@ -340,7 +352,98 @@
         }
         break
       }
+      case 'compose-intro-bcc':
+        introToBcc()
+        break
+      case 'compose-toggle-reply-all':
+        toggleReplyAll()
+        break
+      case 'compose-cc-sender':
+        ccSender()
+        break
+      case 'compose-recipient-down':
+      case 'compose-recipient-up':
+        void moveChip(recipient ?? focusedChip(), action === 'compose-recipient-down' ? 'down' : 'up')
+        break
     }
+  }
+
+  // the recipient chip that has focus in this composer, or null.
+  function focusedChip(): ChipRef | null {
+    const el = (document.activeElement as HTMLElement | null)?.closest<HTMLElement>('[data-chip]')
+    if (!el || !el.closest(`[data-compose-id="${session.id}"]`)) {
+      return null
+    }
+    const field = el.dataset.chipField as RecipientField | undefined
+    return field && recipientFields.includes(field) ? { value: el.dataset.chip ?? '', field } : null
+  }
+
+  function fieldsOf(s: ComposeSession): RecipientFields {
+    return { to: s.to, cc: s.cc, bcc: s.bcc }
+  }
+
+  // moveChip moves a recipient one field down or up and keeps focus on it.
+  async function moveChip(chip: ChipRef | null, dir: 'down' | 'up'): Promise<void> {
+    const to = chip ? fieldBeside(chip.field, dir) : null
+    if (!chip || !to) {
+      return
+    }
+    const current = getSession(session.id) ?? session
+    updateCompose(session.id, {
+      ...moveRecipient(fieldsOf(current), chip.value, chip.field, to),
+      showCc: current.showCc || to === 'cc',
+      showBcc: current.showBcc || to === 'bcc',
+    })
+    await tick()
+    const moved = Array.from(document.querySelectorAll<HTMLElement>(`[data-compose-id="${session.id}"] [data-chip-field="${to}"]`)).find(
+      (el) => el.dataset.chip === chip.value,
+    )
+    moved?.focus()
+  }
+
+  // introToBcc moves the person a reply answers to Bcc and thanks them for the
+  // introduction at the top of the message.
+  function introToBcc(): void {
+    const current = getSession(session.id) ?? session
+    const origin = current.origin
+    const moved = origin ? introducerToBcc(fieldsOf(current), { name: origin.fromName, email: origin.fromAddress }) : null
+    if (!moved) {
+      toastInfo($t('recipients.noIntroducer'))
+      return
+    }
+    updateCompose(session.id, {
+      ...moved,
+      showCc: moved.cc !== '',
+      showBcc: true,
+      body: withLeadLine(current.body, $t('recipients.introLine'), current.mode),
+    })
+  }
+
+  // toggleReplyAll turns a reply into a reply all and back.
+  function toggleReplyAll(): void {
+    const kind = session.origin?.kind
+    if (kind !== 'reply' && kind !== 'replyAll') {
+      toastInfo($t('recipients.notAReply'))
+      return
+    }
+    switchReplyKind(session.id, kind === 'reply' ? 'replyAll' : 'reply')
+    folded = Boolean(getSession(session.id)?.fold)
+  }
+
+  // ccSender copies the sender of the original into Cc.
+  function ccSender(): void {
+    const current = getSession(session.id) ?? session
+    const origin = current.origin
+    if (!origin) {
+      toastInfo($t('recipients.noOriginal'))
+      return
+    }
+    const moved = senderToCc(fieldsOf(current), { name: origin.fromName, email: origin.fromAddress })
+    if (!moved) {
+      toastInfo($t('recipients.senderThere'))
+      return
+    }
+    updateCompose(session.id, { ...moved, showCc: true })
   }
 
   // commands from the palette or a key pressed outside the composer reach the
@@ -348,7 +451,7 @@
   let handledCommand = 0
   $: if ($composeCommand && $composeCommand.sessionId === session.id && $composeCommand.seq !== handledCommand) {
     handledCommand = $composeCommand.seq
-    runAction($composeCommand.action, $composeCommand.snippetId)
+    runAction($composeCommand.action, $composeCommand.snippetId, $composeCommand.recipient)
   }
 
   // the editor that takes a snippet: the rich one, or CodeMirror in vim mode.
@@ -569,6 +672,7 @@
       <ProtectionMenu protection={session.protection} status={protectionStatus} on:change={(e) => updateCompose(session.id, { protection: e.detail })} />
       <FollowUpMenu
         bind:this={followMenu}
+        compact={!session.followUpAt}
         id={`compose-${session.id}`}
         value={session.followUpAt ?? ''}
         on:change={(e) => updateCompose(session.id, { followUpAt: e.detail || undefined })}
@@ -685,7 +789,6 @@
         />
         <SnippetPicker
           bind:this={snippetPicker}
-          compact
           menuAbove
           id={`compose-${session.id}`}
           canManage={mainWindow}
