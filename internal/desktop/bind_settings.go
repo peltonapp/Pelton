@@ -146,6 +146,9 @@ const (
 	// "footer", "tabs" or "hidden"; and which edge the rail is on.
 	settingNavStyle = "nav_style"
 	settingRailSide = "rail_side"
+	// the views pinned to the middle of the rail, comma separated: "u:inbox"
+	// for a unified view, "v:12" for a saved one.
+	settingRailPins = "rail_pins"
 	// how the panes are drawn in the new design: "hybrid", "flat" or "soft".
 	settingPaneStyle = "pane_style"
 	// where the sender picture goes in a list row and the reading header:
@@ -404,6 +407,9 @@ type UIPrefsDTO struct {
 	NavStyle string `json:"navStyle"`
 	// RailSide is the window edge the rail sits on: left or right.
 	RailSide string `json:"railSide"`
+	// RailPins lists the views pinned to the middle of the rail, comma
+	// separated, in display order.
+	RailPins string `json:"railPins"`
 	// PaneStyle draws the panes in the new design: hybrid, flat or soft.
 	PaneStyle string `json:"paneStyle"`
 	// AvatarPlacement puts the sender picture in its own column, inline in the
@@ -582,6 +588,7 @@ func (a *App) GetUIPrefs() (UIPrefsDTO, error) {
 		LayoutMode:                 a.stringSetting(settingLayoutMode, "columns"),
 		NavStyle:                   a.stringSetting(settingNavStyle, "rail"),
 		RailSide:                   a.stringSetting(settingRailSide, "left"),
+		RailPins:                   a.stringSetting(settingRailPins, ""),
 		PaneStyle:                  a.stringSetting(settingPaneStyle, "hybrid"),
 		AvatarPlacement:            a.stringSetting(settingAvatarPlacement, "inline"),
 		ContactsView:               a.stringSetting(settingContactsView, "panes"),

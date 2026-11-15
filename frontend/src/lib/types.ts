@@ -614,6 +614,9 @@ export interface UIPrefs {
   navStyle: NavStyle
   // railSide is the window edge the rail sits on.
   railSide: RailSide
+  // railPins lists the views pinned to the middle of the rail, comma
+  // separated: "u:inbox" for a unified view, "v:12" for a saved one.
+  railPins: string
   // paneStyle draws the panes in the new design.
   paneStyle: PaneStyle
   // avatarPlacement puts the sender picture in its own column, inline in the

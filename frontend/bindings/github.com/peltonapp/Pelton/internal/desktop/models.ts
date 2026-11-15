@@ -6517,6 +6517,12 @@ export class UIPrefsDTO {
     "railSide": string;
 
     /**
+     * RailPins lists the views pinned to the middle of the rail, comma
+     * separated, in display order.
+     */
+    "railPins": string;
+
+    /**
      * PaneStyle draws the panes in the new design: hybrid, flat or soft.
      */
     "paneStyle": string;
@@ -6907,6 +6913,9 @@ export class UIPrefsDTO {
         }
         if (!("railSide" in $$source)) {
             this["railSide"] = "";
+        }
+        if (!("railPins" in $$source)) {
+            this["railPins"] = "";
         }
         if (!("paneStyle" in $$source)) {
             this["paneStyle"] = "";

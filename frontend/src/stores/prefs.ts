@@ -79,6 +79,7 @@ const defaults: UIPrefs = {
   layoutMode: 'columns',
   navStyle: 'rail',
   railSide: 'left',
+  railPins: '',
   paneStyle: 'hybrid',
   avatarPlacement: 'inline',
   contactsView: 'panes',
@@ -270,6 +271,22 @@ export function setNavStyle(navStyle: NavStyle): void {
 }
 
 /** Moves the rail to the left or right window edge. */
+/** The ids of the views pinned to the rail, in display order. */
+export function railPinIds(railPins: string): string[] {
+  return railPins === '' ? [] : railPins.split(',')
+}
+
+/** Pins a view to the rail, or takes it off again. */
+export function toggleRailPin(id: string): void {
+  prefs.update((p) => {
+    const ids = railPinIds(p.railPins)
+    const next = ids.includes(id) ? ids.filter((x) => x !== id) : [...ids, id]
+    const railPins = next.join(',')
+    void setSetting(SettingKeys.railPins, railPins)
+    return { ...p, railPins }
+  })
+}
+
 export function setRailSide(railSide: RailSide): void {
   prefs.update((p) => ({ ...p, railSide }))
   void setSetting(SettingKeys.railSide, railSide)
