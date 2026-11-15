@@ -159,6 +159,7 @@
   } from './lib/messageactions'
   import { markDone } from './lib/triage'
   import { watchFollowUps } from './stores/followups'
+  import { loadSnippets } from './stores/snippets'
   import { buildCommands, mailCommands, type CommandContext, type MessageOp, type FolderOp } from './lib/commands'
   import { extraPaletteCommands } from './lib/palettesources'
   import { catalogByAction } from './lib/menuactions'
@@ -374,6 +375,7 @@
     void initMenuBar()
     void initPalette()
     void loadSignatures()
+    void loadSnippets()
     void loadVIPSenders()
     void loadVirusTotalConfig()
     // the sidebar marks mailboxes with no stored password, so the markers have

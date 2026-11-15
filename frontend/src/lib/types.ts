@@ -440,6 +440,22 @@ export interface ComposeRequest {
 }
 
 /**
+ * Snippet is a reusable text block for the composer. body is plain text with
+ * {placeholders}; subject, to and cc fill only empty fields; trigger is the
+ * word typed after ";" to insert it, '' for none.
+ */
+export interface Snippet {
+  id: number
+  name: string
+  body: string
+  subject: string
+  to: string
+  cc: string
+  trigger: string
+  position: number
+}
+
+/**
  * FollowUp is a "remind me if nobody replies" reminder on a sent message.
  * Times are RFC3339; firedAt is empty while it waits. localId, folderId and
  * threadId point at the cached copy of the sent message, 0 until one synced.

@@ -943,6 +943,7 @@ export class BackupInfoDTO {
     "settingCount": number;
     "mailboxCount": number;
     "signatureCount": number;
+    "snippetCount": number;
 
     /** Creates a new BackupInfoDTO instance. */
     constructor($$source: Partial<BackupInfoDTO> = {}) {
@@ -978,6 +979,9 @@ export class BackupInfoDTO {
         }
         if (!("signatureCount" in $$source)) {
             this["signatureCount"] = 0;
+        }
+        if (!("snippetCount" in $$source)) {
+            this["snippetCount"] = 0;
         }
 
         Object.assign(this, $$source);
@@ -4042,6 +4046,59 @@ export class SignatureDTO {
     static createFrom($$source: any = {}): SignatureDTO {
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         return new SignatureDTO($$parsedSource as Partial<SignatureDTO>);
+    }
+}
+
+/**
+ * SnippetDTO mirrors storage.Snippet for the frontend. To and Cc are address
+ * lists as typed; Trigger is stored without its prefix.
+ */
+export class SnippetDTO {
+    "id": number;
+    "name": string;
+    "body": string;
+    "subject": string;
+    "to": string;
+    "cc": string;
+    "trigger": string;
+    "position": number;
+
+    /** Creates a new SnippetDTO instance. */
+    constructor($$source: Partial<SnippetDTO> = {}) {
+        if (!("id" in $$source)) {
+            this["id"] = 0;
+        }
+        if (!("name" in $$source)) {
+            this["name"] = "";
+        }
+        if (!("body" in $$source)) {
+            this["body"] = "";
+        }
+        if (!("subject" in $$source)) {
+            this["subject"] = "";
+        }
+        if (!("to" in $$source)) {
+            this["to"] = "";
+        }
+        if (!("cc" in $$source)) {
+            this["cc"] = "";
+        }
+        if (!("trigger" in $$source)) {
+            this["trigger"] = "";
+        }
+        if (!("position" in $$source)) {
+            this["position"] = 0;
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new SnippetDTO instance from a string or object.
+     */
+    static createFrom($$source: any = {}): SnippetDTO {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new SnippetDTO($$parsedSource as Partial<SnippetDTO>);
     }
 }
 

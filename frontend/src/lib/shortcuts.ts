@@ -85,10 +85,10 @@ export type ShortcutAction =
   | ComposeAction
 
 /** The shortcut actions that act on a composer rather than on mail. */
-export type ComposeAction = 'compose-follow-up'
+export type ComposeAction = 'compose-follow-up' | 'compose-insert-snippet'
 
 /** Every composer action, in the order Settings and the palette list them. */
-export const composeActions: readonly ComposeAction[] = ['compose-follow-up']
+export const composeActions: readonly ComposeAction[] = ['compose-follow-up', 'compose-insert-snippet']
 
 /** isComposeAction reports whether an action belongs to a composer. */
 export function isComposeAction(action: string): action is ComposeAction {
@@ -188,6 +188,7 @@ export const shortcuts: Shortcut[] = [
   { action: 'go-calendar', combo: 'mod+shift+c', labelKey: 'shortcut.goCalendar' },
   { action: 'go-contacts', combo: 'mod+shift+a', labelKey: 'shortcut.goContacts' },
   { action: 'compose-follow-up', combo: 'mod+shift+f', labelKey: 'followUp.menu' },
+  { action: 'compose-insert-snippet', combo: 'mod+shift+i', labelKey: 'snippets.insert' },
 ]
 
 // ParsedCombo is a combo broken into its modifier flags and final key.

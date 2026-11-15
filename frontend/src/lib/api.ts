@@ -42,6 +42,7 @@ import type {
   ComposeRequest,
   Draft,
   FollowUp,
+  Snippet,
   OutboxRow,
   OutboxEdit,
   UIPrefs,
@@ -919,6 +920,29 @@ export function listFollowUps(): Promise<FollowUp[]> {
     return Promise.resolve([])
   }
   return App.ListFollowUps().then((list) => list ?? [])
+}
+
+// listSnippets returns every snippet in the user's order.
+export function listSnippets(): Promise<Snippet[]> {
+  if (isDemoActive()) {
+    return Promise.resolve([])
+  }
+  return App.ListSnippets().then((list) => list ?? [])
+}
+
+// saveSnippet creates a snippet (id 0) or updates one, returning it as stored.
+export function saveSnippet(snippet: Snippet): Promise<Snippet> {
+  return App.SaveSnippet(snippet) as Promise<Snippet>
+}
+
+// deleteSnippet removes a snippet.
+export function deleteSnippet(id: number): Promise<void> {
+  return App.DeleteSnippet(id)
+}
+
+// reorderSnippets stores the order the snippets are listed in.
+export function reorderSnippets(ids: number[]): Promise<void> {
+  return App.ReorderSnippets(ids)
 }
 
 // cancelFollowUp drops a reminder, waiting or fired.

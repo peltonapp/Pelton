@@ -75,6 +75,7 @@ export {
     SearchResultDTO,
     SettingResult,
     SignatureDTO,
+    SnippetDTO,
     TestConnectionRequest,
     ThemeApplyDTO,
     ThemeDraftDTO,

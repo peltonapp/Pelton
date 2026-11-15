@@ -25,6 +25,7 @@
     type ComposeSession,
   } from './stores/compose'
   import { loadSignatures } from './stores/signatures'
+  import { loadSnippets } from './stores/snippets'
   import { loadSidebar } from './stores/accounts'
   import { applyTrafficLights, closeCurrentWindow, setWindowTitle, takeComposeSession, titleBarDoubleClick } from './lib/api'
   import { onComposeCloseRequest } from './lib/events'
@@ -60,6 +61,7 @@
     await initShortcuts()
     void initPalette()
     void loadSignatures()
+    void loadSnippets()
     // the account picker and the From line read the accounts from here.
     await loadSidebar()
     const session = await takeComposeSession<ComposeSession>(token).catch(() => null)

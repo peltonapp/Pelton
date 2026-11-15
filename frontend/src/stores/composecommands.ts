@@ -11,6 +11,8 @@ export interface ComposeCommand {
   sessionId: number
   action: ComposeAction
   seq: number
+  /** The snippet to insert, for an insert picked in the palette. */
+  snippetId?: number
 }
 
 /** The session of the composer in this window that last had focus. */
@@ -25,12 +27,12 @@ let seq = 0
  * runComposeCommand sends an action to the active composer and reports
  * whether there was one to send it to.
  */
-export function runComposeCommand(action: ComposeAction): boolean {
+export function runComposeCommand(action: ComposeAction, snippetId?: number): boolean {
   const sessionId = get(activeComposer)
   if (sessionId === null) {
     return false
   }
-  composeCommand.set({ sessionId, action, seq: ++seq })
+  composeCommand.set({ sessionId, action, seq: ++seq, snippetId })
   return true
 }
 

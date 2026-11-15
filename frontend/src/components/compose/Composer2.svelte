@@ -29,6 +29,10 @@
   import FormatBar from './v2/FormatBar.svelte'
   import ReplyContext from './v2/ReplyContext.svelte'
   import FollowUpMenu from './v2/FollowUpMenu.svelte'
+  import SnippetPicker from './v2/SnippetPicker.svelte'
+  import { snippets } from '../../stores/snippets'
+  import { expandPlaceholders, matchTrigger, recipientNames, snippetFields } from '../../lib/snippets'
+  import { textToHtml } from '../../lib/richtext'
   import { activeComposer, composeCommand, releaseComposer } from '../../stores/composecommands'
   import { registerComposePalette } from '../../lib/composepalette'
   import {
@@ -58,7 +62,7 @@
   import { revealMessage } from '../../stores/selection'
   import { focusPane } from '../../stores/tabs'
   import { errorMessage, toastError } from '../../stores/toast'
-  import type { ProtectionStatus, Signature } from '../../lib/types'
+  import type { ProtectionStatus, Signature, Snippet } from '../../lib/types'
   import type CodeMirrorEditor from './CodeMirrorEditor.svelte'
   import type RichEditorView from './RichEditor.svelte'
 
@@ -82,6 +86,15 @@
 
   let strip: AttachmentStrip
   let followMenu: FollowUpMenu | null = null
+  let snippetPicker: SnippetPicker | null = null
+  let cmEditor: CodeMirrorEditor | null = null
+
+  /** What inserting a snippet needs from either editor. */
+  interface SnippetEditor {
+    textBeforeCaret(): string
+    insertBeforeCaret(count: number, content: string): { from: number; tail: number }
+    selectNextPlaceholder(tail: number, from?: number): boolean
+  }
   let moreButton: HTMLButtonElement
   let moreOpen = false
   let sigChoice = ''
@@ -221,6 +234,11 @@
     if (confirmClose || session.minimized) {
       return
     }
+    if (onEditorKey(event)) {
+      event.preventDefault()
+      event.stopPropagation()
+      return
+    }
     const action = composeActions.find((a) => $bindings[a] && comboMatches(event, $bindings[a]))
     if (action) {
       event.preventDefault()
@@ -240,15 +258,25 @@
     await send()
   }
 
-  // runAction carries out a composer action, from a key or the palette.
-  function runAction(action: ComposeAction): void {
+  // runAction carries out a composer action, from a key or the palette. A
+  // snippet named with it is inserted straight away.
+  function runAction(action: ComposeAction, snippetId?: number): void {
+    if (docked && session.minimized) {
+      updateCompose(session.id, { minimized: false })
+    }
     switch (action) {
       case 'compose-follow-up':
-        if (docked && session.minimized) {
-          updateCompose(session.id, { minimized: false })
-        }
         followMenu?.open()
         break
+      case 'compose-insert-snippet': {
+        const chosen = snippetId === undefined ? undefined : $snippets.find((s) => s.id === snippetId)
+        if (chosen) {
+          void insertSnippet(chosen, 0)
+        } else {
+          void snippetPicker?.show()
+        }
+        break
+      }
     }
   }
 
@@ -257,7 +285,68 @@
   let handledCommand = 0
   $: if ($composeCommand && $composeCommand.sessionId === session.id && $composeCommand.seq !== handledCommand) {
     handledCommand = $composeCommand.seq
-    runAction($composeCommand.action)
+    runAction($composeCommand.action, $composeCommand.snippetId)
+  }
+
+  // the editor that takes a snippet: the rich one, or CodeMirror in vim mode.
+  $: textEditor = (rich ? richEditor : cmEditor) as SnippetEditor | null
+
+  // after a snippet went in, Tab walks its placeholders. tail is how far its
+  // end lies from the end of the document, so the walk stays inside it.
+  let placeholderTail: number | null = null
+
+  // insertSnippet puts a snippet into the body at the caret, replacing count
+  // characters before it (a typed trigger), fills the header fields that are
+  // still empty, and selects its first placeholder when it has one.
+  async function insertSnippet(snippet: Snippet, count: number): Promise<void> {
+    const current = getSession(session.id) ?? session
+    const names = recipientNames(current.to)
+    const account = ($sidebar.data?.accounts ?? []).find((a) => a.id === current.accountId)
+    const text = expandPlaceholders(snippet.body, {
+      ...names,
+      myName: account?.displayName || account?.email || '',
+      date: new Date().toLocaleDateString(),
+    })
+    const fields = snippetFields(snippet, current)
+    if (Object.keys(fields).length > 0) {
+      updateCompose(session.id, fields)
+    }
+    await tick()
+    const editor = textEditor
+    if (!editor) {
+      return
+    }
+    const content = rich ? textToHtml(text) : text
+    const placed = editor.insertBeforeCaret(count, content)
+    placeholderTail = editor.selectNextPlaceholder(placed.tail, placed.from) ? placed.tail : null
+  }
+
+  // onEditorKey runs the snippet keys inside the editor: Tab moves to the next
+  // placeholder of a snippet just inserted, and Tab or Space right after a
+  // trigger word puts its snippet in.
+  function onEditorKey(event: KeyboardEvent): boolean {
+    if ((event.key !== 'Tab' && event.key !== ' ') || event.metaKey || event.ctrlKey || event.altKey) {
+      return false
+    }
+    const editor = textEditor
+    if (!editor || !(event.target as HTMLElement | null)?.closest?.('.editor')) {
+      return false
+    }
+    if (event.key === 'Tab' && !event.shiftKey && placeholderTail !== null) {
+      if (editor.selectNextPlaceholder(placeholderTail)) {
+        return true
+      }
+      placeholderTail = null
+    }
+    if (event.shiftKey) {
+      return false
+    }
+    const found = matchTrigger(editor.textBeforeCaret(), $snippets)
+    if (!found) {
+      return false
+    }
+    void insertSnippet(found.snippet, found.length)
+    return true
   }
 
   onMount(() => {
@@ -421,6 +510,7 @@
         value={session.followUpAt ?? ''}
         on:change={(e) => updateCompose(session.id, { followUpAt: e.detail || undefined })}
       />
+      <SnippetPicker bind:this={snippetPicker} id={`compose-${session.id}`} canManage={mainWindow} on:pick={(e) => void insertSnippet(e.detail, 0)} />
       <button type="button" class="c2-tool" disabled={saving} on:click={() => save()}>
         <Ph svg={floppyIcon} size={16} />
         <span>{$t('action.saveDraft')}</span>
@@ -484,6 +574,7 @@
       {:else if CMEditor}
         <svelte:component
           this={CMEditor}
+          bind:this={cmEditor}
           content={typed}
           placeholder={$t('compose.editor.placeholderPlain')}
           vimEnabled={$prefs.composeVimMode}
@@ -517,6 +608,14 @@
           id={`compose-${session.id}`}
           value={session.followUpAt ?? ''}
           on:change={(e) => updateCompose(session.id, { followUpAt: e.detail || undefined })}
+        />
+        <SnippetPicker
+          bind:this={snippetPicker}
+          compact
+          menuAbove
+          id={`compose-${session.id}`}
+          canManage={mainWindow}
+          on:pick={(e) => void insertSnippet(e.detail, 0)}
         />
         <button type="button" class="c2-tool compact" disabled={saving} aria-label={$t('action.saveDraft')} use:tip={{ text: $t('action.saveDraft'), side: 'top' }} on:click={() => save()}>
           <Ph svg={floppyIcon} size={16} />

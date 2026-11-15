@@ -14,6 +14,7 @@ import listIcon from '@phosphor-icons/core/assets/duotone/list-dashes-duotone.sv
 import readingIcon from '@phosphor-icons/core/assets/duotone/book-open-text-duotone.svg?raw'
 import composingIcon from '@phosphor-icons/core/assets/duotone/pencil-simple-line-duotone.svg?raw'
 import signaturesIcon from '@phosphor-icons/core/assets/duotone/signature-duotone.svg?raw'
+import snippetsIcon from '@phosphor-icons/core/assets/duotone/text-indent-duotone.svg?raw'
 import contactsIcon from '@phosphor-icons/core/assets/duotone/address-book-duotone.svg?raw'
 import accountsIcon from '@phosphor-icons/core/assets/duotone/at-duotone.svg?raw'
 import profilesIcon from '@phosphor-icons/core/assets/duotone/users-duotone.svg?raw'
@@ -76,6 +77,7 @@ export const settingsPages2: SettingsPage[] = [
   { key: 'reading', group: 'mail', labelKey: 'settings2.page.reading', icon: readingIcon },
   { key: 'composing', group: 'mail', labelKey: 'settings2.page.composing', icon: composingIcon },
   { key: 'signatures', group: 'mail', labelKey: 'settings2.page.signatures', icon: signaturesIcon },
+  { key: 'snippets', group: 'mail', labelKey: 'settings2.page.snippets', icon: snippetsIcon },
   { key: 'notifications', group: 'mail', labelKey: 'settings2.page.notifications', icon: notificationsIcon },
   { key: 'contacts', group: 'people', labelKey: 'settings2.page.contacts', icon: contactsIcon },
   { key: 'accounts', group: 'accounts', labelKey: 'settings2.page.accounts', icon: accountsIcon },
