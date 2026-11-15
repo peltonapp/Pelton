@@ -100,7 +100,7 @@ const defaults: UIPrefs = {
   unreadBadge: true,
   themeDarkStart: '19:00',
   themeDarkEnd: '07:00',
-  bodyFont: 'default',
+  bodyFont: 'system',
   senderFonts: true,
   uiFont: 'default',
   monoFont: 'default',

@@ -609,7 +609,7 @@ func (a *App) GetUIPrefs() (UIPrefsDTO, error) {
 		UnreadBadge:                a.boolSetting(settingUnreadBadge, true),
 		ThemeDarkStart:             a.stringSetting(settingThemeDarkStart, "19:00"),
 		ThemeDarkEnd:               a.stringSetting(settingThemeDarkEnd, "07:00"),
-		BodyFont:                   a.stringSetting(settingBodyFont, "default"),
+		BodyFont:                   a.stringSetting(settingBodyFont, "system"),
 		UIFont:                     a.stringSetting(settingUIFont, "default"),
 		MonoFont:                   a.stringSetting(settingMonoFont, "default"),
 		SenderFonts:                a.senderFonts(),
