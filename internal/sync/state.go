@@ -93,20 +93,33 @@ func highestUID(servers []ServerMessage) uint32 {
 // loadServerView fetches the uid+flags of every message in the selected mailbox
 // and converts them to reconcile inputs. It also returns the color label encoded
 // in each message's keyword flags (uid -> color, 0 when none), so the caller can
-// adopt server-side color changes when color syncing is on.
-func loadServerView(client mailClient) ([]ServerMessage, map[uint32]int, error) {
+// adopt server-side color changes when color syncing is on. pins holds every
+// uid, true where the message carries the pin keyword.
+func loadServerView(client mailClient) ([]ServerMessage, map[uint32]int, map[uint32]bool, error) {
 	headers, err := client.FetchAllFlags()
 	if err != nil {
-		return nil, nil, fmt.Errorf("sync: load server view: %w", err)
+		return nil, nil, nil, fmt.Errorf("sync: load server view: %w", err)
 	}
 	servers := make([]ServerMessage, 0, len(headers))
 	colors := make(map[uint32]int, len(headers))
+	pins := make(map[uint32]bool, len(headers))
 	for _, h := range headers {
 		servers = append(servers, ServerMessage{
 			UID:   uint32(h.UID),
 			Flags: imapFlagsToStorage(h.Flags),
 		})
 		colors[uint32(h.UID)] = colorFromFlags(h.Flags)
+		pins[uint32(h.UID)] = hasKeyword(h.Flags, pinKeyword)
 	}
-	return servers, colors, nil
+	return servers, colors, pins, nil
+}
+
+// hasKeyword reports whether flags holds keyword, compared case-insensitively.
+func hasKeyword(flags []imap.Flag, keyword imap.Flag) bool {
+	for _, f := range flags {
+		if strings.EqualFold(string(f), string(keyword)) {
+			return true
+		}
+	}
+	return false
 }

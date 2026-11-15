@@ -245,10 +245,17 @@ func settleThread(ctx context.Context, ex execer, accountID int64, found []int64
 	return target, nil
 }
 
+// mergeThread folds one conversation into another. A mute on either side
+// carries over, and so does a note; two notes are joined into one.
 func mergeThread(ctx context.Context, ex execer, from, into int64) error {
 	for _, stmt := range []string{
 		`UPDATE messages SET thread_id = ? WHERE thread_id = ?`,
 		`UPDATE thread_keys SET thread_id = ? WHERE thread_id = ?`,
+		`UPDATE threads SET muted = 1 WHERE id = ?1 AND EXISTS (SELECT 1 FROM threads WHERE id = ?2 AND muted = 1)`,
+		`UPDATE notes SET body = body || char(10) || char(10) || (SELECT o.body FROM notes o WHERE o.thread_id = ?2 AND o.message_key = '')
+		 WHERE thread_id = ?1 AND message_key = '' AND EXISTS (SELECT 1 FROM notes o WHERE o.thread_id = ?2 AND o.message_key = '')`,
+		`DELETE FROM notes WHERE thread_id = ?2 AND message_key = '' AND EXISTS (SELECT 1 FROM notes o WHERE o.thread_id = ?1 AND o.message_key = '')`,
+		`UPDATE notes SET thread_id = ?1 WHERE thread_id = ?2 AND message_key = ''`,
 	} {
 		if _, err := ex.ExecContext(ctx, stmt, into, from); err != nil {
 			return fmt.Errorf("storage: merge thread %d into %d: %w", from, into, err)

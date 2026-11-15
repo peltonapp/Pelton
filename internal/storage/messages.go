@@ -86,6 +86,19 @@ type Message struct {
 	// assigned on insert; 0 means the row predates threading and the background
 	// backfill has not reached it yet.
 	ThreadID int64
+	// ListID is the raw List-Id header. It is read on insert to classify the
+	// message and is not stored.
+	ListID string
+	// MailKind is the split inbox classification worked out on insert, a mask
+	// of MailKindList and MailKindAutomated.
+	MailKind MailKind
+	// Pinned keeps the message at the top of the list.
+	Pinned bool
+	// Muted and HasNote are read, never written through this struct: Muted
+	// when the message's conversation is muted, HasNote when the message or
+	// its conversation carries a private note.
+	Muted   bool
+	HasNote bool
 }
 
 // MessageAuth is the stored Authentication-Results verdict for one message.
@@ -205,6 +218,7 @@ func insertMessage(ctx context.Context, ex execer, m *Message) (int64, error) {
 		return 0, err
 	}
 	m.ThreadID = assigned.threadID
+	m.MailKind = mailKindFor(m)
 	const query = `
 INSERT INTO messages (
     account_id, folder_id, uid, message_id, subject, from_address, from_name,
@@ -213,8 +227,9 @@ INSERT INTO messages (
     smime_status, smime_signer, smime_email, smime_issuer, smime_detail,
     smime_certs, smime_fingerprint,
     reply_to, auth_spf, auth_dkim, auth_dmarc, auth_spf_domain, auth_dkim_domain,
-    charset_guess, in_reply_to, [references], thread_id, thread_subject, thread_loose
-) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+    charset_guess, in_reply_to, [references], thread_id, thread_subject, thread_loose,
+    mail_kind, pinned
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
 	res, err := ex.ExecContext(ctx, query,
 		m.AccountID, m.FolderID, m.UID, m.MessageID, m.Subject, m.FromAddress,
 		m.FromName, m.ToAddresses, m.CcAddresses, formatTime(m.Date), uint8(m.Flags),
@@ -224,7 +239,8 @@ INSERT INTO messages (
 		orEmptyBlob(m.SMIME.Certs), m.SMIME.Fingerprint,
 		m.ReplyTo, m.Auth.SPF, m.Auth.DKIM, m.Auth.DMARC, m.Auth.SPFDomain, m.Auth.DKIMDomain,
 		m.CharsetGuess, encodeThreadingIDs(m.InReplyTo), encodeThreadingIDs(m.References),
-		assigned.threadID, assigned.subject, boolToInt(assigned.loose))
+		assigned.threadID, assigned.subject, boolToInt(assigned.loose),
+		int(m.MailKind), boolToInt(m.Pinned))
 	if err != nil {
 		return 0, fmt.Errorf("storage: insert message uid %d: %w", m.UID, err)
 	}
@@ -326,7 +342,13 @@ SELECT id, account_id, folder_id, uid, message_id, subject, from_address,
        snooze_hidden, offline, list_unsubscribe, list_unsubscribe_post,
        smime_status, smime_signer, smime_email, smime_issuer, smime_detail,
        smime_fingerprint, reply_to, auth_spf, auth_dkim, auth_dmarc, auth_spf_domain,
-       auth_dkim_domain, charset_guess, in_reply_to, [references], thread_id`
+       auth_dkim_domain, charset_guess, in_reply_to, [references], thread_id,
+       mail_kind, pinned,
+       EXISTS (SELECT 1 FROM threads t WHERE t.id = messages.thread_id AND t.muted = 1) AS muted,
+       (EXISTS (SELECT 1 FROM notes n WHERE n.account_id = messages.account_id AND n.message_key != ''
+                AND n.message_key = ` + noteKeyExpr + `)
+        OR EXISTS (SELECT 1 FROM notes n WHERE messages.thread_id != 0 AND n.thread_id = messages.thread_id
+                   AND n.message_key = '')) AS has_note`
 
 const selectMessageByID = selectMessageColumns + `
 FROM messages WHERE id = ?`
@@ -342,6 +364,10 @@ func scanMessage(row rowScanner) (*Message, error) {
 		unsubPost    int
 		inReplyTo    sql.NullString
 		references   sql.NullString
+		mailKind     int
+		pinned       int
+		muted        int
+		hasNote      int
 	)
 	if err := row.Scan(&m.ID, &m.AccountID, &m.FolderID, &m.UID, &m.MessageID,
 		&m.Subject, &m.FromAddress, &m.FromName, &m.ToAddresses, &m.CcAddresses,
@@ -351,9 +377,13 @@ func scanMessage(row rowScanner) (*Message, error) {
 		&m.SMIME.Status, &m.SMIME.Signer, &m.SMIME.Email, &m.SMIME.Issuer,
 		&m.SMIME.Detail, &m.SMIME.Fingerprint, &m.ReplyTo, &m.Auth.SPF, &m.Auth.DKIM, &m.Auth.DMARC,
 		&m.Auth.SPFDomain, &m.Auth.DKIMDomain, &m.CharsetGuess, &inReplyTo, &references,
-		&m.ThreadID); err != nil {
+		&m.ThreadID, &mailKind, &pinned, &muted, &hasNote); err != nil {
 		return nil, err
 	}
+	m.MailKind = MailKind(mailKind)
+	m.Pinned = pinned != 0
+	m.Muted = muted != 0
+	m.HasNote = hasNote != 0
 	t, err := parseTime(date)
 	if err != nil {
 		return nil, err

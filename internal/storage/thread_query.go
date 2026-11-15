@@ -185,6 +185,7 @@ FROM messages WHERE thread_id = ? AND pending_delete = 0 AND snooze_hidden = 0`
 // threadWhere is the flat list's filter without the one-copy rule.
 func threadWhere(q MessageQuery) (string, []any) {
 	q.OneCopy = false
+	q.byThread = true
 	return messageWhere(q)
 }
 
