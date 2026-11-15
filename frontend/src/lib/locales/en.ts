@@ -2089,6 +2089,7 @@ const en: Record<string, string> = {
   'preview.folder.projects': 'Projects',
   'preview.folder.invoices': 'Invoices',
   'preview.folder.travel': 'Travel',
+  'preview.selection.all': 'All {n} messages in the list are selected.',
 }
 
 export default en

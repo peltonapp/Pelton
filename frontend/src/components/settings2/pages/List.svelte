@@ -9,6 +9,8 @@
   import RowSkeleton from '../skeletons/RowSkeleton.svelte'
   import FlagSkeleton from '../skeletons/FlagSkeleton.svelte'
   import SwipeSkeleton from '../skeletons/SwipeSkeleton.svelte'
+  import SelectionPreview from '../skeletons/SelectionPreview.svelte'
+  import ThreadPreview from '../skeletons/ThreadPreview.svelte'
   import ToggleSwitch from '../../common/ToggleSwitch.svelte'
   import Select from '../../common/Select.svelte'
   import {
@@ -204,7 +206,7 @@
 
 <Card title={$t('list.card.conversations')}>
   <Row id="threaded-list" label={$t('list.threaded.label')} hint={$t('list.threaded.hint')}>
-    <ListPreview slot="preview" />
+    <ThreadPreview slot="preview" threaded={$prefs.threadedList} />
     <ToggleSwitch
       checked={$prefs.threadedList}
       label={$t('list.threaded.label')}
@@ -226,6 +228,7 @@
 
 <Card title={$t('list.card.selection')}>
   <Row id="multi-select" label={$t('settingsPanel.toggle.multiSelect')} hint={$t('settingsPanel.hint.multiSelect')}>
+    <SelectionPreview slot="preview" enabled={$prefs.multiSelectEnabled} showCount={$prefs.showSelectedCount} />
     <ToggleSwitch
       checked={$prefs.multiSelectEnabled}
       label={$t('settingsPanel.toggle.multiSelect')}
@@ -233,6 +236,7 @@
     />
   </Row>
   <Row id="selected-count" label={$t('settingsPanel.toggle.showSelectedCount')} disabled={!multi}>
+    <SelectionPreview slot="preview" showCount={$prefs.showSelectedCount} />
     <ToggleSwitch
       checked={$prefs.showSelectedCount}
       disabled={!multi}
@@ -241,6 +245,7 @@
     />
   </Row>
   <Row id="select-all-scope" label={$t('settingsPanel.label.selectAllScope')} hint={$t('settingsPanel.hint.selectAllScope')} disabled={!multi}>
+    <SelectionPreview slot="preview" showCount scope={$prefs.selectAllScope as 'offer' | 'all' | 'loaded'} />
     <Select
       value={$prefs.selectAllScope}
       disabled={!multi}
