@@ -50,6 +50,9 @@
   let loadedId = -1
   $: if ($visibleMessageId !== null && $visibleMessageId !== loadedId) {
     loadedId = $visibleMessageId
+    // a modal left open belongs to the message that is going away
+    infoOpen = false
+    sourceOpen = false
     void loadMessage($visibleMessageId)
   }
   $: if ($visibleMessageId === null && loadedId !== -1) {
@@ -100,7 +103,9 @@
   $: if ($messageDetail.data && currentVerdictMessage() !== $messageDetail.data.id) {
     resetVerdicts($messageDetail.data.id)
   }
-  $: if (canScan && $messageDetail.data && $messageDetail.data.id !== autoScannedId) {
+  // a scan still running for the previous message holds the next one back
+  // until it ends, which re-runs this block, instead of skipping it.
+  $: if (canScan && !$scanning && $messageDetail.data && $messageDetail.data.id !== autoScannedId) {
     autoScannedId = $messageDetail.data.id
     if ($virusTotal.autoScanLinks || $virusTotal.autoScanAttachments) {
       void runScan($messageDetail.data.id, $virusTotal.autoScanLinks, $virusTotal.autoScanAttachments)
@@ -132,11 +137,15 @@
 
   async function toggleFlag(detail: MessageDetail): Promise<void> {
     const next = !detail.flagged
-    messageDetail.update((s) => (s.data ? { ...s, data: { ...s.data, flagged: next } } : s))
-    patchInList(detail.id, { flagged: next })
+    const apply = (flagged: boolean) => {
+      messageDetail.update((s) => (s.data?.id === detail.id ? { ...s, data: { ...s.data, flagged } } : s))
+      patchInList(detail.id, { flagged })
+    }
+    apply(next)
     try {
       await setFlagged(detail.id, next)
     } catch (err) {
+      apply(!next)
       toastError(errorMessage(err))
     }
   }
@@ -181,8 +190,13 @@
 
   // print builds a clean, self-contained document from the already-sanitized
   // body and opens the system print dialog via a hidden iframe (WKWebView and
-  // WebView2 both route window.print() to the native dialog). using the
-  // sanitized body keeps remote/script content out of the printed page.
+  // WebView2 both route window.print() to the native dialog).
+  //
+  // The page carries the reading pane's content security policy, and the frame
+  // is sandboxed without scripts. Without them, anything the sanitizer lets
+  // through (a css background url, which it keeps on purpose and leaves to the
+  // policy) loaded here even with remote content blocked, inside the app's own
+  // document rather than the reading pane's sandbox.
   function escapeHtml(s: string): string {
     return s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c] ?? c)
   }
@@ -193,7 +207,9 @@
     const bodyHtml = detail.isHtml
       ? detail.bodyHtmlSafe
       : `<pre style="white-space:pre-wrap;font:14px/1.5 ui-monospace,monospace">${escapeHtml(detail.bodyPlain)}</pre>`
-    const doc = `<!doctype html><html><head><meta charset="utf-8"><title>${escapeHtml(detail.subject || noSubject)}</title>
+    const remote = detail.remoteAllowed ? 'data: https: http:' : 'data:'
+    const csp = `default-src 'none'; img-src ${remote}; media-src ${remote}; style-src 'unsafe-inline'; font-src data:; script-src 'none'; form-action 'none'; base-uri 'none'`
+    const doc = `<!doctype html><html><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="${csp}"><title>${escapeHtml(detail.subject || noSubject)}</title>
 <style>
   body{font:14px/1.6 system-ui,sans-serif;color:#111;margin:24px}
   .hdr{border-bottom:1px solid #ccc;padding-bottom:12px;margin-bottom:16px}
@@ -218,28 +234,26 @@ ${bodyHtml}
     frame.style.width = '0'
     frame.style.height = '0'
     frame.style.border = '0'
-    document.body.appendChild(frame)
-    const win = frame.contentWindow
-    const idoc = frame.contentDocument || win?.document
-    if (!win || !idoc) {
-      document.body.removeChild(frame)
-      toastError(get(t)('detail.print.dialogFailed'))
-      return
-    }
-    idoc.open()
-    idoc.write(doc)
-    idoc.close()
+    // same origin so this document can call print on it; no allow-scripts, so
+    // nothing in the message runs. allow-modals is what lets a sandboxed frame
+    // open the print dialog.
+    frame.setAttribute('sandbox', 'allow-same-origin allow-modals')
     // give the iframe a tick to lay out before printing, then clean up after.
-    const run = (): void => {
-      win.focus()
-      win.print()
-      setTimeout(() => frame.remove(), 1000)
+    frame.onload = () => {
+      const win = frame.contentWindow
+      if (!win) {
+        frame.remove()
+        toastError(get(t)('detail.print.dialogFailed'))
+        return
+      }
+      setTimeout(() => {
+        win.focus()
+        win.print()
+        setTimeout(() => frame.remove(), 1000)
+      }, 50)
     }
-    if (idoc.readyState === 'complete') {
-      setTimeout(run, 50)
-    } else {
-      frame.onload = run
-    }
+    frame.srcdoc = doc
+    document.body.appendChild(frame)
   }
 </script>
 

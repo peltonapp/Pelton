@@ -7,16 +7,18 @@
 // preference in (usually $prefs.timeFormat) so views re-render when it changes.
 export type TimeFormat = 'auto' | '12' | '24'
 
-// hour12Of maps the preference onto Intl's hour12 option; undefined lets the
-// locale decide.
-function hour12Of(timeFormat: TimeFormat): boolean | undefined {
+// clockOf maps the preference onto Intl's clock options; an empty object lets
+// the locale decide. The 24 hour clock is asked for as the h23 cycle rather
+// than hour12:false, which some locales turn into h24 and show midnight as
+// "24:05".
+function clockOf(timeFormat: TimeFormat): Intl.DateTimeFormatOptions {
   if (timeFormat === '12') {
-    return true
+    return { hour12: true }
   }
   if (timeFormat === '24') {
-    return false
+    return { hourCycle: 'h23' }
   }
-  return undefined
+  return {}
 }
 
 // formatListDate renders a date compactly for the message list: time for today,
@@ -33,7 +35,7 @@ export function formatListDate(iso: string, timeFormat: TimeFormat = 'auto'): st
   const now = new Date()
   const sameDay = date.toDateString() === now.toDateString()
   if (sameDay) {
-    return date.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit', hour12: hour12Of(timeFormat) })
+    return date.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit', ...clockOf(timeFormat) })
   }
 
   const weekMs = 7 * 24 * 60 * 60 * 1000
@@ -53,7 +55,7 @@ export function formatListDate(iso: string, timeFormat: TimeFormat = 'auto'): st
 // the time, in the user's clock preference.
 export function formatStatusClock(date: Date, timeFormat: TimeFormat = 'auto'): string {
   const day = date.toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short' })
-  const time = date.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit', hour12: hour12Of(timeFormat) })
+  const time = date.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit', ...clockOf(timeFormat) })
   return `${day} ${time}`
 }
 
@@ -73,7 +75,7 @@ export function formatFullDate(iso: string, timeFormat: TimeFormat = 'auto'): st
     year: 'numeric',
     hour: '2-digit',
     minute: '2-digit',
-    hour12: hour12Of(timeFormat),
+    ...clockOf(timeFormat),
   })
 }
 
@@ -84,7 +86,7 @@ export function formatWeekdayTime(date: Date, timeFormat: TimeFormat = 'auto'): 
     weekday: 'short',
     hour: 'numeric',
     minute: '2-digit',
-    hour12: hour12Of(timeFormat),
+    ...clockOf(timeFormat),
   })
 }
 
@@ -97,7 +99,7 @@ export function formatDateTimeMedium(date: Date, withTime: boolean, timeFormat: 
   return new Intl.DateTimeFormat(undefined, {
     dateStyle: 'medium',
     timeStyle: 'short',
-    hour12: hour12Of(timeFormat),
+    ...clockOf(timeFormat),
   }).format(date)
 }
 
@@ -140,10 +142,19 @@ export function formatBytes(bytes: number): string {
     return '0 B'
   }
   const units = ['B', 'KB', 'MB', 'GB']
-  const exp = Math.min(Math.floor(Math.log(bytes) / Math.log(1024)), units.length - 1)
-  const value = bytes / Math.pow(1024, exp)
-  const rounded = exp === 0 ? value : Math.round(value * 10) / 10
+  let exp = Math.min(Math.max(0, Math.floor(Math.log(bytes) / Math.log(1024))), units.length - 1)
+  let rounded = round(bytes / Math.pow(1024, exp), exp)
+  // just under a unit rounds up to 1024 of the smaller one, which reads as a
+  // typo; say 1 of the next unit instead.
+  if (rounded >= 1024 && exp < units.length - 1) {
+    exp++
+    rounded = round(bytes / Math.pow(1024, exp), exp)
+  }
   return `${rounded} ${units[exp]}`
+}
+
+function round(value: number, exp: number): number {
+  return exp === 0 ? Math.round(value) : Math.round(value * 10) / 10
 }
 
 // formatRelative renders an epoch-ms timestamp as a short relative time for the

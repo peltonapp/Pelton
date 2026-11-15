@@ -76,6 +76,7 @@ const defaults: UIPrefs = {
   menuBarInApp: false,
   menuBarNativeMinimal: false,
   menuBarIcons: false,
+  windowMaterial: false,
   timeFormat: 'auto',
   reduceMotion: false,
   handCursor: false,
@@ -92,6 +93,7 @@ const defaults: UIPrefs = {
   statusClock: true,
   statusUnread: true,
   markReadOnOpen: true,
+  openOnArrow: false,
   signatureAboveQuote: false,
   closeAction: 'background',
   startHidden: false,
@@ -462,6 +464,13 @@ export function setThemeDarkTimes(start: string, end: string): void {
 // setMenuBarInApp shows the in-app menu bar on macOS. setMenuBarNativeMinimal
 // reduces the native macOS menu to the app menu while the in-app bar is on;
 // the backend rebuilds the native menu when either setting is written.
+// setWindowMaterial stores the native window material preference (Liquid
+// Glass on macOS, Mica on Windows). The window takes it at the next launch.
+export function setWindowMaterial(value: boolean): void {
+  prefs.update((p) => ({ ...p, windowMaterial: value }))
+  void setSetting(SettingKeys.windowMaterial, String(value))
+}
+
 export function setMenuBarInApp(value: boolean): void {
   prefs.update((p) => ({ ...p, menuBarInApp: value }))
   void setSetting(SettingKeys.menuBarInApp, String(value))
@@ -551,6 +560,12 @@ export function setStatusUnread(value: boolean): void {
 export function setMarkReadOnOpen(value: boolean): void {
   prefs.update((p) => ({ ...p, markReadOnOpen: value }))
   void setSetting(SettingKeys.markReadOnOpen, String(value))
+}
+
+// setOpenOnArrow picks whether the arrow keys open the row they move to.
+export function setOpenOnArrow(value: boolean): void {
+  prefs.update((p) => ({ ...p, openOnArrow: value }))
+  void setSetting(SettingKeys.openOnArrow, String(value))
 }
 
 // setSignatureAboveQuote picks whether a reply's footer goes above the quote.

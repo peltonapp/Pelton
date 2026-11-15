@@ -192,6 +192,7 @@ func TestTransmitAppendsACopyToSent(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Transmit: %v", err)
 	}
+	app.sentCopies.Wait()
 
 	if len(client.appended) != 1 {
 		t.Fatalf("appended %d messages to Sent, want 1", len(client.appended))
@@ -253,6 +254,7 @@ func TestTransmitReplyPreservesQueuedBytesInSent(t *testing.T) {
 	if err := transmitter.Transmit(ctx, queued); err != nil {
 		t.Fatalf("Transmit: %v", err)
 	}
+	app.sentCopies.Wait()
 	var data []byte
 	select {
 	case data = <-captured:
@@ -309,5 +311,50 @@ func TestTransmitSucceedsWhenTheSentCopyFails(t *testing.T) {
 	})
 	if err != nil {
 		t.Errorf("Transmit reported failure for a message that was sent: %v", err)
+	}
+	app.sentCopies.Wait()
+}
+
+// A sync can hold the imap lock for a long time. The copy to Sent waits for it,
+// but the send must not: the message is delivered, and the outbox has to be
+// free to mark it sent and move on to the next one.
+func TestTransmitDoesNotWaitForTheSentCopy(t *testing.T) {
+	client := &fakeIMAP{}
+	app, account := sendingAccount(t, client)
+
+	syncMu.Lock()
+	locked := true
+	defer func() {
+		if locked {
+			syncMu.Unlock()
+		}
+	}()
+
+	done := make(chan error, 1)
+	go func() {
+		done <- (&accountTransmitter{app: app}).Transmit(context.Background(), outbox.Message{
+			AccountID:    account.ID,
+			EnvelopeFrom: "me@example.com",
+			Recipients:   []string{"you@example.com"},
+			Raw:          []byte("Subject: hi\r\n\r\nbody\r\n"),
+		})
+	}()
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Fatalf("Transmit: %v", err)
+		}
+	case <-time.After(10 * time.Second):
+		t.Fatal("Transmit waited for the imap lock held by a sync")
+	}
+	if len(client.appended) != 0 {
+		t.Fatal("the copy to Sent ran while a sync held the imap lock")
+	}
+
+	syncMu.Unlock()
+	locked = false
+	app.sentCopies.Wait()
+	if len(client.appended) != 1 {
+		t.Fatalf("appended %d messages to Sent once the lock was free, want 1", len(client.appended))
 	}
 }

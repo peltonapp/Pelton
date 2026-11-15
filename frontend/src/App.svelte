@@ -63,8 +63,12 @@
     openCrashReport,
     titleBarDoubleClick,
     setUnreadBadge,
+    quitApp,
+    hideApp,
+    isFullscreen,
+    toggleFullscreen as toggleWindowFullscreen,
   } from './lib/api'
-  import { BrowserOpenURL } from '../wailsjs/runtime/runtime'
+  import { openURL } from './lib/browser'
   import { liabilityAccepted } from './lib/liability'
   import { setDemoActive } from './lib/demo'
   import { recordArchived } from './stores/undoarchive'
@@ -72,7 +76,6 @@
   import { loadViews, editingView, closeViewEditor, openViewEditor, views as savedViews } from './stores/views'
   import { selectSavedView } from './stores/selection'
   import { isMac } from './lib/i18n'
-  import { Quit, Hide, WindowIsFullscreen, WindowFullscreen, WindowUnfullscreen } from '../wailsjs/runtime/runtime'
   import { matchShortcut, comboHasModifier, isFunctionKeyCombo, type ShortcutAction } from './lib/shortcuts'
   import { cyclePane, focusPane as focusPaneArea } from './lib/panes'
   import { bindings, recording, initShortcuts } from './stores/shortcuts'
@@ -153,6 +156,7 @@
   } from './stores/palette'
   import AccountPasswordDialog from './components/settings/AccountPasswordDialog.svelte'
   import DevOverlays from './components/dev/DevOverlays.svelte'
+  import peltonLogo from './assets/images/icons/pelton-logo.png'
   import {
     passwordPrompt,
     answerPasswordPrompt,
@@ -226,7 +230,7 @@
     if (!isMac) {
       return
     }
-    fullscreen = await WindowIsFullscreen().catch(() => false)
+    fullscreen = await isFullscreen().catch(() => false)
   }
 
   // the native Mail menu's message actions are only usable while a message is
@@ -720,7 +724,7 @@
             break
           }
           if (detail.unsubscribe.kind === 'link') {
-            BrowserOpenURL(detail.unsubscribe.target)
+            openURL(detail.unsubscribe.target)
             break
           }
           await unsubscribeMessage(msg.id)
@@ -868,15 +872,15 @@
         void toggleFullscreen()
         break
       case 'hide-window':
-        // Hide, not WindowHide: on macOS ordering the window out strands it,
-        // because wails has no reopen handler for the dock icon to trigger.
-        Hide()
+        // the app, not just the window: on macOS ordering the window out
+        // strands it, and an app hidden whole comes back from the dock icon.
+        hideApp()
         break
       case 'close-window':
         closeFrontmost()
         break
       case 'quit':
-        Quit()
+        quitApp()
         break
       case 'command-palette':
         togglePalette()
@@ -1165,11 +1169,7 @@
   }
 
   async function toggleFullscreen(): Promise<void> {
-    if (await WindowIsFullscreen()) {
-      WindowUnfullscreen()
-    } else {
-      WindowFullscreen()
-    }
+    await toggleWindowFullscreen()
   }
 
   function handleMenu(action: string): void {
@@ -1519,7 +1519,11 @@
     style="--wails-draggable:drag"
     aria-hidden="true"
     on:dblclick={titleBarDoubleClick}
-  ></div>
+  >
+    <!-- the app mark sits where a native title bar would put the title, just
+         past the traffic lights -->
+    <img class="titlebar-logo" src={peltonLogo} alt="" draggable="false" />
+  </div>
 {/if}
 
 <div class="shell" class:with-topbar={showMenuBar || macTitlebar}>
@@ -1665,6 +1669,18 @@
     inset: 0 0 auto 0;
     height: var(--titlebar-lights);
     z-index: 700;
+  }
+
+  .titlebar-logo {
+    position: absolute;
+    left: var(--titlebar-inset);
+    top: 50%;
+    height: calc(16px / var(--ui-scale, 1));
+    width: auto;
+    transform: translateY(calc(-50% - var(--titlebar-nudge)));
+    opacity: 0.85;
+    pointer-events: none;
+    user-select: none;
   }
 
   /* the two zero-width tracks hold the resizer handles, which overhang via

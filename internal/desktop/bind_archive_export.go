@@ -4,8 +4,6 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/wailsapp/wails/v2/pkg/runtime"
-
 	"github.com/peltonapp/Pelton/internal/mailexport"
 )
 
@@ -26,7 +24,7 @@ func (a *App) ChooseArchiveExportFolder() (string, error) {
 	if err := a.ready(); err != nil {
 		return "", err
 	}
-	return runtime.OpenDirectoryDialog(a.ctx, runtime.OpenDialogOptions{
+	return a.openDirectoryDialog(openDialogOptions{
 		Title: "Choose where archived mail is saved",
 	})
 }

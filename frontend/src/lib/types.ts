@@ -542,6 +542,9 @@ export interface UIPrefs {
   menuBarInApp: boolean
   menuBarNativeMinimal: boolean
   menuBarIcons: boolean
+  // windowMaterial puts the window over a native material (Liquid Glass on
+  // macOS, Mica on Windows) from the next launch on.
+  windowMaterial: boolean
   // timeFormat picks the clock for rendered times: auto (locale), 12, or 24.
   timeFormat: string
   // reduceMotion disables ui transitions and animations.
@@ -581,6 +584,8 @@ export interface UIPrefs {
   statusUnread: boolean
   // markReadOnOpen marks a message read when it is opened (#517).
   markReadOnOpen: boolean
+  // openOnArrow opens the row the arrow keys move to, instead of waiting for Enter.
+  openOnArrow: boolean
   // signatureAboveQuote puts a reply's footer above the quoted original (#512).
   signatureAboveQuote: boolean
   // closeAction is what the window's close button does: 'background' keeps
@@ -998,7 +1003,7 @@ export type FolderRole =
   | 'normal'
 
 // unified view keys mirror the backend view constants.
-export type ViewKey = 'inbox' | 'flagged' | 'sent' | 'drafts' | 'archive' | 'junk' | 'trash'
+export type ViewKey = 'inbox' | 'unread' | 'flagged' | 'sent' | 'drafts' | 'archive' | 'junk' | 'trash'
 
 // pgp status mirrors mailview.PGPStatus.
 export type PGPStatus = 'none' | 'signed' | 'encrypted'

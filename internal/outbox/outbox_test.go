@@ -271,6 +271,68 @@ func TestRequeueStuckRecoversSendingRows(t *testing.T) {
 	}
 }
 
+// blockingTransmitter hangs on one account's mail until released and sends
+// everything else at once.
+type blockingTransmitter struct {
+	hang    int64
+	release chan struct{}
+	sent    chan int64
+}
+
+func (b *blockingTransmitter) Transmit(ctx context.Context, m Message) error {
+	if m.AccountID == b.hang {
+		<-b.release
+	}
+	b.sent <- m.ID
+	return nil
+}
+
+// A server that hangs must only hold up the mail going out through it, not
+// the mail of every other account queued behind it.
+func TestAStuckAccountDoesNotHoldUpTheOthers(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	q, slowAccount := newTestQueue(t)
+	fastAccount, err := q.db.CreateAccount(ctx, &storage.Account{Email: "other@example.com"})
+	if err != nil {
+		t.Fatalf("create account: %v", err)
+	}
+
+	slow1, _ := q.Enqueue(ctx, sampleMessage(slowAccount))
+	slow2, _ := q.Enqueue(ctx, sampleMessage(slowAccount))
+	fast, _ := q.Enqueue(ctx, sampleMessage(fastAccount))
+
+	tx := &blockingTransmitter{hang: slowAccount, release: make(chan struct{}), sent: make(chan int64, 3)}
+	worker := NewWorker(q, tx, WithInterval(20*time.Millisecond))
+	go func() { _ = worker.Run(ctx) }()
+
+	select {
+	case id := <-tx.sent:
+		if id != fast {
+			t.Fatalf("first message sent = %d, want the other account's %d", id, fast)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("the other account's message waited behind the stuck one")
+	}
+	if got := findByID(t, q, slow2); got.State != StateQueued {
+		t.Fatalf("the stuck account's second message is %q, want it still queued behind the first", got.State)
+	}
+
+	close(tx.release)
+	var order []int64
+	for len(order) < 2 {
+		select {
+		case id := <-tx.sent:
+			order = append(order, id)
+		case <-time.After(5 * time.Second):
+			t.Fatalf("stuck account sent %v after release, want both messages", order)
+		}
+	}
+	if order[0] != slow1 || order[1] != slow2 {
+		t.Fatalf("stuck account sent %v, want %d then %d in queue order", order, slow1, slow2)
+	}
+}
+
 func TestBackoffIsCappedAndExponential(t *testing.T) {
 	if backoff(1) != baseBackoff {
 		t.Fatalf("backoff(1) = %v, want %v", backoff(1), baseBackoff)

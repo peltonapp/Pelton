@@ -3,93 +3,95 @@
 package desktop
 
 import (
-	"runtime"
-	"sync/atomic"
+	"sync"
 
-	"github.com/energye/systray"
+	"github.com/wailsapp/wails/v3/pkg/application"
 )
 
-// The notification-area icon is served by systray, whose Windows backend is
-// plain win32 syscalls: no cgo, no network.
+// The notification-area icon is the Wails system tray (#568).
 
-// trayUp is set once systray's loop is running; systray calls made before
-// that have no icon to act on. trayDotted, the icon with the unread dot, is
-// written once before it and only read after it. It stays nil if the icon
-// could not be drawn on, and the tooltip alone then carries the count.
+// trayMu guards tray, the icon once it exists, and trayDotted, the icon with
+// the unread dot. trayDotted stays nil if the icon could not be drawn on, and
+// the tooltip alone then carries the count.
 var (
-	trayUp     atomic.Bool
+	trayMu     sync.Mutex
+	tray       *application.SystemTray
 	trayDotted []byte
 )
 
-// startTray brings up the tray icon on its own OS thread. systray.Run blocks
-// inside its message loop, so it runs in a goroutine for the app's lifetime;
-// stopTray ends it at shutdown.
+// startTray brings up the tray icon. Left click reopens the window; right
+// click shows the menu, which the tray does on its own once it has one.
 func (a *App) startTray() {
-	goSafe("the notification area icon", func() {
-		// win32 delivers a window's messages only to the thread that created
-		// it, so the goroutine must not move off that thread mid-loop.
-		runtime.LockOSThread()
-		systray.Run(a.trayReady, nil)
-	})
-}
-
-// stopTray removes the tray icon. Safe to call even if the tray never came up.
-func (a *App) stopTray() {
-	systray.Quit()
-}
-
-// trayReady builds the icon and menu once systray's loop is up.
-func (a *App) trayReady() {
-	if len(a.trayIcon) > 0 {
-		systray.SetIcon(a.trayIcon)
+	if a.wapp == nil {
+		return
 	}
-	systray.SetTooltip("Pelton")
-
+	menu := application.NewMenu()
 	for _, item := range a.trayMenuItems(a.showWindow) {
 		if item.action == nil {
-			systray.AddSeparator()
+			menu.AddSeparator()
 			continue
 		}
-		systray.AddMenuItem(item.label, "").Click(item.action)
+		action := item.action
+		menu.Add(item.label).OnClick(func(*application.Context) { action() })
 	}
 
-	// left click reopens the window; the menu only shows on right click.
-	systray.SetOnClick(func(systray.IMenu) {
-		a.showWindow()
-	})
-	systray.SetOnRClick(func(m systray.IMenu) {
-		_ = m.ShowMenu()
-	})
+	t := a.wapp.SystemTray.New()
+	if len(a.trayIcon) > 0 {
+		t.SetIcon(a.trayIcon)
+	}
+	t.SetTooltip("Pelton")
+	t.SetMenu(menu)
+	t.OnClick(a.showWindow)
 
+	var dotted []byte
 	if len(a.trayIcon) > 0 {
 		var err error
-		if trayDotted, err = dottedICO(a.trayIcon); err != nil {
+		if dotted, err = dottedICO(a.trayIcon); err != nil {
 			a.log.Error("tray icon: draw the unread dot", "err", err)
 		}
 	}
-	trayUp.Store(true)
-	// the frontend may have reported a count before the loop was up.
+
+	trayMu.Lock()
+	tray, trayDotted = t, dotted
+	trayMu.Unlock()
+	// the frontend may have reported a count before the tray was up.
 	a.applyUnreadBadge()
+}
+
+// stopTray removes the tray icon. Safe to call even if the tray never came up;
+// Wails also removes it when the app quits.
+func (a *App) stopTray() {
+	trayMu.Lock()
+	t := tray
+	tray = nil
+	trayMu.Unlock()
+	if t != nil {
+		t.Destroy()
+	}
 }
 
 // setPlatformBadge shows the unread dot on the tray icon, with the count in
 // its tooltip. Zero clears both.
 func (a *App) setPlatformBadge(count int) {
-	if !trayUp.Load() {
+	trayMu.Lock()
+	t, dotted := tray, trayDotted
+	trayMu.Unlock()
+	if t == nil {
 		return
 	}
 	icon := a.trayIcon
-	if count > 0 && trayDotted != nil {
-		icon = trayDotted
+	if count > 0 && dotted != nil {
+		icon = dotted
 	}
 	if len(icon) > 0 {
-		systray.SetIcon(icon)
+		t.SetIcon(icon)
+		t.SetDarkModeIcon(icon)
 	}
 	tip := "Pelton"
 	if count > 0 {
 		tip += "\n" + trayUnreadText(a, count)
 	}
-	systray.SetTooltip(tip)
+	t.SetTooltip(tip)
 }
 
 // dottedICO is the icon with the unread dot on every frame.

@@ -58,22 +58,31 @@ VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
 
 // ClaimDueOutbox atomically picks the oldest message in queuedState whose
 // next_attempt_at has passed, flips it to sendingState, and returns it. It
-// returns (nil, nil) when nothing is due. The select and update run in one
-// transaction so two workers cannot claim the same row.
-func (d *DB) ClaimDueOutbox(ctx context.Context, queuedState, sendingState string, now time.Time) (*OutboxRow, error) {
+// returns (nil, nil) when nothing is due. Messages of the accounts in skip are
+// passed over, so one account can send while another is still busy. The select
+// and update run in one transaction so two workers cannot claim the same row.
+func (d *DB) ClaimDueOutbox(ctx context.Context, queuedState, sendingState string, now time.Time, skip []int64) (*OutboxRow, error) {
 	tx, err := d.sql.BeginTx(ctx, nil)
 	if err != nil {
 		return nil, fmt.Errorf("storage: begin claim outbox: %w", err)
 	}
 	defer tx.Rollback()
 
-	const selectDue = `
+	args := []any{queuedState, formatTime(now)}
+	exclude := ""
+	if len(skip) > 0 {
+		exclude = " AND account_id NOT IN (?" + strings.Repeat(", ?", len(skip)-1) + ")"
+		for _, id := range skip {
+			args = append(args, id)
+		}
+	}
+	selectDue := `
 SELECT id, account_id, envelope_from, recipients, raw_message, state, attempts, last_error, next_attempt_at, created_at
 FROM outbox
-WHERE state = ? AND next_attempt_at <= ?
+WHERE state = ? AND next_attempt_at <= ?` + exclude + `
 ORDER BY id
 LIMIT 1`
-	row, err := scanOutbox(tx.QueryRowContext(ctx, selectDue, queuedState, formatTime(now)))
+	row, err := scanOutbox(tx.QueryRowContext(ctx, selectDue, args...))
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, nil
 	}

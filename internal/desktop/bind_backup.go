@@ -10,7 +10,6 @@ import (
 
 	"github.com/peltonapp/Pelton/internal/credentials"
 	"github.com/peltonapp/Pelton/internal/storage"
-	"github.com/wailsapp/wails/v2/pkg/runtime"
 )
 
 // Backup import/export lets a user move their configuration between installs
@@ -144,7 +143,7 @@ func (a *App) ExportData(categories []string, credentialPassword string) (string
 		doc.Signatures = signatures
 	}
 
-	dest, err := runtime.SaveFileDialog(a.ctx, runtime.SaveDialogOptions{
+	dest, err := a.saveFileDialog(saveDialogOptions{
 		DefaultFilename: fmt.Sprintf("pelton-backup-%s.json", time.Now().Format("2006-01-02")),
 		Title:           "Export Pelton data",
 	})
@@ -277,9 +276,9 @@ func (a *App) InspectBackupFile() (BackupInfoDTO, error) {
 	if err := a.ready(); err != nil {
 		return BackupInfoDTO{}, err
 	}
-	path, err := runtime.OpenFileDialog(a.ctx, runtime.OpenDialogOptions{
+	path, err := a.openFileDialog(openDialogOptions{
 		Title:   "Import Pelton data",
-		Filters: []runtime.FileFilter{{DisplayName: "Pelton backup (*.json)", Pattern: "*.json"}},
+		Filters: []fileFilter{{DisplayName: "Pelton backup (*.json)", Pattern: "*.json"}},
 	})
 	if err != nil {
 		return BackupInfoDTO{}, err

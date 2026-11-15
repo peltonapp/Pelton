@@ -9,7 +9,7 @@
   // asks the backend to re-render with remote content allowed.
   import { onDestroy, tick } from 'svelte'
   import { get } from 'svelte/store'
-  import { BrowserOpenURL } from '../../../wailsjs/runtime/runtime'
+  import { openURL } from '../../lib/browser'
   import { IconPhoto, IconUserCheck, IconWorldCheck, IconMailCheck, IconShieldSearch, IconChevronDown, IconEyeOff } from '@tabler/icons-svelte'
   import { prefs } from '../../stores/prefs'
   import { getMessageHtml, trustSenderImages, allowDomainImages, allowRemoteForMessage, scanUrl } from '../../lib/api'
@@ -38,6 +38,9 @@
     lastId = detail.id
     remoteLoaded = detail.remoteAllowed
     frameHeight = 320
+    pixelsBlocked = false
+    pixelMenu = null
+    pixelDetails = false
   }
 
   $: senderLabel = displayName(detail.fromName, detail.fromAddress)
@@ -167,7 +170,17 @@
     return crypto.randomUUID().replace(/-/g, '')
   }
 
-  $: srcdoc = buildSrcdoc(detail.bodyHtmlSafe, remoteLoaded, $prefs.messageFontSize, $prefs.bodyFont, makeNonce(), canScan)
+  // one nonce per message: drawing a fresh one on every update made the
+  // document a new string each time, and the frame reloaded when a flag was
+  // toggled or the pane re-rendered for any other reason.
+  let nonce = makeNonce()
+  let nonceFor = -1
+  $: if (detail.id !== nonceFor) {
+    nonceFor = detail.id
+    nonce = makeNonce()
+  }
+
+  $: srcdoc = buildSrcdoc(detail.bodyHtmlSafe, remoteLoaded, $prefs.messageFontSize, $prefs.bodyFont, nonce, canScan)
 
   // plain-text bodies render in a <pre>, not the sandboxed iframe, so bare
   // urls need their own linkification: nothing upstream turns them into real
@@ -318,7 +331,7 @@
     }
     const href = data?.peltonOpenUrl
     if (typeof href === 'string' && /^(https?:|mailto:)/i.test(href)) {
-      BrowserOpenURL(href)
+      openURL(href)
       return
     }
     const link = data?.peltonContextLink
@@ -464,8 +477,13 @@
 
   async function loadRemote(includeTrackers = false): Promise<void> {
     try {
-      const html = await getMessageHtml(detail.id, true, includeTrackers)
-      setBodyHtml(html)
+      const id = detail.id
+      const html = await getMessageHtml(id, true, includeTrackers)
+      setBodyHtml(id, html)
+      // the reader may have moved on while the html was fetched
+      if (detail.id !== id) {
+        return
+      }
       remoteLoaded = true
       pixelsBlocked = !includeTrackers && trackers.length > 0
       pixelMenu = null
@@ -637,7 +655,7 @@
   <pre dir="auto" class="body-plain mono selectable" style={`font-size:${$prefs.messageFontSize}px`}>{#each plainSegments as segment}{#if segment.href}<a
         class="plain-link"
         href={segment.href}
-        on:click|preventDefault={() => BrowserOpenURL(segment.href ?? '')}
+        on:click|preventDefault={() => openURL(segment.href ?? '')}
         on:contextmenu={(e) => onPlainContext(e, segment.href ?? '')}
         on:mouseenter={() => showHover(segment.href ?? '')}
         on:mouseleave={() => showHover('')}

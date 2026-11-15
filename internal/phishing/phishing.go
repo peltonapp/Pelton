@@ -150,6 +150,15 @@ var shorteners = map[string]bool{
 	"lnkd.in": true, "t.ly": true, "s.id": true, "short.io": true,
 }
 
+// shortenerOwners are the shorteners above that belong to one company, which
+// shortens only its own links with them. LinkedIn's mail is full of lnkd.in,
+// and from LinkedIn that hides nothing.
+var shortenerOwners = map[string][]string{
+	"lnkd.in": {"linkedin.com"},
+	"t.co":    {"twitter.com", "x.com"},
+	"goo.gl":  {"google.com"},
+}
+
 // credentialPath matches the paths a sign-in page lives at. On the sender's own
 // domain that is unremarkable, which is why the check also asks whose domain it
 // is.
@@ -166,9 +175,26 @@ func Analyse(msg Message) Report {
 		return Report{Level: LevelNone}
 	}
 
+	// the same finding about the same site counts once, however many links
+	// repeat it. A newsletter with twenty links through one shortener says one
+	// thing twenty times, and counting each added up to a warning about a
+	// message with nothing wrong with it.
+	counted := make(map[string]bool)
 	seen := make(map[string]bool)
 	var strongs, mediums, weaks int
 	for _, s := range signals {
+		if s.Target != "" && !seen[s.Target] {
+			seen[s.Target] = true
+			report.Links = append(report.Links, s.Target)
+		}
+		key := string(s.Kind) + "|" + s.Detail
+		if host := hostOf(s.Target); host != "" {
+			key = string(s.Kind) + "|" + registrable(host)
+		}
+		if counted[key] {
+			continue
+		}
+		counted[key] = true
 		switch s.weight {
 		case strong:
 			strongs++
@@ -176,10 +202,6 @@ func Analyse(msg Message) Report {
 			mediums++
 		default:
 			weaks++
-		}
-		if s.Target != "" && !seen[s.Target] {
-			seen[s.Target] = true
-			report.Links = append(report.Links, s.Target)
 		}
 	}
 
@@ -367,6 +389,13 @@ func linkSignals(msg Message) []Signal {
 		return nil
 	}
 	from := domainOf(msg.From)
+	// a sender that authentication vouches for is allowed its own short and
+	// sister domains (see ownedBy). Without the check, anyone could claim them
+	// by writing the From line.
+	trusted := authenticated(msg.Auth, from)
+	own := func(host string) bool {
+		return sameOrg(host, from) || (trusted && ownedBy(host, from))
+	}
 
 	var out []Signal
 	for _, link := range links {
@@ -375,7 +404,9 @@ func linkSignals(msg Message) []Signal {
 			continue
 		}
 		// the visible text names a site, and it is not where the link goes.
-		if textHost := hostOf(link.text); textHost != "" && !sameOrg(textHost, host) {
+		// When both are the sender's own, as in a link reading spotify.com
+		// that goes through spoti.fi, nobody is being pointed somewhere else.
+		if textHost := hostOf(link.text); textHost != "" && !sameOrg(textHost, host) && !(own(textHost) && own(host)) {
 			out = append(out, Signal{
 				Kind:   KindLinkTextMismatch,
 				Detail: fmt.Sprintf("%s -> %s", textHost, host),
@@ -390,14 +421,14 @@ func linkSignals(msg Message) []Signal {
 			})
 			continue
 		}
-		if shorteners[registrable(host)] {
+		if shorteners[registrable(host)] && !own(host) {
 			out = append(out, Signal{
 				Kind: KindShortenedLink, Detail: host, Target: link.href, weight: weak,
 			})
 			continue
 		}
 		// a sign-in page somewhere unrelated to whoever this claims to be from.
-		if credentialPath.MatchString(pathOf(link.href)) && !sameOrg(host, from) {
+		if credentialPath.MatchString(pathOf(link.href)) && !own(host) {
 			out = append(out, Signal{
 				Kind: KindCredentialLink, Detail: host, Target: link.href, weight: medium,
 			})

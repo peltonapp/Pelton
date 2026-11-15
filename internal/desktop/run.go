@@ -8,20 +8,22 @@ package desktop
 
 import (
 	"embed"
+	"fmt"
+	"io/fs"
 	"os"
 
 	"github.com/peltonapp/Pelton/internal/logging"
 	"github.com/peltonapp/Pelton/internal/storage"
-	"github.com/wailsapp/wails/v2"
-	"github.com/wailsapp/wails/v2/pkg/options"
-	"github.com/wailsapp/wails/v2/pkg/options/assetserver"
-	"github.com/wailsapp/wails/v2/pkg/options/mac"
-	wailswindows "github.com/wailsapp/wails/v2/pkg/options/windows"
+	"github.com/wailsapp/wails/v3/pkg/application"
+	"github.com/wailsapp/wails/v3/pkg/events"
+	"github.com/wailsapp/wails/v3/pkg/services/dock"
+	"github.com/wailsapp/wails/v3/pkg/services/notifications"
 )
 
 // Config carries what the root entrypoint owns: the embedded frontend assets,
 // the build version string and the embedded license texts.
 type Config struct {
+	// Assets holds the built frontend under frontend/dist.
 	Assets          embed.FS
 	Version         string
 	LicenseManifest string
@@ -36,7 +38,7 @@ type Config struct {
 	Channel string
 }
 
-// Run constructs and runs the wails application. It returns wails.Run's error.
+// Run constructs and runs the wails application. It returns Run's error.
 func Run(cfg Config) error {
 	// the outermost panic handler. A panic that gets this far has already
 	// taken the ui with it; this leaves a file behind saying what happened
@@ -53,7 +55,7 @@ func Run(cfg Config) error {
 
 	// a mailto: click that launched the app arrives as argv on Linux/Windows.
 	// stash it so the first webview mount can open the prefilled compose. macOS
-	// delivers the same thing through OnUrlOpen (an Apple event) instead.
+	// delivers the same thing as an Apple event instead (see below).
 	if raw := firstMailtoArg(os.Args[1:]); raw != "" {
 		app.setPendingMailto(parseMailto(raw))
 	}
@@ -74,45 +76,87 @@ func Run(cfg Config) error {
 		title = "Pelton Nightly"
 	}
 
-	return wails.Run(&options.App{
-		Title:     title,
-		// the window opens at the default and startup resizes it to whatever was
-		// remembered, once the store is open. see geometry.go.
-		Width:     defaultWindowWidth,
-		Height:    defaultWindowHeight,
-		MinWidth:  minWindowWidth,
-		MinHeight: minWindowHeight,
-		// the tray icon, the Dock icon (quitevent_darwin.m) or another launch
-		// shows it.
-		StartHidden: app.startedHidden,
-		AssetServer: &assetserver.Options{
-			Assets: cfg.Assets,
+	// new-mail notifications and the macOS Dock badge, through the Wails
+	// services rather than per-platform code of Pelton's own (#568).
+	app.notifier = notifications.New()
+	app.notifier.OnNotificationResponse(app.onNotificationResponse)
+	app.dock = dock.New()
+
+	dist, err := fs.Sub(cfg.Assets, "frontend/dist")
+	if err != nil {
+		return fmt.Errorf("pelton: frontend assets: %w", err)
+	}
+
+	wapp := application.New(application.Options{
+		Name:        title,
+		Description: aboutMessage(cfg.Channel, cfg.Version),
+		Logger:      app.log,
+		Services: []application.Service{
+			application.NewService(app),
+			application.NewService(&notifierService{a: app}),
+			application.NewService(app.dock),
 		},
-		// neutral dark surface so the native window chrome matches the ui before
-		// the frontend paints. the real colors come from the css token theme.
-		BackgroundColour: &options.RGBA{R: 17, G: 18, B: 20, A: 1},
-		// what the close button does is a user setting, so beforeClose decides
-		// per close whether to hide the window or exit. HideWindowOnClose is
-		// deliberately left off: it is a static option and would take that
-		// decision away before beforeClose ever runs.
-		OnBeforeClose: app.beforeClose,
-		OnStartup:     app.startup,
-		OnDomReady:    app.domReady,
-		OnShutdown:    app.shutdown,
-		Menu:              app.initialMenu(),
+		Assets: application.AssetOptions{
+			Handler: application.AssetFileServerFS(dist),
+		},
+		// saving the window frame and closing the store happen here, before
+		// wails tears the window down.
+		OnShutdown: app.shutdown,
 		// keep a single instance: a second launch (e.g. another mailto click)
 		// hands its argv to the running app and exits, so mailto links reuse the
 		// open window instead of spawning a new one.
-		SingleInstanceLock: &options.SingleInstanceLock{
-			UniqueId: instanceID,
-			OnSecondInstanceLaunch: func(data options.SecondInstanceData) {
+		SingleInstance: &application.SingleInstanceOptions{
+			UniqueID: instanceID,
+			OnSecondInstanceLaunch: func(data application.SecondInstanceData) {
 				if raw := firstMailtoArg(data.Args); raw != "" {
 					app.deliverMailto(raw)
 				}
 				app.showWindow()
 			},
 		},
-		Mac: &mac.Options{
+		Mac: application.MacOptions{
+			// the window's close button hides it (or quits through quitApp),
+			// so the last window closing is never what ends the app.
+			ApplicationShouldTerminateAfterLastWindowClosed: false,
+		},
+		Windows: application.WindowsOptions{
+			// closing hides the window to the tray; quitApp is the way out.
+			DisableQuitOnLastWindowClosed: true,
+		},
+		Linux: application.LinuxOptions{
+			DisableQuitOnLastWindowClosed: true,
+			ProgramName:                   "pelton",
+		},
+	})
+	app.wapp = wapp
+
+	// macOS delivers a mailto: click as an Apple event, not argv.
+	wapp.Event.OnApplicationEvent(events.Common.ApplicationLaunchedWithUrl, func(e *application.ApplicationEvent) {
+		app.deliverMailto(e.Context().URL())
+		app.showWindow()
+	})
+
+	if menu := app.initialMenu(); menu != nil {
+		wapp.Menu.Set(menu)
+	}
+
+	// the window itself is created in ServiceStartup, once the remembered
+	// geometry can be read from the store.
+	app.windowOptions = application.WebviewWindowOptions{
+		Name:      "main",
+		Title:     title,
+		Width:     defaultWindowWidth,
+		Height:    defaultWindowHeight,
+		MinWidth:  minWindowWidth,
+		MinHeight: minWindowHeight,
+		// the tray icon, the Dock icon (quitevent_darwin.m) or another launch
+		// shows it.
+		Hidden: app.startedHidden,
+		// neutral dark surface so the native window chrome matches the ui before
+		// the frontend paints. the real colors come from the css token theme.
+		BackgroundColour: application.NewRGB(17, 18, 20),
+		URL:              "/",
+		Mac: application.MacWindow{
 			// draw the ui all the way to the top of the window instead of under an
 			// opaque native title bar, which never matches the theme. the frontend
 			// keeps the top strip clear of the traffic lights and makes it draggable
@@ -121,22 +165,12 @@ func Run(cfg Config) error {
 			// hidden, not hidden-inset: the inset variant asks for an NSToolbar,
 			// and the toolbar makes the title bar taller, which drops the traffic
 			// lights below the middle of the 30px menu bar row they share.
-			TitleBar: mac.TitleBarHidden(),
-			About: &mac.AboutInfo{
-				Title:   title,
-				Message: aboutMessage(cfg.Channel, cfg.Version),
-			},
-			// macOS delivers a mailto: click as an Apple event, not argv.
-			OnUrlOpen: func(url string) {
-				app.deliverMailto(url)
-				app.showWindow()
-			},
+			TitleBar: application.MacTitleBarHidden,
 		},
-		Windows: &wailswindows.Options{
-			Theme: wailswindows.SystemDefault,
+		Windows: application.WindowsWindow{
+			Theme: application.SystemDefault,
 		},
-		Bind: []interface{}{
-			app,
-		},
-	})
+	}
+
+	return wapp.Run()
 }

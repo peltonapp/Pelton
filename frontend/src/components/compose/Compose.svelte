@@ -22,6 +22,7 @@
     IconMinus,
     IconArrowsDiagonal,
     IconArrowsDiagonalMinimize2,
+    IconAppWindow,
     IconTrash,
     IconChevronDown,
     IconClock,
@@ -39,7 +40,9 @@
   import AttachmentPicker from './AttachmentPicker.svelte'
   import DateTimePicker from '../common/DateTimePicker.svelte'
   import { currentUIScale } from '../../theme/theme'
-  import { updateCompose, closeCompose, closeRequest, getSession, restoreSession, setComposeFullscreenDefault, type ComposeSession } from '../../stores/compose'
+  import { updateCompose, closeCompose, closeRequest, getSession, restoreSession, setComposeFullscreenDefault, composeInWindow, type ComposeSession } from '../../stores/compose'
+  import { openComposeWindow } from '../../lib/api'
+  import { isDemoActive } from '../../lib/demo'
   import { signatures, signatureById, getAccountSignatures } from '../../stores/signatures'
   import type { Signature } from '../../lib/types'
   import { sidebar } from '../../stores/accounts'
@@ -334,6 +337,17 @@
     updateCompose(session.id, { minimized: !session.minimized })
   }
 
+  // popOut moves this compose into a window of its own (#573), with every
+  // field as it is, and drops the pane here once the window has it.
+  async function popOut(): Promise<void> {
+    try {
+      await openComposeWindow(session)
+      closeCompose(session.id)
+    } catch (err) {
+      toastError(errorMessage(err))
+    }
+  }
+
   // applyFormat applies the requested markdown formatting to the CodeMirror
   // selection via the editor's exposed methods (which dispatch the change and
   // keep focus/caret correct).
@@ -534,7 +548,8 @@
       session.cc.trim().length > 0 ||
       session.bcc.trim().length > 0 ||
       session.subject.trim().length > 0 ||
-      session.body.trim().length > 0
+      session.body.trim().length > 0 ||
+      session.attachments.length > 0
     )
   }
 
@@ -580,25 +595,35 @@
   class="compose"
   class:fullscreen={session.fullscreen}
   class:minimized={session.minimized}
+  class:in-window={$composeInWindow}
   data-compose-id={session.id}
   role="dialog"
   aria-label={$t('compose.dialog.ariaLabel')}
   on:keydown|capture={onSendKey}
 >
   <!-- svelte-ignore a11y-click-events-have-key-events a11y-no-static-element-interactions -->
-  <header class="head" on:dblclick={toggleMinimize}>
+  <header class="head" on:dblclick={() => !$composeInWindow && toggleMinimize()}>
     <span class="title">{session.subject || $t('compose.title.untitled')}</span>
-    <div class="win">
-      <button type="button" class="win-btn" aria-label={$t('compose.window.minimize')} title={$t('compose.window.minimize')} on:click={toggleMinimize}>
-        <IconMinus size={15} stroke={1.8} />
-      </button>
-      <button type="button" class="win-btn" aria-label={session.fullscreen ? $t('compose.window.restore') : $t('compose.window.fullscreen')} title={session.fullscreen ? $t('compose.window.restore') : $t('compose.window.fullscreen')} on:click={toggleFullscreen}>
-        {#if session.fullscreen}
-          <IconArrowsDiagonalMinimize2 size={15} stroke={1.8} />
-        {:else}
-          <IconArrowsDiagonal size={15} stroke={1.8} />
+    <!-- a quick second click on a window button must not also count as a
+         double-click on the bar -->
+    <div class="win" on:dblclick|stopPropagation role="presentation">
+      {#if !$composeInWindow}
+        <button type="button" class="win-btn" aria-label={$t('compose.window.minimize')} title={$t('compose.window.minimize')} on:click={toggleMinimize}>
+          <IconMinus size={15} stroke={1.8} />
+        </button>
+        <button type="button" class="win-btn" aria-label={session.fullscreen ? $t('compose.window.restore') : $t('compose.window.fullscreen')} title={session.fullscreen ? $t('compose.window.restore') : $t('compose.window.fullscreen')} on:click={toggleFullscreen}>
+          {#if session.fullscreen}
+            <IconArrowsDiagonalMinimize2 size={15} stroke={1.8} />
+          {:else}
+            <IconArrowsDiagonal size={15} stroke={1.8} />
+          {/if}
+        </button>
+        {#if !isDemoActive()}
+          <button type="button" class="win-btn" aria-label={$t('messageList.menu.openInWindow')} title={$t('messageList.menu.openInWindow')} on:click={() => void popOut()}>
+            <IconAppWindow size={15} stroke={1.8} />
+          </button>
         {/if}
-      </button>
+      {/if}
       <button
         type="button"
         class="win-btn"
@@ -689,7 +714,7 @@
           on:change={(e) => setBody(e.detail)}
         />
       {:else}
-        <div class="editor-loading">Loading editor…</div>
+        <div class="editor-loading">{$t('compose.editor.loading')}</div>
       {/if}
     </div>
 
@@ -801,6 +826,20 @@
     height: auto;
     max-height: none;
     z-index: 130;
+  }
+
+  /* in a compose window the one compose is the window: edge to edge, below
+     the macOS traffic lights, with no corner to float in. */
+  .compose.in-window {
+    position: fixed;
+    inset: 0;
+    top: var(--titlebar-lights);
+    width: auto;
+    height: auto;
+    max-height: none;
+    border-radius: 0;
+    border: none;
+    box-shadow: none;
   }
 
   /* minimized collapses to just the title bar. */

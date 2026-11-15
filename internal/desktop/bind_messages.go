@@ -12,7 +12,6 @@ import (
 	"github.com/peltonapp/Pelton/internal/mailview"
 	"github.com/peltonapp/Pelton/internal/messageid"
 	"github.com/peltonapp/Pelton/internal/storage"
-	"github.com/wailsapp/wails/v2/pkg/runtime"
 )
 
 // ListMessagesRequest selects the page to read. Kind is "folder", "view" or
@@ -309,9 +308,10 @@ func (a *App) updateFlag(id int64, flag storage.Flag, on bool) error {
 	if err := a.store.MarkFlagsPending(a.ctx, id, flags); err != nil {
 		return err
 	}
-	// the Flagged view lists a message once however many folders hold it, so
-	// every copy has to follow, or unflagging one would leave another showing.
-	if flag == storage.FlagFlagged {
+	// the Flagged and Unread views list a message once however many folders
+	// hold it, so every copy has to follow, or unflagging or reading one would
+	// leave another showing.
+	if flag == storage.FlagFlagged || flag == storage.FlagSeen {
 		if err := a.store.MarkCopiesFlagPending(a.ctx, m.AccountID, id, m.MessageID, flag, on); err != nil {
 			return err
 		}
@@ -393,7 +393,7 @@ func (a *App) SaveAttachment(messageID, attachmentID int64) (string, error) {
 		return "", fmt.Errorf("pelton: attachment %d not found", attachmentID)
 	}
 
-	dest, err := runtime.SaveFileDialog(a.ctx, runtime.SaveDialogOptions{
+	dest, err := a.saveFileDialog(saveDialogOptions{
 		DefaultFilename: target.Filename,
 		Title:           "Save attachment",
 	})
