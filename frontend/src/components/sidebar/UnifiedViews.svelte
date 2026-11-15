@@ -3,7 +3,8 @@
   // the default selection. flagged shows a total (flagged are not "unread"), the
   // others show unread counts. rows drag to reorder; the order is stored as a
   // list of view keys, since the views themselves are computed, not rows.
-  import { IconTrash, IconPin, IconPinnedOff } from '@tabler/icons-svelte'
+  import { IconTrash, IconPin, IconPinnedOff, IconPaperclip } from '@tabler/icons-svelte'
+  import { attachmentsOpen, openAttachments } from '../../stores/attachments'
   import { unifiedViewIcon } from '../../lib/unifiedviewicons'
   import SidebarRow from './SidebarRow.svelte'
   import type { UnifiedView, ViewKey } from '../../lib/types'
@@ -93,7 +94,7 @@
       <SidebarRow
         label={viewLabel(view)}
         count={badgeCount(view, $prefs.showFlaggedCount)}
-        active={$selection.kind === 'view' && $selection.view === view.key}
+        active={!$attachmentsOpen && $selection.kind === 'view' && $selection.view === view.key}
         reorderable
         reorderId={view.key}
         on:select={() => choose(view)}
@@ -103,6 +104,11 @@
       </SidebarRow>
     {/each}
   </div>
+  {#if $prefs.design !== 'classic'}
+    <SidebarRow label={$t('attachments.title')} active={$attachmentsOpen} on:select={() => openAttachments()}>
+      <IconPaperclip size={15} stroke={1.6} />
+    </SidebarRow>
+  {/if}
 </nav>
 
 <style>

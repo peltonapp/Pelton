@@ -157,6 +157,10 @@
   } from './lib/messageactions'
   import { buildCommands, mailCommands, type CommandContext, type MessageOp, type FolderOp } from './lib/commands'
   import { extraPaletteCommands } from './lib/palettesources'
+  import './lib/palette-attachments'
+  import AttachmentsBrowser from './components/attachments/AttachmentsBrowser.svelte'
+  import { attachmentsOpen, toggleAttachments } from './stores/attachments'
+  import { setSenderPanel } from './stores/prefs'
   import { catalogByAction } from './lib/menuactions'
   import { shortcutLabel } from './lib/i18n'
   import {
@@ -938,6 +942,17 @@
       case 'go-contacts':
         goToSpace('contacts')
         break
+      case 'open-attachments':
+        if (!classic && !overlayOpen) {
+          openSpace('mail')
+          toggleAttachments()
+        }
+        break
+      case 'toggle-sender-panel':
+        if (!classic) {
+          setSenderPanel(!$prefs.senderPanel)
+        }
+        break
       case 'hide-window':
         // the app, not just the window: on macOS ordering the window out
         // strands it, and an app hidden whole comes back from the dock icon.
@@ -1673,18 +1688,25 @@
         <Resizer disabled={locked} label={$t('app.pane.resizeSidebar')} on:resize={resizeSidebar} on:end={commitPanes} />
         <div
           class="surface"
-          class:stacked
-          style={stacked
-            ? `grid-template-rows: ${listH}px 0 minmax(0, 1fr)`
-            : `grid-template-columns: ${listW}px 0 minmax(0, 1fr)`}
+          class:stacked={stacked && !$attachmentsOpen}
+          class:browsing={$attachmentsOpen}
+          style={$attachmentsOpen
+            ? ''
+            : stacked
+              ? `grid-template-rows: ${listH}px 0 minmax(0, 1fr)`
+              : `grid-template-columns: ${listW}px 0 minmax(0, 1fr)`}
         >
-          <MessageList />
-          {#if stacked}
-            <Resizer orientation="horizontal" disabled={locked} label={$t('app.pane.resizeMessageList')} on:resize={resizeListHeight} on:end={commitListHeight} />
+          {#if $attachmentsOpen}
+            <AttachmentsBrowser />
           {:else}
-            <Resizer disabled={locked} label={$t('app.pane.resizeMessageList')} on:resize={resizeList} on:end={commitPanes} />
+            <MessageList />
+            {#if stacked}
+              <Resizer orientation="horizontal" disabled={locked} label={$t('app.pane.resizeMessageList')} on:resize={resizeListHeight} on:end={commitListHeight} />
+            {:else}
+              <Resizer disabled={locked} label={$t('app.pane.resizeMessageList')} on:resize={resizeList} on:end={commitPanes} />
+            {/if}
+            <MessageDetail />
           {/if}
-          <MessageDetail />
           <ComposeTabLayer />
         </div>
       </div>
@@ -1906,8 +1928,15 @@
     border-radius: var(--pane-radius);
   }
 
-  .surface.stacked {
+  .surface.stacked,
+  .surface.browsing {
     grid-template-columns: minmax(0, 1fr);
+  }
+
+  :global(:root[data-panes='soft']) .surface.browsing > :global(.browser) {
+    border: var(--hairline) solid var(--border-default);
+    border-radius: var(--pane-radius);
+    overflow: hidden;
   }
 
   .surface.stacked > :global(.list-col) {

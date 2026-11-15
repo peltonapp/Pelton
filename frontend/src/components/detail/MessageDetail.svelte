@@ -33,7 +33,8 @@
   import { recordArchived } from '../../stores/undoarchive'
   import { openReply, openForward } from '../../stores/compose'
   import { errorMessage, toastError } from '../../stores/toast'
-  import { prefs } from '../../stores/prefs'
+  import { prefs, setSenderPanel } from '../../stores/prefs'
+  import SenderPanel from './SenderPanel.svelte'
   import { t } from '../../lib/i18n'
   import { get } from 'svelte/store'
   import { tick } from 'svelte'
@@ -66,6 +67,12 @@
   let sourceFor: number | null = null
 
   $: newDesign = $prefs.design !== 'classic'
+
+  // the sender panel only shows while the reader keeps room for a readable
+  // column beside it, in css pixels; a narrow window leaves it out entirely.
+  const panelMinReader = 720
+  let rowWidth = 0
+  $: panelFits = rowWidth === 0 || rowWidth >= panelMinReader
 
   // onReaderAction runs what a conversation card or the action bar asked for,
   // on the message it was asked for.
@@ -363,11 +370,18 @@ ${bodyHtml}
   {:else if $messageDetail.status === 'error'}
     <ErrorState message={$messageDetail.error} onRetry={() => $visibleMessageId && loadMessage($visibleMessageId)} />
   {:else if $messageDetail.data && newDesign}
-    <Conversation
-      detail={$messageDetail.data}
-      on:action={(e) => onReaderAction(e.detail.kind, e.detail.message)}
-      on:more={(e) => openReaderMenu(e.detail.message, e.detail.x, e.detail.y)}
-    />
+    <div class="reader-row" bind:clientWidth={rowWidth}>
+      <Conversation
+        detail={$messageDetail.data}
+        senderPanel={$prefs.senderPanel}
+        on:action={(e) => onReaderAction(e.detail.kind, e.detail.message)}
+        on:more={(e) => openReaderMenu(e.detail.message, e.detail.x, e.detail.y)}
+        on:toggleSender={() => setSenderPanel(!$prefs.senderPanel)}
+      />
+      {#if $prefs.senderPanel && panelFits}
+        <SenderPanel detail={$messageDetail.data} on:close={() => setSenderPanel(false)} />
+      {/if}
+    </div>
   {:else if $messageDetail.data}
     {@const detail = $messageDetail.data}
     <div class="toolbar-bar">
@@ -479,6 +493,13 @@ ${bodyHtml}
     background-size: cover;
     background-position: center;
     background-repeat: no-repeat;
+  }
+
+  .reader-row {
+    flex: 1;
+    display: flex;
+    min-height: 0;
+    min-width: 0;
   }
 
   .toolbar-bar {

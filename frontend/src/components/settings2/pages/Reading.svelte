@@ -14,6 +14,7 @@
     setSenderFonts,
     setMarkReadOnOpen,
     setOpenOnArrow,
+    setSenderPanel,
   } from '../../../stores/prefs'
   import { bodyFonts, bodyFontStack } from '../../../lib/fonts'
   import { listSystemFonts, getSetting, setSetting } from '../../../lib/api'
@@ -150,6 +151,9 @@
   </Row>
   <Row id="open-on-arrow" label={$t('settingsPanel.toggle.openOnArrow')}>
     <ToggleSwitch checked={$prefs.openOnArrow} label={$t('settingsPanel.toggle.openOnArrow')} on:change={(e) => setOpenOnArrow(e.detail)} />
+  </Row>
+  <Row id="sender-panel" label={$t('senderPanel.setting')} hint={$t('senderPanel.settingHint')}>
+    <ToggleSwitch checked={$prefs.senderPanel} label={$t('senderPanel.setting')} on:change={(e) => setSenderPanel(e.detail)} />
   </Row>
 </Card>
 

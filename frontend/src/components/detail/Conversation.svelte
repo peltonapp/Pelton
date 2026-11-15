@@ -12,6 +12,7 @@
   import fullIcon from '@phosphor-icons/core/assets/duotone/arrows-out-line-horizontal-duotone.svg?raw'
   import smallerIcon from '@phosphor-icons/core/assets/duotone/minus-duotone.svg?raw'
   import largerIcon from '@phosphor-icons/core/assets/duotone/plus-duotone.svg?raw'
+  import panelIcon from '@phosphor-icons/core/assets/duotone/sidebar-simple-duotone.svg?raw'
   import Ph from '../common/Ph.svelte'
   import ConversationCard from './ConversationCard.svelte'
   import QuickReply from './QuickReply.svelte'
@@ -27,6 +28,8 @@
 
   /** The message opened from the list, whose conversation is shown. */
   export let detail: MessageDetail
+  /** Whether the sender panel is on, for the header button's state. */
+  export let senderPanel = false
 
   /** What a reader action is asked to do, and to which message. */
   type Action = 'reply' | 'replyAll' | 'forward' | 'archive' | 'delete' | 'reload'
@@ -34,6 +37,7 @@
   const dispatch = createEventDispatcher<{
     action: { kind: Action; message: MessageDetail }
     more: { message: MessageDetail; x: number; y: number }
+    toggleSender: void
   }>()
 
   // the message type sizes the reading pane offers, smallest to largest.
@@ -287,6 +291,16 @@
           {/each}
         </div>
       </div>
+      <button
+        type="button"
+        class="tool panel-toggle"
+        aria-pressed={senderPanel}
+        aria-label={senderPanel ? $t('senderPanel.hide') : $t('senderPanel.show')}
+        title={senderPanel ? $t('senderPanel.hide') : $t('senderPanel.show')}
+        on:click={() => dispatch('toggleSender')}
+      >
+        <Ph svg={panelIcon} size={16} />
+      </button>
     </header>
 
     {#if threadError}
@@ -338,6 +352,7 @@
   .scroll {
     flex: 1;
     min-height: 0;
+    min-width: 0;
     overflow-y: auto;
     display: flex;
     flex-direction: column;
@@ -435,6 +450,23 @@
     opacity: 0.4;
   }
 
+  .panel-toggle {
+    flex-shrink: 0;
+    align-self: center;
+    border: var(--hairline) solid var(--border-default);
+    padding: var(--space-2);
+  }
+
+  /* the panel opens on the inline end, so the glyph's bar sits there too. */
+  .panel-toggle :global(svg) {
+    transform: scaleX(-1);
+  }
+
+  :global([dir='rtl']) .panel-toggle :global(svg) {
+    transform: none;
+  }
+
+  .tool[aria-pressed='true'],
   .tool[aria-checked='true'] {
     background: var(--selection-bg);
     color: var(--text-primary);
