@@ -41,6 +41,7 @@ import type {
   Thread,
   ComposeRequest,
   Draft,
+  FollowUp,
   OutboxRow,
   OutboxEdit,
   UIPrefs,
@@ -909,6 +910,20 @@ export function checkForUpdates(): Promise<UpdateCheckResult> {
 // undo-send delay window, resolving true when it was cancelled in time.
 export function cancelSend(id: number): Promise<boolean> {
   return App.CancelSend(id)
+}
+
+// listFollowUps returns every follow-up reminder, waiting and fired, the
+// soonest due first.
+export function listFollowUps(): Promise<FollowUp[]> {
+  if (isDemoActive()) {
+    return Promise.resolve([])
+  }
+  return App.ListFollowUps().then((list) => list ?? [])
+}
+
+// cancelFollowUp drops a reminder, waiting or fired.
+export function cancelFollowUp(id: number): Promise<void> {
+  return App.CancelFollowUp(id)
 }
 
 // clearSentOutbox prunes rows already marked sent after the ui has shown the

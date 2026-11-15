@@ -31,6 +31,7 @@ export const EventNames = {
   agentProposals: 'agent:proposals',
   openMessage: 'message:open',
   composeCloseRequest: 'compose:close-request',
+  followUpsChanged: 'followups:changed',
 } as const
 
 // payloads, mirroring the go event structs.
@@ -188,6 +189,12 @@ export function onAccountSyncState(cb: (e: AccountSyncStateEvent) => void): Unsu
 // carries no payload; subscribers refetch the outbox.
 export function onOutboxChanged(cb: () => void): Unsubscribe {
   return EventsOn(EventNames.outboxChanged, () => cb())
+}
+
+// onFollowUpsChanged fires when a follow-up reminder is set, comes due, is
+// answered or is cancelled. It carries no payload; subscribers refetch.
+export function onFollowUpsChanged(cb: () => void): Unsubscribe {
+  return EventsOn(EventNames.followUpsChanged, () => cb())
 }
 
 // onMenu fires when a native menubar item is chosen. the payload is a short

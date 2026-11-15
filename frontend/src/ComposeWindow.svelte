@@ -10,7 +10,12 @@
   import Toasts from './components/common/Toasts.svelte'
   import ContextMenu from './components/common/ContextMenu.svelte'
   import ConfirmDialog from './components/common/ConfirmDialog.svelte'
+  import CommandPalette from './components/common/CommandPalette.svelte'
   import { initPrefs, prefs } from './stores/prefs'
+  import { bindings, initShortcuts, recording } from './stores/shortcuts'
+  import { initPalette, paletteOpen, togglePalette } from './stores/palette'
+  import { extraPaletteCommands } from './lib/palettesources'
+  import { comboMatches } from './lib/shortcuts'
   import {
     initComposePrefs,
     composeSessions,
@@ -52,6 +57,8 @@
       void applyTrafficLights(token, true)
     }
     await initComposePrefs()
+    await initShortcuts()
+    void initPalette()
     void loadSignatures()
     // the account picker and the From line read the accounts from here.
     await loadSidebar()
@@ -72,7 +79,20 @@
   $: if (ready) {
     setWindowTitle($composeSessions[0]?.subject || $t('compose.title.untitled'))
   }
+
+  // the palette here holds what a compose window can do: the composer's own
+  // actions, registered by the composer.
+  function onKeydown(event: KeyboardEvent): void {
+    const combo = $bindings['command-palette']
+    if (classic || $recording || !combo || !comboMatches(event, combo)) {
+      return
+    }
+    event.preventDefault()
+    togglePalette()
+  }
 </script>
+
+<svelte:window on:keydown={onKeydown} />
 
 <!-- the new composer's toolbar is the title bar of its window, so only the
      classic pane needs the strip. -->
@@ -97,6 +117,9 @@
 <Toasts />
 <ContextMenu />
 <ConfirmDialog />
+{#if !classic}
+  <CommandPalette commands={$paletteOpen ? extraPaletteCommands($t) : []} />
+{/if}
 
 <style>
   .titlebar-drag {

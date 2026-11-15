@@ -1113,6 +1113,12 @@ export class ComposeRequest {
      */
     "forwardOf": number;
 
+    /**
+     * FollowUpAt is an optional RFC3339 time to be reminded at if nobody has
+     * replied by then. Empty sets no reminder. It must come after the send.
+     */
+    "followUpAt": string;
+
     /** Creates a new ComposeRequest instance. */
     constructor($$source: Partial<ComposeRequest> = {}) {
         if (!("accountId" in $$source)) {
@@ -1156,6 +1162,9 @@ export class ComposeRequest {
         }
         if (!("forwardOf" in $$source)) {
             this["forwardOf"] = 0;
+        }
+        if (!("followUpAt" in $$source)) {
+            this["followUpAt"] = "";
         }
 
         Object.assign(this, $$source);
@@ -2005,6 +2014,73 @@ export class FolderDTO {
             $$parsedSource["attributes"] = $$createField9_0($$parsedSource["attributes"]);
         }
         return new FolderDTO($$parsedSource as Partial<FolderDTO>);
+    }
+}
+
+/**
+ * FollowUpDTO is one reminder for the frontend. Times are RFC3339; FiredAt is
+ * empty while the reminder is waiting. LocalID, FolderID and ThreadID point
+ * at the cached copy of the sent message, the one in Sent when there is one,
+ * and are 0 until a copy has synced.
+ */
+export class FollowUpDTO {
+    "id": number;
+    "accountId": number;
+    "messageId": string;
+    "subject": string;
+    "recipients": string;
+    "sentAt": string;
+    "dueAt": string;
+    "firedAt": string;
+    "localId": number;
+    "folderId": number;
+    "threadId": number;
+
+    /** Creates a new FollowUpDTO instance. */
+    constructor($$source: Partial<FollowUpDTO> = {}) {
+        if (!("id" in $$source)) {
+            this["id"] = 0;
+        }
+        if (!("accountId" in $$source)) {
+            this["accountId"] = 0;
+        }
+        if (!("messageId" in $$source)) {
+            this["messageId"] = "";
+        }
+        if (!("subject" in $$source)) {
+            this["subject"] = "";
+        }
+        if (!("recipients" in $$source)) {
+            this["recipients"] = "";
+        }
+        if (!("sentAt" in $$source)) {
+            this["sentAt"] = "";
+        }
+        if (!("dueAt" in $$source)) {
+            this["dueAt"] = "";
+        }
+        if (!("firedAt" in $$source)) {
+            this["firedAt"] = "";
+        }
+        if (!("localId" in $$source)) {
+            this["localId"] = 0;
+        }
+        if (!("folderId" in $$source)) {
+            this["folderId"] = 0;
+        }
+        if (!("threadId" in $$source)) {
+            this["threadId"] = 0;
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new FollowUpDTO instance from a string or object.
+     */
+    static createFrom($$source: any = {}): FollowUpDTO {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new FollowUpDTO($$parsedSource as Partial<FollowUpDTO>);
     }
 }
 

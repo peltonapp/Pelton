@@ -15,6 +15,7 @@ import { clearSelection } from '../stores/listselect'
 import { closeTab } from '../stores/tabs'
 import { archivedEntry, recordArchivedBatch, type ArchivedMessage } from '../stores/undoarchive'
 import { errorMessage, toastError } from '../stores/toast'
+import { dropFollowUp, dueFollowUps } from '../stores/followups'
 
 // folders whose mail a conversation's done leaves where it is: your own
 // replies in Sent, drafts, and what is already in Archive, Trash or Junk.
@@ -127,6 +128,14 @@ export async function markDone(items: MessageSummary[]): Promise<void> {
   }
   release()
   recordArchivedBatch(undone)
+  // a conversation marked done is handled, so a reminder that came due on it
+  // has done its job.
+  const threadIds = new Set(items.map((i) => i.threadId).filter((id) => id !== 0))
+  for (const f of get(dueFollowUps)) {
+    if (threadIds.has(f.threadId)) {
+      void dropFollowUp(f.id)
+    }
+  }
   if (failure !== '') {
     toastError(failure)
   }

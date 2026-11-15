@@ -434,6 +434,28 @@ export interface ComposeRequest {
   // forwardOf is the id of the message this one forwards; once sent, that
   // message is marked forwarded. Leave it out (or 0) for anything else.
   forwardOf?: number
+  // followUpAt is an optional RFC3339 time to be reminded at when nobody has
+  // replied by then. Empty or left out sets no reminder.
+  followUpAt?: string
+}
+
+/**
+ * FollowUp is a "remind me if nobody replies" reminder on a sent message.
+ * Times are RFC3339; firedAt is empty while it waits. localId, folderId and
+ * threadId point at the cached copy of the sent message, 0 until one synced.
+ */
+export interface FollowUp {
+  id: number
+  accountId: number
+  messageId: string
+  subject: string
+  recipients: string
+  sentAt: string
+  dueAt: string
+  firedAt: string
+  localId: number
+  folderId: number
+  threadId: number
 }
 
 // ProtectionStatus is what the compose window needs to offer the pgp controls

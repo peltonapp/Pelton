@@ -10,7 +10,7 @@
   // CodeMirror, so with it on the body is plain text in that editor instead.
   // send, save and the close prompt share their logic with the classic pane
   // through lib/composeactions.ts.
-  import { onMount, tick } from 'svelte'
+  import { onDestroy, onMount, tick } from 'svelte'
   import { get } from 'svelte/store'
   import paperclipIcon from '@phosphor-icons/core/assets/duotone/paperclip-duotone.svg?raw'
   import floppyIcon from '@phosphor-icons/core/assets/duotone/floppy-disk-duotone.svg?raw'
@@ -28,6 +28,9 @@
   import AttachmentStrip from './v2/AttachmentStrip.svelte'
   import FormatBar from './v2/FormatBar.svelte'
   import ReplyContext from './v2/ReplyContext.svelte'
+  import FollowUpMenu from './v2/FollowUpMenu.svelte'
+  import { activeComposer, composeCommand, releaseComposer } from '../../stores/composecommands'
+  import { registerComposePalette } from '../../lib/composepalette'
   import {
     closeCompose,
     closeRequest,
@@ -44,7 +47,7 @@
   import { convertEditorBody, htmlToText } from '../../lib/richtext'
   import { withSignatureBlock } from '../../lib/signatureblock'
   import { bodyFontStack } from '../../lib/fonts'
-  import { comboMatches } from '../../lib/shortcuts'
+  import { comboMatches, composeActions, type ComposeAction } from '../../lib/shortcuts'
   import { formatStatusClock, type TimeFormat } from '../../lib/format'
   import { tip } from '../../lib/tip'
   import { t } from '../../lib/i18n'
@@ -78,6 +81,7 @@
   const protectionWatch = new ProtectionWatch(session.id, session.saved)
 
   let strip: AttachmentStrip
+  let followMenu: FollowUpMenu | null = null
   let moreButton: HTMLButtonElement
   let moreOpen = false
   let sigChoice = ''
@@ -210,11 +214,22 @@
     }
   }
 
-  // onSendKey sends on the send shortcut from anywhere in the composer. It
-  // listens on the way down, because both editors bind the same key.
-  async function onSendKey(event: KeyboardEvent): Promise<void> {
+  // onComposerKey answers the send shortcut and the composer actions from
+  // anywhere in the composer. It listens on the way down, because both editors
+  // bind the same keys.
+  async function onComposerKey(event: KeyboardEvent): Promise<void> {
+    if (confirmClose || session.minimized) {
+      return
+    }
+    const action = composeActions.find((a) => $bindings[a] && comboMatches(event, $bindings[a]))
+    if (action) {
+      event.preventDefault()
+      event.stopPropagation()
+      runAction(action)
+      return
+    }
     const combo = $bindings.send
-    if (!combo || !comboMatches(event, combo) || sendState !== 'idle' || confirmClose || session.minimized) {
+    if (!combo || !comboMatches(event, combo) || sendState !== 'idle') {
       return
     }
     event.preventDefault()
@@ -224,6 +239,32 @@
     await tick()
     await send()
   }
+
+  // runAction carries out a composer action, from a key or the palette.
+  function runAction(action: ComposeAction): void {
+    switch (action) {
+      case 'compose-follow-up':
+        if (docked && session.minimized) {
+          updateCompose(session.id, { minimized: false })
+        }
+        followMenu?.open()
+        break
+    }
+  }
+
+  // commands from the palette or a key pressed outside the composer reach the
+  // composer that last had focus.
+  let handledCommand = 0
+  $: if ($composeCommand && $composeCommand.sessionId === session.id && $composeCommand.seq !== handledCommand) {
+    handledCommand = $composeCommand.seq
+    runAction($composeCommand.action)
+  }
+
+  onMount(() => {
+    registerComposePalette()
+    activeComposer.set(session.id)
+  })
+  onDestroy(() => releaseComposer(session.id))
 
   async function save(after?: () => void): Promise<void> {
     saving = true
@@ -333,7 +374,8 @@
   data-compose-id={session.id}
   role="dialog"
   aria-label={$t('compose.dialog.ariaLabel')}
-  on:keydown|capture={onSendKey}
+  on:keydown|capture={onComposerKey}
+  on:focusin={() => activeComposer.set(session.id)}
   on:dragover|preventDefault
   on:drop|preventDefault={onDrop}
 >
@@ -373,6 +415,12 @@
         <span>{$t('compose.attach.button')}</span>
       </button>
       <ProtectionMenu protection={session.protection} status={protectionStatus} on:change={(e) => updateCompose(session.id, { protection: e.detail })} />
+      <FollowUpMenu
+        bind:this={followMenu}
+        id={`compose-${session.id}`}
+        value={session.followUpAt ?? ''}
+        on:change={(e) => updateCompose(session.id, { followUpAt: e.detail || undefined })}
+      />
       <button type="button" class="c2-tool" disabled={saving} on:click={() => save()}>
         <Ph svg={floppyIcon} size={16} />
         <span>{$t('action.saveDraft')}</span>
@@ -462,6 +510,14 @@
           <Ph svg={paperclipIcon} size={16} />
         </button>
         <ProtectionMenu compact menuAbove protection={session.protection} status={protectionStatus} on:change={(e) => updateCompose(session.id, { protection: e.detail })} />
+        <FollowUpMenu
+          bind:this={followMenu}
+          compact
+          menuAbove
+          id={`compose-${session.id}`}
+          value={session.followUpAt ?? ''}
+          on:change={(e) => updateCompose(session.id, { followUpAt: e.detail || undefined })}
+        />
         <button type="button" class="c2-tool compact" disabled={saving} aria-label={$t('action.saveDraft')} use:tip={{ text: $t('action.saveDraft'), side: 'top' }} on:click={() => save()}>
           <Ph svg={floppyIcon} size={16} />
         </button>

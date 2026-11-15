@@ -42,6 +42,7 @@ export {
     EmlExportDTO,
     FetchOlderResult,
     FolderDTO,
+    FollowUpDTO,
     ImageAllowEntryDTO,
     LinkVerdictDTO,
     ListMessagesRequest,

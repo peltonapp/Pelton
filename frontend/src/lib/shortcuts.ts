@@ -80,6 +80,20 @@ export type ShortcutAction =
   | 'go-mail'
   | 'go-calendar'
   | 'go-contacts'
+  // composer actions of the new design. They act on the composer that last
+  // had focus, so they carry a modifier and work while typing.
+  | ComposeAction
+
+/** The shortcut actions that act on a composer rather than on mail. */
+export type ComposeAction = 'compose-follow-up'
+
+/** Every composer action, in the order Settings and the palette list them. */
+export const composeActions: readonly ComposeAction[] = ['compose-follow-up']
+
+/** isComposeAction reports whether an action belongs to a composer. */
+export function isComposeAction(action: string): action is ComposeAction {
+  return (composeActions as readonly string[]).includes(action)
+}
 
 // Shortcut pairs an action with its default combo and the label key for display.
 export interface Shortcut {
@@ -173,6 +187,7 @@ export const shortcuts: Shortcut[] = [
   { action: 'go-mail', combo: 'mod+shift+m', labelKey: 'shortcut.goMail' },
   { action: 'go-calendar', combo: 'mod+shift+c', labelKey: 'shortcut.goCalendar' },
   { action: 'go-contacts', combo: 'mod+shift+a', labelKey: 'shortcut.goContacts' },
+  { action: 'compose-follow-up', combo: 'mod+shift+f', labelKey: 'followUp.menu' },
 ]
 
 // ParsedCombo is a combo broken into its modifier flags and final key.

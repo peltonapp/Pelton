@@ -12,6 +12,8 @@
   import trashIcon from '@phosphor-icons/core/assets/duotone/trash-duotone.svg?raw'
   import syncIcon from '@phosphor-icons/core/assets/duotone/arrows-clockwise-duotone.svg?raw'
   import xIcon from '@phosphor-icons/core/assets/regular/x.svg?raw'
+  import bellIcon from '@phosphor-icons/core/assets/duotone/bell-ringing-duotone.svg?raw'
+  import { followUps, dropFollowUp } from '../../stores/followups'
   import { flip } from 'svelte/animate'
   import { fly } from 'svelte/transition'
   import { onDestroy } from 'svelte'
@@ -114,7 +116,7 @@
       </header>
 
       <div class="body">
-        {#if $outbox.length === 0}
+        {#if $outbox.length === 0 && $followUps.length === 0}
           <p class="empty">{$t('common.outboxPanel.empty')}</p>
         {/if}
 
@@ -197,6 +199,36 @@
                     </button>
                   </span>
                 {/if}
+              </div>
+            {/each}
+          </section>
+        {/if}
+
+        {#if $followUps.length > 0}
+          <section aria-label={$t('followUp.section')}>
+            <h3>{$t('followUp.section')}</h3>
+            {#each $followUps as item (item.id)}
+              <div class="row" class:due={item.firedAt !== ''} animate:flip={{ duration: motion }}>
+                <span class="glyph"><Ph svg={bellIcon} size={15} /></span>
+                <span class="main">
+                  <span class="to">{item.subject || $t('messageList.noSubject')}</span>
+                  <span class="meta">
+                    {item.firedAt !== ''
+                      ? $t('followUp.notice.fired')
+                      : $t('followUp.remindsAt').replace('{when}', when(item.dueAt))}
+                  </span>
+                </span>
+                <span class="actions">
+                  <button
+                    type="button"
+                    class="c2-tool compact"
+                    aria-label={item.firedAt !== '' ? $t('followUp.dismiss') : $t('followUp.cancel')}
+                    use:tip={{ text: item.firedAt !== '' ? $t('followUp.dismiss') : $t('followUp.cancel') }}
+                    on:click={() => void dropFollowUp(item.id)}
+                  >
+                    <Ph svg={xIcon} size={13} />
+                  </button>
+                </span>
               </div>
             {/each}
           </section>
@@ -337,6 +369,10 @@
 
   .row.failed .glyph {
     color: var(--danger);
+  }
+
+  .row.due .glyph {
+    color: var(--warning);
   }
 
   .main {

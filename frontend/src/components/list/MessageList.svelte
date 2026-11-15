@@ -40,6 +40,8 @@
     IconCircleCheck,
   } from '@tabler/icons-svelte'
   import InboxZero from './InboxZero.svelte'
+  import FollowUpBand from './FollowUpBand.svelte'
+  import { dueFollowUps, followUpsIn } from '../../stores/followups'
   import { markDone } from '../../lib/triage'
   import { selection, searchQuery, openMessageId, openMessage } from '../../stores/selection'
   import {
@@ -151,6 +153,13 @@
     }
     return ($sidebar.data?.foldersByAccount[sel.accountId] ?? []).some((f) => f.id === sel.folderId && f.role === 'inbox')
   }
+
+  // an inbox of the new design, outside a search, carries the follow-ups that
+  // came due on top and says so when it is empty.
+  $: inboxShown = !classic && !inSearch && !$searchQuery && isInbox($selection)
+  $: inboxFollowUps = inboxShown
+    ? followUpsIn($dueFollowUps, $selection.kind === 'folder' ? $selection.accountId : 0)
+    : []
 
   let listEl: HTMLDivElement
   // highlightId is the row the keyboard highlight sits on; activeIndex is its
@@ -1152,6 +1161,10 @@
     </div>
   {/if}
 
+  {#if inboxShown}
+    <FollowUpBand items={inboxFollowUps} />
+  {/if}
+
   <div
     class="rows"
     role="listbox"
@@ -1177,8 +1190,10 @@
         <IconMail size={28} stroke={1.4} />
         <button slot="action" type="button" class="load-older-btn" on:click={resetQuickFilter}>{$t('quickFilter.clear')}</button>
       </EmptyState>
-    {:else if items.length === 0 && !classic && !inSearch && !$searchQuery && isInbox($selection)}
-      <InboxZero />
+    {:else if items.length === 0 && inboxShown}
+      {#if inboxFollowUps.length === 0}
+        <InboxZero />
+      {/if}
     {:else if items.length === 0}
       <EmptyState
         title={$searchQuery || inSearch ? $t('messageList.empty.noMatch') : $t('messageList.empty.noMessages')}

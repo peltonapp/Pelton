@@ -75,6 +75,9 @@ const (
 	// It carries the folder as well as the message so the list can move to
 	// where the message actually lives rather than opening it out of context.
 	EventOpenMessage = "message:open"
+	// EventFollowUpsChanged fires when a follow-up reminder is set, comes due,
+	// is answered or is cancelled, so the reminder lists reload.
+	EventFollowUpsChanged = "followups:changed"
 )
 
 // OpenMessageEvent is the payload for EventOpenMessage.

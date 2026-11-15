@@ -89,7 +89,8 @@
   import { loadViews, editingView, closeViewEditor, openViewEditor, views as savedViews } from './stores/views'
   import { selectSavedView } from './stores/selection'
   import { isMac } from './lib/i18n'
-  import { matchShortcut, comboHasModifier, isFunctionKeyCombo, type ShortcutAction } from './lib/shortcuts'
+  import { matchShortcut, comboHasModifier, isFunctionKeyCombo, isComposeAction, type ShortcutAction } from './lib/shortcuts'
+  import { runComposeCommand } from './stores/composecommands'
   import { cyclePane, focusPane as focusPaneArea } from './lib/panes'
   import { bindings, recording, initShortcuts } from './stores/shortcuts'
   import { initMenuBar } from './stores/menubar'
@@ -157,6 +158,7 @@
     toggleSpam,
   } from './lib/messageactions'
   import { markDone } from './lib/triage'
+  import { watchFollowUps } from './stores/followups'
   import { buildCommands, mailCommands, type CommandContext, type MessageOp, type FolderOp } from './lib/commands'
   import { extraPaletteCommands } from './lib/palettesources'
   import { catalogByAction } from './lib/menuactions'
@@ -479,6 +481,7 @@
     unsubscribers.push(onProfileChanged(() => void reloadForProfile()))
     unsubscribers.push(onAgentProposals(() => void loadProposals()))
     void loadProposals()
+    unsubscribers.push(watchFollowUps())
     unsubscribers.push(onMenu(handleMenu))
     // a mailto: link opened while the app is already running.
     unsubscribers.push(onMailtoCompose((draft) => openMailtoDraft(draft)))
@@ -827,6 +830,10 @@
     // the space on screen gets the first say, so the same key makes a new
     // event in the calendar and a new message in mail.
     if (!classic && !overlayOpen && runSpaceAction($space, action)) {
+      return
+    }
+    if (isComposeAction(action)) {
+      runComposeCommand(action)
       return
     }
     switch (action) {
