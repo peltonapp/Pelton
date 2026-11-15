@@ -209,10 +209,14 @@ export const isWindows = /windows/i.test(navigator.userAgent)
 export const modSymbol = isMac ? '⌘' : 'Ctrl'
 
 // shortcutLabel renders a combo like "mod+n" into a localized, platform-correct
-// hint such as "⌘N" or "Ctrl+N".
+// hint such as "⌘N" or "Ctrl+N". Shift in front of a symbol it produced, as
+// in "shift+?", is left out: the symbol already says it.
 export function shortcutLabel(combo: string): string {
-  return combo
-    .split('+')
+  const parts = combo.split('+')
+  const key = parts[parts.length - 1] ?? ''
+  const shiftedSymbol = key.length === 1 && key.toLowerCase() === key.toUpperCase() && !/[0-9]/.test(key)
+  return parts
+    .filter((part) => !(shiftedSymbol && part === 'shift'))
     .map((part) => {
       if (part === 'mod') return modSymbol
       if (part === 'shift') return isMac ? '⇧' : 'Shift'

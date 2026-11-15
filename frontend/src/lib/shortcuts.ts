@@ -80,12 +80,17 @@ export type ShortcutAction =
   // the attachments browser and the reader's sender panel, new design only.
   | 'open-attachments'
   | 'toggle-sender-panel'
+  // the shortcut sheet and focus mode, new design only.
+  | 'shortcut-sheet'
+  | 'focus-mode'
 
 // Shortcut pairs an action with its default combo and the label key for display.
 export interface Shortcut {
   action: ShortcutAction
   combo: string
   labelKey: string
+  /** The action exists in the new design only; classic does not list it. */
+  newDesignOnly?: boolean
   /**
    * A second key that fires the same action while the binding is untouched.
    * It exists for actions where two platforms disagree about which key is
@@ -176,6 +181,9 @@ export const shortcuts: Shortcut[] = [
   // mod+shift+i opens the web inspector in development builds.
   { action: 'open-attachments', combo: 'mod+shift+f', labelKey: 'shortcut.openAttachments' },
   { action: 'toggle-sender-panel', combo: 'i', labelKey: 'shortcut.toggleSenderPanel' },
+  // "?" is shifted on every common layout, so the key arrives with shift held.
+  { action: 'shortcut-sheet', combo: 'shift+?', labelKey: 'shortcut.shortcutSheet', newDesignOnly: true },
+  { action: 'focus-mode', combo: 'mod+shift+h', labelKey: 'shortcut.focusMode', newDesignOnly: true },
 ]
 
 // ParsedCombo is a combo broken into its modifier flags and final key.
@@ -244,6 +252,19 @@ export function isFunctionKeyCombo(combo: string): boolean {
 export function comboHasModifier(combo: string): boolean {
   const p = parseCombo(combo)
   return p.mod || p.alt || p.shift
+}
+
+/**
+ * Whether pressing the combo in a text field would type something, so it must
+ * not fire there: a key without modifiers, or a character typed with only
+ * Shift held. Function keys type nothing.
+ */
+export function comboTypes(combo: string): boolean {
+  const p = parseCombo(combo)
+  if (p.mod || p.alt || isFunctionKeyCombo(combo)) {
+    return false
+  }
+  return !p.shift || p.key.length === 1
 }
 
 // comboMatches reports whether a keydown event exactly matches a combo. the match

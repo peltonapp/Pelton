@@ -30,6 +30,8 @@ const defaults: UIPrefs = {
   sendDelaySeconds: 0,
   flagHighlight: 'flag',
   showShortcutHints: true,
+  coachHints: true,
+  coachHold: true,
   harvestAddresses: true,
   showAccountEmail: false,
   alwaysLoadImages: false,
@@ -776,6 +778,18 @@ export function setFlagHighlight(style: string): void {
 export function setShortcutHints(value: boolean): void {
   prefs.update((p) => ({ ...p, showShortcutHints: value }))
   void setSetting(SettingKeys.shortcutHints, String(value))
+}
+
+/** Turns the hint that names the key after a mouse action on or off. */
+export function setCoachHints(value: boolean): void {
+  prefs.update((p) => ({ ...p, coachHints: value }))
+  void setSetting(SettingKeys.coachHints, String(value))
+}
+
+/** Turns the shortcut sheet shown while the modifier is held on or off. */
+export function setCoachHold(value: boolean): void {
+  prefs.update((p) => ({ ...p, coachHold: value }))
+  void setSetting(SettingKeys.coachHold, String(value))
 }
 
 // setHarvestAddresses toggles learning addresses from mail for autocomplete.

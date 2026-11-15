@@ -1,13 +1,14 @@
 <script lang="ts">
   // the Notifications page: where in-app toasts appear, whether new mail raises
-  // a system notification, the unread badge on the dock or tray icon, and the
-  // senders that always notify.
+  // a system notification, the unread badge on the dock or tray icon, the
+  // senders that always notify, and the focus schedule.
   import Card from '../ui/Card.svelte'
   import Row from '../ui/Row.svelte'
   import ToggleSwitch from '../../common/ToggleSwitch.svelte'
   import ToastPositionPicker from '../../settings/ToastPositionPicker.svelte'
   import ToastPreview from '../skeletons/ToastPreview.svelte'
   import DesktopPreview from '../skeletons/DesktopPreview.svelte'
+  import FocusSchedule from '../FocusSchedule.svelte'
   import { prefs, setToastPosition, setNotifyNewMail, setUnreadBadgeEnabled } from '../../../stores/prefs'
   import { isMac, t } from '../../../lib/i18n'
 
@@ -51,6 +52,10 @@
       {$t('vip.manage')}
     </button>
   </Row>
+</Card>
+
+<Card title={$t('focus.title')}>
+  <FocusSchedule />
 </Card>
 
 {#if vipOpen}
