@@ -30,8 +30,10 @@ func TestMain(m *testing.M) {
 type fakeIMAP struct {
 	// selected is every mailbox SELECT was called on, in order.
 	selected []string
-	// moved records each Move as the uid it was given and the destination.
-	moved []movedMessage
+	// moved records each Move as the uid it was given and the destination, and
+	// moveCalls counts the MoveMessages commands.
+	moved     []movedMessage
+	moveCalls int
 	// searchResult is what SearchByMessageID returns.
 	searchResult []imap.UID
 	// created, renamed and deleted record the mailbox management commands.
@@ -153,8 +155,18 @@ func (f *fakeIMAP) Move(uid imap.UID, mailbox string) error {
 	return nil
 }
 
-func (f *fakeIMAP) MoveMessages([]imap.UID, string) error { return nil }
-func (f *fakeIMAP) DeleteMessages(...imap.UID) error      { return nil }
+func (f *fakeIMAP) MoveMessages(uids []imap.UID, mailbox string) error {
+	if f.failMove != nil {
+		return f.failMove
+	}
+	for _, uid := range uids {
+		f.moved = append(f.moved, movedMessage{uid: uid, dest: mailbox})
+	}
+	f.moveCalls++
+	return nil
+}
+
+func (f *fakeIMAP) DeleteMessages(...imap.UID) error { return nil }
 
 func (f *fakeIMAP) SearchByMessageID(string) ([]imap.UID, error) { return f.searchResult, nil }
 

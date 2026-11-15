@@ -207,8 +207,9 @@ func TestStorageStatistics(t *testing.T) {
 	if len(senders) != 2 || senders[0].Email != "big@example.com" || senders[0].Bytes != 8000 || senders[0].Count != 2 {
 		t.Fatalf("biggest senders = %+v", senders)
 	}
-	if senders[0].FromAddress != "big@example.com" {
-		t.Errorf("name comes from the newest message, got %q", senders[0].FromAddress)
+	// the newest message has no display name, so the newest one with a name wins.
+	if senders[0].FromAddress != "Big <big@example.com>" {
+		t.Errorf("name comes from the newest named message, got %q", senders[0].FromAddress)
 	}
 	if senders[1].Email != "me@example.com" {
 		t.Errorf("second biggest = %+v", senders[1])

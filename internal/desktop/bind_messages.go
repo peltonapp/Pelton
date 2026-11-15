@@ -341,6 +341,16 @@ func (a *App) DeleteMessage(id int64) error {
 	if err := a.ready(); err != nil {
 		return err
 	}
+	if err := a.deleteMessage(id); err != nil {
+		return err
+	}
+	goSafe("counting unread mail", a.refreshViewCounts)
+	return nil
+}
+
+// deleteMessage is DeleteMessage without the badge refresh, so a bulk delete
+// refreshes once at the end.
+func (a *App) deleteMessage(id int64) error {
 	m, err := a.store.GetMessage(a.ctx, id)
 	if err != nil {
 		return err
@@ -353,17 +363,62 @@ func (a *App) DeleteMessage(id int64) error {
 		if err := a.store.DeleteAttachmentFilesForMessage(m.AccountID, m.ID); err != nil {
 			return err
 		}
-		if err := a.store.DeleteMessage(a.ctx, id); err != nil {
-			return err
-		}
-		go a.refreshViewCounts()
-		return nil
+		return a.store.DeleteMessage(a.ctx, id)
 	}
-	if err := a.store.MarkDeletePending(a.ctx, id); err != nil {
-		return err
+	return a.store.MarkDeletePending(a.ctx, id)
+}
+
+// BulkResultDTO reports a bulk action over many messages. Done lists the ids
+// it acted on; Failed counts the rest and FirstError says why the first of them
+// failed.
+type BulkResultDTO struct {
+	Done       []int64 `json:"done"`
+	Failed     int     `json:"failed"`
+	FirstError string  `json:"firstError"`
+}
+
+func (r *BulkResultDTO) fail(err error) {
+	if r.Failed == 0 {
+		r.FirstError = err.Error()
+	}
+	r.Failed++
+}
+
+// DeleteMessages deletes many messages the way DeleteMessage deletes one, and
+// refreshes the badges once. A message that fails does not stop the rest.
+// Imported mail is deleted outright and cannot be undone; for the rest
+// UndoDeletes brings them back until the next sync.
+func (a *App) DeleteMessages(ids []int64) (BulkResultDTO, error) {
+	res := BulkResultDTO{Done: []int64{}}
+	if err := a.ready(); err != nil {
+		return res, err
+	}
+	for _, id := range ids {
+		if err := a.deleteMessage(id); err != nil {
+			res.fail(err)
+			continue
+		}
+		res.Done = append(res.Done, id)
 	}
 	goSafe("counting unread mail", a.refreshViewCounts)
-	return nil
+	return res, nil
+}
+
+// UndoDeletes reverses DeleteMessages for the messages still cached.
+func (a *App) UndoDeletes(ids []int64) (BulkResultDTO, error) {
+	res := BulkResultDTO{Done: []int64{}}
+	if err := a.ready(); err != nil {
+		return res, err
+	}
+	for _, id := range ids {
+		if err := a.store.ClearDeletePending(a.ctx, id); err != nil {
+			res.fail(err)
+			continue
+		}
+		res.Done = append(res.Done, id)
+	}
+	goSafe("counting unread mail", a.refreshViewCounts)
+	return res, nil
 }
 
 // UndoDelete reverses a pending delete while the message is still cached (before

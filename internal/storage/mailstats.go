@@ -214,15 +214,19 @@ func (d *DB) senderUsage(ctx context.Context, what, query string, args []any) ([
 	return out, nil
 }
 
-// senderNameSQL looks up a sender's newest message in each sender index and
-// keeps the newer of the two.
+// senderNameSQL looks up a sender's newest message that carries a display
+// name, or the newest one when none does, in each sender index and keeps the
+// better of the two.
 const senderNameSQL = `
 SELECT from_address, from_name FROM (
-    SELECT * FROM (SELECT from_address, from_name, date ` + fromListMail + ` AND ` + senderEmailSQL + ` = ?1 ORDER BY date DESC LIMIT 1)
+    SELECT * FROM (SELECT from_address, from_name, date, ` + namedSQL + ` AS named ` + fromListMail + ` AND ` + senderEmailSQL + ` = ?1 ORDER BY named DESC, date DESC LIMIT 1)
     UNION ALL
-    SELECT * FROM (SELECT from_address, from_name, date ` + fromOtherMail + ` AND ` + senderEmailSQL + ` = ?1 ORDER BY date DESC LIMIT 1)
+    SELECT * FROM (SELECT from_address, from_name, date, ` + namedSQL + ` AS named ` + fromOtherMail + ` AND ` + senderEmailSQL + ` = ?1 ORDER BY named DESC, date DESC LIMIT 1)
 )
-ORDER BY date DESC LIMIT 1`
+ORDER BY named DESC, date DESC LIMIT 1`
+
+// namedSQL is 1 for a message whose sender carries a display name.
+const namedSQL = `(from_name != '' OR instr(from_address, '<') > 1)`
 
 // senderName fills the From fields from the sender's newest message.
 func (d *DB) senderName(ctx context.Context, u *SenderUsage) error {
