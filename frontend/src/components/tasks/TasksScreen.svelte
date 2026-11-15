@@ -284,6 +284,25 @@
     if ((await removeTask(task)) !== null) {
       selectedId = next?.id ?? null
       detailOpen = detailOpen && next !== null
+      await tick()
+      if (next) {
+        document.querySelector<HTMLElement>(`[data-task-row="${next.id}"]`)?.focus()
+      }
+    }
+  }
+
+  // space on a row: in a smart list the task leaves the list once it changes,
+  // so the selection and the keyboard move on to the row after it.
+  async function toggleSelected(task: Task): Promise<void> {
+    const index = rows.findIndex((r) => r.task.id === task.id)
+    const next = rows[index + 1]?.task ?? rows[index - 1]?.task ?? null
+    await toggleDone(task)
+    if (!rows.some((r) => r.task.id === task.id) && next) {
+      selectedId = next.id
+      await tick()
+      document.querySelector<HTMLElement>(`[data-task-row="${next.id}"]`)?.focus()
+    } else {
+      document.querySelector<HTMLElement>(`[data-task-row="${task.id}"]`)?.focus()
     }
   }
 
@@ -388,7 +407,7 @@
     }
     const run: Record<string, () => void> = {
       n: newTask,
-      ' ': () => selected && !selected.readOnly && void toggleDone(selected),
+      ' ': () => selected && !selected.readOnly && void toggleSelected(selected),
       Enter: () => selected && void openDetail(selected.id),
       Delete: () => void removeSelected(),
       Backspace: () => void removeSelected(),
