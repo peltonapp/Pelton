@@ -1669,6 +1669,7 @@ const en: Record<string, string> = {
   'flagColor.purple': 'Purple',
   'flagColor.pink': 'Pink',
   'palette.group.mail': 'Mail',
+  'export.working': 'Exporting',
   'calendar.search.placeholder': 'Search events',
   'calendar.search.none': 'No event matches that.',
   'settingsPanel.bodyFont.system': 'System font',
