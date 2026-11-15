@@ -400,13 +400,14 @@
 
   .conv-head {
     display: flex;
+    flex-wrap: wrap;
     align-items: flex-start;
-    gap: var(--space-4);
+    gap: var(--space-2) var(--space-4);
     margin-bottom: var(--space-4);
   }
 
   .title {
-    flex: 1;
+    flex: 1 1 16rem;
     min-width: 0;
     display: flex;
     flex-direction: column;
