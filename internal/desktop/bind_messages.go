@@ -411,6 +411,9 @@ func (a *App) SaveAttachment(messageID, attachmentID int64) (string, error) {
 	if dest == "" {
 		return "", nil
 	}
+	if target, err = a.localAttachment(*target); err != nil {
+		return "", err
+	}
 	if err := a.copyAttachmentProgress(*target, dest, 0, 1); err != nil {
 		a.emit(EventAttachmentProgress, AttachmentProgressEvent{AttachmentID: target.ID, Error: err.Error(), FilesTotal: 1})
 		return "", err

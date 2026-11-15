@@ -65,6 +65,10 @@ import type {
   ContactConflict,
   ContactDraft,
   AttachmentContent,
+  AttachmentEntry,
+  AttachmentPage,
+  AttachmentQuery,
+  SenderOverview,
   ThemeInfo,
   ThemeApply,
   ThemeImportPreview,
@@ -1263,6 +1267,56 @@ export function saveAllAttachments(messageId: number): Promise<string> {
   return App.SaveAllAttachments(messageId)
 }
 
+/** queryAttachments reads one page of the attachments browser, newest first. */
+export async function queryAttachments(q: AttachmentQuery): Promise<AttachmentPage> {
+  if (isDemoActive()) {
+    return { entries: [], total: q.withTotal ? 0 : -1 }
+  }
+  const page = await App.QueryAttachments(q)
+  return { entries: (page.entries ?? []) as AttachmentEntry[], total: page.total }
+}
+
+/**
+ * fetchAttachment makes sure an attachment's bytes are stored here, fetching
+ * its message from the server when they are not, and returns the entry as it
+ * now stands.
+ */
+export async function fetchAttachment(attachmentId: number): Promise<AttachmentEntry> {
+  return (await App.FetchAttachment(attachmentId)) as AttachmentEntry
+}
+
+/** openAttachmentFile opens an attachment in the application the system has for it. */
+export function openAttachmentFile(messageId: number, attachmentId: number): Promise<void> {
+  if (isDemoActive()) {
+    return Promise.resolve()
+  }
+  return App.OpenAttachmentFile(messageId, attachmentId)
+}
+
+/**
+ * saveAttachmentsTo asks for a folder and saves the given attachments there,
+ * returning the folder, or '' when the dialog was cancelled.
+ */
+export function saveAttachmentsTo(refs: { messageId: number; attachmentId: number }[]): Promise<string> {
+  if (isDemoActive()) {
+    return Promise.resolve('')
+  }
+  return App.SaveAttachmentsTo(refs)
+}
+
+/** senderOverview returns what the local mail says about one address. */
+export async function senderOverview(address: string): Promise<SenderOverview> {
+  if (isDemoActive()) {
+    return { address, count: 0, first: '', last: '', recent: [], files: [], filesTotal: 0, automated: false }
+  }
+  const o = await App.SenderOverview(address)
+  return {
+    ...o,
+    recent: (o.recent ?? []) as MessageSummary[],
+    files: (o.files ?? []) as AttachmentEntry[],
+  }
+}
+
 // --- offline range download ---
 
 // downloadRange downloads all mail since the start date that is not cached yet.
@@ -1610,6 +1664,7 @@ export const SettingKeys = {
   composeOpenIn: 'compose_open_in',
   threadedList: 'threaded_list',
   readerWidth: 'reader_width',
+  senderPanel: 'sender_panel',
   themeId: 'theme_id',
   menuBarInApp: 'menu_bar_in_app',
   menuBarNativeMinimal: 'menu_bar_native_minimal',

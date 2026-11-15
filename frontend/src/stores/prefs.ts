@@ -88,6 +88,7 @@ const defaults: UIPrefs = {
   composeOpenIn: 'window',
   threadedList: true,
   readerWidth: 'full',
+  senderPanel: false,
   themeId: '',
   menuBarInApp: false,
   menuBarNativeMinimal: false,
@@ -342,6 +343,12 @@ export function setThreadedList(threadedList: boolean): void {
 export function setReaderWidth(readerWidth: ReaderWidth): void {
   prefs.update((p) => ({ ...p, readerWidth }))
   void setSetting(SettingKeys.readerWidth, readerWidth)
+}
+
+/** Shows or hides the sender panel beside the reader in the new design. */
+export function setSenderPanel(senderPanel: boolean): void {
+  prefs.update((p) => ({ ...p, senderPanel }))
+  void setSetting(SettingKeys.senderPanel, String(senderPanel))
 }
 
 /** Turns the gliding caret of the compose editor on or off. */

@@ -142,6 +142,13 @@
   --reader-width-narrow: 640px;
   --reader-width-medium: 820px;
 
+  /* the sender panel beside the reader, and the attachments browser's preview
+     column and grid tiles. */
+  --sender-panel-width: 280px;
+  --attachments-preview-width: 380px;
+  --attachments-tile: 132px;
+  --sender-avatar: 48px;
+
   /* default density (medium) row + pane spacing. overridden per density below. */
   --row-pad-y: 8px;
   --row-pad-x: 12px;

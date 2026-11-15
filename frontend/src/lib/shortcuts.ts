@@ -77,6 +77,9 @@ export type ShortcutAction =
   | 'go-mail'
   | 'go-calendar'
   | 'go-contacts'
+  // the attachments browser and the reader's sender panel, new design only.
+  | 'open-attachments'
+  | 'toggle-sender-panel'
 
 // Shortcut pairs an action with its default combo and the label key for display.
 export interface Shortcut {
@@ -169,6 +172,10 @@ export const shortcuts: Shortcut[] = [
   { action: 'go-mail', combo: 'mod+shift+m', labelKey: 'shortcut.goMail' },
   { action: 'go-calendar', combo: 'mod+shift+c', labelKey: 'shortcut.goCalendar' },
   { action: 'go-contacts', combo: 'mod+shift+a', labelKey: 'shortcut.goContacts' },
+  // F for files. The panel takes a plain letter like the other reader keys:
+  // mod+shift+i opens the web inspector in development builds.
+  { action: 'open-attachments', combo: 'mod+shift+f', labelKey: 'shortcut.openAttachments' },
+  { action: 'toggle-sender-panel', combo: 'i', labelKey: 'shortcut.toggleSenderPanel' },
 ]
 
 // ParsedCombo is a combo broken into its modifier flags and final key.
