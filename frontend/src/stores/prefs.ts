@@ -88,6 +88,8 @@ const defaults: UIPrefs = {
   composeOpenIn: 'window',
   threadedList: true,
   afterMove: 'older',
+  warnMissingAttachment: true,
+  warnEmptySubject: true,
   readerWidth: 'full',
   themeId: '',
   menuBarInApp: false,
@@ -343,6 +345,18 @@ export function setThreadedList(threadedList: boolean): void {
 export function setAfterMove(afterMove: AfterMove): void {
   prefs.update((p) => ({ ...p, afterMove }))
   void setSetting(SettingKeys.afterMove, afterMove)
+}
+
+/** Turns the missing attachment check before sending on or off. */
+export function setWarnMissingAttachment(warnMissingAttachment: boolean): void {
+  prefs.update((p) => ({ ...p, warnMissingAttachment }))
+  void setSetting(SettingKeys.warnMissingAttachment, String(warnMissingAttachment))
+}
+
+/** Turns the empty subject check before sending on or off. */
+export function setWarnEmptySubject(warnEmptySubject: boolean): void {
+  prefs.update((p) => ({ ...p, warnEmptySubject }))
+  void setSetting(SettingKeys.warnEmptySubject, String(warnEmptySubject))
 }
 
 /** Picks how wide the reading column runs in the new design. */

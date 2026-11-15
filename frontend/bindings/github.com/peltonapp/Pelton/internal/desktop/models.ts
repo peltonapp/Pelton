@@ -5337,6 +5337,18 @@ export class UIPrefsDTO {
     "afterMove": string;
 
     /**
+     * WarnMissingAttachment asks before sending a message whose text speaks of
+     * an attachment it does not carry. On by default.
+     */
+    "warnMissingAttachment": boolean;
+
+    /**
+     * WarnEmptySubject asks before sending a message without a subject. On by
+     * default.
+     */
+    "warnEmptySubject": boolean;
+
+    /**
      * ReaderWidth caps the reading column in the new design: narrow, medium
      * or full.
      */
@@ -5710,6 +5722,12 @@ export class UIPrefsDTO {
         }
         if (!("afterMove" in $$source)) {
             this["afterMove"] = "";
+        }
+        if (!("warnMissingAttachment" in $$source)) {
+            this["warnMissingAttachment"] = false;
+        }
+        if (!("warnEmptySubject" in $$source)) {
+            this["warnEmptySubject"] = false;
         }
         if (!("readerWidth" in $$source)) {
             this["readerWidth"] = "";

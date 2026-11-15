@@ -677,6 +677,11 @@ export interface UIPrefs {
   // afterMove is what the reader opens once the open message is archived,
   // deleted or moved in the new design.
   afterMove: AfterMove
+  // warnMissingAttachment asks before sending a message whose text speaks of
+  // an attachment it does not carry.
+  warnMissingAttachment: boolean
+  // warnEmptySubject asks before sending a message without a subject.
+  warnEmptySubject: boolean
   // readerWidth caps the reading column in the new design.
   readerWidth: ReaderWidth
   // themeId selects an installed custom theme; empty means the built-in

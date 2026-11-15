@@ -8,6 +8,8 @@ const entries: SettingsIndexEntry[] = [
   { page: 'composing', id: 'chips', labelKey: 'settingsPanel.toggle.chipRecipients', keywords: 'chips recipients tokens comma' },
   { page: 'composing', id: 'signature-above-quote', labelKey: 'settingsPanel.toggle.signatureAboveQuote', keywords: 'signature footer reply quote above below' },
   { page: 'composing', id: 'vim-editor', labelKey: 'onboarding.extras.vimEditor', keywords: 'vim modal keybindings insert normal' },
+  { page: 'composing', id: 'warn-missing-attachment', labelKey: 'sendCheck.setting.attachment', keywords: 'attachment forgot missing attached warn reminder check send file' },
+  { page: 'composing', id: 'warn-empty-subject', labelKey: 'sendCheck.setting.subject', keywords: 'subject empty missing warn check send' },
   { page: 'composing', id: 'undo-send', labelKey: 'settingsPanel.label.undoSendWindow', keywords: 'undo send delay hold outgoing' },
 ]
 

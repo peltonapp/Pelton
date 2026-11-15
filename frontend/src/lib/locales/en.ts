@@ -2139,6 +2139,19 @@ const en: Record<string, string> = {
   'snippets.search': 'Search snippets',
   'snippets.manage': 'Manage snippets',
   'snippets.keywords': 'snippet template canned text',
+  'sendCheck.noRecipients': 'This message has nobody to go to yet.',
+  'sendCheck.missingAttachment': "It looks like you meant to attach something, but there's no attachment.",
+  'sendCheck.emptySubject': 'This message has no subject.',
+  'sendCheck.attach': 'Attach a file',
+  'sendCheck.sendAnyway': 'Send anyway',
+  'sendCheck.neverAsk': "Don't ask again",
+  'sendCheck.addSubject': 'Add a subject',
+  'sendCheck.addRecipient': 'Add a recipient',
+  'sendCheck.dismiss': 'Back to the message',
+  'sendCheck.setting.attachment': 'Warn about missing attachments',
+  'sendCheck.setting.attachmentHint': 'Before sending, ask when your text or subject mentions an attachment and none is attached. Quoted text and your signature are not checked, and phrases in every language Pelton speaks count.',
+  'sendCheck.setting.subject': 'Warn about an empty subject',
+  'sendCheck.setting.subjectHint': 'Before sending, ask when the message has no subject.',
 }
 
 export default en

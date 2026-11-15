@@ -30,6 +30,9 @@
   import ReplyContext from './v2/ReplyContext.svelte'
   import FollowUpMenu from './v2/FollowUpMenu.svelte'
   import SnippetPicker from './v2/SnippetPicker.svelte'
+  import SendCheckBar from './v2/SendCheckBar.svelte'
+  import { sendIssues, type SendIssue } from '../../lib/sendcheck'
+  import { parseAddressList } from '../../lib/mailcompose'
   import { snippets } from '../../stores/snippets'
   import { expandPlaceholders, matchTrigger, recipientNames, snippetFields } from '../../lib/snippets'
   import { textToHtml } from '../../lib/richtext'
@@ -55,7 +58,7 @@
   import { formatStatusClock, type TimeFormat } from '../../lib/format'
   import { tip } from '../../lib/tip'
   import { t } from '../../lib/i18n'
-  import { prefs } from '../../stores/prefs'
+  import { prefs, setWarnMissingAttachment } from '../../stores/prefs'
   import { bindings, shortcutTitle } from '../../stores/shortcuts'
   import { signatures, signatureById, getAccountSignatures } from '../../stores/signatures'
   import { sidebar } from '../../stores/accounts'
@@ -210,10 +213,70 @@
 
   // send morphs the button: a pie loader while the message is queued, then a
   // check that is left to draw before the composer closes.
-  async function send(scheduledAt?: Date): Promise<void> {
+  // the question a send stopped on, the ones already answered "send anyway",
+  // and the send-later time it was asked with.
+  let checkIssue: SendIssue | null = null
+  let checkSkip = new Set<SendIssue>()
+  let checkAt: Date | undefined
+
+  // issuesOf lists what to ask about before the session's message goes out.
+  function issuesOf(s: ComposeSession): SendIssue[] {
+    const recipients = [s.to, s.cc, s.bcc].reduce((n, field) => n + parseAddressList(field).length, 0)
+    return sendIssues(
+      {
+        recipients,
+        subject: s.subject,
+        originalSubject: s.origin?.subject,
+        body: typedPart(s),
+        mode: s.mode,
+        attachments: s.attachments,
+      },
+      { missingAttachment: $prefs.warnMissingAttachment, emptySubject: $prefs.warnEmptySubject },
+    )
+  }
+
+  // a question goes away by itself once what it asked about is fixed.
+  $: if (checkIssue && !issuesOf(session).includes(checkIssue)) {
+    checkIssue = null
+  }
+
+  function sendAnyway(): void {
+    if (!checkIssue) {
+      return
+    }
+    const skip = new Set([...checkSkip, checkIssue])
+    checkIssue = null
+    void send(checkAt, skip)
+  }
+
+  function neverAskAttachment(): void {
+    setWarnMissingAttachment(false)
+    sendAnyway()
+  }
+
+  function attachFromCheck(): void {
+    checkIssue = null
+    strip.pick()
+  }
+
+  function fixFromCheck(): void {
+    const field = checkIssue === 'emptySubject' ? `#subject-${session.id}` : `#to-${session.id}`
+    checkIssue = null
+    document.querySelector<HTMLInputElement>(field)?.focus()
+  }
+
+  async function send(scheduledAt?: Date, skip: Set<SendIssue> = new Set()): Promise<void> {
     if (sendState !== 'idle') {
       return
     }
+    const issues = issuesOf(getSession(session.id) ?? session).filter((issue) => !skip.has(issue))
+    if (issues.length > 0) {
+      checkIssue = issues[0]
+      checkSkip = skip
+      checkAt = scheduledAt
+      return
+    }
+    checkIssue = null
     sendState = 'sending'
     const sent = await sendSession(session.id, session, {
       scheduledAt,
@@ -546,6 +609,17 @@
 
     <HeaderFields {session} />
     <AttachmentStrip bind:this={strip} {session} />
+
+    {#if checkIssue}
+      <SendCheckBar
+        issue={checkIssue}
+        on:sendAnyway={sendAnyway}
+        on:attach={attachFromCheck}
+        on:fix={fixFromCheck}
+        on:neverAsk={neverAskAttachment}
+        on:dismiss={() => (checkIssue = null)}
+      />
+    {/if}
 
     {#if rich}
       <FormatBar editor={richEditor} {revision} />
