@@ -131,16 +131,19 @@ func (a *App) UnsnoozeMessage(id int64) error {
 
 // runSnoozePoller wakes periodically to revive messages whose snooze time has
 // passed, marking them unread and unhiding them, then nudges the ui to refresh.
+// The same tick ends an elapsed focus and starts a scheduled one.
 func (a *App) runSnoozePoller() {
 	ticker := time.NewTicker(30 * time.Second)
 	defer ticker.Stop()
 	a.reviveDueSnoozes() // catch any that came due while the app was closed
+	a.advanceFocus(time.Now())
 	for {
 		select {
 		case <-a.ctx.Done():
 			return
 		case <-ticker.C:
 			a.reviveDueSnoozes()
+			a.advanceFocus(time.Now())
 		}
 	}
 }

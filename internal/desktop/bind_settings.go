@@ -170,6 +170,10 @@ const (
 	settingReaderWidth = "reader_width"
 	// show the sender panel beside the reader in the new design.
 	settingSenderPanel = "sender_panel"
+	// the shortcut coach of the new design: a hint naming the key after an
+	// action done by mouse, and the sheet shown while the modifier is held.
+	settingCoachHints = "coach_hints"
+	settingCoachHold  = "coach_hold"
 	// general new-mail OS notifications (#126). VIP senders are stored
 	// separately in bind_vip.go and notify even when this is off.
 	settingNotifyNewMail = "notify_new_mail"
@@ -273,6 +277,12 @@ type UIPrefsDTO struct {
 	// ShowShortcutHints shows inline keyboard shortcut chips in the ui. Off by
 	// default to keep the interface clean.
 	ShowShortcutHints bool `json:"showShortcutHints"`
+	// CoachHints shows a short hint naming the key after an action done by
+	// mouse, in the new design.
+	CoachHints bool `json:"coachHints"`
+	// CoachHold shows the shortcuts that apply on screen while the platform
+	// modifier is held, in the new design.
+	CoachHold bool `json:"coachHold"`
 	// HarvestAddresses keeps learning addresses from the mail that passes
 	// through, for compose autocomplete. Off leaves only synced contacts.
 	HarvestAddresses bool `json:"harvestAddresses"`
@@ -538,6 +548,8 @@ func (a *App) GetUIPrefs() (UIPrefsDTO, error) {
 		SendDelaySeconds:    a.intSetting(settingSendDelay, 0),
 		FlagHighlight:       a.stringSetting(settingFlagHighlight, defaultFlagHighlight),
 		ShowShortcutHints:   a.boolSetting(settingShortcutHints, true),
+		CoachHints:          a.boolSetting(settingCoachHints, true),
+		CoachHold:           a.boolSetting(settingCoachHold, true),
 		HarvestAddresses:    a.harvestAddresses(),
 		ShowAccountEmail:    a.boolSetting(settingAccountEmail, false),
 		AlwaysLoadImages:    a.boolSetting(settingRemoteAlways, false),

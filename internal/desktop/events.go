@@ -78,6 +78,12 @@ const (
 	// It carries the folder as well as the message so the list can move to
 	// where the message actually lives rather than opening it out of context.
 	EventOpenMessage = "message:open"
+	// EventFocusChanged fires when focus mode starts, ends or changes its end
+	// time, with the FocusDTO as payload.
+	EventFocusChanged = "focus:changed"
+	// EventFocusEnded fires once when focus mode ends, with a FocusSummaryDTO
+	// saying what arrived meanwhile.
+	EventFocusEnded = "focus:ended"
 )
 
 // OpenMessageEvent is the payload for EventOpenMessage.

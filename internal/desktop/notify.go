@@ -6,6 +6,7 @@ import (
 	"strconv"
 	"strings"
 	"sync/atomic"
+	"time"
 
 	"github.com/peltonapp/Pelton/internal/storage"
 	"github.com/wailsapp/wails/v3/pkg/services/notifications"
@@ -104,21 +105,77 @@ type notifyStrings struct {
 	noSubject   string // shown in place of an empty subject
 	fromUnknown string // shown in place of an empty sender
 	summary     string // body of the one notification standing in for a burst, with %d for the count
+
+	// the summary raised when focus mode ends (bind_focus.go). Many messages
+	// with none from a VIP reuse summary.
+	focusEnded      string // its title
+	focusOne        string // one message, not from a VIP
+	focusOneVIP     string // one message, from a VIP
+	focusManyVIP    string // %d messages, %d of them from VIPs
+	focusManyOneVIP string // %d messages, one of them from a VIP
 }
 
 var notifyLocales = map[string]notifyStrings{
-	"en":    {newMail: "New mail", vipNewMail: "New mail from a VIP", noSubject: "(no subject)", fromUnknown: "Unknown sender", summary: "%d new messages"},
-	"de":    {newMail: "Neue Nachricht", vipNewMail: "Neue Nachricht von einem VIP", noSubject: "(kein Betreff)", fromUnknown: "Unbekannter Absender", summary: "%d neue Nachrichten"},
-	"fr":    {newMail: "Nouveau message", vipNewMail: "Nouveau message d'un VIP", noSubject: "(sans objet)", fromUnknown: "Expéditeur inconnu", summary: "%d nouveaux messages"},
-	"nl":    {newMail: "Nieuw bericht", vipNewMail: "Nieuw bericht van een VIP", noSubject: "(geen onderwerp)", fromUnknown: "Onbekende afzender", summary: "%d nieuwe berichten"},
-	"es":    {newMail: "Nuevo mensaje", vipNewMail: "Nuevo mensaje de un VIP", noSubject: "(sin asunto)", fromUnknown: "Remitente desconocido", summary: "%d mensajes nuevos"},
-	"it":    {newMail: "Nuova email", vipNewMail: "Nuova email da un VIP", noSubject: "(nessun oggetto)", fromUnknown: "Mittente sconosciuto", summary: "%d nuove email"},
-	"pl":    {newMail: "Nowa wiadomość", vipNewMail: "Nowa wiadomość od VIP-a", noSubject: "(bez tematu)", fromUnknown: "Nieznany nadawca", summary: "Nowe wiadomości: %d"},
-	"ru":    {newMail: "Новая почта", vipNewMail: "Новая почта от VIP-отправителя", noSubject: "(без темы)", fromUnknown: "Неизвестный отправитель", summary: "Новых писем: %d"},
-	"tr":    {newMail: "Yeni posta", vipNewMail: "Bir VIP'ten yeni posta", noSubject: "(konu yok)", fromUnknown: "Bilinmeyen gönderici", summary: "%d yeni posta"},
-	"pt":    {newMail: "Correio novo", vipNewMail: "Correio novo de um VIP", noSubject: "(sem assunto)", fromUnknown: "Remetente desconhecido", summary: "%d mensagens novas"},
-	"ar":    {newMail: "بريد جديد", vipNewMail: "بريد جديد من جهة مهمة", noSubject: "(بلا موضوع)", fromUnknown: "مرسل غير معروف", summary: "رسائل جديدة: %d"},
-	"zh-CN": {newMail: "新邮件", vipNewMail: "来自 VIP 的新邮件", noSubject: "（无主题）", fromUnknown: "未知发件人", summary: "%d 封新邮件"},
+	"en": {
+		newMail: "New mail", vipNewMail: "New mail from a VIP", noSubject: "(no subject)", fromUnknown: "Unknown sender", summary: "%d new messages",
+		focusEnded: "Focus ended", focusOne: "1 new message", focusOneVIP: "1 new message, from a VIP",
+		focusManyVIP: "%d new messages, %d from VIPs", focusManyOneVIP: "%d new messages, 1 from a VIP",
+	},
+	"de": {
+		newMail: "Neue Nachricht", vipNewMail: "Neue Nachricht von einem VIP", noSubject: "(kein Betreff)", fromUnknown: "Unbekannter Absender", summary: "%d neue Nachrichten",
+		focusEnded: "Fokus beendet", focusOne: "1 neue Nachricht", focusOneVIP: "1 neue Nachricht, von einem VIP",
+		focusManyVIP: "%d neue Nachrichten, %d von VIPs", focusManyOneVIP: "%d neue Nachrichten, 1 von einem VIP",
+	},
+	"fr": {
+		newMail: "Nouveau message", vipNewMail: "Nouveau message d'un VIP", noSubject: "(sans objet)", fromUnknown: "Expéditeur inconnu", summary: "%d nouveaux messages",
+		focusEnded: "Concentration terminée", focusOne: "1 nouveau message", focusOneVIP: "1 nouveau message, d'un VIP",
+		focusManyVIP: "%d nouveaux messages, dont %d de VIP", focusManyOneVIP: "%d nouveaux messages, dont 1 d'un VIP",
+	},
+	"nl": {
+		newMail: "Nieuw bericht", vipNewMail: "Nieuw bericht van een VIP", noSubject: "(geen onderwerp)", fromUnknown: "Onbekende afzender", summary: "%d nieuwe berichten",
+		focusEnded: "Focus beëindigd", focusOne: "1 nieuw bericht", focusOneVIP: "1 nieuw bericht, van een VIP",
+		focusManyVIP: "%d nieuwe berichten, %d van VIP's", focusManyOneVIP: "%d nieuwe berichten, 1 van een VIP",
+	},
+	"es": {
+		newMail: "Nuevo mensaje", vipNewMail: "Nuevo mensaje de un VIP", noSubject: "(sin asunto)", fromUnknown: "Remitente desconocido", summary: "%d mensajes nuevos",
+		focusEnded: "Concentración terminada", focusOne: "1 mensaje nuevo", focusOneVIP: "1 mensaje nuevo, de un VIP",
+		focusManyVIP: "%d mensajes nuevos, %d de VIP", focusManyOneVIP: "%d mensajes nuevos, 1 de un VIP",
+	},
+	"it": {
+		newMail: "Nuova email", vipNewMail: "Nuova email da un VIP", noSubject: "(nessun oggetto)", fromUnknown: "Mittente sconosciuto", summary: "%d nuove email",
+		focusEnded: "Concentrazione terminata", focusOne: "1 nuova email", focusOneVIP: "1 nuova email, da un VIP",
+		focusManyVIP: "%d nuove email, %d da VIP", focusManyOneVIP: "%d nuove email, 1 da un VIP",
+	},
+	"pl": {
+		newMail: "Nowa wiadomość", vipNewMail: "Nowa wiadomość od VIP-a", noSubject: "(bez tematu)", fromUnknown: "Nieznany nadawca", summary: "Nowe wiadomości: %d",
+		focusEnded: "Skupienie zakończone", focusOne: "1 nowa wiadomość", focusOneVIP: "1 nowa wiadomość, od VIP-a",
+		focusManyVIP: "Nowe wiadomości: %d, od VIP-ów: %d", focusManyOneVIP: "Nowe wiadomości: %d, od VIP-a: 1",
+	},
+	"ru": {
+		newMail: "Новая почта", vipNewMail: "Новая почта от VIP-отправителя", noSubject: "(без темы)", fromUnknown: "Неизвестный отправитель", summary: "Новых писем: %d",
+		focusEnded: "Режим фокуса завершён", focusOne: "1 новое письмо", focusOneVIP: "1 новое письмо, от VIP-отправителя",
+		focusManyVIP: "Новых писем: %d, от VIP: %d", focusManyOneVIP: "Новых писем: %d, от VIP: 1",
+	},
+	"tr": {
+		newMail: "Yeni posta", vipNewMail: "Bir VIP'ten yeni posta", noSubject: "(konu yok)", fromUnknown: "Bilinmeyen gönderici", summary: "%d yeni posta",
+		focusEnded: "Odak sona erdi", focusOne: "1 yeni posta", focusOneVIP: "1 yeni posta, bir VIP'ten",
+		focusManyVIP: "%d yeni posta, %d tanesi VIP'lerden", focusManyOneVIP: "%d yeni posta, 1 tanesi bir VIP'ten",
+	},
+	"pt": {
+		newMail: "Correio novo", vipNewMail: "Correio novo de um VIP", noSubject: "(sem assunto)", fromUnknown: "Remetente desconhecido", summary: "%d mensagens novas",
+		focusEnded: "Foco terminado", focusOne: "1 mensagem nova", focusOneVIP: "1 mensagem nova, de um VIP",
+		focusManyVIP: "%d mensagens novas, %d de VIPs", focusManyOneVIP: "%d mensagens novas, 1 de um VIP",
+	},
+	"ar": {
+		newMail: "بريد جديد", vipNewMail: "بريد جديد من جهة مهمة", noSubject: "(بلا موضوع)", fromUnknown: "مرسل غير معروف", summary: "رسائل جديدة: %d",
+		focusEnded: "انتهى وضع التركيز", focusOne: "رسالة جديدة واحدة", focusOneVIP: "رسالة جديدة واحدة من جهة مهمة",
+		focusManyVIP: "رسائل جديدة: %d، من جهات مهمة: %d", focusManyOneVIP: "رسائل جديدة: %d، من جهة مهمة: 1",
+	},
+	"zh-CN": {
+		newMail: "新邮件", vipNewMail: "来自 VIP 的新邮件", noSubject: "（无主题）", fromUnknown: "未知发件人", summary: "%d 封新邮件",
+		focusEnded: "专注已结束", focusOne: "1 封新邮件", focusOneVIP: "1 封新邮件，来自 VIP",
+		focusManyVIP: "%d 封新邮件，其中 %d 封来自 VIP", focusManyOneVIP: "%d 封新邮件，其中 1 封来自 VIP",
+	},
 }
 
 // notifyStringsFor returns the notification text table for lang, falling back to
@@ -135,18 +192,22 @@ func notifyStringsFor(lang string) notifyStrings {
 // notifications only fire when the setting is on; VIP-sender notifications fire
 // regardless, so important senders cut through a quiet inbox. Only INBOX is
 // considered so mail landing in other folders during a full sync stays quiet.
+// During focus mode only VIP senders notify, and every new message is counted
+// for the summary raised when focus ends.
 func (a *App) notifyNewMail(folder storage.Folder, ids []int64) {
 	if len(ids) == 0 || !strings.EqualFold(folder.IMAPPath, "INBOX") {
 		return
 	}
+	focused := a.advanceFocus(time.Now()).Active
 	general := a.boolSetting(settingNotifyNewMail, false)
 	vips := a.vipSet()
-	if !general && len(vips) == 0 {
+	if !focused && !general && len(vips) == 0 {
 		return
 	}
 
 	s := notifyStringsFor(a.stringSetting(settingLanguage, "en"))
 	var pending []notification
+	var held, heldVIP int
 	for _, id := range ids {
 		if a.ctx.Err() != nil {
 			return
@@ -161,7 +222,13 @@ func (a *App) notifyNewMail(folder storage.Folder, ids []int64) {
 			continue
 		}
 		vip := vips[bareAddress(m.FromAddress)]
-		if !vip && !general {
+		if focused {
+			held++
+			if vip {
+				heldVIP++
+			}
+		}
+		if !notifyAllowed(general, vip, focused) {
 			continue
 		}
 
@@ -170,6 +237,9 @@ func (a *App) notifyNewMail(folder storage.Folder, ids []int64) {
 			title = s.vipNewMail
 		}
 		pending = append(pending, notification{title: title, body: notifyBody(m, s), messageID: m.ID})
+	}
+	if held > 0 {
+		a.recordHeld(held, heldVIP)
 	}
 	for _, n := range collapseNotifications(pending, s) {
 		a.sendNotification(n)

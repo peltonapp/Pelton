@@ -45,6 +45,8 @@ export {
     DraftDTO,
     EmlExportDTO,
     FetchOlderResult,
+    FocusDTO,
+    FocusScheduleDTO,
     FolderDTO,
     ImageAllowEntryDTO,
     LinkVerdictDTO,
