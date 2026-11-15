@@ -4430,6 +4430,45 @@ export class OccurrenceDTO {
 }
 
 /**
+ * OutboxCancelDTO is the result of cancelling a send.
+ */
+export class OutboxCancelDTO {
+    /**
+     * Outcome is one of draft, compose, held, tooLate or gone.
+     */
+    "outcome": string;
+
+    /**
+     * Request is what the message was written from, when Outcome is compose.
+     */
+    "request": ComposeRequest;
+
+    /** Creates a new OutboxCancelDTO instance. */
+    constructor($$source: Partial<OutboxCancelDTO> = {}) {
+        if (!("outcome" in $$source)) {
+            this["outcome"] = "";
+        }
+        if (!("request" in $$source)) {
+            this["request"] = (new ComposeRequest());
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new OutboxCancelDTO instance from a string or object.
+     */
+    static createFrom($$source: any = {}): OutboxCancelDTO {
+        const $$createField1_0 = $$createType18;
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        if ("request" in $$parsedSource) {
+            $$parsedSource["request"] = $$createField1_0($$parsedSource["request"]);
+        }
+        return new OutboxCancelDTO($$parsedSource as Partial<OutboxCancelDTO>);
+    }
+}
+
+/**
  * OutboxEditDTO is the result of taking a message back out of the outbox.
  */
 export class OutboxEditDTO {
@@ -4470,6 +4509,66 @@ export class OutboxEditDTO {
 }
 
 /**
+ * OutboxLogEntryDTO is one line of the send activity log.
+ */
+export class OutboxLogEntryDTO {
+    "seq": number;
+    "at": string;
+    "messageId": number;
+    "step": string;
+    "recipients": string[];
+
+    /**
+     * Detail is the error of a failed step.
+     */
+    "detail": string;
+
+    /**
+     * RetryAt is when a retry step's message is tried again.
+     */
+    "retryAt": string;
+
+    /** Creates a new OutboxLogEntryDTO instance. */
+    constructor($$source: Partial<OutboxLogEntryDTO> = {}) {
+        if (!("seq" in $$source)) {
+            this["seq"] = 0;
+        }
+        if (!("at" in $$source)) {
+            this["at"] = "";
+        }
+        if (!("messageId" in $$source)) {
+            this["messageId"] = 0;
+        }
+        if (!("step" in $$source)) {
+            this["step"] = "";
+        }
+        if (!("recipients" in $$source)) {
+            this["recipients"] = [];
+        }
+        if (!("detail" in $$source)) {
+            this["detail"] = "";
+        }
+        if (!("retryAt" in $$source)) {
+            this["retryAt"] = "";
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new OutboxLogEntryDTO instance from a string or object.
+     */
+    static createFrom($$source: any = {}): OutboxLogEntryDTO {
+        const $$createField4_0 = $$createType0;
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        if ("recipients" in $$parsedSource) {
+            $$parsedSource["recipients"] = $$createField4_0($$parsedSource["recipients"]);
+        }
+        return new OutboxLogEntryDTO($$parsedSource as Partial<OutboxLogEntryDTO>);
+    }
+}
+
+/**
  * OutboxRowDTO is one queued or failed message for the outbox view.
  */
 export class OutboxRowDTO {
@@ -4487,6 +4586,11 @@ export class OutboxRowDTO {
      * request is still known and EditOutboxMessage can take it back.
      */
     "editable": boolean;
+
+    /**
+     * Priority orders the queue: a higher one goes before older messages.
+     */
+    "priority": number;
 
     /** Creates a new OutboxRowDTO instance. */
     constructor($$source: Partial<OutboxRowDTO> = {}) {
@@ -4516,6 +4620,9 @@ export class OutboxRowDTO {
         }
         if (!("editable" in $$source)) {
             this["editable"] = false;
+        }
+        if (!("priority" in $$source)) {
+            this["priority"] = 0;
         }
 
         Object.assign(this, $$source);

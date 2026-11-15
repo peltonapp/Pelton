@@ -28,6 +28,7 @@ function row(patch: Partial<OutboxRow>): OutboxRow {
     nextAttemptAt: '',
     createdAt: '',
     editable: false,
+    priority: 0,
     ...patch,
   }
 }

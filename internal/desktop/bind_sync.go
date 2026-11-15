@@ -96,6 +96,7 @@ func (a *App) runOutboxWorker() {
 	transmitter := &accountTransmitter{app: a}
 	worker := outbox.NewWorker(a.queue, transmitter,
 		outbox.WithLogger(a.log),
+		outbox.WithActivity(a.activity),
 		// emit after every state change so the ui reflects sending -> sent/failed
 		// promptly. without this the outbox banner stayed stuck on "sending".
 		outbox.WithOnChange(func() { a.emit(EventOutboxChanged, nil) }),
@@ -103,6 +104,7 @@ func (a *App) runOutboxWorker() {
 	if _, err := a.queue.RequeueStuck(a.ctx); err != nil {
 		a.log.Error("requeue stuck outbox", "err", err)
 	}
+	a.sendWorker.Store(worker)
 	if err := worker.Run(a.ctx); err != nil && a.ctx.Err() == nil {
 		a.log.Error("outbox worker stopped", "err", err)
 	}

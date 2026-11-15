@@ -20,6 +20,7 @@ import { mount } from 'svelte'
 import App from './App.svelte'
 import MessageWindow from './MessageWindow.svelte'
 import ComposeWindow from './ComposeWindow.svelte'
+import OutboxWindow from './OutboxWindow.svelte'
 import { isDemoMode, windowMaterialActive } from './lib/api'
 import { setDemoActive } from './lib/demo'
 import { initSmoothCaret } from './lib/smoothcaret'
@@ -49,9 +50,9 @@ await windowMaterialActive()
   .then((on) => document.documentElement.classList.toggle('window-material', on))
   .catch(() => {})
 
-// a message or a compose opened in a window of its own loads the same page
-// with ?window=message&id=N or ?window=compose&token=T, and gets that alone
-// instead of the app.
+// a message, a compose or the send activity opened in a window of its own
+// loads the same page with ?window=message&id=N, ?window=compose&token=T or
+// ?window=outbox, and gets that alone instead of the app.
 const params = new URLSearchParams(window.location.search)
 const messageId = Number(params.get('id'))
 const composeToken = params.get('token') ?? ''
@@ -60,7 +61,9 @@ const app =
     ? mount(MessageWindow, { target, props: { messageId } })
     : params.get('window') === 'compose' && composeToken
       ? mount(ComposeWindow, { target, props: { token: composeToken } })
-      : mount(App, { target })
+      : params.get('window') === 'outbox'
+        ? mount(OutboxWindow, { target })
+        : mount(App, { target })
 
 initSmoothCaret()
 

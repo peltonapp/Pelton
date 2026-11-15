@@ -79,6 +79,16 @@ export function formatFullDate(iso: string, timeFormat: TimeFormat = 'auto'): st
   })
 }
 
+// formatLogTime renders a time with seconds, for lines of an activity log.
+export function formatLogTime(date: Date, timeFormat: TimeFormat = 'auto'): string {
+  return date.toLocaleTimeString(undefined, {
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    ...clockOf(timeFormat),
+  })
+}
+
 // formatWeekdayTime renders "Mon 9:30" style labels for scheduling presets
 // (send later, snooze, outbox rows).
 export function formatWeekdayTime(date: Date, timeFormat: TimeFormat = 'auto'): string {

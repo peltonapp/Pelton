@@ -127,10 +127,11 @@ func TestMessageFailsAfterMaxAttempts(t *testing.T) {
 	// drive attempts directly so we do not have to wait out the backoff windows.
 	for i := range MaxAttempts {
 		m := findByID(t, q, id)
-		retry, err := q.markAttemptFailed(ctx, m, "boom")
+		next, err := q.markAttemptFailed(ctx, m, "boom")
 		if err != nil {
 			t.Fatalf("mark attempt failed: %v", err)
 		}
+		retry := !next.IsZero()
 		if i < MaxAttempts-1 && !retry {
 			t.Fatalf("attempt %d should still retry", i+1)
 		}

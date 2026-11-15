@@ -318,6 +318,7 @@ export function demoOutbox(): OutboxRow[] {
       nextAttemptAt: '',
       createdAt: ago(0),
       editable: false,
+      priority: 0,
     },
   ]
 }

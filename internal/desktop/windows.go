@@ -210,6 +210,61 @@ func (a *App) OpenComposeWindow(session string) error {
 	return nil
 }
 
+// The send activity window: the outbox and the live activity log, in a window
+// of its own. There is only ever one.
+const (
+	outboxWindowName = "outbox-activity"
+	// outboxWindowToken is what the window passes to TrafficLights.
+	outboxWindowToken = "outbox"
+
+	settingOutboxWindowWidth  = "outbox_window_width"
+	settingOutboxWindowHeight = "outbox_window_height"
+
+	defaultOutboxWindowWidth  = 820
+	defaultOutboxWindowHeight = 560
+	minOutboxWindowWidth      = 640
+	minOutboxWindowHeight     = 320
+)
+
+// OpenOutboxWindow shows the send activity in its own window, or brings the
+// one already open forward.
+func (a *App) OpenOutboxWindow() error {
+	if err := a.ready(); err != nil {
+		return err
+	}
+	if a.wapp == nil {
+		return nil
+	}
+	if w, ok := a.wapp.Window.GetByName(outboxWindowName); ok {
+		w.Show()
+		w.Focus()
+		return nil
+	}
+	query := url.Values{}
+	query.Set("window", "outbox")
+	opts := application.WebviewWindowOptions{
+		Name:             outboxWindowName,
+		Title:            "Pelton",
+		Width:            max(a.intSetting(settingOutboxWindowWidth, defaultOutboxWindowWidth), minOutboxWindowWidth),
+		Height:           max(a.intSetting(settingOutboxWindowHeight, defaultOutboxWindowHeight), minOutboxWindowHeight),
+		MinWidth:         minOutboxWindowWidth,
+		MinHeight:        minOutboxWindowHeight,
+		URL:              "/?" + query.Encode(),
+		BackgroundColour: a.windowOptions.BackgroundColour,
+		BackgroundType:   a.windowOptions.BackgroundType,
+		Mac:              a.windowOptions.Mac,
+		Windows:          a.windowOptions.Windows,
+	}
+	if a.integratedFrame && a.stringSetting(settingDesign, "new") != "classic" {
+		insetComposeTitleBar(&opts)
+	}
+	w := a.wapp.Window.NewWithOptions(opts)
+	w.RegisterHook(events.Common.WindowClosing, func(*application.WindowEvent) {
+		a.saveWindowSize(w, settingOutboxWindowWidth, settingOutboxWindowHeight)
+	})
+	return nil
+}
+
 // ShowMessageInMainWindow brings the main window forward and opens a message
 // there, in the folder it lives in. A message that is gone only shows the
 // window.
