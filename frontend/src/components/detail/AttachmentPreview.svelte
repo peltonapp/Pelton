@@ -197,8 +197,8 @@
     top: 50%;
     left: 50%;
     transform: translate(-50%, -50%);
-    width: min(920px, calc(100vw - 2 * var(--space-5)));
-    height: min(80vh, calc(100vh - 2 * var(--space-5)));
+    width: min(920px, calc(100% - 2 * var(--space-5)));
+    height: min(80%, calc(100% - 2 * var(--space-5)));
     display: flex;
     flex-direction: column;
     border: var(--hairline) solid var(--border-default);

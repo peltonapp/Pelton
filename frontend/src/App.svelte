@@ -23,6 +23,8 @@
   import { calendarFocus, calendarImport, calendarQuickAdd } from './stores/calendar'
   import { formatTime } from './lib/calformat'
   import type { TimeFormat } from './lib/format'
+  import { spaces } from './lib/spaces'
+  import { popupIsOpen } from './lib/popups'
   import { frameIntegrated } from './stores/windowframe'
   import { setDraft, submitSearch, searchOpenedId } from './stores/search'
   import SnoozeDialog from './components/detail/SnoozeDialog.svelte'
@@ -76,6 +78,7 @@
     getLogStatus,
     openCrashReport,
     titleBarDoubleClick,
+    applyTrafficLights,
     setUnreadBadge,
     quitApp,
     hideApp,
@@ -179,7 +182,7 @@
     promptForMissingPasswords,
     refreshMissingPasswords,
   } from './stores/passwordprompt'
-  import type { EditorMode, MessageSummary, ThemePref, ThemeInfo, Folder, Account } from './lib/types'
+  import type { EditorMode, MessageSummary, ThemePref, ThemeInfo, Folder, Account, Space } from './lib/types'
 
   let settingsOpen = false
   // the settings screen is code-split and loaded on first open. A load that
@@ -283,6 +286,9 @@
       return
     }
     fullscreen = await isFullscreen().catch(() => false)
+    // where the traffic lights sit differs between macOS releases, so what is
+    // drawn beside them is lined up with where they really are.
+    await applyTrafficLights()
   }
 
   // the native Mail menu's message actions are only usable while a message is
@@ -975,6 +981,15 @@
       case 'toggle-fullscreen':
         void toggleFullscreen()
         break
+      case 'go-mail':
+        goToSpace('mail')
+        break
+      case 'go-calendar':
+        goToSpace('calendar')
+        break
+      case 'go-contacts':
+        goToSpace('contacts')
+        break
       case 'hide-window':
         // the app, not just the window: on macOS ordering the window out
         // strands it, and an app hidden whole comes back from the dock icon.
@@ -1386,6 +1401,21 @@
     }
   }
 
+  // goToSpace shows one of the spaces from its shortcut. classic has no spaces
+  // but does have a contacts screen; a space this build lacks is left alone.
+  function goToSpace(key: Space): void {
+    if (classic) {
+      if (key === 'contacts') {
+        openContacts()
+      }
+      return
+    }
+    if (overlayOpen || !spaces.some((s) => s.key === key)) {
+      return
+    }
+    openSpace(key)
+  }
+
   function anyDialogOpen(): boolean {
     return (
       settingsOpen ||
@@ -1484,6 +1514,12 @@
     // while the settings panel is capturing a new binding, let it have the keys.
     if ($recording) {
       return
+    }
+    // Escape that has something of ours to close is ours alone. left to the
+    // system as well, it would also take a full screen window out of full
+    // screen, which should only happen from the plain main view.
+    if (event.key === 'Escape' && (anyDialogOpen() || overlayOpen || popupIsOpen())) {
+      event.preventDefault()
     }
     if (tryVimNav(event)) {
       event.preventDefault()
@@ -2029,10 +2065,10 @@
   .titlebar-logo {
     position: absolute;
     left: var(--titlebar-inset);
-    top: 50%;
+    top: var(--titlebar-lights-center);
     height: calc(16px / var(--ui-scale, 1));
     width: auto;
-    transform: translateY(calc(-50% - var(--titlebar-nudge)));
+    transform: translateY(-50%);
     opacity: 0.85;
     pointer-events: none;
     user-select: none;

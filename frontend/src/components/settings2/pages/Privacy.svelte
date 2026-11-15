@@ -6,6 +6,7 @@
   import Row from '../ui/Row.svelte'
   import ToggleSwitch from '../../common/ToggleSwitch.svelte'
   import NetworkSection from '../../settings/NetworkSection.svelte'
+  import RemoteContentPreview from '../skeletons/RemoteContentPreview.svelte'
   import { prefs, setAlwaysLoadImages, setBlockTrackingPixels } from '../../../stores/prefs'
   import { t } from '../../../lib/i18n'
   import '../../../theme/settings2-sections-system.css'
@@ -31,6 +32,7 @@
 
 <Card title={$t('settings2.privacy.remote')}>
   <Row id="always-load-images" label={$t('settingsPanel.toggle.alwaysLoadImages')} hint={$t('settingsPanel.hint.remoteImagesToggle')}>
+    <RemoteContentPreview slot="preview" images={$prefs.alwaysLoadImages} blockPixels={$prefs.blockTrackingPixels} />
     <ToggleSwitch
       checked={$prefs.alwaysLoadImages}
       label={$t('settingsPanel.toggle.alwaysLoadImages')}
@@ -47,6 +49,7 @@
     </div>
   {/if}
   <Row id="block-tracking-pixels" label={$t('settingsPanel.toggle.blockTrackingPixels')} hint={$t('settingsPanel.hint.blockTrackingPixelsDetail')}>
+    <RemoteContentPreview slot="preview" images blockPixels={$prefs.blockTrackingPixels} />
     <ToggleSwitch
       checked={$prefs.blockTrackingPixels}
       label={$t('settingsPanel.toggle.blockTrackingPixels')}
