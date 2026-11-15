@@ -4,6 +4,9 @@
   // menu, the search field and what the app is busy with.
   import SpaceSwitcher from './SpaceSwitcher.svelte'
   import TopSearch from './TopSearch.svelte'
+  import SpaceSearch from './SpaceSearch.svelte'
+  import { space } from '../../stores/space'
+  import { spaceSearchProviders } from '../../lib/spacesearch'
   import ActivityButton from './ActivityButton.svelte'
   import { titleBarDoubleClick } from '../../lib/api'
   import { isMac } from '../../lib/i18n'
@@ -12,6 +15,9 @@
 
   /** Shows the space switcher as tabs in the bar. */
   export let tabs: boolean = false
+
+  // a space with a search of its own takes the field over while it is showing.
+  $: spaceProvider = $space === 'mail' ? undefined : $spaceSearchProviders[$space]
 </script>
 
 <!-- svelte-ignore a11y-no-static-element-interactions -->
@@ -28,7 +34,11 @@
     {/if}
   </div>
 
-  <TopSearch />
+  {#if spaceProvider}
+    <SpaceSearch provider={spaceProvider} />
+  {:else}
+    <TopSearch />
+  {/if}
 
   <div class="side end">
     <ActivityButton />
