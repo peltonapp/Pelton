@@ -1571,6 +1571,7 @@ export const SettingKeys = {
   layoutMode: 'layout_mode',
   navStyle: 'nav_style',
   railSide: 'rail_side',
+  railPins: 'rail_pins',
   paneStyle: 'pane_style',
   avatarPlacement: 'avatar_placement',
   listHeight: 'list_height',
