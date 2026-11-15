@@ -636,6 +636,9 @@ export interface UIPrefs {
   // threadedList groups the message list into conversations in the new
   // design.
   threadedList: boolean
+  // afterMove is what the reader opens once the open message is archived,
+  // deleted or moved in the new design.
+  afterMove: AfterMove
   // readerWidth caps the reading column in the new design.
   readerWidth: ReaderWidth
   // themeId selects an installed custom theme; empty means the built-in
@@ -1139,6 +1142,11 @@ export type AvatarPlacement = 'column' | 'inline' | 'hidden'
 export type ComposeOpenIn = 'window' | 'docked' | 'tab'
 /** How wide the reading column runs in the new design. */
 export type ReaderWidth = 'narrow' | 'medium' | 'full'
+/**
+ * What the reader opens once the open message leaves the list by archive,
+ * delete or move: the older neighbour, the newer one, or nothing.
+ */
+export type AfterMove = 'older' | 'newer' | 'list'
 /** One of the top-level areas of the app. */
 export type Space = 'mail' | 'contacts' | 'calendar'
 export type SelectAllScope = 'offer' | 'all' | 'loaded'

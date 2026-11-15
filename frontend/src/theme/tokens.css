@@ -142,6 +142,11 @@
   --reader-width-narrow: 640px;
   --reader-width-medium: 820px;
 
+  /* triage and writing: the empty inbox's mark and the snippet picker's
+     list. */
+  --inbox-zero-mark: 40px;
+  --snippet-list-height: 280px;
+
   /* default density (medium) row + pane spacing. overridden per density below. */
   --row-pad-y: 8px;
   --row-pad-x: 12px;

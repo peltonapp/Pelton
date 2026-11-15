@@ -31,7 +31,9 @@
     setSwipeLeftAction,
     setSwipeRightAction,
     setThreadedList,
+    setAfterMove,
   } from '../../../stores/prefs'
+  import AfterMoveSkeleton from '../skeletons/AfterMoveSkeleton.svelte'
   import { t } from '../../../lib/i18n'
   import { pfpDataUri, type PfpStyle } from '../../../lib/pfp'
   import { initials } from '../../../lib/format'
@@ -43,7 +45,14 @@
     SelectAllScope,
     SearchKind,
     SearchSortPref,
+    AfterMove,
   } from '../../../lib/types'
+
+  $: afterMoveOptions = [
+    { key: 'older', label: $t('list.afterMove.older') },
+    { key: 'newer', label: $t('list.afterMove.newer') },
+    { key: 'list', label: $t('list.afterMove.list') },
+  ]
 
   $: snippetCapable = $prefs.rowTemplate === 'relaxed' || $prefs.rowTemplate === 'comfortable'
 
@@ -209,6 +218,15 @@
       checked={$prefs.threadedList}
       label={$t('list.threaded.label')}
       on:change={(e) => setThreadedList(e.detail)}
+    />
+  </Row>
+  <Row id="after-move" label={$t('list.afterMove.label')} hint={$t('list.afterMove.hint')}>
+    <AfterMoveSkeleton slot="preview" mode={$prefs.afterMove} />
+    <Segmented
+      label={$t('list.afterMove.label')}
+      value={$prefs.afterMove}
+      options={afterMoveOptions}
+      on:change={(e) => setAfterMove(e.detail as AfterMove)}
     />
   </Row>
 </Card>

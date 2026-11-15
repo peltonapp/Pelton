@@ -5198,6 +5198,12 @@ export class UIPrefsDTO {
     "threadedList": boolean;
 
     /**
+     * AfterMove is what the reader opens once the open message is archived,
+     * deleted or moved in the new design: older, newer or list.
+     */
+    "afterMove": string;
+
+    /**
      * ReaderWidth caps the reading column in the new design: narrow, medium
      * or full.
      */
@@ -5568,6 +5574,9 @@ export class UIPrefsDTO {
         }
         if (!("threadedList" in $$source)) {
             this["threadedList"] = false;
+        }
+        if (!("afterMove" in $$source)) {
+            this["afterMove"] = "";
         }
         if (!("readerWidth" in $$source)) {
             this["readerWidth"] = "";

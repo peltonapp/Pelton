@@ -1580,6 +1580,7 @@ export const SettingKeys = {
   recentSearches: 'recent_searches',
   composeOpenIn: 'compose_open_in',
   threadedList: 'threaded_list',
+  afterMove: 'after_move',
   readerWidth: 'reader_width',
   themeId: 'theme_id',
   menuBarInApp: 'menu_bar_in_app',

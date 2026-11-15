@@ -37,6 +37,9 @@ export type ShortcutAction =
   | 'download-offline'
   | 'delete-message'
   | 'archive'
+  // archives the open or selected conversations whole and moves the reader on
+  // to the next one.
+  | 'done'
   // marks the message as spam, or rescues it when it is already in the spam
   // folder: one key, since only one of the two ever applies.
   | 'toggle-spam'
@@ -134,6 +137,7 @@ export const shortcuts: Shortcut[] = [
   // move to trash with one undo behind it (#329).
   { action: 'delete-message', combo: 'backspace', alt: 'delete', labelKey: 'shortcut.deleteMessage' },
   { action: 'archive', combo: 'e', labelKey: 'shortcut.archive' },
+  { action: 'done', combo: 'd', labelKey: 'shortcut.done' },
   { action: 'toggle-spam', combo: '', labelKey: 'shortcut.toggleSpam' },
   { action: 'unsubscribe', combo: '', labelKey: 'shortcut.unsubscribe' },
   // saved views (preset searches), unbound by default so the user opts in.

@@ -2083,6 +2083,14 @@ const en: Record<string, string> = {
   'list.card.conversations': 'Conversations',
   'list.threaded.label': 'Group into conversations',
   'list.threaded.hint': 'Show each conversation as one row with its replies beneath, and open it as a conversation.',
+  'shortcut.done': 'Mark done',
+  'palette.bulk.doneCount': 'Mark {n} done',
+  'inboxZero.line': 'Nothing left in your inbox.',
+  'list.afterMove.label': 'After archive, delete or move',
+  'list.afterMove.hint': 'What the reader opens once the message on screen leaves the list. Mark done follows the same choice.',
+  'list.afterMove.older': 'Older',
+  'list.afterMove.newer': 'Newer',
+  'list.afterMove.list': 'Back to list',
 }
 
 export default en

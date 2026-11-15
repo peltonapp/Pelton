@@ -153,8 +153,10 @@
     exportEml,
     reportArchiveExport,
     dropDeleted,
+    leaveList,
     toggleSpam,
   } from './lib/messageactions'
+  import { markDone } from './lib/triage'
   import { buildCommands, mailCommands, type CommandContext, type MessageOp, type FolderOp } from './lib/commands'
   import { extraPaletteCommands } from './lib/palettesources'
   import { catalogByAction } from './lib/menuactions'
@@ -706,6 +708,9 @@
       case 'archive':
         void bulkArchive(items)
         return true
+      case 'done':
+        void markDone(items)
+        return true
       case 'download-offline':
         void bulkSetOffline(items, true)
         return true
@@ -788,17 +793,17 @@
           const undo = await archiveMessage(msg.id)
           reportArchiveExport(undo)
           recordArchived(msg, undo)
-          removeFromList(msg.id)
           closeTab(msg.id)
-          if (get(openMessageId) === msg.id) {
-            openMessageId.set(null)
-          }
+          leaveList([msg.id])
           break
         }
         case 'toggle-spam':
           if (await toggleSpam(msg)) {
             closeTab(msg.id)
           }
+          break
+        case 'done':
+          await markDone([msg])
           break
       }
     } catch (err) {
@@ -872,6 +877,7 @@
       case 'download-offline':
       case 'delete-message':
       case 'archive':
+      case 'done':
       case 'toggle-spam':
       case 'unsubscribe':
         void messageAction(action)
@@ -1057,6 +1063,9 @@
       case 'archive':
         void archiveOne(item)
         break
+      case 'done':
+        void markDone([item])
+        break
       case 'download-offline':
         void setOffline(item, true)
         break
@@ -1088,6 +1097,9 @@
         break
       case 'archive':
         void bulkArchive(items)
+        break
+      case 'done':
+        void markDone(items)
         break
       case 'download-offline':
         void bulkSetOffline(items, true)

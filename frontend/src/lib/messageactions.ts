@@ -23,7 +23,8 @@ import {
 } from './api'
 import type { ArchiveUndo } from './api'
 import type { MessageSummary, Folder } from './types'
-import { patchInList, removeFromList, neighbourInList } from '../stores/messages'
+import { patchInList, removeFromList, neighbourInList, newestFirst } from '../stores/messages'
+import { prefs } from '../stores/prefs'
 import { openMessageId } from '../stores/selection'
 import { clearSelection } from '../stores/listselect'
 import { recordDeleted, recordDeletedBatch } from '../stores/undodelete'
@@ -94,23 +95,56 @@ export async function setOffline(item: MessageSummary, offline: boolean): Promis
 }
 
 /**
- * Drops a deleted message from the list and moves the detail pane on.
- *
- * Emptying the pane instead means a run of deletes has to go back to the list
- * between each one, which is most of the work of triaging a mailbox. alsoDeleting
- * names the rest of a batch, so a bulk delete does not land on a row that is
- * about to go as well.
- *
- * It removes the row itself because the neighbour has to be read while the row
- * is still there to have one.
+ * nextAfterLeaving picks the message the reader opens once the open message
+ * leaves the list. The new design follows the afterMove preference: the older
+ * or newer neighbour, falling back to the other side at either end, or null
+ * for back to the list. Classic keeps its own behaviour: a delete moves on to
+ * the neighbour below and anything else closes the pane.
  */
-export function dropDeleted(id: number, alsoDeleting?: ReadonlySet<number>): void {
-  const wasOpen = get(openMessageId) === id
-  const next = wasOpen ? neighbourInList(id, alsoDeleting) : null
-  removeFromList(id)
+export function nextAfterLeaving(openId: number, leaving: ReadonlySet<number>, classicAdvance: boolean): number | null {
+  const p = get(prefs)
+  if (p.design === 'classic') {
+    return classicAdvance ? neighbourInList(openId, leaving) : null
+  }
+  if (p.afterMove === 'list') {
+    return null
+  }
+  const older = newestFirst() ? 'below' : 'above'
+  const newer = older === 'below' ? 'above' : 'below'
+  return neighbourInList(openId, leaving, p.afterMove === 'newer' ? newer : older)
+}
+
+/**
+ * Takes rows out of the list after they were archived, deleted or moved, and
+ * moves the reader on when it was showing one of them, so working down a
+ * mailbox never goes back to an empty pane in between. alsoLeaving names the
+ * rest of a batch, so the reader does not land on a row about to go as well.
+ * classicAdvance keeps the classic design's delete behaviour (see
+ * nextAfterLeaving).
+ *
+ * It removes the rows itself because the neighbour has to be read while the
+ * open row is still there to have one.
+ */
+export function leaveList(ids: readonly number[], alsoLeaving?: ReadonlySet<number>, classicAdvance = false): void {
+  const leaving = new Set([...ids, ...(alsoLeaving ?? [])])
+  const open = get(openMessageId)
+  const wasOpen = open !== null && ids.includes(open)
+  const next = wasOpen ? nextAfterLeaving(open, leaving, classicAdvance) : null
+  for (const id of ids) {
+    removeFromList(id)
+  }
   if (wasOpen) {
     openMessageId.set(next)
   }
+}
+
+/**
+ * Drops a deleted message from the list and moves the detail pane on.
+ * alsoDeleting names the rest of a batch, so a bulk delete does not land on a
+ * row that is about to go as well.
+ */
+export function dropDeleted(id: number, alsoDeleting?: ReadonlySet<number>): void {
+  leaveList([id], alsoDeleting, true)
 }
 
 /** Deletes one message, recording it for undo and moving the pane on if it was open. */
@@ -135,7 +169,6 @@ export function reportArchiveExport(undo: ArchiveUndo): void {
   }
 }
 
-/** Archives one message, recording it for undo and closing it if it was open. */
 /**
  * Moves messages to a folder of their account as one undo step. Messages
  * already in that folder are left alone. The rows leave the list at once and
@@ -146,12 +179,7 @@ export async function moveToFolder(items: MessageSummary[], folder: Folder): Pro
   if (targets.length === 0) {
     return
   }
-  for (const target of targets) {
-    removeFromList(target.id)
-    if (get(openMessageId) === target.id) {
-      openMessageId.set(null)
-    }
-  }
+  leaveList(targets.map((m) => m.id))
   const undone: ArchivedMessage[] = []
   let failure = ''
   for (const target of targets) {
@@ -177,15 +205,13 @@ export async function moveToFolder(items: MessageSummary[], folder: Folder): Pro
   )
 }
 
+/** Archives one message, recording it for undo and moving the reader on if it was open. */
 export async function archive(item: MessageSummary): Promise<void> {
   try {
     const undo = await archiveMessage(item.id)
     reportArchiveExport(undo)
     recordArchived(item, undo)
-    removeFromList(item.id)
-    if (get(openMessageId) === item.id) {
-      openMessageId.set(null)
-    }
+    leaveList([item.id])
   } catch (err) {
     toastError(errorMessage(err))
   }
@@ -219,10 +245,7 @@ export async function toggleSpam(item: MessageSummary): Promise<boolean> {
   try {
     const undo = state === 'spam' ? await markNotSpam(item.id) : await markSpam(item.id)
     recordArchived(item, undo)
-    removeFromList(item.id)
-    if (get(openMessageId) === item.id) {
-      openMessageId.set(null)
-    }
+    leaveList([item.id])
     toastSuccess(get(t)(state === 'spam' ? 'spam.toast.notSpam' : 'spam.toast.marked'))
     return true
   } catch (err) {
@@ -339,6 +362,7 @@ export async function exportEml(ids: number[]): Promise<void> {
 /** Archives every given message, sequentially, as one undo step. */
 export async function bulkArchive(items: MessageSummary[]): Promise<void> {
   clearSelection()
+  const batch = new Set(items.map((m) => m.id))
   const undone: ArchivedMessage[] = []
   for (const item of items) {
     try {
@@ -348,10 +372,7 @@ export async function bulkArchive(items: MessageSummary[]): Promise<void> {
       if (entry) {
         undone.push(entry)
       }
-      removeFromList(item.id)
-      if (get(openMessageId) === item.id) {
-        openMessageId.set(null)
-      }
+      leaveList([item.id], batch)
     } catch (err) {
       toastError(errorMessage(err))
     }

@@ -165,6 +165,9 @@ const (
 	settingComposeOpenIn = "compose_open_in"
 	// group the message list into conversations in the new design.
 	settingThreadedList = "threaded_list"
+	// what the reader shows after the open message is archived, deleted or
+	// moved in the new design: "older", "newer" or "list".
+	settingAfterMove = "after_move"
 	// how wide the reading column runs in the new design: "narrow", "medium"
 	// or "full".
 	settingReaderWidth = "reader_width"
@@ -425,6 +428,9 @@ type UIPrefsDTO struct {
 	ComposeOpenIn string `json:"composeOpenIn"`
 	// ThreadedList shows the message list as conversations in the new design.
 	ThreadedList bool `json:"threadedList"`
+	// AfterMove is what the reader opens once the open message is archived,
+	// deleted or moved in the new design: older, newer or list.
+	AfterMove string `json:"afterMove"`
 	// ReaderWidth caps the reading column in the new design: narrow, medium
 	// or full.
 	ReaderWidth string `json:"readerWidth"`
@@ -591,6 +597,7 @@ func (a *App) GetUIPrefs() (UIPrefsDTO, error) {
 		QuickFilterBar:             a.boolSetting(settingQuickFilterBar, false),
 		ComposeOpenIn:              a.stringSetting(settingComposeOpenIn, "window"),
 		ThreadedList:               a.boolSetting(settingThreadedList, true),
+		AfterMove:                  a.stringSetting(settingAfterMove, "older"),
 		ReaderWidth:                a.stringSetting(settingReaderWidth, "full"),
 		ThemeID:                    a.stringSetting(settingThemeID, ""),
 		MenuBarInApp:               a.boolSetting(settingMenuBarInApp, false),

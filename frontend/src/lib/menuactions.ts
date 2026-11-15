@@ -46,6 +46,7 @@ import {
   IconPin,
   IconBrush,
   IconCommand,
+  IconCircleCheck,
 } from '@tabler/icons-svelte'
 import type { ShortcutAction } from './shortcuts'
 import { isMac } from './i18n'
@@ -112,6 +113,7 @@ export const menuActionCatalog: MenuActionDef[] = [
   { action: 'snooze', labelKey: 'shortcut.snooze', iconName: 'alarm-snooze', icon: IconAlarmSnooze, needsMessage: true },
   { action: 'download-offline', labelKey: 'shortcut.downloadOffline', iconName: 'download', icon: IconDownload, needsMessage: true },
   { action: 'archive', labelKey: 'menu.archive', iconName: 'archive', icon: IconArchive, needsMessage: true },
+  { action: 'done', labelKey: 'shortcut.done', iconName: 'circle-check', icon: IconCircleCheck, needsMessage: true },
   { action: 'toggle-spam', labelKey: 'shortcut.toggleSpam', iconName: 'alert-triangle', icon: IconAlertTriangle, needsMessage: true },
   { action: 'delete-message', labelKey: 'menu.deleteMessage', iconName: 'trash', icon: IconTrash, needsMessage: true, danger: true },
   { action: 'unsubscribe', labelKey: 'shortcut.unsubscribe', iconName: 'mail-x', icon: IconMailX, needsMessage: true },

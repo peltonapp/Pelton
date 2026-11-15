@@ -5,7 +5,7 @@
 // source of truth.
 
 import { writable } from 'svelte/store'
-import type { UIPrefs, ThemePref, DensityPref, EditorMode, ViewsPlacement, CloseAction, LogLevel, SelectAllScope, SearchKind, SearchSortPref, DesignPref, LayoutMode, NavStyle, RailSide, PaneStyle, AvatarPlacement, ComposeOpenIn, ReaderWidth } from '../lib/types'
+import type { UIPrefs, ThemePref, DensityPref, EditorMode, ViewsPlacement, CloseAction, LogLevel, SelectAllScope, SearchKind, SearchSortPref, DesignPref, LayoutMode, NavStyle, RailSide, PaneStyle, AvatarPlacement, ComposeOpenIn, ReaderWidth, AfterMove } from '../lib/types'
 import { getUIPrefs, setSetting, SettingKeys, systemColorScheme, setWindowTheme, getThemeApply } from '../lib/api'
 import { applyTheme, applyDensity, applyAccent, applyScale, applyReduceMotion, applyHandCursor, setThemeSchedule, applyUIFont, applyMonoFont, applyCorners, applyDesign, watchSystemTheme, setSystemSchemeOverride, resolveTheme } from '../theme/theme'
 import { applyUserTheme } from '../theme/usertheme'
@@ -87,6 +87,7 @@ const defaults: UIPrefs = {
   quickFilterBar: false,
   composeOpenIn: 'window',
   threadedList: true,
+  afterMove: 'older',
   readerWidth: 'full',
   themeId: '',
   menuBarInApp: false,
@@ -336,6 +337,12 @@ export function setComposeOpenIn(composeOpenIn: ComposeOpenIn): void {
 export function setThreadedList(threadedList: boolean): void {
   prefs.update((p) => ({ ...p, threadedList }))
   void setSetting(SettingKeys.threadedList, String(threadedList))
+}
+
+/** Picks what the reader opens after the open message is archived, deleted or moved. */
+export function setAfterMove(afterMove: AfterMove): void {
+  prefs.update((p) => ({ ...p, afterMove }))
+  void setSetting(SettingKeys.afterMove, afterMove)
 }
 
 /** Picks how wide the reading column runs in the new design. */
