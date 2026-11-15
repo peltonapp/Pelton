@@ -67,7 +67,11 @@ const app =
 
 initSmoothCaret()
 
-// remove the pre-mount splash now that svelte has taken over.
-document.getElementById('splash')?.remove()
+// fade the pre-mount splash out now that svelte has taken over, then drop it.
+const splash = document.getElementById('splash')
+if (splash) {
+  splash.classList.add('out')
+  setTimeout(() => splash.remove(), 260)
+}
 
 export default app

@@ -9,27 +9,120 @@
          dead space along the right and bottom edges. -->
     <title>Pelton</title>
     <style>
-        /* instant splash painted before the bundle and svelte mount, so the
-           window never shows blank while loading. removed once the app mounts.
-           inline and token-free on purpose: it must render with zero deps. */
-        html, body { margin: 0; height: 100%; background: #111214; }
+        /* the splash is painted before the bundle and svelte mount, so the
+           window never shows blank while loading: an outline of the app with
+           the Pelton mark where the open message goes. it is removed once
+           the app mounts. inline and token-free: it must render with nothing
+           else loaded. */
+        :root {
+            --sp-bg: #f3f3f1; --sp-pane: #fbfbfa; --sp-line: #e3e3df;
+            --sp-bar: #e6e6e2; --sp-glint: #f4f4f1; --sp-accent: #465af2;
+        }
+        @media (prefers-color-scheme: dark) {
+            :root {
+                --sp-bg: #111214; --sp-pane: #17181b; --sp-line: #24262a;
+                --sp-bar: #212327; --sp-glint: #2b2d32; --sp-accent: #6e7dff;
+            }
+        }
+        html, body { margin: 0; height: 100%; background: var(--sp-bg); }
         #splash {
-            position: fixed; inset: 0; display: flex; align-items: center;
-            justify-content: center; flex-direction: column; gap: 14px;
-            background: #111214; color: #7e828b;
-            font-family: -apple-system, system-ui, sans-serif; font-size: 13px;
+            position: fixed; inset: 0; z-index: 1000; display: flex;
+            background: var(--sp-bg); transition: opacity .22s ease-out;
         }
-        #splash .ring {
-            width: 26px; height: 26px; border-radius: 999px;
-            border: 2px solid #2a2c30; border-top-color: #465af2;
-            animation: spin .7s linear infinite;
+        #splash.out { opacity: 0; pointer-events: none; }
+        #splash .rail {
+            flex: 0 0 48px; display: flex; flex-direction: column;
+            align-items: center; gap: 14px; padding-top: 52px;
         }
-        @keyframes spin { to { transform: rotate(360deg); } }
+        #splash .dot { width: 22px; height: 22px; border-radius: 6px; }
+        #splash .dot.on { background: var(--sp-accent); opacity: .5; animation: none; }
+        #splash .side {
+            flex: 0 0 196px; display: flex; flex-direction: column; gap: 12px;
+            padding: 56px 16px 0 6px;
+        }
+        #splash .panes {
+            flex: 1; min-width: 0; display: flex; margin: 44px 8px 8px 0;
+            border: 1px solid var(--sp-line); border-radius: 8px;
+            background: var(--sp-pane); overflow: hidden;
+        }
+        #splash .list {
+            flex: 0 0 34%; max-width: 380px; min-width: 0;
+            border-right: 1px solid var(--sp-line);
+        }
+        #splash .row {
+            display: flex; flex-direction: column; gap: 8px; padding: 14px 16px;
+            border-bottom: 1px solid var(--sp-line);
+        }
+        #splash .read {
+            flex: 1; min-width: 0; position: relative; display: flex;
+            align-items: center; justify-content: center;
+        }
+        #splash .b {
+            height: 9px; border-radius: 5px; background: var(--sp-bar);
+            background-image: linear-gradient(100deg, transparent 30%, var(--sp-glint) 50%, transparent 70%);
+            background-size: 220% 100%; background-repeat: no-repeat;
+            animation: sp-glint 1.5s ease-in-out infinite;
+        }
+        #splash .dot { background: var(--sp-bar); }
+        #splash .w30 { width: 30%; } #splash .w45 { width: 45%; }
+        #splash .w60 { width: 60%; } #splash .w75 { width: 75%; }
+        #splash .w90 { width: 90%; }
+        #splash .row:nth-child(2) .b { animation-delay: .08s; }
+        #splash .row:nth-child(3) .b { animation-delay: .16s; }
+        #splash .row:nth-child(4) .b { animation-delay: .24s; }
+        #splash .row:nth-child(5) .b { animation-delay: .32s; }
+        #splash .row:nth-child(6) .b { animation-delay: .4s; }
+        #splash .mark {
+            height: 72px; width: auto; user-select: none; -webkit-user-select: none;
+            animation: sp-breathe 1.9s ease-in-out infinite;
+        }
+        /* a window that holds one message, one composer or the send log gets
+           the mark alone. */
+        #splash.solo .rail, #splash.solo .side, #splash.solo .list { display: none; }
+        #splash.solo .panes { margin: 0; border: 0; border-radius: 0; background: var(--sp-bg); }
+        @keyframes sp-glint { from { background-position: 130% 0; } to { background-position: -90% 0; } }
+        @keyframes sp-breathe {
+            0%, 100% { opacity: .55; transform: scale(.97); }
+            50% { opacity: 1; transform: scale(1); }
+        }
+        @media (max-width: 720px) { #splash .side { display: none; } }
+        @media (prefers-reduced-motion: reduce) {
+            #splash .b, #splash .mark { animation: none; }
+            #splash { transition: none; }
+        }
     </style>
 </head>
 <body>
 <div id="app"></div>
-<div id="splash"><div class="ring"></div><div>Loading Pelton…</div></div>
+<div id="splash" role="status" aria-label="Loading Pelton">
+    <div class="rail" aria-hidden="true">
+        <span class="dot on"></span><span class="dot"></span><span class="dot"></span><span class="dot"></span>
+    </div>
+    <div class="side" aria-hidden="true">
+        <span class="b w60"></span><span class="b w75"></span><span class="b w45"></span>
+        <span class="b w60"></span><span class="b w30"></span><span class="b w75"></span>
+        <span class="b w45"></span>
+    </div>
+    <div class="panes">
+        <div class="list" aria-hidden="true">
+            <div class="row"><span class="b w45"></span><span class="b w90"></span><span class="b w60"></span></div>
+            <div class="row"><span class="b w30"></span><span class="b w75"></span><span class="b w90"></span></div>
+            <div class="row"><span class="b w60"></span><span class="b w90"></span><span class="b w45"></span></div>
+            <div class="row"><span class="b w45"></span><span class="b w60"></span><span class="b w75"></span></div>
+            <div class="row"><span class="b w30"></span><span class="b w90"></span><span class="b w60"></span></div>
+            <div class="row"><span class="b w60"></span><span class="b w75"></span><span class="b w30"></span></div>
+        </div>
+        <div class="read">
+            <img class="mark" src="./src/assets/images/icons/pelton-logo.png" alt="" draggable="false"/>
+        </div>
+    </div>
+</div>
+<script>
+    // a secondary window is not the whole app, so its splash is the mark alone.
+    if (new URLSearchParams(location.search).get('window')) {
+        document.getElementById('splash').classList.add('solo')
+    }
+</script>
 <script src="./src/main.ts" type="module"></script>
 </body>
 </html>
