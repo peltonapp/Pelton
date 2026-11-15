@@ -99,6 +99,11 @@ export default defineConfig({
     // does not exist and every component test fails before it renders.
     ...(process.env.VITEST ? { conditions: ['browser'] } : {}),
   },
+  // the date scanning worker loads chrono's locales on demand, which needs
+  // module workers to split into chunks.
+  worker: {
+    format: 'es',
+  },
   build: {
     // the flag set is globbed whole so a new locale needs no asset work, and
     // most of its svgs are small enough that vite would inline every one of

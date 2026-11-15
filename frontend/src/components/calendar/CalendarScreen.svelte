@@ -42,6 +42,7 @@
     calendarImport,
     calendarSync,
     calendarSyncError,
+    defaultCalendarId,
     eventConflict,
     loadCalendars,
     loadCalendarSettings,
@@ -124,7 +125,7 @@
   $: placed = [...$occurrences, ...taskEntries].map(placeOccurrence)
   $: colors = new Map($calendars.map((c) => [c.id, calendarColor(c)]))
   $: writable = $calendars.filter((c) => !c.readOnly)
-  $: defaultCalendar = (writable.find((c) => c.id === $calendarSettings.defaultCalendarId) ?? writable.find((c) => c.default) ?? writable[0])?.id ?? 0
+  $: defaultCalendar = defaultCalendarId($calendars, $calendarSettings)
   $: busyDays = daysWithEvents(placed)
   $: title = formatViewTitle(view, range.from, range.to, focus)
   $: rtl = typeof document !== 'undefined' && document.documentElement.dir === 'rtl'
@@ -707,7 +708,8 @@
       return { start: startOfDay(seed.at), end: addDays(startOfDay(seed.at), 1), allDay: true }
     }
     const start = seed.at && seed.mode === 'time' ? seed.at : defaultSlot(seed.at ?? focus, new Date())
-    return { start, end: new Date(start.getTime() + 3600000), allDay: false }
+    const end = seed.mode === 'time' && seed.end && seed.end > start ? seed.end : new Date(start.getTime() + 3600000)
+    return { start, end, allDay: false }
   }
 
   async function foundIn(mail: MailEventSource): Promise<FoundDate[]> {

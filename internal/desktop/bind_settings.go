@@ -192,6 +192,11 @@ const (
 	// action done by mouse, and the sheet shown while the modifier is held.
 	settingCoachHints = "coach_hints"
 	settingCoachHold  = "coach_hold"
+	// mark the dates a mail names in the reader, with a calendar preview on
+	// hover. On by default.
+	settingMailDates = "mail_dates"
+	// show the My Day panel beside the mail surface in the new design.
+	settingMyDayPanel = "my_day_panel"
 	// general new-mail OS notifications (#126). VIP senders are stored
 	// separately in bind_vip.go and notify even when this is off.
 	settingNotifyNewMail = "notify_new_mail"
@@ -477,6 +482,12 @@ type UIPrefsDTO struct {
 	// SenderPanel shows the panel about the open message's sender beside the
 	// reader in the new design.
 	SenderPanel bool `json:"senderPanel"`
+	// MailDates marks the dates a mail names in the reader, with a preview of
+	// the calendar around them on hover.
+	MailDates bool `json:"mailDates"`
+	// MyDayPanel shows today's agenda and tasks beside the mail surface in the
+	// new design.
+	MyDayPanel bool `json:"myDayPanel"`
 	// ThemeID selects an installed custom theme (see bind_themes.go). Empty
 	// means the built-in default themes driven by the Theme setting.
 	ThemeID string `json:"themeId"`
@@ -651,6 +662,8 @@ func (a *App) GetUIPrefs() (UIPrefsDTO, error) {
 		SplitActive:                a.stringSetting(settingSplitActive, ""),
 		ReaderWidth:                a.stringSetting(settingReaderWidth, "full"),
 		SenderPanel:                a.boolSetting(settingSenderPanel, false),
+		MailDates:                  a.boolSetting(settingMailDates, true),
+		MyDayPanel:                 a.boolSetting(settingMyDayPanel, false),
 		ThemeID:                    a.stringSetting(settingThemeID, ""),
 		MenuBarInApp:               a.boolSetting(settingMenuBarInApp, false),
 		MenuBarNativeMinimal:       a.boolSetting(settingMenuBarNativeMinimal, false),

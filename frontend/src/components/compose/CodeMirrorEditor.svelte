@@ -113,6 +113,14 @@
     return view ? view.state.selection.main.head : 0
   }
 
+  // insertText puts text at the caret, in place of the selection.
+  export function insertText(text: string): void {
+    if (!view) return
+    const sel = view.state.selection.main
+    view.dispatch({ changes: { from: sel.from, to: sel.to, insert: text }, selection: { anchor: sel.from + text.length } })
+    view.focus()
+  }
+
   // wrapSelection surrounds the selection (or a placeholder) with token, used by
   // the markdown toolbar for bold/italic/code.
   export function wrapSelection(token: string, ph: string): void {

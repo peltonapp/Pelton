@@ -249,6 +249,7 @@ export function buildSheet(ctx: SheetContext, src: SheetSource): SheetGroup[] {
       ...(ctx.space !== 'calendar' ? [item('calendar-quick-add')] : []),
       ...(mail ? [item('next-pane'), item('prev-pane'), item('focus-sidebar'), item('focus-list'), item('focus-reader')] : []),
       item('sync'),
+      item('toggle-my-day'),
       item('focus-mode'),
       item('shortcut-sheet'),
       item('preferences'),

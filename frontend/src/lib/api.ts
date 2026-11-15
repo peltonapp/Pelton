@@ -1936,6 +1936,8 @@ export const SettingKeys = {
   splitActive: 'split_inbox_active',
   readerWidth: 'reader_width',
   senderPanel: 'sender_panel',
+  mailDates: 'mail_dates',
+  myDayPanel: 'my_day_panel',
   themeId: 'theme_id',
   menuBarInApp: 'menu_bar_in_app',
   menuBarNativeMinimal: 'menu_bar_native_minimal',

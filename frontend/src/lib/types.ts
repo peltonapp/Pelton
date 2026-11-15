@@ -875,6 +875,12 @@ export interface UIPrefs {
   // senderPanel shows the panel about the open message's sender beside the
   // reader in the new design.
   senderPanel: boolean
+  // mailDates marks the dates a mail names in the reader, with a calendar
+  // preview on hover.
+  mailDates: boolean
+  // myDayPanel shows today's agenda and tasks beside the mail surface in the
+  // new design.
+  myDayPanel: boolean
   // themeId selects an installed custom theme; empty means the built-in
   // default themes driven by the theme (light/dark/system) setting.
   themeId: string

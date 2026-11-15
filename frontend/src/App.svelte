@@ -151,7 +151,9 @@
     inVisual,
   } from './stores/listselect'
   import { selectFolder, selectView, revealMessage } from './stores/selection'
-  import { setTheme, setThemeId } from './stores/prefs'
+  import { setTheme, setThemeId, setMyDayPanel } from './stores/prefs'
+  import MyDayPanel from './components/myday/MyDayPanel.svelte'
+  import { myDayFits } from './lib/myday'
   import { openCreateFolder, openRenameFolder, openDeleteFolder, openEmptyTrash } from './stores/folderdialog'
   import { setFolderPinned, listThemes } from './lib/api'
   import { editViewInEditor } from './stores/views'
@@ -189,6 +191,7 @@
   import { attachmentsOpen, toggleAttachments } from './stores/attachments'
   import { setSenderPanel } from './stores/prefs'
   import './lib/palette-tasks'
+  import './lib/palette-availability'
   import { startTasks, toggleDone, tasks as taskStore, taskFromMailRequest } from './stores/tasks'
   import { createTasksFromMail, openTask } from './lib/taskmail'
   import { getTask } from './lib/api'
@@ -278,6 +281,15 @@
   let windowWidth = window.innerWidth
   $: railFolded = $prefs.navStyle === 'rail' && windowWidth < railFoldWidth
   $: showRail = $prefs.navStyle === 'rail' && !railFolded
+
+  // the My Day panel sits beside the mail surface only while the reader keeps
+  // a readable column next to it; narrower, it folds away.
+  let mailWidth = 0
+  let myDayWidth = 0
+  $: if ($prefs.myDayPanel && myDayWidth === 0) {
+    myDayWidth = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--myday-width')) || 0
+  }
+  $: showMyDay = $prefs.myDayPanel && myDayFits(mailWidth, sidebarW, listW, stacked, myDayWidth)
   $: inboxUnread = $sidebar.data?.views?.find((v) => v.key === 'inbox')?.unreadCount ?? 0
   // classic shows contacts as an overlay; the new design shows it as a space.
   function openContacts(): void {
@@ -1139,6 +1151,17 @@
           createTaskFromMail()
         }
         break
+      case 'toggle-my-day':
+        // from another space it brings mail back with the panel open.
+        if (!classic) {
+          if ($space !== 'mail') {
+            openSpace('mail')
+            setMyDayPanel(true)
+          } else {
+            setMyDayPanel(!$prefs.myDayPanel)
+          }
+        }
+        break
       case 'undo':
         if (!triggerUndo() && !triggerUndoDelete() && !triggerUndoArchive()) {
           toastInfo(get(t)('app.toast.nothingToUndo'))
@@ -1956,7 +1979,12 @@
     {/if}
 
     {#if $space === 'mail'}
-      <div class="mail" style={`grid-template-columns: ${sidebarW}px 0 minmax(0, 1fr)`}>
+      <div
+        class="mail"
+        class:with-myday={showMyDay}
+        style={`grid-template-columns: ${sidebarW}px 0 minmax(0, 1fr)${showMyDay ? ' var(--myday-width)' : ''}`}
+        bind:clientWidth={mailWidth}
+      >
         <div class="side-col">
           <Sidebar
             on:compose={startCompose}
@@ -2000,6 +2028,9 @@
           {/if}
           <ComposeTabLayer />
         </div>
+        {/if}
+        {#if showMyDay}
+          <MyDayPanel on:close={() => setMyDayPanel(false)} />
         {/if}
       </div>
     {:else if $space === 'contacts'}

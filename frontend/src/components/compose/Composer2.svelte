@@ -19,6 +19,9 @@
   import minimizeIcon from '@phosphor-icons/core/assets/duotone/minus-duotone.svg?raw'
   import trashIcon from '@phosphor-icons/core/assets/duotone/trash-duotone.svg?raw'
   import xIcon from '@phosphor-icons/core/assets/regular/x.svg?raw'
+  import availabilityIcon from '@phosphor-icons/core/assets/duotone/calendar-dots-duotone.svg?raw'
+  import AvailabilityPanel from './v2/AvailabilityPanel.svelte'
+  import { availabilityRequest } from '../../stores/compose'
   import Ph from '../common/Ph.svelte'
   import Select from '../common/Select.svelte'
   import AnchoredPopover from '../common/AnchoredPopover.svelte'
@@ -100,7 +103,6 @@
   let strip: AttachmentStrip
   let followMenu: FollowUpMenu | null = null
   let snippetPicker: SnippetPicker | null = null
-  let cmEditor: CodeMirrorEditor | null = null
 
   /** What inserting a snippet needs from either editor. */
   interface SnippetEditor {
@@ -110,6 +112,8 @@
   }
   let moreButton: HTMLButtonElement
   let moreOpen = false
+  let availButton: HTMLButtonElement
+  let availOpen = false
   let sigChoice = ''
 
   $: rich = session.mode === 'wysiwyg'
@@ -121,6 +125,7 @@
   let RichEditor: typeof RichEditorView | null = null
   let richEditor: RichEditorView | null = null
   let CMEditor: typeof CodeMirrorEditor | null = null
+  let cmEditor: CodeMirrorEditor | null = null
   let revision = 0
   $: if (rich && !RichEditor) {
     void import('./RichEditor.svelte').then((m) => (RichEditor = m.default))
@@ -611,6 +616,25 @@
     }
   }
 
+  // the free times picked in the availability panel go in at the caret.
+  function insertAvailability(text: string): void {
+    availOpen = false
+    if (rich) {
+      richEditor?.insertText(text)
+    } else {
+      cmEditor?.insertText(text)
+    }
+  }
+
+  // the palette asks the composer of a session to open the panel.
+  $: if ($availabilityRequest === session.id) {
+    availabilityRequest.set(null)
+    if (session.minimized) {
+      updateCompose(session.id, { minimized: false })
+    }
+    void tick().then(() => (availOpen = true))
+  }
+
   function onConfirmKeydown(event: KeyboardEvent): void {
     if (event.key === 'Escape') {
       event.preventDefault()
@@ -678,6 +702,18 @@
         on:change={(e) => updateCompose(session.id, { followUpAt: e.detail || undefined })}
       />
       <SnippetPicker bind:this={snippetPicker} id={`compose-${session.id}`} canManage={mainWindow} on:pick={(e) => void insertSnippet(e.detail, 0)} />
+      <button
+        type="button"
+        class="c2-tool compact"
+        bind:this={availButton}
+        aria-label={$t('avail.open')}
+        aria-haspopup="dialog"
+        aria-expanded={availOpen}
+        use:tip={{ text: $t('avail.open') }}
+        on:click={() => (availOpen = !availOpen)}
+      >
+        <Ph svg={availabilityIcon} size={16} />
+      </button>
       <button type="button" class="c2-tool" disabled={saving} on:click={() => save()}>
         <Ph svg={floppyIcon} size={16} />
         <span>{$t('action.saveDraft')}</span>
@@ -794,6 +830,18 @@
           canManage={mainWindow}
           on:pick={(e) => void insertSnippet(e.detail, 0)}
         />
+        <button
+          type="button"
+          class="c2-tool compact"
+          bind:this={availButton}
+          aria-label={$t('avail.open')}
+          aria-haspopup="dialog"
+          aria-expanded={availOpen}
+          use:tip={{ text: $t('avail.open'), side: 'top' }}
+          on:click={() => (availOpen = !availOpen)}
+        >
+          <Ph svg={availabilityIcon} size={16} />
+        </button>
         <button type="button" class="c2-tool compact" disabled={saving} aria-label={$t('action.saveDraft')} use:tip={{ text: $t('action.saveDraft'), side: 'top' }} on:click={() => save()}>
           <Ph svg={floppyIcon} size={16} />
         </button>
@@ -850,6 +898,12 @@
     </div>
   {/if}
 </div>
+
+{#if availOpen && availButton}
+  <AnchoredPopover anchor={availButton} side={docked ? 'above' : 'below'} align="start" label={$t('avail.title')} on:close={() => (availOpen = false)}>
+    <AvailabilityPanel on:insert={(e) => insertAvailability(e.detail)} on:close={() => (availOpen = false)} />
+  </AnchoredPopover>
+{/if}
 
 {#if moreOpen && moreButton}
   <AnchoredPopover anchor={moreButton} side={docked ? 'above' : 'below'} align="end" role="menu" label={$t('compose2.more')} on:close={() => (moreOpen = false)}>
@@ -913,9 +967,11 @@
   }
 
   /* the toolbar of a window or tab. in a window it is the title bar too: it
-     drags the window and keeps clear of the macOS traffic lights. */
+     drags the window and keeps clear of the macOS traffic lights. a narrow
+     tab wraps it rather than clipping the buttons at its end. */
   .toolbar {
     display: flex;
+    flex-wrap: wrap;
     align-items: center;
     gap: var(--space-1);
     min-height: calc(var(--control-height) + 2 * var(--space-3));

@@ -60,6 +60,7 @@
   import { menuHint } from '../../stores/shortcuts'
   import { createTasksFromMail } from '../../lib/taskmail'
   import { forgetCard } from '../../stores/threads'
+  import { readerMinWidth } from '../../lib/myday'
   import type { MessageDetail, EditorMode } from '../../lib/types'
 
   // default editor mode for replies and forwards, from settings.
@@ -74,10 +75,12 @@
   $: newDesign = $prefs.design !== 'classic'
 
   // the sender panel only shows while the reader keeps room for a readable
-  // column beside it, in css pixels; a narrow window leaves it out entirely.
-  const panelMinReader = 720
+  // column beside it; a narrow window leaves it out entirely. The row is
+  // measured after My Day has taken its width, so the two panels share one
+  // budget and the reader never drops below readerMinWidth.
+  const senderPanelWidth = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--sender-panel-width')) || 280
   let rowWidth = 0
-  $: panelFits = rowWidth === 0 || rowWidth >= panelMinReader
+  $: panelFits = rowWidth === 0 || rowWidth - senderPanelWidth >= readerMinWidth
 
   // onReaderAction runs what a conversation card or the action bar asked for,
   // on the message it was asked for.

@@ -18,6 +18,7 @@
     setMarkReadOnOpen,
     setOpenOnArrow,
     setSenderPanel,
+    setMailDates,
   } from '../../../stores/prefs'
   import { bodyFonts, bodyFontStack } from '../../../lib/fonts'
   import { listSystemFonts, getSetting, setSetting } from '../../../lib/api'
@@ -161,6 +162,12 @@
   </Row>
   <Row id="sender-panel" label={$t('senderPanel.setting')} hint={$t('senderPanel.settingHint')}>
     <ToggleSwitch checked={$prefs.senderPanel} label={$t('senderPanel.setting')} on:change={(e) => setSenderPanel(e.detail)} />
+  </Row>
+</Card>
+
+<Card title={$t('reading.card.dates')}>
+  <Row id="mail-dates" label={$t('reading.mailDates')} hint={$t('reading.mailDates.hint')}>
+    <ToggleSwitch checked={$prefs.mailDates} label={$t('reading.mailDates')} on:change={(e) => setMailDates(e.detail)} />
   </Row>
 </Card>
 

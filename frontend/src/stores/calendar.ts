@@ -104,6 +104,14 @@ export interface MailDropAt {
   at: Date | null
   mode: MailDropMode
   shift: boolean
+  /** Where the event ends, when the time was picked with an end; an hour after at otherwise. */
+  end?: Date
+}
+
+/** The calendar new events go to: the default while it takes events, else the first writable one. */
+export function defaultCalendarId(list: Calendar[], settings: CalendarSettings): number {
+  const writable = list.filter((c) => !c.readOnly)
+  return (writable.find((c) => c.id === settings.defaultCalendarId) ?? writable.find((c) => c.default) ?? writable[0])?.id ?? 0
 }
 
 /** A right click on a day, a time slot or the all-day lane, as the views report it. */

@@ -168,6 +168,14 @@
   --coach-filter-width: 200px;
   --coach-hint-offset: 20px;
   --focus-menu-width: 248px;
+  /* calendar in mail: the preview a date in a mail opens and the hour height
+     of its slice of the day, the My Day panel beside the mail, and the
+     availability panel of the composer with the height of its week's hours. */
+  --date-peek-width: 320px;
+  --date-peek-hour: 22px;
+  --myday-width: 300px;
+  --avail-width: 460px;
+  --avail-hour: 14px;
   /* conversations: the column the expand control sits in, which replies are
      indented by, and the widths the reading column can be capped at. */
   --thread-twisty: 16px;

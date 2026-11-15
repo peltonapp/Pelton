@@ -8944,6 +8944,18 @@ export class UIPrefsDTO {
     "senderPanel": boolean;
 
     /**
+     * MailDates marks the dates a mail names in the reader, with a preview of
+     * the calendar around them on hover.
+     */
+    "mailDates": boolean;
+
+    /**
+     * MyDayPanel shows today's agenda and tasks beside the mail surface in the
+     * new design.
+     */
+    "myDayPanel": boolean;
+
+    /**
      * ThemeID selects an installed custom theme (see bind_themes.go). Empty
      * means the built-in default themes driven by the Theme setting.
      */
@@ -9341,6 +9353,12 @@ export class UIPrefsDTO {
         }
         if (!("senderPanel" in $$source)) {
             this["senderPanel"] = false;
+        }
+        if (!("mailDates" in $$source)) {
+            this["mailDates"] = false;
+        }
+        if (!("myDayPanel" in $$source)) {
+            this["myDayPanel"] = false;
         }
         if (!("themeId" in $$source)) {
             this["themeId"] = "";
