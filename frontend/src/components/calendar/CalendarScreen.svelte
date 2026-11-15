@@ -149,6 +149,7 @@
       compose: () => whenFree(newEvent),
       search: () => whenFree(() => openQuickAdd()),
       'calendar-quick-add': () => whenFree(() => openQuickAdd()),
+      'calendar-import': () => whenFree(() => void pickImport(0)),
       'delete-message': () => whenFree(deleteSelected),
       sync: () => void refreshCalendars(),
       undo: () => runUndo(),
