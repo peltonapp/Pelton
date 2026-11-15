@@ -139,6 +139,7 @@ func (e *Engine) storeMessage(ctx context.Context, folder storage.Folder, msg *p
 
 		ListUnsubscribe:     msg.ListUnsubscribe,
 		ListUnsubscribePost: msg.ListUnsubscribePost,
+		ListID:              msg.ListID,
 
 		// parsed here for the same reason as the signature below: the headers
 		// are gone once the message is stored, so a later check would have to

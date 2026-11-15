@@ -62,6 +62,9 @@ type Message struct {
 	// ListUnsubscribePost marks RFC 8058 one-click support.
 	ListUnsubscribe     string
 	ListUnsubscribePost bool
+	// ListID is the List-Id header value. It is written on insert and read
+	// only by the newsletter aggregates, never by a message read.
+	ListID string
 	// SMIME describes the message's s/mime signature as verified when it was
 	// synced. The zero value means no signature, which is most mail.
 	SMIME SMIMESignature
@@ -213,8 +216,9 @@ INSERT INTO messages (
     smime_status, smime_signer, smime_email, smime_issuer, smime_detail,
     smime_certs, smime_fingerprint,
     reply_to, auth_spf, auth_dkim, auth_dmarc, auth_spf_domain, auth_dkim_domain,
-    charset_guess, in_reply_to, [references], thread_id, thread_subject, thread_loose
-) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+    charset_guess, in_reply_to, [references], thread_id, thread_subject, thread_loose,
+    list_id
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
 	res, err := ex.ExecContext(ctx, query,
 		m.AccountID, m.FolderID, m.UID, m.MessageID, m.Subject, m.FromAddress,
 		m.FromName, m.ToAddresses, m.CcAddresses, formatTime(m.Date), uint8(m.Flags),
@@ -224,7 +228,8 @@ INSERT INTO messages (
 		orEmptyBlob(m.SMIME.Certs), m.SMIME.Fingerprint,
 		m.ReplyTo, m.Auth.SPF, m.Auth.DKIM, m.Auth.DMARC, m.Auth.SPFDomain, m.Auth.DKIMDomain,
 		m.CharsetGuess, encodeThreadingIDs(m.InReplyTo), encodeThreadingIDs(m.References),
-		assigned.threadID, assigned.subject, boolToInt(assigned.loose))
+		assigned.threadID, assigned.subject, boolToInt(assigned.loose),
+		m.ListID)
 	if err != nil {
 		return 0, fmt.Errorf("storage: insert message uid %d: %w", m.UID, err)
 	}

@@ -110,6 +110,7 @@ const multipartMessage = "Message-ID: <root@example.com>\r\n" +
 	"Date: Mon, 06 Jan 2020 10:00:00 +0000\r\n" +
 	"List-Unsubscribe: <https://example.com/u>\r\n" +
 	"List-Unsubscribe-Post: List-Unsubscribe=One-Click\r\n" +
+	"List-Id: Example News <news.example.com>\r\n" +
 	"MIME-Version: 1.0\r\n" +
 	"Content-Type: multipart/mixed; boundary=outer\r\n" +
 	"\r\n" +
@@ -173,6 +174,9 @@ func TestParseMultipart(t *testing.T) {
 	}
 	if !msg.ListUnsubscribePost {
 		t.Error("one-click unsubscribe was not detected")
+	}
+	if msg.ListID != "Example News <news.example.com>" {
+		t.Errorf("list id = %q", msg.ListID)
 	}
 	if msg.Size != int64(len(multipartMessage)) {
 		t.Errorf("size = %d, want %d", msg.Size, len(multipartMessage))
