@@ -503,6 +503,102 @@ export interface OutboxLogEntry {
   retryAt: string
 }
 
+/** An out of office reply kept in Pelton's sieve script on the server. */
+export interface SieveVacation {
+  enabled: boolean
+  /** First and last day, YYYY-MM-DD, both inclusive; '' is unbounded. */
+  start: string
+  end: string
+  /** How often one sender gets a reply; 0 leaves it to the server. */
+  days: number
+  subject: string
+  from: string
+  /** The account's addresses the reply answers for. */
+  addresses: string[]
+  body: string
+}
+
+/** One test of a server filter rule. */
+export interface SieveCondition {
+  /** 'from', 'to', 'subject', 'header', 'size', 'envfrom' or 'envto'. */
+  field: string
+  /** The header a 'header' condition looks at. */
+  header: string
+  /** 'contains', 'is', 'matches', 'exists' (header), 'over' or 'under' (size). */
+  op: string
+  negate: boolean
+  /** Text to compare with, or for size a number with an optional K, M or G. */
+  value: string
+}
+
+/** One thing a server filter rule does. */
+export interface SieveAction {
+  /** 'fileinto', 'redirect', 'keep', 'discard', 'stop' or 'addflag'. */
+  kind: string
+  /** Folder, address or flag. */
+  arg: string
+}
+
+/** One server filter rule. */
+export interface SieveRule {
+  name: string
+  enabled: boolean
+  /** One condition is enough when true; all must hold when false. */
+  matchAny: boolean
+  conditions: SieveCondition[]
+  actions: SieveAction[]
+}
+
+/** Pelton's own sieve script, as a model. */
+export interface SieveScript {
+  vacation: SieveVacation | null
+  rules: SieveRule[]
+  /** Other scripts that keep running after Pelton's rules. */
+  includes: string[]
+}
+
+/** Which of Pelton's controls the server can back. */
+export interface SieveCaps {
+  implementation: string
+  extensions: string[]
+  vacation: boolean
+  dates: boolean
+  fileInto: boolean
+  flags: boolean
+  envelope: boolean
+  include: boolean
+}
+
+/** An account's sieve service and Pelton's script on it. */
+export interface SieveState {
+  accountId: number
+  /** 'ok', 'unsupported', 'unreachable', 'auth', 'credentials', 'tls' or 'error'. */
+  status: string
+  detail: string
+  host: string
+  port: number
+  /** '' for STARTTLS, 'ssl' for implicit TLS. */
+  tls: string
+  manual: boolean
+  remembered: boolean
+  caps: SieveCaps
+  exists: boolean
+  active: boolean
+  editable: boolean
+  raw: string
+  script: SieveScript
+  otherActive: string
+  hasPrevious: boolean
+  addresses: string[]
+}
+
+/** The outcome of a save; with problem set the server refused it and nothing was written. */
+export interface SieveSave {
+  state: SieveState
+  problem: string
+  line: number
+}
+
 export interface UIPrefs {
   theme: string
   accent: string

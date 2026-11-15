@@ -158,6 +158,7 @@
   import { buildCommands, mailCommands, type CommandContext, type MessageOp, type FolderOp } from './lib/commands'
   import { extraPaletteCommands } from './lib/palettesources'
   import './lib/palette-attachments'
+  import './lib/palette-sieve'
   import AttachmentsBrowser from './components/attachments/AttachmentsBrowser.svelte'
   import { attachmentsOpen, toggleAttachments } from './stores/attachments'
   import { setSenderPanel } from './stores/prefs'
