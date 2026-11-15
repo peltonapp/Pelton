@@ -53,7 +53,9 @@
     type CellMenuAt,
     type MailDropAt,
   } from '../../stores/calendar'
-  import { createEventDraftFromMessage, getEvent, listAccounts, mailEventSource, openICSFile, readICSFiles } from '../../lib/api'
+  import { createEventDraftFromMessage, getEvent, listAccounts, listOccurrences, mailEventSource, openICSFile, readICSFiles } from '../../lib/api'
+  import { focusSpaceSearch, registerSpaceSearch } from '../../lib/spacesearch'
+  import { searchOccurrences } from '../../lib/calendarsearch'
   import { onFilesDropped } from '../../lib/events'
   import {
     addDays,
@@ -71,7 +73,7 @@
     viewRange,
     weekDays,
   } from '../../lib/caldate'
-  import { calendarColor, formatViewTitle } from '../../lib/calformat'
+  import { calendarColor, formatViewTitle, formatWhen } from '../../lib/calformat'
   import { datesInText, type FoundDate } from '../../lib/eventphrase'
   import { loadChrono } from '../../lib/chronoload'
   import { mailLinkLines } from '../../lib/maillink'
@@ -147,7 +149,11 @@
     unwatch = watchCalendar()
     unregister = registerSpaceActions('calendar', {
       compose: () => whenFree(newEvent),
-      search: () => whenFree(() => openQuickAdd()),
+      search: () => {
+        if (!focusSpaceSearch()) {
+          whenFree(() => openQuickAdd())
+        }
+      },
       'calendar-quick-add': () => whenFree(() => openQuickAdd()),
       'calendar-import': () => whenFree(() => void pickImport(0)),
       'delete-message': () => whenFree(deleteSelected),
@@ -173,7 +179,69 @@
     }
   })
 
+  // --- the top bar search ---------------------------------------------------------
+
+  const searchBackDays = 366
+  const searchAheadDays = 2 * 366
+  const searchCacheMs = 30_000
+  let searchPool: { at: number; list: Occurrence[] } | null = null
+
+  // every occurrence from a year back to two years ahead, kept for half a
+  // minute so typing does not ask the store for each letter.
+  async function searchablePool(): Promise<Occurrence[]> {
+    const now = Date.now()
+    if (searchPool && now - searchPool.at < searchCacheMs) {
+      return searchPool.list
+    }
+    const day = 86_400_000
+    const list = await listOccurrences(toRFC3339(new Date(now - searchBackDays * day)), toRFC3339(new Date(now + searchAheadDays * day)))
+    searchPool = { at: now, list }
+    return list
+  }
+
+  const searchHits = new Map<string, Occurrence>()
+
+  const stopSearch = registerSpaceSearch('calendar', {
+    placeholderKey: 'calendar.search.placeholder',
+    emptyKey: 'calendar.search.none',
+    search: async (query) => {
+      const found = searchOccurrences(await searchablePool(), query, new Date())
+      searchHits.clear()
+      return found.map((occ) => {
+        const id = occurrenceKey(occ)
+        searchHits.set(id, occ)
+        const start = parseEventTime(occ.start, occ.allDay)
+        const end = parseEventTime(occ.end, occ.allDay)
+        return {
+          id,
+          title: occ.summary || $t('calendar.untitled'),
+          detail: formatWhen(start, end, occ.allDay, timeFormat, $locale),
+          aside: occ.location,
+          color: colors.get(occ.calendarId),
+        }
+      })
+    },
+    open: (result) => {
+      const occ = searchHits.get(result.id)
+      if (occ) {
+        whenFree(() => void openFound(occ))
+      }
+    },
+  })
+
+  async function openFound(occ: Occurrence): Promise<void> {
+    try {
+      const ev = await getEvent(occ.eventId, occ.recurrenceId)
+      closeFloating()
+      showDay(parseEventTime(occ.start, occ.allDay))
+      openEditor(draftFromEvent(ev))
+    } catch (err) {
+      toastError(errorMessage(err))
+    }
+  }
+
   onDestroy(() => {
+    stopSearch()
     unwatch?.()
     unregister?.()
     stopDrop?.()
