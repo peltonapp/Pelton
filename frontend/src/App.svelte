@@ -95,8 +95,20 @@
   import { loadViews, editingView, closeViewEditor, openViewEditor, views as savedViews } from './stores/views'
   import { selectSavedView } from './stores/selection'
   import { isMac } from './lib/i18n'
-  import { matchShortcut, comboHasModifier, isFunctionKeyCombo, isComposeAction, chipActions, type ShortcutAction } from './lib/shortcuts'
+  import {
+    matchShortcut,
+    comboTypes,
+    isComposeAction,
+    chipActions,
+    shortcuts as shortcutRegistry,
+    type ShortcutAction,
+  } from './lib/shortcuts'
   import { runComposeCommand } from './stores/composecommands'
+  import CoachLayer from './components/shell/CoachLayer.svelte'
+  import { initCoach, toggleSheet } from './stores/coach'
+  import { noteAction, noteShortcut } from './lib/coach'
+  import { initFocus, focusMenuOpen, refreshFocus } from './stores/focus'
+  import './lib/palette-focus'
   import { cyclePane, focusPane as focusPaneArea } from './lib/panes'
   import { bindings, recording, initShortcuts } from './stores/shortcuts'
   import { initMenuBar } from './stores/menubar'
@@ -488,6 +500,8 @@
     await initSidebarState()
     await initComposePrefs()
     void initShortcuts()
+    void initCoach().then((stop) => unsubscribers.push(stop))
+    void initFocus().then((stop) => unsubscribers.push(stop))
     void initMenuBar()
     void initPalette()
     void loadSignatures()
@@ -984,8 +998,19 @@
     | 'hide-window'
     | 'export-eml'
 
+  // a mail action with no mail panes on screen, under a screen that fills the
+  // mail surface or in another space, does nothing the coach should hear of.
+  function swallowedMailAction(action: string): boolean {
+    return !classic && isMailOnlyAction(action) && (screenInPlace || $space !== 'mail')
+  }
+
   // dispatch maps an action (from a shortcut or a menu item) to its handler.
   function dispatchAction(action: MenuAction): void {
+    // the coach tells a click from a key press here, for every action a menu,
+    // the palette or a shortcut runs.
+    if (!swallowedMailAction(action)) {
+      noteAction(action as ShortcutAction)
+    }
     // the space on screen gets the first say, so the same key makes a new
     // event in the calendar and a new message in mail.
     if (!classic && !overlayOpen && runSpaceAction($space, action)) {
@@ -1151,6 +1176,16 @@
       case 'toggle-sender-panel':
         if (!classic) {
           setSenderPanel(!$prefs.senderPanel)
+        }
+        break
+      case 'shortcut-sheet':
+        if (!classic && !overlayOpen) {
+          toggleSheet()
+        }
+        break
+      case 'focus-mode':
+        if (!classic && !overlayOpen) {
+          focusMenuOpen.update((open) => !open)
         }
         break
       case 'hide-window':
@@ -1697,6 +1732,8 @@
     return true
   }
 
+  const newDesignOnly = new Set<ShortcutAction>(shortcutRegistry.filter((s) => s.newDesignOnly).map((s) => s.action))
+
   function onKeydown(event: KeyboardEvent): void {
     // while the settings panel is capturing a new binding, let it have the keys.
     if ($recording) {
@@ -1741,8 +1778,11 @@
       return
     }
     if (action) {
-      // a modifier-less custom binding must not hijack typing in a field.
-      if (!comboHasModifier($bindings[action]) && !isFunctionKeyCombo($bindings[action]) && isEditableTarget(event.target)) {
+      // a binding that types a character must not hijack typing in a field.
+      if (comboTypes($bindings[action]) && isEditableTarget(event.target)) {
+        return
+      }
+      if (classic && newDesignOnly.has(action)) {
         return
       }
       // a recipient move only means something on a focused recipient chip;
@@ -1751,6 +1791,9 @@
         return
       }
       event.preventDefault()
+      if (!swallowedMailAction(action)) {
+        noteShortcut(action)
+      }
       dispatchAction(action)
       return
     }
@@ -1814,6 +1857,7 @@
     void loadSignatures()
     void loadVIPSenders()
     void loadViews()
+    void refreshFocus()
     await loadList(get(selection))
   }
 
@@ -2092,6 +2136,10 @@
 <MoveDialog />
 
 <CommandPalette commands={paletteCommands} mail={paletteMailCommands} />
+
+{#if !classic}
+  <CoachLayer suspended={overlayOpen} />
+{/if}
 
 <AccountPasswordDialog account={$passwordPrompt} onDone={answerPasswordPrompt} />
 

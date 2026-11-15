@@ -96,6 +96,12 @@ const (
 	// EventFollowUpsChanged fires when a follow-up reminder is set, comes due,
 	// is answered or is cancelled, so the reminder lists reload.
 	EventFollowUpsChanged = "followups:changed"
+	// EventFocusChanged fires when focus mode starts, ends or changes its end
+	// time, with the FocusDTO as payload.
+	EventFocusChanged = "focus:changed"
+	// EventFocusEnded fires once when focus mode ends, with a FocusSummaryDTO
+	// saying what arrived meanwhile.
+	EventFocusEnded = "focus:ended"
 )
 
 // CalendarSyncEvent is the payload for EventCalendarSync. Done and Total

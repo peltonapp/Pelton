@@ -59,6 +59,11 @@ export function formatStatusClock(date: Date, timeFormat: TimeFormat = 'auto'): 
   return `${day} ${time}`
 }
 
+/** Renders a time of day alone, in the user's clock preference. */
+export function formatClockTime(date: Date, timeFormat: TimeFormat = 'auto'): string {
+  return date.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit', ...clockOf(timeFormat) })
+}
+
 // formatFullDate renders a full, unambiguous date for the message header.
 export function formatFullDate(iso: string, timeFormat: TimeFormat = 'auto'): string {
   if (!iso) {

@@ -26,6 +26,7 @@ import {
   demoThreads,
   demoThread,
 } from './demo'
+import { noteAction } from './coach'
 import type {
   Account,
   AccountProxy,
@@ -48,6 +49,8 @@ import type {
   OutboxEdit,
   OutboxCancel,
   OutboxLogEntry,
+  FocusInfo,
+  FocusSchedule,
   UIPrefs,
   SearchSort,
   ViewKey,
@@ -577,6 +580,7 @@ export function setSeen(id: number, seen: boolean): Promise<void> {
 }
 
 export function setFlagged(id: number, flagged: boolean): Promise<void> {
+  noteAction('flag')
   if (isDemoActive()) {
     return Promise.resolve()
   }
@@ -585,6 +589,7 @@ export function setFlagged(id: number, flagged: boolean): Promise<void> {
 
 // deleteMessage marks a message for server-side deletion on the next sync.
 export function deleteMessage(id: number): Promise<void> {
+  noteAction('delete-message')
   if (isDemoActive()) {
     return Promise.resolve()
   }
@@ -698,6 +703,7 @@ const noUndo: ArchiveUndo = { messageId: '', originalFolderId: 0, destFolderId: 
 // archiveMessage moves a message to its account's Archive folder on the server,
 // returning the info needed to undo it.
 export function archiveMessage(id: number): Promise<ArchiveUndo> {
+  noteAction('archive')
   if (isDemoActive()) {
     return Promise.resolve(noUndo)
   }
@@ -1138,6 +1144,31 @@ export function readOutboxLog(): Promise<OutboxLogEntry[]> {
 // the one already open forward.
 export function openOutboxWindow(): Promise<void> {
   return App.OpenOutboxWindow()
+}
+
+/** Focus mode as it stands now; the backend ends an elapsed one first. */
+export function getFocus(): Promise<FocusInfo> {
+  return App.GetFocus()
+}
+
+/** Turns focus on until the given time, or until it is turned off with null. */
+export function startFocus(until: Date | null): Promise<FocusInfo> {
+  return App.StartFocus(until ? until.toISOString().replace(/\.\d{3}Z$/, 'Z') : '')
+}
+
+/** Turns focus off now; the summary arrives as a focus:ended event. */
+export function endFocus(): Promise<void> {
+  return App.EndFocus()
+}
+
+/** The days and hours focus starts on its own. */
+export function getFocusSchedule(): Promise<FocusSchedule> {
+  return App.GetFocusSchedule().then((s) => ({ ...s, days: s.days ?? [] }))
+}
+
+/** Stores the focus schedule; a window already open starts focus at once. */
+export function setFocusSchedule(schedule: FocusSchedule): Promise<void> {
+  return App.SetFocusSchedule(schedule)
 }
 
 // trustSenderImages permanently allows remote content from a message's sender.
@@ -1828,6 +1859,10 @@ export const SettingKeys = {
   sendDelay: 'send_delay_seconds',
   flagHighlight: 'flag_highlight',
   shortcutHints: 'show_shortcut_hints',
+  coachHints: 'coach_hints',
+  coachHold: 'coach_hold',
+  // the shortcut coach's counters: hints shown and keys used, per action.
+  coachCounters: 'shortcut_coach',
   harvestAddresses: 'harvest_addresses',
   accountEmail: 'show_account_email',
   onboarded: 'onboarding_complete',

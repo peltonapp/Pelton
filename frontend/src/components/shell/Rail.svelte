@@ -24,6 +24,7 @@
   import { unifiedViewIcon } from '../../lib/unifiedviewicons'
   import { viewIconComponent, viewColorCss } from '../../lib/viewicons'
   import { openContextMenu } from '../../stores/contextmenu'
+  import { focus } from '../../stores/focus'
 
   /** Which window edge the rail is on; tooltips open toward the content. */
   export let side: RailSide = 'left'
@@ -110,7 +111,7 @@
         on:click={() => openSpace(entry.key)}
       >
         <Ph svg={entry.icon} size={19} />
-        {#if entry.key === 'mail' && unread > 0}
+        {#if entry.key === 'mail' && unread > 0 && !$focus.active}
           <span class="badge" aria-hidden="true"></span>
         {/if}
         {#if entry.key === 'tasks' && $taskBadge > 0}
@@ -135,7 +136,7 @@
           on:contextmenu|preventDefault={(e) => onPinContext(e, pin)}
         >
           <svelte:component this={pin.icon} size={17} stroke={1.6} />
-          {#if pin.unread}
+          {#if pin.unread && !$focus.active}
             <span class="badge" aria-hidden="true"></span>
           {/if}
         </button>

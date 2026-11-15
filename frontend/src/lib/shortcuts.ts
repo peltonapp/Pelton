@@ -99,6 +99,9 @@ export type ShortcutAction =
   // the newsletter manager on the mail surface, and the insights page.
   | 'open-newsletters'
   | 'open-insights'
+  // the shortcut sheet and focus mode, new design only.
+  | 'shortcut-sheet'
+  | 'focus-mode'
   // composer actions of the new design. They act on the composer that last
   // had focus, so they carry a modifier and work while typing.
   | ComposeAction
@@ -139,6 +142,8 @@ export interface Shortcut {
   action: ShortcutAction
   combo: string
   labelKey: string
+  /** The action exists in the new design only; classic does not list it. */
+  newDesignOnly?: boolean
   /**
    * A second key that fires the same action while the binding is untouched.
    * It exists for actions where two platforms disagree about which key is
@@ -246,6 +251,9 @@ export const shortcuts: Shortcut[] = [
   { action: 'edit-note', combo: 'shift+n', labelKey: 'shortcut.editNote' },
   { action: 'open-newsletters', combo: 'mod+shift+l', labelKey: 'shortcut.openNewsletters' },
   { action: 'open-insights', combo: '', labelKey: 'shortcut.openInsights' },
+  // "?" is shifted on every common layout, so the key arrives with shift held.
+  { action: 'shortcut-sheet', combo: 'shift+?', labelKey: 'shortcut.shortcutSheet', newDesignOnly: true },
+  { action: 'focus-mode', combo: 'mod+shift+h', labelKey: 'shortcut.focusMode', newDesignOnly: true },
   { action: 'compose-follow-up', combo: 'mod+shift+u', labelKey: 'followUp.menu' },
   { action: 'compose-insert-snippet', combo: 'mod+shift+i', labelKey: 'snippets.insert' },
   { action: 'compose-intro-bcc', combo: 'mod+shift+b', labelKey: 'recipients.introBcc' },
@@ -322,6 +330,19 @@ export function isFunctionKeyCombo(combo: string): boolean {
 export function comboHasModifier(combo: string): boolean {
   const p = parseCombo(combo)
   return p.mod || p.alt || p.shift
+}
+
+/**
+ * Whether pressing the combo in a text field would type something, so it must
+ * not fire there: a key without modifiers, or a character typed with only
+ * Shift held. Function keys type nothing.
+ */
+export function comboTypes(combo: string): boolean {
+  const p = parseCombo(combo)
+  if (p.mod || p.alt || isFunctionKeyCombo(combo)) {
+    return false
+  }
+  return !p.shift || p.key.length === 1
 }
 
 // comboMatches reports whether a keydown event exactly matches a combo. the match

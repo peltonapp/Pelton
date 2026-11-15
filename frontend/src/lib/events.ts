@@ -3,7 +3,7 @@
 // single unsubscribe function, and keeps the event-name strings in one place.
 
 import { Events } from '@wailsio/runtime'
-import type { AccountSyncState, OutboxLogEntry } from './types'
+import type { AccountSyncState, OutboxLogEntry, FocusInfo, FocusSummary } from './types'
 
 // EventsOn subscribes to a backend event and hands the callback its payload.
 function EventsOn<T>(name: string, cb: (data: T) => void): () => void {
@@ -38,6 +38,8 @@ export const EventNames = {
   icsOpen: 'calendar:open-files',
   taskReminder: 'tasks:reminder',
   followUpsChanged: 'followups:changed',
+  focusChanged: 'focus:changed',
+  focusEnded: 'focus:ended',
 } as const
 
 /** TaskReminderEvent is a task reminder that came due, alongside its notification. */
@@ -333,6 +335,16 @@ export function onAgentProposals(cb: () => void): Unsubscribe {
 // shown. Today that is a clicked new-mail notification on Windows.
 export function onOpenMessage(cb: (e: OpenMessageEvent) => void): Unsubscribe {
   return EventsOn(EventNames.openMessage, (e: OpenMessageEvent) => cb(e))
+}
+
+/** Fires when focus mode starts, ends or changes its end time. */
+export function onFocusChanged(cb: (e: FocusInfo) => void): Unsubscribe {
+  return EventsOn(EventNames.focusChanged, (e: FocusInfo) => cb(e))
+}
+
+/** Fires once when focus mode ends, with what arrived meanwhile. */
+export function onFocusEnded(cb: (e: FocusSummary) => void): Unsubscribe {
+  return EventsOn(EventNames.focusEnded, (e: FocusSummary) => cb(e))
 }
 
 // onComposeCloseRequest fires in a compose window whose close button was

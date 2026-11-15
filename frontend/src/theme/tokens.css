@@ -161,6 +161,13 @@
   --task-check: 16px;
   --task-indent: 22px;
   --task-detail-width: 340px;
+  /* the shortcut coach: the sheet's width, columns and filter field, and how
+     far the hint sits off the bottom edge. the focus menu's width. */
+  --coach-sheet-width: 720px;
+  --coach-sheet-columns: 2;
+  --coach-filter-width: 200px;
+  --coach-hint-offset: 20px;
+  --focus-menu-width: 248px;
   /* conversations: the column the expand control sits in, which replies are
      indented by, and the widths the reading column can be capped at. */
   --thread-twisty: 16px;

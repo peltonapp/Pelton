@@ -70,16 +70,38 @@ export function isMailOnlyAction(action: string): boolean {
 /**
  * Lets a space answer app actions while it is on screen: compose becomes "new
  * event" in the calendar, search focuses the space's own search, and so on.
- * Returns the function that takes the handlers away again.
+ * Returns the function that takes the handlers away again. labels names what
+ * an action does in the space, for the shortcut sheet, by localization key.
  */
-export function registerSpaceActions(key: Space, handlers: Record<string, SpaceActionHandler>): () => void {
+export function registerSpaceActions(
+  key: Space,
+  handlers: Record<string, SpaceActionHandler>,
+  labels: Record<string, string> = {},
+): () => void {
   const map = new Map(Object.entries(handlers))
   spaceActions.set(key, map)
+  spaceLabels.set(key, labels)
   return () => {
     if (spaceActions.get(key) === map) {
       spaceActions.delete(key)
+      spaceLabels.delete(key)
     }
   }
+}
+
+const spaceLabels = new Map<Space, Record<string, string>>()
+
+/**
+ * The actions a space answers to while it is on screen, with the label key
+ * it gave each, or none to use the action's own.
+ */
+export function spaceActionEntries(key: Space): { action: string; labelKey?: string }[] {
+  const map = spaceActions.get(key)
+  if (!map) {
+    return []
+  }
+  const labels = spaceLabels.get(key) ?? {}
+  return [...map.keys()].map((action) => ({ action, labelKey: labels[action] }))
 }
 
 const mountWaitFrames = 180

@@ -218,6 +218,10 @@ type App struct {
 	// waiting for the next sidebar refresh.
 	badgeMu     sync.Mutex
 	unreadBadge int
+
+	// focusMu serialises changes to the stored focus state (bind_focus.go),
+	// which the ticker, the bindings and the new-mail path all write.
+	focusMu sync.Mutex
 }
 
 // IsDemoMode reports whether the app was launched in the cosmetic demo mode. The

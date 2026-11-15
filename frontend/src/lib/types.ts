@@ -568,6 +568,34 @@ export interface OutboxLogEntry {
   retryAt: string
 }
 
+/** Focus mode as it stands: on or off, when it ends, what arrived so far. */
+export interface FocusInfo {
+  active: boolean
+  /** When focus ends, RFC 3339; empty runs until it is turned off. */
+  until: string
+  /** The schedule started this focus. */
+  scheduled: boolean
+  /** New messages that arrived during this focus. */
+  held: number
+}
+
+/**
+ * When focus starts on its own: on these weekdays (0 is Sunday) from start to
+ * end, both "HH:MM". An end at or before the start runs past midnight.
+ */
+export interface FocusSchedule {
+  enabled: boolean
+  days: number[]
+  start: string
+  end: string
+}
+
+/** What arrived during a focus that just ended. */
+export interface FocusSummary {
+  total: number
+  vip: number
+}
+
 export interface UIPrefs {
   theme: string
   accent: string
@@ -588,6 +616,12 @@ export interface UIPrefs {
   // showShortcutHints toggles the keyboard shortcut shown beside a context-menu
   // entry that has one. On by default.
   showShortcutHints: boolean
+  // coachHints shows a short hint naming the key after an action done by
+  // mouse, in the new design. On by default.
+  coachHints: boolean
+  // coachHold shows the shortcuts that apply on screen while the platform
+  // modifier is held, in the new design. On by default.
+  coachHold: boolean
   // harvestAddresses keeps learning addresses from mail for compose
   // autocomplete. off leaves only the contacts from a synced address book.
   harvestAddresses: boolean

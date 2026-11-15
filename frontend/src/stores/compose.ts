@@ -6,6 +6,7 @@
 import { writable, get } from 'svelte/store'
 import type { Address, ComposeRequest, Draft, EditorMode, MessageDetail, ComposeAttachment } from '../lib/types'
 import { getSetting, setSetting } from '../lib/api'
+import { noteAction } from '../lib/coach'
 import { formatAddress, formatAddressList, parseAddressList, renderBody } from '../lib/mailcompose'
 import { formatFullDate } from '../lib/format'
 import { escapeHtml, textToHtml } from '../lib/richtext'
@@ -176,6 +177,7 @@ function blankSession(accountId: number, mode: EditorMode): ComposeSession {
 
 // openCompose starts a new empty compose session and returns its id.
 export function openCompose(accountId: number, mode: EditorMode): number {
+  noteAction('compose')
   const session = blankSession(accountId, mode)
   composeSessions.update((list) => [...list, session])
   return session.id
@@ -282,6 +284,7 @@ export function replySession(detail: MessageDetail, mode: EditorMode, kind: Repl
  * typed (plain text) already written above the original, and returns its id.
  */
 export function openReplyWith(detail: MessageDetail, mode: EditorMode, kind: ReplyKind, typed: string): number {
+  noteAction(kind === 'replyAll' ? 'reply-all' : kind === 'forward' ? 'forward' : 'reply')
   const session = replySession(detail, mode, kind, typed)
   composeSessions.update((list) => [...list, session])
   return session.id

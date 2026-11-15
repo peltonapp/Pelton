@@ -59,6 +59,8 @@ export {
     EventRequest,
     EventSaveResultDTO,
     FetchOlderResult,
+    FocusDTO,
+    FocusScheduleDTO,
     FolderDTO,
     FollowUpDTO,
     ICSFileDTO,

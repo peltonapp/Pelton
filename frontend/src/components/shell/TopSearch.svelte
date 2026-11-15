@@ -19,6 +19,7 @@
   import { searchAddresses } from '../../lib/api'
   import { accountLabel } from '../../lib/format'
   import { t } from '../../lib/i18n'
+  import { noteAction } from '../../lib/coach'
   import { chipLabel, parseQuery, addChip, type SearchChip, type OperatorKey } from '../../lib/searchquery'
   import { suggest, suggestContext, type FolderOption, type Person, type Suggestion } from '../../lib/searchsuggest'
   import { sidebar } from '../../stores/accounts'
@@ -371,7 +372,10 @@
         value={text}
         on:input={onInput}
         on:keydown={onKeydown}
-        on:focus={() => (open = true)}
+        on:focus={() => {
+          open = true
+          noteAction('search')
+        }}
         on:click={() => (open = true)}
       />
     </div>
