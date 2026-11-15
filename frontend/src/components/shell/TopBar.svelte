@@ -8,6 +8,7 @@
   import { space } from '../../stores/space'
   import { spaceSearchProviders } from '../../lib/spacesearch'
   import ActivityButton from './ActivityButton.svelte'
+  import MyDayButton from './MyDayButton.svelte'
   import { titleBarDoubleClick } from '../../lib/api'
   import { isMac } from '../../lib/i18n'
   import WindowButtons from './WindowButtons.svelte'
@@ -41,6 +42,9 @@
   {/if}
 
   <div class="side end">
+    {#if $space === 'mail'}
+      <MyDayButton />
+    {/if}
     <ActivityButton />
     <slot name="end" />
     {#if !isMac && $frameIntegrated}

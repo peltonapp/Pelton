@@ -79,6 +79,8 @@ export type ShortcutAction =
   | 'go-tasks'
   // makes a task from the open message, or from each selected one.
   | 'create-task'
+  // shows or hides the My Day panel beside the mail.
+  | 'toggle-my-day'
   // switching between the spaces of the new design.
   | 'go-mail'
   | 'go-calendar'
@@ -177,6 +179,8 @@ export const shortcuts: Shortcut[] = [
   { action: 'go-tasks', combo: 'mod+shift+d', labelKey: 'shortcut.goTasks' },
   // t for task, free among the message letters.
   { action: 'create-task', combo: 't', labelKey: 'shortcut.createTask' },
+  // y for "your day"; the letters near it are taken by the spaces and tasks.
+  { action: 'toggle-my-day', combo: 'mod+shift+y', labelKey: 'shortcut.toggleMyDay' },
   // letters rather than digits: mod+1 to 9 pick reading-pane tabs, and a digit
   // with Shift or Alt types a symbol that would not match.
   { action: 'go-mail', combo: 'mod+shift+m', labelKey: 'shortcut.goMail' },
