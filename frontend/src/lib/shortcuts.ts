@@ -73,6 +73,10 @@ export type ShortcutAction =
   | 'focus-sidebar'
   | 'focus-list'
   | 'focus-reader'
+  // switching between the spaces of the new design.
+  | 'go-mail'
+  | 'go-calendar'
+  | 'go-contacts'
 
 // Shortcut pairs an action with its default combo and the label key for display.
 export interface Shortcut {
@@ -160,6 +164,11 @@ export const shortcuts: Shortcut[] = [
   { action: 'focus-sidebar', combo: '', labelKey: 'shortcut.focusSidebar' },
   { action: 'focus-list', combo: '', labelKey: 'shortcut.focusList' },
   { action: 'focus-reader', combo: '', labelKey: 'shortcut.focusReader' },
+  // letters rather than digits: mod+1 to 9 pick reading-pane tabs, and a digit
+  // with Shift or Alt types a symbol that would not match.
+  { action: 'go-mail', combo: 'mod+shift+m', labelKey: 'shortcut.goMail' },
+  { action: 'go-calendar', combo: 'mod+shift+c', labelKey: 'shortcut.goCalendar' },
+  { action: 'go-contacts', combo: 'mod+shift+a', labelKey: 'shortcut.goContacts' },
 ]
 
 // ParsedCombo is a combo broken into its modifier flags and final key.

@@ -195,6 +195,25 @@
     editor.chain().focus().extendMarkRange('link').setLink({ href }).run()
   }
 
+  /** selectedText is the text of the selection, or '' when nothing is selected. */
+  export function selectedText(): string {
+    if (!editor) {
+      return ''
+    }
+    const { from, to } = editor.state.selection
+    return from === to ? '' : editor.state.doc.textBetween(from, to, ' ')
+  }
+
+  /** insertLink puts text at the caret, linked to href. */
+  export function insertLink(text: string, href: string): void {
+    editor
+      ?.chain()
+      .focus()
+      .insertContent({ type: 'text', text, marks: [{ type: 'link', attrs: { href } }] })
+      .unsetMark('link')
+      .run()
+  }
+
   /** focus puts the caret in the editor. */
   export function focus(): void {
     editor?.commands.focus()
