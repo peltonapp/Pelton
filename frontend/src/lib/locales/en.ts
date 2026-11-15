@@ -2086,6 +2086,17 @@ const en: Record<string, string> = {
   'list.card.conversations': 'Conversations',
   'list.threaded.label': 'Group into conversations',
   'list.threaded.hint': 'Show each conversation as one row with its replies beneath, and open it as a conversation.',
+  'preview.caret.sample': 'Thanks for the notes, see you Friday.',
+  'preview.markdown.bold': 'Thanks',
+  'preview.markdown.italic': 'for the notes',
+  'preview.reply.text': 'Sounds good, see you Friday.',
+  'preview.reply.wrote': '{name} wrote:',
+  'preview.seconds': '{n}s',
+  'preview.folder.projects': 'Projects',
+  'preview.folder.invoices': 'Invoices',
+  'preview.folder.travel': 'Travel',
+  'preview.selection.all': 'All {n} messages in the list are selected.',
+  'preview.sender.sample': 'Designed mail keeps the typeface its sender chose.',
 }
 
 export default en

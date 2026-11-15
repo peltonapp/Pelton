@@ -6,6 +6,9 @@
   import Row from '../ui/Row.svelte'
   import ToggleSwitch from '../../common/ToggleSwitch.svelte'
   import Select from '../../common/Select.svelte'
+  import SenderFontPreview from '../skeletons/SenderFontPreview.svelte'
+  import BadgesPreview from '../skeletons/BadgesPreview.svelte'
+  import OpeningPreview from '../skeletons/OpeningPreview.svelte'
   import {
     prefs,
     setToggle,
@@ -124,6 +127,7 @@
     />
   </Row>
   <Row id="sender-fonts" label={$t('settingsPanel.toggle.senderFonts')} hint={$t('settingsPanel.hint.senderFonts')}>
+    <SenderFontPreview slot="preview" senderFonts={$prefs.senderFonts} />
     <ToggleSwitch checked={$prefs.senderFonts} label={$t('settingsPanel.toggle.senderFonts')} on:change={(e) => setSenderFonts(e.detail)} />
   </Row>
   <Row id="charset-fallback" label={$t('settingsPanel.label.charsetFallback')} hint={$t('settingsPanel.hint.charsetFallback')}>
@@ -139,6 +143,7 @@
 <Card title={$t('settingsPanel.techInfo')}>
   {#each techInfo as item (item.key)}
     <Row id={item.id} label={item.label} hint={item.note}>
+      <BadgesPreview slot="preview" />
       <ToggleSwitch checked={$prefs[item.key]} label={item.label} on:change={(e) => setToggle(item.key, e.detail)} />
     </Row>
   {/each}
@@ -146,9 +151,11 @@
 
 <Card title={$t('reading.card.opening')}>
   <Row id="mark-read" label={$t('settingsPanel.toggle.markReadOnOpen')}>
+    <OpeningPreview slot="preview" markRead={$prefs.markReadOnOpen} openOnArrow />
     <ToggleSwitch checked={$prefs.markReadOnOpen} label={$t('settingsPanel.toggle.markReadOnOpen')} on:change={(e) => setMarkReadOnOpen(e.detail)} />
   </Row>
   <Row id="open-on-arrow" label={$t('settingsPanel.toggle.openOnArrow')}>
+    <OpeningPreview slot="preview" markRead={$prefs.markReadOnOpen} openOnArrow={$prefs.openOnArrow} />
     <ToggleSwitch checked={$prefs.openOnArrow} label={$t('settingsPanel.toggle.openOnArrow')} on:change={(e) => setOpenOnArrow(e.detail)} />
   </Row>
 </Card>
