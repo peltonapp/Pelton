@@ -10,6 +10,7 @@
   import { spaces, spaceDrop } from '../../lib/spaces'
   import { maildrop } from '../../stores/maildrag'
   import { space, openSpace } from '../../stores/space'
+  import { taskBadge } from '../../stores/tasks'
   import { currentProfile, profiles, switchRelative } from '../../stores/profiles'
   import { tip } from '../../lib/tip'
   import { t } from '../../lib/i18n'
@@ -43,6 +44,9 @@
         <Ph svg={entry.icon} size={19} />
         {#if entry.key === 'mail' && unread > 0}
           <span class="badge" aria-hidden="true"></span>
+        {/if}
+        {#if entry.key === 'tasks' && $taskBadge > 0}
+          <span class="count" aria-hidden="true">{$taskBadge > 99 ? '99+' : $taskBadge}</span>
         {/if}
       </button>
     {/each}
@@ -165,6 +169,24 @@
     border-radius: 50%;
     background: var(--accent);
     box-shadow: 0 0 0 1.5px var(--chrome-bg);
+  }
+
+  /* the Tasks entry counts what is due, in the quiet text color: a number
+     there is information, not an alarm. */
+  .count {
+    position: absolute;
+    top: var(--space-1);
+    inset-inline-end: var(--space-1);
+    min-width: var(--space-5);
+    padding: 0 var(--space-1);
+    border-radius: var(--radius-control);
+    background: var(--chrome-bg);
+    box-shadow: 0 0 0 var(--hairline) var(--border-default);
+    font-size: var(--fz-meta);
+    line-height: 1.4;
+    color: var(--text-secondary);
+    font-variant-numeric: tabular-nums;
+    text-align: center;
   }
 
   .glyph {

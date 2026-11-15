@@ -359,6 +359,21 @@ func TestExportTaskListICS(t *testing.T) {
 	}
 }
 
+func TestFindEventByUID(t *testing.T) {
+	a := newCalendarTestApp(t)
+	created, err := a.CreateEvent(EventRequest{CalendarID: localCalendar(t, a), Summary: "Review", Start: "2026-04-02T10:00:00Z", End: "2026-04-02T11:00:00Z"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	ref, err := a.FindEventByUID(created.Event.UID)
+	if err != nil || !ref.Found || ref.EventID != created.Event.ID || ref.Summary != "Review" {
+		t.Errorf("ref = %+v, %v", ref, err)
+	}
+	if ref, _ := a.FindEventByUID("nope"); ref.Found {
+		t.Error("found an event that is not there")
+	}
+}
+
 func TestTaskSettingsRoundTrip(t *testing.T) {
 	a := newCalendarTestApp(t)
 	got, err := a.GetTaskSettings()

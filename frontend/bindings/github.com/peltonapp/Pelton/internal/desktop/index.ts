@@ -49,6 +49,7 @@ export {
     EmlExportDTO,
     EventDTO,
     EventLinkResultDTO,
+    EventRefDTO,
     EventRequest,
     EventSaveResultDTO,
     FetchOlderResult,

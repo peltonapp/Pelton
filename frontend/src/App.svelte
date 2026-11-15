@@ -86,7 +86,7 @@
   import { liabilityAccepted } from './lib/liability'
   import { setDemoActive } from './lib/demo'
   import { recordArchived } from './stores/undoarchive'
-  import { onMailNew, onMailRepaired, onSyncState, onSyncProgress, onOutboxChanged, onMenu, onViewsChanged, onFoldersChanged, onProfileChanged, onMailtoCompose, onAgentProposals, onOpenMessage, onCalendarReminder, onICSOpen, type Unsubscribe, type MailtoDraft, type CalendarReminderEvent } from './lib/events'
+  import { onMailNew, onMailRepaired, onSyncState, onSyncProgress, onOutboxChanged, onMenu, onViewsChanged, onFoldersChanged, onProfileChanged, onMailtoCompose, onAgentProposals, onOpenMessage, onCalendarReminder, onTaskReminder, onICSOpen, type Unsubscribe, type MailtoDraft, type CalendarReminderEvent, type TaskReminderEvent } from './lib/events'
   import { loadViews, editingView, closeViewEditor, openViewEditor, views as savedViews } from './stores/views'
   import { selectSavedView } from './stores/selection'
   import { isMac } from './lib/i18n'
@@ -114,7 +114,7 @@
   import { profiles, currentProfile, loadProfiles, switchTo, switchRelative } from './stores/profiles'
   import { loadProposals } from './stores/agent'
   import { settingsRequest, clearSettingsRequest } from './stores/settingsnav'
-  import { errorMessage, toastError, toastInfo, pushAction } from './stores/toast'
+  import { errorMessage, toastError, toastInfo, pushAction, pushActions } from './stores/toast'
   import { friendlyError } from './lib/errors'
   import { setOnline } from './stores/network'
   import { moveTargets } from './stores/move'
@@ -159,6 +159,10 @@
   import { buildCommands, mailCommands, type CommandContext, type MessageOp, type FolderOp } from './lib/commands'
   import { extraPaletteCommands } from './lib/palettesources'
   import './lib/palette-calendar'
+  import './lib/palette-tasks'
+  import { startTasks, toggleDone, tasks as taskStore, taskFromMailRequest } from './stores/tasks'
+  import { createTasksFromMail, openTask } from './lib/taskmail'
+  import { getTask } from './lib/api'
   import { catalogByAction } from './lib/menuactions'
   import { shortcutLabel } from './lib/i18n'
   import {
@@ -363,6 +367,52 @@
     openSpace('calendar')
   }
 
+  // the toast line of a task reminder: the title and when it is due.
+  function taskReminderText(e: TaskReminderEvent): string {
+    const title = e.summary || $t('tasks.untitled')
+    if (e.due.length > 10) {
+      return `${title}, ${formatTime(new Date(e.due), $prefs.timeFormat as TimeFormat)}`
+    }
+    return title
+  }
+
+  async function completeFromReminder(e: TaskReminderEvent): Promise<void> {
+    try {
+      const task = get(taskStore).find((x) => x.id === e.taskId) ?? (await getTask(e.taskId))
+      await toggleDone(task, true)
+    } catch (err) {
+      toastError(errorMessage(err))
+    }
+  }
+
+  // tasks: create-task acts on the selection or the open message.
+  function createTaskFromMail(): void {
+    const ids = selectedMessages.length > 1 ? selectedMessages.map((m) => m.id) : [currentMessage()?.id].filter((id): id is number => id !== undefined)
+    if (ids.length === 0) {
+      toastInfo(get(t)('app.toast.openMessageFirst'))
+      return
+    }
+    void createTasksFromMail(ids)
+  }
+
+  $: if ($taskFromMailRequest) {
+    taskFromMailRequest.set(false)
+    if (!classic) {
+      createTaskFromMail()
+    }
+  }
+
+  // the tasks store feeds the rail badge, the mail markers and the calendar,
+  // so it runs for as long as the new design is on.
+  let stopTasks: (() => void) | undefined
+  $: if (!classic && !stopTasks) {
+    stopTasks = startTasks()
+  } else if (classic && stopTasks) {
+    stopTasks()
+    stopTasks = undefined
+  }
+  onDestroy(() => stopTasks?.())
+
   onMount(async () => {
     // cosmetic demo mode (--potatoes-are-nice). main.ts has normally answered
     // this before the first component mounted; this is the backstop for a
@@ -495,6 +545,21 @@
       onCalendarReminder((e) => {
         if (!classic) {
           pushAction('info', reminderText(e), { label: $t('calendar.show'), run: () => showReminder(e) }, 10000)
+        }
+      }),
+    )
+    unsubscribers.push(
+      onTaskReminder((e) => {
+        if (!classic) {
+          pushActions(
+            'info',
+            taskReminderText(e),
+            [
+              { label: $t('tasks.reminder.done'), run: () => void completeFromReminder(e) },
+              { label: $t('tasks.open'), run: () => openTask(e.taskId) },
+            ],
+            10000,
+          )
         }
       }),
     )
@@ -953,6 +1018,16 @@
         if (!classic) {
           calendarQuickAdd.set(true)
           openSpace('calendar')
+        }
+        break
+      case 'go-tasks':
+        if (!classic) {
+          openSpace('tasks')
+        }
+        break
+      case 'create-task':
+        if (!classic) {
+          createTaskFromMail()
         }
         break
       case 'undo':
@@ -1722,6 +1797,12 @@
     {:else if $space === 'calendar'}
       <div class="space-host">
         {#await import('./components/calendar/CalendarScreen.svelte') then m}
+          <svelte:component this={m.default} />
+        {/await}
+      </div>
+    {:else if $space === 'tasks'}
+      <div class="space-host">
+        {#await import('./components/tasks/TasksScreen.svelte') then m}
           <svelte:component this={m.default} />
         {/await}
       </div>

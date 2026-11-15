@@ -10,6 +10,9 @@
   import archiveIcon from '@phosphor-icons/core/assets/duotone/archive-duotone.svg?raw'
   import trashIcon from '@phosphor-icons/core/assets/duotone/trash-duotone.svg?raw'
   import moreIcon from '@phosphor-icons/core/assets/duotone/dots-three-duotone.svg?raw'
+  import taskIcon from '@phosphor-icons/core/assets/duotone/check-square-duotone.svg?raw'
+  import { taskMailMarks, tasks } from '../../stores/tasks'
+  import { openTask } from '../../lib/taskmail'
   import Ph from '../common/Ph.svelte'
   import { shortcutTitle } from '../../stores/shortcuts'
   import { dur, motion } from '../../lib/motion'
@@ -23,6 +26,32 @@
     delete: void
     more: { x: number; y: number }
   }>()
+
+  /** The stored id of the message the bar acts on, for its task marker. */
+  export let messageId: number = 0
+  /** Its Message-ID header, which a task's mid: link names. */
+  export let headerId: string = ''
+
+  $: taskMark = messageId ? $taskMailMarks.get(messageId) : undefined
+
+  // the task that links to this mail: an open one first.
+  function openLinkedTask(): void {
+    const want = headerId.replace(/[<>]/g, '').trim()
+    const linked = $tasks
+      .filter((x) => x.mailLinks.some((l) => midId(l) === want))
+      .sort((a, b) => Number(a.done) - Number(b.done))
+    if (linked[0]) {
+      openTask(linked[0].id)
+    }
+  }
+
+  function midId(link: string): string {
+    try {
+      return decodeURIComponent(link.slice(4).split('/')[0]).replace(/[<>]/g, '')
+    } catch {
+      return ''
+    }
+  }
 
   function onMore(event: MouseEvent): void {
     const rect = (event.currentTarget as HTMLElement).getBoundingClientRect()
@@ -73,6 +102,13 @@
     >
       <Ph svg={trashIcon} size={16} />
     </button>
+    {#if taskMark !== undefined}
+      <span class="sep" aria-hidden="true"></span>
+      <button type="button" class="btn task" class:done={taskMark} title={$t(taskMark ? 'tasks.mailMarkDone' : 'tasks.mailMark')} on:click={openLinkedTask}>
+        <Ph svg={taskIcon} size={16} />
+        <span>{$t('tasks.openTask')}</span>
+      </button>
+    {/if}
     <button type="button" class="btn" aria-label={$t('reader.more')} title={$t('reader.more')} on:click={onMore}>
       <Ph svg={moreIcon} size={16} />
     </button>
@@ -133,6 +169,14 @@
 
   .btn:active {
     transform: scale(var(--press-scale));
+  }
+
+  .btn.task {
+    color: var(--accent);
+  }
+
+  .btn.task.done {
+    color: var(--text-tertiary);
   }
 
   .btn.primary {

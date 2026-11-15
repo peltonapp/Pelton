@@ -2531,6 +2531,48 @@ export class EventLinkResultDTO {
 }
 
 /**
+ * EventRefDTO says where an event a task points at is: its id and when it
+ * starts, for showing it in the calendar. Found is false when no calendar has
+ * an event with that UID.
+ */
+export class EventRefDTO {
+    "found": boolean;
+    "eventId": number;
+    "start": string;
+    "allDay": boolean;
+    "summary": string;
+
+    /** Creates a new EventRefDTO instance. */
+    constructor($$source: Partial<EventRefDTO> = {}) {
+        if (!("found" in $$source)) {
+            this["found"] = false;
+        }
+        if (!("eventId" in $$source)) {
+            this["eventId"] = 0;
+        }
+        if (!("start" in $$source)) {
+            this["start"] = "";
+        }
+        if (!("allDay" in $$source)) {
+            this["allDay"] = false;
+        }
+        if (!("summary" in $$source)) {
+            this["summary"] = "";
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new EventRefDTO instance from a string or object.
+     */
+    static createFrom($$source: any = {}): EventRefDTO {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new EventRefDTO($$parsedSource as Partial<EventRefDTO>);
+    }
+}
+
+/**
  * EventRequest is the editor's event. An ID of 0 creates one in CalendarID.
  * For an occurrence of a recurring event, RecurrenceID names it and Scope says
  * whether the change is for this occurrence, this and the following ones, or

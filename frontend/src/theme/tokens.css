@@ -156,6 +156,11 @@
   --cal-6: #c9394a;
   --cal-7: #b9428a;
   --cal-8: #7552c4;
+  /* tasks: the checkbox, how far a subtask is indented per level, and the
+     detail pane beside the list. the sidebar shares the calendar's width. */
+  --task-check: 16px;
+  --task-indent: 22px;
+  --task-detail-width: 340px;
   /* conversations: the column the expand control sits in, which replies are
      indented by, and the widths the reading column can be capped at. */
   --thread-twisty: 16px;

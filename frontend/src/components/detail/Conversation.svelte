@@ -325,6 +325,8 @@
   </div>
 
   <ReaderActionBar
+    messageId={focusDetail?.id ?? 0}
+    headerId={focusDetail?.messageId ?? ''}
     on:reply={() => act('reply', focusDetail)}
     on:replyAll={() => act('replyAll', focusDetail)}
     on:forward={() => act('forward', focusDetail)}

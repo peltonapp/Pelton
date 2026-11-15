@@ -538,6 +538,46 @@ func (a *App) ListTaskMailMarks() ([]TaskMailMarkDTO, error) {
 	return out, nil
 }
 
+// EventRefDTO says where an event a task points at is: its id and when it
+// starts, for showing it in the calendar. Found is false when no calendar has
+// an event with that UID.
+type EventRefDTO struct {
+	Found   bool   `json:"found"`
+	EventID int64  `json:"eventId"`
+	Start   string `json:"start"`
+	AllDay  bool   `json:"allDay"`
+	Summary string `json:"summary"`
+}
+
+// FindEventByUID finds the event a task links to by its UID.
+func (a *App) FindEventByUID(uid string) (EventRefDTO, error) {
+	if err := a.ready(); err != nil {
+		return EventRefDTO{}, err
+	}
+	rows, err := a.store.FindCalendarEventsByUID(a.ctx, strings.TrimSpace(uid))
+	if err != nil {
+		return EventRefDTO{}, err
+	}
+	for _, row := range rows {
+		if row.Pending == storage.PendingDelete {
+			continue
+		}
+		obj, err := parseStoredEvent(row)
+		if err != nil || obj.First() == nil {
+			continue
+		}
+		ev := obj.First()
+		return EventRefDTO{
+			Found:   true,
+			EventID: row.ID,
+			Start:   formatEventTime(obj.Zones.Instant(ev.Start), ev.Start.AllDay),
+			AllDay:  ev.Start.AllDay,
+			Summary: ev.Summary,
+		}, nil
+	}
+	return EventRefDTO{}, nil
+}
+
 // GetTaskSettings returns the task preferences.
 func (a *App) GetTaskSettings() (TaskSettingsDTO, error) {
 	if err := a.ready(); err != nil {

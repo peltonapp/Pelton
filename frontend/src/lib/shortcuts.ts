@@ -75,6 +75,10 @@ export type ShortcutAction =
   | 'focus-reader'
   // opens the calendar's quick add, from the calendar or any other space.
   | 'calendar-quick-add'
+  // shows the Tasks space.
+  | 'go-tasks'
+  // makes a task from the open message, or from each selected one.
+  | 'create-task'
 
 // Shortcut pairs an action with its default combo and the label key for display.
 export interface Shortcut {
@@ -165,6 +169,10 @@ export const shortcuts: Shortcut[] = [
   // q is the key other calendars open quick add with, and nothing else here
   // uses it; like every bare letter it never fires from inside a text field.
   { action: 'calendar-quick-add', combo: 'q', labelKey: 'shortcut.calendarQuickAdd' },
+  // the key Thunderbird shows its task list with.
+  { action: 'go-tasks', combo: 'mod+shift+d', labelKey: 'shortcut.goTasks' },
+  // t for task, free among the message letters.
+  { action: 'create-task', combo: 't', labelKey: 'shortcut.createTask' },
 ]
 
 // ParsedCombo is a combo broken into its modifier flags and final key.

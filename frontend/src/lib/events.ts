@@ -35,7 +35,22 @@ export const EventNames = {
   calendarChanged: 'calendar:changed',
   calendarReminder: 'calendar:reminder',
   icsOpen: 'calendar:open-files',
+  taskReminder: 'tasks:reminder',
 } as const
+
+/** TaskReminderEvent is a task reminder that came due, alongside its notification. */
+export interface TaskReminderEvent {
+  taskId: number
+  listId: number
+  summary: string
+  /** A date, rfc3339, or empty for a task with no due date. */
+  due: string
+}
+
+/** onTaskReminder fires when a task's reminder is due. */
+export function onTaskReminder(cb: (e: TaskReminderEvent) => void): Unsubscribe {
+  return EventsOn(EventNames.taskReminder, (e: TaskReminderEvent) => cb(e))
+}
 
 /** onICSOpen fires when the system asks the running app to open .ics files; collect them with consumePendingICS. */
 export function onICSOpen(cb: () => void): () => void {

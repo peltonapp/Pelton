@@ -1137,7 +1137,7 @@ export type ComposeOpenIn = 'window' | 'docked' | 'tab'
 /** How wide the reading column runs in the new design. */
 export type ReaderWidth = 'narrow' | 'medium' | 'full'
 /** One of the top-level areas of the app. */
-export type Space = 'mail' | 'contacts' | 'calendar'
+export type Space = 'mail' | 'contacts' | 'calendar' | 'tasks'
 export type SelectAllScope = 'offer' | 'all' | 'loaded'
 
 // SearchSort is an order search results can actually come back in. The backend
@@ -1485,6 +1485,8 @@ export interface Occurrence {
   // a change made here has not reached the server yet.
   pending: boolean
   conflict: boolean
+  // set on an entry the calendar draws for a task due that day.
+  task?: Task
 }
 
 /**
@@ -1644,6 +1646,8 @@ export interface ICSImportResult {
   imported: number
   updated: number
   skipped: number
+  /** Tasks the file carried, which went to a task list. */
+  tasks: number
 }
 
 /** ICSFile is a calendar file read for import, iCalendar or JSCalendar. */
@@ -1653,6 +1657,8 @@ export interface ICSFile {
   /** How many events an import would take, and the titles of the first few. */
   events: number
   summaries: string[]
+  /** How many tasks it holds. */
+  tasks: number
   /** Set instead of the rest when the file could not be read. */
   error: string
 }
@@ -1681,4 +1687,138 @@ export interface MessageRef {
   id: number
   accountId: number
   folderId: number
+}
+
+/** TaskList is a local task list or a CalDAV collection that takes tasks. */
+export interface TaskList {
+  id: number
+  // 0 for a local list.
+  accountId: number
+  accountName: string
+  // empty for the local list the app starts with; the ui labels it.
+  name: string
+  color: string
+  local: boolean
+  readOnly: boolean
+  // the collection holds events too.
+  events: boolean
+  lastError: string
+  default: boolean
+}
+
+/** TaskContact is a person a task is for or about. */
+export interface TaskContact {
+  name: string
+  email: string
+}
+
+/**
+ * Task is one task. due and start are a date (2006-01-02), rfc3339 for a task
+ * with a time of day, or empty.
+ */
+export interface Task {
+  id: number
+  listId: number
+  listName: string
+  listColor: string
+  uid: string
+  title: string
+  notes: string
+  url: string
+  due: string
+  start: string
+  timeZone: string
+  done: boolean
+  // rfc3339, empty while open.
+  completed: string
+  // NEEDS-ACTION, IN-PROCESS, COMPLETED or CANCELLED, or empty.
+  status: string
+  percent: number
+  // 0 for none, 1 highest through 9 lowest.
+  priority: number
+  rrule: string
+  reminders: Reminder[]
+  // the uid of the parent task, empty for a top-level one.
+  parent: string
+  categories: string[]
+  // mid: links to mails.
+  mailLinks: string[]
+  contacts: TaskContact[]
+  eventUids: string[]
+  sortOrder: number
+  created: string
+  readOnly: boolean
+  pending: boolean
+  conflict: boolean
+  syncError: string
+}
+
+/** TaskDraft is the editor's task; id 0 creates one, uid then restores one. */
+export interface TaskDraft {
+  id: number
+  listId: number
+  uid: string
+  title: string
+  notes: string
+  url: string
+  due: string
+  start: string
+  timeZone: string
+  status: string
+  percent: number
+  priority: number
+  rrule: string
+  reminders: Reminder[]
+  parent: string
+  categories: string[]
+  mailLinks: string[]
+  contacts: TaskContact[]
+  eventUids: string[]
+  sortOrder: number
+  force: boolean
+}
+
+/** TaskSaveResult is the outcome of a task save. */
+export interface TaskSaveResult {
+  task: Task
+  queued: boolean
+  conflict: boolean
+  server: Task
+  // completing a repeating task moved it on to its next occurrence.
+  advanced: boolean
+}
+
+/** RemovedTask is a deleted task as it was, which restoreTasks takes back. */
+export interface RemovedTask {
+  listId: number
+  data: string
+}
+
+/** TaskDeleteResult is what a deletion removed, subtasks included. */
+export interface TaskDeleteResult {
+  removed: RemovedTask[]
+  queued: boolean
+}
+
+/** TaskMailMark says a stored message has a task; done when every such task is. */
+export interface TaskMailMark {
+  messageId: number
+  done: boolean
+}
+
+/** What the rail badge on Tasks counts. */
+export type TaskBadge = 'overdue' | 'today' | 'off'
+/** How a task list is ordered. */
+export type TaskSort = 'manual' | 'due' | 'priority' | 'title' | 'created'
+
+/** TaskSettings are the task preferences. */
+export interface TaskSettings {
+  defaultListId: number
+  // the time of day a due date picked without one gets, -1 to keep a date.
+  defaultDueMinutes: number
+  badge: TaskBadge
+  showInCalendar: boolean
+  // how long a completed task stays listed, -1 for good.
+  completedDays: number
+  sort: TaskSort
 }
