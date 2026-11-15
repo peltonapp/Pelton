@@ -2086,6 +2086,9 @@ const en: Record<string, string> = {
   'preview.reply.text': 'Sounds good, see you Friday.',
   'preview.reply.wrote': '{name} wrote:',
   'preview.seconds': '{n}s',
+  'preview.folder.projects': 'Projects',
+  'preview.folder.invoices': 'Invoices',
+  'preview.folder.travel': 'Travel',
 }
 
 export default en
