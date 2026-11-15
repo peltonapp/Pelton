@@ -87,6 +87,9 @@ const defaults: UIPrefs = {
   quickFilterBar: false,
   composeOpenIn: 'window',
   threadedList: true,
+  splitInbox: false,
+  splitTabs: 'important,newsletters,notifications',
+  splitActive: '',
   readerWidth: 'full',
   themeId: '',
   menuBarInApp: false,
@@ -336,6 +339,24 @@ export function setComposeOpenIn(composeOpenIn: ComposeOpenIn): void {
 export function setThreadedList(threadedList: boolean): void {
   prefs.update((p) => ({ ...p, threadedList }))
   void setSetting(SettingKeys.threadedList, String(threadedList))
+}
+
+/** Turns the split inbox on or off. */
+export function setSplitInbox(splitInbox: boolean): void {
+  prefs.update((p) => ({ ...p, splitInbox }))
+  void setSetting(SettingKeys.splitInbox, String(splitInbox))
+}
+
+/** Stores the split inbox tab order, comma separated, without the catch-all. */
+export function setSplitTabs(splitTabs: string): void {
+  prefs.update((p) => ({ ...p, splitTabs }))
+  void setSetting(SettingKeys.splitTabs, splitTabs)
+}
+
+/** Remembers the split inbox tab last shown. */
+export function setSplitActive(splitActive: string): void {
+  prefs.update((p) => ({ ...p, splitActive }))
+  void setSetting(SettingKeys.splitActive, splitActive)
 }
 
 /** Picks how wide the reading column runs in the new design. */

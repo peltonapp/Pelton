@@ -31,7 +31,7 @@ describe('suggest', () => {
   it('offers recent searches, a way to clear them and the operators on an empty field', () => {
     const rows = suggest(base(''))
     expect(rows.slice(0, 3).map((r) => r.kind)).toEqual(['recent', 'recent', 'clearRecent'])
-    expect(rows.filter((r) => r.kind === 'operator')).toHaveLength(8)
+    expect(rows.filter((r) => r.kind === 'operator')).toHaveLength(9)
   })
 
   it('leaves out the clear entry when nothing is recent', () => {
@@ -54,7 +54,12 @@ describe('suggest', () => {
   })
 
   it('completes has: and is: with the values they take', () => {
-    expect(suggest(base('has:'))).toEqual([{ kind: 'chip', group: 'values', chip: { field: 'has', value: 'attachment' } }])
+    expect(suggest(base('has:'))).toEqual([
+      { kind: 'chip', group: 'values', chip: { field: 'has', value: 'attachment' } },
+      { kind: 'chip', group: 'values', chip: { field: 'has', value: 'note' } },
+    ])
+    expect(suggest(base('has:n'))).toEqual([{ kind: 'chip', group: 'values', chip: { field: 'has', value: 'note' } }])
+    expect(suggest(base('note:venue'))).toEqual([{ kind: 'chip', group: 'values', chip: { field: 'note', value: 'venue' } }])
     expect(suggest(base('is:f'))).toEqual([{ kind: 'chip', group: 'values', chip: { field: 'is', value: 'flagged' } }])
     expect(suggest(base('is:'))).toHaveLength(2)
   })

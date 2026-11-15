@@ -77,6 +77,13 @@ export type ShortcutAction =
   | 'go-mail'
   | 'go-calendar'
   | 'go-contacts'
+  // the split inbox tabs, only while the message list has focus.
+  | 'next-split'
+  | 'prev-split'
+  // pin, mute and a private note on the open message or its conversation.
+  | 'toggle-pin'
+  | 'toggle-mute'
+  | 'edit-note'
 
 // Shortcut pairs an action with its default combo and the label key for display.
 export interface Shortcut {
@@ -169,6 +176,13 @@ export const shortcuts: Shortcut[] = [
   { action: 'go-mail', combo: 'mod+shift+m', labelKey: 'shortcut.goMail' },
   { action: 'go-calendar', combo: 'mod+shift+c', labelKey: 'shortcut.goCalendar' },
   { action: 'go-contacts', combo: 'mod+shift+a', labelKey: 'shortcut.goContacts' },
+  // Tab only moves between splits while the list has focus; everywhere else it
+  // keeps moving focus between controls.
+  { action: 'next-split', combo: 'tab', labelKey: 'shortcut.nextSplit' },
+  { action: 'prev-split', combo: 'shift+tab', labelKey: 'shortcut.prevSplit' },
+  { action: 'toggle-pin', combo: 'shift+p', labelKey: 'shortcut.togglePin' },
+  { action: 'toggle-mute', combo: 'shift+m', labelKey: 'shortcut.toggleMute' },
+  { action: 'edit-note', combo: 'shift+n', labelKey: 'shortcut.editNote' },
 ]
 
 // ParsedCombo is a combo broken into its modifier flags and final key.

@@ -20,6 +20,7 @@
   import { messageDetail, loadMessage, clearMessage } from '../../stores/message'
   import { setFlagged, deleteMessage, archiveMessage, scanMessage, openMessageWindow } from '../../lib/api'
   import { reportArchiveExport, dropDeleted, exportEml, markSeen } from '../../lib/messageactions'
+  import { editNote, toggleMute, togglePin } from '../../lib/organize'
   import {
     virusTotal,
     scanning,
@@ -87,6 +88,15 @@
         break
       case 'delete':
         void remove(message)
+        break
+      case 'pin':
+        void togglePin(message)
+        break
+      case 'mute':
+        void toggleMute(message)
+        break
+      case 'note':
+        editNote(message)
         break
       case 'reload':
         if (message.id === $messageDetail.data?.id) {

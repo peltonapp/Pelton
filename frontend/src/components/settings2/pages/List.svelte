@@ -33,7 +33,9 @@
     setSwipeLeftAction,
     setSwipeRightAction,
     setThreadedList,
+    setSplitInbox,
   } from '../../../stores/prefs'
+  import SplitEditor from '../../list/SplitEditor.svelte'
   import { t } from '../../../lib/i18n'
   import { pfpDataUri, type PfpStyle } from '../../../lib/pfp'
   import { initials } from '../../../lib/format'
@@ -212,6 +214,19 @@
       label={$t('list.threaded.label')}
       on:change={(e) => setThreadedList(e.detail)}
     />
+  </Row>
+</Card>
+
+<Card title={$t('settings.list.splitInbox')}>
+  <Row id="split-inbox" label={$t('settings.list.splitInbox')} hint={$t('settings.list.splitInboxHint')}>
+    <ToggleSwitch
+      checked={$prefs.splitInbox}
+      label={$t('settings.list.splitInbox')}
+      on:change={(e) => setSplitInbox(e.detail)}
+    />
+  </Row>
+  <Row id="split-tabs" label={$t('settings.list.splitTabs')} hint={$t('settings.list.splitTabsHint')} stacked disabled={!$prefs.splitInbox}>
+    <SplitEditor />
   </Row>
 </Card>
 

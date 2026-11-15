@@ -4,7 +4,7 @@
 // and deletes reflect immediately without a round trip.
 
 import { writable, get, derived, type Readable } from 'svelte/store'
-import type { MessageSummary, Selection, SearchSort, SearchSortPref, SearchKind, ThreadSummary } from '../lib/types'
+import type { MessageList, MessageSummary, Selection, SearchSort, SearchSortPref, SearchKind, ThreadSummary } from '../lib/types'
 import {
   listFolderMessages,
   listViewMessages,
@@ -26,6 +26,7 @@ import { errorMessage, push, toastError } from './toast'
 import { prefs, searchSortPref } from './prefs'
 import { refreshCountsSoon } from './sidebarcounts'
 import { dropThreadMessage, invalidateThreads, patchThreadMessage, threadedOn, threadSeenOf } from './threads'
+import { splitFor } from './splits'
 
 // how many rows we request per page.
 export const PAGE_SIZE = 50
@@ -105,24 +106,34 @@ interface Page {
   threads?: Record<number, ThreadSummary>
 }
 
-// fetchThreadPage reads one page of conversations for a selection.
+// fetchThreadPage reads one page of conversations for a selection. The first
+// page puts the Pinned group in front.
 async function fetchThreadPage(sel: Selection, offset: number, limit: number): Promise<Page> {
+  const split = splitFor(sel)
   const page =
     sel.kind === 'view'
-      ? await listViewThreads(sel.view, limit, offset)
+      ? await listViewThreads(sel.view, limit, offset, split)
       : sel.kind === 'savedView'
         ? await listSavedViewThreads(sel.viewId, limit, offset)
-        : await listFolderThreads(sel.folderId, limit, offset)
+        : await listFolderThreads(sel.folderId, limit, offset, split)
+  const pinned = (page.pinned ?? []).map((thread) => ({ ...thread, head: { ...thread.head, pinned: true } }))
+  const all = [...pinned, ...(page.threads ?? [])]
   const threads: Record<number, ThreadSummary> = {}
-  for (const thread of page.threads ?? []) {
+  for (const thread of all) {
     threads[thread.head.id] = thread
   }
   return {
-    items: (page.threads ?? []).map((thread) => thread.head),
-    total: page.total,
+    items: all.map((thread) => thread.head),
+    total: page.total + pinned.length,
     hasOlder: page.hasOlder,
     threads,
   }
+}
+
+// flatPage joins a page of messages onto its Pinned group.
+function flatPage(page: MessageList): Page {
+  const pinned = page.pinned ?? []
+  return { items: [...pinned, ...(page.messages ?? [])], total: page.total + pinned.length, hasOlder: page.hasOlder }
 }
 
 // fetchPage reads one page for a selection at the given offset, as
@@ -132,15 +143,50 @@ async function fetchPage(sel: Selection, offset: number): Promise<Page> {
     return fetchThreadPage(sel, offset, PAGE_SIZE)
   }
   if (sel.kind === 'view') {
-    const page = await listViewMessages(sel.view, PAGE_SIZE, offset)
-    return { items: page.messages ?? [], total: page.total, hasOlder: page.hasOlder }
+    return flatPage(await listViewMessages(sel.view, PAGE_SIZE, offset, splitFor(sel)))
   }
   if (sel.kind === 'savedView') {
-    const page = await listSavedViewMessages(sel.viewId, PAGE_SIZE, offset)
-    return { items: page.messages ?? [], total: page.total, hasOlder: page.hasOlder }
+    return flatPage(await listSavedViewMessages(sel.viewId, PAGE_SIZE, offset))
   }
-  const page = await listFolderMessages(sel.folderId, PAGE_SIZE, offset)
-  return { items: page.messages ?? [], total: page.total, hasOlder: page.hasOlder }
+  return flatPage(await listFolderMessages(sel.folderId, PAGE_SIZE, offset, splitFor(sel)))
+}
+
+/** Whether a row belongs to the Pinned group: the message or its conversation is pinned. */
+export function rowPinned(m: MessageSummary, threads?: Record<number, ThreadSummary>): boolean {
+  return !!m.pinned || !!threads?.[m.id]?.pinned
+}
+
+/**
+ * Puts the pinned rows in front, each side keeping its order. A list that is
+ * not a result set keeps its rest newest first, which is where an unpinned
+ * row has to go back to.
+ */
+export function pinnedFirst(items: MessageSummary[], threads?: Record<number, ThreadSummary>, byDate = false): MessageSummary[] {
+  const pinned = items.filter((m) => rowPinned(m, threads))
+  const rest = items.filter((m) => !rowPinned(m, threads))
+  if (byDate) {
+    rest.sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0))
+  }
+  return [...pinned, ...rest]
+}
+
+/** Pins or unpins a loaded row, conversation included, and moves it into place. */
+export function repinInList(id: number, pinned: boolean): void {
+  messageList.update((s) => {
+    if (s.status !== 'ready' || !s.data) {
+      return s
+    }
+    const threads = s.data.threads
+      ? Object.fromEntries(
+          Object.entries(s.data.threads).map(([head, thread]) =>
+            Number(head) === id ? [head, { ...thread, pinned, head: { ...thread.head, pinned } }] : [head, thread],
+          ),
+        )
+      : undefined
+    const items = s.data.items.map((m) => (m.id === id ? { ...m, pinned } : m))
+    return ready({ ...s.data, threads, items: pinnedFirst(items, threads, !s.data.searching) })
+  })
+  patchThreadMessage(id, { pinned })
 }
 
 // loadList loads the first page for a selection, replacing the list.
@@ -306,6 +352,8 @@ function requestFilter(f: SearchFilter): Omit<SearchRequest, 'query' | 'limit' |
     flaggedOnly: f.flaggedOnly,
     accountId: f.accountId,
     folderId: f.folderId,
+    note: f.note,
+    hasNote: f.hasNote,
   }
 }
 
@@ -361,7 +409,7 @@ export function allMatchingIds(): Promise<MessageIDs> {
   if (!currentSelection) {
     return Promise.resolve({ ids: [], capped: false, matching: 0 })
   }
-  return messageIds(currentSelection)
+  return messageIds(currentSelection, splitFor(currentSelection))
 }
 
 // searchPage fetches one page of ranked results.
@@ -408,7 +456,7 @@ export async function runSearch(query: string, filter: SearchFilter = emptyFilte
     // "load older" affordance on a result set.
     messageList.set(
       ready({
-        items: messages,
+        items: pinnedFirst(messages),
         total,
         searching: true,
         hasOlder: false,
@@ -451,7 +499,7 @@ async function loadMoreSearch(): Promise<void> {
       if (!s.data || !s.data.searching || currentSearch !== active) {
         return s
       }
-      const items = appendPage(s.data.items, messages)
+      const items = pinnedFirst(appendPage(s.data.items, messages))
       return ready({
         ...s.data,
         items,
@@ -550,8 +598,9 @@ export function removeFromList(id: number): void {
     // not desync total from the real remaining count).
     const removed = items.length !== s.data.items.length
     // the rows behind it move up one on the server, so the next page starts
-    // one earlier than it would have.
-    if (removed) {
+    // one earlier than it would have. The Pinned group is not paged.
+    const gone = s.data.items.find((m) => m.id === id)
+    if (removed && gone && !rowPinned(gone, s.data.threads)) {
       currentOffset = Math.max(0, currentOffset - 1)
     }
     return ready({
