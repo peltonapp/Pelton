@@ -41,12 +41,15 @@
     },
   ]
 
-  $: template = $prefs.rowTemplate as RowTemplate
-  $: placement = $prefs.avatarPlacement
+  /** Choices to show in place of the saved ones, for an option being pointed at. */
+  export let trial: { template?: string; avatar?: string; flag?: string } = {}
+
+  $: template = (trial.template ?? $prefs.rowTemplate) as RowTemplate
+  $: placement = trial.avatar ?? $prefs.avatarPlacement
   $: column = placement === 'column' && template !== 'single'
   $: inline = placement === 'inline'
   $: snippet = $prefs.rowShowSnippet && (template === 'relaxed' || template === 'comfortable')
-  $: flag = $prefs.flagHighlight
+  $: flag = trial.flag ?? $prefs.flagHighlight
   $: columnSize = template === 'relaxed' ? 36 : 30
 
   function when(minutes: number): string {

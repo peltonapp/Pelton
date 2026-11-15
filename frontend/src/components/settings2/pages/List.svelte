@@ -46,6 +46,12 @@
   } from '../../../lib/types'
 
   $: snippetCapable = $prefs.rowTemplate === 'relaxed' || $prefs.rowTemplate === 'comfortable'
+
+  // the option under the pointer in each card group, which the preview shows
+  // in place of the saved choice.
+  let trialAvatar: string | null = null
+  let trialTemplate: string | null = null
+  let trialFlag: string | null = null
   $: multi = $prefs.multiSelectEnabled
 
   $: placements = [
@@ -129,9 +135,10 @@
 
 <Card title={$t('list.card.layout')}>
   <Row id="avatar-placement" label={$t('list.avatarPlacement.label')} hint={$t('list.avatarPlacement.hint')} stacked>
-    <ListPreview slot="preview" />
+    <ListPreview slot="preview" trial={{ avatar: trialAvatar ?? undefined }} />
     <div class="fill">
       <ChoiceCards
+        on:hover={(e) => (trialAvatar = e.detail)}
         label={$t('list.avatarPlacement.label')}
         value={$prefs.avatarPlacement}
         options={placements}
@@ -146,9 +153,10 @@
     {/if}
   </Row>
   <Row id="row-template" label={$t('settingsPanel.label.rowLayout')} stacked>
-    <ListPreview slot="preview" />
+    <ListPreview slot="preview" trial={{ template: trialTemplate ?? undefined }} />
     <div class="fill">
       <ChoiceCards
+        on:hover={(e) => (trialTemplate = e.detail)}
         label={$t('settingsPanel.label.rowLayout')}
         value={$prefs.rowTemplate}
         options={templates}
@@ -179,8 +187,9 @@
     />
   </Row>
   <Row id="flag-highlight" label={$t('settingsPanel.label.flaggedHighlight')} hint={$t('settingsPanel.hint.barIconFlag')} stacked>
-    <ListPreview slot="preview" />
+    <ListPreview slot="preview" trial={{ flag: trialFlag ?? undefined }} />
     <ChoiceCards
+      on:hover={(e) => (trialFlag = e.detail)}
       label={$t('settingsPanel.label.flaggedHighlight')}
       value={$prefs.flagHighlight}
       options={flagOptions}
