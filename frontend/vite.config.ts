@@ -56,6 +56,28 @@ const flagUrlDev = {
 const pdfjsRoot = fileURLToPath(new URL('./node_modules/pdfjs-dist/', import.meta.url))
 const pdfjsDirs = ['cmaps', 'standard_fonts', 'iccs', 'wasm']
 const pdfjsSkip = (name: string) => name.startsWith('quickjs') || name.startsWith('LICENSE')
+// in development, an error that keeps the app from starting is posted here by
+// the splash (index.html) and printed in the terminal, since the webview's
+// console is not otherwise visible.
+const bootErrors = {
+  name: 'boot-errors',
+  configureServer(server: { middlewares: { use: (fn: (req: { url?: string, method?: string, on: (ev: string, cb: (chunk?: Buffer) => void) => void }, res: { statusCode: number, end: (b?: string) => void }, next: () => void) => void) => void } }) {
+    server.middlewares.use((req, res, next) => {
+      if (req.url !== '/__boot_error' || req.method !== 'POST') {
+        next()
+        return
+      }
+      const chunks: Buffer[] = []
+      req.on('data', (chunk) => chunk && chunks.push(chunk))
+      req.on('end', () => {
+        console.error(`\n[boot error]\n${Buffer.concat(chunks).toString('utf8').slice(0, 8000)}\n`)
+        res.statusCode = 204
+        res.end()
+      })
+    })
+  },
+}
+
 const pdfjsAssets = {
   name: 'pdfjs-assets',
   configureServer(server: { middlewares: { use: (fn: (req: { url?: string }, res: { setHeader: (k: string, v: string) => void, end: (b: Buffer) => void }, next: () => void) => void) => void } }) {
@@ -90,7 +112,7 @@ const pdfjsAssets = {
 
 // https://vitejs.dev/config/
 export default defineConfig({
-  plugins: [svelte(), dropLegacyWoff, flagUrlDev, pdfjsAssets],
+  plugins: [svelte(), dropLegacyWoff, flagUrlDev, pdfjsAssets, bootErrors],
   resolve: {
     alias: {
       'tabler-nodes-outline': tablerNodesOutline,

@@ -25,6 +25,7 @@ import { writable, derived } from 'svelte/store'
 import en from './locales/en'
 import { getUserLocale } from './api'
 import { applyCJK, applyDirection } from '../theme/theme'
+import { isMac, isWindows } from './platform'
 
 export type Locale = 'en' | 'de' | 'fr' | 'nl' | 'es' | 'it' | 'pl' | 'ru' | 'tr' | 'pt' | 'ar' | 'zh-CN'
 
@@ -198,11 +199,7 @@ export const t = derived([locale, catalogs, userCatalog], ([$locale, $catalogs, 
   return $user?.[key] ?? $catalogs[$locale]?.[key] ?? $catalogs.en?.[key] ?? key
 })
 
-// isMac drives the modifier symbol and is used by shortcut matching.
-export const isMac = /mac/i.test(navigator.userAgent)
-
-// isWindows gates the few settings only Windows has (the Mica material).
-export const isWindows = /windows/i.test(navigator.userAgent)
+export { isMac, isWindows }
 
 
 // modSymbol is the display glyph for the primary modifier on this platform.

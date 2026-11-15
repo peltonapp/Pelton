@@ -67,6 +67,9 @@ const app =
 
 initSmoothCaret()
 
+// from here on an error is the app's to show, not the splash's.
+;(window as unknown as { peltonBooted?: boolean }).peltonBooted = true
+
 // fade the pre-mount splash out now that svelte has taken over, then drop it.
 const splash = document.getElementById('splash')
 if (splash) {

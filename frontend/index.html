@@ -76,6 +76,16 @@
             height: 72px; width: auto; user-select: none; -webkit-user-select: none;
             animation: sp-breathe 1.9s ease-in-out infinite;
         }
+        #splash.failed .read { flex-direction: column; gap: 16px; padding: 24px; }
+        #splash.failed .mark { animation: none; opacity: .6; height: 48px; }
+        #splash.failed .b { animation: none; }
+        #splash .fail {
+            margin: 0; max-width: 100%; max-height: 60%; overflow: auto;
+            white-space: pre-wrap; word-break: break-word;
+            font: 12px/1.5 ui-monospace, Menlo, Consolas, monospace; color: #b3261e;
+            user-select: text; -webkit-user-select: text;
+        }
+        @media (prefers-color-scheme: dark) { #splash .fail { color: #ff8a80; } }
         /* a window that holds one message, one composer or the send log gets
            the mark alone. */
         #splash.solo .rail, #splash.solo .side, #splash.solo .list { display: none; }
@@ -122,6 +132,42 @@
     if (new URLSearchParams(location.search).get('window')) {
         document.getElementById('splash').classList.add('solo')
     }
+    // an error before the app has mounted would leave the splash up forever.
+    // show what went wrong on it instead; main.ts sets peltonBooted once the
+    // app is on screen, after which errors are the app's own business.
+    (function () {
+        function report(text) {
+            if (window.peltonBooted) { return }
+            var splash = document.getElementById('splash')
+            if (!splash) { return }
+            var box = splash.querySelector('.fail')
+            if (!box) {
+                box = document.createElement('pre')
+                box.className = 'fail'
+                splash.querySelector('.read').appendChild(box)
+                splash.classList.add('failed')
+            }
+            box.textContent += (box.textContent ? '\n\n' : 'Pelton could not start. Please report this with the details below.\n\n') + text
+            // the dev server prints this in the terminal; a built app has no
+            // such route and the request simply finds nothing.
+            try { fetch('/__boot_error', { method: 'POST', body: text }).catch(function () {}) } catch (e) {}
+        }
+        // the message, then the stack unless the stack already starts with it
+        // (some engines repeat the message there, others leave it out).
+        function describe(message, stack) {
+            message = String(message || 'Unknown error')
+            if (!stack) { return message }
+            return stack.indexOf(message) >= 0 ? stack : message + '\n' + stack
+        }
+        window.addEventListener('error', function (e) {
+            var where = e.filename ? e.filename + ':' + e.lineno : ''
+            report(describe(e.message, (e.error && e.error.stack) || where))
+        })
+        window.addEventListener('unhandledrejection', function (e) {
+            var r = e.reason
+            report(describe(r && r.message ? r.message : r, r && r.stack))
+        })
+    })()
 </script>
 <script src="./src/main.ts" type="module"></script>
 </body>

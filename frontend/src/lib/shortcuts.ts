@@ -6,7 +6,7 @@
 // stays a pure, store-free library so it can be unit-reasoned and imported
 // anywhere.
 
-import { isMac } from './i18n'
+import { isMac } from './platform'
 
 // ShortcutAction is the set of app-wide actions a shortcut can trigger. The
 // second group are message-level actions that act on the open message, or on
