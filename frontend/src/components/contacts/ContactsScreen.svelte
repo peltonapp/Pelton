@@ -18,6 +18,8 @@
   import Spinner from '../common/Spinner.svelte'
   import ContactEditor from './ContactEditor.svelte'
   import ContactConflictDialog from './ContactConflictDialog.svelte'
+  import ContactTasks from '../tasks/ContactTasks.svelte'
+  import { prefs } from '../../stores/prefs'
   import {
     addressBooks,
     contacts,
@@ -273,6 +275,11 @@
           {/if}
           {#if selected.readOnly}
             <p class="sub">{$t('contacts.readOnly')}</p>
+          {/if}
+          <!-- tasks extension point: feat/contacts-revamp replaces this pane
+               with ContactDetail.svelte, which takes this same section. -->
+          {#if $prefs.design !== 'classic' && selected.emails.length > 0}
+            <ContactTasks name={selected.fullName} emails={selected.emails.map((e) => e.value)} />
           {/if}
         {:else}
           <p class="empty-list">{$t('contacts.pickOne')}</p>

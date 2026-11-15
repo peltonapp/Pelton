@@ -13,6 +13,7 @@
   import ToggleSwitch from '../../common/ToggleSwitch.svelte'
   import CalDavAccounts from '../../calendar/CalDavAccounts.svelte'
   import { calendarSettings, calendars, loadCalendars, loadCalendarSettings, saveCalendarSettings } from '../../../stores/calendar'
+  import { loadTaskSettings, saveTaskSettings, taskSettings } from '../../../stores/tasks'
   import { atMinutes, localeWeekStart } from '../../../lib/caldate'
   import { formatTime } from '../../../lib/calformat'
   import { weekdayName } from '../../../lib/recurrence'
@@ -28,6 +29,7 @@
   let icsHandler = { known: false, isDefault: false }
 
   onMount(() => {
+    void loadTaskSettings()
     void loadCalendarSettings()
     void loadCalendars()
     void readICSHandler()
@@ -187,6 +189,9 @@
       label={$t('calendarSettings.reminders')}
       on:change={(e) => saveCalendarSettings({ remindersEnabled: e.detail })}
     />
+  </Row>
+  <Row id="calendar-show-tasks" label={$t('taskSettings.inCalendar')} hint={$t('taskSettings.inCalendar.hint')}>
+    <ToggleSwitch checked={$taskSettings.showInCalendar} label={$t('taskSettings.inCalendar')} on:change={(e) => saveTaskSettings({ showInCalendar: e.detail })} />
   </Row>
   <Row id="calendar-ics-handler" label={$t('calendarSettings.icsHandler')} hint={$t('calendarSettings.icsHandler.hint')}>
     {#if icsHandler.known && icsHandler.isDefault}

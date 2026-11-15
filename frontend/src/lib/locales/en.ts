@@ -1796,6 +1796,8 @@ const en: Record<string, string> = {
   'tasks.mailMarkDone': 'Its task is done',
   'tasks.inCalendarDone': 'Mark as done: {title}',
   'tasks.inCalendarOpen': 'Mark as not done: {title}',
+  'calendar.importTasks': '{n} tasks went to a task list.',
+  'calendar.importTaskCount': '{n} tasks',
   'tasks.forContact': 'Open tasks',
   'tasks.forContactNone': 'No open tasks for this person.',
   'taskSettings.newTasks': 'New tasks',
