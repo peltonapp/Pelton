@@ -2090,6 +2090,7 @@ const en: Record<string, string> = {
   'preview.folder.invoices': 'Invoices',
   'preview.folder.travel': 'Travel',
   'preview.selection.all': 'All {n} messages in the list are selected.',
+  'preview.sender.sample': 'Designed mail keeps the typeface its sender chose.',
 }
 
 export default en

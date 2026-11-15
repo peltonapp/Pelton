@@ -5,6 +5,9 @@
   import Row from '../ui/Row.svelte'
   import ToggleSwitch from '../../common/ToggleSwitch.svelte'
   import ShortcutSettings from '../../settings/ShortcutSettings.svelte'
+  import ShortcutHintPreview from '../skeletons/ShortcutHintPreview.svelte'
+  import PalettePreview from '../skeletons/PalettePreview.svelte'
+  import AppVimPreview from '../skeletons/AppVimPreview.svelte'
   import { prefs, setShortcutHints, setAppVimMode } from '../../../stores/prefs'
   import { paletteQuickSelect, setPaletteQuickSelect } from '../../../stores/palette'
   import { t } from '../../../lib/i18n'
@@ -15,6 +18,7 @@
 
 <Card title={$t('settings2.shortcuts.general')}>
   <Row id="shortcut-hints" label={$t('settingsPanel.toggle.shortcutHints')}>
+    <ShortcutHintPreview slot="preview" hints={$prefs.showShortcutHints} />
     <ToggleSwitch
       checked={$prefs.showShortcutHints}
       label={$t('settingsPanel.toggle.shortcutHints')}
@@ -22,6 +26,7 @@
     />
   </Row>
   <Row id="palette-quick-select" label={$t('settingsPanel.toggle.paletteQuickSelect')} hint={$t('settingsPanel.hint.paletteQuickSelect')}>
+    <PalettePreview slot="preview" quickSelect={$paletteQuickSelect} />
     <ToggleSwitch
       checked={$paletteQuickSelect}
       label={$t('settingsPanel.toggle.paletteQuickSelect')}
@@ -29,6 +34,7 @@
     />
   </Row>
   <Row id="app-vim" label={appVimLabel} hint={`${$t('settingsPanel.hint.appVim')} ${$t('settingsPanel.hint.appVimDetail')}`}>
+    <AppVimPreview slot="preview" enabled={$prefs.appVimMode} />
     <ToggleSwitch checked={$prefs.appVimMode} label={$t('onboarding.extras.appVim')} on:change={(e) => setAppVimMode(e.detail)} />
   </Row>
 </Card>
