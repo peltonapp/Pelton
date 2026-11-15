@@ -93,7 +93,7 @@
   import CoachLayer from './components/shell/CoachLayer.svelte'
   import { initCoach, toggleSheet } from './stores/coach'
   import { noteAction, noteShortcut } from './lib/coach'
-  import { initFocus, focusMenuOpen } from './stores/focus'
+  import { initFocus, focusMenuOpen, refreshFocus } from './stores/focus'
   import './lib/palette-focus'
   import { cyclePane, focusPane as focusPaneArea } from './lib/panes'
   import { bindings, recording, initShortcuts } from './stores/shortcuts'
@@ -1601,6 +1601,7 @@
     void loadSignatures()
     void loadVIPSenders()
     void loadViews()
+    void refreshFocus()
     await loadList(get(selection))
   }
 
