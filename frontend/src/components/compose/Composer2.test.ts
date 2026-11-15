@@ -10,6 +10,7 @@ const api = vi.hoisted(() => ({
   uploadDraft: vi.fn(),
   composeProtectionStatus: vi.fn(),
   showMessageInMainWindow: vi.fn(),
+  listOccurrences: vi.fn(),
 }))
 
 vi.mock('../../lib/api', async (importOriginal) => ({
@@ -28,8 +29,9 @@ vi.mock('../../stores/signatures', async (importOriginal) => ({
 }))
 
 import Composer2 from './Composer2.svelte'
-import { composeSessions, getSession, openCompose, openReply, updateCompose, type ComposeSession } from '../../stores/compose'
+import { availabilityRequest, composeSessions, getSession, openCompose, openReply, updateCompose, type ComposeSession } from '../../stores/compose'
 import { prefs } from '../../stores/prefs'
+import { calendars, calendarSettingsLoaded } from '../../stores/calendar'
 import type { MessageDetail } from '../../lib/types'
 
 let unsubscribe: (() => void) | null = null
@@ -166,5 +168,33 @@ describe('Composer2', () => {
     const id = openCompose(1, 'wysiwyg')
     mount(id)
     expect(get(composeSessions).find((s) => s.id === id)?.mode).toBe('plaintext')
+  })
+
+  it('inserts free times from the availability panel into the message', async () => {
+    calendars.set([{ id: 1, accountId: 0, accountName: '', name: 'Work', description: '', color: '', local: true, readOnly: false, visible: true, lastSync: '', lastError: '', default: true }])
+    calendarSettingsLoaded.set(true)
+    api.listOccurrences.mockResolvedValue([])
+    const id = openCompose(1, 'wysiwyg')
+    mount(id)
+    await vi.waitFor(() => expect(document.querySelector('.ProseMirror')).not.toBeNull())
+
+    await userEvent.click(screen.getByRole('button', { name: 'Share availability' }))
+    await userEvent.click(await screen.findByRole('radio', { name: 'Next week' }))
+    const insert = await screen.findByRole('button', { name: 'Insert' })
+    await vi.waitFor(() => expect(insert).toBeEnabled())
+    await userEvent.click(insert)
+
+    await vi.waitFor(() => expect(getSession(id)?.body).toContain('Times are in'))
+    expect(screen.queryByRole('dialog', { name: 'Share availability' })).toBeNull()
+  })
+
+  it('opens the availability panel when the palette asks', async () => {
+    calendarSettingsLoaded.set(true)
+    api.listOccurrences.mockResolvedValue([])
+    const id = openCompose(1, 'wysiwyg')
+    mount(id, 'docked')
+    availabilityRequest.set(id)
+    expect(await screen.findByRole('dialog', { name: 'Share availability' })).toBeInTheDocument()
+    expect(get(availabilityRequest)).toBeNull()
   })
 })

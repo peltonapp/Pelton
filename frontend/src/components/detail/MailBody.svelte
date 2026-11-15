@@ -335,13 +335,16 @@
   // markDates finds the dates in the frame's text, off the main thread, then
   // wraps them in marks over the same text nodes. Taking the marks out first
   // makes it safe to run again for the same document.
-  async function markDates(): Promise<void> {
-    const run = ++dateRun
+  let datesBody: HTMLElement | null = null
+
+  async function markDates(again = false): Promise<void> {
     const doc = frame?.contentDocument
     const body = readyBody()
-    if (!doc || !body) {
+    if (!doc || !body || (body === datesBody && !again)) {
       return
     }
+    datesBody = body
+    const run = ++dateRun
     unmarkDates(doc)
     mentions = []
     closePeek(false)
@@ -373,7 +376,7 @@
   let datesWere: boolean | null = null
   $: if (frame && detail.isHtml && datesOn !== datesWere) {
     if (datesWere !== null) {
-      void markDates()
+      void markDates(true)
     }
     datesWere = datesOn
   }

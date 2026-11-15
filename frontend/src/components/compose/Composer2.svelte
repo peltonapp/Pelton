@@ -19,6 +19,9 @@
   import minimizeIcon from '@phosphor-icons/core/assets/duotone/minus-duotone.svg?raw'
   import trashIcon from '@phosphor-icons/core/assets/duotone/trash-duotone.svg?raw'
   import xIcon from '@phosphor-icons/core/assets/regular/x.svg?raw'
+  import availabilityIcon from '@phosphor-icons/core/assets/duotone/calendar-dots-duotone.svg?raw'
+  import AvailabilityPanel from './v2/AvailabilityPanel.svelte'
+  import { availabilityRequest } from '../../stores/compose'
   import Ph from '../common/Ph.svelte'
   import Select from '../common/Select.svelte'
   import AnchoredPopover from '../common/AnchoredPopover.svelte'
@@ -80,6 +83,8 @@
   let strip: AttachmentStrip
   let moreButton: HTMLButtonElement
   let moreOpen = false
+  let availButton: HTMLButtonElement
+  let availOpen = false
   let sigChoice = ''
 
   $: rich = session.mode === 'wysiwyg'
@@ -91,6 +96,7 @@
   let RichEditor: typeof RichEditorView | null = null
   let richEditor: RichEditorView | null = null
   let CMEditor: typeof CodeMirrorEditor | null = null
+  let cmEditor: CodeMirrorEditor | null = null
   let revision = 0
   $: if (rich && !RichEditor) {
     void import('./RichEditor.svelte').then((m) => (RichEditor = m.default))
@@ -315,6 +321,25 @@
     }
   }
 
+  // the free times picked in the availability panel go in at the caret.
+  function insertAvailability(text: string): void {
+    availOpen = false
+    if (rich) {
+      richEditor?.insertText(text)
+    } else {
+      cmEditor?.insertText(text)
+    }
+  }
+
+  // the palette asks the composer of a session to open the panel.
+  $: if ($availabilityRequest === session.id) {
+    availabilityRequest.set(null)
+    if (session.minimized) {
+      updateCompose(session.id, { minimized: false })
+    }
+    void tick().then(() => (availOpen = true))
+  }
+
   function onConfirmKeydown(event: KeyboardEvent): void {
     if (event.key === 'Escape') {
       event.preventDefault()
@@ -377,6 +402,18 @@
         <Ph svg={floppyIcon} size={16} />
         <span>{$t('action.saveDraft')}</span>
       </button>
+      <button
+        type="button"
+        class="c2-tool compact"
+        bind:this={availButton}
+        aria-label={$t('avail.open')}
+        aria-haspopup="dialog"
+        aria-expanded={availOpen}
+        use:tip={{ text: $t('avail.open') }}
+        on:click={() => (availOpen = !availOpen)}
+      >
+        <Ph svg={availabilityIcon} size={16} />
+      </button>
       <span class="grow" aria-hidden="true"></span>
       {#if canPopOut}
         <button type="button" class="c2-tool compact" aria-label={$t('messageList.menu.openInWindow')} use:tip={{ text: $t('messageList.menu.openInWindow') }} on:click={popOut}>
@@ -436,6 +473,7 @@
       {:else if CMEditor}
         <svelte:component
           this={CMEditor}
+          bind:this={cmEditor}
           content={typed}
           placeholder={$t('compose.editor.placeholderPlain')}
           vimEnabled={$prefs.composeVimMode}
@@ -464,6 +502,18 @@
         <ProtectionMenu compact menuAbove protection={session.protection} status={protectionStatus} on:change={(e) => updateCompose(session.id, { protection: e.detail })} />
         <button type="button" class="c2-tool compact" disabled={saving} aria-label={$t('action.saveDraft')} use:tip={{ text: $t('action.saveDraft'), side: 'top' }} on:click={() => save()}>
           <Ph svg={floppyIcon} size={16} />
+        </button>
+        <button
+          type="button"
+          class="c2-tool compact"
+          bind:this={availButton}
+          aria-label={$t('avail.open')}
+          aria-haspopup="dialog"
+          aria-expanded={availOpen}
+          use:tip={{ text: $t('avail.open'), side: 'top' }}
+          on:click={() => (availOpen = !availOpen)}
+        >
+          <Ph svg={availabilityIcon} size={16} />
         </button>
       {/if}
       <span class="state" aria-live="polite">{statusText}</span>
@@ -518,6 +568,12 @@
     </div>
   {/if}
 </div>
+
+{#if availOpen && availButton}
+  <AnchoredPopover anchor={availButton} side={docked ? 'above' : 'below'} align="start" label={$t('avail.title')} on:close={() => (availOpen = false)}>
+    <AvailabilityPanel on:insert={(e) => insertAvailability(e.detail)} on:close={() => (availOpen = false)} />
+  </AnchoredPopover>
+{/if}
 
 {#if moreOpen && moreButton}
   <AnchoredPopover anchor={moreButton} side={docked ? 'above' : 'below'} align="end" role="menu" label={$t('compose2.more')} on:close={() => (moreOpen = false)}>

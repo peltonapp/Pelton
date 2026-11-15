@@ -214,6 +214,16 @@
       .run()
   }
 
+  /** insertText puts plain text at the caret, one paragraph per line. */
+  export function insertText(text: string): void {
+    const lines = text.split('\n')
+    editor
+      ?.chain()
+      .focus()
+      .insertContent(lines.map((line) => ({ type: 'paragraph', content: line ? [{ type: 'text', text: line }] : [] })))
+      .run()
+  }
+
   /** focus puts the caret in the editor. */
   export function focus(): void {
     editor?.commands.focus()

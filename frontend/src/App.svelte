@@ -163,6 +163,7 @@
   import { extraPaletteCommands } from './lib/palettesources'
   import './lib/palette-calendar'
   import './lib/palette-tasks'
+  import './lib/palette-availability'
   import { startTasks, toggleDone, tasks as taskStore, taskFromMailRequest } from './stores/tasks'
   import { createTasksFromMail, openTask } from './lib/taskmail'
   import { getTask } from './lib/api'
