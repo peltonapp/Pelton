@@ -26,7 +26,12 @@ type OutboxRow struct {
 	LastError     string
 	NextAttemptAt time.Time
 	CreatedAt     time.Time
+	// Priority puts a row ahead of older ones when claiming: higher goes first.
+	Priority int
 }
+
+// outboxColumns is the column list scanOutbox reads, in its order.
+const outboxColumns = `id, account_id, envelope_from, recipients, raw_message, state, attempts, last_error, next_attempt_at, created_at, priority`
 
 // InsertOutbox inserts a queued message and returns its new id. CreatedAt and
 // NextAttemptAt default to now when left zero.
@@ -56,8 +61,9 @@ VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
 	return id, nil
 }
 
-// ClaimDueOutbox atomically picks the oldest message in queuedState whose
-// next_attempt_at has passed, flips it to sendingState, and returns it. It
+// ClaimDueOutbox atomically picks the message in queuedState whose
+// next_attempt_at has passed, highest priority first and oldest among equals,
+// flips it to sendingState, and returns it. It
 // returns (nil, nil) when nothing is due. Messages of the accounts in skip are
 // passed over, so one account can send while another is still busy. The select
 // and update run in one transaction so two workers cannot claim the same row.
@@ -77,10 +83,10 @@ func (d *DB) ClaimDueOutbox(ctx context.Context, queuedState, sendingState strin
 		}
 	}
 	selectDue := `
-SELECT id, account_id, envelope_from, recipients, raw_message, state, attempts, last_error, next_attempt_at, created_at
+SELECT ` + outboxColumns + `
 FROM outbox
 WHERE state = ? AND next_attempt_at <= ?` + exclude + `
-ORDER BY id
+ORDER BY priority DESC, id
 LIMIT 1`
 	row, err := scanOutbox(tx.QueryRowContext(ctx, selectDue, args...))
 	if errors.Is(err, sql.ErrNoRows) {
@@ -124,6 +130,24 @@ UPDATE outbox SET state = ?, attempts = ?, last_error = ?, next_attempt_at = ? W
 	res, err := d.sql.ExecContext(ctx, query, state, attempts, lastErr, formatTime(nextAttempt), id, wantState)
 	if err != nil {
 		return false, fmt.Errorf("storage: update outbox %d if %s: %w", id, wantState, err)
+	}
+	n, err := res.RowsAffected()
+	if err != nil {
+		return false, fmt.Errorf("storage: rows affected: %w", err)
+	}
+	return n > 0, nil
+}
+
+// PrioritiseOutbox moves row id to the front of the claim order while it is
+// still in wantState, by giving it one more than the highest priority in the
+// outbox, and reports whether it was moved.
+func (d *DB) PrioritiseOutbox(ctx context.Context, id int64, wantState string) (bool, error) {
+	const query = `
+UPDATE outbox SET priority = (SELECT COALESCE(MAX(priority), 0) + 1 FROM outbox)
+WHERE id = ? AND state = ?`
+	res, err := d.sql.ExecContext(ctx, query, id, wantState)
+	if err != nil {
+		return false, fmt.Errorf("storage: prioritise outbox %d: %w", id, err)
 	}
 	n, err := res.RowsAffected()
 	if err != nil {
@@ -181,7 +205,7 @@ func (d *DB) DeleteOutboxIfState(ctx context.Context, id int64, wantState string
 // ListOutbox returns every outbox row ordered by id, for inspection and the cli.
 func (d *DB) ListOutbox(ctx context.Context) ([]OutboxRow, error) {
 	const query = `
-SELECT id, account_id, envelope_from, recipients, raw_message, state, attempts, last_error, next_attempt_at, created_at
+SELECT ` + outboxColumns + `
 FROM outbox ORDER BY id`
 	rows, err := d.sql.QueryContext(ctx, query)
 	if err != nil {
@@ -210,7 +234,7 @@ func scanOutbox(row rowScanner) (*OutboxRow, error) {
 		created string
 	)
 	if err := row.Scan(&r.ID, &r.AccountID, &r.EnvelopeFrom, &r.Recipients, &r.Raw,
-		&r.State, &r.Attempts, &r.LastError, &next, &created); err != nil {
+		&r.State, &r.Attempts, &r.LastError, &next, &created, &r.Priority); err != nil {
 		return nil, err
 	}
 	nextAt, err := parseTime(next)

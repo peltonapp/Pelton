@@ -31,6 +31,9 @@ const (
 	EventAccountSyncState = "sync:accounts"
 	// EventOutboxChanged fires when the outbox contents or a message state change.
 	EventOutboxChanged = "outbox:changed"
+	// EventOutboxLog fires for each new line of the send activity log, with
+	// the OutboxLogEntryDTO as payload.
+	EventOutboxLog = "outbox:log"
 	// EventAgentProposals fires when an agent proposes a message, or one is
 	// approved or discarded, so the queue in the ui matches what is stored.
 	EventAgentProposals = "agent:proposals"
