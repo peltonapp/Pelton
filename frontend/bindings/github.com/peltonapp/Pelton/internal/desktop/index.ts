@@ -87,6 +87,7 @@ export {
     ThunderbirdFolderDTO,
     ThunderbirdProfileDTO,
     TrackingPixelDTO,
+    TrafficLightsDTO,
     UIPrefsDTO,
     UnifiedViewDTO,
     UnsubscribeDTO,

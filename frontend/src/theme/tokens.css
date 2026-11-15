@@ -360,4 +360,7 @@
   --titlebar-lights: calc(28px / var(--ui-scale, 1));
   --titlebar-inset: calc(78px / var(--ui-scale, 1));
   --titlebar-nudge: calc(3px / var(--ui-scale, 1));
+  /* the centre line of the traffic lights. this is where older releases put
+     them; the app replaces it with the measured value once it knows. */
+  --titlebar-lights-center: calc(11px / var(--ui-scale, 1));
 }

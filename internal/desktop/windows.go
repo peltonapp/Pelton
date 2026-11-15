@@ -189,6 +189,9 @@ func (a *App) OpenComposeWindow(session string) error {
 		Mac:              a.windowOptions.Mac,
 		Windows:          a.windowOptions.Windows,
 	}
+	if a.integratedFrame && a.stringSetting(settingDesign, "new") != "classic" {
+		insetComposeTitleBar(&opts)
+	}
 	cw := &composeWindow{}
 	a.composeWindows.Store(name, cw)
 	w := a.wapp.Window.NewWithOptions(opts)
