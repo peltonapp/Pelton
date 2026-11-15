@@ -35,6 +35,8 @@
   import SnippetPicker from './v2/SnippetPicker.svelte'
   import SendCheckBar from './v2/SendCheckBar.svelte'
   import { sendIssues, type SendIssue } from '../../lib/sendcheck'
+  import { canArchiveAfter, sendPlan, type SendVariant } from '../../lib/sendvariants'
+  import { emitArchiveAfterSend } from '../../lib/events'
   import { parseAddressList } from '../../lib/mailcompose'
   import { snippets } from '../../stores/snippets'
   import { expandPlaceholders, matchTrigger, recipientNames, snippetFields } from '../../lib/snippets'
@@ -54,6 +56,7 @@
   import {
     closeCompose,
     closeRequest,
+    composeInWindow,
     getSession,
     switchReplyKind,
     typedPart,
@@ -78,7 +81,7 @@
   import { revealMessage } from '../../stores/selection'
   import { focusPane } from '../../stores/tabs'
   import { errorMessage, toastError, toastInfo } from '../../stores/toast'
-  import type { ProtectionStatus, Signature, Snippet } from '../../lib/types'
+  import type { FollowUpInterval, ProtectionStatus, Signature, Snippet } from '../../lib/types'
   import type CodeMirrorEditor from './CodeMirrorEditor.svelte'
   import type RichEditorView from './RichEditor.svelte'
 
@@ -120,6 +123,7 @@
   $: composeFont = bodyFontStack($prefs.bodyFont)
   $: canPopOut = layout !== 'window' && !isDemoActive()
   $: docked = layout === 'docked'
+  $: canArchive = canArchiveAfter(session)
 
   // the editors are code-split and load the first time they are needed.
   let RichEditor: typeof RichEditorView | null = null
@@ -233,6 +237,8 @@
   let checkIssue: SendIssue | null = null
   let checkSkip = new Set<SendIssue>()
   let checkAt: Date | undefined
+  let checkVariant: SendVariant = 'send'
+  let checkInterval: FollowUpInterval | undefined
 
   // issuesOf lists what to ask about before the session's message goes out.
   function issuesOf(s: ComposeSession): SendIssue[] {
@@ -261,7 +267,7 @@
     }
     const skip = new Set([...checkSkip, checkIssue])
     checkIssue = null
-    void send(checkAt, skip)
+    void send(checkAt, skip, checkVariant, checkInterval)
   }
 
   function neverAskAttachment(): void {
@@ -280,29 +286,61 @@
     document.querySelector<HTMLInputElement>(field)?.focus()
   }
 
-  async function send(scheduledAt?: Date, skip: Set<SendIssue> = new Set()): Promise<void> {
+  // send queues the message. Send and remind goes out with a reminder of the
+  // interval it was picked with; a reply archives what it answered once it can
+  // no longer be undone, from the main window, which a compose window hands
+  // that over to since it closes as it sends.
+  async function send(scheduledAt?: Date, skip: Set<SendIssue> = new Set(), variant: SendVariant = 'send', interval?: FollowUpInterval): Promise<void> {
     if (sendState !== 'idle') {
       return
     }
-    const issues = issuesOf(getSession(session.id) ?? session).filter((issue) => !skip.has(issue))
+    const current = getSession(session.id) ?? session
+    if (variant === 'archive' && !canArchiveAfter(current)) {
+      toastInfo($t('sendVariant.notAReply'))
+      return
+    }
+    const issues = issuesOf(current).filter((issue) => !skip.has(issue))
     if (issues.length > 0) {
       checkIssue = issues[0]
       checkSkip = skip
       checkAt = scheduledAt
+      checkVariant = variant
+      checkInterval = interval
       return
     }
     checkIssue = null
+    const plan = sendPlan(current, variant, $prefs, new Date(), interval)
+    const followUpBefore = current.followUpAt
+    if (plan.followUpAt) {
+      updateCompose(session.id, { followUpAt: plan.followUpAt })
+    }
+    const archiveId = plan.archiveId
+    const handOff = archiveId !== null && get(composeInWindow)
     sendState = 'sending'
     const sent = await sendSession(session.id, session, {
       scheduledAt,
       beforeClose: async () => {
+        if (handOff) {
+          emitArchiveAfterSend({ messageId: archiveId, delaySeconds: scheduledAt ? 0 : get(prefs).sendDelaySeconds })
+        }
         sendState = 'sent'
         await wait(get(prefs).reduceMotion ? 0 : 560)
       },
+      afterSent: archiveId !== null && !handOff ? () => void import('../../lib/triage').then((m) => m.markAnsweredDone(archiveId)) : undefined,
     })
     if (!sent) {
       sendState = 'idle'
+      if (plan.followUpAt) {
+        updateCompose(session.id, { followUpAt: followUpBefore })
+      }
     }
+  }
+
+  // sendVariant sends from a key or the palette, once the editor's last edit
+  // has reached the session.
+  async function sendVariant(variant: SendVariant): Promise<void> {
+    await tick()
+    await send(undefined, new Set(), variant)
   }
 
   // onComposerKey answers the send shortcut and the composer actions from
@@ -345,6 +383,12 @@
       updateCompose(session.id, { minimized: false })
     }
     switch (action) {
+      case 'compose-send-archive':
+        void sendVariant('archive')
+        break
+      case 'compose-send-remind':
+        void sendVariant('remind')
+        break
       case 'compose-follow-up':
         followMenu?.open()
         break
@@ -687,7 +731,15 @@
       style={layout === 'window' ? '--wails-draggable:drag' : undefined}
       on:dblclick|self={() => layout === 'window' && titleBarDoubleClick()}
     >
-      <SendButton id={`compose-${session.id}`} state={sendState} on:send={() => send()} on:schedule={(e) => send(e.detail)} />
+      <SendButton
+        id={`compose-${session.id}`}
+        state={sendState}
+        {canArchive}
+        on:send={() => send()}
+        on:schedule={(e) => send(e.detail)}
+        on:archive={() => send(undefined, new Set(), 'archive')}
+        on:remind={(e) => send(undefined, new Set(), 'remind', e.detail)}
+      />
       <span class="gap" aria-hidden="true"></span>
       <button type="button" class="c2-tool" on:click={() => strip.pick()}>
         <Ph svg={paperclipIcon} size={16} />
@@ -810,7 +862,16 @@
 
     <footer class="status" class:dock-foot={docked}>
       {#if docked}
-        <SendButton id={`compose-${session.id}`} state={sendState} menuAbove on:send={() => send()} on:schedule={(e) => send(e.detail)} />
+        <SendButton
+          id={`compose-${session.id}`}
+          state={sendState}
+          menuAbove
+          {canArchive}
+          on:send={() => send()}
+          on:schedule={(e) => send(e.detail)}
+          on:archive={() => send(undefined, new Set(), 'archive')}
+          on:remind={(e) => send(undefined, new Set(), 'remind', e.detail)}
+        />
         <button type="button" class="c2-tool compact" aria-label={$t('compose.attach.button')} use:tip={{ text: $t('compose.attach.button'), side: 'top' }} on:click={() => strip.pick()}>
           <Ph svg={paperclipIcon} size={16} />
         </button>

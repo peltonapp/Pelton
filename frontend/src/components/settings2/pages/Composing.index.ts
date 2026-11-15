@@ -11,6 +11,8 @@ const entries: SettingsIndexEntry[] = [
   { page: 'composing', id: 'warn-missing-attachment', labelKey: 'sendCheck.setting.attachment', keywords: 'attachment forgot missing attached warn reminder check send file' },
   { page: 'composing', id: 'warn-empty-subject', labelKey: 'sendCheck.setting.subject', keywords: 'subject empty missing warn check send' },
   { page: 'composing', id: 'undo-send', labelKey: 'settingsPanel.label.undoSendWindow', keywords: 'undo send delay hold outgoing' },
+  { page: 'composing', id: 'after-reply-send', labelKey: 'sendVariant.setting.afterReply', keywords: 'send archive reply forward done conversation after auto' },
+  { page: 'composing', id: 'send-remind-after', labelKey: 'sendVariant.setting.remindAfter', keywords: 'send remind reminder follow up interval default nobody replies' },
 ]
 
 export default entries

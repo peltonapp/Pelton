@@ -91,7 +91,7 @@
   import { liabilityAccepted } from './lib/liability'
   import { setDemoActive } from './lib/demo'
   import { recordArchived } from './stores/undoarchive'
-  import { onMailNew, onMailRepaired, onSyncState, onSyncProgress, onOutboxChanged, onMenu, onViewsChanged, onFoldersChanged, onProfileChanged, onMailtoCompose, onAgentProposals, onOpenMessage, onCalendarReminder, onTaskReminder, onICSOpen, type Unsubscribe, type MailtoDraft, type CalendarReminderEvent, type TaskReminderEvent } from './lib/events'
+  import { onMailNew, onMailRepaired, onSyncState, onSyncProgress, onOutboxChanged, onMenu, onViewsChanged, onFoldersChanged, onProfileChanged, onMailtoCompose, onAgentProposals, onOpenMessage, onArchiveAfterSend, onCalendarReminder, onTaskReminder, onICSOpen, type Unsubscribe, type MailtoDraft, type CalendarReminderEvent, type TaskReminderEvent } from './lib/events'
   import { loadViews, editingView, closeViewEditor, openViewEditor, views as savedViews } from './stores/views'
   import { selectSavedView } from './stores/selection'
   import { isMac } from './lib/i18n'
@@ -100,6 +100,7 @@
     comboTypes,
     isComposeAction,
     chipActions,
+    sendActions,
     shortcuts as shortcutRegistry,
     type ShortcutAction,
   } from './lib/shortcuts'
@@ -177,7 +178,7 @@
     leaveList,
     toggleSpam,
   } from './lib/messageactions'
-  import { markDone } from './lib/triage'
+  import { markAnsweredDone, markDone } from './lib/triage'
   import { watchFollowUps } from './stores/followups'
   import { loadSnippets } from './stores/snippets'
   import { editNote, toggleMute, togglePin } from './lib/organize'
@@ -658,6 +659,12 @@
     // time this arrives; all that is left is to go to the message.
     unsubscribers.push(
       onOpenMessage((e) => revealMessage(e.messageId, e.accountId, e.folderId, get(sidebar).data ?? null)),
+    )
+    // a send and archive from a compose window, which closes as it sends.
+    unsubscribers.push(
+      onArchiveAfterSend((e) => {
+        setTimeout(() => void markAnsweredDone(e.messageId), e.delaySeconds * 1000)
+      }),
     )
 
     // a mailto: link that launched the app: the backend stashed it, so pick it
@@ -1812,6 +1819,11 @@
       // a recipient move only means something on a focused recipient chip;
       // anywhere else its keys keep their own meaning.
       if ((chipActions as readonly string[]).includes(action) &&!(event.target as HTMLElement | null)?.closest?.('[data-chip]')) {
+        return
+      }
+      // like send, a send variant only answers inside a composer, which takes
+      // the key before it gets here.
+      if ((sendActions as readonly string[]).includes(action)) {
         return
       }
       event.preventDefault()

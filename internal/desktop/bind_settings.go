@@ -171,6 +171,12 @@ const (
 	// what the reader shows after the open message is archived, deleted or
 	// moved in the new design: "older", "newer" or "list".
 	settingAfterMove = "after_move"
+	// what plain Send does after a reply or forward is sent in the new
+	// composer: "nothing" or "archive" the conversation it answered.
+	settingAfterReplySend = "after_reply_send"
+	// when Send and remind sets its reminder: "tomorrow", "threeDays" or
+	// "week".
+	settingSendRemindAfter = "send_remind_after"
 	// the checks the new composer runs before sending: a text that speaks of
 	// an attachment it does not carry, and an empty subject.
 	settingWarnMissingAttachment = "warn_missing_attachment"
@@ -465,6 +471,12 @@ type UIPrefsDTO struct {
 	// AfterMove is what the reader opens once the open message is archived,
 	// deleted or moved in the new design: older, newer or list.
 	AfterMove string `json:"afterMove"`
+	// AfterReplySend is what plain Send does after a reply or forward goes
+	// out: nothing or archive.
+	AfterReplySend string `json:"afterReplySend"`
+	// SendRemindAfter is when Send and remind sets its reminder: tomorrow,
+	// threeDays or week.
+	SendRemindAfter string `json:"sendRemindAfter"`
 	// WarnMissingAttachment asks before sending a message whose text speaks of
 	// an attachment it does not carry. On by default.
 	WarnMissingAttachment bool `json:"warnMissingAttachment"`
@@ -655,6 +667,8 @@ func (a *App) GetUIPrefs() (UIPrefsDTO, error) {
 		ComposeOpenIn:              a.stringSetting(settingComposeOpenIn, "window"),
 		ThreadedList:               a.boolSetting(settingThreadedList, true),
 		AfterMove:                  a.stringSetting(settingAfterMove, "older"),
+		AfterReplySend:             a.stringSetting(settingAfterReplySend, "nothing"),
+		SendRemindAfter:            a.stringSetting(settingSendRemindAfter, "threeDays"),
 		WarnMissingAttachment:      a.boolSetting(settingWarnMissingAttachment, true),
 		WarnEmptySubject:           a.boolSetting(settingWarnEmptySubject, true),
 		SplitInbox:                 a.boolSetting(settingSplitInbox, false),

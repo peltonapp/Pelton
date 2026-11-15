@@ -5,7 +5,7 @@
 // source of truth.
 
 import { writable } from 'svelte/store'
-import type { UIPrefs, ThemePref, DensityPref, EditorMode, ViewsPlacement, CloseAction, LogLevel, SelectAllScope, SearchKind, SearchSortPref, DesignPref, LayoutMode, NavStyle, RailSide, PaneStyle, AvatarPlacement, ContactsView, ComposeOpenIn, ReaderWidth, AfterMove } from '../lib/types'
+import type { UIPrefs, ThemePref, DensityPref, EditorMode, ViewsPlacement, CloseAction, LogLevel, SelectAllScope, SearchKind, SearchSortPref, DesignPref, LayoutMode, NavStyle, RailSide, PaneStyle, AvatarPlacement, ContactsView, ComposeOpenIn, ReaderWidth, AfterMove, AfterReplySend, FollowUpInterval } from '../lib/types'
 import { getUIPrefs, setSetting, SettingKeys, systemColorScheme, setWindowTheme, getThemeApply } from '../lib/api'
 import { applyTheme, applyDensity, applyAccent, applyScale, applyReduceMotion, applyHandCursor, setThemeSchedule, applyUIFont, applyMonoFont, applyCorners, applyDesign, watchSystemTheme, setSystemSchemeOverride, resolveTheme } from '../theme/theme'
 import { applyUserTheme } from '../theme/usertheme'
@@ -91,6 +91,8 @@ const defaults: UIPrefs = {
   composeOpenIn: 'window',
   threadedList: true,
   afterMove: 'older',
+  afterReplySend: 'nothing',
+  sendRemindAfter: 'threeDays',
   warnMissingAttachment: true,
   warnEmptySubject: true,
   splitInbox: false,
@@ -360,6 +362,18 @@ export function setThreadedList(threadedList: boolean): void {
 export function setAfterMove(afterMove: AfterMove): void {
   prefs.update((p) => ({ ...p, afterMove }))
   void setSetting(SettingKeys.afterMove, afterMove)
+}
+
+/** Picks what plain Send does with the conversation a reply answered. */
+export function setAfterReplySend(afterReplySend: AfterReplySend): void {
+  prefs.update((p) => ({ ...p, afterReplySend }))
+  void setSetting(SettingKeys.afterReplySend, afterReplySend)
+}
+
+/** Picks when Send and remind sets its reminder. */
+export function setSendRemindAfter(sendRemindAfter: FollowUpInterval): void {
+  prefs.update((p) => ({ ...p, sendRemindAfter }))
+  void setSetting(SettingKeys.sendRemindAfter, sendRemindAfter)
 }
 
 /** Turns the missing attachment check before sending on or off. */

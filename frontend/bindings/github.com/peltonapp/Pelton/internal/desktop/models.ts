@@ -8912,6 +8912,18 @@ export class UIPrefsDTO {
     "afterMove": string;
 
     /**
+     * AfterReplySend is what plain Send does after a reply or forward goes
+     * out: nothing or archive.
+     */
+    "afterReplySend": string;
+
+    /**
+     * SendRemindAfter is when Send and remind sets its reminder: tomorrow,
+     * threeDays or week.
+     */
+    "sendRemindAfter": string;
+
+    /**
      * WarnMissingAttachment asks before sending a message whose text speaks of
      * an attachment it does not carry. On by default.
      */
@@ -9332,6 +9344,12 @@ export class UIPrefsDTO {
         }
         if (!("afterMove" in $$source)) {
             this["afterMove"] = "";
+        }
+        if (!("afterReplySend" in $$source)) {
+            this["afterReplySend"] = "";
+        }
+        if (!("sendRemindAfter" in $$source)) {
+            this["sendRemindAfter"] = "";
         }
         if (!("warnMissingAttachment" in $$source)) {
             this["warnMissingAttachment"] = false;

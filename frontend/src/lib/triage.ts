@@ -4,7 +4,7 @@
 // preference through leaveList.
 
 import { get } from 'svelte/store'
-import { archiveMessage } from './api'
+import { archiveMessage, getMessage } from './api'
 import type { MessageSummary, ThreadMessage, ThreadSummary } from './types'
 import { nextAfterLeaving, reportArchiveExport } from './messageactions'
 import { holdRegroup, messageList, removeFromList, restoreToList } from '../stores/messages'
@@ -139,4 +139,29 @@ export async function markDone(items: MessageSummary[]): Promise<void> {
   if (failure !== '') {
     toastError(failure)
   }
+}
+
+/**
+ * markAnsweredDone runs done on the conversation of a message a sent reply
+ * answered. It goes by the list's row for the message, or for its
+ * conversation when the list is grouped, so the reader moves on the way done
+ * moves it; a message the list does not show is looked up instead.
+ */
+export async function markAnsweredDone(messageId: number): Promise<void> {
+  const data = get(messageList).data
+  const threads = threadedOn(get(prefs)) ? data?.threads : undefined
+  let row = data?.items.find((i) => i.id === messageId)
+  if (!row && threads) {
+    const head = Object.values(threads).find((t) => t.messageIds.includes(messageId))
+    row = head ? data?.items.find((i) => threads[i.id] === head) : undefined
+  }
+  if (!row) {
+    try {
+      row = await getMessage(messageId)
+    } catch (err) {
+      toastError(errorMessage(err))
+      return
+    }
+  }
+  await markDone([row])
 }
