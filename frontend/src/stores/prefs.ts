@@ -88,6 +88,8 @@ const defaults: UIPrefs = {
   composeOpenIn: 'window',
   threadedList: true,
   readerWidth: 'full',
+  mailDates: true,
+  myDayPanel: false,
   themeId: '',
   menuBarInApp: false,
   menuBarNativeMinimal: false,
@@ -342,6 +344,18 @@ export function setThreadedList(threadedList: boolean): void {
 export function setReaderWidth(readerWidth: ReaderWidth): void {
   prefs.update((p) => ({ ...p, readerWidth }))
   void setSetting(SettingKeys.readerWidth, readerWidth)
+}
+
+/** Turns the marking of dates in an open mail on or off. */
+export function setMailDates(mailDates: boolean): void {
+  prefs.update((p) => ({ ...p, mailDates }))
+  void setSetting(SettingKeys.mailDates, String(mailDates))
+}
+
+/** Shows or hides the My Day panel beside the mail surface. */
+export function setMyDayPanel(myDayPanel: boolean): void {
+  prefs.update((p) => ({ ...p, myDayPanel }))
+  void setSetting(SettingKeys.myDayPanel, String(myDayPanel))
 }
 
 /** Turns the gliding caret of the compose editor on or off. */

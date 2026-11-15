@@ -638,6 +638,12 @@ export interface UIPrefs {
   threadedList: boolean
   // readerWidth caps the reading column in the new design.
   readerWidth: ReaderWidth
+  // mailDates marks the dates a mail names in the reader, with a calendar
+  // preview on hover.
+  mailDates: boolean
+  // myDayPanel shows today's agenda and tasks beside the mail surface in the
+  // new design.
+  myDayPanel: boolean
   // themeId selects an installed custom theme; empty means the built-in
   // default themes driven by the theme (light/dark/system) setting.
   themeId: string
