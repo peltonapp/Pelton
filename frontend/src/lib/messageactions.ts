@@ -30,7 +30,7 @@ import { recordDeleted, recordDeletedBatch } from '../stores/undodelete'
 import { recordArchived, archivedEntry, recordArchivedBatch, type ArchivedMessage } from '../stores/undoarchive'
 import { askConfirm } from '../stores/confirm'
 import { isVIPAddress, addVIP, removeVIP } from '../stores/vip'
-import { errorMessage, toastError, toastInfo, toastSuccess } from '../stores/toast'
+import { errorMessage, toastError, toastInfo, toastSuccess, withBusyToast } from '../stores/toast'
 import { sidebar } from '../stores/accounts'
 import { t } from './i18n'
 import { get } from 'svelte/store'
@@ -313,13 +313,13 @@ export async function exportEml(ids: number[]): Promise<void> {
   }
   try {
     if (ids.length === 1) {
-      const path = await exportMessageEml(ids[0])
+      const path = await withBusyToast(get(t)('export.working'), () => exportMessageEml(ids[0]))
       if (path) {
         toastSuccess(get(t)('export.eml.done'))
       }
       return
     }
-    const result = await exportMessagesEml(ids)
+    const result = await withBusyToast(get(t)('export.working'), () => exportMessagesEml(ids))
     if (!result.dir) {
       return
     }

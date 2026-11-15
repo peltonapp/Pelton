@@ -113,7 +113,7 @@
   import { profiles, currentProfile, loadProfiles, switchTo, switchRelative } from './stores/profiles'
   import { loadProposals } from './stores/agent'
   import { settingsRequest, clearSettingsRequest } from './stores/settingsnav'
-  import { errorMessage, toastError, toastInfo, pushAction } from './stores/toast'
+  import { errorMessage, toastError, toastInfo, pushAction, withBusyToast } from './stores/toast'
   import { friendlyError } from './lib/errors'
   import { setOnline } from './stores/network'
   import { moveTargets } from './stores/move'
@@ -647,7 +647,7 @@
       toastInfo(get(t)('app.toast.exportOpenFirst'))
       return
     }
-    exportMessagePrintView(id).catch((err) => toastError(errorMessage(err)))
+    withBusyToast(get(t)('export.working'), () => exportMessagePrintView(id)).catch((err) => toastError(errorMessage(err)))
   }
 
   // export the currently open message as an .eml file, or tell the user to open

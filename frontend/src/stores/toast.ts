@@ -17,6 +17,8 @@ export interface Toast {
   kind: ToastKind
   message: string
   action?: ToastAction
+  /** Work is still running: the toast shows a progress pie and stays. */
+  busy?: boolean
 }
 
 export const toasts = writable<Toast[]>([])
@@ -42,6 +44,30 @@ export function pushAction(kind: ToastKind, message: string, action: ToastAction
     setTimeout(() => dismiss(id), ttl)
   }
   return id
+}
+
+const busyShowMs = 350
+
+/**
+ * Runs work that can take a while under a toast with a progress pie. The
+ * toast appears only once the work has run for a moment, so a quick job or a
+ * cancelled file dialog shows nothing, and goes when the work ends; reporting
+ * the outcome stays with the caller.
+ */
+export async function withBusyToast<T>(message: string, work: () => Promise<T>): Promise<T> {
+  let id = 0
+  const timer = setTimeout(() => {
+    id = nextId++
+    toasts.update((list) => [...list, { id, kind: 'info', message, busy: true }])
+  }, busyShowMs)
+  try {
+    return await work()
+  } finally {
+    clearTimeout(timer)
+    if (id !== 0) {
+      dismiss(id)
+    }
+  }
 }
 
 // updateToast replaces the message of a live toast, used to tick the countdown.
