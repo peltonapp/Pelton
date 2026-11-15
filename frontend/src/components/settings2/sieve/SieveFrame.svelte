@@ -119,7 +119,7 @@
   {#if loaded && accounts.length === 0}
     <p class="empty">{$t('sieve.noServerAccounts')}</p>
   {:else}
-    <Row label={$t('sieve.mailbox')} hint={account?.email ?? ''}>
+    <Row label={account ? accountLabel(account) : ''} hint={account && accountLabel(account) !== account.email ? account.email : ''}>
       {#if accounts.length > 1}
         <Select
           value={String(accountId)}
@@ -207,7 +207,7 @@
   }
 
   .status :global(.pie) {
-    margin-top: 2px;
+    margin-top: var(--space-1);
   }
 
   .status-text {

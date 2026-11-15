@@ -193,8 +193,8 @@
   }
 
   .dot {
-    width: 7px;
-    height: 7px;
+    width: var(--space-2);
+    height: var(--space-2);
     border-radius: 50%;
     background: var(--text-tertiary);
     flex-shrink: 0;
