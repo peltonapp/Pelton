@@ -6190,6 +6190,43 @@ export class TrackingPixelDTO {
 }
 
 /**
+ * TrafficLightsDTO is where the macOS window buttons of a window sit, in
+ * points, so the page can line its own title bar content up with them. Both
+ * values are 0 when unknown or on another system.
+ */
+export class TrafficLightsDTO {
+    /**
+     * Center is how far below the window's top edge their centre line is.
+     */
+    "center": number;
+
+    /**
+     * End is how far from the window's leading edge the last button ends.
+     */
+    "end": number;
+
+    /** Creates a new TrafficLightsDTO instance. */
+    constructor($$source: Partial<TrafficLightsDTO> = {}) {
+        if (!("center" in $$source)) {
+            this["center"] = 0;
+        }
+        if (!("end" in $$source)) {
+            this["end"] = 0;
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new TrafficLightsDTO instance from a string or object.
+     */
+    static createFrom($$source: any = {}): TrafficLightsDTO {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new TrafficLightsDTO($$parsedSource as Partial<TrafficLightsDTO>);
+    }
+}
+
+/**
  * UIPrefsDTO is the complete set of user-facing preferences this step exposes:
  * theme, accent, density and the per-row technical-info toggles. Other settings
  * come later.

@@ -76,6 +76,7 @@
     getLogStatus,
     openCrashReport,
     titleBarDoubleClick,
+    applyTrafficLights,
     setUnreadBadge,
     quitApp,
     hideApp,
@@ -284,6 +285,9 @@
       return
     }
     fullscreen = await isFullscreen().catch(() => false)
+    // where the traffic lights sit differs between macOS releases, so what is
+    // drawn beside them is lined up with where they really are.
+    await applyTrafficLights()
   }
 
   // the native Mail menu's message actions are only usable while a message is
@@ -2029,10 +2033,10 @@
   .titlebar-logo {
     position: absolute;
     left: var(--titlebar-inset);
-    top: 50%;
+    top: var(--titlebar-lights-center);
     height: calc(16px / var(--ui-scale, 1));
     width: auto;
-    transform: translateY(calc(-50% - var(--titlebar-nudge)));
+    transform: translateY(-50%);
     opacity: 0.85;
     pointer-events: none;
     user-select: none;
