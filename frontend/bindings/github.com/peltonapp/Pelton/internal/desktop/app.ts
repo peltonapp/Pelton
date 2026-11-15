@@ -2649,6 +2649,16 @@ export function ToggleMaximiseWindow(): $CancellablePromise<void> {
 }
 
 /**
+ * TrafficLights reports where the window buttons sit in the main window, or
+ * in the compose window opened with the given token.
+ */
+export function TrafficLights(composeToken: string): $CancellablePromise<$models.TrafficLightsDTO> {
+    return $Call.ByID(1219898178, composeToken).then(($result: any) => {
+        return $$createType112($result);
+    });
+}
+
+/**
  * TriggerSync syncs all accounts on demand (the ui refresh action). It returns a
  * clear error only when no account could be synced for lack of credentials.
  */
@@ -2949,3 +2959,4 @@ const $$createType108 = $models.VerdictDTO.createFrom;
 const $$createType109 = $models.MessageScanDTO.createFrom;
 const $$createType110 = $models.SearchResultDTO.createFrom;
 const $$createType111 = $models.ConnectionTestDTO.createFrom;
+const $$createType112 = $models.TrafficLightsDTO.createFrom;

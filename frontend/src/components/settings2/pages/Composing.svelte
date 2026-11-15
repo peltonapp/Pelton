@@ -8,6 +8,12 @@
   import ToggleSwitch from '../../common/ToggleSwitch.svelte'
   import Select from '../../common/Select.svelte'
   import VimPreview from '../skeletons/VimPreview.svelte'
+  import MarkdownPreview from '../skeletons/MarkdownPreview.svelte'
+  import CaretPreview from '../skeletons/CaretPreview.svelte'
+  import AutocompletePreview from '../skeletons/AutocompletePreview.svelte'
+  import RecipientsPreview from '../skeletons/RecipientsPreview.svelte'
+  import SignaturePreview from '../skeletons/SignaturePreview.svelte'
+  import SendDelayPreview from '../skeletons/SendDelayPreview.svelte'
   import {
     prefs,
     setComposeOpenIn,
@@ -55,12 +61,15 @@
     </ChoiceCards>
   </Row>
   <Row id="compose-markdown" label={$t('composing.markdown')} hint={$t('composing.markdown.hint')}>
+    <MarkdownPreview slot="preview" on={$prefs.composeMarkdown} />
     <ToggleSwitch checked={$prefs.composeMarkdown} label={$t('composing.markdown')} on:change={(e) => setComposeMarkdown(e.detail)} />
   </Row>
   <Row id="smooth-caret" label={$t('composing.smoothCaret')} hint={$t('composing.smoothCaret.hint')}>
+    <CaretPreview slot="preview" smooth={$prefs.smoothCaret} />
     <ToggleSwitch checked={$prefs.smoothCaret} label={$t('composing.smoothCaret')} on:change={(e) => setSmoothCaret(e.detail)} />
   </Row>
   <Row id="autocomplete" label={$t('settingsPanel.toggle.autocomplete')} hint={$t('settingsPanel.hint.autocomplete')}>
+    <AutocompletePreview slot="preview" enabled={$prefs.composeAutocomplete} />
     <ToggleSwitch
       checked={$prefs.composeAutocomplete}
       label={$t('settingsPanel.toggle.autocomplete')}
@@ -68,6 +77,7 @@
     />
   </Row>
   <Row id="chips" label={$t('settingsPanel.toggle.chipRecipients')} hint={chipsHint}>
+    <RecipientsPreview slot="preview" chips={$prefs.composeChips} />
     <ToggleSwitch
       checked={$prefs.composeChips}
       label={$t('settingsPanel.toggle.chipRecipients')}
@@ -75,6 +85,7 @@
     />
   </Row>
   <Row id="signature-above-quote" label={$t('settingsPanel.toggle.signatureAboveQuote')}>
+    <SignaturePreview slot="preview" above={$prefs.signatureAboveQuote} />
     <ToggleSwitch
       checked={$prefs.signatureAboveQuote}
       label={$t('settingsPanel.toggle.signatureAboveQuote')}
@@ -100,6 +111,7 @@
 
 <Card title={$t('settingsPanel.category.sending')}>
   <Row id="undo-send" label={$t('settingsPanel.label.undoSendWindow')} hint={$t('settingsPanel.hint.undoSend')}>
+    <SendDelayPreview slot="preview" seconds={$prefs.sendDelaySeconds} />
     <Select
       value={String($prefs.sendDelaySeconds)}
       ariaLabel={$t('settingsPanel.label.undoSendWindow')}

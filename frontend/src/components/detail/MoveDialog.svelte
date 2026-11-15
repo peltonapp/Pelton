@@ -180,8 +180,8 @@
     top: 50%;
     left: 50%;
     transform: translate(-50%, -50%);
-    width: min(400px, calc(100vw - 2 * var(--space-5)));
-    max-height: 70vh;
+    width: min(400px, calc(100% - 2 * var(--space-5)));
+    max-height: 70%;
     padding: var(--space-4);
     display: flex;
     flex-direction: column;

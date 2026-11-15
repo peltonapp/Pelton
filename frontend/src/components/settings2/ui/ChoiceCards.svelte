@@ -21,7 +21,9 @@
   export let minWidth: number = 150
   export let disabled: boolean = false
 
-  const dispatch = createEventDispatcher<{ change: string }>()
+  // `hover` names the option under the pointer, or null once it leaves, so a
+  // preview can show what that option would do before it is chosen.
+  const dispatch = createEventDispatcher<{ change: string; hover: string | null }>()
 
   function pick(key: string): void {
     if (!disabled && key !== value) {
@@ -56,6 +58,10 @@
       {disabled}
       on:click={() => pick(option.key)}
       on:keydown={(e) => onKeydown(e, index)}
+      on:pointerenter={() => dispatch('hover', option.key)}
+      on:pointerleave={() => dispatch('hover', null)}
+      on:focus={() => dispatch('hover', option.key)}
+      on:blur={() => dispatch('hover', null)}
     >
       <span class="art">
         <slot {option} selected={value === option.key} />

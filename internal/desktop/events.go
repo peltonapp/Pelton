@@ -152,13 +152,15 @@ type DownloadProgressEvent struct {
 // AttachmentProgressEvent is the payload for EventAttachmentProgress. It reports
 // byte progress for the current file plus how many files are done in a save-all.
 type AttachmentProgressEvent struct {
-	Running    bool   `json:"running"`
-	Filename   string `json:"filename"`
-	BytesDone  int64  `json:"bytesDone"`
-	BytesTotal int64  `json:"bytesTotal"`
-	FilesDone  int    `json:"filesDone"`
-	FilesTotal int    `json:"filesTotal"`
-	Error      string `json:"error"`
+	Running bool `json:"running"`
+	// AttachmentID names the attachment being written.
+	AttachmentID int64  `json:"attachmentId"`
+	Filename     string `json:"filename"`
+	BytesDone    int64  `json:"bytesDone"`
+	BytesTotal   int64  `json:"bytesTotal"`
+	FilesDone    int    `json:"filesDone"`
+	FilesTotal   int    `json:"filesTotal"`
+	Error        string `json:"error"`
 }
 
 // ImportProgressEvent is the payload for EventImportProgress. Running is false

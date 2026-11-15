@@ -14,7 +14,16 @@
   import { currentProfile, profiles, switchRelative } from '../../stores/profiles'
   import { tip } from '../../lib/tip'
   import { t } from '../../lib/i18n'
-  import type { RailSide } from '../../lib/types'
+  import type { ComponentType } from 'svelte'
+  import { IconPinnedOff } from '@tabler/icons-svelte'
+  import type { RailSide, ViewKey } from '../../lib/types'
+  import { prefs, railPinIds, toggleRailPin } from '../../stores/prefs'
+  import { sidebar } from '../../stores/accounts'
+  import { views } from '../../stores/views'
+  import { selection, selectView, selectSavedView, unifiedViewLabel } from '../../stores/selection'
+  import { unifiedViewIcon } from '../../lib/unifiedviewicons'
+  import { viewIconComponent, viewColorCss } from '../../lib/viewicons'
+  import { openContextMenu } from '../../stores/contextmenu'
 
   /** Which window edge the rail is on; tooltips open toward the content. */
   export let side: RailSide = 'left'
@@ -25,6 +34,65 @@
 
   $: tipSide = side === 'left' ? ('right' as const) : ('left' as const)
   $: activeIndex = Math.max(0, spaces.findIndex((s) => s.key === $space))
+
+  /** A view pinned to the middle of the rail. */
+  interface Pin {
+    id: string
+    label: string
+    icon: ComponentType
+    color: string
+    unread: boolean
+    active: boolean
+    open: () => void
+  }
+
+  // the pinned views, in the order they were pinned. one whose view is gone
+  // (a deleted saved view) simply does not show.
+  $: pins = railPinIds($prefs.railPins)
+    .map((id): Pin | null => {
+      const [kind, key] = [id.slice(0, 1), id.slice(2)]
+      if (kind === 'u') {
+        const view = ($sidebar.data?.views ?? []).find((v) => v.key === key)
+        if (!view) {
+          return null
+        }
+        const label = unifiedViewLabel(view.key)
+        return {
+          id,
+          label,
+          icon: unifiedViewIcon(view.key),
+          color: '',
+          unread: view.unreadCount > 0,
+          active: $space === 'mail' && $selection.kind === 'view' && $selection.view === view.key,
+          open: () => selectView(view.key as ViewKey, label),
+        }
+      }
+      const view = $views.find((v) => String(v.id) === key)
+      if (!view) {
+        return null
+      }
+      return {
+        id,
+        label: view.name,
+        icon: viewIconComponent(view.icon),
+        color: viewColorCss(view.color),
+        unread: view.unreadCount > 0,
+        active: $space === 'mail' && $selection.kind === 'savedView' && $selection.viewId === view.id,
+        open: () => selectSavedView(view.id, view.name),
+      }
+    })
+    .filter((pin): pin is Pin => pin !== null)
+
+  function openPin(pin: Pin): void {
+    openSpace('mail')
+    pin.open()
+  }
+
+  function onPinContext(event: MouseEvent, pin: Pin): void {
+    openContextMenu(event.clientX, event.clientY, [
+      { label: $t('rail.unpin'), icon: IconPinnedOff, action: () => toggleRailPin(pin.id) },
+    ])
+  }
 </script>
 
 <nav class="rail" class:right={side === 'right'} aria-label={$t('space.switcher')} style="--wails-draggable:drag">
@@ -51,6 +119,29 @@
       </button>
     {/each}
   </div>
+
+  {#if pins.length > 0}
+    <div class="group pins" aria-label={$t('rail.pins')}>
+      {#each pins as pin (pin.id)}
+        <button
+          type="button"
+          class="entry pin"
+          class:active={pin.active}
+          aria-label={pin.label}
+          aria-current={pin.active ? 'page' : undefined}
+          style={pin.color ? `--pin-color:${pin.color}` : ''}
+          use:tip={{ text: pin.label, side: tipSide }}
+          on:click={() => openPin(pin)}
+          on:contextmenu|preventDefault={(e) => onPinContext(e, pin)}
+        >
+          <svelte:component this={pin.icon} size={17} stroke={1.6} />
+          {#if pin.unread}
+            <span class="badge" aria-hidden="true"></span>
+          {/if}
+        </button>
+      {/each}
+    </div>
+  {/if}
 
   <div class="group foot">
     <button
@@ -107,6 +198,28 @@
     flex-direction: column;
     gap: var(--space-2);
     --wails-draggable: no-drag;
+  }
+
+  /* the pinned views sit in the middle of the rail and scroll if there are
+     more than fit, so the spaces above and the foot below always stay put. */
+  .pins {
+    flex: 0 1 auto;
+    min-height: 0;
+    margin-block: var(--space-4);
+    padding-block: var(--space-3);
+    border-block: var(--hairline) solid var(--border-subtle);
+    overflow-y: auto;
+    scrollbar-width: none;
+  }
+
+  .pin {
+    flex-shrink: 0;
+    color: var(--pin-color, var(--text-tertiary));
+  }
+
+  .pin.active {
+    background: var(--selection-bg);
+    color: var(--pin-color, var(--accent));
   }
 
   .entry {

@@ -21,7 +21,7 @@
   } from './stores/compose'
   import { loadSignatures } from './stores/signatures'
   import { loadSidebar } from './stores/accounts'
-  import { closeCurrentWindow, setWindowTitle, takeComposeSession, titleBarDoubleClick } from './lib/api'
+  import { applyTrafficLights, closeCurrentWindow, setWindowTitle, takeComposeSession, titleBarDoubleClick } from './lib/api'
   import { onComposeCloseRequest } from './lib/events'
   import { isMac, t } from './lib/i18n'
 
@@ -46,6 +46,11 @@
       document.documentElement.dataset.titlebar = 'mac'
     }
     await initPrefs()
+    if (isMac && $prefs.design !== 'classic') {
+      // the composer's toolbar is this window's title bar, so it is sized to
+      // put the window buttons on its centre line.
+      void applyTrafficLights(token, true)
+    }
     await initComposePrefs()
     void loadSignatures()
     // the account picker and the From line read the accounts from here.

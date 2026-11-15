@@ -1420,6 +1420,31 @@ export function titleBarDoubleClick(): void {
   void App.TitleBarDoubleClick()
 }
 
+// trafficLights is where the macOS window buttons sit, in points: `center` is
+// their centre line below the window's top edge, `end` where the last one ends
+// from the leading edge. Both are 0 when unknown or not on macOS. Without a
+// token it measures the main window, with one that compose window.
+export function trafficLights(composeToken = ''): Promise<{ center: number; end: number }> {
+  return App.TrafficLights(composeToken)
+}
+
+// applyTrafficLights lines the page's title bar tokens up with where the
+// window buttons really are. `fill` also makes the title bar strip as tall as
+// twice their centre line, for a bar the buttons sit in the middle of.
+export async function applyTrafficLights(composeToken = '', fill = false): Promise<void> {
+  const at = await trafficLights(composeToken).catch(() => ({ center: 0, end: 0 }))
+  if (at.center <= 0) {
+    return
+  }
+  const root = document.documentElement.style
+  const scaled = (points: number): string => `calc(${points}px / var(--ui-scale, 1))`
+  root.setProperty('--titlebar-lights-center', scaled(at.center))
+  if (fill) {
+    root.setProperty('--titlebar-lights', scaled(at.center * 2))
+    root.setProperty('--titlebar-inset', scaled(at.end + 14))
+  }
+}
+
 // quitApp exits the app, as the Quit menu item does.
 export function quitApp(): void {
   void App.QuitApp()
@@ -1572,6 +1597,7 @@ export const SettingKeys = {
   layoutMode: 'layout_mode',
   navStyle: 'nav_style',
   railSide: 'rail_side',
+  railPins: 'rail_pins',
   paneStyle: 'pane_style',
   avatarPlacement: 'avatar_placement',
   listHeight: 'list_height',

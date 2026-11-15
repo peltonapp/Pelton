@@ -216,8 +216,8 @@
     transform: translate(-50%, -50%);
     display: flex;
     flex-direction: column;
-    max-height: 85vh;
-    width: min(var(--modal-width), calc(100vw - 2 * var(--space-5)));
+    max-height: 85%;
+    width: min(var(--modal-width), calc(100% - 2 * var(--space-5)));
     border: var(--hairline) solid var(--border-default);
     border-radius: var(--radius-card);
     background: var(--surface-overlay);
