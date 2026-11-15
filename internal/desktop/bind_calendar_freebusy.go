@@ -46,8 +46,9 @@ type FreeBusyRequest struct {
 	// one the server knows the user by.
 	Organizer string   `json:"organizer"`
 	Attendees []string `json:"attendees"`
-	// ExcludeUID leaves the event being edited out of the user's own time.
-	ExcludeUID string `json:"excludeUid"`
+	// ExcludeEventID leaves the event being edited out of the user's own
+	// time; 0 for a new event.
+	ExcludeEventID int64 `json:"excludeEventId"`
 }
 
 // BusySpanDTO is one busy stretch, rfc3339 bounds. Kind is busy, tentative or
@@ -133,7 +134,7 @@ func (a *App) LookupFreeBusy(ctx context.Context, req FreeBusyRequest) (FreeBusy
 	}
 	var objs []*ical.Object
 	for _, row := range rows {
-		if !cals[row.CalendarID].HoldsEvents() || (req.ExcludeUID != "" && row.UID == req.ExcludeUID) {
+		if !cals[row.CalendarID].HoldsEvents() || (req.ExcludeEventID != 0 && row.ID == req.ExcludeEventID) {
 			continue
 		}
 		obj, err := parseStoredEvent(row)

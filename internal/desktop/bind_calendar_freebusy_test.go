@@ -95,15 +95,15 @@ func TestLookupFreeBusyLocalCalendar(t *testing.T) {
 		}
 	}
 	occs := occurrences(t, a, "2026-11-16T00:00:00Z", "2026-11-17T00:00:00Z")
-	var editing string
+	var editing int64
 	for _, o := range occs {
 		if o.Summary == "Edited" {
-			editing = o.UID
+			editing = o.EventID
 		}
 	}
 	got, err := a.LookupFreeBusy(context.Background(), FreeBusyRequest{
 		CalendarID: cal, From: "2026-11-16T00:00:00Z", To: "2026-11-17T00:00:00Z",
-		Attendees: []string{"ada@example.com", "mailto:ADA@example.com", " "}, ExcludeUID: editing,
+		Attendees: []string{"ada@example.com", "mailto:ADA@example.com", " "}, ExcludeEventID: editing,
 	})
 	if err != nil {
 		t.Fatal(err)

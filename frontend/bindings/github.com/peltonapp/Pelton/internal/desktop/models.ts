@@ -3015,9 +3015,10 @@ export class FreeBusyRequest {
     "attendees": string[];
 
     /**
-     * ExcludeUID leaves the event being edited out of the user's own time.
+     * ExcludeEventID leaves the event being edited out of the user's own
+     * time; 0 for a new event.
      */
-    "excludeUid": string;
+    "excludeEventId": number;
 
     /** Creates a new FreeBusyRequest instance. */
     constructor($$source: Partial<FreeBusyRequest> = {}) {
@@ -3036,8 +3037,8 @@ export class FreeBusyRequest {
         if (!("attendees" in $$source)) {
             this["attendees"] = [];
         }
-        if (!("excludeUid" in $$source)) {
-            this["excludeUid"] = "";
+        if (!("excludeEventId" in $$source)) {
+            this["excludeEventId"] = 0;
         }
 
         Object.assign(this, $$source);
