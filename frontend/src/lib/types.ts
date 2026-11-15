@@ -1913,6 +1913,46 @@ export interface EventSaveResult {
   server: CalendarEvent
 }
 
+/** FreeBusyQuery asks for busy time between from and to, both rfc3339. */
+export interface FreeBusyQuery {
+  // the event's calendar; its CalDAV server is asked about the attendees.
+  calendarId: number
+  from: string
+  to: string
+  // the address the request is made as; empty for the server's first one.
+  organizer: string
+  attendees: string[]
+  // the event being edited, left out of the user's own time; 0 for none.
+  excludeEventId: number
+}
+
+/** BusyKind is how busy a stretch is. */
+export type BusyKind = 'busy' | 'tentative' | 'unavailable'
+
+/** BusySpan is one busy stretch, rfc3339 bounds. */
+export interface BusySpan {
+  start: string
+  end: string
+  kind: BusyKind
+}
+
+/** AttendeeFreeBusy is what is known of one attendee's time. */
+export interface AttendeeFreeBusy {
+  email: string
+  known: boolean
+  // why nothing is known: local, unsupported or unanswered.
+  reason: '' | 'local' | 'unsupported' | 'unanswered'
+  // the server's request-status, when it gave one.
+  status: string
+  busy: BusySpan[]
+}
+
+/** FreeBusy is the user's own busy time and the attendees', in the order asked. */
+export interface FreeBusy {
+  mine: BusySpan[]
+  attendees: AttendeeFreeBusy[]
+}
+
 /** Invite is the invitation a message carries. */
 export interface Invite {
   // false for a message without calendar data; nothing else is set then.

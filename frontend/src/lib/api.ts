@@ -80,6 +80,8 @@ import type {
   EventDraft,
   EventSaveResult,
   EventScope,
+  FreeBusy,
+  FreeBusyQuery,
   Invite,
   InviteAnswer,
   InviteAnswerResult,
@@ -2501,6 +2503,24 @@ export function deleteEvent(id: number, scope: EventScope | '' = '', recurrenceI
 /** resolveEventConflict keeps the local version (keepMine) or takes the server's. */
 export function resolveEventConflict(id: number, keepMine: boolean): Promise<CalendarEvent> {
   return App.ResolveEventConflict(id, keepMine) as unknown as Promise<CalendarEvent>
+}
+
+/** A call that can be stopped; cancel stops the work on the go side too. */
+export type Cancellable<T> = Promise<T> & { cancel(): void }
+
+/**
+ * lookupFreeBusy reads the user's busy time from the calendars here and asks
+ * the CalDAV server of the event's calendar about the attendees. Attendees the
+ * server cannot answer for come back unknown; an unreachable server rejects.
+ */
+export function lookupFreeBusy(query: FreeBusyQuery): Cancellable<FreeBusy> {
+  if (isDemoActive()) {
+    const none: FreeBusy = { mine: [], attendees: query.attendees.map((email) => ({ email, known: false, reason: 'local', status: '', busy: [] })) }
+    return Object.assign(Promise.resolve(none), { cancel: () => {} })
+  }
+  const call = App.LookupFreeBusy(new desktop.FreeBusyRequest(query))
+  const out = call.then((r) => r as unknown as FreeBusy)
+  return Object.assign(out, { cancel: () => call.cancel() })
 }
 
 /** syncCalendars syncs every calendar account and resolves when done. */
