@@ -65,6 +65,9 @@ type fakeIMAP struct {
 	permanentFlags []imap.Flag
 	// flagOps records each STORE as "+flag" or "-flag", in order.
 	flagOps []string
+	// message is what FetchMessage answers, and fetchedUIDs records each call.
+	message     *pimap.Message
+	fetchedUIDs []imap.UID
 }
 
 type draftCall struct {
@@ -124,7 +127,13 @@ func (f *fakeIMAP) DeleteFolder(path string) error {
 	return nil
 }
 
-func (f *fakeIMAP) FetchMessage(imap.UID) (*pimap.Message, error) { return &pimap.Message{}, nil }
+func (f *fakeIMAP) FetchMessage(uid imap.UID) (*pimap.Message, error) {
+	f.fetchedUIDs = append(f.fetchedUIDs, uid)
+	if f.message != nil {
+		return f.message, nil
+	}
+	return &pimap.Message{}, nil
+}
 func (f *fakeIMAP) FetchMessages([]imap.UID, func(imap.UID, *pimap.Message, error) error) error {
 	return nil
 }

@@ -413,6 +413,9 @@ func (a *App) SaveAttachment(messageID, attachmentID int64) (string, error) {
 	if dest == "" {
 		return "", nil
 	}
+	if target, err = a.localAttachment(*target); err != nil {
+		return "", err
+	}
 	if err := a.copyAttachment(target.DiskPath, dest); err != nil {
 		return "", err
 	}
