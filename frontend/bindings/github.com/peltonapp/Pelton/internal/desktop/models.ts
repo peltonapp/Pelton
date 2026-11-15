@@ -7,6 +7,9 @@ import { Create as $Create } from "@wailsio/runtime";
 
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore: Unused imports
+import * as sieve$0 from "../sieve/models.js";
+// eslint-disable-next-line @typescript-eslint/ban-ts-comment
+// @ts-ignore: Unused imports
 import * as themepack$0 from "../themepack/models.js";
 
 /**
@@ -4302,6 +4305,236 @@ export class SettingResult {
 }
 
 /**
+ * SieveCapsDTO says which of Pelton's controls the server can back.
+ */
+export class SieveCapsDTO {
+    "implementation": string;
+    "extensions": string[];
+    "vacation": boolean;
+
+    /**
+     * Dates is the date and relational pair a bounded out of office needs.
+     */
+    "dates": boolean;
+    "fileInto": boolean;
+    "flags": boolean;
+    "envelope": boolean;
+    "include": boolean;
+
+    /** Creates a new SieveCapsDTO instance. */
+    constructor($$source: Partial<SieveCapsDTO> = {}) {
+        if (!("implementation" in $$source)) {
+            this["implementation"] = "";
+        }
+        if (!("extensions" in $$source)) {
+            this["extensions"] = [];
+        }
+        if (!("vacation" in $$source)) {
+            this["vacation"] = false;
+        }
+        if (!("dates" in $$source)) {
+            this["dates"] = false;
+        }
+        if (!("fileInto" in $$source)) {
+            this["fileInto"] = false;
+        }
+        if (!("flags" in $$source)) {
+            this["flags"] = false;
+        }
+        if (!("envelope" in $$source)) {
+            this["envelope"] = false;
+        }
+        if (!("include" in $$source)) {
+            this["include"] = false;
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new SieveCapsDTO instance from a string or object.
+     */
+    static createFrom($$source: any = {}): SieveCapsDTO {
+        const $$createField1_0 = $$createType0;
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        if ("extensions" in $$parsedSource) {
+            $$parsedSource["extensions"] = $$createField1_0($$parsedSource["extensions"]);
+        }
+        return new SieveCapsDTO($$parsedSource as Partial<SieveCapsDTO>);
+    }
+}
+
+/**
+ * SieveSaveDTO is the outcome of a save. When Problem is set the server
+ * refused the script at CHECKSCRIPT and nothing was written; Line is the line
+ * it named, 0 for none.
+ */
+export class SieveSaveDTO {
+    "state": SieveStateDTO;
+    "problem": string;
+    "line": number;
+
+    /** Creates a new SieveSaveDTO instance. */
+    constructor($$source: Partial<SieveSaveDTO> = {}) {
+        if (!("state" in $$source)) {
+            this["state"] = (new SieveStateDTO());
+        }
+        if (!("problem" in $$source)) {
+            this["problem"] = "";
+        }
+        if (!("line" in $$source)) {
+            this["line"] = 0;
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new SieveSaveDTO instance from a string or object.
+     */
+    static createFrom($$source: any = {}): SieveSaveDTO {
+        const $$createField0_0 = $$createType38;
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        if ("state" in $$parsedSource) {
+            $$parsedSource["state"] = $$createField0_0($$parsedSource["state"]);
+        }
+        return new SieveSaveDTO($$parsedSource as Partial<SieveSaveDTO>);
+    }
+}
+
+/**
+ * SieveStateDTO is an account's sieve service and Pelton's script on it.
+ */
+export class SieveStateDTO {
+    "accountId": number;
+
+    /**
+     * Status is "ok", "unsupported" (no sieve service), "unreachable",
+     * "auth" (credentials refused), "credentials" (none stored), "tls" or
+     * "error". Detail carries the underlying error text.
+     */
+    "status": string;
+    "detail": string;
+
+    /**
+     * Host, Port and TLS are the connection used; Manual says they were set
+     * by hand.
+     */
+    "host": string;
+    "port": number;
+    "tls": string;
+    "manual": boolean;
+
+    /**
+     * Remembered is true when Unsupported comes from an earlier check.
+     */
+    "remembered": boolean;
+    "caps": SieveCapsDTO;
+
+    /**
+     * Exists and Active describe Pelton's script on the server.
+     */
+    "exists": boolean;
+    "active": boolean;
+
+    /**
+     * Editable is false when the script cannot be modelled; Raw is its text
+     * either way and Script the model when it is editable.
+     */
+    "editable": boolean;
+    "raw": string;
+    "script": sieve$0.Script;
+
+    /**
+     * OtherActive names another script that is active now, "" when none is.
+     */
+    "otherActive": string;
+    "hasPrevious": boolean;
+
+    /**
+     * Addresses are the account's own addresses, for the out of office.
+     */
+    "addresses": string[];
+
+    /** Creates a new SieveStateDTO instance. */
+    constructor($$source: Partial<SieveStateDTO> = {}) {
+        if (!("accountId" in $$source)) {
+            this["accountId"] = 0;
+        }
+        if (!("status" in $$source)) {
+            this["status"] = "";
+        }
+        if (!("detail" in $$source)) {
+            this["detail"] = "";
+        }
+        if (!("host" in $$source)) {
+            this["host"] = "";
+        }
+        if (!("port" in $$source)) {
+            this["port"] = 0;
+        }
+        if (!("tls" in $$source)) {
+            this["tls"] = "";
+        }
+        if (!("manual" in $$source)) {
+            this["manual"] = false;
+        }
+        if (!("remembered" in $$source)) {
+            this["remembered"] = false;
+        }
+        if (!("caps" in $$source)) {
+            this["caps"] = (new SieveCapsDTO());
+        }
+        if (!("exists" in $$source)) {
+            this["exists"] = false;
+        }
+        if (!("active" in $$source)) {
+            this["active"] = false;
+        }
+        if (!("editable" in $$source)) {
+            this["editable"] = false;
+        }
+        if (!("raw" in $$source)) {
+            this["raw"] = "";
+        }
+        if (!("script" in $$source)) {
+            this["script"] = (new sieve$0.Script());
+        }
+        if (!("otherActive" in $$source)) {
+            this["otherActive"] = "";
+        }
+        if (!("hasPrevious" in $$source)) {
+            this["hasPrevious"] = false;
+        }
+        if (!("addresses" in $$source)) {
+            this["addresses"] = [];
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new SieveStateDTO instance from a string or object.
+     */
+    static createFrom($$source: any = {}): SieveStateDTO {
+        const $$createField8_0 = $$createType39;
+        const $$createField13_0 = $$createType40;
+        const $$createField16_0 = $$createType0;
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        if ("caps" in $$parsedSource) {
+            $$parsedSource["caps"] = $$createField8_0($$parsedSource["caps"]);
+        }
+        if ("script" in $$parsedSource) {
+            $$parsedSource["script"] = $$createField13_0($$parsedSource["script"]);
+        }
+        if ("addresses" in $$parsedSource) {
+            $$parsedSource["addresses"] = $$createField16_0($$parsedSource["addresses"]);
+        }
+        return new SieveStateDTO($$parsedSource as Partial<SieveStateDTO>);
+    }
+}
+
+/**
  * SignatureDTO mirrors storage.Signature for the frontend. Kind is "header" or
  * "footer"; Format is "markdown" or "html".
  */
@@ -4612,8 +4845,8 @@ export class ThemeImportPreviewDTO {
      * Creates a new ThemeImportPreviewDTO instance from a string or object.
      */
     static createFrom($$source: any = {}): ThemeImportPreviewDTO {
-        const $$createField2_0 = $$createType38;
-        const $$createField3_0 = $$createType40;
+        const $$createField2_0 = $$createType41;
+        const $$createField3_0 = $$createType43;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("info" in $$parsedSource) {
             $$parsedSource["info"] = $$createField2_0($$parsedSource["info"]);
@@ -4739,7 +4972,7 @@ export class ThreadDTO {
      * Creates a new ThreadDTO instance from a string or object.
      */
     static createFrom($$source: any = {}): ThreadDTO {
-        const $$createField1_0 = $$createType42;
+        const $$createField1_0 = $$createType45;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("messages" in $$parsedSource) {
             $$parsedSource["messages"] = $$createField1_0($$parsedSource["messages"]);
@@ -4776,7 +5009,7 @@ export class ThreadListDTO {
      * Creates a new ThreadListDTO instance from a string or object.
      */
     static createFrom($$source: any = {}): ThreadListDTO {
-        const $$createField0_0 = $$createType44;
+        const $$createField0_0 = $$createType47;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("threads" in $$parsedSource) {
             $$parsedSource["threads"] = $$createField0_0($$parsedSource["threads"]);
@@ -5145,8 +5378,8 @@ export class ThunderbirdProfileDTO {
      * Creates a new ThunderbirdProfileDTO instance from a string or object.
      */
     static createFrom($$source: any = {}): ThunderbirdProfileDTO {
-        const $$createField2_0 = $$createType46;
-        const $$createField3_0 = $$createType48;
+        const $$createField2_0 = $$createType49;
+        const $$createField3_0 = $$createType51;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("accounts" in $$parsedSource) {
             $$parsedSource["accounts"] = $$createField2_0($$parsedSource["accounts"]);
@@ -6717,14 +6950,17 @@ const $$createType34 = $Create.Array($$createType33);
 const $$createType35 = RecipientKeyDTO.createFrom;
 const $$createType36 = $Create.Array($$createType35);
 const $$createType37 = $Create.Map($Create.Any, $Create.Any);
-const $$createType38 = ThemeInfoDTO.createFrom;
-const $$createType39 = themepack$0.CSSFile.createFrom;
-const $$createType40 = $Create.Array($$createType39);
-const $$createType41 = ThreadMessageDTO.createFrom;
-const $$createType42 = $Create.Array($$createType41);
-const $$createType43 = ThreadSummaryDTO.createFrom;
-const $$createType44 = $Create.Array($$createType43);
-const $$createType45 = ThunderbirdAccountDTO.createFrom;
-const $$createType46 = $Create.Array($$createType45);
-const $$createType47 = ThunderbirdFolderDTO.createFrom;
-const $$createType48 = $Create.Array($$createType47);
+const $$createType38 = SieveStateDTO.createFrom;
+const $$createType39 = SieveCapsDTO.createFrom;
+const $$createType40 = sieve$0.Script.createFrom;
+const $$createType41 = ThemeInfoDTO.createFrom;
+const $$createType42 = themepack$0.CSSFile.createFrom;
+const $$createType43 = $Create.Array($$createType42);
+const $$createType44 = ThreadMessageDTO.createFrom;
+const $$createType45 = $Create.Array($$createType44);
+const $$createType46 = ThreadSummaryDTO.createFrom;
+const $$createType47 = $Create.Array($$createType46);
+const $$createType48 = ThunderbirdAccountDTO.createFrom;
+const $$createType49 = $Create.Array($$createType48);
+const $$createType50 = ThunderbirdFolderDTO.createFrom;
+const $$createType51 = $Create.Array($$createType50);

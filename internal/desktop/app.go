@@ -192,6 +192,10 @@ type App struct {
 	// real accounts and mail. It never touches the store or the network.
 	demoMode bool
 
+	// sieveMu runs one sieve session at a time, so two saves cannot interleave
+	// their backup, upload and activation. See bind_sieve.go.
+	sieveMu sync.Mutex
+
 	// proxyMu guards proxyCfg, the cached outbound proxy preference (with its
 	// password from the keyring). It is loaded at startup and refreshed by
 	// SetProxyConfig, so the mail and http paths read it without touching the
