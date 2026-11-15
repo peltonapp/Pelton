@@ -162,6 +162,10 @@ func (a *App) notifyNewMail(folder storage.Folder, ids []int64) {
 		if m.Flags.Has(storage.FlagSeen) {
 			continue
 		}
+		// a muted conversation stays quiet, VIP sender or not.
+		if m.Muted {
+			continue
+		}
 		vip := vips[bareAddress(m.FromAddress)]
 		if !vip && !general {
 			continue

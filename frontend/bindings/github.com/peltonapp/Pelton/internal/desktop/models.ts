@@ -3570,6 +3570,12 @@ export class ListMessagesRequest {
     "limit": number;
     "offset": number;
 
+    /**
+     * Split narrows an inbox to one split inbox tab (see bind_splits.go).
+     * Empty lists the whole inbox.
+     */
+    "split": string;
+
     /** Creates a new ListMessagesRequest instance. */
     constructor($$source: Partial<ListMessagesRequest> = {}) {
         if (!("kind" in $$source)) {
@@ -3589,6 +3595,9 @@ export class ListMessagesRequest {
         }
         if (!("offset" in $$source)) {
             this["offset"] = 0;
+        }
+        if (!("split" in $$source)) {
+            this["split"] = "";
         }
 
         Object.assign(this, $$source);
@@ -3893,6 +3902,15 @@ export class MessageDetailDTO {
     "forwarded": boolean;
 
     /**
+     * Pinned keeps the row in the Pinned group at the top of the list. Muted
+     * means its conversation is muted. HasNote means the message or its
+     * conversation carries a private note.
+     */
+    "pinned": boolean;
+    "muted": boolean;
+    "hasNote": boolean;
+
+    /**
      * MessageID is the bare RFC Message-ID, empty when missing or invalid.
      */
     "messageId": string;
@@ -4052,6 +4070,15 @@ export class MessageDetailDTO {
         if (!("forwarded" in $$source)) {
             this["forwarded"] = false;
         }
+        if (!("pinned" in $$source)) {
+            this["pinned"] = false;
+        }
+        if (!("muted" in $$source)) {
+            this["muted"] = false;
+        }
+        if (!("hasNote" in $$source)) {
+            this["hasNote"] = false;
+        }
         if (!("messageId" in $$source)) {
             this["messageId"] = "";
         }
@@ -4121,45 +4148,45 @@ export class MessageDetailDTO {
      */
     static createFrom($$source: any = {}): MessageDetailDTO {
         const $$createField19_0 = $$createType26;
-        const $$createField24_0 = $$createType0;
-        const $$createField25_0 = $$createType0;
-        const $$createField34_0 = $$createType0;
-        const $$createField35_0 = $$createType28;
-        const $$createField36_0 = $$createType30;
-        const $$createField37_0 = $$createType31;
-        const $$createField39_0 = $$createType33;
-        const $$createField41_0 = $$createType34;
-        const $$createField42_0 = $$createType34;
+        const $$createField27_0 = $$createType0;
+        const $$createField28_0 = $$createType0;
+        const $$createField37_0 = $$createType0;
+        const $$createField38_0 = $$createType28;
+        const $$createField39_0 = $$createType30;
+        const $$createField40_0 = $$createType31;
+        const $$createField42_0 = $$createType33;
+        const $$createField44_0 = $$createType34;
+        const $$createField45_0 = $$createType34;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("smime" in $$parsedSource) {
             $$parsedSource["smime"] = $$createField19_0($$parsedSource["smime"]);
         }
         if ("inReplyTo" in $$parsedSource) {
-            $$parsedSource["inReplyTo"] = $$createField24_0($$parsedSource["inReplyTo"]);
+            $$parsedSource["inReplyTo"] = $$createField27_0($$parsedSource["inReplyTo"]);
         }
         if ("references" in $$parsedSource) {
-            $$parsedSource["references"] = $$createField25_0($$parsedSource["references"]);
+            $$parsedSource["references"] = $$createField28_0($$parsedSource["references"]);
         }
         if ("remoteHosts" in $$parsedSource) {
-            $$parsedSource["remoteHosts"] = $$createField34_0($$parsedSource["remoteHosts"]);
+            $$parsedSource["remoteHosts"] = $$createField37_0($$parsedSource["remoteHosts"]);
         }
         if ("trackingPixels" in $$parsedSource) {
-            $$parsedSource["trackingPixels"] = $$createField35_0($$parsedSource["trackingPixels"]);
+            $$parsedSource["trackingPixels"] = $$createField38_0($$parsedSource["trackingPixels"]);
         }
         if ("attachments" in $$parsedSource) {
-            $$parsedSource["attachments"] = $$createField36_0($$parsedSource["attachments"]);
+            $$parsedSource["attachments"] = $$createField39_0($$parsedSource["attachments"]);
         }
         if ("phishing" in $$parsedSource) {
-            $$parsedSource["phishing"] = $$createField37_0($$parsedSource["phishing"]);
+            $$parsedSource["phishing"] = $$createField40_0($$parsedSource["phishing"]);
         }
         if ("unsubscribe" in $$parsedSource) {
-            $$parsedSource["unsubscribe"] = $$createField39_0($$parsedSource["unsubscribe"]);
+            $$parsedSource["unsubscribe"] = $$createField42_0($$parsedSource["unsubscribe"]);
         }
         if ("replyIds" in $$parsedSource) {
-            $$parsedSource["replyIds"] = $$createField41_0($$parsedSource["replyIds"]);
+            $$parsedSource["replyIds"] = $$createField44_0($$parsedSource["replyIds"]);
         }
         if ("forwardIds" in $$parsedSource) {
-            $$parsedSource["forwardIds"] = $$createField42_0($$parsedSource["forwardIds"]);
+            $$parsedSource["forwardIds"] = $$createField45_0($$parsedSource["forwardIds"]);
         }
         return new MessageDetailDTO($$parsedSource as Partial<MessageDetailDTO>);
     }
@@ -4217,6 +4244,12 @@ export class MessageListDTO {
      */
     "hasOlder": boolean;
 
+    /**
+     * Pinned is the Pinned group listed above the page. Only the first page
+     * carries it, and Messages and Total then leave the pinned mail out.
+     */
+    "pinned": MessageSummaryDTO[];
+
     /** Creates a new MessageListDTO instance. */
     constructor($$source: Partial<MessageListDTO> = {}) {
         if (!("messages" in $$source)) {
@@ -4228,6 +4261,9 @@ export class MessageListDTO {
         if (!("hasOlder" in $$source)) {
             this["hasOlder"] = false;
         }
+        if (!("pinned" in $$source)) {
+            this["pinned"] = [];
+        }
 
         Object.assign(this, $$source);
     }
@@ -4237,9 +4273,13 @@ export class MessageListDTO {
      */
     static createFrom($$source: any = {}): MessageListDTO {
         const $$createField0_0 = $$createType36;
+        const $$createField3_0 = $$createType36;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("messages" in $$parsedSource) {
             $$parsedSource["messages"] = $$createField0_0($$parsedSource["messages"]);
+        }
+        if ("pinned" in $$parsedSource) {
+            $$parsedSource["pinned"] = $$createField3_0($$parsedSource["pinned"]);
         }
         return new MessageListDTO($$parsedSource as Partial<MessageListDTO>);
     }
@@ -4372,6 +4412,15 @@ export class MessageSummaryDTO {
     "answered": boolean;
     "forwarded": boolean;
 
+    /**
+     * Pinned keeps the row in the Pinned group at the top of the list. Muted
+     * means its conversation is muted. HasNote means the message or its
+     * conversation carries a private note.
+     */
+    "pinned": boolean;
+    "muted": boolean;
+    "hasNote": boolean;
+
     /** Creates a new MessageSummaryDTO instance. */
     constructor($$source: Partial<MessageSummaryDTO> = {}) {
         if (!("id" in $$source)) {
@@ -4443,6 +4492,15 @@ export class MessageSummaryDTO {
         if (!("forwarded" in $$source)) {
             this["forwarded"] = false;
         }
+        if (!("pinned" in $$source)) {
+            this["pinned"] = false;
+        }
+        if (!("muted" in $$source)) {
+            this["muted"] = false;
+        }
+        if (!("hasNote" in $$source)) {
+            this["hasNote"] = false;
+        }
 
         Object.assign(this, $$source);
     }
@@ -4457,6 +4515,35 @@ export class MessageSummaryDTO {
             $$parsedSource["smime"] = $$createField19_0($$parsedSource["smime"]);
         }
         return new MessageSummaryDTO($$parsedSource as Partial<MessageSummaryDTO>);
+    }
+}
+
+/**
+ * NoteDTO is a private note. Body is empty when there is none; UpdatedAt is
+ * rfc3339, empty along with it.
+ */
+export class NoteDTO {
+    "body": string;
+    "updatedAt": string;
+
+    /** Creates a new NoteDTO instance. */
+    constructor($$source: Partial<NoteDTO> = {}) {
+        if (!("body" in $$source)) {
+            this["body"] = "";
+        }
+        if (!("updatedAt" in $$source)) {
+            this["updatedAt"] = "";
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new NoteDTO instance from a string or object.
+     */
+    static createFrom($$source: any = {}): NoteDTO {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new NoteDTO($$parsedSource as Partial<NoteDTO>);
     }
 }
 
@@ -5646,6 +5733,14 @@ export class SearchRequestDTO {
      */
     "sort": string;
 
+    /**
+     * Note keeps messages whose private note, or whose conversation's note,
+     * contains this text, from a note: chip. HasNote keeps every message with
+     * a note, from has:note.
+     */
+    "note": string;
+    "hasNote": boolean;
+
     /** Creates a new SearchRequestDTO instance. */
     constructor($$source: Partial<SearchRequestDTO> = {}) {
         if (!("query" in $$source)) {
@@ -5689,6 +5784,12 @@ export class SearchRequestDTO {
         }
         if (!("sort" in $$source)) {
             this["sort"] = "";
+        }
+        if (!("note" in $$source)) {
+            this["note"] = "";
+        }
+        if (!("hasNote" in $$source)) {
+            this["hasNote"] = false;
         }
 
         Object.assign(this, $$source);
@@ -5923,6 +6024,39 @@ export class SnippetDTO {
     static createFrom($$source: any = {}): SnippetDTO {
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         return new SnippetDTO($$parsedSource as Partial<SnippetDTO>);
+    }
+}
+
+/**
+ * SplitTabDTO is one tab of the split inbox with its counts. Key is
+ * important, newsletters, notifications, view:<id> or other.
+ */
+export class SplitTabDTO {
+    "key": string;
+    "total": number;
+    "unread": number;
+
+    /** Creates a new SplitTabDTO instance. */
+    constructor($$source: Partial<SplitTabDTO> = {}) {
+        if (!("key" in $$source)) {
+            this["key"] = "";
+        }
+        if (!("total" in $$source)) {
+            this["total"] = 0;
+        }
+        if (!("unread" in $$source)) {
+            this["unread"] = 0;
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new SplitTabDTO instance from a string or object.
+     */
+    static createFrom($$source: any = {}): SplitTabDTO {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new SplitTabDTO($$parsedSource as Partial<SplitTabDTO>);
     }
 }
 
@@ -6935,12 +7069,13 @@ export class ThreadDTO {
 
 /**
  * ThreadListDTO is a page of conversations plus the total for paging. HasOlder
- * means the same as on MessageListDTO.
+ * and Pinned mean the same as on MessageListDTO.
  */
 export class ThreadListDTO {
     "threads": ThreadSummaryDTO[];
     "total": number;
     "hasOlder": boolean;
+    "pinned": ThreadSummaryDTO[];
 
     /** Creates a new ThreadListDTO instance. */
     constructor($$source: Partial<ThreadListDTO> = {}) {
@@ -6953,6 +7088,9 @@ export class ThreadListDTO {
         if (!("hasOlder" in $$source)) {
             this["hasOlder"] = false;
         }
+        if (!("pinned" in $$source)) {
+            this["pinned"] = [];
+        }
 
         Object.assign(this, $$source);
     }
@@ -6962,9 +7100,13 @@ export class ThreadListDTO {
      */
     static createFrom($$source: any = {}): ThreadListDTO {
         const $$createField0_0 = $$createType58;
+        const $$createField3_0 = $$createType58;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("threads" in $$parsedSource) {
             $$parsedSource["threads"] = $$createField0_0($$parsedSource["threads"]);
+        }
+        if ("pinned" in $$parsedSource) {
+            $$parsedSource["pinned"] = $$createField3_0($$parsedSource["pinned"]);
         }
         return new ThreadListDTO($$parsedSource as Partial<ThreadListDTO>);
     }
@@ -7022,6 +7164,15 @@ export class ThreadMessageDTO {
     "threadId": number;
     "answered": boolean;
     "forwarded": boolean;
+
+    /**
+     * Pinned keeps the row in the Pinned group at the top of the list. Muted
+     * means its conversation is muted. HasNote means the message or its
+     * conversation carries a private note.
+     */
+    "pinned": boolean;
+    "muted": boolean;
+    "hasNote": boolean;
     "folderRole": string;
     "fromMe": boolean;
 
@@ -7096,6 +7247,15 @@ export class ThreadMessageDTO {
         if (!("forwarded" in $$source)) {
             this["forwarded"] = false;
         }
+        if (!("pinned" in $$source)) {
+            this["pinned"] = false;
+        }
+        if (!("muted" in $$source)) {
+            this["muted"] = false;
+        }
+        if (!("hasNote" in $$source)) {
+            this["hasNote"] = false;
+        }
         if (!("folderRole" in $$source)) {
             this["folderRole"] = "";
         }
@@ -7142,6 +7302,11 @@ export class ThreadSummaryDTO {
     "forwarded": boolean;
     "messageIds": number[];
 
+    /**
+     * Pinned is true when any member is pinned.
+     */
+    "pinned": boolean;
+
     /** Creates a new ThreadSummaryDTO instance. */
     constructor($$source: Partial<ThreadSummaryDTO> = {}) {
         if (!("threadId" in $$source)) {
@@ -7173,6 +7338,9 @@ export class ThreadSummaryDTO {
         }
         if (!("messageIds" in $$source)) {
             this["messageIds"] = [];
+        }
+        if (!("pinned" in $$source)) {
+            this["pinned"] = false;
         }
 
         Object.assign(this, $$source);
@@ -7779,6 +7947,14 @@ export class UIPrefsDTO {
     "warnEmptySubject": boolean;
 
     /**
+     * SplitInbox splits the inbox into tabs in the new design. SplitTabs is
+     * the tab order, SplitActive the tab last shown.
+     */
+    "splitInbox": boolean;
+    "splitTabs": string;
+    "splitActive": string;
+
+    /**
      * ReaderWidth caps the reading column in the new design: narrow, medium
      * or full.
      */
@@ -8167,6 +8343,15 @@ export class UIPrefsDTO {
         }
         if (!("warnEmptySubject" in $$source)) {
             this["warnEmptySubject"] = false;
+        }
+        if (!("splitInbox" in $$source)) {
+            this["splitInbox"] = false;
+        }
+        if (!("splitTabs" in $$source)) {
+            this["splitTabs"] = "";
+        }
+        if (!("splitActive" in $$source)) {
+            this["splitActive"] = "";
         }
         if (!("readerWidth" in $$source)) {
             this["readerWidth"] = "";

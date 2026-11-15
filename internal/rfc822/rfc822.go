@@ -48,6 +48,8 @@ type Message struct {
 	// support via List-Unsubscribe-Post.
 	ListUnsubscribe     string
 	ListUnsubscribePost bool
+	// ListID is the raw List-Id header, which marks mailing-list mail.
+	ListID string
 	// ReplyTo is the Reply-To header, and AuthResults every
 	// Authentication-Results header in the order the message carries them: the
 	// first was added by the receiving server and is the only trustworthy one.
@@ -136,6 +138,7 @@ func parts(mr *mail.Reader, msg *Message) error {
 	msg.AuthResults = headerValues(&mr.Header, "Authentication-Results")
 	msg.ListUnsubscribe = mr.Header.Get("List-Unsubscribe")
 	msg.ListUnsubscribePost = strings.Contains(strings.ToLower(mr.Header.Get("List-Unsubscribe-Post")), "one-click")
+	msg.ListID = mr.Header.Get("List-Id")
 	msg.InReplyTo = []string{}
 	fields := mr.Header.FieldsByKey("In-Reply-To")
 	count := 0

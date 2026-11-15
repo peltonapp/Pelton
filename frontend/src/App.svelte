@@ -164,6 +164,7 @@
   import { markDone } from './lib/triage'
   import { watchFollowUps } from './stores/followups'
   import { loadSnippets } from './stores/snippets'
+  import { editNote, toggleMute, togglePin } from './lib/organize'
   import { buildCommands, mailCommands, type CommandContext, type MessageOp, type FolderOp } from './lib/commands'
   import { extraPaletteCommands } from './lib/palettesources'
   import './lib/palette-calendar'
@@ -1119,6 +1120,24 @@
         }
         break
       }
+      case 'toggle-pin':
+      case 'toggle-mute':
+      case 'edit-note': {
+        const msg = currentMessage()
+        if (!msg) {
+          toastInfo(get(t)('app.toast.openMessageFirst'))
+        } else if (action === 'toggle-pin') {
+          void togglePin(msg)
+        } else if (action === 'toggle-mute') {
+          void toggleMute(msg)
+        } else {
+          editNote(msg)
+        }
+        break
+      }
+      case 'next-split':
+      case 'prev-split':
+        break
       case 'move-to': {
         if (selectedMessages.length > 1) {
           const items = selectedMessages
@@ -1660,6 +1679,11 @@
       }
     }
     const action = matchShortcut(event, $bindings)
+    // the split keys belong to the message list, which takes them itself while
+    // it has focus; anywhere else Tab keeps moving focus.
+    if (action === 'next-split' || action === 'prev-split') {
+      return
+    }
     if (action) {
       // a modifier-less custom binding must not hijack typing in a field.
       if (!comboHasModifier($bindings[action]) && !isFunctionKeyCombo($bindings[action]) && isEditableTarget(event.target)) {

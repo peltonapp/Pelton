@@ -121,6 +121,8 @@ import type {
   ProfileDraft,
   PasswordCheck,
   AccountSyncState,
+  Note,
+  SplitTab,
 } from './types'
 
 // isDemoMode reports whether the app launched in the cosmetic --potatoes-are-nice
@@ -336,31 +338,34 @@ export function listUnifiedViews(): Promise<UnifiedView[]> {
   return App.ListUnifiedViews()
 }
 
-// listFolderMessages reads a page of a single folder.
+// listFolderMessages reads a page of a single folder. split narrows an inbox
+// to one split inbox tab; '' reads all of it.
 export function listFolderMessages(
   folderId: number,
   limit: number,
   offset: number,
+  split = '',
 ): Promise<MessageList> {
   if (isDemoActive()) {
     return Promise.resolve(demoList())
   }
   return App.ListMessages(
-    new desktop.ListMessagesRequest({ kind: 'folder', folderId, view: '', limit, offset }),
+    new desktop.ListMessagesRequest({ kind: 'folder', folderId, view: '', limit, offset, split }),
   )
 }
 
-// listViewMessages reads a page of a unified view.
+// listViewMessages reads a page of a unified view, split as for a folder.
 export function listViewMessages(
   view: ViewKey,
   limit: number,
   offset: number,
+  split = '',
 ): Promise<MessageList> {
   if (isDemoActive()) {
     return Promise.resolve(demoList())
   }
   return App.ListMessages(
-    new desktop.ListMessagesRequest({ kind: 'view', folderId: 0, view, limit, offset }),
+    new desktop.ListMessagesRequest({ kind: 'view', folderId: 0, view, limit, offset, split }),
   )
 }
 
@@ -381,22 +386,22 @@ export function listSavedViewMessages(
 // listFolderThreads reads a page of one folder as conversations. Paging counts
 // conversations, and a conversation is listed when any of its messages is in
 // the folder.
-export function listFolderThreads(folderId: number, limit: number, offset: number): Promise<ThreadList> {
+export function listFolderThreads(folderId: number, limit: number, offset: number, split = ''): Promise<ThreadList> {
   if (isDemoActive()) {
     return Promise.resolve(demoThreads())
   }
   return App.ListThreads(
-    new desktop.ListMessagesRequest({ kind: 'folder', folderId, view: '', limit, offset }),
+    new desktop.ListMessagesRequest({ kind: 'folder', folderId, view: '', limit, offset, split }),
   )
 }
 
 // listViewThreads reads a page of a unified view as conversations.
-export function listViewThreads(view: ViewKey, limit: number, offset: number): Promise<ThreadList> {
+export function listViewThreads(view: ViewKey, limit: number, offset: number, split = ''): Promise<ThreadList> {
   if (isDemoActive()) {
     return Promise.resolve(demoThreads())
   }
   return App.ListThreads(
-    new desktop.ListMessagesRequest({ kind: 'view', folderId: 0, view, limit, offset }),
+    new desktop.ListMessagesRequest({ kind: 'view', folderId: 0, view, limit, offset, split }),
   )
 }
 
@@ -757,6 +762,10 @@ export interface SearchRequest {
   // the order results come back in, already resolved from the "automatic"
   // setting: the backend is told an order, never asked to guess one.
   sort: SearchSort
+  // note keeps messages whose private note contains this text, hasNote every
+  // message that has one.
+  note?: string
+  hasNote?: boolean
 }
 
 // SearchResult is one page of ranked results. total counts index matches and is
@@ -787,13 +796,13 @@ export interface MessageIDs {
 // messageIds returns every message id in a list, ignoring paging, for select
 // all. The list in the ui only holds the pages that were scrolled to, so
 // selecting a whole mailbox has to come from the query.
-export function messageIds(sel: Selection): Promise<MessageIDs> {
+export function messageIds(sel: Selection, split = ''): Promise<MessageIDs> {
   if (isDemoActive()) {
     return Promise.resolve({ ids: [], capped: false, matching: 0 })
   }
   if (sel.kind === 'view') {
     return App.MessageIDs(
-      new desktop.ListMessagesRequest({ kind: 'view', folderId: 0, view: sel.view, limit: 0, offset: 0 }),
+      new desktop.ListMessagesRequest({ kind: 'view', folderId: 0, view: sel.view, limit: 0, offset: 0, split }),
     )
   }
   if (sel.kind === 'savedView') {
@@ -802,7 +811,7 @@ export function messageIds(sel: Selection): Promise<MessageIDs> {
     )
   }
   return App.MessageIDs(
-    new desktop.ListMessagesRequest({ kind: 'folder', folderId: sel.folderId, view: '', limit: 0, offset: 0 }),
+    new desktop.ListMessagesRequest({ kind: 'folder', folderId: sel.folderId, view: '', limit: 0, offset: 0, split }),
   )
 }
 
@@ -1282,6 +1291,65 @@ export function setFlagColor(id: number, color: number): Promise<void> {
   return App.SetFlagColor(id, color)
 }
 
+/** Mutes or unmutes the conversation a message belongs to. */
+export function setConversationMuted(id: number, muted: boolean): Promise<void> {
+  if (isDemoActive()) {
+    return Promise.resolve()
+  }
+  return App.SetConversationMuted(id, muted)
+}
+
+/**
+ * Pins or unpins a message. With conversation set, unpinning clears every
+ * message of its conversation.
+ */
+export function setPinned(id: number, pinned: boolean, conversation: boolean): Promise<void> {
+  if (isDemoActive()) {
+    return Promise.resolve()
+  }
+  return App.SetPinned(id, pinned, conversation)
+}
+
+/** Reads the private note on a message, or on its conversation. */
+export function getNote(id: number, conversation: boolean): Promise<Note> {
+  if (isDemoActive()) {
+    return Promise.resolve({ body: '', updatedAt: '' })
+  }
+  return App.GetNote(id, conversation)
+}
+
+/** Writes the private note on a message, or on its conversation; a blank body deletes it. */
+export function saveNote(id: number, conversation: boolean, body: string): Promise<Note> {
+  if (isDemoActive()) {
+    return Promise.resolve({ body, updatedAt: '' })
+  }
+  return App.SaveNote(id, conversation, body)
+}
+
+/** Deletes the private note on a message, or on its conversation. */
+export function deleteNote(id: number, conversation: boolean): Promise<void> {
+  if (isDemoActive()) {
+    return Promise.resolve()
+  }
+  return App.DeleteNote(id, conversation)
+}
+
+/** Counts each split inbox tab of an inbox selection; empty for anything else. */
+export function splitCounts(sel: Selection): Promise<SplitTab[]> {
+  if (isDemoActive() || sel.kind === 'savedView') {
+    return Promise.resolve([])
+  }
+  return App.SplitCounts(
+    new desktop.ListMessagesRequest({
+      kind: sel.kind,
+      folderId: sel.kind === 'folder' ? sel.folderId : 0,
+      view: sel.kind === 'view' ? sel.view : '',
+      limit: 0,
+      offset: 0,
+    }),
+  )
+}
+
 // downloadMessageOffline / removeOffline pin or unpin a single message.
 export function downloadMessageOffline(id: number): Promise<void> {
   if (isDemoActive()) {
@@ -1732,6 +1800,9 @@ export const SettingKeys = {
   afterMove: 'after_move',
   warnMissingAttachment: 'warn_missing_attachment',
   warnEmptySubject: 'warn_empty_subject',
+  splitInbox: 'split_inbox',
+  splitTabs: 'split_inbox_tabs',
+  splitActive: 'split_inbox_active',
   readerWidth: 'reader_width',
   senderPanel: 'sender_panel',
   themeId: 'theme_id',

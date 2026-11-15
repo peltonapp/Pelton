@@ -175,6 +175,14 @@ const (
 	// an attachment it does not carry, and an empty subject.
 	settingWarnMissingAttachment = "warn_missing_attachment"
 	settingWarnEmptySubject      = "warn_empty_subject"
+	// split the inbox into tabs in the new design. Off by default.
+	settingSplitInbox = "split_inbox"
+	// the split inbox tabs in order, comma separated: important, newsletters,
+	// notifications, or view:<id> for a saved view. The catch-all tab is always
+	// last and not listed.
+	settingSplitTabs = "split_inbox_tabs"
+	// the split inbox tab last shown.
+	settingSplitActive = "split_inbox_active"
 	// how wide the reading column runs in the new design: "narrow", "medium"
 	// or "full".
 	settingReaderWidth = "reader_width"
@@ -448,6 +456,11 @@ type UIPrefsDTO struct {
 	// WarnEmptySubject asks before sending a message without a subject. On by
 	// default.
 	WarnEmptySubject bool `json:"warnEmptySubject"`
+	// SplitInbox splits the inbox into tabs in the new design. SplitTabs is
+	// the tab order, SplitActive the tab last shown.
+	SplitInbox  bool   `json:"splitInbox"`
+	SplitTabs   string `json:"splitTabs"`
+	SplitActive string `json:"splitActive"`
 	// ReaderWidth caps the reading column in the new design: narrow, medium
 	// or full.
 	ReaderWidth string `json:"readerWidth"`
@@ -621,6 +634,9 @@ func (a *App) GetUIPrefs() (UIPrefsDTO, error) {
 		AfterMove:                  a.stringSetting(settingAfterMove, "older"),
 		WarnMissingAttachment:      a.boolSetting(settingWarnMissingAttachment, true),
 		WarnEmptySubject:           a.boolSetting(settingWarnEmptySubject, true),
+		SplitInbox:                 a.boolSetting(settingSplitInbox, false),
+		SplitTabs:                  a.stringSetting(settingSplitTabs, defaultSplitTabs),
+		SplitActive:                a.stringSetting(settingSplitActive, ""),
 		ReaderWidth:                a.stringSetting(settingReaderWidth, "full"),
 		SenderPanel:                a.boolSetting(settingSenderPanel, false),
 		ThemeID:                    a.stringSetting(settingThemeID, ""),

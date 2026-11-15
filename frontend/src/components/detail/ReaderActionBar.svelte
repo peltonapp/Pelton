@@ -11,6 +11,11 @@
   import trashIcon from '@phosphor-icons/core/assets/duotone/trash-duotone.svg?raw'
   import moreIcon from '@phosphor-icons/core/assets/duotone/dots-three-duotone.svg?raw'
   import taskIcon from '@phosphor-icons/core/assets/duotone/check-square-duotone.svg?raw'
+  import pinIcon from '@phosphor-icons/core/assets/duotone/push-pin-duotone.svg?raw'
+  import unpinIcon from '@phosphor-icons/core/assets/duotone/push-pin-slash-duotone.svg?raw'
+  import muteIcon from '@phosphor-icons/core/assets/duotone/bell-slash-duotone.svg?raw'
+  import unmuteIcon from '@phosphor-icons/core/assets/duotone/bell-duotone.svg?raw'
+  import noteIcon from '@phosphor-icons/core/assets/duotone/note-pencil-duotone.svg?raw'
   import { taskMailMarks, tasks } from '../../stores/tasks'
   import { openTask } from '../../lib/taskmail'
   import Ph from '../common/Ph.svelte'
@@ -18,12 +23,29 @@
   import { dur, motion } from '../../lib/motion'
   import { t } from '../../lib/i18n'
 
+  /** The message, or its conversation, is pinned. */
+  export let pinned: boolean = false
+  /** The conversation is muted. */
+  export let muted: boolean = false
+  /** Pin acts on the whole conversation. */
+  export let conversation: boolean = false
+  /** The message belongs to a conversation that can be muted. */
+  export let canMute: boolean = true
+
+  $: pinLabel = conversation
+    ? $t(pinned ? 'pin.unpinConversation' : 'pin.pinConversation')
+    : $t(pinned ? 'pin.unpin' : 'pin.pin')
+  $: muteLabel = $t(muted ? 'mute.unmute' : 'mute.mute')
+
   const dispatch = createEventDispatcher<{
     reply: void
     replyAll: void
     forward: void
     archive: void
     delete: void
+    pin: void
+    mute: void
+    note: void
     more: { x: number; y: number }
   }>()
 
@@ -101,6 +123,40 @@
       on:click={() => dispatch('delete')}
     >
       <Ph svg={trashIcon} size={16} />
+    </button>
+    <span class="sep" aria-hidden="true"></span>
+    <button
+      type="button"
+      class="btn"
+      class:on={pinned}
+      aria-label={pinLabel}
+      aria-pressed={pinned}
+      title={$shortcutTitle(pinLabel, 'toggle-pin')}
+      on:click={() => dispatch('pin')}
+    >
+      <Ph svg={pinned ? unpinIcon : pinIcon} size={16} />
+    </button>
+    {#if canMute}
+      <button
+        type="button"
+        class="btn"
+        class:on={muted}
+        aria-label={muteLabel}
+        aria-pressed={muted}
+        title={$shortcutTitle(muteLabel, 'toggle-mute')}
+        on:click={() => dispatch('mute')}
+      >
+        <Ph svg={muted ? unmuteIcon : muteIcon} size={16} />
+      </button>
+    {/if}
+    <button
+      type="button"
+      class="btn"
+      aria-label={$t('note.add')}
+      title={$shortcutTitle($t('note.add'), 'edit-note')}
+      on:click={() => dispatch('note')}
+    >
+      <Ph svg={noteIcon} size={16} />
     </button>
     {#if taskMark !== undefined}
       <span class="sep" aria-hidden="true"></span>
@@ -188,6 +244,11 @@
   .btn.primary:hover {
     background: color-mix(in srgb, var(--accent) 88%, var(--text-primary));
     color: var(--accent-fg);
+  }
+
+  .btn.on {
+    background: var(--selection-bg);
+    color: var(--text-primary);
   }
 
   .btn.danger:hover {

@@ -176,6 +176,26 @@ export interface MessageSummary {
   // or from a reply or forward sent through Pelton.
   answered: boolean
   forwarded: boolean
+  // pinned keeps the row in the Pinned group at the top of the list, muted
+  // means its conversation is muted, and hasNote that the message or its
+  // conversation carries a private note.
+  pinned?: boolean
+  muted?: boolean
+  hasNote?: boolean
+}
+
+/** A private note on a message or a conversation. body is '' when there is none. */
+export interface Note {
+  body: string
+  updatedAt: string
+}
+
+/** One split inbox tab with its counts. key is important, newsletters,
+ * notifications, view:<id> or other. */
+export interface SplitTab {
+  key: string
+  total: number
+  unread: number
 }
 
 /** ThreadSummary is one conversation row in the threaded list. head is the
@@ -197,14 +217,18 @@ export interface ThreadSummary {
   answered: boolean
   forwarded: boolean
   messageIds: number[]
+  // pinned is true when any of its messages is pinned.
+  pinned?: boolean
 }
 
 /** ThreadList is a page of conversations; total and paging count
- * conversations, not messages. */
+ * conversations, not messages. pinned is the Pinned group, on the first page
+ * only, which the pages leave out. */
 export interface ThreadList {
   threads: ThreadSummary[]
   total: number
   hasOlder: boolean
+  pinned?: ThreadSummary[]
 }
 
 /** ThreadMessage is one message of an open conversation. folderRole is the
@@ -380,6 +404,9 @@ export interface MessageList {
   // hasOlder means the server still holds mail older than anything cached for
   // this selection, so reaching total is not the end of the mailbox.
   hasOlder: boolean
+  // pinned is the Pinned group, on the first page only, which messages and
+  // total leave out.
+  pinned?: MessageSummary[]
 }
 
 // FetchOlderResult reports what one 'load older mail' round trip fetched, and
@@ -706,6 +733,13 @@ export interface UIPrefs {
   warnMissingAttachment: boolean
   // warnEmptySubject asks before sending a message without a subject.
   warnEmptySubject: boolean
+  // splitInbox splits the inbox into tabs in the new design. splitTabs is the
+  // comma separated tab order (important, newsletters, notifications,
+  // view:<id>), the catch-all Other tab always last and not listed;
+  // splitActive is the tab last shown.
+  splitInbox: boolean
+  splitTabs: string
+  splitActive: string
   // readerWidth caps the reading column in the new design.
   readerWidth: ReaderWidth
   // senderPanel shows the panel about the open message's sender beside the

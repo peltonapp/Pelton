@@ -19,7 +19,8 @@
   import ReaderActionBar from './ReaderActionBar.svelte'
   import { prefs, setMessageFontSize, setReaderWidth } from '../../stores/prefs'
   import { threadedOn, threadMessages, cardDetails, loadThread, loadCard } from '../../stores/threads'
-  import { patchInList } from '../../stores/messages'
+  import { messageList, patchInList, rowPinned } from '../../stores/messages'
+  import NoteCard from './NoteCard.svelte'
   import { setSeen } from '../../lib/api'
   import { sameMessage } from '../../lib/threadrows'
   import { errorMessage, toastError } from '../../stores/toast'
@@ -32,7 +33,7 @@
   export let senderPanel = false
 
   /** What a reader action is asked to do, and to which message. */
-  type Action = 'reply' | 'replyAll' | 'forward' | 'archive' | 'delete' | 'reload'
+  type Action = 'reply' | 'replyAll' | 'forward' | 'archive' | 'delete' | 'reload' | 'pin' | 'mute' | 'note'
 
   const dispatch = createEventDispatcher<{
     action: { kind: Action; message: MessageDetail }
@@ -210,6 +211,12 @@
     }
   }
 
+  // the pin and mute state the action bar shows, from the list row when there
+  // is one, since a conversation's pin lives there.
+  $: listRow = $messageList.data?.items.find((m) => m.id === detail.id)
+  $: pinned = rowPinned(listRow ?? detail, $messageList.data?.threads)
+  $: muted = !!(listRow?.muted ?? detail.muted)
+
   $: fontIndex = Math.max(0, fontSizes.indexOf($prefs.messageFontSize))
 
   function stepFont(by: number): void {
@@ -303,6 +310,8 @@
       </button>
     </header>
 
+    <NoteCard messageId={detail.id} {threadId} />
+
     {#if threadError}
       <p class="thread-error">{threadError}</p>
     {/if}
@@ -341,6 +350,13 @@
   <ReaderActionBar
     messageId={focusDetail?.id ?? 0}
     headerId={focusDetail?.messageId ?? ''}
+    {pinned}
+    {muted}
+    conversation={threadId !== 0}
+    canMute={detail.threadId !== 0}
+    on:pin={() => act('pin', detail)}
+    on:mute={() => act('mute', detail)}
+    on:note={() => act('note', detail)}
     on:reply={() => act('reply', focusDetail)}
     on:replyAll={() => act('replyAll', focusDetail)}
     on:forward={() => act('forward', focusDetail)}

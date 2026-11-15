@@ -71,6 +71,8 @@ type Message struct {
 	// support via List-Unsubscribe-Post.
 	ListUnsubscribe     string
 	ListUnsubscribePost bool
+	// ListID is the raw List-Id header value.
+	ListID string
 	// ReplyTo is the Reply-To header value ('' when there is none), and
 	// AuthResults every Authentication-Results header in the order they appear.
 	// Both are read here because the raw bytes are dropped after storing, so
@@ -336,6 +338,7 @@ func parseBody(raw []byte, msg *Message) error {
 	msg.Attachments = parsed.Attachments
 	msg.ListUnsubscribe = parsed.ListUnsubscribe
 	msg.ListUnsubscribePost = parsed.ListUnsubscribePost
+	msg.ListID = parsed.ListID
 	msg.ReplyTo = parsed.ReplyTo
 	msg.AuthResults = parsed.AuthResults
 	msg.InReplyTo = parsed.InReplyTo

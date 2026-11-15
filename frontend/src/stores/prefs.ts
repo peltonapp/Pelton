@@ -91,6 +91,9 @@ const defaults: UIPrefs = {
   afterMove: 'older',
   warnMissingAttachment: true,
   warnEmptySubject: true,
+  splitInbox: false,
+  splitTabs: 'important,newsletters,notifications',
+  splitActive: '',
   readerWidth: 'full',
   senderPanel: false,
   themeId: '',
@@ -365,6 +368,24 @@ export function setWarnMissingAttachment(warnMissingAttachment: boolean): void {
 export function setWarnEmptySubject(warnEmptySubject: boolean): void {
   prefs.update((p) => ({ ...p, warnEmptySubject }))
   void setSetting(SettingKeys.warnEmptySubject, String(warnEmptySubject))
+}
+
+/** Turns the split inbox on or off. */
+export function setSplitInbox(splitInbox: boolean): void {
+  prefs.update((p) => ({ ...p, splitInbox }))
+  void setSetting(SettingKeys.splitInbox, String(splitInbox))
+}
+
+/** Stores the split inbox tab order, comma separated, without the catch-all. */
+export function setSplitTabs(splitTabs: string): void {
+  prefs.update((p) => ({ ...p, splitTabs }))
+  void setSetting(SettingKeys.splitTabs, splitTabs)
+}
+
+/** Remembers the split inbox tab last shown. */
+export function setSplitActive(splitActive: string): void {
+  prefs.update((p) => ({ ...p, splitActive }))
+  void setSetting(SettingKeys.splitActive, splitActive)
 }
 
 /** Picks how wide the reading column runs in the new design. */

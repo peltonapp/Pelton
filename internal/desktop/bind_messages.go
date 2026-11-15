@@ -23,10 +23,17 @@ type ListMessagesRequest struct {
 	ViewID   int64  `json:"viewId"`
 	Limit    int    `json:"limit"`
 	Offset   int    `json:"offset"`
+	// Split narrows an inbox to one split inbox tab (see bind_splits.go).
+	// Empty lists the whole inbox.
+	Split string `json:"split"`
 }
+
+// maxPinned caps the Pinned group of one list.
+const maxPinned = 200
 
 // ListMessages returns a page of summaries for a folder or a unified view, plus
 // the total count for pagination. This is the single read path the list uses.
+// The first page also carries the Pinned group, which the pages leave out.
 func (a *App) ListMessages(req ListMessagesRequest) (MessageListDTO, error) {
 	if err := a.ready(); err != nil {
 		return MessageListDTO{}, err
@@ -40,6 +47,20 @@ func (a *App) ListMessages(req ListMessagesRequest) (MessageListDTO, error) {
 	if err != nil {
 		return MessageListDTO{}, err
 	}
+	pinned := []MessageSummaryDTO{}
+	if req.Offset == 0 {
+		pq := q
+		pq.Pin = storage.PinOnly
+		pq.Limit = maxPinned
+		msgs, err := a.store.QueryMessages(a.ctx, pq)
+		if err != nil {
+			return MessageListDTO{}, err
+		}
+		if pinned, err = a.buildSummaries(a.ctx, msgs); err != nil {
+			return MessageListDTO{}, err
+		}
+	}
+	q.Pin = storage.PinExclude
 	q.Limit = req.Limit
 	q.Offset = req.Offset
 
@@ -60,16 +81,25 @@ func (a *App) ListMessages(req ListMessagesRequest) (MessageListDTO, error) {
 	if err != nil {
 		return MessageListDTO{}, err
 	}
-	return MessageListDTO{Messages: summaries, Total: total, HasOlder: hasOlder}, nil
+	return MessageListDTO{Messages: summaries, Total: total, HasOlder: hasOlder, Pinned: pinned}, nil
 }
 
 // requestQuery turns a list request into the storage query (the folder id set
-// and any flag filter), delegating unified views to viewQuery.
+// and any flag filter), delegating unified views to viewQuery. An inbox leaves
+// muted conversations out and narrows to the split tab the request names.
 func (a *App) requestQuery(ctx context.Context, req ListMessagesRequest) (storage.MessageQuery, error) {
+	q := storage.MessageQuery{FolderIDs: []int64{req.FolderID}}
 	if req.Kind == "view" {
-		return a.viewQuery(ctx, req.View)
+		var err error
+		if q, err = a.viewQuery(ctx, req.View); err != nil {
+			return q, err
+		}
 	}
-	return storage.MessageQuery{FolderIDs: []int64{req.FolderID}}, nil
+	if a.isInboxRequest(ctx, req) {
+		q.HideMuted = true
+		q.Split = a.splitFilter(ctx, req.Split)
+	}
+	return q, nil
 }
 
 // GetMessage returns the full message for the reading pane: sanitized html with

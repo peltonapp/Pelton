@@ -226,6 +226,8 @@ type fakeClient struct {
 	refuseKeywords bool
 	// messageIDs gives a uid a Message-ID header; unset uids have none.
 	messageIDs map[uint32]string
+	// permanentFlags is what SELECT reports a STORE can keep.
+	permanentFlags []imap.Flag
 }
 
 func (c *fakeClient) Select(string) (*pimap.Mailbox, error) {
@@ -233,7 +235,7 @@ func (c *fakeClient) Select(string) (*pimap.Mailbox, error) {
 	if validity == 0 {
 		validity = 1
 	}
-	return &pimap.Mailbox{UIDValidity: validity, NumMessages: uint32(len(c.uids))}, nil
+	return &pimap.Mailbox{UIDValidity: validity, NumMessages: uint32(len(c.uids)), PermanentFlags: c.permanentFlags}, nil
 }
 
 func (c *fakeClient) FetchAllFlags() ([]pimap.MessageHeader, error) {

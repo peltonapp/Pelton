@@ -89,6 +89,13 @@ export type ShortcutAction =
   | 'go-tasks'
   // makes a task from the open message, or from each selected one.
   | 'create-task'
+  // the split inbox tabs, only while the message list has focus.
+  | 'next-split'
+  | 'prev-split'
+  // pin, mute and a private note on the open message or its conversation.
+  | 'toggle-pin'
+  | 'toggle-mute'
+  | 'edit-note'
   // composer actions of the new design. They act on the composer that last
   // had focus, so they carry a modifier and work while typing.
   | ComposeAction
@@ -227,6 +234,13 @@ export const shortcuts: Shortcut[] = [
   { action: 'go-tasks', combo: 'mod+shift+d', labelKey: 'shortcut.goTasks' },
   // t for task, free among the message letters.
   { action: 'create-task', combo: 't', labelKey: 'shortcut.createTask' },
+  // Tab only moves between splits while the list has focus; everywhere else it
+  // keeps moving focus between controls.
+  { action: 'next-split', combo: 'tab', labelKey: 'shortcut.nextSplit' },
+  { action: 'prev-split', combo: 'shift+tab', labelKey: 'shortcut.prevSplit' },
+  { action: 'toggle-pin', combo: 'shift+p', labelKey: 'shortcut.togglePin' },
+  { action: 'toggle-mute', combo: 'shift+m', labelKey: 'shortcut.toggleMute' },
+  { action: 'edit-note', combo: 'shift+n', labelKey: 'shortcut.editNote' },
   { action: 'compose-follow-up', combo: 'mod+shift+u', labelKey: 'followUp.menu' },
   { action: 'compose-insert-snippet', combo: 'mod+shift+i', labelKey: 'snippets.insert' },
   { action: 'compose-intro-bcc', combo: 'mod+shift+b', labelKey: 'recipients.introBcc' },

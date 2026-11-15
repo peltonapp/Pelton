@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"time"
 )
 
 // MessageQuery selects a page of messages. It supports one or more folders (the
@@ -26,7 +27,30 @@ type MessageQuery struct {
 	// starred inbox message is in INBOX, All Mail, Starred and Important. The
 	// first stored copy is the one listed.
 	OneCopy bool
+	// HideMuted leaves out the mail of muted conversations, which is what the
+	// inbox views ask for.
+	HideMuted bool
+	// Pin narrows the query to pinned mail or away from it. A conversation
+	// query treats a conversation as pinned when any of its messages is.
+	Pin PinFilter
+	// Split narrows the query to one tab of the split inbox. Nil lists every
+	// tab.
+	Split *SplitFilter
+	// byThread is set by the conversation queries.
+	byThread bool
 }
+
+// PinFilter says which side of the pinned line a query lists.
+type PinFilter int
+
+const (
+	// PinAny lists pinned and unpinned mail alike.
+	PinAny PinFilter = iota
+	// PinOnly lists pinned mail.
+	PinOnly
+	// PinExclude lists what is not pinned.
+	PinExclude
+)
 
 // QueryMessages returns the page of messages matching q, newest first. It is the
 // single read path the ui list uses for both per folder and unified views.
@@ -236,6 +260,15 @@ func folderWhere(q MessageQuery, folderIDs []int64) (string, []any) {
 		where += " AND (flags & ?) = 0"
 		args = append(args, uint8(q.ExcludeFlags))
 	}
+	if q.HideMuted {
+		where += " AND thread_id NOT IN (SELECT id FROM threads WHERE muted = 1)"
+	}
+	where += pinClause(q.Pin, q.byThread)
+	if q.Split != nil {
+		clause, splitArgs := splitWhere(*q.Split, time.Now())
+		where += " AND " + clause
+		args = append(args, splitArgs...)
+	}
 	if q.OneCopy {
 		all, allArgs := inClause(q.FolderIDs)
 		other := "o.pending_delete = 0 AND o.snooze_hidden = 0 AND o.folder_id IN (" + all + ")"
@@ -253,6 +286,25 @@ AND o.message_id = messages.message_id AND o.id < messages.id AND ` + other + `)
 		args = append(args, allArgs...)
 	}
 	return where, args
+}
+
+// pinnedThreads lists the conversations holding a pinned message.
+const pinnedThreads = `SELECT thread_id FROM messages WHERE pinned = 1 AND thread_id != 0`
+
+// pinClause is the WHERE fragment for a pin filter, by message or by
+// conversation.
+func pinClause(pin PinFilter, byThread bool) string {
+	switch {
+	case pin == PinOnly && byThread:
+		return " AND (pinned = 1 OR thread_id IN (" + pinnedThreads + "))"
+	case pin == PinOnly:
+		return " AND pinned = 1"
+	case pin == PinExclude && byThread:
+		return " AND pinned = 0 AND thread_id NOT IN (" + pinnedThreads + ")"
+	case pin == PinExclude:
+		return " AND pinned = 0"
+	}
+	return ""
 }
 
 // inClause renders n "?" placeholders and the matching args slice for an IN list.
