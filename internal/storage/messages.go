@@ -119,12 +119,15 @@ type SMIMESignature struct {
 }
 
 // IncomingAttachment is attachment metadata together with its content, handed
-// to InsertMessageWithAttachments. Content is read once and written to disk.
+// to InsertMessageWithAttachments. Content is read once and written to disk. A
+// nil Content records the part without its bytes, with Size as its size, so it
+// can be listed and fetched from the server later.
 type IncomingAttachment struct {
 	Filename    string
 	ContentType string
 	ContentID   string
 	Content     io.Reader
+	Size        int64
 }
 
 // InsertMessage inserts a single message row, assigning it to a conversation
@@ -165,6 +168,15 @@ func (d *DB) InsertMessageWithAttachments(ctx context.Context, m *Message, atts 
 
 	var writtenPaths []string
 	for _, in := range atts {
+		if in.Content == nil {
+			row := &Attachment{MessageID: id, Filename: sanitizeFilename(in.Filename),
+				ContentType: in.ContentType, ContentID: in.ContentID, SizeBytes: in.Size}
+			if err := insertAttachment(ctx, tx, row); err != nil {
+				d.removeAttachmentFiles(writtenPaths)
+				return 0, err
+			}
+			continue
+		}
 		saved, err := d.writeAttachmentFile(m.AccountID, id, in.Filename, in.Content)
 		if err != nil {
 			d.removeAttachmentFiles(writtenPaths)

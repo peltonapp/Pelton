@@ -171,6 +171,8 @@ const (
 	// how wide the reading column runs in the new design: "narrow", "medium"
 	// or "full".
 	settingReaderWidth = "reader_width"
+	// show the sender panel beside the reader in the new design.
+	settingSenderPanel = "sender_panel"
 	// general new-mail OS notifications (#126). VIP senders are stored
 	// separately in bind_vip.go and notify even when this is off.
 	settingNotifyNewMail = "notify_new_mail"
@@ -433,6 +435,9 @@ type UIPrefsDTO struct {
 	// ReaderWidth caps the reading column in the new design: narrow, medium
 	// or full.
 	ReaderWidth string `json:"readerWidth"`
+	// SenderPanel shows the panel about the open message's sender beside the
+	// reader in the new design.
+	SenderPanel bool `json:"senderPanel"`
 	// ThemeID selects an installed custom theme (see bind_themes.go). Empty
 	// means the built-in default themes driven by the Theme setting.
 	ThemeID string `json:"themeId"`
@@ -598,6 +603,7 @@ func (a *App) GetUIPrefs() (UIPrefsDTO, error) {
 		ComposeOpenIn:              a.stringSetting(settingComposeOpenIn, "window"),
 		ThreadedList:               a.boolSetting(settingThreadedList, true),
 		ReaderWidth:                a.stringSetting(settingReaderWidth, "full"),
+		SenderPanel:                a.boolSetting(settingSenderPanel, false),
 		ThemeID:                    a.stringSetting(settingThemeID, ""),
 		MenuBarInApp:               a.boolSetting(settingMenuBarInApp, false),
 		MenuBarNativeMinimal:       a.boolSetting(settingMenuBarNativeMinimal, false),

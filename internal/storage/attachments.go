@@ -2,6 +2,7 @@ package storage
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -26,6 +27,10 @@ const (
 	// cannot loop forever.
 	maxDuplicateAttempts = 10000
 )
+
+// ErrAttachmentNotLocal is returned for an attachment whose bytes were never
+// stored, because its message was cached without attachments.
+var ErrAttachmentNotLocal = errors.New("storage: attachment not downloaded")
 
 // Attachment is attachment metadata. The bytes live on disk at DiskPath, which
 // is relative to the attachments root so the config dir stays portable.
@@ -68,6 +73,9 @@ FROM attachments WHERE message_id = ? ORDER BY id`
 // OpenAttachment opens an attachment file for reading given its stored relative
 // DiskPath. The caller must close the returned reader.
 func (d *DB) OpenAttachment(diskPath string) (io.ReadCloser, error) {
+	if diskPath == "" {
+		return nil, ErrAttachmentNotLocal
+	}
 	full := filepath.Join(d.attachmentsDir, filepath.FromSlash(diskPath))
 	f, err := os.Open(full)
 	if err != nil {

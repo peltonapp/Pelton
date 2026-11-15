@@ -640,6 +640,9 @@ export interface UIPrefs {
   threadedList: boolean
   // readerWidth caps the reading column in the new design.
   readerWidth: ReaderWidth
+  // senderPanel shows the panel about the open message's sender beside the
+  // reader in the new design.
+  senderPanel: boolean
   // themeId selects an installed custom theme; empty means the built-in
   // default themes driven by the theme (light/dark/system) setting.
   themeId: string
@@ -849,6 +852,66 @@ export interface AttachmentContent {
   sizeBytes: number
   data: string
   tooLarge: boolean
+}
+
+/** The groups the attachments browser filters by. */
+export type AttachmentKind = 'document' | 'image' | 'pdf' | 'spreadsheet' | 'archive' | 'media' | 'other'
+
+/** One file in the attachments browser, with the message it came with. */
+export interface AttachmentEntry {
+  id: number
+  messageId: number
+  accountId: number
+  folderId: number
+  threadId: number
+  filename: string
+  contentType: string
+  sizeBytes: number
+  kind: AttachmentKind
+  subject: string
+  fromName: string
+  fromAddress: string
+  date: string
+  /** False when the bytes are not stored here and come from the server on request. */
+  downloaded: boolean
+}
+
+/** The attachments browser filters. Dates are YYYY-MM-DD; empty leaves a filter off. */
+export interface AttachmentFilter {
+  kinds: AttachmentKind[]
+  accountId: number
+  sender: string
+  since: string
+  until: string
+  name: string
+}
+
+/** A request for one page of attachments. */
+export interface AttachmentQuery extends AttachmentFilter {
+  senderAddress: string
+  limit: number
+  offset: number
+  withTotal: boolean
+}
+
+/** A page of attachments; total is -1 unless it was asked for. */
+export interface AttachmentPage {
+  entries: AttachmentEntry[]
+  total: number
+}
+
+/** What the sender panel knows about one address, all from local mail. */
+export interface SenderOverview {
+  address: string
+  count: number
+  first: string
+  last: string
+  /** One message per conversation, newest first. */
+  recent: MessageSummary[]
+  files: AttachmentEntry[]
+  filesTotal: number
+  /** The address reads as a machine sender (noreply and the like). */
+  automated: boolean
 }
 
 // the eight flag colors. index 0 means "no color"; 1..8 map to the palette in
