@@ -181,7 +181,7 @@ export function formatRelative(epochMs: number, t: (key: string) => string): str
 // displayName returns the best label for a sender: name if present, else email.
 export function displayName(name: string, email: string): string {
   // a name that needed quoting in the header ("Arne K.") is shown without them.
-  return name.trim().replace(/^"([^"]*)"/, '$1') || email
+  return name.trim().replace(/^\\?["“”]([^"“”\\]*)\\?["“”]/, '$1') || email
 }
 
 // AccountNames is the part of an Account that names it. Taking the fields

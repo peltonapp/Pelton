@@ -296,8 +296,6 @@
           >
             <Ph svg={caretIcon} size={12} />
           </button>
-        {:else if thread !== null && !child}
-          <span class="twisty-space" aria-hidden="true"></span>
         {/if}
         {#if unread}
           <span class="dot" aria-hidden="true"></span>
@@ -568,10 +566,10 @@
     font-weight: var(--fw-medium);
   }
 
-  /* conversations. the expand control takes a fixed column so rows with and
-     without one keep their senders lined up, and replies indent by it. */
-  .twisty,
-  .twisty-space {
+  /* conversations. only a row that can be expanded has the control; the others
+     start at the row's edge like their subject line does, and replies indent
+     by the control's width. */
+  .twisty {
     flex-shrink: 0;
     width: var(--thread-twisty);
     height: var(--thread-twisty);
