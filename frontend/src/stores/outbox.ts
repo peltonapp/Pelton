@@ -54,16 +54,27 @@ export const emptySyncCounts: SyncCounts = {
 // finished bar does not linger into the next one.
 export const syncCounts = writable<SyncCounts>(emptySyncCounts)
 
+let announceSent = true
+
+/**
+ * quietOutbox leaves confirming and pruning sent messages to the main window,
+ * for a window of its own that also shows the outbox.
+ */
+export function quietOutbox(): void {
+  announceSent = false
+}
+
 // loadOutbox refetches the queue. it swallows errors into an empty list since the
 // outbox view is secondary; a transient failure should not break the app. when
 // the refetch reveals freshly-sent messages it shows a brief confirmation and
-// prunes them so the queue does not keep completed rows around.
+// prunes them so the queue does not keep completed rows around. In a window
+// other than the main one (see quietOutbox) it only leaves them out.
 export async function loadOutbox(): Promise<void> {
   try {
     const rows = await listOutbox()
     const sent = rows.filter((r) => r.state === 'sent')
     outbox.set(rows.filter((r) => r.state !== 'sent'))
-    if (sent.length > 0) {
+    if (announceSent && sent.length > 0) {
       const tr = get(t)
       toastSuccess(sent.length === 1 ? tr('outbox.toast.sent') : tr('outbox.toast.sentMany').replace('{count}', String(sent.length)))
       // prune the sent rows; the resulting outbox:changed event triggers another

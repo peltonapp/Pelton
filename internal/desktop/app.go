@@ -57,6 +57,11 @@ type App struct {
 	// in this run, by outbox id, so a scheduled or failed send can be taken
 	// back into a composer. Memory only; see bind_outbox_edit.go.
 	sentRequests sync.Map
+	// sendWorker is the running outbox worker, nil until it starts. activity
+	// is the memory only log of what it does, for the send activity window.
+	// See bind_outbox_controls.go.
+	sendWorker atomic.Pointer[outbox.Worker]
+	activity   *outbox.ActivityLog
 	// notifier posts the new-mail notifications (notify.go) and dock carries
 	// the unread badge on macOS. Both are nil in tests. notifyReady is set once
 	// the notification service has started (notifier.go).
@@ -232,7 +237,7 @@ func (a *App) IsDevMode() bool {
 // emit runtime events on.
 func newApp(version, channel string) *App {
 	w := logging.NewWriter()
-	return &App{
+	a := &App{
 		logWriter:  w,
 		log:        w.Logger(),
 		version:    version,
@@ -240,6 +245,8 @@ func newApp(version, channel string) *App {
 		startedAt:  time.Now(),
 		storeReady: make(chan struct{}),
 	}
+	a.activity = outbox.NewActivityLog(activityLogSize, a.emitActivity)
+	return a
 }
 
 // ServiceStartup is the wails service startup hook. It opens the store, runs

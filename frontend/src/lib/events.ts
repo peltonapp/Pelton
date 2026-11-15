@@ -3,7 +3,7 @@
 // single unsubscribe function, and keeps the event-name strings in one place.
 
 import { Events } from '@wailsio/runtime'
-import type { AccountSyncState } from './types'
+import type { AccountSyncState, OutboxLogEntry } from './types'
 
 // EventsOn subscribes to a backend event and hands the callback its payload.
 function EventsOn<T>(name: string, cb: (data: T) => void): () => void {
@@ -18,6 +18,7 @@ export const EventNames = {
   syncState: 'sync:state',
   accountSyncState: 'sync:accounts',
   outboxChanged: 'outbox:changed',
+  outboxLog: 'outbox:log',
   menu: 'menu:action',
   downloadProgress: 'download:progress',
   attachmentProgress: 'attachment:progress',
@@ -189,6 +190,11 @@ export function onAccountSyncState(cb: (e: AccountSyncStateEvent) => void): Unsu
 // carries no payload; subscribers refetch the outbox.
 export function onOutboxChanged(cb: () => void): Unsubscribe {
   return EventsOn(EventNames.outboxChanged, () => cb())
+}
+
+// onOutboxLog fires with each new line of the send activity log.
+export function onOutboxLog(cb: (e: OutboxLogEntry) => void): Unsubscribe {
+  return EventsOn(EventNames.outboxLog, (e: OutboxLogEntry) => cb(e))
 }
 
 // onMenu fires when a native menubar item is chosen. the payload is a short

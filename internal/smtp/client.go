@@ -22,6 +22,7 @@ import (
 	gosmtp "github.com/emersion/go-smtp"
 
 	"github.com/peltonapp/Pelton/internal/certtrust"
+	"github.com/peltonapp/Pelton/internal/outbox"
 )
 
 const (
@@ -255,10 +256,20 @@ func authClient(cfg Config) (sasl.Client, error) {
 	}
 }
 
+// closeOnCancel drops the connection when ctx is cancelled, which ends a
+// command go-smtp is blocked in. The returned stop detaches it and reports
+// false when it has already fired.
+func (c *Client) closeOnCancel(ctx context.Context) (stop func() bool) {
+	return context.AfterFunc(ctx, func() { _ = c.raw.Close() })
+}
+
 // Send transmits one message. Bcc recipients are included in to even though they
-// are absent from the message headers, which is how Bcc is delivered. The
-// context is honoured before the exchange starts; go-smtp itself does not take a
-// context mid-command.
+// are absent from the message headers, which is how Bcc is delivered.
+//
+// Cancelling ctx drops the connection until the message is committed: right
+// before the end of DATA, outbox.Commit is asked whether the send may still
+// go ahead. A connection dropped before that point leaves the server with an
+// unfinished message, which it discards.
 func (c *Client) Send(ctx context.Context, from string, to []string, raw []byte) error {
 	if err := ctx.Err(); err != nil {
 		return err
@@ -266,6 +277,8 @@ func (c *Client) Send(ctx context.Context, from string, to []string, raw []byte)
 	if len(to) == 0 {
 		return fmt.Errorf("smtp: no recipients")
 	}
+	stop := c.closeOnCancel(ctx)
+	defer stop()
 
 	if err := c.raw.Mail(from, nil); err != nil {
 		return fmt.Errorf("smtp: MAIL FROM %q: %w", from, err)
@@ -281,8 +294,18 @@ func (c *Client) Send(ctx context.Context, from string, to []string, raw []byte)
 		return fmt.Errorf("smtp: DATA: %w", err)
 	}
 	if _, err := w.Write(raw); err != nil {
+		if ctx.Err() != nil {
+			return ctx.Err()
+		}
 		_ = w.Close()
 		return fmt.Errorf("smtp: write message body: %w", err)
+	}
+	if err := outbox.Commit(ctx); err != nil {
+		_ = c.raw.Close()
+		return err
+	}
+	if !stop() {
+		return ctx.Err()
 	}
 	if err := w.Close(); err != nil {
 		return fmt.Errorf("smtp: finalize message: %w", err)

@@ -80,16 +80,30 @@ func NewSender(cfg Config, opts ...SenderOption) *Sender {
 // "sending" and the rest of the queue stuck behind it. It also meant a restart
 // in the meantime queued the delivered message again. An append failure is
 // only logged.
+//
+// Each step is reported to the outbox activity log. Cancelling ctx stops the
+// send at any point before the message is committed (see Client.Send).
 func (s *Sender) Transmit(ctx context.Context, m outbox.Message) error {
+	if err := ctx.Err(); err != nil {
+		return err
+	}
+	outbox.Report(ctx, outbox.StepConnecting)
 	client, err := Dial(s.cfg)
 	if err != nil {
 		return err
 	}
 
-	if err := client.Authenticate(); err != nil {
+	outbox.Report(ctx, outbox.StepSigningIn)
+	stop := client.closeOnCancel(ctx)
+	err = client.Authenticate()
+	if !stop() && err == nil {
+		err = ctx.Err()
+	}
+	if err != nil {
 		_ = client.Close()
 		return err
 	}
+	outbox.Report(ctx, outbox.StepSending)
 	if err := client.Send(ctx, m.EnvelopeFrom, m.Recipients, m.Raw); err != nil {
 		_ = client.Close()
 		return err
