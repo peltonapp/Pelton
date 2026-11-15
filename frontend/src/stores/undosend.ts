@@ -16,7 +16,9 @@ export const pendingUndo = writable<(() => void) | null>(null)
 
 // scheduleUndo shows the countdown toast for a held message and wires undo. The
 // session is the exact compose state that was sent, used to reopen on undo.
-export function scheduleUndo(messageId: number, session: ComposeSession, delaySeconds: number): void {
+// committed runs once the message is past taking back: the window ran out, or
+// an undo came too late.
+export function scheduleUndo(messageId: number, session: ComposeSession, delaySeconds: number, committed?: () => void): void {
   let remaining = delaySeconds
   let done = false
 
@@ -41,6 +43,7 @@ export function scheduleUndo(messageId: number, session: ComposeSession, delaySe
         toastInfo('Send undone. Your message is back as a draft.')
       } else {
         toastError('Too late to undo, the message is already on its way.')
+        committed?.()
       }
     } catch (err) {
       toastError(errorMessage(err))
@@ -62,6 +65,7 @@ export function scheduleUndo(messageId: number, session: ComposeSession, delaySe
     remaining -= 1
     if (remaining <= 0) {
       finish()
+      committed?.()
       return
     }
     updateToast(toastId, `Sending in ${remaining}s…`)

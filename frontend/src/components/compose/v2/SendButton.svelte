@@ -1,8 +1,9 @@
 <script lang="ts">
-  // the composer's primary action: Send, with a caret that opens the
-  // send-later menu. while the message is being queued the label gives way to
-  // a pie loader, and once it is queued a check draws itself before the
-  // composer closes. the button keeps one width throughout so nothing jumps.
+  // the composer's primary action: Send, with a caret that opens the other
+  // ways to send: send and archive for a reply, send and remind, and send
+  // later. while the message is being queued the label gives way to a pie
+  // loader, and once it is queued a check draws itself before the composer
+  // closes. the button keeps one width throughout so nothing jumps.
   import { createEventDispatcher } from 'svelte'
   import sendIcon from '@phosphor-icons/core/assets/duotone/paper-plane-tilt-duotone.svg?raw'
   import caretIcon from '@phosphor-icons/core/assets/duotone/caret-down-duotone.svg?raw'
@@ -10,24 +11,31 @@
   import eveningIcon from '@phosphor-icons/core/assets/duotone/sun-horizon-duotone.svg?raw'
   import morningIcon from '@phosphor-icons/core/assets/duotone/sun-duotone.svg?raw'
   import weekIcon from '@phosphor-icons/core/assets/duotone/calendar-dots-duotone.svg?raw'
+  import laterWeekIcon from '@phosphor-icons/core/assets/duotone/calendar-blank-duotone.svg?raw'
+  import archiveIcon from '@phosphor-icons/core/assets/duotone/archive-duotone.svg?raw'
   import Ph from '../../common/Ph.svelte'
   import PieProgress from '../../common/PieProgress.svelte'
   import AnchoredPopover from '../../common/AnchoredPopover.svelte'
   import DateTimePicker from '../../common/DateTimePicker.svelte'
-  import { buildSendPresets, formatSendWhen, type SendPreset } from '../../../lib/composeactions'
-  import { shortcutTitle } from '../../../stores/shortcuts'
+  import { buildFollowUpPresets, buildSendPresets, formatSendWhen, type FollowUpPreset, type SendPreset } from '../../../lib/composeactions'
+  import type { ShortcutAction } from '../../../lib/shortcuts'
+  import type { FollowUpInterval } from '../../../lib/types'
+  import { bindings, shortcutTitle } from '../../../stores/shortcuts'
+  import { prefs } from '../../../stores/prefs'
   import { tip } from '../../../lib/tip'
-  import { t } from '../../../lib/i18n'
+  import { shortcutLabel, t } from '../../../lib/i18n'
   import { toastError } from '../../../stores/toast'
 
   /** Where the send is: waiting for a click, being queued, or queued. */
   export let state: 'idle' | 'sending' | 'sent' = 'idle'
   /** Unique id base for the custom time field. */
   export let id: string
-  /** Opens the send-later menu above the button rather than below. */
+  /** Opens the menu above the button rather than below. */
   export let menuAbove = false
+  /** Offers send and archive, for a reply or forward. */
+  export let canArchive = false
 
-  const dispatch = createEventDispatcher<{ send: void; schedule: Date }>()
+  const dispatch = createEventDispatcher<{ send: void; schedule: Date; archive: void; remind: FollowUpInterval }>()
 
   const icons: Record<SendPreset['key'], string> = {
     laterToday: clockIcon,
@@ -36,12 +44,30 @@
     mondayMorning: weekIcon,
   }
 
+  const remindIcons: Record<FollowUpPreset['key'], string> = {
+    tomorrow: morningIcon,
+    threeDays: weekIcon,
+    week: laterWeekIcon,
+  }
+
   let caret: HTMLButtonElement
   let menuOpen = false
   let custom = ''
 
   $: busy = state !== 'idle'
   $: presets = menuOpen ? buildSendPresets(new Date(), $t) : []
+  $: reminders = menuOpen ? buildFollowUpPresets(new Date(), $t) : []
+  $: hint = (action: ShortcutAction): string => ($prefs.showShortcutHints && $bindings[action] ? shortcutLabel($bindings[action]) : '')
+
+  function sendArchive(): void {
+    menuOpen = false
+    dispatch('archive')
+  }
+
+  function sendRemind(interval: FollowUpInterval): void {
+    menuOpen = false
+    dispatch('remind', interval)
+  }
 
   function toggleMenu(): void {
     if (busy) {
@@ -89,10 +115,10 @@
     class="caret"
     bind:this={caret}
     disabled={busy}
-    aria-label={$t('compose.sendLater.ariaLabel')}
+    aria-label={$t('sendVariant.menu')}
     aria-haspopup="menu"
     aria-expanded={menuOpen}
-    use:tip={{ text: $t('compose.sendLater.ariaLabel'), side: menuAbove ? 'top' : 'bottom' }}
+    use:tip={{ text: $t('sendVariant.menu'), side: menuAbove ? 'top' : 'bottom' }}
     on:click={toggleMenu}
   >
     <Ph svg={caretIcon} size={12} />
@@ -100,8 +126,35 @@
 </div>
 
 {#if menuOpen}
-  <AnchoredPopover anchor={caret} side={menuAbove ? 'above' : 'below'} align="start" role="menu" label={$t('compose.sendLater.ariaLabel')} on:close={() => (menuOpen = false)}>
+  <AnchoredPopover anchor={caret} side={menuAbove ? 'above' : 'below'} align="start" role="menu" label={$t('sendVariant.menu')} on:close={() => (menuOpen = false)}>
     <div class="menu">
+      {#if canArchive}
+        <button type="button" class="preset" role="menuitem" on:click={sendArchive}>
+          <Ph svg={archiveIcon} size={16} />
+          <span class="label">{$t('sendVariant.archive')}</span>
+          {#if hint('compose-send-archive')}
+            <kbd class="key">{hint('compose-send-archive')}</kbd>
+          {/if}
+        </button>
+      {/if}
+      <p class="lead" class:first={!canArchive}>{$t('sendVariant.remind')}</p>
+      {#each reminders as reminder (reminder.key)}
+        <button
+          type="button"
+          class="preset"
+          role="menuitem"
+          aria-label={`${$t('sendVariant.remind')}, ${reminder.label}`}
+          on:click={() => sendRemind(reminder.key)}
+        >
+          <Ph svg={remindIcons[reminder.key]} size={16} />
+          <span class="label">{reminder.label}</span>
+          <span class="when">{formatSendWhen(reminder.when)}</span>
+          {#if reminder.key === $prefs.sendRemindAfter && hint('compose-send-remind')}
+            <kbd class="key">{hint('compose-send-remind')}</kbd>
+          {/if}
+        </button>
+      {/each}
+      <p class="lead">{$t('sendVariant.later')}</p>
       {#each presets as preset (preset.key)}
         <button type="button" class="preset" role="menuitem" on:click={() => schedule(preset.when)}>
           <Ph svg={icons[preset.key]} size={16} />
@@ -262,6 +315,26 @@
     font-size: var(--fz-meta);
     color: var(--text-tertiary);
     font-variant-numeric: tabular-nums;
+  }
+
+  .key {
+    font-family: var(--font-ui);
+    font-size: var(--fz-meta);
+    color: var(--text-tertiary);
+  }
+
+  .lead {
+    margin: var(--space-1) 0 0;
+    padding: var(--space-3) var(--space-3) var(--space-1);
+    border-top: var(--hairline) solid var(--border-subtle);
+    font-size: var(--fz-meta);
+    color: var(--text-tertiary);
+  }
+
+  .lead.first {
+    margin-top: 0;
+    padding-top: var(--space-2);
+    border-top: none;
   }
 
   .custom {

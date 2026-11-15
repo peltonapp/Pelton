@@ -32,6 +32,8 @@ export const EventNames = {
   openMessage: 'message:open',
   composeCloseRequest: 'compose:close-request',
   followUpsChanged: 'followups:changed',
+  // sent between windows by the frontend, not by go.
+  archiveAfterSend: 'compose:archive-after-send',
 } as const
 
 // payloads, mirroring the go event structs.
@@ -155,6 +157,13 @@ export interface OpenMessageEvent {
   folderId: number
 }
 
+// ArchiveAfterSendEvent asks the main window to archive the conversation a
+// reply sent from a compose window answered, once delaySeconds have passed.
+export interface ArchiveAfterSendEvent {
+  messageId: number
+  delaySeconds: number
+}
+
 // Unsubscribe removes an event listener.
 export type Unsubscribe = () => void
 
@@ -272,6 +281,18 @@ export function onAgentProposals(cb: () => void): Unsubscribe {
 // shown. Today that is a clicked new-mail notification on Windows.
 export function onOpenMessage(cb: (e: OpenMessageEvent) => void): Unsubscribe {
   return EventsOn(EventNames.openMessage, (e: OpenMessageEvent) => cb(e))
+}
+
+// emitArchiveAfterSend hands a send and archive from a compose window to the
+// main window, which outlives it.
+export function emitArchiveAfterSend(e: ArchiveAfterSendEvent): void {
+  void Events.Emit(EventNames.archiveAfterSend, e)
+}
+
+// onArchiveAfterSend fires in every window when a compose window sent a reply
+// whose conversation is to be archived.
+export function onArchiveAfterSend(cb: (e: ArchiveAfterSendEvent) => void): Unsubscribe {
+  return EventsOn(EventNames.archiveAfterSend, cb)
 }
 
 // onComposeCloseRequest fires in a compose window whose close button was

@@ -1620,6 +1620,8 @@ export const SettingKeys = {
   composeOpenIn: 'compose_open_in',
   threadedList: 'threaded_list',
   afterMove: 'after_move',
+  afterReplySend: 'after_reply_send',
+  sendRemindAfter: 'send_remind_after',
   warnMissingAttachment: 'warn_missing_attachment',
   warnEmptySubject: 'warn_empty_subject',
   readerWidth: 'reader_width',

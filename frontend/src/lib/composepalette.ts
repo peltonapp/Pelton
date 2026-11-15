@@ -7,6 +7,7 @@
 import type { ComponentType } from 'svelte'
 import { get } from 'svelte/store'
 import {
+  IconArchive,
   IconArrowsExchange,
   IconBellRinging,
   IconChevronsDown,
@@ -24,7 +25,8 @@ import { triggerPrefix } from './snippets'
 import { fieldBeside, recipientFields } from './recipientmoves'
 import { splitAddressList } from './mailcompose'
 import { activeComposer, runComposeCommand, type ChipRef } from '../stores/composecommands'
-import { composeSessions } from '../stores/compose'
+import { composeSessions, type ComposeSession } from '../stores/compose'
+import { canArchiveAfter } from './sendvariants'
 import { bindings } from '../stores/shortcuts'
 import { snippets } from '../stores/snippets'
 
@@ -38,6 +40,8 @@ export interface ComposeActionMeta {
 
 /** The palette label and icon of each composer action. */
 export const composeActionMeta: Record<ComposeAction, ComposeActionMeta> = {
+  'compose-send-archive': { labelKey: 'sendVariant.archive', keywordsKey: 'sendVariant.keywords', icon: IconArchive },
+  'compose-send-remind': { labelKey: 'sendVariant.remind', keywordsKey: 'sendVariant.keywords', icon: IconBellRinging },
   'compose-follow-up': { labelKey: 'followUp.menu', keywordsKey: 'followUp.keywords', icon: IconBellRinging },
   'compose-insert-snippet': { labelKey: 'snippets.insert', keywordsKey: 'snippets.keywords', icon: IconTextPlus },
   'compose-intro-bcc': { labelKey: 'recipients.introBcc', keywordsKey: 'recipients.keywords', icon: IconEyeOff },
@@ -52,6 +56,8 @@ export interface ComposePaletteContext {
   t: (key: string) => string
   /** Whether a composer is open to act on. */
   open: boolean
+  /** Whether that composer answers a message, so it can send and archive. */
+  answering: boolean
   /** The current key of an action, formatted, or ''. */
   hint: (action: ComposeAction) => string
   snippets: Snippet[]
@@ -108,7 +114,8 @@ export function composeCommands(ctx: ComposePaletteContext): PaletteCommand[] {
   if (!ctx.open) {
     return []
   }
-  return composeActions.map((action) => {
+  const actions = ctx.answering ? composeActions : composeActions.filter((a) => a !== 'compose-send-archive')
+  return actions.map((action) => {
     const meta = composeActionMeta[action]
     return {
       id: `compose:${action}`,
@@ -130,10 +137,15 @@ export function composeCommands(ctx: ComposePaletteContext): PaletteCommand[] {
   })
 }
 
+// activeSession is the session of the composer that last had focus.
+function activeSession(): ComposeSession | undefined {
+  const id = get(activeComposer)
+  return get(composeSessions).find((s) => s.id === id)
+}
+
 // activeRecipients lists the active composer's recipients, field by field.
 function activeRecipients(): ChipRef[] {
-  const id = get(activeComposer)
-  const session = get(composeSessions).find((s) => s.id === id)
+  const session = activeSession()
   if (!session) {
     return []
   }
@@ -146,6 +158,7 @@ export function registerComposePalette(): void {
     composeCommands({
       t,
       open: get(activeComposer) !== null,
+      answering: canArchiveAfter(activeSession() ?? {}),
       hint: (action) => {
         const combo = (get(bindings) as Record<string, string>)[action] ?? ''
         return combo ? shortcutLabel(combo) : ''

@@ -677,6 +677,11 @@ export interface UIPrefs {
   // afterMove is what the reader opens once the open message is archived,
   // deleted or moved in the new design.
   afterMove: AfterMove
+  // afterReplySend is what plain Send does with the conversation a reply or
+  // forward answered, once it is on its way.
+  afterReplySend: AfterReplySend
+  // sendRemindAfter is when Send and remind sets its reminder.
+  sendRemindAfter: FollowUpInterval
   // warnMissingAttachment asks before sending a message whose text speaks of
   // an attachment it does not carry.
   warnMissingAttachment: boolean
@@ -1190,6 +1195,10 @@ export type ReaderWidth = 'narrow' | 'medium' | 'full'
  * delete or move: the older neighbour, the newer one, or nothing.
  */
 export type AfterMove = 'older' | 'newer' | 'list'
+/** What plain Send does with the conversation a reply answered. */
+export type AfterReplySend = 'nothing' | 'archive'
+/** When a follow-up reminder set from a preset comes: each lands at nine. */
+export type FollowUpInterval = 'tomorrow' | 'threeDays' | 'week'
 /** One of the top-level areas of the app. */
 export type Space = 'mail' | 'contacts' | 'calendar'
 export type SelectAllScope = 'offer' | 'all' | 'loaded'

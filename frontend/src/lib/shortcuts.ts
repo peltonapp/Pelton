@@ -86,6 +86,10 @@ export type ShortcutAction =
 
 /** The shortcut actions that act on a composer rather than on mail. */
 export type ComposeAction =
+  // send, then archive the conversation a reply answered, or set a follow-up
+  // reminder on the message.
+  | 'compose-send-archive'
+  | 'compose-send-remind'
   | 'compose-follow-up'
   | 'compose-insert-snippet'
   | 'compose-intro-bcc'
@@ -98,6 +102,8 @@ export type ComposeAction =
 
 /** Every composer action, in the order Settings and the palette list them. */
 export const composeActions: readonly ComposeAction[] = [
+  'compose-send-archive',
+  'compose-send-remind',
   'compose-follow-up',
   'compose-insert-snippet',
   'compose-intro-bcc',
@@ -109,6 +115,9 @@ export const composeActions: readonly ComposeAction[] = [
 
 /** The composer actions that act on a focused recipient chip. */
 export const chipActions: readonly ComposeAction[] = ['compose-recipient-down', 'compose-recipient-up']
+
+/** The composer actions that send, which like send only answer inside a composer. */
+export const sendActions: readonly ComposeAction[] = ['compose-send-archive', 'compose-send-remind']
 
 /** isComposeAction reports whether an action belongs to a composer. */
 export function isComposeAction(action: string): action is ComposeAction {
@@ -207,6 +216,9 @@ export const shortcuts: Shortcut[] = [
   { action: 'go-mail', combo: 'mod+shift+m', labelKey: 'shortcut.goMail' },
   { action: 'go-calendar', combo: 'mod+shift+c', labelKey: 'shortcut.goCalendar' },
   { action: 'go-contacts', combo: 'mod+shift+a', labelKey: 'shortcut.goContacts' },
+  // the send key with one more modifier, so the variants sit beside it.
+  { action: 'compose-send-archive', combo: 'mod+shift+enter', labelKey: 'sendVariant.archive' },
+  { action: 'compose-send-remind', combo: 'mod+alt+enter', labelKey: 'sendVariant.remind' },
   { action: 'compose-follow-up', combo: 'mod+shift+f', labelKey: 'followUp.menu' },
   { action: 'compose-insert-snippet', combo: 'mod+shift+i', labelKey: 'snippets.insert' },
   { action: 'compose-intro-bcc', combo: 'mod+shift+b', labelKey: 'recipients.introBcc' },
