@@ -222,7 +222,7 @@ const (
 
 	defaultOutboxWindowWidth  = 820
 	defaultOutboxWindowHeight = 560
-	minOutboxWindowWidth      = 420
+	minOutboxWindowWidth      = 640
 	minOutboxWindowHeight     = 320
 )
 

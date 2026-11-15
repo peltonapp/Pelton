@@ -473,12 +473,34 @@ export interface OutboxRow {
   createdAt: string
   // editable is set when the message can be taken back into a composer.
   editable: boolean
+  // priority orders the queue: a higher one goes before older messages.
+  priority: number
 }
 
 /** A message taken back out of the outbox, or taken false when it could not be. */
 export interface OutboxEdit {
   taken: boolean
   request: ComposeRequest
+}
+
+/**
+ * How cancelling a send ended: back in Drafts, back as a request to open in a
+ * composer, kept as a failed send, too late, or no longer in the outbox.
+ */
+export interface OutboxCancel {
+  outcome: 'draft' | 'compose' | 'held' | 'tooLate' | 'gone'
+  request: ComposeRequest
+}
+
+/** One line of the send activity log. */
+export interface OutboxLogEntry {
+  seq: number
+  at: string
+  messageId: number
+  step: string
+  recipients: string[]
+  detail: string
+  retryAt: string
 }
 
 export interface UIPrefs {

@@ -43,6 +43,8 @@ import type {
   Draft,
   OutboxRow,
   OutboxEdit,
+  OutboxCancel,
+  OutboxLogEntry,
   UIPrefs,
   SearchSort,
   ViewKey,
@@ -940,6 +942,33 @@ export function sendOutboxNow(id: number): Promise<boolean> {
 // be taken back.
 export function editOutboxMessage(id: number): Promise<OutboxEdit> {
   return App.EditOutboxMessage(id) as unknown as Promise<OutboxEdit>
+}
+
+// cancelOutboxSend stops a message that is waiting or being transmitted and
+// says where it went: back to Drafts, back as a request for a composer, kept
+// as a failed send, or nowhere because it was too late.
+export function cancelOutboxSend(id: number): Promise<OutboxCancel> {
+  return App.CancelOutboxSend(id) as unknown as Promise<OutboxCancel>
+}
+
+// prioritiseOutboxSend moves a waiting message to the front of the queue.
+// Resolves false when it was no longer waiting.
+export function prioritiseOutboxSend(id: number): Promise<boolean> {
+  return App.PrioritiseOutboxSend(id)
+}
+
+// readOutboxLog returns the send activity of this run, oldest first.
+export function readOutboxLog(): Promise<OutboxLogEntry[]> {
+  if (isDemoActive()) {
+    return Promise.resolve([])
+  }
+  return App.ReadOutboxLog().then((list) => (list ?? []) as OutboxLogEntry[])
+}
+
+// openOutboxWindow shows the send activity in a window of its own, or brings
+// the one already open forward.
+export function openOutboxWindow(): Promise<void> {
+  return App.OpenOutboxWindow()
 }
 
 // trustSenderImages permanently allows remote content from a message's sender.
