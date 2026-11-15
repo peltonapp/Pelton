@@ -8,6 +8,8 @@
   import ThemeSkeleton from '../skeletons/ThemeSkeleton.svelte'
   import DensitySkeleton from '../skeletons/DensitySkeleton.svelte'
   import CornerSkeleton from '../skeletons/CornerSkeleton.svelte'
+  import MonoFontPreview from '../skeletons/MonoFontPreview.svelte'
+  import EmptyStatePreview from '../skeletons/EmptyStatePreview.svelte'
   import Select from '../../common/Select.svelte'
   import ToggleSwitch from '../../common/ToggleSwitch.svelte'
   import AccentPicker from '../../settings/AccentPicker.svelte'
@@ -222,6 +224,7 @@
     <Select value={$prefs.uiFont} ariaLabel={$t('settingsPanel.label.uiFont')} items={uiFontItems} on:change={(e) => setUIFont(e.detail)} />
   </Row>
   <Row id="mono-font" label={$t('settingsPanel.label.monoFont')} hint={$t('settingsPanel.hint.monoFont')}>
+    <MonoFontPreview slot="preview" />
     <Select
       value={$prefs.monoFont}
       ariaLabel={$t('settingsPanel.label.monoFont')}
@@ -260,6 +263,7 @@
     hint={$t('settingsPanel.hint.emptyStateFullscreen')}
     disabled={!$prefs.emptyStateImage}
   >
+    <EmptyStatePreview slot="preview" src={$prefs.emptyStateImage || peltonLogo} fullscreen={$prefs.emptyStateFullscreen} />
     <ToggleSwitch
       checked={$prefs.emptyStateFullscreen}
       disabled={!$prefs.emptyStateImage}

@@ -12,7 +12,9 @@
   /** Makes the segments inert. */
   export let disabled: boolean = false
 
-  const dispatch = createEventDispatcher<{ change: string }>()
+  // `hover` names the segment under the pointer, or null once it leaves, so a
+  // preview can show what that option would do before it is chosen.
+  const dispatch = createEventDispatcher<{ change: string; hover: string | null }>()
 
   $: index = Math.max(0, options.findIndex((o) => o.key === value))
 
@@ -59,6 +61,10 @@
       class:on={value === option.key}
       on:click={() => pick(option.key)}
       on:keydown={onKeydown}
+      on:pointerenter={() => dispatch('hover', option.key)}
+      on:pointerleave={() => dispatch('hover', null)}
+      on:focus={() => dispatch('hover', option.key)}
+      on:blur={() => dispatch('hover', null)}
     >
       {option.label}
     </button>
