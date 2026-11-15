@@ -184,6 +184,7 @@
   import './lib/palette-calendar'
   import './lib/palette-contacts'
   import './lib/palette-attachments'
+  import './lib/palette-sieve'
   import AttachmentsBrowser from './components/attachments/AttachmentsBrowser.svelte'
   import { attachmentsOpen, toggleAttachments } from './stores/attachments'
   import { setSenderPanel } from './stores/prefs'

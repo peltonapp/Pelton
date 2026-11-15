@@ -127,7 +127,12 @@ import type {
   AccountSyncState,
   Note,
   SplitTab,
+  SieveState,
+  SieveSave,
+  SieveVacation,
+  SieveRule,
 } from './types'
+import { normalizeState } from './sieve'
 
 // isDemoMode reports whether the app launched in the cosmetic --potatoes-are-nice
 // screenshot mode; the frontend reads it once to switch the data layer to samples.
@@ -2669,4 +2674,86 @@ export function setTaskSettings(settings: TaskSettings): Promise<void> {
 /** createEventDraftFromMessage prefills an event from a mail dropped on the calendar. */
 export function createEventDraftFromMessage(messageId: number): Promise<EventDraft> {
   return App.CreateEventDraftFromMessage(messageId) as unknown as Promise<EventDraft>
+}
+
+// demoSieve answers the sieve calls in demo mode, which never reaches a server.
+function demoSieve(accountId: number): SieveState {
+  return {
+    accountId,
+    status: 'unsupported',
+    detail: '',
+    host: '',
+    port: 0,
+    tls: '',
+    manual: false,
+    remembered: false,
+    caps: { implementation: '', extensions: [], vacation: false, dates: false, fileInto: false, flags: false, envelope: false, include: false },
+    exists: false,
+    active: false,
+    editable: true,
+    raw: '',
+    script: { vacation: null, rules: [], includes: [] },
+    otherActive: '',
+    hasPrevious: false,
+    addresses: [],
+  }
+}
+
+// sieveState connects to an account's sieve service (out of office and server
+// filters) and reports what is there.
+export function sieveState(accountId: number): Promise<SieveState> {
+  if (isDemoActive()) {
+    return Promise.resolve(demoSieve(accountId))
+  }
+  return sieveCall(App.SieveState(accountId))
+}
+
+function sieveCall(call: Promise<unknown>): Promise<SieveState> {
+  return call.then((s) => normalizeState(s as SieveState))
+}
+
+function sieveSaveCall(call: Promise<unknown>): Promise<SieveSave> {
+  return call.then((r) => {
+    const out = r as SieveSave
+    return { ...out, state: normalizeState(out.state) }
+  })
+}
+
+// recheckSieve looks for a sieve service again on a server remembered as having none.
+export function recheckSieve(accountId: number): Promise<SieveState> {
+  if (isDemoActive()) {
+    return Promise.resolve(demoSieve(accountId))
+  }
+  return sieveCall(App.RecheckSieve(accountId))
+}
+
+// setSieveConnection sets the sieve host, port and security by hand; '' and 0
+// go back to the defaults, tls is 'starttls' or 'ssl'.
+export function setSieveConnection(accountId: number, host: string, port: number, tls: string): Promise<SieveState> {
+  return sieveCall(App.SetSieveConnection(accountId, host, port, tls))
+}
+
+// saveSieveVacation writes the out of office to the server and activates it.
+export function saveSieveVacation(accountId: number, vacation: SieveVacation): Promise<SieveSave> {
+  return sieveSaveCall(App.SaveSieveVacation(accountId, vacation))
+}
+
+// saveSieveRules writes the server filters to the server and activates them.
+export function saveSieveRules(accountId: number, rules: SieveRule[]): Promise<SieveSave> {
+  return sieveSaveCall(App.SaveSieveRules(accountId, rules))
+}
+
+// checkSieveScript asks the server whether a script is valid, storing nothing.
+export function checkSieveScript(accountId: number, text: string): Promise<SieveSave> {
+  return sieveSaveCall(App.CheckSieveScript(accountId, text))
+}
+
+// saveSieveScript writes a script as text after the server checked it.
+export function saveSieveScript(accountId: number, text: string): Promise<SieveSave> {
+  return sieveSaveCall(App.SaveSieveScript(accountId, text))
+}
+
+// restoreSievePrevious undoes the last sieve save.
+export function restoreSievePrevious(accountId: number): Promise<SieveState> {
+  return sieveCall(App.RestoreSievePrevious(accountId))
 }

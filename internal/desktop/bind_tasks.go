@@ -867,16 +867,6 @@ func applyTaskRequest(t *ical.Todo, req TaskRequest) error {
 	return nil
 }
 
-func cleanList(list []string) []string {
-	var out []string
-	for _, s := range list {
-		if s = strings.TrimSpace(s); s != "" && !slices.Contains(out, s) {
-			out = append(out, s)
-		}
-	}
-	return out
-}
-
 // taskTime reads a due or start date: a date (2006-01-02), rfc3339 written in
 // tz (or UTC when tz is empty), or nothing.
 func taskTime(s, tz string) (ical.DateTime, error) {
