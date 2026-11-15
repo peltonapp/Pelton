@@ -270,6 +270,32 @@ type SearchRequestDTO struct {
 	// suits a given query stays in one place rather than being split across the
 	// two sides.
 	Sort string `json:"sort"`
+	// Note keeps messages whose private note, or whose conversation's note,
+	// contains this text, from a note: chip. HasNote keeps every message with
+	// a note, from has:note.
+	Note    string `json:"note"`
+	HasNote bool   `json:"hasNote"`
+}
+
+// notesWanted reports whether the request filters on private notes.
+func (r SearchRequestDTO) notesWanted() bool {
+	return r.HasNote || strings.TrimSpace(r.Note) != ""
+}
+
+// restrictToNotes narrows q to the messages the request's note filter
+// matches. Notes are not in the index, so the matching ids come from the
+// store and the index search runs among them.
+func (a *App) restrictToNotes(q *search.Query, r SearchRequestDTO) error {
+	if !r.notesWanted() {
+		return nil
+	}
+	ids, err := a.store.NoteMessageIDs(a.ctx, r.Note)
+	if err != nil {
+		return err
+	}
+	q.OnlyIDs = ids
+	q.RestrictIDs = true
+	return nil
 }
 
 // hasStoredFilter reports whether the request filters on a stored message field
@@ -316,7 +342,7 @@ func (r SearchRequestDTO) searchQuery(limit int) (search.Query, bool) {
 		q.Before = time.Unix(r.BeforeUnix, 0)
 	}
 	empty := q.Text == "" && q.From == "" && q.To == "" && q.Subject == "" &&
-		q.After.IsZero() && q.Before.IsZero() && !r.hasStoredFilter()
+		q.After.IsZero() && q.Before.IsZero() && !r.hasStoredFilter() && !r.notesWanted()
 	return q, !empty
 }
 
@@ -353,6 +379,9 @@ func (a *App) Search(req SearchRequestDTO) (SearchResultDTO, error) {
 	q, ok := req.searchQuery(req.Limit)
 	if !ok {
 		return empty, nil
+	}
+	if err := a.restrictToNotes(&q, req); err != nil {
+		return empty, err
 	}
 
 	res, err := a.index.Search(q)

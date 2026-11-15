@@ -165,6 +165,14 @@ const (
 	settingComposeOpenIn = "compose_open_in"
 	// group the message list into conversations in the new design.
 	settingThreadedList = "threaded_list"
+	// split the inbox into tabs in the new design. Off by default.
+	settingSplitInbox = "split_inbox"
+	// the split inbox tabs in order, comma separated: important, newsletters,
+	// notifications, or view:<id> for a saved view. The catch-all tab is always
+	// last and not listed.
+	settingSplitTabs = "split_inbox_tabs"
+	// the split inbox tab last shown.
+	settingSplitActive = "split_inbox_active"
 	// how wide the reading column runs in the new design: "narrow", "medium"
 	// or "full".
 	settingReaderWidth = "reader_width"
@@ -425,6 +433,11 @@ type UIPrefsDTO struct {
 	ComposeOpenIn string `json:"composeOpenIn"`
 	// ThreadedList shows the message list as conversations in the new design.
 	ThreadedList bool `json:"threadedList"`
+	// SplitInbox splits the inbox into tabs in the new design. SplitTabs is
+	// the tab order, SplitActive the tab last shown.
+	SplitInbox  bool   `json:"splitInbox"`
+	SplitTabs   string `json:"splitTabs"`
+	SplitActive string `json:"splitActive"`
 	// ReaderWidth caps the reading column in the new design: narrow, medium
 	// or full.
 	ReaderWidth string `json:"readerWidth"`
@@ -591,6 +604,9 @@ func (a *App) GetUIPrefs() (UIPrefsDTO, error) {
 		QuickFilterBar:             a.boolSetting(settingQuickFilterBar, false),
 		ComposeOpenIn:              a.stringSetting(settingComposeOpenIn, "window"),
 		ThreadedList:               a.boolSetting(settingThreadedList, true),
+		SplitInbox:                 a.boolSetting(settingSplitInbox, false),
+		SplitTabs:                  a.stringSetting(settingSplitTabs, defaultSplitTabs),
+		SplitActive:                a.stringSetting(settingSplitActive, ""),
 		ReaderWidth:                a.stringSetting(settingReaderWidth, "full"),
 		ThemeID:                    a.stringSetting(settingThemeID, ""),
 		MenuBarInApp:               a.boolSetting(settingMenuBarInApp, false),

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"net/mail"
+	"sort"
 	"strings"
 	"time"
 
@@ -43,14 +44,17 @@ type ThreadSummaryDTO struct {
 	Answered       bool              `json:"answered"`
 	Forwarded      bool              `json:"forwarded"`
 	MessageIDs     []int64           `json:"messageIds"`
+	// Pinned is true when any member is pinned.
+	Pinned bool `json:"pinned"`
 }
 
 // ThreadListDTO is a page of conversations plus the total for paging. HasOlder
-// means the same as on MessageListDTO.
+// and Pinned mean the same as on MessageListDTO.
 type ThreadListDTO struct {
 	Threads  []ThreadSummaryDTO `json:"threads"`
 	Total    int                `json:"total"`
 	HasOlder bool               `json:"hasOlder"`
+	Pinned   []ThreadSummaryDTO `json:"pinned"`
 }
 
 // ThreadMessageDTO is one message of an open conversation. FolderRole is the
@@ -89,6 +93,20 @@ func (a *App) ListThreads(req ListMessagesRequest) (ThreadListDTO, error) {
 	if err != nil {
 		return ThreadListDTO{}, err
 	}
+	pinned := []ThreadSummaryDTO{}
+	if req.Offset == 0 {
+		pq := q
+		pq.Pin = storage.PinOnly
+		pq.Limit = maxPinned
+		pages, err := a.store.QueryThreads(a.ctx, storage.ThreadQuery{Query: pq, MemberFolderIDs: members})
+		if err != nil {
+			return ThreadListDTO{}, err
+		}
+		if pinned, err = a.threadSummaries(a.ctx, pages); err != nil {
+			return ThreadListDTO{}, err
+		}
+	}
+	q.Pin = storage.PinExclude
 	q.Limit = req.Limit
 	q.Offset = req.Offset
 	tq := storage.ThreadQuery{Query: q, MemberFolderIDs: members}
@@ -109,7 +127,7 @@ func (a *App) ListThreads(req ListMessagesRequest) (ThreadListDTO, error) {
 	if err != nil {
 		return ThreadListDTO{}, err
 	}
-	return ThreadListDTO{Threads: threads, Total: total, HasOlder: hasOlder}, nil
+	return ThreadListDTO{Threads: threads, Total: total, HasOlder: hasOlder, Pinned: pinned}, nil
 }
 
 func (a *App) listSavedViewThreads(ctx context.Context, req ListMessagesRequest, members []int64) (ThreadListDTO, error) {
@@ -125,6 +143,8 @@ func (a *App) listSavedViewThreads(ctx context.Context, req ListMessagesRequest,
 	if err != nil {
 		return ThreadListDTO{}, err
 	}
+	// pinned conversations lead, each side keeping its order.
+	sort.SliceStable(pages, func(i, j int) bool { return pagePinned(pages[i]) && !pagePinned(pages[j]) })
 	total := len(pages)
 	offset := min(max(req.Offset, 0), total)
 	end := total
@@ -136,6 +156,19 @@ func (a *App) listSavedViewThreads(ctx context.Context, req ListMessagesRequest,
 		return ThreadListDTO{}, err
 	}
 	return ThreadListDTO{Threads: threads, Total: total}, nil
+}
+
+// pagePinned reports whether any message of a conversation is pinned.
+func pagePinned(p storage.ThreadPage) bool {
+	if p.Head.Pinned {
+		return true
+	}
+	for _, m := range p.Members {
+		if m.Pinned {
+			return true
+		}
+	}
+	return false
 }
 
 // threadMemberFolders is every folder whose mail belongs to a conversation:
@@ -195,6 +228,7 @@ func threadSummary(p storage.ThreadPage, head MessageSummaryDTO) ThreadSummaryDT
 		}
 		dto.Flagged = dto.Flagged || m.Flags.Has(storage.FlagFlagged)
 		dto.HasAttachments = dto.HasAttachments || m.HasAttachments
+		dto.Pinned = dto.Pinned || m.Pinned
 	}
 	for i := len(p.Members) - 1; i >= 0 && len(dto.Participants) < maxThreadParticipants; i-- {
 		name := senderName(p.Members[i].FromName, p.Members[i].FromAddress)

@@ -307,6 +307,8 @@ func (a *App) listSavedView(ctx context.Context, viewID int64, limit, offset int
 	if err != nil {
 		return MessageListDTO{}, err
 	}
+	// pinned mail leads, each side keeping its order.
+	sort.SliceStable(matches, func(i, j int) bool { return matches[i].Pinned && !matches[j].Pinned })
 
 	total := len(matches)
 	if offset > total {

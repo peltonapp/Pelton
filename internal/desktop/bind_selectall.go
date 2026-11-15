@@ -74,6 +74,9 @@ func (a *App) SearchMessageIDs(req SearchRequestDTO) (MessageIDsDTO, error) {
 	if !ok {
 		return MessageIDsDTO{IDs: []int64{}}, nil
 	}
+	if err := a.restrictToNotes(&q, req); err != nil {
+		return MessageIDsDTO{}, err
+	}
 
 	res, err := a.index.Search(q)
 	if err != nil {

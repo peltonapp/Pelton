@@ -28,6 +28,7 @@ type ThreadMember struct {
 	Date           time.Time
 	Flags          Flag
 	HasAttachments bool
+	Pinned         bool
 }
 
 // ThreadPage is one conversation in a listing. Head is the newest message of
@@ -219,7 +220,7 @@ func (d *DB) threadMembers(ctx context.Context, threadIDs, folderIDs []int64) (m
 	folderMarks, folderArgs := inClause(folderIDs)
 	args = append(args, folderArgs...)
 	rows, err := d.sql.QueryContext(ctx, `
-SELECT id, account_id, folder_id, thread_id, message_id, from_name, from_address, date, flags, has_attachments
+SELECT id, account_id, folder_id, thread_id, message_id, from_name, from_address, date, flags, has_attachments, pinned
 FROM messages
 WHERE thread_id IN (`+threadMarks+`) AND folder_id IN (`+folderMarks+`)
   AND pending_delete = 0 AND snooze_hidden = 0
@@ -235,9 +236,10 @@ ORDER BY date ASC, uid ASC, id ASC`, args...)
 			date     string
 			flags    uint8
 			hasAtt   int
+			pinned   int
 		)
 		if err := rows.Scan(&m.ID, &m.AccountID, &m.FolderID, &threadID, &m.MessageID,
-			&m.FromName, &m.FromAddress, &date, &flags, &hasAtt); err != nil {
+			&m.FromName, &m.FromAddress, &date, &flags, &hasAtt, &pinned); err != nil {
 			return nil, fmt.Errorf("storage: scan thread member: %w", err)
 		}
 		if m.Date, err = parseTime(date); err != nil {
@@ -245,6 +247,7 @@ ORDER BY date ASC, uid ASC, id ASC`, args...)
 		}
 		m.Flags = Flag(flags)
 		m.HasAttachments = hasAtt != 0
+		m.Pinned = pinned != 0
 		out[threadID] = append(out[threadID], m)
 	}
 	return out, rows.Err()
@@ -261,6 +264,7 @@ func memberOf(m Message) ThreadMember {
 		Date:           m.Date,
 		Flags:          m.Flags,
 		HasAttachments: m.HasAttachments,
+		Pinned:         m.Pinned,
 	}
 }
 
