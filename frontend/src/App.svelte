@@ -51,7 +51,7 @@
   import { selection, applyStartupSelection, searchQuery } from './stores/selection'
   import { loadList, messageList } from './stores/messages'
   import { initProgress } from './stores/progress'
-  import { composeSessions, openCompose, openComposeWith, initComposePrefs, openReply, openForward, requestComposeClose, setForcedComposeMode } from './stores/compose'
+  import { composeSessions, openCompose, openComposeWith, initComposePrefs, openReply, openForward, requestComposeClose, setForcedComposeMode, updateCompose } from './stores/compose'
   import { routeComposeSessions } from './stores/composeroute'
   import Composer2 from './components/compose/Composer2.svelte'
   import ComposeTabLayer from './components/compose/ComposeTabLayer.svelte'
@@ -191,6 +191,9 @@
   import { setSenderPanel } from './stores/prefs'
   import './lib/palette-tasks'
   import './lib/palette-availability'
+  import './lib/palette-projects'
+  import { startProjects, fileMailRequest } from './stores/projects'
+  import { pickProjectFor } from './lib/projectpicker'
   import { startTasks, toggleDone, tasks as taskStore, taskFromMailRequest } from './stores/tasks'
   import { createTasksFromMail, openTask } from './lib/taskmail'
   import { getTask } from './lib/api'
@@ -438,6 +441,22 @@
     void createTasksFromMail(ids)
   }
 
+  // files the open conversation, or the selected ones, under a project.
+  function addToProject(): void {
+    const items = selectedMessages.length > 1 ? selectedMessages : [currentMessage()].filter((m): m is MessageSummary => m !== null)
+    pickProjectFor(
+      items.map((m) => m.id),
+      items.length === 1 ? items[0].threadId : 0,
+    )
+  }
+
+  $: if ($fileMailRequest) {
+    fileMailRequest.set(false)
+    if (!classic) {
+      addToProject()
+    }
+  }
+
   $: if ($taskFromMailRequest) {
     taskFromMailRequest.set(false)
     if (!classic) {
@@ -455,6 +474,17 @@
     stopTasks = undefined
   }
   onDestroy(() => stopTasks?.())
+
+  // the projects feed the mail chips, the reader's suggestions and the
+  // composer's picker as well as their own space.
+  let stopProjects: (() => void) | undefined
+  $: if (!classic && !stopProjects) {
+    stopProjects = startProjects()
+  } else if (classic && stopProjects) {
+    stopProjects()
+    stopProjects = undefined
+  }
+  onDestroy(() => stopProjects?.())
 
   // the newsletter manager and the insights page in the palette, with their
   // live shortcut as the hint.
@@ -749,13 +779,16 @@
 
   // startComposeTo opens a new message addressed to one contact, which is what
   // clicking an address on the contacts screen does (#168).
-  function startComposeTo(email: string): void {
+  function startComposeTo(email: string, projectId = 0): void {
     const accountId = composeAccountId()
     if (accountId === null) {
       toastError(get(t)('app.toast.addMailboxFirst'))
       return
     }
-    openComposeWith(accountId, editorMode, { to: email, cc: '', bcc: '', subject: '', body: '' })
+    const id = openComposeWith(accountId, editorMode, { to: email, cc: '', bcc: '', subject: '', body: '' })
+    if (projectId) {
+      updateCompose(id, { projectId })
+    }
   }
 
   // openPendingICS takes the .ics files the system asked Pelton to open and
@@ -1162,6 +1195,16 @@
       case 'create-task':
         if (!classic) {
           createTaskFromMail()
+        }
+        break
+      case 'go-projects':
+        if (!classic) {
+          goToSpace('projects')
+        }
+        break
+      case 'add-to-project':
+        if (!classic) {
+          addToProject()
         }
         break
       case 'toggle-my-day':
@@ -2057,6 +2100,15 @@
       <div class="space-host">
         {#await import('./components/tasks/TasksScreen.svelte') then m}
           <svelte:component this={m.default} />
+        {/await}
+      </div>
+    {:else if $space === 'projects'}
+      <div class="space-host">
+        {#await import('./components/projects/ProjectsScreen.svelte') then m}
+          <svelte:component
+            this={m.default}
+            on:compose={(e) => { openSpace('mail'); startComposeTo(e.detail.email, e.detail.projectId) }}
+          />
         {/await}
       </div>
     {/if}

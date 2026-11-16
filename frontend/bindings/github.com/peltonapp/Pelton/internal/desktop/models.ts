@@ -1886,6 +1886,12 @@ export class ComposeRequest {
      */
     "followUpAt": string;
 
+    /**
+     * ProjectID files the message under a project once it is queued, with
+     * the replies it gets. 0 files it nowhere.
+     */
+    "projectId": number;
+
     /** Creates a new ComposeRequest instance. */
     constructor($$source: Partial<ComposeRequest> = {}) {
         if (!("accountId" in $$source)) {
@@ -1932,6 +1938,9 @@ export class ComposeRequest {
         }
         if (!("followUpAt" in $$source)) {
             this["followUpAt"] = "";
+        }
+        if (!("projectId" in $$source)) {
+            this["projectId"] = 0;
         }
 
         Object.assign(this, $$source);
@@ -6158,6 +6167,682 @@ export class ProfileRequest {
 }
 
 /**
+ * ProjectBoardDTO is a project's board: its columns in order and its cards,
+ * by column and position.
+ */
+export class ProjectBoardDTO {
+    "project": ProjectDTO;
+    "columns": ProjectColumnDTO[];
+    "cards": ProjectCardDTO[];
+
+    /** Creates a new ProjectBoardDTO instance. */
+    constructor($$source: Partial<ProjectBoardDTO> = {}) {
+        if (!("project" in $$source)) {
+            this["project"] = (new ProjectDTO());
+        }
+        if (!("columns" in $$source)) {
+            this["columns"] = [];
+        }
+        if (!("cards" in $$source)) {
+            this["cards"] = [];
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new ProjectBoardDTO instance from a string or object.
+     */
+    static createFrom($$source: any = {}): ProjectBoardDTO {
+        const $$createField0_0 = $$createType64;
+        const $$createField1_0 = $$createType66;
+        const $$createField2_0 = $$createType68;
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        if ("project" in $$parsedSource) {
+            $$parsedSource["project"] = $$createField0_0($$parsedSource["project"]);
+        }
+        if ("columns" in $$parsedSource) {
+            $$parsedSource["columns"] = $$createField1_0($$parsedSource["columns"]);
+        }
+        if ("cards" in $$parsedSource) {
+            $$parsedSource["cards"] = $$createField2_0($$parsedSource["cards"]);
+        }
+        return new ProjectBoardDTO($$parsedSource as Partial<ProjectBoardDTO>);
+    }
+}
+
+/**
+ * ProjectCardDTO is a card: its task, where it sits, and how much is attached
+ * to it. Mail, Events and Notes count the card's own links plus the mail and
+ * events the task links to itself. SourceKind and SourceRef are empty for a
+ * card made in Pelton; they name the outside item a mirrored card stands for.
+ */
+export class ProjectCardDTO {
+    "task": TaskDTO;
+    "projectId": number;
+    "columnId": number;
+    "position": number;
+    "mail": number;
+    "events": number;
+    "notes": number;
+    "sourceKind": string;
+    "sourceRef": string;
+
+    /** Creates a new ProjectCardDTO instance. */
+    constructor($$source: Partial<ProjectCardDTO> = {}) {
+        if (!("task" in $$source)) {
+            this["task"] = (new TaskDTO());
+        }
+        if (!("projectId" in $$source)) {
+            this["projectId"] = 0;
+        }
+        if (!("columnId" in $$source)) {
+            this["columnId"] = 0;
+        }
+        if (!("position" in $$source)) {
+            this["position"] = 0;
+        }
+        if (!("mail" in $$source)) {
+            this["mail"] = 0;
+        }
+        if (!("events" in $$source)) {
+            this["events"] = 0;
+        }
+        if (!("notes" in $$source)) {
+            this["notes"] = 0;
+        }
+        if (!("sourceKind" in $$source)) {
+            this["sourceKind"] = "";
+        }
+        if (!("sourceRef" in $$source)) {
+            this["sourceRef"] = "";
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new ProjectCardDTO instance from a string or object.
+     */
+    static createFrom($$source: any = {}): ProjectCardDTO {
+        const $$createField0_0 = $$createType69;
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        if ("task" in $$parsedSource) {
+            $$parsedSource["task"] = $$createField0_0($$parsedSource["task"]);
+        }
+        return new ProjectCardDTO($$parsedSource as Partial<ProjectCardDTO>);
+    }
+}
+
+/**
+ * ProjectCardRequest makes a new task and puts it on a board. Index is where
+ * in the column, -1 for the end. A card made in the done column is made
+ * completed.
+ */
+export class ProjectCardRequest {
+    "projectId": number;
+    "columnId": number;
+    "title": string;
+    "notes": string;
+    "due": string;
+    "timeZone": string;
+    "priority": number;
+    "index": number;
+
+    /** Creates a new ProjectCardRequest instance. */
+    constructor($$source: Partial<ProjectCardRequest> = {}) {
+        if (!("projectId" in $$source)) {
+            this["projectId"] = 0;
+        }
+        if (!("columnId" in $$source)) {
+            this["columnId"] = 0;
+        }
+        if (!("title" in $$source)) {
+            this["title"] = "";
+        }
+        if (!("notes" in $$source)) {
+            this["notes"] = "";
+        }
+        if (!("due" in $$source)) {
+            this["due"] = "";
+        }
+        if (!("timeZone" in $$source)) {
+            this["timeZone"] = "";
+        }
+        if (!("priority" in $$source)) {
+            this["priority"] = 0;
+        }
+        if (!("index" in $$source)) {
+            this["index"] = 0;
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new ProjectCardRequest instance from a string or object.
+     */
+    static createFrom($$source: any = {}): ProjectCardRequest {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new ProjectCardRequest($$parsedSource as Partial<ProjectCardRequest>);
+    }
+}
+
+/**
+ * ProjectColumnDTO is one column of a board.
+ */
+export class ProjectColumnDTO {
+    "id": number;
+    "projectId": number;
+    "name": string;
+    "position": number;
+    "wipLimit": number;
+    "done": boolean;
+
+    /** Creates a new ProjectColumnDTO instance. */
+    constructor($$source: Partial<ProjectColumnDTO> = {}) {
+        if (!("id" in $$source)) {
+            this["id"] = 0;
+        }
+        if (!("projectId" in $$source)) {
+            this["projectId"] = 0;
+        }
+        if (!("name" in $$source)) {
+            this["name"] = "";
+        }
+        if (!("position" in $$source)) {
+            this["position"] = 0;
+        }
+        if (!("wipLimit" in $$source)) {
+            this["wipLimit"] = 0;
+        }
+        if (!("done" in $$source)) {
+            this["done"] = false;
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new ProjectColumnDTO instance from a string or object.
+     */
+    static createFrom($$source: any = {}): ProjectColumnDTO {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new ProjectColumnDTO($$parsedSource as Partial<ProjectColumnDTO>);
+    }
+}
+
+/**
+ * ProjectColumnRequest is a column to make with a new project.
+ */
+export class ProjectColumnRequest {
+    "name": string;
+    "wipLimit": number;
+    "done": boolean;
+
+    /** Creates a new ProjectColumnRequest instance. */
+    constructor($$source: Partial<ProjectColumnRequest> = {}) {
+        if (!("name" in $$source)) {
+            this["name"] = "";
+        }
+        if (!("wipLimit" in $$source)) {
+            this["wipLimit"] = 0;
+        }
+        if (!("done" in $$source)) {
+            this["done"] = false;
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new ProjectColumnRequest instance from a string or object.
+     */
+    static createFrom($$source: any = {}): ProjectColumnRequest {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new ProjectColumnRequest($$parsedSource as Partial<ProjectColumnRequest>);
+    }
+}
+
+/**
+ * ProjectDTO is one project with the counts its tile shows. Cards counts the
+ * cards whose task still exists and Done those completed; NextDue is the
+ * earliest due date of an open card, a date or rfc3339, empty for none, and
+ * Overdue how many open cards are past theirs. Mail counts conversations.
+ */
+export class ProjectDTO {
+    "id": number;
+    "name": string;
+    "color": string;
+    "icon": string;
+    "description": string;
+    "status": string;
+    "startDate": string;
+    "dueDate": string;
+    "position": number;
+    "listId": number;
+    "createdAt": string;
+    "updatedAt": string;
+    "archivedAt": string;
+    "cards": number;
+    "done": number;
+    "overdue": number;
+    "nextDue": string;
+    "mail": number;
+    "events": number;
+    "notes": number;
+    "people": ProjectPersonDTO[];
+
+    /** Creates a new ProjectDTO instance. */
+    constructor($$source: Partial<ProjectDTO> = {}) {
+        if (!("id" in $$source)) {
+            this["id"] = 0;
+        }
+        if (!("name" in $$source)) {
+            this["name"] = "";
+        }
+        if (!("color" in $$source)) {
+            this["color"] = "";
+        }
+        if (!("icon" in $$source)) {
+            this["icon"] = "";
+        }
+        if (!("description" in $$source)) {
+            this["description"] = "";
+        }
+        if (!("status" in $$source)) {
+            this["status"] = "";
+        }
+        if (!("startDate" in $$source)) {
+            this["startDate"] = "";
+        }
+        if (!("dueDate" in $$source)) {
+            this["dueDate"] = "";
+        }
+        if (!("position" in $$source)) {
+            this["position"] = 0;
+        }
+        if (!("listId" in $$source)) {
+            this["listId"] = 0;
+        }
+        if (!("createdAt" in $$source)) {
+            this["createdAt"] = "";
+        }
+        if (!("updatedAt" in $$source)) {
+            this["updatedAt"] = "";
+        }
+        if (!("archivedAt" in $$source)) {
+            this["archivedAt"] = "";
+        }
+        if (!("cards" in $$source)) {
+            this["cards"] = 0;
+        }
+        if (!("done" in $$source)) {
+            this["done"] = 0;
+        }
+        if (!("overdue" in $$source)) {
+            this["overdue"] = 0;
+        }
+        if (!("nextDue" in $$source)) {
+            this["nextDue"] = "";
+        }
+        if (!("mail" in $$source)) {
+            this["mail"] = 0;
+        }
+        if (!("events" in $$source)) {
+            this["events"] = 0;
+        }
+        if (!("notes" in $$source)) {
+            this["notes"] = 0;
+        }
+        if (!("people" in $$source)) {
+            this["people"] = [];
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new ProjectDTO instance from a string or object.
+     */
+    static createFrom($$source: any = {}): ProjectDTO {
+        const $$createField20_0 = $$createType71;
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        if ("people" in $$parsedSource) {
+            $$parsedSource["people"] = $$createField20_0($$parsedSource["people"]);
+        }
+        return new ProjectDTO($$parsedSource as Partial<ProjectDTO>);
+    }
+}
+
+/**
+ * ProjectEventDTO is an event linked to a project, at its next occurrence
+ * from now, or its last one when it has none to come. Found is false when no
+ * calendar has it any more; Label then names what it was.
+ */
+export class ProjectEventDTO {
+    "uid": string;
+    "taskUid": string;
+    "label": string;
+    "found": boolean;
+    "eventId": number;
+    "calendarColor": string;
+    "summary": string;
+    "start": string;
+    "end": string;
+    "allDay": boolean;
+    "recurring": boolean;
+    "recurrenceId": string;
+    "past": boolean;
+
+    /** Creates a new ProjectEventDTO instance. */
+    constructor($$source: Partial<ProjectEventDTO> = {}) {
+        if (!("uid" in $$source)) {
+            this["uid"] = "";
+        }
+        if (!("taskUid" in $$source)) {
+            this["taskUid"] = "";
+        }
+        if (!("label" in $$source)) {
+            this["label"] = "";
+        }
+        if (!("found" in $$source)) {
+            this["found"] = false;
+        }
+        if (!("eventId" in $$source)) {
+            this["eventId"] = 0;
+        }
+        if (!("calendarColor" in $$source)) {
+            this["calendarColor"] = "";
+        }
+        if (!("summary" in $$source)) {
+            this["summary"] = "";
+        }
+        if (!("start" in $$source)) {
+            this["start"] = "";
+        }
+        if (!("end" in $$source)) {
+            this["end"] = "";
+        }
+        if (!("allDay" in $$source)) {
+            this["allDay"] = false;
+        }
+        if (!("recurring" in $$source)) {
+            this["recurring"] = false;
+        }
+        if (!("recurrenceId" in $$source)) {
+            this["recurrenceId"] = "";
+        }
+        if (!("past" in $$source)) {
+            this["past"] = false;
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new ProjectEventDTO instance from a string or object.
+     */
+    static createFrom($$source: any = {}): ProjectEventDTO {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new ProjectEventDTO($$parsedSource as Partial<ProjectEventDTO>);
+    }
+}
+
+/**
+ * ProjectLinkDTO is something a project or a card points at. TaskUID is empty
+ * for the project's own links.
+ */
+export class ProjectLinkDTO {
+    "id": number;
+    "projectId": number;
+    "taskUid": string;
+    "kind": string;
+    "accountId": number;
+    "threadId": number;
+    "ref": string;
+    "label": string;
+    "createdAt": string;
+
+    /** Creates a new ProjectLinkDTO instance. */
+    constructor($$source: Partial<ProjectLinkDTO> = {}) {
+        if (!("id" in $$source)) {
+            this["id"] = 0;
+        }
+        if (!("projectId" in $$source)) {
+            this["projectId"] = 0;
+        }
+        if (!("taskUid" in $$source)) {
+            this["taskUid"] = "";
+        }
+        if (!("kind" in $$source)) {
+            this["kind"] = "";
+        }
+        if (!("accountId" in $$source)) {
+            this["accountId"] = 0;
+        }
+        if (!("threadId" in $$source)) {
+            this["threadId"] = 0;
+        }
+        if (!("ref" in $$source)) {
+            this["ref"] = "";
+        }
+        if (!("label" in $$source)) {
+            this["label"] = "";
+        }
+        if (!("createdAt" in $$source)) {
+            this["createdAt"] = "";
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new ProjectLinkDTO instance from a string or object.
+     */
+    static createFrom($$source: any = {}): ProjectLinkDTO {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new ProjectLinkDTO($$parsedSource as Partial<ProjectLinkDTO>);
+    }
+}
+
+/**
+ * ProjectMailMarkDTO says a conversation belongs to a project.
+ */
+export class ProjectMailMarkDTO {
+    "threadId": number;
+    "projectId": number;
+
+    /** Creates a new ProjectMailMarkDTO instance. */
+    constructor($$source: Partial<ProjectMailMarkDTO> = {}) {
+        if (!("threadId" in $$source)) {
+            this["threadId"] = 0;
+        }
+        if (!("projectId" in $$source)) {
+            this["projectId"] = 0;
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new ProjectMailMarkDTO instance from a string or object.
+     */
+    static createFrom($$source: any = {}): ProjectMailMarkDTO {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new ProjectMailMarkDTO($$parsedSource as Partial<ProjectMailMarkDTO>);
+    }
+}
+
+/**
+ * ProjectMoveResultDTO is a card after a move. Advanced is true when the move
+ * to the done column completed a repeating task, which moved on to its next
+ * occurrence and so stayed where it was.
+ */
+export class ProjectMoveResultDTO {
+    "card": ProjectCardDTO;
+    "advanced": boolean;
+
+    /** Creates a new ProjectMoveResultDTO instance. */
+    constructor($$source: Partial<ProjectMoveResultDTO> = {}) {
+        if (!("card" in $$source)) {
+            this["card"] = (new ProjectCardDTO());
+        }
+        if (!("advanced" in $$source)) {
+            this["advanced"] = false;
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new ProjectMoveResultDTO instance from a string or object.
+     */
+    static createFrom($$source: any = {}): ProjectMoveResultDTO {
+        const $$createField0_0 = $$createType67;
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        if ("card" in $$parsedSource) {
+            $$parsedSource["card"] = $$createField0_0($$parsedSource["card"]);
+        }
+        return new ProjectMoveResultDTO($$parsedSource as Partial<ProjectMoveResultDTO>);
+    }
+}
+
+/**
+ * ProjectNoteDTO is a note kept with a project, its body Markdown.
+ */
+export class ProjectNoteDTO {
+    "id": number;
+    "projectId": number;
+    "title": string;
+    "body": string;
+    "createdAt": string;
+    "updatedAt": string;
+
+    /** Creates a new ProjectNoteDTO instance. */
+    constructor($$source: Partial<ProjectNoteDTO> = {}) {
+        if (!("id" in $$source)) {
+            this["id"] = 0;
+        }
+        if (!("projectId" in $$source)) {
+            this["projectId"] = 0;
+        }
+        if (!("title" in $$source)) {
+            this["title"] = "";
+        }
+        if (!("body" in $$source)) {
+            this["body"] = "";
+        }
+        if (!("createdAt" in $$source)) {
+            this["createdAt"] = "";
+        }
+        if (!("updatedAt" in $$source)) {
+            this["updatedAt"] = "";
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new ProjectNoteDTO instance from a string or object.
+     */
+    static createFrom($$source: any = {}): ProjectNoteDTO {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new ProjectNoteDTO($$parsedSource as Partial<ProjectNoteDTO>);
+    }
+}
+
+/**
+ * ProjectPersonDTO is someone a project is with: a contact or an address.
+ */
+export class ProjectPersonDTO {
+    "email": string;
+    "name": string;
+
+    /** Creates a new ProjectPersonDTO instance. */
+    constructor($$source: Partial<ProjectPersonDTO> = {}) {
+        if (!("email" in $$source)) {
+            this["email"] = "";
+        }
+        if (!("name" in $$source)) {
+            this["name"] = "";
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new ProjectPersonDTO instance from a string or object.
+     */
+    static createFrom($$source: any = {}): ProjectPersonDTO {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new ProjectPersonDTO($$parsedSource as Partial<ProjectPersonDTO>);
+    }
+}
+
+/**
+ * ProjectRequest is the project editor's project. An ID of 0 creates one,
+ * with Columns as its board; an update leaves the board alone. ListID is the
+ * task list new cards go to, 0 for the default.
+ */
+export class ProjectRequest {
+    "id": number;
+    "name": string;
+    "color": string;
+    "icon": string;
+    "description": string;
+    "startDate": string;
+    "dueDate": string;
+    "listId": number;
+    "columns": ProjectColumnRequest[];
+
+    /** Creates a new ProjectRequest instance. */
+    constructor($$source: Partial<ProjectRequest> = {}) {
+        if (!("id" in $$source)) {
+            this["id"] = 0;
+        }
+        if (!("name" in $$source)) {
+            this["name"] = "";
+        }
+        if (!("color" in $$source)) {
+            this["color"] = "";
+        }
+        if (!("icon" in $$source)) {
+            this["icon"] = "";
+        }
+        if (!("description" in $$source)) {
+            this["description"] = "";
+        }
+        if (!("startDate" in $$source)) {
+            this["startDate"] = "";
+        }
+        if (!("dueDate" in $$source)) {
+            this["dueDate"] = "";
+        }
+        if (!("listId" in $$source)) {
+            this["listId"] = 0;
+        }
+        if (!("columns" in $$source)) {
+            this["columns"] = [];
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new ProjectRequest instance from a string or object.
+     */
+    static createFrom($$source: any = {}): ProjectRequest {
+        const $$createField8_0 = $$createType73;
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        if ("columns" in $$parsedSource) {
+            $$parsedSource["columns"] = $$createField8_0($$parsedSource["columns"]);
+        }
+        return new ProjectRequest($$parsedSource as Partial<ProjectRequest>);
+    }
+}
+
+/**
  * ProtectionStatusDTO is what the compose window needs to offer the controls
  * honestly: whether this account can sign at all, whether every recipient can
  * be encrypted to, and which ones cannot.
@@ -6226,7 +6911,7 @@ export class ProtectionStatusDTO {
      * Creates a new ProtectionStatusDTO instance from a string or object.
      */
     static createFrom($$source: any = {}): ProtectionStatusDTO {
-        const $$createField3_0 = $$createType65;
+        const $$createField3_0 = $$createType75;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("recipients" in $$parsedSource) {
             $$parsedSource["recipients"] = $$createField3_0($$parsedSource["recipients"]);
@@ -6580,7 +7265,7 @@ export class SaveThemeRequest {
      * Creates a new SaveThemeRequest instance from a string or object.
      */
     static createFrom($$source: any = {}): SaveThemeRequest {
-        const $$createField5_0 = $$createType66;
+        const $$createField5_0 = $$createType76;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("tokens" in $$parsedSource) {
             $$parsedSource["tokens"] = $$createField5_0($$parsedSource["tokens"]);
@@ -6936,7 +7621,7 @@ export class SieveSaveDTO {
      * Creates a new SieveSaveDTO instance from a string or object.
      */
     static createFrom($$source: any = {}): SieveSaveDTO {
-        const $$createField0_0 = $$createType67;
+        const $$createField0_0 = $$createType77;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("state" in $$parsedSource) {
             $$parsedSource["state"] = $$createField0_0($$parsedSource["state"]);
@@ -7060,8 +7745,8 @@ export class SieveStateDTO {
      * Creates a new SieveStateDTO instance from a string or object.
      */
     static createFrom($$source: any = {}): SieveStateDTO {
-        const $$createField8_0 = $$createType68;
-        const $$createField13_0 = $$createType69;
+        const $$createField8_0 = $$createType78;
+        const $$createField13_0 = $$createType79;
         const $$createField16_0 = $$createType0;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("caps" in $$parsedSource) {
@@ -7396,7 +8081,7 @@ export class TaskDTO {
         const $$createField17_0 = $$createType25;
         const $$createField19_0 = $$createType0;
         const $$createField20_0 = $$createType0;
-        const $$createField21_0 = $$createType71;
+        const $$createField21_0 = $$createType81;
         const $$createField22_0 = $$createType0;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("reminders" in $$parsedSource) {
@@ -7442,7 +8127,7 @@ export class TaskDeleteResultDTO {
      * Creates a new TaskDeleteResultDTO instance from a string or object.
      */
     static createFrom($$source: any = {}): TaskDeleteResultDTO {
-        const $$createField0_0 = $$createType73;
+        const $$createField0_0 = $$createType83;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("removed" in $$parsedSource) {
             $$parsedSource["removed"] = $$createField0_0($$parsedSource["removed"]);
@@ -7661,7 +8346,7 @@ export class TaskRequest {
         const $$createField13_0 = $$createType25;
         const $$createField15_0 = $$createType0;
         const $$createField16_0 = $$createType0;
-        const $$createField17_0 = $$createType71;
+        const $$createField17_0 = $$createType81;
         const $$createField18_0 = $$createType0;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("reminders" in $$parsedSource) {
@@ -7723,8 +8408,8 @@ export class TaskSaveResultDTO {
      * Creates a new TaskSaveResultDTO instance from a string or object.
      */
     static createFrom($$source: any = {}): TaskSaveResultDTO {
-        const $$createField0_0 = $$createType74;
-        const $$createField3_0 = $$createType74;
+        const $$createField0_0 = $$createType69;
+        const $$createField3_0 = $$createType69;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("task" in $$parsedSource) {
             $$parsedSource["task"] = $$createField0_0($$parsedSource["task"]);
@@ -7945,8 +8630,8 @@ export class ThemeApplyDTO {
      * Creates a new ThemeApplyDTO instance from a string or object.
      */
     static createFrom($$source: any = {}): ThemeApplyDTO {
-        const $$createField2_0 = $$createType66;
-        const $$createField4_0 = $$createType66;
+        const $$createField2_0 = $$createType76;
+        const $$createField4_0 = $$createType76;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("tokens" in $$parsedSource) {
             $$parsedSource["tokens"] = $$createField2_0($$parsedSource["tokens"]);
@@ -8003,7 +8688,7 @@ export class ThemeDraftDTO {
      * Creates a new ThemeDraftDTO instance from a string or object.
      */
     static createFrom($$source: any = {}): ThemeDraftDTO {
-        const $$createField5_0 = $$createType66;
+        const $$createField5_0 = $$createType76;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("tokens" in $$parsedSource) {
             $$parsedSource["tokens"] = $$createField5_0($$parsedSource["tokens"]);
@@ -8075,8 +8760,8 @@ export class ThemeImportPreviewDTO {
      * Creates a new ThemeImportPreviewDTO instance from a string or object.
      */
     static createFrom($$source: any = {}): ThemeImportPreviewDTO {
-        const $$createField2_0 = $$createType75;
-        const $$createField3_0 = $$createType77;
+        const $$createField2_0 = $$createType84;
+        const $$createField3_0 = $$createType86;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("info" in $$parsedSource) {
             $$parsedSource["info"] = $$createField2_0($$parsedSource["info"]);
@@ -8202,7 +8887,7 @@ export class ThreadDTO {
      * Creates a new ThreadDTO instance from a string or object.
      */
     static createFrom($$source: any = {}): ThreadDTO {
-        const $$createField1_0 = $$createType79;
+        const $$createField1_0 = $$createType88;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("messages" in $$parsedSource) {
             $$parsedSource["messages"] = $$createField1_0($$parsedSource["messages"]);
@@ -8243,8 +8928,8 @@ export class ThreadListDTO {
      * Creates a new ThreadListDTO instance from a string or object.
      */
     static createFrom($$source: any = {}): ThreadListDTO {
-        const $$createField0_0 = $$createType81;
-        const $$createField3_0 = $$createType81;
+        const $$createField0_0 = $$createType90;
+        const $$createField3_0 = $$createType90;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("threads" in $$parsedSource) {
             $$parsedSource["threads"] = $$createField0_0($$parsedSource["threads"]);
@@ -8642,8 +9327,8 @@ export class ThunderbirdProfileDTO {
      * Creates a new ThunderbirdProfileDTO instance from a string or object.
      */
     static createFrom($$source: any = {}): ThunderbirdProfileDTO {
-        const $$createField2_0 = $$createType83;
-        const $$createField3_0 = $$createType85;
+        const $$createField2_0 = $$createType92;
+        const $$createField3_0 = $$createType94;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("accounts" in $$parsedSource) {
             $$parsedSource["accounts"] = $$createField2_0($$parsedSource["accounts"]);
@@ -9147,6 +9832,17 @@ export class UIPrefsDTO {
     "myDayPanel": boolean;
 
     /**
+     * ProjectsView is how the Projects space lists projects: grid or list.
+     */
+    "projectsView": string;
+
+    /**
+     * ProjectSuggestions offers, in the reader, to file mail from a project's
+     * people under that project.
+     */
+    "projectSuggestions": boolean;
+
+    /**
      * ThemeID selects an installed custom theme (see bind_themes.go). Empty
      * means the built-in default themes driven by the Theme setting.
      */
@@ -9570,6 +10266,12 @@ export class UIPrefsDTO {
         }
         if (!("myDayPanel" in $$source)) {
             this["myDayPanel"] = false;
+        }
+        if (!("projectsView" in $$source)) {
+            this["projectsView"] = "";
+        }
+        if (!("projectSuggestions" in $$source)) {
+            this["projectSuggestions"] = false;
         }
         if (!("themeId" in $$source)) {
             this["themeId"] = "";
@@ -10063,7 +10765,7 @@ export class UserLocaleApplyDTO {
      * Creates a new UserLocaleApplyDTO instance from a string or object.
      */
     static createFrom($$source: any = {}): UserLocaleApplyDTO {
-        const $$createField3_0 = $$createType66;
+        const $$createField3_0 = $$createType76;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("strings" in $$parsedSource) {
             $$parsedSource["strings"] = $$createField3_0($$parsedSource["strings"]);
@@ -10372,25 +11074,34 @@ const $$createType60 = $Create.Array($$createType59);
 const $$createType61 = MailtoDraft.createFrom;
 const $$createType62 = PhishingSignalDTO.createFrom;
 const $$createType63 = $Create.Array($$createType62);
-const $$createType64 = RecipientKeyDTO.createFrom;
-const $$createType65 = $Create.Array($$createType64);
-const $$createType66 = $Create.Map($Create.Any, $Create.Any);
-const $$createType67 = SieveStateDTO.createFrom;
-const $$createType68 = SieveCapsDTO.createFrom;
-const $$createType69 = sieve$0.Script.createFrom;
-const $$createType70 = TaskContactDTO.createFrom;
+const $$createType64 = ProjectDTO.createFrom;
+const $$createType65 = ProjectColumnDTO.createFrom;
+const $$createType66 = $Create.Array($$createType65);
+const $$createType67 = ProjectCardDTO.createFrom;
+const $$createType68 = $Create.Array($$createType67);
+const $$createType69 = TaskDTO.createFrom;
+const $$createType70 = ProjectPersonDTO.createFrom;
 const $$createType71 = $Create.Array($$createType70);
-const $$createType72 = RemovedTaskDTO.createFrom;
+const $$createType72 = ProjectColumnRequest.createFrom;
 const $$createType73 = $Create.Array($$createType72);
-const $$createType74 = TaskDTO.createFrom;
-const $$createType75 = ThemeInfoDTO.createFrom;
-const $$createType76 = themepack$0.CSSFile.createFrom;
-const $$createType77 = $Create.Array($$createType76);
-const $$createType78 = ThreadMessageDTO.createFrom;
-const $$createType79 = $Create.Array($$createType78);
-const $$createType80 = ThreadSummaryDTO.createFrom;
+const $$createType74 = RecipientKeyDTO.createFrom;
+const $$createType75 = $Create.Array($$createType74);
+const $$createType76 = $Create.Map($Create.Any, $Create.Any);
+const $$createType77 = SieveStateDTO.createFrom;
+const $$createType78 = SieveCapsDTO.createFrom;
+const $$createType79 = sieve$0.Script.createFrom;
+const $$createType80 = TaskContactDTO.createFrom;
 const $$createType81 = $Create.Array($$createType80);
-const $$createType82 = ThunderbirdAccountDTO.createFrom;
+const $$createType82 = RemovedTaskDTO.createFrom;
 const $$createType83 = $Create.Array($$createType82);
-const $$createType84 = ThunderbirdFolderDTO.createFrom;
-const $$createType85 = $Create.Array($$createType84);
+const $$createType84 = ThemeInfoDTO.createFrom;
+const $$createType85 = themepack$0.CSSFile.createFrom;
+const $$createType86 = $Create.Array($$createType85);
+const $$createType87 = ThreadMessageDTO.createFrom;
+const $$createType88 = $Create.Array($$createType87);
+const $$createType89 = ThreadSummaryDTO.createFrom;
+const $$createType90 = $Create.Array($$createType89);
+const $$createType91 = ThunderbirdAccountDTO.createFrom;
+const $$createType92 = $Create.Array($$createType91);
+const $$createType93 = ThunderbirdFolderDTO.createFrom;
+const $$createType94 = $Create.Array($$createType93);

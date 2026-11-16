@@ -161,6 +161,14 @@
   --task-check: 16px;
   --task-indent: 22px;
   --task-detail-width: 340px;
+  /* projects: a board column (fixed, the board scrolls sideways rather than
+     squeezing it), the tiles of the project list, the card panel beside the
+     board, the notes list and how far a card being dragged leans. */
+  --project-column-width: 280px;
+  --project-tile-width: 264px;
+  --project-detail-width: 380px;
+  --project-notes-width: 260px;
+  --project-drag-tilt: -2.5deg;
   /* the shortcut coach: the sheet's width, columns and filter field, and how
      far the hint sits off the bottom edge. the focus menu's width. */
   --coach-sheet-width: 720px;

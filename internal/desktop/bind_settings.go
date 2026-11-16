@@ -203,6 +203,11 @@ const (
 	settingMailDates = "mail_dates"
 	// show the My Day panel beside the mail surface in the new design.
 	settingMyDayPanel = "my_day_panel"
+	// how the Projects space lists projects: "grid" or "list".
+	settingProjectsView = "projects_view"
+	// offer to file mail from a project's people under the project, in the
+	// reader. On by default.
+	settingProjectSuggestions = "project_suggestions"
 	// general new-mail OS notifications (#126). VIP senders are stored
 	// separately in bind_vip.go and notify even when this is off.
 	settingNotifyNewMail = "notify_new_mail"
@@ -508,6 +513,11 @@ type UIPrefsDTO struct {
 	// MyDayPanel shows today's agenda and tasks beside the mail surface in the
 	// new design.
 	MyDayPanel bool `json:"myDayPanel"`
+	// ProjectsView is how the Projects space lists projects: grid or list.
+	ProjectsView string `json:"projectsView"`
+	// ProjectSuggestions offers, in the reader, to file mail from a project's
+	// people under that project.
+	ProjectSuggestions bool `json:"projectSuggestions"`
 	// ThemeID selects an installed custom theme (see bind_themes.go). Empty
 	// means the built-in default themes driven by the Theme setting.
 	ThemeID string `json:"themeId"`
@@ -694,6 +704,8 @@ func (a *App) GetUIPrefs() (UIPrefsDTO, error) {
 		SenderPanel:                a.boolSetting(settingSenderPanel, false),
 		MailDates:                  a.boolSetting(settingMailDates, true),
 		MyDayPanel:                 a.boolSetting(settingMyDayPanel, false),
+		ProjectsView:               a.stringSetting(settingProjectsView, "grid"),
+		ProjectSuggestions:         a.boolSetting(settingProjectSuggestions, true),
 		ThemeID:                    a.stringSetting(settingThemeID, ""),
 		MenuBarInApp:               a.boolSetting(settingMenuBarInApp, false),
 		MenuBarNativeMinimal:       a.boolSetting(settingMenuBarNativeMinimal, false),

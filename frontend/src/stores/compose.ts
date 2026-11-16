@@ -90,6 +90,9 @@ export interface ComposeSession {
   // followUpAt is when to be reminded if nobody has replied, as an ISO time,
   // unset for no reminder.
   followUpAt?: string
+  // projectId files the message and its replies under a project once it is
+  // sent, unset for none.
+  projectId?: number
 }
 
 /** The three reply types a reply can be switched between. */
@@ -437,6 +440,7 @@ function requestSession(accountId: number, req: ComposeRequest): ComposeSession 
     draftMessageId: req.draftMessageId ?? '',
     signaturesApplied: true,
     followUpAt: req.followUpAt || undefined,
+    projectId: req.projectId || undefined,
   })
   return session
 }

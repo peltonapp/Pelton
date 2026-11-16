@@ -106,6 +106,9 @@ const (
 	// EventFocusEnded fires once when focus mode ends, with a FocusSummaryDTO
 	// saying what arrived meanwhile.
 	EventFocusEnded = "focus:ended"
+	// EventProjectsChanged fires when a project, its board, its links or its
+	// notes changed, with a ProjectsChangedEvent naming which.
+	EventProjectsChanged = "projects:changed"
 )
 
 // CalendarSyncEvent is the payload for EventCalendarSync. Done and Total
@@ -123,6 +126,12 @@ type CalendarSyncEvent struct {
 // means anything may have changed.
 type CalendarChangedEvent struct {
 	CalendarIDs []int64 `json:"calendarIds"`
+}
+
+// ProjectsChangedEvent is the payload for EventProjectsChanged. An empty list
+// means any project may have changed.
+type ProjectsChangedEvent struct {
+	ProjectIDs []int64 `json:"projectIds"`
 }
 
 // CalendarReminderEvent is the payload for EventCalendarReminder.

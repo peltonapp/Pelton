@@ -91,6 +91,10 @@ export type ShortcutAction =
   | 'go-tasks'
   // makes a task from the open message, or from each selected one.
   | 'create-task'
+  // shows the Projects space.
+  | 'go-projects'
+  // files the open or selected conversations under a project.
+  | 'add-to-project'
   // the split inbox tabs, only while the message list has focus.
   | 'next-split'
   | 'prev-split'
@@ -260,6 +264,11 @@ export const shortcuts: Shortcut[] = [
   { action: 'go-tasks', combo: 'mod+shift+d', labelKey: 'shortcut.goTasks' },
   // t for task, free among the message letters.
   { action: 'create-task', combo: 't', labelKey: 'shortcut.createTask' },
+  // j sits between the letters the other spaces took.
+  { action: 'go-projects', combo: 'mod+shift+j', labelKey: 'shortcut.goProjects', newDesignOnly: true },
+  // p for project, free among the message letters; with a suggestion showing
+  // in the reader it takes that one without asking.
+  { action: 'add-to-project', combo: 'p', labelKey: 'shortcut.addToProject', newDesignOnly: true },
   // Tab only moves between splits while the list has focus; everywhere else it
   // keeps moving focus between controls.
   { action: 'next-split', combo: 'tab', labelKey: 'shortcut.nextSplit' },

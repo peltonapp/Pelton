@@ -10,6 +10,7 @@ const entries: SettingsIndexEntry[] = [
   { page: 'reading', id: 'auth-status', labelKey: 'settingsPanel.authStatus', keywords: 'technical info spf dkim dmarc authentication badge' },
   { page: 'reading', id: 'mark-read', labelKey: 'settingsPanel.toggle.markReadOnOpen', keywords: 'mark read seen unread open automatically' },
   { page: 'reading', id: 'sender-panel', labelKey: 'senderPanel.setting', keywords: 'sender panel contact person side info vip files conversations' },
+  { page: 'reading', id: 'project-suggestions', labelKey: 'projects.settings.suggestions', keywords: 'projects suggest add file people sender board' },
   { page: 'reading', id: 'mail-dates', labelKey: 'reading.mailDates', keywords: 'dates times calendar hover preview event detect highlight' },
   { page: 'reading', id: 'open-on-arrow', labelKey: 'settingsPanel.toggle.openOnArrow', keywords: 'arrow keys keyboard open select navigate enter' },
 ]

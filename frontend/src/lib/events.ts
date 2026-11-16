@@ -41,6 +41,7 @@ export const EventNames = {
   followUpsChanged: 'followups:changed',
   focusChanged: 'focus:changed',
   focusEnded: 'focus:ended',
+  projectsChanged: 'projects:changed',
   // sent between windows by the frontend, not by go.
   archiveAfterSend: 'compose:archive-after-send',
 } as const
@@ -389,6 +390,16 @@ export function onCalendarSync(cb: (e: CalendarSyncEvent) => void): Unsubscribe 
 /** onCalendarChanged fires when events or calendars changed, from a sync or an edit. */
 export function onCalendarChanged(cb: (e: CalendarChangedEvent) => void): Unsubscribe {
   return EventsOn(EventNames.calendarChanged, (e: CalendarChangedEvent | null) => cb({ calendarIds: e?.calendarIds ?? [] }))
+}
+
+/** ProjectsChangedEvent names the projects that changed; empty means any. */
+export interface ProjectsChangedEvent {
+  projectIds: number[]
+}
+
+/** onProjectsChanged fires when a project, its board, its links or its notes changed. */
+export function onProjectsChanged(cb: (e: ProjectsChangedEvent) => void): Unsubscribe {
+  return EventsOn(EventNames.projectsChanged, (e: ProjectsChangedEvent | null) => cb({ projectIds: e?.projectIds ?? [] }))
 }
 
 /** onCalendarReminder fires when an event's reminder is due. */

@@ -21,6 +21,7 @@
   import { threadedOn, threadMessages, cardDetails, loadThread, loadCard } from '../../stores/threads'
   import { messageList, patchInList, rowPinned } from '../../stores/messages'
   import NoteCard from './NoteCard.svelte'
+  import ProjectHint from '../projects/ProjectHint.svelte'
   import { setSeen } from '../../lib/api'
   import { sameMessage } from '../../lib/threadrows'
   import { errorMessage, toastError } from '../../stores/toast'
@@ -311,6 +312,7 @@
     </header>
 
     <NoteCard messageId={detail.id} {threadId} />
+    <ProjectHint {detail} />
 
     {#if threadError}
       <p class="thread-error">{threadError}</p>

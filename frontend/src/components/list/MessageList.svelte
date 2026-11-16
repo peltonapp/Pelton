@@ -27,6 +27,7 @@
     IconSquareMinus,
     IconClockPause,
     IconChecklist,
+    IconLayoutKanban,
     IconDownload,
     IconDownloadOff,
     IconFolderSymlink,
@@ -95,6 +96,7 @@
   } from '../../stores/selectall'
   import { prefs, setSearchSort, setSplitActive } from '../../stores/prefs'
   import { createTasksFromMail } from '../../lib/taskmail'
+  import { pickProjectFor } from '../../lib/projectpicker'
   import { maildragSource } from '../../stores/maildrag'
   import { threadedOn, threadMessages, loadThread } from '../../stores/threads'
   import { listRows, threadAware, type ListRow } from '../../lib/threadrows'
@@ -979,7 +981,10 @@
         { label: $t('messageList.bulk.snoozeCount').replace('{n}', n), icon: IconClockPause, hint: menuHint('snooze'), action: bulkSnooze },
         ...(classic
           ? []
-          : [{ label: $t('tasks.createFromMailCount').replace('{n}', n), icon: IconChecklist, hint: menuHint('create-task'), action: () => void createTasksFromMail(selectedItems.map((m) => m.id)) }]),
+          : [
+              { label: $t('tasks.createFromMailCount').replace('{n}', n), icon: IconChecklist, hint: menuHint('create-task'), action: () => void createTasksFromMail(selectedItems.map((m) => m.id)) },
+              { label: $t('projects.addToCount').replace('{n}', n), icon: IconLayoutKanban, hint: menuHint('add-to-project'), action: () => pickProjectFor(selectedItems.map((m) => m.id)) },
+            ]),
         { label: $t('messageList.bulk.moveCount').replace('{n}', n), icon: IconFolderSymlink, hint: menuHint('move-to'), action: bulkMove },
         { label: $t('messageList.bulk.archiveCount').replace('{n}', n), icon: IconArchive, hint: menuHint('archive'), action: () => void bulkArchiveSelection() },
         ...(classic ? [] : [{ label: $t('palette.bulk.doneCount').replace('{n}', n), icon: IconCircleCheck, hint: menuHint('done'), action: () => void markDone(selectedItems) }]),
@@ -1021,7 +1026,12 @@
       ...organizeEntries(item),
       'separator',
       { label: $t('messageList.menu.snooze'), icon: IconClockPause, hint: menuHint('snooze'), action: () => openSnooze(item.id, item.subject) },
-      ...(classic ? [] : [{ label: $t('shortcut.createTask'), icon: IconChecklist, hint: menuHint('create-task'), action: () => void createTasksFromMail([item.id]) }]),
+      ...(classic
+        ? []
+        : [
+            { label: $t('shortcut.createTask'), icon: IconChecklist, hint: menuHint('create-task'), action: () => void createTasksFromMail([item.id]) },
+            { label: $t('projects.addTo'), icon: IconLayoutKanban, hint: menuHint('add-to-project'), action: () => pickProjectFor([item.id], item.threadId) },
+          ]),
       { label: $t('messageList.menu.moveTo'), icon: IconFolderSymlink, hint: menuHint('move-to'), action: () => openMove(item) },
       ...(classic ? [] : [{ label: $t('shortcut.done'), icon: IconCircleCheck, hint: menuHint('done'), action: () => void markDone([item]) }]),
       ...spamEntry(item),
