@@ -19,7 +19,7 @@ import { messageList } from '../stores/messages'
 import { openMessageId } from '../stores/selection'
 import { prefs } from '../stores/prefs'
 import { invalidateThreads } from '../stores/threads'
-import { triggerUndoArchive } from '../stores/undoarchive'
+import { clearHistory, undoLatest } from '../stores/undohistory'
 import { ready } from './async'
 import type { MessageSummary, ThreadMessage, ThreadSummary } from './types'
 
@@ -90,9 +90,7 @@ afterEach(() => {
   vi.clearAllMocks()
   openMessageId.set(null)
   invalidateThreads()
-  while (triggerUndoArchive()) {
-    // drain the undo stack between tests
-  }
+  clearHistory()
 })
 
 describe('archivable', () => {
@@ -222,7 +220,7 @@ describe('markDone', () => {
     expect(api.archiveMessage.mock.calls.map((c) => c[0])).toEqual([5, 1])
     expect(ids()).toEqual([2])
     expect(get(openMessageId)).toBe(2)
-    expect(triggerUndoArchive()).toBe(true)
+    expect(await undoLatest()).toBe(true)
     await vi.waitFor(() => expect(api.restoreMessage).toHaveBeenCalledTimes(2))
   })
 

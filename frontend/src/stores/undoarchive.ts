@@ -1,18 +1,17 @@
-// undoarchive.ts keeps a small stack of recently moved messages (archive, move
-// to a folder, spam marks) so a global cmd+z can move the last one back to where
-// it came from. a move happens on the server and drops the local row, so undo
-// re-locates the message in the folder it went to by its rfc Message-ID and
-// moves it back. undo is impossible for a message with no Message-ID (rare),
-// which we surface rather than silently fail.
+// undoarchive.ts records moves (archive, move to a folder, spam marks, done) in
+// the undo history. a move happens on the server and drops the local row, so
+// undo re-locates the message in the folder it went to by its rfc Message-ID
+// and moves it back, and redo moves it forward again the same way. a move with
+// no Message-ID cannot be found afterwards, so it is not recorded.
 //
 // One entry is one action, not one message, so archiving a selection of eleven
 // is undone in one press.
 
-import { get, writable } from 'svelte/store'
+import { get } from 'svelte/store'
 import type { MessageSummary } from '../lib/types'
 import { restoreMessage, type ArchiveUndo } from '../lib/api'
 import { t } from '../lib/i18n'
-import { toastInfo, toastError, errorMessage } from './toast'
+import { messageKeys, recordHistory, subjectDetail, type HistoryKind } from './undohistory'
 
 interface ArchivedMessage {
   summary: MessageSummary
@@ -21,14 +20,18 @@ interface ArchivedMessage {
   destFolderId: number
 }
 
-const archived = writable<ArchivedMessage[][]>([])
+/** The kinds of move the history records, and the words for one when the default does not fit. */
+export interface MoveRecord {
+  kind?: Extract<HistoryKind, 'archive' | 'move' | 'spam' | 'done'>
+  label?: string
+}
 
 // recordArchived remembers a just-moved message so it can be moved back. A move
 // with no Message-ID cannot be undone and is not recorded.
-export function recordArchived(summary: MessageSummary, undo: ArchiveUndo): void {
+export function recordArchived(summary: MessageSummary, undo: ArchiveUndo, record?: MoveRecord): void {
   const entry = archivedEntry(summary, undo)
   if (entry) {
-    recordArchivedBatch([entry])
+    recordArchivedBatch([entry], record)
   }
 }
 
@@ -41,41 +44,43 @@ export function archivedEntry(summary: MessageSummary, undo: ArchiveUndo): Archi
   return { summary, messageId: undo.messageId, originalFolderId: undo.originalFolderId, destFolderId: undo.destFolderId }
 }
 
+// moveAll runs one move per message, in order, and reports the first failure
+// after all of them were tried: a message that is already gone cannot hold back
+// the ones that are not.
+async function moveAll(moves: ArchivedMessage[], forward: boolean): Promise<void> {
+  let failure: unknown = null
+  for (const m of moves) {
+    try {
+      if (forward) {
+        await restoreMessage(m.messageId, m.originalFolderId, m.destFolderId)
+      } else {
+        await restoreMessage(m.messageId, m.destFolderId, m.originalFolderId)
+      }
+    } catch (err) {
+      failure = failure ?? err
+    }
+  }
+  if (failure !== null) {
+    throw failure
+  }
+}
+
 // recordArchivedBatch remembers a whole bulk archive or move as one undo step.
-export function recordArchivedBatch(entries: ArchivedMessage[]): void {
+export function recordArchivedBatch(entries: ArchivedMessage[], record: MoveRecord = {}): void {
   if (entries.length === 0) {
     return
   }
-  archived.update((s) => [...s, entries])
-}
-
-// triggerUndoArchive restores the most recent archive, however many messages it
-// covered. It returns true when it had something to undo (and kicks off the
-// async move), false otherwise.
-export function triggerUndoArchive(): boolean {
-  const stack = get(archived)
-  if (stack.length === 0) {
-    return false
-  }
-  const last = stack[stack.length - 1]
-  archived.set(stack.slice(0, -1))
-  void (async () => {
-    let failure = ''
-    for (const entry of last) {
-      try {
-        await restoreMessage(entry.messageId, entry.destFolderId, entry.originalFolderId)
-      } catch (err) {
-        failure = errorMessage(err)
-      }
-    }
-    if (failure !== '') {
-      toastError(failure)
-      return
-    }
-    const label = get(t)
-    toastInfo(last.length === 1 ? label('undo.archiveDone') : label('undo.archiveDoneCount').replace('{n}', String(last.length)))
-  })()
-  return true
+  const kind = record.kind ?? 'archive'
+  recordHistory({
+    kind,
+    label: record.label ?? get(t)(kind === 'done' ? 'history.kind.done' : 'history.kind.archive'),
+    detail: subjectDetail(entries.map((e) => e.summary.subject)),
+    count: entries.length,
+    touches: entries.flatMap((e) => messageKeys(e.summary.id)),
+    rekeys: true,
+    undo: () => moveAll(entries, false),
+    redo: () => moveAll(entries, true),
+  })
 }
 
 export type { ArchivedMessage }

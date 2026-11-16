@@ -101,6 +101,11 @@ export type ShortcutAction =
   // the newsletter manager on the mail surface, and the insights page.
   | 'open-newsletters'
   | 'open-insights'
+  // undo and redo of the last mail action, and the list of recent ones. They
+  // leave a text field, the composer and the editors to their own undo.
+  | 'undo'
+  | 'redo'
+  | 'undo-history'
   // the shortcut sheet and focus mode, new design only.
   | 'shortcut-sheet'
   | 'focus-mode'
@@ -264,6 +269,9 @@ export const shortcuts: Shortcut[] = [
   { action: 'edit-note', combo: 'shift+n', labelKey: 'shortcut.editNote' },
   { action: 'open-newsletters', combo: 'mod+shift+l', labelKey: 'shortcut.openNewsletters' },
   { action: 'open-insights', combo: '', labelKey: 'shortcut.openInsights' },
+  { action: 'undo', combo: 'mod+z', labelKey: 'shortcut.undo' },
+  { action: 'redo', combo: 'mod+shift+z', labelKey: 'shortcut.redo' },
+  { action: 'undo-history', combo: 'mod+shift+t', labelKey: 'shortcut.undoHistory', newDesignOnly: true },
   // "?" is shifted on every common layout, so the key arrives with shift held.
   { action: 'shortcut-sheet', combo: 'shift+?', labelKey: 'shortcut.shortcutSheet', newDesignOnly: true },
   { action: 'focus-mode', combo: 'mod+shift+h', labelKey: 'shortcut.focusMode', newDesignOnly: true },

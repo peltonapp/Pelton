@@ -127,7 +127,7 @@ export async function markDone(items: MessageSummary[]): Promise<void> {
     }
   }
   release()
-  recordArchivedBatch(undone)
+  recordArchivedBatch(undone, { kind: 'done' })
   // a conversation marked done is handled, so a reminder that came due on it
   // has done its job.
   const threadIds = new Set(items.map((i) => i.threadId).filter((id) => id !== 0))
