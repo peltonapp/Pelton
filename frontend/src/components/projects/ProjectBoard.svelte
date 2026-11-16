@@ -339,7 +339,7 @@
       Enter: () => void openCard(uid),
       ' ': () => !card.task.readOnly && void toggleDone(card.task),
       n: () => void openAdd(card.columnId),
-      Escape: () => (selectedUid = null),
+      ...(selectedUid ? { Escape: () => (selectedUid = null) } : {}),
     }
     const action = run[event.key]
     if (action) {

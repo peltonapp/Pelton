@@ -13,7 +13,7 @@
   import DateField from '../calendar/DateField.svelte'
   import { paletteHex } from '../../lib/calformat'
   import { dayKey, parseDayKey } from '../../lib/caldate'
-  import { projectIcons } from '../../lib/projecticons'
+  import { projectIcon, projectIcons } from '../../lib/projecticons'
   import { projectColor } from '../../lib/projectlogic'
   import { taskLists } from '../../stores/tasks'
   import { saveProject } from '../../stores/projects'
@@ -86,9 +86,7 @@
   <form class="form" id="project-form" on:submit|preventDefault={submit}>
     <div class="name-row">
       <span class="mark" style={`--project:${swatch}`} aria-hidden="true">
-        {#each projectIcons.filter((i) => i.name === (icon || 'kanban')) as i (i.name)}
-          <Ph svg={i.svg} size={18} />
-        {/each}
+        <Ph svg={projectIcon(icon)} size={18} />
       </span>
       <!-- svelte-ignore a11y-autofocus -->
       <input
