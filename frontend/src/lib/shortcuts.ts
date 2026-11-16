@@ -95,6 +95,8 @@ export type ShortcutAction =
   | 'go-projects'
   // files the open or selected conversations under a project.
   | 'add-to-project'
+  // shows the Feeds space.
+  | 'go-feeds'
   // the split inbox tabs, only while the message list has focus.
   | 'next-split'
   | 'prev-split'
@@ -280,6 +282,7 @@ export const shortcuts: Shortcut[] = [
   // p for project, free among the message letters; with a suggestion showing
   // in the reader it takes that one without asking.
   { action: 'add-to-project', combo: 'p', labelKey: 'shortcut.addToProject', newDesignOnly: true },
+  { action: 'go-feeds', combo: 'mod+shift+g', labelKey: 'shortcut.goFeeds', newDesignOnly: true },
   // Tab only moves between splits while the list has focus; everywhere else it
   // keeps moving focus between controls.
   { action: 'next-split', combo: 'tab', labelKey: 'shortcut.nextSplit' },

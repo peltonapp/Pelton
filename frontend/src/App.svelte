@@ -91,7 +91,7 @@
   import { liabilityAccepted } from './lib/liability'
   import { setDemoActive } from './lib/demo'
   import { recordArchived } from './stores/undoarchive'
-  import { onMailNew, onMailRepaired, onSyncState, onSyncProgress, onOutboxChanged, onMenu, onViewsChanged, onFoldersChanged, onProfileChanged, onMailtoCompose, onAgentProposals, onOpenMessage, onReplyMessage, onArchiveAfterSend, onCalendarReminder, onTaskReminder, onICSOpen, type Unsubscribe, type MailtoDraft, type CalendarReminderEvent, type TaskReminderEvent } from './lib/events'
+  import { onMailNew, onMailRepaired, onSyncState, onSyncProgress, onOutboxChanged, onMenu, onViewsChanged, onFoldersChanged, onProfileChanged, onMailtoCompose, onAgentProposals, onOpenMessage, onReplyMessage, onArchiveAfterSend, onFeedsOpen, onCalendarReminder, onTaskReminder, onICSOpen, type Unsubscribe, type MailtoDraft, type CalendarReminderEvent, type TaskReminderEvent } from './lib/events'
   import { loadViews, editingView, closeViewEditor, openViewEditor, views as savedViews } from './stores/views'
   import { selectSavedView } from './stores/selection'
   import { isMac } from './lib/i18n'
@@ -198,6 +198,8 @@
   import './lib/palette-projects'
   import { startProjects, fileMailRequest } from './stores/projects'
   import { pickProjectFor } from './lib/projectpicker'
+  import './lib/palette-feeds'
+  import { startFeeds, feedFocus } from './stores/feeds'
   import { startTasks, toggleDone, tasks as taskStore, taskFromMailRequest } from './stores/tasks'
   import { createTasksFromMail, openTask } from './lib/taskmail'
   import { getTask } from './lib/api'
@@ -508,6 +510,26 @@
   }
   onDestroy(() => stopNotes?.())
 
+  // the feeds store feeds the rail's unread dot, so it runs alongside.
+  let stopFeeds: (() => void) | undefined
+  $: if (!classic && !stopFeeds) {
+    stopFeeds = startFeeds()
+  } else if (classic && stopFeeds) {
+    stopFeeds()
+    stopFeeds = undefined
+  }
+  onDestroy(() => stopFeeds?.())
+
+  // shareFromFeeds opens a new message carrying a feed entry's title and link.
+  function shareFromFeeds(mail: { subject: string; body: string }): void {
+    const accountId = composeAccountId()
+    if (accountId === null) {
+      toastError(get(t)('app.toast.addMailboxFirst'))
+      return
+    }
+    openComposeWith(accountId, editorMode, { to: '', cc: '', bcc: '', subject: mail.subject, body: mail.body })
+  }
+
   // the newsletter manager and the insights page in the palette, with their
   // live shortcut as the hint.
   registerPaletteSource('mailtools', (tr) => {
@@ -727,6 +749,15 @@
           openReply(await getMessage(e.messageId), editorMode, false)
         } catch (err) {
           toastError(errorMessage(err))
+        }
+      }),
+    )
+    // a clicked notification about a new feed entry.
+    unsubscribers.push(
+      onFeedsOpen((id) => {
+        if (!classic) {
+          feedFocus.set(id)
+          openSpace('feeds')
         }
       }),
     )
@@ -1247,6 +1278,9 @@
         break
       case 'notes-toggle-mode':
         // the editor's mode only means something with a note on screen.
+        break
+      case 'go-feeds':
+        goToSpace('feeds')
         break
       case 'create-task':
         if (!classic) {
@@ -2179,6 +2213,12 @@
       <div class="space-host">
         {#await import('./components/notes/NotesScreen.svelte') then m}
           <svelte:component this={m.default} />
+        {/await}
+      </div>
+    {:else if $space === 'feeds'}
+      <div class="space-host">
+        {#await import('./components/feeds/FeedsScreen.svelte') then m}
+          <svelte:component this={m.default} on:compose={(e) => shareFromFeeds(e.detail)} />
         {/await}
       </div>
     {/if}

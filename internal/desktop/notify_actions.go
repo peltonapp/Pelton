@@ -98,12 +98,13 @@ type notifyHandlers struct {
 	markRead func(id int64) error
 	reply    func(id int64)
 	open     func(id int64)
+	openFeed func(id int64)
 	show     func()
 }
 
 // dispatchNotificationResponse runs what a notification response asks for: a
-// button on a message acts on that message, a click on a message opens it, and
-// anything else brings the window up. It returns the failure of a button's
+// button on a message acts on that message, a click on a message or a feed
+// entry opens it, and anything else brings the window up. It returns the failure of a button's
 // action, which the caller logs; the click paths cannot fail.
 func dispatchNotificationResponse(h notifyHandlers, response notifications.NotificationResponse) error {
 	id, hasMessage := notifyMessageID(response.UserInfo)
@@ -118,6 +119,10 @@ func dispatchNotificationResponse(h notifyHandlers, response notifications.Notif
 			return nil
 		}
 		h.open(id)
+		return nil
+	}
+	if id, ok := notifyDataID(response.UserInfo, notifyDataFeedEntry); ok && h.openFeed != nil {
+		h.openFeed(id)
 		return nil
 	}
 	h.show()
@@ -157,9 +162,10 @@ func (a *App) notifyHandlers() notifyHandlers {
 			a.emit(EventMailRepaired, MailRepairedEvent{AccountID: m.AccountID, FolderID: m.FolderID, Count: 1})
 			return nil
 		},
-		reply: a.replyFromNotification,
-		open:  a.openFromNotification,
-		show:  a.showWindow,
+		reply:    a.replyFromNotification,
+		open:     a.openFromNotification,
+		openFeed: a.openFeedFromNotification,
+		show:     a.showWindow,
 	}
 }
 

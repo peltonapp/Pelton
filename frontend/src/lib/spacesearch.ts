@@ -1,6 +1,6 @@
 // spacesearch.ts lets a space other than mail put its own search in the top
-// bar: the calendar searches events, contacts search people. the space's
-// screen registers a provider while it is on screen.
+// bar: the calendar searches events, contacts search people, feeds search
+// entries. the space's screen registers a provider while it is on screen.
 
 import { writable } from 'svelte/store'
 import type { Space } from './types'

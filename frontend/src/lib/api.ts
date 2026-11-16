@@ -102,6 +102,15 @@ import type {
   RemovedTask,
   TaskMailMark,
   TaskSettings,
+  Feed,
+  FeedCandidate,
+  FeedEntry,
+  FeedEntryDetail,
+  FeedFolder,
+  FeedImportResult,
+  FeedScope,
+  FeedSettings,
+  FeedSidebar,
   AttachmentContent,
   AttachmentEntry,
   AttachmentPage,
@@ -2037,6 +2046,11 @@ export const SettingKeys = {
   myDayPanel: 'my_day_panel',
   projectsView: 'projects_view',
   projectSuggestions: 'project_suggestions',
+  feedsRefreshMinutes: 'feeds_refresh_minutes',
+  feedsKeepDays: 'feeds_keep_days',
+  feedsKeepCount: 'feeds_keep_count',
+  feedsLoadImages: 'feeds_load_images',
+  feedsMarkReadOnScroll: 'feeds_mark_read_on_scroll',
   themeId: 'theme_id',
   menuBarInApp: 'menu_bar_in_app',
   menuBarNativeMinimal: 'menu_bar_native_minimal',
@@ -3230,4 +3244,153 @@ export function vaultImportFile(path: string): Promise<string> {
 /** vaultFileData returns a file of the notes folder as a data: URL. */
 export function vaultFileData(path: string): Promise<string> {
   return App.VaultFileData(path)
+}
+
+// --- feeds ------------------------------------------------------------------------
+
+const emptyFeedSidebar: FeedSidebar = { folders: [], feeds: [], counts: { unread: 0, today: 0, starred: 0, readLater: 0 } }
+
+/** feedScopeDTO turns a list scope into what the backend reads. */
+function feedScopeDTO(scope: FeedScope, unreadOnly: boolean, search: string): desktop.FeedScopeDTO {
+  const id = scope.kind === 'feed' || scope.kind === 'folder' ? scope.id : 0
+  return new desktop.FeedScopeDTO({ kind: scope.kind, id, unreadOnly, search })
+}
+
+/** listFeedSidebar returns the folders, the feeds and the smart view counts. */
+export function listFeedSidebar(): Promise<FeedSidebar> {
+  if (isDemoActive()) {
+    return Promise.resolve(emptyFeedSidebar)
+  }
+  return App.ListFeedSidebar().then((s) => ({
+    folders: (s.folders ?? []) as FeedFolder[],
+    feeds: (s.feeds ?? []) as Feed[],
+    counts: s.counts,
+  }))
+}
+
+/** listFeedEntries returns a page of the entries a scope selects, newest first. */
+export function listFeedEntries(scope: FeedScope, unreadOnly: boolean, search: string, limit: number, offset: number): Promise<FeedEntry[]> {
+  if (isDemoActive() || scope.kind === 'newsletters') {
+    return Promise.resolve([])
+  }
+  return App.ListFeedEntries(feedScopeDTO(scope, unreadOnly, search), limit, offset).then((list) => (list ?? []) as unknown as FeedEntry[])
+}
+
+/** searchFeedEntries returns the newest entries of every feed matching text, read or not. */
+export function searchFeedEntries(text: string, limit: number): Promise<FeedEntry[]> {
+  if (isDemoActive() || !text.trim()) {
+    return Promise.resolve([])
+  }
+  return App.ListFeedEntries(new desktop.FeedScopeDTO({ kind: 'all', id: 0, unreadOnly: false, search: text }), limit, 0).then((list) => (list ?? []) as unknown as FeedEntry[])
+}
+
+/** getFeedEntry returns an entry for the reader, its html sanitized. */
+export function getFeedEntry(id: number): Promise<FeedEntryDetail> {
+  return App.GetFeedEntry(id) as unknown as Promise<FeedEntryDetail>
+}
+
+/** getFeedEntryHtml renders an entry again with remote images allowed or not. */
+export function getFeedEntryHtml(id: number, allowRemote: boolean, includeTrackers: boolean): Promise<string> {
+  return App.GetFeedEntryHTML(id, allowRemote, includeTrackers)
+}
+
+/** setFeedEntriesRead marks entries read or unread; it returns the ids that changed. */
+export function setFeedEntriesRead(ids: number[], read: boolean): Promise<number[]> {
+  return App.SetFeedEntriesRead(ids, read).then((list) => list ?? [])
+}
+
+/** markFeedScopeRead marks every unread entry of a scope read and returns their ids. */
+export function markFeedScopeRead(scope: FeedScope, search: string): Promise<number[]> {
+  return App.MarkFeedScopeRead(feedScopeDTO(scope, true, search)).then((list) => list ?? [])
+}
+
+/** setFeedEntryStarred stars or unstars an entry. */
+export function setFeedEntryStarred(id: number, starred: boolean): Promise<void> {
+  return App.SetFeedEntryStarred(id, starred)
+}
+
+/** setFeedEntryReadLater puts an entry on the read-later list or takes it off. */
+export function setFeedEntryReadLater(id: number, later: boolean): Promise<void> {
+  return App.SetFeedEntryReadLater(id, later)
+}
+
+/** discoverFeeds finds the working feeds at an address, with a preview of each. */
+export function discoverFeeds(address: string): Promise<FeedCandidate[]> {
+  return App.DiscoverFeeds(address).then((list) => (list ?? []) as unknown as FeedCandidate[])
+}
+
+/** addFeed subscribes to a feed, fetches it and returns it. */
+export function addFeed(address: string, folderId: number, title: string): Promise<Feed> {
+  return App.AddFeed(address, folderId, title) as unknown as Promise<Feed>
+}
+
+/** updateFeed saves what the user set on a feed. */
+export function updateFeed(settings: FeedSettings): Promise<void> {
+  return App.UpdateFeed(new desktop.FeedSettingsDTO(settings))
+}
+
+/** deleteFeed unsubscribes from a feed and drops its entries. */
+export function deleteFeed(id: number): Promise<void> {
+  return App.DeleteFeed(id)
+}
+
+/** moveFeeds puts feeds into a folder (0 for none) in the given order. */
+export function moveFeeds(folderId: number, ids: number[]): Promise<void> {
+  return App.MoveFeeds(folderId, ids)
+}
+
+/** createFeedFolder adds a folder at the end. */
+export function createFeedFolder(name: string): Promise<FeedFolder> {
+  return App.CreateFeedFolder(name) as unknown as Promise<FeedFolder>
+}
+
+/** renameFeedFolder renames a folder. */
+export function renameFeedFolder(id: number, name: string): Promise<void> {
+  return App.RenameFeedFolder(id, name)
+}
+
+/** deleteFeedFolder removes a folder; its feeds move out of it. */
+export function deleteFeedFolder(id: number): Promise<void> {
+  return App.DeleteFeedFolder(id)
+}
+
+/** reorderFeedFolders puts the folders in the given order. */
+export function reorderFeedFolders(ids: number[]): Promise<void> {
+  return App.ReorderFeedFolders(ids)
+}
+
+/** refreshFeeds fetches every feed in the background; progress arrives as events. */
+export function refreshFeeds(): Promise<void> {
+  return App.RefreshFeeds()
+}
+
+/** refreshFeed fetches one feed in the background. */
+export function refreshFeed(id: number): Promise<void> {
+  return App.RefreshFeed(id)
+}
+
+/** importOpml asks for an OPML file and subscribes to its feeds. */
+export function importOpml(): Promise<FeedImportResult> {
+  return App.ImportOPML() as unknown as Promise<FeedImportResult>
+}
+
+/** exportOpml writes the subscriptions to a file the user picks; '' when cancelled. */
+export function exportOpml(): Promise<string> {
+  return App.ExportOPML()
+}
+
+/** listNewsletterMail returns the newest newsletter mail for the Feeds space. */
+export function listNewsletterMail(limit: number, offset: number, unreadOnly: boolean): Promise<MessageSummary[]> {
+  if (isDemoActive()) {
+    return Promise.resolve([])
+  }
+  return App.ListNewsletterMail(limit, offset, unreadOnly).then((list) => (list ?? []) as unknown as MessageSummary[])
+}
+
+/** countNewsletterMail counts the unread newsletter mail. */
+export function countNewsletterMail(): Promise<number> {
+  if (isDemoActive()) {
+    return Promise.resolve(0)
+  }
+  return App.CountNewsletterMail()
 }

@@ -54,6 +54,7 @@ func (a *App) startBackgroundServices() {
 	goSafe("the periodic sync", a.runAutoSyncLoop)
 	goSafe("the calendar sync", a.runCalendarSyncLoop)
 	goSafe("calendar reminders", a.runReminderLoop)
+	goSafe("refreshing feeds", a.runFeedLoop)
 	a.startMCPIfEnabled()
 	goSafe("counting unread mail", a.refreshViewCounts)
 }

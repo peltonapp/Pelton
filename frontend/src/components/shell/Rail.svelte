@@ -1,6 +1,6 @@
 <script lang="ts">
-  // the rail: a slim strip on one window edge that switches between mail,
-  // contacts and the calendar, with search, the profile and settings at its
+  // the rail: a slim strip on one window edge that switches between the
+  // spaces, with search, the profile and settings at its
   // foot. a marker glides to the active entry.
   import { createEventDispatcher } from 'svelte'
   import searchIcon from '@phosphor-icons/core/assets/duotone/magnifying-glass-duotone.svg?raw'
@@ -11,6 +11,7 @@
   import { maildrop } from '../../stores/maildrag'
   import { space, openSpace } from '../../stores/space'
   import { taskBadge } from '../../stores/tasks'
+  import { feedsUnread } from '../../stores/feeds'
   import { currentProfile, profiles, switchRelative } from '../../stores/profiles'
   import { tip } from '../../lib/tip'
   import { t } from '../../lib/i18n'
@@ -112,6 +113,9 @@
       >
         <Ph svg={entry.icon} size={19} />
         {#if entry.key === 'mail' && unread > 0 && !$focus.active}
+          <span class="badge" aria-hidden="true"></span>
+        {/if}
+        {#if entry.key === 'feeds' && $feedsUnread > 0 && !$focus.active}
           <span class="badge" aria-hidden="true"></span>
         {/if}
         {#if entry.key === 'tasks' && $taskBadge > 0}

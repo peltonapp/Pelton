@@ -379,6 +379,27 @@ export interface MessageDetail extends MessageSummary {
   forwardIds: number[]
 }
 
+/**
+ * BodyDetail is what the mail body renderer reads of a message. A feed entry
+ * is shown through the same renderer by filling these fields in.
+ */
+export type BodyDetail = Pick<
+  MessageDetail,
+  'id' | 'date' | 'fromName' | 'fromAddress' | 'isHtml' | 'bodyHtmlSafe' | 'bodyPlain' | 'hasRemoteContent' | 'remoteAllowed' | 'remoteHosts' | 'trackingPixels'
+> &
+  Partial<Pick<MessageDetail, 'phishing'>>
+
+/**
+ * RemoteSource loads the remote content of a body that is not a stored
+ * message. load renders it again with remote content and hands the result to
+ * whoever owns the body; always, when set, is the "always load" choice offered
+ * beside "load once".
+ */
+export interface RemoteSource {
+  load: (includeTrackers: boolean) => Promise<void>
+  always?: { label: string; title: string; run: () => Promise<void> }
+}
+
 export type PGPState = '' | 'open' | 'locked' | 'nokey' | 'failed'
 
 // TrackingPixel is one remote image that looks like it exists to report the
@@ -894,6 +915,17 @@ export interface UIPrefs {
   // projectSuggestions offers, in the reader, to file mail from a project's
   // people under that project.
   projectSuggestions: boolean
+  // feedsRefreshMinutes is how often feeds are fetched, 0 for only by hand.
+  // feedsKeepDays and feedsKeepCount are the retention rules, 0 turning one
+  // off; starred and read-later entries are always kept.
+  feedsRefreshMinutes: number
+  feedsKeepDays: number
+  feedsKeepCount: number
+  // feedsLoadImages shows every feed's remote images without asking.
+  feedsLoadImages: boolean
+  // feedsMarkReadOnScroll marks entries read as they scroll past the top of
+  // the list.
+  feedsMarkReadOnScroll: boolean
   // themeId selects an installed custom theme; empty means the built-in
   // default themes driven by the theme (light/dark/system) setting.
   themeId: string
@@ -1546,7 +1578,7 @@ export type AfterReplySend = 'nothing' | 'archive'
 /** When a follow-up reminder set from a preset comes: each lands at nine. */
 export type FollowUpInterval = 'tomorrow' | 'threeDays' | 'week'
 /** One of the top-level areas of the app. */
-export type Space = 'mail' | 'contacts' | 'calendar' | 'tasks' | 'projects' | 'notes'
+export type Space = 'mail' | 'contacts' | 'calendar' | 'tasks' | 'projects' | 'notes' | 'feeds'
 /** How the Projects space lists projects. */
 export type ProjectsView = 'grid' | 'list'
 export type SelectAllScope = 'offer' | 'all' | 'loaded'
@@ -2649,4 +2681,125 @@ export interface VaultHit {
   path: string
   title: string
   context: string
+}
+
+/** FeedFolder groups feeds in the Feeds sidebar. */
+export interface FeedFolder {
+  id: number
+  name: string
+  position: number
+}
+
+/**
+ * Feed is one subscription. title is the name to show; feedTitle what the
+ * feed calls itself and customTitle what the user renamed it to. error is why
+ * the last fetch failed, '' when it worked. Dates are rfc3339, '' for never.
+ */
+export interface Feed {
+  id: number
+  folderId: number
+  url: string
+  siteUrl: string
+  title: string
+  feedTitle: string
+  customTitle: string
+  description: string
+  /** A data: url of the site's icon, or ''. */
+  icon: string
+  error: string
+  errorCount: number
+  lastFetched: string
+  lastSuccess: string
+  nextFetch: string
+  /** 0 follows the Feeds setting. */
+  intervalMinutes: number
+  loadImages: boolean
+  notify: boolean
+  position: number
+  unread: number
+}
+
+/** FeedCounts are the numbers beside the smart views. */
+export interface FeedCounts {
+  unread: number
+  today: number
+  starred: number
+  readLater: number
+}
+
+/** FeedSidebar is everything the Feeds sidebar shows. */
+export interface FeedSidebar {
+  folders: FeedFolder[]
+  feeds: Feed[]
+  counts: FeedCounts
+}
+
+/** FeedEnclosure is a file attached to an entry, such as a podcast episode. */
+export interface FeedEnclosure {
+  url: string
+  type: string
+  length: number
+  title: string
+}
+
+/** FeedEntry is one row of the entry list. published is rfc3339. */
+export interface FeedEntry {
+  id: number
+  feedId: number
+  title: string
+  url: string
+  author: string
+  published: string
+  snippet: string
+  image: string
+  read: boolean
+  starred: boolean
+  readLater: boolean
+  media: FeedEnclosure[]
+}
+
+/** FeedEntryDetail is an entry opened in the reader, its html sanitized. */
+export interface FeedEntryDetail extends FeedEntry {
+  bodyHtmlSafe: string
+  hasRemoteContent: boolean
+  remoteAllowed: boolean
+  remoteHosts: string[]
+  trackingPixels: TrackingPixel[]
+}
+
+/** The smart views of the Feeds sidebar. */
+export type FeedSmartView = 'unread' | 'today' | 'starred' | 'later' | 'newsletters'
+
+/**
+ * FeedScope is what the entry list shows: a smart view, one feed, or one
+ * folder (id 0 holds the feeds in no folder).
+ */
+export type FeedScope = { kind: FeedSmartView } | { kind: 'feed'; id: number } | { kind: 'folder'; id: number }
+
+/** FeedSettings is what the user edits on a feed. */
+export interface FeedSettings {
+  id: number
+  customTitle: string
+  folderId: number
+  intervalMinutes: number
+  loadImages: boolean
+  notify: boolean
+}
+
+/** FeedCandidate is a feed found at an address, with a preview. */
+export interface FeedCandidate {
+  url: string
+  title: string
+  siteUrl: string
+  kind: string
+  entryCount: number
+  latest: string[]
+  lastPost: string
+  subscribed: boolean
+}
+
+/** FeedImportResult reports an OPML import. */
+export interface FeedImportResult {
+  added: number
+  skipped: number
 }

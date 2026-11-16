@@ -104,6 +104,11 @@ const defaults: UIPrefs = {
   myDayPanel: false,
   projectsView: 'grid',
   projectSuggestions: true,
+  feedsRefreshMinutes: 30,
+  feedsKeepDays: 90,
+  feedsKeepCount: 500,
+  feedsLoadImages: false,
+  feedsMarkReadOnScroll: false,
   themeId: '',
   menuBarInApp: false,
   menuBarNativeMinimal: false,
@@ -460,6 +465,15 @@ export function setProjectsView(projectsView: ProjectsView): void {
 export function setProjectSuggestions(projectSuggestions: boolean): void {
   prefs.update((p) => ({ ...p, projectSuggestions }))
   void setSetting(SettingKeys.projectSuggestions, String(projectSuggestions))
+}
+
+/** The Feeds preferences a setter takes, by name. */
+export type FeedPrefs = Pick<UIPrefs, 'feedsRefreshMinutes' | 'feedsKeepDays' | 'feedsKeepCount' | 'feedsLoadImages' | 'feedsMarkReadOnScroll'>
+
+/** Saves one Feeds preference: refresh interval, retention, images or mark on scroll. */
+export function setFeedPref<K extends keyof FeedPrefs>(key: K, value: FeedPrefs[K]): void {
+  prefs.update((p) => ({ ...p, [key]: value }))
+  void setSetting(SettingKeys[key], String(value))
 }
 
 /** Turns the gliding caret of the compose editor on or off. */

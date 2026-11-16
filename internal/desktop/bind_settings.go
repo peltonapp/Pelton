@@ -531,6 +531,17 @@ type UIPrefsDTO struct {
 	// ProjectSuggestions offers, in the reader, to file mail from a project's
 	// people under that project.
 	ProjectSuggestions bool `json:"projectSuggestions"`
+	// FeedsRefreshMinutes is how often feeds are fetched, 0 for only by hand.
+	// FeedsKeepDays and FeedsKeepCount are the retention rules (0 turns one
+	// off); starred and read-later entries are always kept.
+	FeedsRefreshMinutes int `json:"feedsRefreshMinutes"`
+	FeedsKeepDays       int `json:"feedsKeepDays"`
+	FeedsKeepCount      int `json:"feedsKeepCount"`
+	// FeedsLoadImages shows the remote images of every feed without asking.
+	FeedsLoadImages bool `json:"feedsLoadImages"`
+	// FeedsMarkReadOnScroll marks entries read as they scroll out of the top
+	// of the list.
+	FeedsMarkReadOnScroll bool `json:"feedsMarkReadOnScroll"`
 	// ThemeID selects an installed custom theme (see bind_themes.go). Empty
 	// means the built-in default themes driven by the Theme setting.
 	ThemeID string `json:"themeId"`
@@ -749,6 +760,11 @@ func (a *App) GetUIPrefs() (UIPrefsDTO, error) {
 		MyDayPanel:                 a.boolSetting(settingMyDayPanel, false),
 		ProjectsView:               a.stringSetting(settingProjectsView, "grid"),
 		ProjectSuggestions:         a.boolSetting(settingProjectSuggestions, true),
+		FeedsRefreshMinutes:        a.intSetting(settingFeedsRefresh, defaultFeedsRefresh),
+		FeedsKeepDays:              a.intSetting(settingFeedsKeepDays, defaultFeedsKeepDays),
+		FeedsKeepCount:             a.intSetting(settingFeedsKeepCount, defaultFeedsKeepCount),
+		FeedsLoadImages:            a.boolSetting(settingFeedsLoadImages, false),
+		FeedsMarkReadOnScroll:      a.boolSetting(settingFeedsMarkScroll, false),
 		ThemeID:                    a.stringSetting(settingThemeID, ""),
 		MenuBarInApp:               a.boolSetting(settingMenuBarInApp, false),
 		MenuBarNativeMinimal:       a.boolSetting(settingMenuBarNativeMinimal, false),

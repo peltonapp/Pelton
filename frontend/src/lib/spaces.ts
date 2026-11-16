@@ -8,6 +8,7 @@ import calendarIcon from '@phosphor-icons/core/assets/duotone/calendar-blank-duo
 import tasksIcon from '@phosphor-icons/core/assets/duotone/list-checks-duotone.svg?raw'
 import projectsIcon from '@phosphor-icons/core/assets/duotone/kanban-duotone.svg?raw'
 import notesIcon from '@phosphor-icons/core/assets/duotone/notebook-duotone.svg?raw'
+import feedsIcon from '@phosphor-icons/core/assets/duotone/rss-duotone.svg?raw'
 import { get } from 'svelte/store'
 import type { Space } from './types'
 import type { MailDropOptions } from '../stores/maildrag'
@@ -96,4 +97,5 @@ export const spaces: SpaceEntry[] = [
   { key: 'projects', labelKey: 'space.projects', icon: projectsIcon },
   { key: 'contacts', labelKey: 'space.contacts', icon: contactsIcon },
   { key: 'notes', labelKey: 'space.notes', icon: notesIcon },
+  { key: 'feeds', labelKey: 'space.feeds', icon: feedsIcon },
 ]

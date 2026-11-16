@@ -7,7 +7,7 @@
   // plaintext renders in the mono font, with bare urls linkified. remote
   // images are blocked by the backend by default; a per-message affordance
   // asks the backend to re-render with remote content allowed.
-  import { onDestroy, tick } from 'svelte'
+  import { createEventDispatcher, onDestroy, tick } from 'svelte'
   import { get } from 'svelte/store'
   import { openURL } from '../../lib/browser'
   import { IconPhoto, IconUserCheck, IconWorldCheck, IconMailCheck, IconShieldSearch, IconChevronDown, IconEyeOff, IconCopy, IconExternalLink } from '@tabler/icons-svelte'
@@ -23,7 +23,7 @@
   import { bodyFontStack } from '../../lib/fonts'
   import { frameKeyRelay, relayedKey, replayKey } from '../../lib/framekeys'
   import { t } from '../../lib/i18n'
-  import type { MessageDetail, Verdict } from '../../lib/types'
+  import type { BodyDetail, RemoteSource, Verdict } from '../../lib/types'
   import { markClass, markDocument } from '../../lib/highlight'
   import { highlightTerms, searchOpenedId } from '../../stores/search'
   import Highlight from '../common/Highlight.svelte'
@@ -40,9 +40,20 @@
   import type { DateMention } from '../../lib/eventphrase'
   import type { TimeFormat } from '../../lib/format'
 
-  export let detail: MessageDetail
+  export let detail: BodyDetail
   /** Folds the quoted original at the end of a reply behind a toggle. */
   export let collapseQuotes: boolean = false
+  /**
+   * Where the body's remote content comes from when it is not a stored
+   * message, such as a feed entry: the load buttons then ask this instead of
+   * the mail backend, and offer its own "always" choice in place of trusting a
+   * sender. Dates in the body are not marked for such a body.
+   */
+  export let remote: RemoteSource | null = null
+
+  // html tells a holder of its own copy of the message, such as the Feeds
+  // reader, that the body was rendered again with remote content.
+  const dispatch = createEventDispatcher<{ html: { id: number; html: string } }>()
 
   $: canScan = scanEnabled($virusTotal)
   // the link menu offers copy and open original as well as the scan. The
@@ -320,7 +331,7 @@
 
   // --- dates named in the mail ------------------------------------------------
 
-  $: datesOn = $prefs.mailDates && $prefs.design !== 'classic'
+  $: datesOn = $prefs.mailDates && $prefs.design !== 'classic' && remote === null
   $: timeFormat = $prefs.timeFormat as TimeFormat
 
   // the dates found in the shown body, by mark number, and the run they were
@@ -874,8 +885,13 @@
   async function loadRemote(includeTrackers = false): Promise<void> {
     try {
       const id = detail.id
-      const html = await getMessageHtml(id, true, includeTrackers)
-      setBodyHtml(id, html)
+      if (remote) {
+        await remote.load(includeTrackers)
+      } else {
+        const html = await getMessageHtml(id, true, includeTrackers)
+        setBodyHtml(id, html)
+        dispatch('html', { id, html })
+      }
       // the reader may have moved on while the html was fetched
       if (detail.id !== id) {
         return
@@ -921,9 +937,42 @@
     }
   }
 
+  // trust whatever the remote source offers to trust, then show it now.
+  async function trustSource(includeTrackers = false): Promise<void> {
+    try {
+      await remote?.always?.run()
+      await loadRemote(includeTrackers)
+    } catch (err) {
+      toastError(errorMessage(err))
+    }
+  }
+
   // the load buttons, built as data so the split control that carries the
   // "load the pixels too" menu is written once rather than four times.
-  $: loadActions = [
+  $: loadActions = remote
+    ? [
+        {
+          key: 'once',
+          icon: IconPhoto,
+          label: $t('detail.mailBody.loadOnce'),
+          title: '',
+          run: (withPixels: boolean) => loadRemote(withPixels),
+        },
+        ...(remote.always
+          ? [
+              {
+                key: 'always',
+                icon: IconWorldCheck,
+                label: remote.always.label,
+                title: remote.always.title,
+                run: (withPixels: boolean) => trustSource(withPixels),
+              },
+            ]
+          : []),
+      ]
+    : mailLoadActions
+
+  $: mailLoadActions = [
     {
       key: 'once',
       icon: IconPhoto,

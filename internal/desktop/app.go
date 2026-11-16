@@ -254,6 +254,10 @@ type App struct {
 	vault     *notes.Service
 	vaultMu   sync.Mutex
 	vaultStop context.CancelFunc
+
+	// feedState holds the feed fetcher and the refresh lock. See
+	// feeds_refresh.go.
+	feedState feedFetchState
 }
 
 // locked reports whether the app lock is engaged. An App built without one,
