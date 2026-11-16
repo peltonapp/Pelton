@@ -13,7 +13,7 @@
   import { space, spaceActionEntries } from '../../stores/space'
   import { visibleMessageId, tabs } from '../../stores/tabs'
   import { selectedIds } from '../../stores/listselect'
-  import { spaces } from '../../lib/spaces'
+  import { visibleSpaces } from '../../lib/spaces'
   import { shortcuts as registry } from '../../lib/shortcuts'
   import { buildSheet, filterSheet, type SheetContext, type SheetGroup, type SheetSource } from '../../lib/coach'
   import { dur, motion } from '../../lib/motion'
@@ -45,7 +45,7 @@
     const active = document.activeElement
     return {
       space: $space,
-      spaces: spaces.map((s) => s.key),
+      spaces: $visibleSpaces.map((s) => s.key),
       message: $visibleMessageId !== null || $selectedIds.size > 0,
       composer: document.querySelector('[data-compose-id]') !== null,
       composerFocused: !!active?.closest?.('[data-compose-id]'),

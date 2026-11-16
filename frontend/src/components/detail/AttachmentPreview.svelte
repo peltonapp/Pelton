@@ -26,7 +26,7 @@
 
   // (re)load whenever the target changes.
   $: if ($previewTarget) {
-    const key = `${$previewTarget.messageId}:${$previewTarget.attachment.id}`
+    const key = $previewTarget.key ?? `${$previewTarget.messageId}:${$previewTarget.attachment.id}`
     if (key !== lastKey) {
       lastKey = key
       void load()
@@ -71,7 +71,7 @@
     releaseUrl()
     const key = lastKey
     try {
-      const c = await readAttachment(target.messageId, target.attachment.id)
+      const c = target.read ? await target.read() : await readAttachment(target.messageId, target.attachment.id)
       // the preview was closed or moved to another file while this one was
       // read; its bytes would land under the wrong name
       if (key !== lastKey) {
@@ -117,8 +117,8 @@
       return
     }
     try {
-      const path = await saveAttachment(target.messageId, target.attachment.id)
-      if (path) {
+      const saved = target.save ? await target.save() : await saveAttachment(target.messageId, target.attachment.id)
+      if (saved) {
         toastSuccess($t('detail.attachments.saved').replace('{name}', target.attachment.filename))
       }
     } catch (err) {

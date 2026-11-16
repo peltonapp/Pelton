@@ -27,6 +27,7 @@ function contact(id: number, patch: Partial<Contact> = {}): Contact {
     note: '',
     emails: [],
     phones: [],
+    matrixId: '',
     readOnly: false,
     updated: '',
     extra: [],

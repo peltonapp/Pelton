@@ -67,8 +67,10 @@ type ContactDTO struct {
 	Note         string            `json:"note"`
 	Emails       []ContactValueDTO `json:"emails"`
 	Phones       []ContactValueDTO `json:"phones"`
-	ReadOnly     bool              `json:"readOnly"`
-	Updated      string            `json:"updated"`
+	// MatrixID is the person's Matrix user id, from the card's IMPP entry.
+	MatrixID string `json:"matrixId"`
+	ReadOnly bool   `json:"readOnly"`
+	Updated  string `json:"updated"`
 	// Extra lists the vCard properties Pelton has no field for but keeps on
 	// every write, so the editor can say the card carries more than this.
 	Extra []string `json:"extra"`
@@ -542,7 +544,12 @@ func (a *App) addressBookDTO(id int64) (AddressBookDTO, error) {
 
 func toContactDTO(c storage.Contact, books map[int64]storage.AddressBook) ContactDTO {
 	book := books[c.BookID]
+	matrixID := ""
+	if parsed, err := pcarddav.ParseCard(c.Card); err == nil {
+		matrixID = parsed.MatrixID
+	}
 	return ContactDTO{
+		MatrixID:     matrixID,
 		ID:           c.ID,
 		BookID:       c.BookID,
 		BookName:     book.Name,
@@ -570,6 +577,9 @@ func extraProperties(card string) []string {
 	var out []string
 	for name := range parsed.Card {
 		if knownProperty(name) {
+			continue
+		}
+		if strings.EqualFold(name, "IMPP") && pcarddav.OnlyMatrixIMPP(parsed.Card) {
 			continue
 		}
 		out = append(out, name)

@@ -183,6 +183,32 @@ func TestDeleteIsIdempotent(t *testing.T) {
 // A mailbox's proxy password is its own entry: it must not overwrite the
 // account's mail secret or the app-wide proxy password, and clearing it must
 // leave both alone.
+func TestChatSecretRoundTrip(t *testing.T) {
+	if _, err := LoadChatSecret("profile-1"); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("missing chat secret: %v", err)
+	}
+	want := ChatSecret{AccessToken: "syt_token", PickleKey: "pickle"}
+	if err := StoreChatSecret("profile-1", want); err != nil {
+		t.Fatal(err)
+	}
+	// a mail account with the same number must not see it.
+	if _, err := Load(1); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("account 1 = %v", err)
+	}
+	if got, err := LoadChatSecret("profile-1"); err != nil || got != want {
+		t.Fatalf("LoadChatSecret = %+v, %v", got, err)
+	}
+	if err := DeleteChatSecret("profile-1"); err != nil {
+		t.Fatal(err)
+	}
+	if err := DeleteChatSecret("profile-1"); err != nil {
+		t.Fatalf("second delete: %v", err)
+	}
+	if _, err := LoadChatSecret("profile-1"); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("after delete: %v", err)
+	}
+}
+
 func TestAccountProxyPasswordIsSeparate(t *testing.T) {
 	const accountID = 12
 	if err := Store(accountID, Secret{Method: MethodPassword, Password: "mail"}); err != nil {

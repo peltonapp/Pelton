@@ -99,13 +99,15 @@ type notifyHandlers struct {
 	reply    func(id int64)
 	open     func(id int64)
 	openFeed func(id int64)
+	openChat func(room string)
 	show     func()
 }
 
 // dispatchNotificationResponse runs what a notification response asks for: a
-// button on a message acts on that message, a click on a message or a feed
-// entry opens it, and anything else brings the window up. It returns the failure of a button's
-// action, which the caller logs; the click paths cannot fail.
+// button on a message acts on that message, a click on a message, a feed entry
+// or a chat room opens it, and anything else brings the window up. It returns
+// the failure of a button's action, which the caller logs; the click paths
+// cannot fail.
 func dispatchNotificationResponse(h notifyHandlers, response notifications.NotificationResponse) error {
 	id, hasMessage := notifyMessageID(response.UserInfo)
 	if hasMessage {
@@ -123,6 +125,10 @@ func dispatchNotificationResponse(h notifyHandlers, response notifications.Notif
 	}
 	if id, ok := notifyDataID(response.UserInfo, notifyDataFeedEntry); ok && h.openFeed != nil {
 		h.openFeed(id)
+		return nil
+	}
+	if room, ok := response.UserInfo[notifyDataChatRoom].(string); ok && room != "" && h.openChat != nil {
+		h.openChat(room)
 		return nil
 	}
 	h.show()
@@ -165,6 +171,7 @@ func (a *App) notifyHandlers() notifyHandlers {
 		reply:    a.replyFromNotification,
 		open:     a.openFromNotification,
 		openFeed: a.openFeedFromNotification,
+		openChat: a.openChatFromNotification,
 		show:     a.showWindow,
 	}
 }

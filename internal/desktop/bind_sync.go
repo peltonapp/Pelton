@@ -57,6 +57,7 @@ func (a *App) startBackgroundServices() {
 	goSafe("refreshing feeds", a.runFeedLoop)
 	a.startMCPIfEnabled()
 	goSafe("counting unread mail", a.refreshViewCounts)
+	goSafe("starting chat", a.startChatIfEnabled)
 }
 
 // runAutoSyncLoop periodically runs a full sync pass across every account, on

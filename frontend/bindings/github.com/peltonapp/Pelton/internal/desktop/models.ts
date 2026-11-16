@@ -2077,6 +2077,11 @@ export class ContactDTO {
     "note": string;
     "emails": ContactValueDTO[];
     "phones": ContactValueDTO[];
+
+    /**
+     * MatrixID is the person's Matrix user id, from the card's IMPP entry.
+     */
+    "matrixId": string;
     "readOnly": boolean;
     "updated": string;
 
@@ -2118,6 +2123,9 @@ export class ContactDTO {
         if (!("phones" in $$source)) {
             this["phones"] = [];
         }
+        if (!("matrixId" in $$source)) {
+            this["matrixId"] = "";
+        }
         if (!("readOnly" in $$source)) {
             this["readOnly"] = false;
         }
@@ -2137,7 +2145,7 @@ export class ContactDTO {
     static createFrom($$source: any = {}): ContactDTO {
         const $$createField8_0 = $$createType20;
         const $$createField9_0 = $$createType20;
-        const $$createField12_0 = $$createType0;
+        const $$createField13_0 = $$createType0;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("emails" in $$parsedSource) {
             $$parsedSource["emails"] = $$createField8_0($$parsedSource["emails"]);
@@ -2146,7 +2154,7 @@ export class ContactDTO {
             $$parsedSource["phones"] = $$createField9_0($$parsedSource["phones"]);
         }
         if ("extra" in $$parsedSource) {
-            $$parsedSource["extra"] = $$createField12_0($$parsedSource["extra"]);
+            $$parsedSource["extra"] = $$createField13_0($$parsedSource["extra"]);
         }
         return new ContactDTO($$parsedSource as Partial<ContactDTO>);
     }
@@ -2166,6 +2174,11 @@ export class ContactRequest {
     "note": string;
     "emails": ContactValueDTO[];
     "phones": ContactValueDTO[];
+
+    /**
+     * MatrixID is the person's Matrix user id; empty removes it.
+     */
+    "matrixId": string;
 
     /**
      * Force resolves a conflict the user has already been shown: write anyway,
@@ -2199,6 +2212,9 @@ export class ContactRequest {
         }
         if (!("phones" in $$source)) {
             this["phones"] = [];
+        }
+        if (!("matrixId" in $$source)) {
+            this["matrixId"] = "";
         }
         if (!("force" in $$source)) {
             this["force"] = false;
@@ -11309,6 +11325,34 @@ export class UIPrefsDTO {
     "statusUnread": boolean;
 
     /**
+     * ChatEnabled turns the Matrix chat space on. Off by default: nothing
+     * chat related runs or connects until it is on.
+     */
+    "chatEnabled": boolean;
+
+    /**
+     * ChatSendReceipts sends public read receipts in chat; off keeps them
+     * private.
+     */
+    "chatSendReceipts": boolean;
+
+    /**
+     * ChatSendTyping tells chat rooms while the user types.
+     */
+    "chatSendTyping": boolean;
+
+    /**
+     * ChatNotify picks which chat messages notify: all, mentions (direct
+     * messages and mentions, the default) or off.
+     */
+    "chatNotify": string;
+
+    /**
+     * ChatMarkdown formats chat messages as Markdown when sent.
+     */
+    "chatMarkdown": boolean;
+
+    /**
      * MarkReadOnOpen marks a message read when it is opened in the list.
      */
     "markReadOnOpen": boolean;
@@ -11756,6 +11800,21 @@ export class UIPrefsDTO {
         }
         if (!("statusUnread" in $$source)) {
             this["statusUnread"] = false;
+        }
+        if (!("chatEnabled" in $$source)) {
+            this["chatEnabled"] = false;
+        }
+        if (!("chatSendReceipts" in $$source)) {
+            this["chatSendReceipts"] = false;
+        }
+        if (!("chatSendTyping" in $$source)) {
+            this["chatSendTyping"] = false;
+        }
+        if (!("chatNotify" in $$source)) {
+            this["chatNotify"] = "";
+        }
+        if (!("chatMarkdown" in $$source)) {
+            this["chatMarkdown"] = false;
         }
         if (!("markReadOnOpen" in $$source)) {
             this["markReadOnOpen"] = false;

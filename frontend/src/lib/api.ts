@@ -168,6 +168,16 @@ import type {
   VaultOp,
   VaultMention,
   VaultHit,
+  ChatStatus,
+  ChatServer,
+  ChatRoom,
+  ChatTimelinePage,
+  ChatSendRequest,
+  ChatMember,
+  ChatCreateRoomRequest,
+  ChatProfile,
+  ChatVerification,
+  ChatDevice,
 } from './types'
 import { normalizeState } from './sieve'
 
@@ -2079,6 +2089,11 @@ export const SettingKeys = {
   syncProgressBar: 'sync_progress_bar',
   statusClock: 'status_clock',
   statusUnread: 'status_unread',
+  chatEnabled: 'chat_enabled',
+  chatSendReceipts: 'chat_send_receipts',
+  chatSendTyping: 'chat_send_typing',
+  chatNotify: 'chat_notify',
+  chatMarkdown: 'chat_markdown',
   markReadOnOpen: 'mark_read_on_open',
   openOnArrow: 'open_on_arrow',
   signatureAboveQuote: 'signature_above_quote',
@@ -3393,4 +3408,276 @@ export function countNewsletterMail(): Promise<number> {
     return Promise.resolve(0)
   }
   return App.CountNewsletterMail()
+}
+
+// chat. Every call reaches the user's own homeserver through the backend; in
+// demo mode chat stays signed out and none of them leave the frontend.
+
+const signedOutChat: ChatStatus = {
+  state: 'signedOut',
+  userId: '',
+  deviceId: '',
+  homeserver: '',
+  displayName: '',
+  avatar: '',
+  error: '',
+  encryption: {
+    ready: false,
+    deviceVerified: false,
+    crossSigning: false,
+    secretStorage: false,
+    secretStoragePassphrase: false,
+    backupVersion: '',
+    backupKeys: 0,
+    backupActive: false,
+    fingerprint: '',
+  },
+}
+
+/** The chat account's state; signed out while chat is off. */
+export function chatStatus(): Promise<ChatStatus> {
+  if (isDemoActive()) {
+    return Promise.resolve(signedOutChat)
+  }
+  return App.ChatStatus() as unknown as Promise<ChatStatus>
+}
+
+/** Finds the homeserver for a server name, Matrix ID or URL, and its sign-in methods. */
+export function chatDiscover(input: string): Promise<ChatServer> {
+  return App.ChatDiscover(input) as unknown as Promise<ChatServer>
+}
+
+/** Signs in with a user name and password. */
+export function chatLoginPassword(homeserver: string, user: string, password: string): Promise<void> {
+  return App.ChatLoginPassword(homeserver, user, password)
+}
+
+/** Signs in through the server's single sign-on page in the system browser. */
+export function chatLoginSSO(homeserver: string, providerId: string): Promise<void> {
+  return App.ChatLoginSSO(homeserver, providerId)
+}
+
+/** Abandons a browser sign-in that is waiting. */
+export function chatCancelSSO(): Promise<void> {
+  return App.ChatCancelSSO()
+}
+
+/** Signs in with a login token. */
+export function chatLoginToken(homeserver: string, token: string): Promise<void> {
+  return App.ChatLoginToken(homeserver, token)
+}
+
+/** Signs this device out and removes its chat data and keys. */
+export function chatSignOut(): Promise<void> {
+  return App.ChatSignOut()
+}
+
+/** Every room, direct chat, space and invite, most recent first. */
+export function chatRooms(): Promise<ChatRoom[]> {
+  if (isDemoActive()) {
+    return Promise.resolve([])
+  }
+  return App.ChatRooms().then((list) => (list ?? []) as unknown as ChatRoom[])
+}
+
+/** One room. */
+export function chatRoom(roomId: string): Promise<ChatRoom> {
+  return App.ChatRoom(roomId) as unknown as Promise<ChatRoom>
+}
+
+/** Up to limit messages older than before, or the newest when before is empty. */
+export function chatTimeline(roomId: string, before: string, limit: number): Promise<ChatTimelinePage> {
+  return App.ChatTimeline(roomId, before, limit) as unknown as Promise<ChatTimelinePage>
+}
+
+/** Sends a message, reply or edit and returns its event id. */
+export function chatSend(req: ChatSendRequest): Promise<string> {
+  return App.ChatSend(req)
+}
+
+/** Reacts to a message. */
+export function chatReact(roomId: string, eventId: string, key: string): Promise<string> {
+  return App.ChatReact(roomId, eventId, key)
+}
+
+/** Removes a message or takes back a reaction. */
+export function chatRedact(roomId: string, eventId: string): Promise<void> {
+  return App.ChatRedact(roomId, eventId)
+}
+
+/** Tells a room the user is typing; the backend drops it when typing notices are off. */
+export function chatTyping(roomId: string, typing: boolean): Promise<void> {
+  return App.ChatTyping(roomId, typing)
+}
+
+/** Moves the read marker of a room. */
+export function chatMarkRead(roomId: string, eventId: string): Promise<void> {
+  return App.ChatMarkRead(roomId, eventId)
+}
+
+/** Who is typing in a room. */
+export function chatTypists(roomId: string): Promise<ChatMember[]> {
+  return App.ChatTypists(roomId).then((list) => (list ?? []) as unknown as ChatMember[])
+}
+
+/** A room's members, by power level and name. */
+export function chatMembers(roomId: string): Promise<ChatMember[]> {
+  return App.ChatMembers(roomId).then((list) => (list ?? []) as unknown as ChatMember[])
+}
+
+/** Creates a room and returns its id. */
+export function chatCreateRoom(req: ChatCreateRoomRequest): Promise<string> {
+  return App.ChatCreateRoom(req)
+}
+
+/** The direct chat with a person, started when there is none. */
+export function chatOpenDirect(userId: string): Promise<string> {
+  return App.ChatOpenDirect(userId)
+}
+
+/** Joins a room by address or link, or accepts an invite. */
+export function chatJoin(target: string): Promise<string> {
+  return App.ChatJoin(target)
+}
+
+/** Leaves a room or declines an invite. */
+export function chatLeave(roomId: string): Promise<void> {
+  return App.ChatLeave(roomId)
+}
+
+/** Invites a person to a room. */
+export function chatInvite(roomId: string, userId: string): Promise<void> {
+  return App.ChatInvite(roomId, userId)
+}
+
+/** Adds a room to or removes it from the favourites. */
+export function chatSetFavourite(roomId: string, favourite: boolean): Promise<void> {
+  return App.ChatSetFavourite(roomId, favourite)
+}
+
+/** A person's public profile, to show who a Matrix ID is. */
+export function chatLookupProfile(userId: string): Promise<ChatProfile> {
+  return App.ChatLookupProfile(userId) as unknown as Promise<ChatProfile>
+}
+
+/** A message's file or thumbnail, in the shape the attachment previewer reads. */
+export async function chatMedia(roomId: string, eventId: string, thumbnail: boolean): Promise<AttachmentContent> {
+  const m = await App.ChatMedia(roomId, eventId, thumbnail)
+  return { filename: m.name, contentType: m.mime, sizeBytes: m.size, data: m.data, tooLarge: m.tooLarge }
+}
+
+/** A small mxc picture as a data url. */
+export function chatAvatar(mxc: string): Promise<string> {
+  return App.ChatAvatar(mxc)
+}
+
+/** An mxc image from message html as a data url. */
+export function chatInlineImage(mxc: string): Promise<string> {
+  return App.ChatInlineImage(mxc)
+}
+
+/** Asks where to save a message's file and saves it; empty when cancelled. */
+export function chatSaveMedia(roomId: string, eventId: string): Promise<string> {
+  return App.ChatSaveMedia(roomId, eventId)
+}
+
+/** The largest file the homeserver accepts, or 0 when it does not say. */
+export function chatUploadLimit(): Promise<number> {
+  return App.ChatUploadLimit()
+}
+
+/** Sends a file the frontend holds, such as a pasted image. */
+export function chatSendFileData(roomId: string, name: string, mime: string, base64: string, uploadId: string, replyTo: string): Promise<string> {
+  return App.ChatSendFileData({ roomId, name, mime, replyTo }, base64, uploadId)
+}
+
+/** Sends files from disk, such as dropped ones. */
+export function chatSendFilePaths(roomId: string, paths: string[], uploadIds: string[], replyTo: string): Promise<void> {
+  return App.ChatSendFilePaths(roomId, paths, uploadIds, replyTo)
+}
+
+/** Asks for files to send. */
+export function chatPickFiles(): Promise<string[]> {
+  return App.ChatPickFiles().then((list) => list ?? [])
+}
+
+/** Asks again for the keys of undecryptable messages. */
+export function chatRetryDecryption(roomId: string, eventIds: string[]): Promise<void> {
+  return App.ChatRetryDecryption(roomId, eventIds)
+}
+
+/** The device verifications in flight. */
+export function chatVerifications(): Promise<ChatVerification[]> {
+  if (isDemoActive()) {
+    return Promise.resolve([])
+  }
+  return App.ChatVerifications().then((list) => (list ?? []) as unknown as ChatVerification[])
+}
+
+/** Asks another device to verify; one of the user's own when userId is empty. */
+export function chatStartVerification(userId: string): Promise<string> {
+  return App.ChatStartVerification(userId)
+}
+
+/** Accepts a verification request. */
+export function chatAcceptVerification(id: string): Promise<void> {
+  return App.ChatAcceptVerification(id)
+}
+
+/** Starts comparing emoji in a ready verification. */
+export function chatStartSAS(id: string): Promise<void> {
+  return App.ChatStartSAS(id)
+}
+
+/** Says the emoji match. */
+export function chatConfirmSAS(id: string): Promise<void> {
+  return App.ChatConfirmSAS(id)
+}
+
+/** Stops a verification; mismatch says the emoji did not match. */
+export function chatCancelVerification(id: string, mismatch: boolean): Promise<void> {
+  return App.ChatCancelVerification(id, mismatch)
+}
+
+/** Forgets a finished verification. */
+export function chatDismissVerification(id: string): Promise<void> {
+  return App.ChatDismissVerification(id)
+}
+
+/** Reads the encryption state again. */
+export function chatRefreshEncryption(): Promise<void> {
+  return App.ChatRefreshEncryption()
+}
+
+/** Opens secure storage with the recovery key, or its passphrase. */
+export function chatUnlock(secret: string, passphrase: boolean): Promise<void> {
+  return App.ChatUnlock(secret, passphrase)
+}
+
+/** Sets up cross-signing, secure storage and key backup; returns the recovery key. */
+export function chatSetupEncryption(passphrase: string, password: string): Promise<string> {
+  return App.ChatSetupEncryption(passphrase, password).then((r) => r.recoveryKey)
+}
+
+/** The user's sessions, this one first. */
+export function chatDevices(): Promise<ChatDevice[]> {
+  return App.ChatDevices().then((list) => (list ?? []) as unknown as ChatDevice[])
+}
+
+/** Signs out another of the user's sessions. */
+export function chatSignOutDevice(deviceId: string, password: string): Promise<void> {
+  return App.ChatSignOutDevice(deviceId, password)
+}
+
+/** Whether the user verified a person. */
+export function chatUserTrust(userId: string): Promise<boolean> {
+  return App.ChatUserTrust(userId)
+}
+
+/** Tells the backend which room is on screen, so it stays quiet while focused. */
+export function chatSetViewing(roomId: string): Promise<void> {
+  if (isDemoActive()) {
+    return Promise.resolve()
+  }
+  return App.ChatSetViewing(roomId)
 }

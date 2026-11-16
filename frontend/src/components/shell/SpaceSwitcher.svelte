@@ -3,7 +3,7 @@
   // no rail: at the foot of the sidebar and as tabs in the top bar. a highlight
   // slides under the active segment.
   import Ph from '../common/Ph.svelte'
-  import { spaces, spaceDrop } from '../../lib/spaces'
+  import { visibleSpaces as spaces, spaceDrop } from '../../lib/spaces'
   import { maildrop } from '../../stores/maildrag'
   import { space, openSpace } from '../../stores/space'
   import { tip } from '../../lib/tip'
@@ -12,7 +12,7 @@
   /** Shows each entry's name beside its icon. */
   export let labels: boolean = false
 
-  $: activeIndex = Math.max(0, spaces.findIndex((s) => s.key === $space))
+  $: activeIndex = Math.max(0, $spaces.findIndex((s) => s.key === $space))
 </script>
 
 <div
@@ -20,10 +20,10 @@
   class:labels
   role="tablist"
   aria-label={$t('space.switcher')}
-  style={`--count:${spaces.length};--active:${activeIndex}`}
+  style={`--count:${$spaces.length};--active:${activeIndex}`}
 >
   <span class="thumb" aria-hidden="true"></span>
-  {#each spaces as entry (entry.key)}
+  {#each $spaces as entry (entry.key)}
     <button
       type="button"
       role="tab"

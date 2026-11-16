@@ -34,6 +34,7 @@
       note: conflict.mine.note,
       emails: conflict.mine.emails,
       phones: conflict.mine.phones,
+      matrixId: conflict.mine.matrixId,
       force: true,
     })
     busy = false

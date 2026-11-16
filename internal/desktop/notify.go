@@ -31,11 +31,16 @@ type notification struct {
 	actions bool
 	// feedEntryID is set instead for a new feed entry.
 	feedEntryID int64
+	// chatRoom is the chat room a chat notification is about.
+	chatRoom string
 }
 
 // notifyDataMessageID is the key of the message id in a notification's data.
 // The OS hands the data back on a click.
 const notifyDataMessageID = "messageId"
+
+// notifyDataChatRoom is the key of the chat room id in a notification's data.
+const notifyDataChatRoom = "chatRoom"
 
 // notifySeq makes notification ids unique within a run.
 var notifySeq atomic.Int64
@@ -83,6 +88,9 @@ func (a *App) deliverNotification(n notification) error {
 	}
 	if n.feedEntryID > 0 {
 		data[notifyDataFeedEntry] = n.feedEntryID
+	}
+	if n.chatRoom != "" {
+		data[notifyDataChatRoom] = n.chatRoom
 	}
 	options := notifications.NotificationOptions{
 		ID:    "pelton-" + strconv.FormatInt(notifySeq.Add(1), 10),

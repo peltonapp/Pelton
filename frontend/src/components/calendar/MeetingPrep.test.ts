@@ -85,7 +85,7 @@ function prep(patch: Partial<MeetingPrep> = {}): MeetingPrep {
         partStat: 'ACCEPTED',
         organizer: false,
         self: false,
-        contact: { id: 1, bookId: 1, bookName: 'Personal', uid: 'a', fullName: 'Ada Lovelace', organization: 'Analytical', title: 'Countess', note: '', emails: [{ value: 'ada@x.example', label: '' }], phones: [{ value: '+31 6 1234 5678', label: '' }], readOnly: false, updated: '', extra: [] },
+        contact: { id: 1, bookId: 1, bookName: 'Personal', uid: 'a', fullName: 'Ada Lovelace', organization: 'Analytical', title: 'Countess', note: '', emails: [{ value: 'ada@x.example', label: '' }], phones: [{ value: '+31 6 1234 5678', label: '' }], matrixId: '', readOnly: false, updated: '', extra: [] },
       },
       { email: 'bob@x.example', name: '', role: 'REQ-PARTICIPANT', partStat: 'DECLINED', organizer: false, self: false, contact: null },
     ],

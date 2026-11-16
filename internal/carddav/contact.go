@@ -28,7 +28,10 @@ type Contact struct {
 	Note         string
 	Emails       []Labelled
 	Phones       []Labelled
-	Card         vcard.Card
+	// MatrixID is the person's Matrix user id, kept as a vCard IMPP entry
+	// with the matrix: scheme.
+	MatrixID string
+	Card     vcard.Card
 }
 
 // Labelled is one value with the label its type carried ("home", "work"), or
@@ -70,6 +73,7 @@ func FromCard(card vcard.Card) Contact {
 		Note:         card.PreferredValue(vcard.FieldNote),
 		Emails:       labelled(card[vcard.FieldEmail]),
 		Phones:       labelled(card[vcard.FieldTelephone]),
+		MatrixID:     MatrixIDOf(card),
 		Card:         card,
 	}
 	// a card with no FN is legal in vCard 3.0 and unusable in a list, so the
@@ -98,6 +102,7 @@ func (c Contact) ToCard() vcard.Card {
 	setValue(card, vcard.FieldNote, c.Note)
 	setLabelled(card, vcard.FieldEmail, c.Emails)
 	setLabelled(card, vcard.FieldTelephone, c.Phones)
+	setMatrixID(card, c.MatrixID)
 	if c.UID != "" {
 		setValue(card, vcard.FieldUID, c.UID)
 	}
@@ -153,6 +158,73 @@ func setLabelled(card vcard.Card, name string, values []Labelled) {
 		return
 	}
 	card[name] = fields
+}
+
+// matrixScheme starts an IMPP value naming a Matrix account.
+const matrixScheme = "matrix:"
+
+// MatrixIDOf returns the Matrix user id on a card, as @user:server, or empty.
+// It reads IMPP values in the matrix: URI form (matrix:u/user:server) and the
+// older matrix:@user:server some clients wrote.
+func MatrixIDOf(card vcard.Card) string {
+	for _, f := range card[vcard.FieldIMPP] {
+		if f == nil {
+			continue
+		}
+		if id := parseMatrixIMPP(f.Value); id != "" {
+			return id
+		}
+	}
+	return ""
+}
+
+// OnlyMatrixIMPP reports whether every IMPP entry on a card is a Matrix id.
+func OnlyMatrixIMPP(card vcard.Card) bool {
+	for _, f := range card[vcard.FieldIMPP] {
+		if f != nil && parseMatrixIMPP(f.Value) == "" {
+			return false
+		}
+	}
+	return true
+}
+
+func parseMatrixIMPP(value string) string {
+	value = strings.TrimSpace(value)
+	if !strings.HasPrefix(strings.ToLower(value), matrixScheme) {
+		return ""
+	}
+	rest := value[len(matrixScheme):]
+	rest, _, _ = strings.Cut(rest, "?")
+	switch {
+	case strings.HasPrefix(rest, "u/"):
+		rest = "@" + rest[2:]
+	case strings.HasPrefix(rest, "@"):
+	default:
+		return ""
+	}
+	if !strings.Contains(rest, ":") {
+		return ""
+	}
+	return rest
+}
+
+// setMatrixID replaces the card's Matrix IMPP entry, leaving any other
+// instant messaging accounts on it alone.
+func setMatrixID(card vcard.Card, matrixID string) {
+	var kept []*vcard.Field
+	for _, f := range card[vcard.FieldIMPP] {
+		if f != nil && parseMatrixIMPP(f.Value) == "" {
+			kept = append(kept, f)
+		}
+	}
+	if id := strings.TrimSpace(matrixID); strings.HasPrefix(id, "@") && strings.Contains(id, ":") {
+		kept = append(kept, &vcard.Field{Value: matrixScheme + "u/" + id[1:]})
+	}
+	if len(kept) == 0 {
+		delete(card, vcard.FieldIMPP)
+		return
+	}
+	card[vcard.FieldIMPP] = kept
 }
 
 // ParseCard reads a stored vCard back into a Contact.

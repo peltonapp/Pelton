@@ -983,6 +983,17 @@ export interface UIPrefs {
   // unread count of the unified inbox (#488).
   statusClock: boolean
   statusUnread: boolean
+  // chatEnabled turns the Matrix chat space on. Off by default; nothing chat
+  // related runs or connects until it is on.
+  chatEnabled: boolean
+  // chatSendReceipts sends public read receipts; off keeps them private.
+  chatSendReceipts: boolean
+  // chatSendTyping tells rooms while the user types.
+  chatSendTyping: boolean
+  // chatNotify picks which chat messages notify.
+  chatNotify: ChatNotifyMode
+  // chatMarkdown formats chat messages as Markdown when sent.
+  chatMarkdown: boolean
   // markReadOnOpen marks a message read when it is opened (#517).
   markReadOnOpen: boolean
   // openOnArrow opens the row the arrow keys move to, instead of waiting for Enter.
@@ -1578,9 +1589,11 @@ export type AfterReplySend = 'nothing' | 'archive'
 /** When a follow-up reminder set from a preset comes: each lands at nine. */
 export type FollowUpInterval = 'tomorrow' | 'threeDays' | 'week'
 /** One of the top-level areas of the app. */
-export type Space = 'mail' | 'contacts' | 'calendar' | 'tasks' | 'projects' | 'notes' | 'feeds'
+export type Space = 'mail' | 'contacts' | 'calendar' | 'tasks' | 'projects' | 'notes' | 'feeds' | 'chat'
 /** How the Projects space lists projects. */
 export type ProjectsView = 'grid' | 'list'
+/** Which chat messages notify: all, direct messages and mentions, or none. */
+export type ChatNotifyMode = 'all' | 'mentions' | 'off'
 export type SelectAllScope = 'offer' | 'all' | 'loaded'
 
 // SearchSort is an order search results can actually come back in. The backend
@@ -1753,6 +1766,8 @@ export interface Contact {
   note: string
   emails: ContactValue[]
   phones: ContactValue[]
+  // matrixId is the person's Matrix user id, or empty.
+  matrixId: string
   readOnly: boolean
   updated: string
   // vCard properties Pelton has no field for. They are kept on every save;
@@ -1824,6 +1839,8 @@ export interface ContactDraft {
   note: string
   emails: ContactValue[]
   phones: ContactValue[]
+  // matrixId is the person's Matrix user id; empty removes it.
+  matrixId: string
   // set only by "keep mine" on the conflict dialog: write over whatever the
   // server now holds.
   force: boolean
@@ -2802,4 +2819,211 @@ export interface FeedCandidate {
 export interface FeedImportResult {
   added: number
   skipped: number
+}
+
+/** The chat account's session state. */
+export type ChatState = 'signedOut' | 'starting' | 'syncing' | 'online' | 'offline' | 'error' | 'stopped'
+
+/** ChatEncryption is this device's end to end encryption state. */
+export interface ChatEncryption {
+  ready: boolean
+  deviceVerified: boolean
+  crossSigning: boolean
+  secretStorage: boolean
+  secretStoragePassphrase: boolean
+  backupVersion: string
+  backupKeys: number
+  backupActive: boolean
+  fingerprint: string
+}
+
+/** ChatStatus is the chat account as settings and the banner show it. */
+export interface ChatStatus {
+  state: ChatState
+  userId: string
+  deviceId: string
+  homeserver: string
+  displayName: string
+  avatar: string
+  error: string
+  encryption: ChatEncryption
+}
+
+/** ChatServer is a homeserver found from what the user typed, with its sign-in methods. */
+export interface ChatServer {
+  homeserver: string
+  serverName: string
+  user: string
+  password: boolean
+  sso: boolean
+  token: boolean
+  providers: { id: string; name: string }[]
+}
+
+/** The kind of a chat room in the list. */
+export type ChatRoomKind = 'direct' | 'room' | 'space'
+
+/** ChatRoom is one room, direct chat, space or invite. */
+export interface ChatRoom {
+  id: string
+  name: string
+  topic: string
+  avatar: string
+  alias: string
+  kind: ChatRoomKind
+  directUser: string
+  encrypted: boolean
+  membership: 'join' | 'invite'
+  inviterId: string
+  inviterName: string
+  favourite: boolean
+  lowPriority: boolean
+  unread: number
+  highlight: number
+  lastTs: number
+  preview: string
+  previewSender: string
+  previewKind: string
+  spaces: string[]
+  memberCount: number
+  fullyRead: string
+}
+
+/** ChatMember is a person in a room. */
+export interface ChatMember {
+  userId: string
+  name: string
+  avatar: string
+  membership: string
+  powerLevel: number
+}
+
+/** The kind of a timeline row. */
+export type ChatMessageKind =
+  | 'text'
+  | 'notice'
+  | 'emote'
+  | 'image'
+  | 'video'
+  | 'audio'
+  | 'file'
+  | 'sticker'
+  | 'location'
+  | 'state'
+  | 'redacted'
+  | 'encrypted'
+  | 'unknown'
+
+/** ChatMessage is one timeline row with edits, reactions and redactions applied. */
+export interface ChatMessage {
+  id: string
+  sender: string
+  senderName: string
+  senderAvatar: string
+  ts: number
+  kind: ChatMessageKind
+  body: string
+  // sanitised to the Matrix subset by the backend.
+  html: string
+  edited: boolean
+  own: boolean
+  replyTo: { id: string; sender: string; senderName: string; body: string; missing: boolean } | null
+  reactions: ChatReaction[]
+  media: ChatMedia | null
+  state: { kind: string; target: string; targetName: string; value: string } | null
+  encrypted: boolean
+  decryptError: string
+  missingKeys: boolean
+  mentioned: boolean
+  readBy: ChatMember[]
+}
+
+/** ChatReaction is one reaction key on a message. */
+export interface ChatReaction {
+  key: string
+  count: number
+  // the user's own reaction event with this key, or empty.
+  mine: string
+  senders: string[]
+}
+
+/** ChatMedia describes the file of a media message; the bytes load separately. */
+export interface ChatMedia {
+  name: string
+  mime: string
+  size: number
+  width: number
+  height: number
+  duration: number
+  thumbnail: boolean
+  encrypted: boolean
+}
+
+/** ChatTimelinePage is a slice of a timeline, oldest first. */
+export interface ChatTimelinePage {
+  messages: ChatMessage[]
+  hasMore: boolean
+  fullyRead: string
+}
+
+/** ChatSendRequest is a text message, reply or edit to send. */
+export interface ChatSendRequest {
+  roomId: string
+  text: string
+  markdown: boolean
+  emote: boolean
+  replyTo: string
+  edit: string
+  mentions: { userId: string; name: string }[]
+}
+
+/** ChatCreateRoomRequest describes a new room. */
+export interface ChatCreateRoomRequest {
+  name: string
+  topic: string
+  invite: string[]
+  encrypted: boolean
+  public: boolean
+}
+
+/** ChatVerificationState is the step an interactive verification is at. */
+export type ChatVerificationState = 'requested' | 'ready' | 'sas' | 'confirmed' | 'done' | 'cancelled'
+
+/** ChatVerification is a device verification in flight. */
+export interface ChatVerification {
+  id: string
+  userId: string
+  userName: string
+  deviceId: string
+  self: boolean
+  incoming: boolean
+  state: ChatVerificationState
+  emojis: { emoji: string; description: string }[]
+  decimals: number[]
+  reason: string
+}
+
+/** ChatDevice is one of the user's sessions. */
+export interface ChatDevice {
+  id: string
+  name: string
+  lastSeen: number
+  current: boolean
+  verified: boolean
+}
+
+/** ChatProfile is a person's public name and picture. */
+export interface ChatProfile {
+  userId: string
+  name: string
+  avatar: string
+}
+
+/** ChatMediaProgress reports a file being saved or sent. */
+export interface ChatMediaProgress {
+  key: string
+  running: boolean
+  bytesDone: number
+  bytesTotal: number
+  error: string
 }

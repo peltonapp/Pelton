@@ -82,6 +82,7 @@ const contact: Contact = {
     { value: 'ann@work.example', label: 'work' },
   ],
   phones: [],
+  matrixId: '',
   readOnly: false,
   updated: '',
   extra: [],

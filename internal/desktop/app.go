@@ -258,6 +258,9 @@ type App struct {
 	// feedState holds the feed fetcher and the refresh lock. See
 	// feeds_refresh.go.
 	feedState feedFetchState
+
+	// chat is the opt in Matrix chat of the active profile (bind_chat.go).
+	chat chatState
 }
 
 // locked reports whether the app lock is engaged. An App built without one,
@@ -453,6 +456,7 @@ func (a *App) shutdown() {
 	a.saveGeometry()
 	a.stopTray()
 	a.stopMCP()
+	a.stopChat()
 	// a message sent just before quitting may still be on its way to Sent.
 	copied := make(chan struct{})
 	go func() {

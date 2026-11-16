@@ -599,6 +599,19 @@ type UIPrefsDTO struct {
 	// unread count of the unified inbox.
 	StatusClock  bool `json:"statusClock"`
 	StatusUnread bool `json:"statusUnread"`
+	// ChatEnabled turns the Matrix chat space on. Off by default: nothing
+	// chat related runs or connects until it is on.
+	ChatEnabled bool `json:"chatEnabled"`
+	// ChatSendReceipts sends public read receipts in chat; off keeps them
+	// private.
+	ChatSendReceipts bool `json:"chatSendReceipts"`
+	// ChatSendTyping tells chat rooms while the user types.
+	ChatSendTyping bool `json:"chatSendTyping"`
+	// ChatNotify picks which chat messages notify: all, mentions (direct
+	// messages and mentions, the default) or off.
+	ChatNotify string `json:"chatNotify"`
+	// ChatMarkdown formats chat messages as Markdown when sent.
+	ChatMarkdown bool `json:"chatMarkdown"`
 	// MarkReadOnOpen marks a message read when it is opened in the list.
 	MarkReadOnOpen bool `json:"markReadOnOpen"`
 	// OpenOnArrow opens the message the arrow keys move to in the list, instead
@@ -789,6 +802,11 @@ func (a *App) GetUIPrefs() (UIPrefsDTO, error) {
 		SyncProgressBar:            a.boolSetting(settingSyncProgress, true),
 		StatusClock:                a.boolSetting(settingStatusClock, true),
 		StatusUnread:               a.boolSetting(settingStatusUnread, true),
+		ChatEnabled:                a.boolSetting(settingChatEnabled, false),
+		ChatSendReceipts:           a.boolSetting(settingChatSendReceipts, true),
+		ChatSendTyping:             a.boolSetting(settingChatSendTyping, true),
+		ChatNotify:                 a.stringSetting(settingChatNotify, "mentions"),
+		ChatMarkdown:               a.boolSetting(settingChatMarkdown, true),
 		MarkReadOnOpen:             a.boolSetting(settingMarkReadOnOpen, true),
 		OpenOnArrow:                a.boolSetting(settingOpenOnArrow, false),
 		SignatureAboveQuote:        a.boolSetting(settingSignatureAboveQuote, false),
@@ -874,6 +892,9 @@ func (a *App) SetSetting(key, value string) error {
 	}
 	if key == settingUnreadBadge || key == settingLanguage {
 		a.applyUnreadBadge()
+	}
+	if key == settingChatEnabled {
+		a.chatSettingChanged(value)
 	}
 	if key == settingIndexDecrypted {
 		// rebuilt from scratch rather than re-indexed in place: switching this

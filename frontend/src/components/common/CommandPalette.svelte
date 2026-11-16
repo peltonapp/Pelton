@@ -81,18 +81,20 @@
   // the event before the message.
   $: groupRank = (
     $space === 'calendar'
-      ? ['calendar', 'action', 'mail', 'navigate', 'tasks', 'projects', 'notes', 'contacts', 'feeds', 'setting']
+      ? ['calendar', 'action', 'mail', 'navigate', 'tasks', 'projects', 'notes', 'contacts', 'feeds', 'chat', 'setting']
       : $space === 'contacts'
-        ? ['contacts', 'action', 'mail', 'navigate', 'calendar', 'tasks', 'projects', 'notes', 'feeds', 'setting']
+        ? ['contacts', 'action', 'mail', 'navigate', 'calendar', 'tasks', 'projects', 'notes', 'feeds', 'chat', 'setting']
         : $space === 'tasks'
-          ? ['tasks', 'action', 'mail', 'navigate', 'calendar', 'projects', 'notes', 'contacts', 'feeds', 'setting']
+          ? ['tasks', 'action', 'mail', 'navigate', 'calendar', 'projects', 'notes', 'contacts', 'feeds', 'chat', 'setting']
           : $space === 'projects'
-            ? ['projects', 'action', 'mail', 'navigate', 'tasks', 'calendar', 'notes', 'contacts', 'feeds', 'setting']
+            ? ['projects', 'action', 'mail', 'navigate', 'tasks', 'calendar', 'notes', 'contacts', 'feeds', 'chat', 'setting']
             : $space === 'notes'
-              ? ['notes', 'action', 'navigate', 'mail', 'calendar', 'tasks', 'projects', 'contacts', 'feeds', 'setting']
+              ? ['notes', 'action', 'navigate', 'mail', 'calendar', 'tasks', 'projects', 'contacts', 'feeds', 'chat', 'setting']
               : $space === 'feeds'
-                ? ['feeds', 'action', 'mail', 'navigate', 'calendar', 'tasks', 'projects', 'notes', 'contacts', 'setting']
-                : ['action', 'mail', 'calendar', 'tasks', 'projects', 'notes', 'contacts', 'feeds', 'navigate', 'setting']
+                ? ['feeds', 'action', 'mail', 'navigate', 'calendar', 'tasks', 'projects', 'notes', 'contacts', 'chat', 'setting']
+                : $space === 'chat'
+                  ? ['chat', 'action', 'mail', 'navigate', 'calendar', 'tasks', 'projects', 'notes', 'contacts', 'feeds', 'setting']
+                  : ['action', 'mail', 'calendar', 'tasks', 'projects', 'notes', 'contacts', 'feeds', 'chat', 'navigate', 'setting']
   ) as CommandGroup[]
 
   /**
@@ -142,6 +144,9 @@
     }
     if (group === 'feeds') {
       return $t('space.feeds')
+    }
+    if (group === 'chat') {
+      return $t('space.chat')
     }
     return $t('palette.group.settings')
   }

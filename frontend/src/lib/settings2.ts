@@ -20,6 +20,7 @@ import calendarIcon from '@phosphor-icons/core/assets/duotone/calendar-blank-duo
 import tasksIcon from '@phosphor-icons/core/assets/duotone/list-checks-duotone.svg?raw'
 import notesIcon from '@phosphor-icons/core/assets/duotone/notebook-duotone.svg?raw'
 import feedsIcon from '@phosphor-icons/core/assets/duotone/rss-duotone.svg?raw'
+import chatIcon from '@phosphor-icons/core/assets/duotone/chats-circle-duotone.svg?raw'
 import accountsIcon from '@phosphor-icons/core/assets/duotone/at-duotone.svg?raw'
 import vacationIcon from '@phosphor-icons/core/assets/duotone/airplane-takeoff-duotone.svg?raw'
 import filtersIcon from '@phosphor-icons/core/assets/duotone/funnel-duotone.svg?raw'
@@ -90,6 +91,7 @@ export const settingsPages2: SettingsPage[] = [
   { key: 'tasks', group: 'people', labelKey: 'settings2.page.tasks', icon: tasksIcon },
   { key: 'notes', group: 'people', labelKey: 'settings2.page.notes', icon: notesIcon },
   { key: 'feeds', group: 'people', labelKey: 'settings2.page.feeds', icon: feedsIcon },
+  { key: 'chat', group: 'people', labelKey: 'settings2.page.chat', icon: chatIcon },
   { key: 'insights', group: 'mail', labelKey: 'settings2.page.insights', icon: insightsIcon },
   { key: 'contacts', group: 'people', labelKey: 'settings2.page.contacts', icon: contactsIcon },
   { key: 'accounts', group: 'accounts', labelKey: 'settings2.page.accounts', icon: accountsIcon },
