@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	goimap "github.com/emersion/go-imap/v2"
 	"github.com/peltonapp/Pelton/internal/autoconfig"
 	"github.com/peltonapp/Pelton/internal/certtrust"
 	"github.com/peltonapp/Pelton/internal/credentials"
@@ -15,7 +16,6 @@ import (
 	"github.com/peltonapp/Pelton/internal/oauth"
 	psmtp "github.com/peltonapp/Pelton/internal/smtp"
 	"github.com/peltonapp/Pelton/internal/storage"
-	goimap "github.com/emersion/go-imap/v2"
 )
 
 // oauthFlowTimeout bounds how long the interactive consent flow may take.

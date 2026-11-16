@@ -33,8 +33,8 @@ type Message struct {
 	Own     bool   `json:"own"`
 	ReplyTo *Reply `json:"replyTo"`
 	// Reactions are grouped by key, in the order they were first given.
-	Reactions []Reaction `json:"reactions"`
-	Media     *Media     `json:"media"`
+	Reactions []Reaction   `json:"reactions"`
+	Media     *Media       `json:"media"`
 	State     *StateChange `json:"state"`
 	// Encrypted is true for an event that was sent encrypted.
 	Encrypted bool `json:"encrypted"`

@@ -15,10 +15,10 @@ import (
 	"strings"
 	"time"
 
+	"github.com/google/uuid"
 	pcarddav "github.com/peltonapp/Pelton/internal/carddav"
 	"github.com/peltonapp/Pelton/internal/credentials"
 	"github.com/peltonapp/Pelton/internal/storage"
-	"github.com/google/uuid"
 )
 
 // contactsTimeout bounds one address book request. Contact sync is small next
