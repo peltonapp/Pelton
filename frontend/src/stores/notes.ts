@@ -129,14 +129,15 @@ export function requestNotes(request: NoteRequest): void {
 let reloadTimer: ReturnType<typeof setTimeout> | null = null
 let pendingReload: Promise<void> | null = null
 
-/** Reloads the index of the open folder. */
+/** Reloads the index of the open folder; with none open the index is empty. */
 export async function reloadVault(): Promise<void> {
   if (pendingReload) {
     return pendingReload
   }
   pendingReload = (async () => {
     try {
-      vaultIndex.set(await vaultSnapshot())
+      const snap = await vaultSnapshot()
+      vaultIndex.set(snap.folder ? snap : null)
     } catch (err) {
       vaultIndex.set(null)
       const msg = errorMessage(err)

@@ -41,7 +41,6 @@
     ensureVault,
     moveNote,
     noteInsert,
-    noteLine,
     noteRequest,
     noteResolver,
     noteTags,
@@ -484,9 +483,9 @@
     }
     const isNote = /\.md$/i.test(p.path)
     const target = joinPath(noteFolder(p.path), isNote ? `${safeNoteName(value)}.md` : safeNoteName(value))
-    if (p.path === active) {
-      await editor?.flush()
-    }
+    // the open note may link to what moves; its edits go to disk first so
+    // the link update works on them.
+    await editor?.flush()
     const ok = await moveNote(p.path, target)
     if (ok && !isNote && scope.kind === 'folder' && scope.path === p.path) {
       scope = { kind: 'folder', path: target }
@@ -499,9 +498,7 @@
     if (to === from || folder === from || folder.startsWith(`${from}/`) || noteFolder(from) === folder) {
       return
     }
-    if (from === active) {
-      await editor?.flush()
-    }
+    await editor?.flush()
     await moveNote(from, to)
   }
 
@@ -667,13 +664,6 @@
     const text = $noteInsert
     noteInsert.set(null)
     editor.insertText(text)
-  }
-
-  // a line asked for from elsewhere (a backlink, the outline, a search hit).
-  $: if ($noteLine && editor && $noteLine.path === active) {
-    const l = $noteLine.line
-    noteLine.set(null)
-    void tick().then(() => editor?.goToLine(l))
   }
 
   function onKeydown(e: KeyboardEvent): void {
@@ -847,7 +837,7 @@
       <div class="editor-row">
         <div class="editor-host">
           {#key active}
-            <NoteEditor bind:this={editor} path={active} {mode} {context} {revision} line={$noteLine?.path === active ? $noteLine.line : null} on:headings={headingsChanged} on:gone={() => active && closeNote(active)} />
+            <NoteEditor bind:this={editor} path={active} {mode} {context} {revision} on:headings={headingsChanged} on:gone={() => active && closeNote(active)} />
           {/key}
         </div>
         {#if panelOpen}

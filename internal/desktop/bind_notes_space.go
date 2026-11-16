@@ -307,8 +307,12 @@ func (a *App) VaultRescan() error {
 }
 
 // VaultSnapshot returns every note, folder and other file of the open folder.
+// With no folder open it is empty, with an empty Folder; nothing is created.
 func (a *App) VaultSnapshot() (VaultSnapshotDTO, error) {
 	svc, err := a.openedVault()
+	if errors.Is(err, notes.ErrNoVault) {
+		return VaultSnapshotDTO{Notes: []VaultNoteDTO{}, Folders: []string{}, Files: []string{}}, nil
+	}
 	if err != nil {
 		return VaultSnapshotDTO{}, err
 	}

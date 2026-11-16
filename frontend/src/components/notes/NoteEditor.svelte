@@ -12,6 +12,7 @@
   // the one on disk. a clean editor simply reloads. line endings and every
   // byte outside what was typed stay as they were in the file.
   import { createEventDispatcher, onDestroy, onMount, tick } from 'svelte'
+  import { get } from 'svelte/store'
   import { Annotation, Compartment, EditorSelection, EditorState } from '@codemirror/state'
   import { EditorView, drawSelection, keymap } from '@codemirror/view'
   import { defaultKeymap, history, historyKeymap } from '@codemirror/commands'
@@ -28,6 +29,7 @@
   import { parseFrontMatter } from '../../lib/notemd'
   import { currentUIScale } from '../../theme/theme'
   import { errorMessage, toastError } from '../../stores/toast'
+  import { noteLine } from '../../stores/notes'
   import { t } from '../../lib/i18n'
 
   /** The vault path of the note. */
@@ -36,15 +38,11 @@
   export let mode: PreviewMode = 'live'
   /** What the editor needs from the notes space, without the path. */
   export let context: Omit<NoteContext, 'path'>
-  /** A line to show once loaded, counting from 0. */
-  export let line: number | null = null
   /** Bumped by the screen when the index changed, so links resolve again. */
   export let revision = 0
 
   const dispatch = createEventDispatcher<{ saved: { path: string }; gone: { path: string }; headings: void }>()
   const saveDelay = 700
-  // the line asked for when the editor opened; later requests use goToLine.
-  const initialLine = line
 
   let host: HTMLDivElement
   let view: EditorView | null = null
@@ -139,8 +137,10 @@
       return
     }
     const saved = places.get(path)
-    if (initialLine !== null) {
-      goToLine(initialLine)
+    const asked = get(noteLine)
+    if (asked && asked.path === path) {
+      noteLine.set(null)
+      goToLine(asked.line)
       return
     }
     if (saved) {
@@ -376,6 +376,13 @@
 
   $: if (view && revision) {
     view.dispatch({ effects: refreshPreview.of(null) })
+  }
+
+  // a line asked for from elsewhere: a backlink, the outline, a search hit.
+  $: if (view && !loading && $noteLine && $noteLine.path === path) {
+    const at = $noteLine.line
+    noteLine.set(null)
+    goToLine(at)
   }
 
   /** The note's current text. */
