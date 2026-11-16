@@ -9226,6 +9226,20 @@ export class UIPrefsDTO {
     "notifyNewMail": boolean;
 
     /**
+     * NotifyActionArchive, NotifyActionMarkRead and NotifyActionReply choose
+     * which buttons a new-mail notification carries.
+     */
+    "notifyActionArchive": boolean;
+    "notifyActionMarkRead": boolean;
+    "notifyActionReply": boolean;
+
+    /**
+     * CleanLinks removes tracking parameters and redirect wrappers from links
+     * opened from a mail.
+     */
+    "cleanLinks": boolean;
+
+    /**
      * VerboseSync shows which mailbox is currently syncing in the status line,
      * with the account and server it is talking to. SyncProgressBar puts a real
      * progress bar next to it, counting message bodies rather than mailboxes.
@@ -9604,6 +9618,18 @@ export class UIPrefsDTO {
         }
         if (!("notifyNewMail" in $$source)) {
             this["notifyNewMail"] = false;
+        }
+        if (!("notifyActionArchive" in $$source)) {
+            this["notifyActionArchive"] = false;
+        }
+        if (!("notifyActionMarkRead" in $$source)) {
+            this["notifyActionMarkRead"] = false;
+        }
+        if (!("notifyActionReply" in $$source)) {
+            this["notifyActionReply"] = false;
+        }
+        if (!("cleanLinks" in $$source)) {
+            this["cleanLinks"] = false;
         }
         if (!("verboseSync" in $$source)) {
             this["verboseSync"] = false;

@@ -27,7 +27,6 @@ import (
 	"github.com/wailsapp/wails/v3/pkg/application"
 	"github.com/wailsapp/wails/v3/pkg/events"
 	"github.com/wailsapp/wails/v3/pkg/services/dock"
-	"github.com/wailsapp/wails/v3/pkg/services/notifications"
 	"golang.org/x/oauth2"
 )
 
@@ -65,10 +64,13 @@ type App struct {
 	// notifier posts the new-mail notifications (notify.go) and dock carries
 	// the unread badge on macOS. Both are nil in tests. notifyReady is set once
 	// the notification service has started (notifier.go).
-	notifier    *notifications.NotificationService
+	notifier    notificationCenter
 	notifyReady atomic.Bool
-	dock        *dock.DockService
-	log         *slog.Logger
+	// notifyCategories holds the ids of the button sets already registered
+	// with the notification service in this run (notify_actions.go).
+	notifyCategories sync.Map
+	dock             *dock.DockService
+	log              *slog.Logger
 	// sentCopies tracks the copies of sent mail still on their way to the Sent
 	// folder (bind_sync.go), which run after the outbox has moved on.
 	sentCopies sync.WaitGroup

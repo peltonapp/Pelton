@@ -89,7 +89,7 @@
   import { liabilityAccepted } from './lib/liability'
   import { setDemoActive } from './lib/demo'
   import { recordArchived } from './stores/undoarchive'
-  import { onMailNew, onMailRepaired, onSyncState, onSyncProgress, onOutboxChanged, onMenu, onViewsChanged, onFoldersChanged, onProfileChanged, onMailtoCompose, onAgentProposals, onOpenMessage, onArchiveAfterSend, onCalendarReminder, onTaskReminder, onICSOpen, type Unsubscribe, type MailtoDraft, type CalendarReminderEvent, type TaskReminderEvent } from './lib/events'
+  import { onMailNew, onMailRepaired, onSyncState, onSyncProgress, onOutboxChanged, onMenu, onViewsChanged, onFoldersChanged, onProfileChanged, onMailtoCompose, onAgentProposals, onOpenMessage, onReplyMessage, onArchiveAfterSend, onCalendarReminder, onTaskReminder, onICSOpen, type Unsubscribe, type MailtoDraft, type CalendarReminderEvent, type TaskReminderEvent } from './lib/events'
   import { loadViews, editingView, closeViewEditor, openViewEditor, views as savedViews } from './stores/views'
   import { selectSavedView } from './stores/selection'
   import { isMac } from './lib/i18n'
@@ -567,7 +567,10 @@
     unsubscribers.push(
       onMailRepaired(() => {
         // the subjects and bodies changed underneath the list, so what is on
-        // screen is stale rather than merely incomplete.
+        // screen is stale rather than merely incomplete. the unread counts
+        // beside it can be too, after a notification button archived or read
+        // a message.
+        void refreshSidebar()
         void loadList(get(selection))
       }),
     )
@@ -657,6 +660,15 @@
     // time this arrives; all that is left is to go to the message.
     unsubscribers.push(
       onOpenMessage((e) => revealMessage(e.messageId, e.accountId, e.folderId, get(sidebar).data ?? null)),
+    )
+    unsubscribers.push(
+      onReplyMessage(async (e) => {
+        try {
+          openReply(await getMessage(e.messageId), editorMode, false)
+        } catch (err) {
+          toastError(errorMessage(err))
+        }
+      }),
     )
     // a send and archive from a compose window, which closes as it sends.
     unsubscribers.push(
