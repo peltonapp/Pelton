@@ -226,6 +226,10 @@ type App struct {
 	// focusMu serialises changes to the stored focus state (bind_focus.go),
 	// which the ticker, the bindings and the new-mail path all write.
 	focusMu sync.Mutex
+
+	// feedState holds the feed fetcher and the refresh lock. See
+	// feeds_refresh.go.
+	feedState feedFetchState
 }
 
 // IsDemoMode reports whether the app was launched in the cosmetic demo mode. The

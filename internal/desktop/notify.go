@@ -26,6 +26,8 @@ type notification struct {
 	title     string
 	body      string
 	messageID int64
+	// feedEntryID is set instead for a new feed entry.
+	feedEntryID int64
 }
 
 // notifyDataMessageID is the key of the message id in a notification's data.
@@ -40,8 +42,13 @@ var notifySeq atomic.Int64
 // names no message. The data has been through JSON on some platforms, so the
 // id can come back as any of the shapes a number takes there.
 func notifyMessageID(data map[string]any) (int64, bool) {
+	return notifyDataID(data, notifyDataMessageID)
+}
+
+// notifyDataID reads a positive id stored under key in a notification's data.
+func notifyDataID(data map[string]any, key string) (int64, bool) {
 	var id int64
-	switch v := data[notifyDataMessageID].(type) {
+	switch v := data[key].(type) {
 	case int64:
 		id = v
 	case int:
@@ -71,6 +78,9 @@ func (a *App) deliverNotification(n notification) error {
 	if n.messageID > 0 {
 		data[notifyDataMessageID] = n.messageID
 	}
+	if n.feedEntryID > 0 {
+		data[notifyDataFeedEntry] = n.feedEntryID
+	}
 	return a.notifier.SendNotification(notifications.NotificationOptions{
 		ID:    "pelton-" + strconv.FormatInt(notifySeq.Add(1), 10),
 		Title: n.title,
@@ -90,6 +100,10 @@ func (a *App) onNotificationResponse(result notifications.NotificationResult) {
 	}
 	if id, ok := notifyMessageID(result.Response.UserInfo); ok {
 		a.openFromNotification(id)
+		return
+	}
+	if id, ok := notifyDataID(result.Response.UserInfo, notifyDataFeedEntry); ok {
+		a.openFeedFromNotification(id)
 		return
 	}
 	a.showWindow()
@@ -115,6 +129,10 @@ type notifyStrings struct {
 	focusOneVIP     string // one message, from a VIP
 	focusManyVIP    string // %d messages, %d of them from VIPs
 	focusManyOneVIP string // %d messages, one of them from a VIP
+
+	// the Feeds space (feeds_refresh.go).
+	feeds   string // title of a summary over several feeds
+	feedNew string // %d new entries
 }
 
 var notifyLocales = map[string]notifyStrings{
@@ -123,72 +141,84 @@ var notifyLocales = map[string]notifyStrings{
 		followUp: "No reply yet", followUpTo: "To %s",
 		focusEnded: "Focus ended", focusOne: "1 new message", focusOneVIP: "1 new message, from a VIP",
 		focusManyVIP: "%d new messages, %d from VIPs", focusManyOneVIP: "%d new messages, 1 from a VIP",
+		feeds: "Feeds", feedNew: "%d new articles",
 	},
 	"de": {
 		newMail: "Neue Nachricht", vipNewMail: "Neue Nachricht von einem VIP", noSubject: "(kein Betreff)", fromUnknown: "Unbekannter Absender", summary: "%d neue Nachrichten",
 		followUp: "Noch keine Antwort", followUpTo: "An %s",
 		focusEnded: "Fokus beendet", focusOne: "1 neue Nachricht", focusOneVIP: "1 neue Nachricht, von einem VIP",
 		focusManyVIP: "%d neue Nachrichten, %d von VIPs", focusManyOneVIP: "%d neue Nachrichten, 1 von einem VIP",
+		feeds: "Feeds", feedNew: "%d neue Artikel",
 	},
 	"fr": {
 		newMail: "Nouveau message", vipNewMail: "Nouveau message d'un VIP", noSubject: "(sans objet)", fromUnknown: "Expéditeur inconnu", summary: "%d nouveaux messages",
 		followUp: "Pas encore de réponse", followUpTo: "À %s",
 		focusEnded: "Concentration terminée", focusOne: "1 nouveau message", focusOneVIP: "1 nouveau message, d'un VIP",
 		focusManyVIP: "%d nouveaux messages, dont %d de VIP", focusManyOneVIP: "%d nouveaux messages, dont 1 d'un VIP",
+		feeds: "Flux", feedNew: "%d nouveaux articles",
 	},
 	"nl": {
 		newMail: "Nieuw bericht", vipNewMail: "Nieuw bericht van een VIP", noSubject: "(geen onderwerp)", fromUnknown: "Onbekende afzender", summary: "%d nieuwe berichten",
 		followUp: "Nog geen antwoord", followUpTo: "Aan %s",
 		focusEnded: "Focus beëindigd", focusOne: "1 nieuw bericht", focusOneVIP: "1 nieuw bericht, van een VIP",
 		focusManyVIP: "%d nieuwe berichten, %d van VIP's", focusManyOneVIP: "%d nieuwe berichten, 1 van een VIP",
+		feeds: "Feeds", feedNew: "%d nieuwe artikelen",
 	},
 	"es": {
 		newMail: "Nuevo mensaje", vipNewMail: "Nuevo mensaje de un VIP", noSubject: "(sin asunto)", fromUnknown: "Remitente desconocido", summary: "%d mensajes nuevos",
 		followUp: "Aún sin respuesta", followUpTo: "Para %s",
 		focusEnded: "Concentración terminada", focusOne: "1 mensaje nuevo", focusOneVIP: "1 mensaje nuevo, de un VIP",
 		focusManyVIP: "%d mensajes nuevos, %d de VIP", focusManyOneVIP: "%d mensajes nuevos, 1 de un VIP",
+		feeds: "Fuentes", feedNew: "%d artículos nuevos",
 	},
 	"it": {
 		newMail: "Nuova email", vipNewMail: "Nuova email da un VIP", noSubject: "(nessun oggetto)", fromUnknown: "Mittente sconosciuto", summary: "%d nuove email",
 		followUp: "Ancora nessuna risposta", followUpTo: "A %s",
 		focusEnded: "Concentrazione terminata", focusOne: "1 nuova email", focusOneVIP: "1 nuova email, da un VIP",
 		focusManyVIP: "%d nuove email, %d da VIP", focusManyOneVIP: "%d nuove email, 1 da un VIP",
+		feeds: "Feed", feedNew: "%d nuovi articoli",
 	},
 	"pl": {
 		newMail: "Nowa wiadomość", vipNewMail: "Nowa wiadomość od VIP-a", noSubject: "(bez tematu)", fromUnknown: "Nieznany nadawca", summary: "Nowe wiadomości: %d",
 		followUp: "Brak odpowiedzi", followUpTo: "Do: %s",
 		focusEnded: "Skupienie zakończone", focusOne: "1 nowa wiadomość", focusOneVIP: "1 nowa wiadomość, od VIP-a",
 		focusManyVIP: "Nowe wiadomości: %d, od VIP-ów: %d", focusManyOneVIP: "Nowe wiadomości: %d, od VIP-a: 1",
+		feeds: "Kanały", feedNew: "Nowe artykuły: %d",
 	},
 	"ru": {
 		newMail: "Новая почта", vipNewMail: "Новая почта от VIP-отправителя", noSubject: "(без темы)", fromUnknown: "Неизвестный отправитель", summary: "Новых писем: %d",
 		followUp: "Ответа пока нет", followUpTo: "Кому: %s",
 		focusEnded: "Режим фокуса завершён", focusOne: "1 новое письмо", focusOneVIP: "1 новое письмо, от VIP-отправителя",
 		focusManyVIP: "Новых писем: %d, от VIP: %d", focusManyOneVIP: "Новых писем: %d, от VIP: 1",
+		feeds: "Ленты", feedNew: "Новых статей: %d",
 	},
 	"tr": {
 		newMail: "Yeni posta", vipNewMail: "Bir VIP'ten yeni posta", noSubject: "(konu yok)", fromUnknown: "Bilinmeyen gönderici", summary: "%d yeni posta",
 		followUp: "Henüz yanıt yok", followUpTo: "Alıcı: %s",
 		focusEnded: "Odak sona erdi", focusOne: "1 yeni posta", focusOneVIP: "1 yeni posta, bir VIP'ten",
 		focusManyVIP: "%d yeni posta, %d tanesi VIP'lerden", focusManyOneVIP: "%d yeni posta, 1 tanesi bir VIP'ten",
+		feeds: "Akışlar", feedNew: "%d yeni makale",
 	},
 	"pt": {
 		newMail: "Correio novo", vipNewMail: "Correio novo de um VIP", noSubject: "(sem assunto)", fromUnknown: "Remetente desconhecido", summary: "%d mensagens novas",
 		followUp: "Ainda sem resposta", followUpTo: "Para %s",
 		focusEnded: "Foco terminado", focusOne: "1 mensagem nova", focusOneVIP: "1 mensagem nova, de um VIP",
 		focusManyVIP: "%d mensagens novas, %d de VIPs", focusManyOneVIP: "%d mensagens novas, 1 de um VIP",
+		feeds: "Feeds", feedNew: "%d artigos novos",
 	},
 	"ar": {
 		newMail: "بريد جديد", vipNewMail: "بريد جديد من جهة مهمة", noSubject: "(بلا موضوع)", fromUnknown: "مرسل غير معروف", summary: "رسائل جديدة: %d",
 		followUp: "لا رد بعد", followUpTo: "إلى %s",
 		focusEnded: "انتهى وضع التركيز", focusOne: "رسالة جديدة واحدة", focusOneVIP: "رسالة جديدة واحدة من جهة مهمة",
 		focusManyVIP: "رسائل جديدة: %d، من جهات مهمة: %d", focusManyOneVIP: "رسائل جديدة: %d، من جهة مهمة: 1",
+		feeds: "الخلاصات", feedNew: "مقالات جديدة: %d",
 	},
 	"zh-CN": {
 		newMail: "新邮件", vipNewMail: "来自 VIP 的新邮件", noSubject: "（无主题）", fromUnknown: "未知发件人", summary: "%d 封新邮件",
 		followUp: "尚无回复", followUpTo: "收件人：%s",
 		focusEnded: "专注已结束", focusOne: "1 封新邮件", focusOneVIP: "1 封新邮件，来自 VIP",
 		focusManyVIP: "%d 封新邮件，其中 %d 封来自 VIP", focusManyOneVIP: "%d 封新邮件，其中 1 封来自 VIP",
+		feeds: "订阅源", feedNew: "%d 篇新文章",
 	},
 }
 

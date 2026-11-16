@@ -500,6 +500,17 @@ type UIPrefsDTO struct {
 	// MyDayPanel shows today's agenda and tasks beside the mail surface in the
 	// new design.
 	MyDayPanel bool `json:"myDayPanel"`
+	// FeedsRefreshMinutes is how often feeds are fetched, 0 for only by hand.
+	// FeedsKeepDays and FeedsKeepCount are the retention rules (0 turns one
+	// off); starred and read-later entries are always kept.
+	FeedsRefreshMinutes int `json:"feedsRefreshMinutes"`
+	FeedsKeepDays       int `json:"feedsKeepDays"`
+	FeedsKeepCount      int `json:"feedsKeepCount"`
+	// FeedsLoadImages shows the remote images of every feed without asking.
+	FeedsLoadImages bool `json:"feedsLoadImages"`
+	// FeedsMarkReadOnScroll marks entries read as they scroll out of the top
+	// of the list.
+	FeedsMarkReadOnScroll bool `json:"feedsMarkReadOnScroll"`
 	// ThemeID selects an installed custom theme (see bind_themes.go). Empty
 	// means the built-in default themes driven by the Theme setting.
 	ThemeID string `json:"themeId"`
@@ -678,6 +689,11 @@ func (a *App) GetUIPrefs() (UIPrefsDTO, error) {
 		SenderPanel:                a.boolSetting(settingSenderPanel, false),
 		MailDates:                  a.boolSetting(settingMailDates, true),
 		MyDayPanel:                 a.boolSetting(settingMyDayPanel, false),
+		FeedsRefreshMinutes:        a.intSetting(settingFeedsRefresh, defaultFeedsRefresh),
+		FeedsKeepDays:              a.intSetting(settingFeedsKeepDays, defaultFeedsKeepDays),
+		FeedsKeepCount:             a.intSetting(settingFeedsKeepCount, defaultFeedsKeepCount),
+		FeedsLoadImages:            a.boolSetting(settingFeedsLoadImages, false),
+		FeedsMarkReadOnScroll:      a.boolSetting(settingFeedsMarkScroll, false),
 		ThemeID:                    a.stringSetting(settingThemeID, ""),
 		MenuBarInApp:               a.boolSetting(settingMenuBarInApp, false),
 		MenuBarNativeMinimal:       a.boolSetting(settingMenuBarNativeMinimal, false),
