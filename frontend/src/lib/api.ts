@@ -135,6 +135,7 @@ import type {
   SieveRule,
   LockState,
   LockAuthResult,
+  QuickComposeStatus,
 } from './types'
 import { normalizeState } from './sieve'
 
@@ -1828,6 +1829,22 @@ export function isLockedError(err: unknown): boolean {
   return typeof cause === 'object' && cause !== null && cause.code === 'locked'
 }
 
+// --- quick compose ---
+
+/** The quick compose setting and whether its shortcut is registered. */
+export function getQuickComposeStatus(): Promise<QuickComposeStatus> {
+  return App.GetQuickComposeStatus() as unknown as Promise<QuickComposeStatus>
+}
+
+/**
+ * Turns quick compose on or off with a shortcut. The shortcut is registered
+ * before anything is stored; a refused one leaves the old setting in place and
+ * the status says why.
+ */
+export function setQuickCompose(enabled: boolean, shortcut: string): Promise<QuickComposeStatus> {
+  return App.SetQuickCompose(enabled, shortcut) as unknown as Promise<QuickComposeStatus>
+}
+
 // isFullscreen reports whether the window is fullscreen.
 export function isFullscreen(): Promise<boolean> {
   return App.IsFullscreen()
@@ -2024,6 +2041,8 @@ export const SettingKeys = {
   signatureAboveQuote: 'signature_above_quote',
   closeAction: 'close_button_action',
   startHidden: 'start_hidden',
+  quickCompose: 'quick_compose',
+  quickComposeShortcut: 'quick_compose_shortcut',
   appLock: 'app_lock',
   appLockIdleMinutes: 'app_lock_idle_minutes',
   appLockOnLaunch: 'app_lock_on_launch',

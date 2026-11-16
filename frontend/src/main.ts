@@ -54,7 +54,8 @@ const lockState = await getLockState().catch(() => null)
 
 // a message, a compose or the send activity opened in a window of its own
 // loads the same page with ?window=message&id=N, ?window=compose&token=T or
-// ?window=outbox, and gets that alone instead of the app.
+// ?window=outbox, and gets that alone instead of the app. ?window=quick is the
+// quick compose window.
 const params = new URLSearchParams(window.location.search)
 const app = mount(Root, {
   target,

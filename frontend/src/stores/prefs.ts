@@ -5,8 +5,8 @@
 // source of truth.
 
 import { writable } from 'svelte/store'
-import type { UIPrefs, ThemePref, DensityPref, EditorMode, ViewsPlacement, CloseAction, LogLevel, SelectAllScope, SearchKind, SearchSortPref, DesignPref, LayoutMode, NavStyle, RailSide, PaneStyle, AvatarPlacement, ContactsView, ComposeOpenIn, ReaderWidth, AfterMove, AfterReplySend, FollowUpInterval } from '../lib/types'
-import { getUIPrefs, setSetting, SettingKeys, systemColorScheme, setWindowTheme, getThemeApply } from '../lib/api'
+import type { QuickComposeStatus, UIPrefs, ThemePref, DensityPref, EditorMode, ViewsPlacement, CloseAction, LogLevel, SelectAllScope, SearchKind, SearchSortPref, DesignPref, LayoutMode, NavStyle, RailSide, PaneStyle, AvatarPlacement, ContactsView, ComposeOpenIn, ReaderWidth, AfterMove, AfterReplySend, FollowUpInterval } from '../lib/types'
+import { getUIPrefs, setSetting, SettingKeys, systemColorScheme, setWindowTheme, getThemeApply, setQuickCompose } from '../lib/api'
 import { applyTheme, applyDensity, applyAccent, applyScale, applyReduceMotion, applyHandCursor, setThemeSchedule, applyUIFont, applyMonoFont, applyCorners, applyDesign, watchSystemTheme, setSystemSchemeOverride, resolveTheme } from '../theme/theme'
 import { applyUserTheme } from '../theme/usertheme'
 import { uiFontStack, monoFontStack } from '../lib/fonts'
@@ -127,6 +127,8 @@ const defaults: UIPrefs = {
   signatureAboveQuote: false,
   closeAction: 'background',
   startHidden: false,
+  quickCompose: false,
+  quickComposeShortcut: '',
   appLock: false,
   appLockIdleMinutes: 5,
   appLockOnLaunch: true,
@@ -805,6 +807,19 @@ export function setCloseAction(value: CloseAction): void {
 export function setStartHidden(value: boolean): void {
   prefs.update((p) => ({ ...p, startHidden: value }))
   void setSetting(SettingKeys.startHidden, String(value))
+}
+
+/**
+ * Turns quick compose on or off with a shortcut. The store follows only what
+ * the backend actually registered and stored; the returned status says why a
+ * shortcut was refused.
+ */
+export async function setQuickComposePref(enabled: boolean, shortcut: string): Promise<QuickComposeStatus> {
+  const status = await setQuickCompose(enabled, shortcut)
+  if (!status.error) {
+    prefs.update((p) => ({ ...p, quickCompose: status.enabled, quickComposeShortcut: status.shortcut }))
+  }
+  return status
 }
 
 /** Records in the store that the app lock was turned on or off by the backend. */

@@ -6390,6 +6390,57 @@ export class ProxyConfigDTO {
 }
 
 /**
+ * QuickComposeStatusDTO is the state of the quick compose shortcut.
+ */
+export class QuickComposeStatusDTO {
+    "enabled": boolean;
+    "shortcut": string;
+
+    /**
+     * Registered is set while the operating system holds the shortcut.
+     */
+    "registered": boolean;
+
+    /**
+     * Wayland is set on a Wayland session, where the desktop decides through
+     * its shortcuts portal whether and how the shortcut is bound.
+     */
+    "wayland": boolean;
+
+    /**
+     * Error says why the shortcut could not be registered: "invalid" for a
+     * shortcut that is not one, "taken" when the system refused it.
+     */
+    "error"?: string;
+
+    /** Creates a new QuickComposeStatusDTO instance. */
+    constructor($$source: Partial<QuickComposeStatusDTO> = {}) {
+        if (!("enabled" in $$source)) {
+            this["enabled"] = false;
+        }
+        if (!("shortcut" in $$source)) {
+            this["shortcut"] = "";
+        }
+        if (!("registered" in $$source)) {
+            this["registered"] = false;
+        }
+        if (!("wayland" in $$source)) {
+            this["wayland"] = false;
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new QuickComposeStatusDTO instance from a string or object.
+     */
+    static createFrom($$source: any = {}): QuickComposeStatusDTO {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new QuickComposeStatusDTO($$parsedSource as Partial<QuickComposeStatusDTO>);
+    }
+}
+
+/**
  * RecipientKeyDTO says whether one address can be encrypted to.
  */
 export class RecipientKeyDTO {
@@ -9373,6 +9424,14 @@ export class UIPrefsDTO {
     "startHidden": boolean;
 
     /**
+     * QuickCompose registers QuickComposeShortcut as a system-wide shortcut
+     * that opens a small compose window. Off by default; the shortcut is a
+     * Wails accelerator such as "Ctrl+Alt+M".
+     */
+    "quickCompose": boolean;
+    "quickComposeShortcut": string;
+
+    /**
      * AppLock is whether the app lock is on. It is turned on and off through
      * EnableAppLock and DisableAppLock. AppLockIdleMinutes locks after that
      * long unused (0 only on demand), AppLockOnLaunch starts locked, and
@@ -9747,6 +9806,12 @@ export class UIPrefsDTO {
         }
         if (!("startHidden" in $$source)) {
             this["startHidden"] = false;
+        }
+        if (!("quickCompose" in $$source)) {
+            this["quickCompose"] = false;
+        }
+        if (!("quickComposeShortcut" in $$source)) {
+            this["quickComposeShortcut"] = "";
         }
         if (!("appLock" in $$source)) {
             this["appLock"] = false;

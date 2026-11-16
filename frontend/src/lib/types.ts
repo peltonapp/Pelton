@@ -946,6 +946,11 @@ export interface UIPrefs {
   closeAction: CloseAction
   // startHidden keeps the window hidden at launch (#483).
   startHidden: boolean
+  // quickCompose registers quickComposeShortcut, a Wails accelerator such as
+  // 'Ctrl+Alt+M', as a system-wide shortcut for a small compose window. Both
+  // change only through setQuickCompose, which registers before it stores.
+  quickCompose: boolean
+  quickComposeShortcut: string
   // appLock is whether the app lock is on; it changes only through
   // enableAppLock and disableAppLock. appLockIdleMinutes locks after that long
   // unused (0 only on demand), appLockOnLaunch starts locked, and
@@ -1005,6 +1010,18 @@ export interface LockAuthResult {
   ok: boolean
   reason?: LockFailure
   retryAfterMs?: number
+}
+
+/** The state of the quick compose shortcut. */
+export interface QuickComposeStatus {
+  enabled: boolean
+  shortcut: string
+  /** Set while the operating system holds the shortcut. */
+  registered: boolean
+  /** A Wayland session, where the desktop decides how the shortcut is bound. */
+  wayland: boolean
+  /** Why the shortcut was not registered: not a shortcut, or refused by the system. */
+  error?: 'invalid' | 'taken'
 }
 
 // LogStatus is what the settings ui shows about logging: where the files are,

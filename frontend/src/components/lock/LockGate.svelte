@@ -3,10 +3,10 @@
   // while the app lock is engaged. In the main window the content is taken
   // out of the page while locked and mounted again after, so nothing of the
   // mail is left behind the lock screen; the stores keep the session in
-  // between. A secondary window (a compose, a message) is hidden by the
-  // backend while locked and keeps its content, so a draft survives; one
-  // opened while locked shows the lock screen and mounts its content only
-  // once unlocked. Every window also reports input for the
+  // between. A secondary window (a compose, a message, quick compose) is
+  // hidden by the backend while locked and keeps its content, so a draft
+  // survives; one opened while locked shows the lock screen and mounts its
+  // content only once unlocked. Every window also reports input for the
   // lock's idle time.
   import { onDestroy, onMount } from 'svelte'
   import LockScreen from './LockScreen.svelte'

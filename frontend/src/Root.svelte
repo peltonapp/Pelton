@@ -1,11 +1,12 @@
 <script lang="ts">
   // Root picks what a window shows from its ?window= query, inside the lock
   // gate every window has: the app in the main window, or a message, a
-  // compose or the send activity in a window of their own.
+  // compose, the send activity or quick compose in a window of their own.
   import App from './App.svelte'
   import MessageWindow from './MessageWindow.svelte'
   import ComposeWindow from './ComposeWindow.svelte'
   import OutboxWindow from './OutboxWindow.svelte'
+  import QuickComposeWindow from './QuickComposeWindow.svelte'
   import LockGate from './components/lock/LockGate.svelte'
   import type { LockState } from './lib/types'
 
@@ -25,7 +26,9 @@
         ? 'compose'
         : kind === 'outbox'
           ? 'outbox'
-          : 'main'
+          : kind === 'quick'
+            ? 'quick'
+            : 'main'
 </script>
 
 <LockGate main={view === 'main'} initial={lockState} let:resumed>
@@ -35,6 +38,8 @@
     <ComposeWindow token={composeToken} />
   {:else if view === 'outbox'}
     <OutboxWindow />
+  {:else if view === 'quick'}
+    <QuickComposeWindow />
   {:else}
     <App {resumed} />
   {/if}

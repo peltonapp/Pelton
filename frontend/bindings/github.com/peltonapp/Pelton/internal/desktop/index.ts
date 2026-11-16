@@ -115,6 +115,7 @@ export {
     ProfileRequest,
     ProtectionStatusDTO,
     ProxyConfigDTO,
+    QuickComposeStatusDTO,
     RecipientKeyDTO,
     ReminderDTO,
     RemovedTaskDTO,

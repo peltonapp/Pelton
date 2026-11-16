@@ -236,6 +236,11 @@ type App struct {
 	authMu     sync.Mutex
 	lockWinMu  sync.Mutex
 	lockHidden []string
+
+	// quickMu guards quickAccel, the global shortcut registered for quick
+	// compose, empty while none is (quickcompose.go).
+	quickMu    sync.Mutex
+	quickAccel string
 }
 
 // locked reports whether the app lock is engaged. An App built without one,

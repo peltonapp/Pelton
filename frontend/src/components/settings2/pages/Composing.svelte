@@ -1,7 +1,7 @@
 <script lang="ts">
   // the Composing page: which editor a new message starts in, how recipients
-  // are entered, signature placement, vim keys, the undo-send window, and what
-  // sending a reply does besides.
+  // are entered, signature placement, vim keys, quick compose, the undo-send
+  // window, and what sending a reply does besides.
   import Card from '../ui/Card.svelte'
   import Row from '../ui/Row.svelte'
   import ChoiceCards from '../ui/ChoiceCards.svelte'
@@ -31,6 +31,7 @@
     setSendRemindAfter,
   } from '../../../stores/prefs'
   import SendCheckSkeleton from '../skeletons/SendCheckSkeleton.svelte'
+  import QuickComposeRows from '../QuickComposeRows.svelte'
   import { t } from '../../../lib/i18n'
   import type { AfterReplySend, ComposeOpenIn, FollowUpInterval } from '../../../lib/types'
 
@@ -124,6 +125,10 @@
       on:change={(e) => setComposeVimMode(e.detail)}
     />
   </Row>
+</Card>
+
+<Card title={$t('quickCompose.settings.title')}>
+  <QuickComposeRows />
 </Card>
 
 <Card title={$t('settingsPanel.category.sending')}>
