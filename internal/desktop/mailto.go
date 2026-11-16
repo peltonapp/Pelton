@@ -152,7 +152,8 @@ type mailtoState struct {
 // for the frontend to pick up on startup.
 func (a *App) deliverMailto(raw string) {
 	draft := parseMailto(raw)
-	if a.ctx != nil {
+	// while locked nothing is listening; the unlocked window picks it up.
+	if a.ctx != nil && !a.locked() {
 		a.emit(EventMailtoCompose, draft)
 		return
 	}

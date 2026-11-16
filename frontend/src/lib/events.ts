@@ -33,6 +33,7 @@ export const EventNames = {
   openMessage: 'message:open',
   replyMessage: 'message:reply',
   composeCloseRequest: 'compose:close-request',
+  appLock: 'applock:changed',
   calendarSync: 'calendar:sync',
   calendarChanged: 'calendar:changed',
   calendarReminder: 'calendar:reminder',
@@ -382,6 +383,11 @@ export function onArchiveAfterSend(cb: (e: ArchiveAfterSendEvent) => void): Unsu
 // pressed, so the compose closes the way its own close button does.
 export function onComposeCloseRequest(cb: () => void): Unsubscribe {
   return EventsOn(EventNames.composeCloseRequest, () => cb())
+}
+
+/** onAppLock fires in every window when the app locks or unlocks. */
+export function onAppLock(cb: (e: { locked: boolean }) => void): Unsubscribe {
+  return EventsOn(EventNames.appLock, (e: { locked: boolean }) => cb(e))
 }
 
 /** onCalendarSync fires as calendars sync, and once more when the run ends. */

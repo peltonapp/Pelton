@@ -16,6 +16,7 @@
   import floppyIcon from '@phosphor-icons/core/assets/duotone/floppy-disk-duotone.svg?raw'
   import moreIcon from '@phosphor-icons/core/assets/duotone/dots-three-duotone.svg?raw'
   import windowIcon from '@phosphor-icons/core/assets/duotone/app-window-duotone.svg?raw'
+  import expandIcon from '@phosphor-icons/core/assets/duotone/arrows-out-simple-duotone.svg?raw'
   import minimizeIcon from '@phosphor-icons/core/assets/duotone/minus-duotone.svg?raw'
   import trashIcon from '@phosphor-icons/core/assets/duotone/trash-duotone.svg?raw'
   import xIcon from '@phosphor-icons/core/assets/regular/x.svg?raw'
@@ -88,8 +89,11 @@
 
   /** The session this composer edits. */
   export let session: ComposeSession
-  /** How the composer is laid out: a window of its own, docked, or a tab. */
-  export let layout: 'window' | 'docked' | 'tab' = 'docked'
+  /**
+   * How the composer is laid out: a window of its own, docked, a tab, or the
+   * quick compose window, a window with only the essentials.
+   */
+  export let layout: 'window' | 'docked' | 'tab' | 'quick' = 'docked'
   /** Set in the main window, where the original of a reply can be shown in place. */
   export let mainWindow = false
 
@@ -124,6 +128,7 @@
   $: composeFont = bodyFontStack($prefs.bodyFont)
   $: canPopOut = layout !== 'window' && !isDemoActive()
   $: docked = layout === 'docked'
+  $: quick = layout === 'quick'
   $: canArchive = canArchiveAfter(session)
 
   // the editors are code-split and load the first time they are needed.
@@ -601,6 +606,15 @@
   }
 
   function requestClose(): void {
+    // quick compose asks nothing: what is in it is kept as a draft.
+    if (quick) {
+      if (hasContent(session) && draftState(session) !== savedAs) {
+        void save(() => closeCompose(session.id))
+      } else {
+        closeCompose(session.id)
+      }
+      return
+    }
     if (hasContent(session) && draftState(session) !== savedAs) {
       confirmClose = true
       return
@@ -694,6 +708,7 @@
 <!-- svelte-ignore a11y-no-noninteractive-element-interactions a11y-interactive-supports-focus -->
 <div
   class="composer {layout}"
+  class:window={quick}
   class:minimized={docked && session.minimized}
   data-compose-id={session.id}
   role="dialog"
@@ -729,7 +744,7 @@
     <!-- svelte-ignore a11y-no-static-element-interactions -->
     <div
       class="toolbar"
-      style={layout === 'window' ? '--wails-draggable:drag' : undefined}
+      style={layout === 'window' || quick ? '--wails-draggable:drag' : undefined}
       on:dblclick|self={() => layout === 'window' && titleBarDoubleClick()}
     >
       <SendButton
@@ -746,6 +761,16 @@
         <Ph svg={paperclipIcon} size={16} />
         <span>{$t('compose.attach.button')}</span>
       </button>
+      {#if quick}
+        <span class="grow" aria-hidden="true"></span>
+        <button type="button" class="c2-tool" on:click={popOut}>
+          <Ph svg={expandIcon} size={16} />
+          <span>{$t('quickCompose.openFull')}</span>
+        </button>
+        <button type="button" class="c2-tool compact" aria-label={$t('compose.window.close')} use:tip={{ text: $t('compose.window.close') }} on:click={requestClose}>
+          <Ph svg={xIcon} size={16} />
+        </button>
+      {:else}
       <ProtectionMenu protection={session.protection} status={protectionStatus} on:change={(e) => updateCompose(session.id, { protection: e.detail })} />
       <FollowUpMenu
         bind:this={followMenu}
@@ -793,6 +818,7 @@
       <button type="button" class="c2-tool compact" aria-label={$t('compose.window.close')} use:tip={{ text: $shortcutTitle($t('compose.window.close'), 'close-window') }} on:click={requestClose}>
         <Ph svg={xIcon} size={16} />
       </button>
+      {/if}
     </div>
   {/if}
 
@@ -815,7 +841,7 @@
       />
     {/if}
 
-    {#if rich}
+    {#if rich && !quick}
       <FormatBar editor={richEditor} {revision} />
     {/if}
 
@@ -912,7 +938,7 @@
       {/if}
       <span class="state" aria-live="polite">{statusText}</span>
       <span class="grow" aria-hidden="true"></span>
-      {#if $signatures.length > 0}
+      {#if $signatures.length > 0 && !quick}
         <Select
           class="c2-sig"
           bind:value={sigChoice}

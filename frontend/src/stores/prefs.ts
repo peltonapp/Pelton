@@ -5,8 +5,8 @@
 // source of truth.
 
 import { writable } from 'svelte/store'
-import type { UIPrefs, ThemePref, DensityPref, EditorMode, ViewsPlacement, CloseAction, LogLevel, SelectAllScope, SearchKind, SearchSortPref, DesignPref, LayoutMode, NavStyle, RailSide, PaneStyle, AvatarPlacement, ContactsView, ComposeOpenIn, ReaderWidth, AfterMove, AfterReplySend, FollowUpInterval, ProjectsView } from '../lib/types'
-import { getUIPrefs, setSetting, SettingKeys, systemColorScheme, setWindowTheme, getThemeApply } from '../lib/api'
+import type { QuickComposeStatus, UIPrefs, ThemePref, DensityPref, EditorMode, ViewsPlacement, CloseAction, LogLevel, SelectAllScope, SearchKind, SearchSortPref, DesignPref, LayoutMode, NavStyle, RailSide, PaneStyle, AvatarPlacement, ContactsView, ComposeOpenIn, ReaderWidth, AfterMove, AfterReplySend, FollowUpInterval, ProjectsView } from '../lib/types'
+import { getUIPrefs, setSetting, SettingKeys, systemColorScheme, setWindowTheme, getThemeApply, setQuickCompose } from '../lib/api'
 import { applyTheme, applyDensity, applyAccent, applyScale, applyReduceMotion, applyHandCursor, setThemeSchedule, applyUIFont, applyMonoFont, applyCorners, applyDesign, watchSystemTheme, setSystemSchemeOverride, resolveTheme } from '../theme/theme'
 import { applyUserTheme } from '../theme/usertheme'
 import { uiFontStack, monoFontStack } from '../lib/fonts'
@@ -133,6 +133,12 @@ const defaults: UIPrefs = {
   signatureAboveQuote: false,
   closeAction: 'background',
   startHidden: false,
+  quickCompose: false,
+  quickComposeShortcut: '',
+  appLock: false,
+  appLockIdleMinutes: 5,
+  appLockOnLaunch: true,
+  appLockHideNotifications: true,
   syncMessageLimit: 50,
   syncAutoBackfill: true,
   startupSelection: 'view:inbox',
@@ -841,6 +847,42 @@ export function setCloseAction(value: CloseAction): void {
 export function setStartHidden(value: boolean): void {
   prefs.update((p) => ({ ...p, startHidden: value }))
   void setSetting(SettingKeys.startHidden, String(value))
+}
+
+/**
+ * Turns quick compose on or off with a shortcut. The store follows only what
+ * the backend actually registered and stored; the returned status says why a
+ * shortcut was refused.
+ */
+export async function setQuickComposePref(enabled: boolean, shortcut: string): Promise<QuickComposeStatus> {
+  const status = await setQuickCompose(enabled, shortcut)
+  if (!status.error) {
+    prefs.update((p) => ({ ...p, quickCompose: status.enabled, quickComposeShortcut: status.shortcut }))
+  }
+  return status
+}
+
+/** Records in the store that the app lock was turned on or off by the backend. */
+export function noteAppLock(on: boolean): void {
+  prefs.update((p) => ({ ...p, appLock: on }))
+}
+
+/** Sets how many idle minutes lock the app; 0 locks only on demand and at launch. */
+export function setAppLockIdleMinutes(value: number): void {
+  prefs.update((p) => ({ ...p, appLockIdleMinutes: value }))
+  void setSetting(SettingKeys.appLockIdleMinutes, String(value))
+}
+
+/** Picks whether Pelton starts locked while the lock is on. */
+export function setAppLockOnLaunch(value: boolean): void {
+  prefs.update((p) => ({ ...p, appLockOnLaunch: value }))
+  void setSetting(SettingKeys.appLockOnLaunch, String(value))
+}
+
+/** Picks whether notifications leave out senders and subjects while locked. */
+export function setAppLockHideNotifications(value: boolean): void {
+  prefs.update((p) => ({ ...p, appLockHideNotifications: value }))
+  void setSetting(SettingKeys.appLockHideNotifications, String(value))
 }
 
 // setSyncMessageLimit caps how many of a folder's newest messages a first sync

@@ -4560,6 +4560,110 @@ export class ListMessagesRequest {
 }
 
 /**
+ * LockAuthResultDTO is the outcome of an unlock or of a lock setting change
+ * that had to authenticate first.
+ */
+export class LockAuthResultDTO {
+    "ok": boolean;
+
+    /**
+     * Reason says why it failed: "wrong" passphrase, "wait" for the backoff,
+     * "cancelled" system prompt, "unavailable" method, "busy" with another
+     * prompt, "short" passphrase, "off" when the lock is not on, or "on"
+     * when it already is.
+     */
+    "reason"?: string;
+    "retryAfterMs"?: number;
+
+    /** Creates a new LockAuthResultDTO instance. */
+    constructor($$source: Partial<LockAuthResultDTO> = {}) {
+        if (!("ok" in $$source)) {
+            this["ok"] = false;
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new LockAuthResultDTO instance from a string or object.
+     */
+    static createFrom($$source: any = {}): LockAuthResultDTO {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new LockAuthResultDTO($$parsedSource as Partial<LockAuthResultDTO>);
+    }
+}
+
+/**
+ * LockStateDTO is what the lock screen and the settings need to know.
+ */
+export class LockStateDTO {
+    "enabled": boolean;
+    "locked": boolean;
+
+    /**
+     * Method is "system" or "passphrase", or empty while the lock is off.
+     */
+    "method": string;
+
+    /**
+     * SystemAvailable reports whether the system prompt exists here, which
+     * is what turning the lock on uses when no passphrase is given.
+     */
+    "systemAvailable": boolean;
+
+    /**
+     * RetryAfterMs is how long the next passphrase attempt has to wait.
+     */
+    "retryAfterMs": number;
+
+    /**
+     * the look of the lock screen, which cannot read the full preferences
+     * while locked.
+     */
+    "theme": string;
+    "accent": string;
+    "language": string;
+
+    /** Creates a new LockStateDTO instance. */
+    constructor($$source: Partial<LockStateDTO> = {}) {
+        if (!("enabled" in $$source)) {
+            this["enabled"] = false;
+        }
+        if (!("locked" in $$source)) {
+            this["locked"] = false;
+        }
+        if (!("method" in $$source)) {
+            this["method"] = "";
+        }
+        if (!("systemAvailable" in $$source)) {
+            this["systemAvailable"] = false;
+        }
+        if (!("retryAfterMs" in $$source)) {
+            this["retryAfterMs"] = 0;
+        }
+        if (!("theme" in $$source)) {
+            this["theme"] = "";
+        }
+        if (!("accent" in $$source)) {
+            this["accent"] = "";
+        }
+        if (!("language" in $$source)) {
+            this["language"] = "";
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new LockStateDTO instance from a string or object.
+     */
+    static createFrom($$source: any = {}): LockStateDTO {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new LockStateDTO($$parsedSource as Partial<LockStateDTO>);
+    }
+}
+
+/**
  * LogStatusDTO is what the settings ui needs to describe logging without
  * reading the disk itself.
  */
@@ -7558,6 +7662,57 @@ export class ProxyConfigDTO {
     static createFrom($$source: any = {}): ProxyConfigDTO {
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         return new ProxyConfigDTO($$parsedSource as Partial<ProxyConfigDTO>);
+    }
+}
+
+/**
+ * QuickComposeStatusDTO is the state of the quick compose shortcut.
+ */
+export class QuickComposeStatusDTO {
+    "enabled": boolean;
+    "shortcut": string;
+
+    /**
+     * Registered is set while the operating system holds the shortcut.
+     */
+    "registered": boolean;
+
+    /**
+     * Wayland is set on a Wayland session, where the desktop decides through
+     * its shortcuts portal whether and how the shortcut is bound.
+     */
+    "wayland": boolean;
+
+    /**
+     * Error says why the shortcut could not be registered: "invalid" for a
+     * shortcut that is not one, "taken" when the system refused it.
+     */
+    "error"?: string;
+
+    /** Creates a new QuickComposeStatusDTO instance. */
+    constructor($$source: Partial<QuickComposeStatusDTO> = {}) {
+        if (!("enabled" in $$source)) {
+            this["enabled"] = false;
+        }
+        if (!("shortcut" in $$source)) {
+            this["shortcut"] = "";
+        }
+        if (!("registered" in $$source)) {
+            this["registered"] = false;
+        }
+        if (!("wayland" in $$source)) {
+            this["wayland"] = false;
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new QuickComposeStatusDTO instance from a string or object.
+     */
+    static createFrom($$source: any = {}): QuickComposeStatusDTO {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new QuickComposeStatusDTO($$parsedSource as Partial<QuickComposeStatusDTO>);
     }
 }
 
@@ -10570,6 +10725,26 @@ export class UIPrefsDTO {
     "startHidden": boolean;
 
     /**
+     * QuickCompose registers QuickComposeShortcut as a system-wide shortcut
+     * that opens a small compose window. Off by default; the shortcut is a
+     * Wails accelerator such as "Ctrl+Alt+M".
+     */
+    "quickCompose": boolean;
+    "quickComposeShortcut": string;
+
+    /**
+     * AppLock is whether the app lock is on. It is turned on and off through
+     * EnableAppLock and DisableAppLock. AppLockIdleMinutes locks after that
+     * long unused (0 only on demand), AppLockOnLaunch starts locked, and
+     * AppLockHideNotifications keeps senders and subjects out of
+     * notifications while locked.
+     */
+    "appLock": boolean;
+    "appLockIdleMinutes": number;
+    "appLockOnLaunch": boolean;
+    "appLockHideNotifications": boolean;
+
+    /**
      * SyncMessageLimit caps how many of a folder's newest messages the first
      * sync fetches; older mail stays on the server until it is asked for. 0
      * means no limit. SyncAutoBackfill fetches the next batch automatically on
@@ -10950,6 +11125,24 @@ export class UIPrefsDTO {
         }
         if (!("startHidden" in $$source)) {
             this["startHidden"] = false;
+        }
+        if (!("quickCompose" in $$source)) {
+            this["quickCompose"] = false;
+        }
+        if (!("quickComposeShortcut" in $$source)) {
+            this["quickComposeShortcut"] = "";
+        }
+        if (!("appLock" in $$source)) {
+            this["appLock"] = false;
+        }
+        if (!("appLockIdleMinutes" in $$source)) {
+            this["appLockIdleMinutes"] = 0;
+        }
+        if (!("appLockOnLaunch" in $$source)) {
+            this["appLockOnLaunch"] = false;
+        }
+        if (!("appLockHideNotifications" in $$source)) {
+            this["appLockHideNotifications"] = false;
         }
         if (!("syncMessageLimit" in $$source)) {
             this["syncMessageLimit"] = 0;

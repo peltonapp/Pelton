@@ -588,6 +588,20 @@ type UIPrefsDTO struct {
 	CloseAction string `json:"closeAction"`
 	// StartHidden keeps the window hidden at launch (#483).
 	StartHidden bool `json:"startHidden"`
+	// QuickCompose registers QuickComposeShortcut as a system-wide shortcut
+	// that opens a small compose window. Off by default; the shortcut is a
+	// Wails accelerator such as "Ctrl+Alt+M".
+	QuickCompose         bool   `json:"quickCompose"`
+	QuickComposeShortcut string `json:"quickComposeShortcut"`
+	// AppLock is whether the app lock is on. It is turned on and off through
+	// EnableAppLock and DisableAppLock. AppLockIdleMinutes locks after that
+	// long unused (0 only on demand), AppLockOnLaunch starts locked, and
+	// AppLockHideNotifications keeps senders and subjects out of
+	// notifications while locked.
+	AppLock                  bool `json:"appLock"`
+	AppLockIdleMinutes       int  `json:"appLockIdleMinutes"`
+	AppLockOnLaunch          bool `json:"appLockOnLaunch"`
+	AppLockHideNotifications bool `json:"appLockHideNotifications"`
 	// SyncMessageLimit caps how many of a folder's newest messages the first
 	// sync fetches; older mail stays on the server until it is asked for. 0
 	// means no limit. SyncAutoBackfill fetches the next batch automatically on
@@ -735,6 +749,12 @@ func (a *App) GetUIPrefs() (UIPrefsDTO, error) {
 		SignatureAboveQuote:        a.boolSetting(settingSignatureAboveQuote, false),
 		CloseAction:                a.stringSetting(settingCloseAction, closeActionBackground),
 		StartHidden:                a.startHiddenEnabled(),
+		QuickCompose:               a.boolSetting(settingQuickCompose, false),
+		QuickComposeShortcut:       a.stringSetting(settingQuickComposeShortcut, defaultQuickComposeShortcut()),
+		AppLock:                    a.boolSetting(settingAppLock, false) && a.lockMethod() != "",
+		AppLockIdleMinutes:         max(a.intSetting(settingAppLockIdle, defaultAppLockIdle), 0),
+		AppLockOnLaunch:            a.boolSetting(settingAppLockOnLaunch, true),
+		AppLockHideNotifications:   a.boolSetting(settingAppLockHideNotifications, true),
 		SyncMessageLimit:           a.syncMessageLimit(),
 		SyncAutoBackfill:           a.boolSetting(settingSyncAutoBackfill, true),
 		StartupSelection:           a.stringSetting(settingStartupSelection, defaultStartupSelection),
@@ -767,8 +787,17 @@ func (a *App) SetSetting(key, value string) error {
 	if err := a.ready(); err != nil {
 		return err
 	}
+	if protectedLockSettings[key] {
+		return errLockSetting
+	}
+	if key == settingQuickCompose || key == settingQuickComposeShortcut {
+		return errQuickComposeSetting
+	}
 	if err := a.store.Set(a.ctx, key, value); err != nil {
 		return err
+	}
+	if key == settingAppLockIdle && a.lock != nil {
+		a.applyLockSettings()
 	}
 	if key == storage.SettingTheme {
 		a.applyNativeTheme(value)

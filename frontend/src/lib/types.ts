@@ -962,6 +962,20 @@ export interface UIPrefs {
   closeAction: CloseAction
   // startHidden keeps the window hidden at launch (#483).
   startHidden: boolean
+  // quickCompose registers quickComposeShortcut, a Wails accelerator such as
+  // 'Ctrl+Alt+M', as a system-wide shortcut for a small compose window. Both
+  // change only through setQuickCompose, which registers before it stores.
+  quickCompose: boolean
+  quickComposeShortcut: string
+  // appLock is whether the app lock is on; it changes only through
+  // enableAppLock and disableAppLock. appLockIdleMinutes locks after that long
+  // unused (0 only on demand), appLockOnLaunch starts locked, and
+  // appLockHideNotifications keeps senders and subjects out of notifications
+  // while locked.
+  appLock: boolean
+  appLockIdleMinutes: number
+  appLockOnLaunch: boolean
+  appLockHideNotifications: boolean
   // syncMessageLimit caps how many of a folder's newest messages the first sync
   // fetches; older mail stays on the server until asked for. 0 means no limit.
   syncMessageLimit: number
@@ -984,6 +998,47 @@ export interface UIPrefs {
 
 // how much detail the log records.
 export type LogLevel = 'debug' | 'info' | 'warn' | 'error'
+
+/** How the app lock is opened: the system prompt or Pelton's own passphrase. */
+export type LockMethod = 'system' | 'passphrase'
+
+/** What the lock screen and the lock settings need to know. */
+export interface LockState {
+  enabled: boolean
+  locked: boolean
+  /** Empty while the lock is off. */
+  method: LockMethod | ''
+  /** Whether the system prompt (Touch ID or the account password) exists here. */
+  systemAvailable: boolean
+  /** How long the next passphrase attempt has to wait. */
+  retryAfterMs: number
+  /** The look of the lock screen, which cannot read the full preferences while locked. */
+  theme: string
+  accent: string
+  language: string
+}
+
+/** Why an unlock or a lock setting change did not go through. */
+export type LockFailure = 'wrong' | 'wait' | 'cancelled' | 'unavailable' | 'busy' | 'short' | 'off' | 'on'
+
+/** The outcome of an unlock or of a lock setting change that authenticated first. */
+export interface LockAuthResult {
+  ok: boolean
+  reason?: LockFailure
+  retryAfterMs?: number
+}
+
+/** The state of the quick compose shortcut. */
+export interface QuickComposeStatus {
+  enabled: boolean
+  shortcut: string
+  /** Set while the operating system holds the shortcut. */
+  registered: boolean
+  /** A Wayland session, where the desktop decides how the shortcut is bound. */
+  wayland: boolean
+  /** Why the shortcut was not registered: not a shortcut, or refused by the system. */
+  error?: 'invalid' | 'taken'
+}
 
 // LogStatus is what the settings ui shows about logging: where the files are,
 // whether anything is being written, and whether the last run crashed.

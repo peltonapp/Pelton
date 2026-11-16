@@ -83,6 +83,7 @@
     setUnreadBadge,
     quitApp,
     hideApp,
+    lockNow,
     isFullscreen,
     toggleFullscreen as toggleWindowFullscreen,
   } from './lib/api'
@@ -260,6 +261,11 @@
   // onboarding, and the acknowledgement is deliberately never remembered.
   let nightlyOpen = false
   const unsubscribers: Unsubscribe[] = []
+
+  // set when the app mounts again after the app lock was opened. The stores
+  // still hold the session, so the launch-only steps (the startup folder,
+  // restored tabs, the nightly and crash notices) are skipped.
+  export let resumed = false
 
   // live pane widths. they track the persisted prefs unless the user is mid-drag,
   // so a resize feels immediate and only commits on release.
@@ -537,7 +543,7 @@
 
     // a nightly warns before anything else is on screen. demo mode is only used
     // for screenshots, so the dialog would just be in the way there.
-    nightlyOpen = !demo && (await isNightly().catch(() => false))
+    nightlyOpen = !demo && !resumed && (await isNightly().catch(() => false))
 
     await initPrefs()
     await initSidebarState()
@@ -557,14 +563,16 @@
     // a mailbox that failed its last sync is marked from the first paint, not
     // only once another sync run happens to end.
     void loadSyncStates()
-    void restoreTabs(get(prefs).restoreTabs)
+    if (!resumed) {
+      void restoreTabs(get(prefs).restoreTabs)
+    }
     void loadProfiles()
     initProgress()
     await loadSidebar()
     // the sidebar data has to be here first: a configured or remembered folder
     // is only honoured if it still exists (#187).
     const sidebarData = get(sidebar).data
-    if (sidebarData) {
+    if (sidebarData && !resumed) {
       await applyStartupSelection(get(prefs).startupSelection, sidebarData)
     }
     void loadViews()
@@ -586,7 +594,9 @@
       // onboarding collects the acknowledgement itself, so only ask separately
       // when the flow is not going to run.
       liabilityOpen = !onboardingOpen && !(await liabilityAccepted())
-      void offerCrashReport()
+      if (!resumed) {
+        void offerCrashReport()
+      }
     }
 
     unsubscribers.push(
@@ -1287,6 +1297,14 @@
         break
       case 'quit':
         quitApp()
+        break
+      case 'lock-app':
+        if ($prefs.appLock) {
+          void lockNow()
+        } else {
+          toastInfo($t('applock.offHint'))
+          openSettingsAt('privacy')
+        }
         break
       case 'command-palette':
         togglePalette()

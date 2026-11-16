@@ -17,11 +17,8 @@ import './style.css'
 import './theme/design-new.css'
 
 import { mount } from 'svelte'
-import App from './App.svelte'
-import MessageWindow from './MessageWindow.svelte'
-import ComposeWindow from './ComposeWindow.svelte'
-import OutboxWindow from './OutboxWindow.svelte'
-import { isDemoMode, windowMaterialActive } from './lib/api'
+import Root from './Root.svelte'
+import { getLockState, isDemoMode, windowMaterialActive } from './lib/api'
 import { setDemoActive } from './lib/demo'
 import { initSmoothCaret } from './lib/smoothcaret'
 
@@ -50,20 +47,25 @@ await windowMaterialActive()
   .then((on) => document.documentElement.classList.toggle('window-material', on))
   .catch(() => {})
 
+// whether the app lock is engaged decides what this window may show at all,
+// so it is known before anything mounts. A failed read mounts as unlocked:
+// the backend refuses every mail call while locked whatever the page thinks.
+const lockState = await getLockState().catch(() => null)
+
 // a message, a compose or the send activity opened in a window of its own
 // loads the same page with ?window=message&id=N, ?window=compose&token=T or
-// ?window=outbox, and gets that alone instead of the app.
+// ?window=outbox, and gets that alone instead of the app. ?window=quick is the
+// quick compose window.
 const params = new URLSearchParams(window.location.search)
-const messageId = Number(params.get('id'))
-const composeToken = params.get('token') ?? ''
-const app =
-  params.get('window') === 'message' && messageId > 0
-    ? mount(MessageWindow, { target, props: { messageId } })
-    : params.get('window') === 'compose' && composeToken
-      ? mount(ComposeWindow, { target, props: { token: composeToken } })
-      : params.get('window') === 'outbox'
-        ? mount(OutboxWindow, { target })
-        : mount(App, { target })
+const app = mount(Root, {
+  target,
+  props: {
+    kind: params.get('window') ?? '',
+    messageId: Number(params.get('id')) || 0,
+    composeToken: params.get('token') ?? '',
+    lockState,
+  },
+})
 
 initSmoothCaret()
 

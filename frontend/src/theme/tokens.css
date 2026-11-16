@@ -192,6 +192,9 @@
   --myday-width: 300px;
   --avail-width: 460px;
   --avail-hour: 14px;
+  /* the app lock screen: the width of its column and the size of the mark. */
+  --lock-width: 300px;
+  --lock-mark: 56px;
   /* conversations: the column the expand control sits in, which replies are
      indented by, and the widths the reading column can be capped at. */
   --thread-twisty: 16px;

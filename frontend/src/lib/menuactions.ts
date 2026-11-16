@@ -49,6 +49,7 @@ import {
   IconBrush,
   IconCommand,
   IconCircleCheck,
+  IconLock,
 } from '@tabler/icons-svelte'
 import type { ShortcutAction } from './shortcuts'
 import { isMac } from './i18n'
@@ -92,6 +93,7 @@ export interface MenuActionDef {
 export const menuActionCatalog: MenuActionDef[] = [
   { action: 'about', labelKey: 'menu.about', iconName: 'info-circle', icon: IconInfoCircle },
   { action: 'preferences', labelKey: 'menu.preferences', iconName: 'settings', icon: IconSettings },
+  { action: 'lock-app', labelKey: 'shortcut.lockApp', iconName: 'lock', icon: IconLock },
   { action: 'hide-window', labelKey: 'menu.hide', iconName: 'eye-off', icon: IconEyeOff, macOnly: true, hint: 'mod+h' },
   { action: 'quit', labelKey: 'menu.quit', iconName: 'power', icon: IconPower, hint: isMac ? 'mod+q' : undefined },
   { action: 'compose', labelKey: 'menu.compose', iconName: 'pencil', icon: IconPencil },
@@ -218,6 +220,7 @@ export function defaultMenuLayout(): MenuBarLayout {
           action('about'),
           sep('app', 0),
           action('preferences'),
+          action('lock-app'),
           sep('app', 1),
           action('hide-window'),
           action('quit'),

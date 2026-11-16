@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"io/fs"
 	"os"
+	"slices"
 
 	"github.com/peltonapp/Pelton/internal/logging"
 	"github.com/peltonapp/Pelton/internal/storage"
@@ -51,7 +52,9 @@ func Run(cfg Config) error {
 	app.programLicense = cfg.ProgramLicense
 	app.trayIcon = cfg.TrayIcon
 	app.demoMode = cfg.DemoMode
-	app.startedHidden = startHidden(os.Args[1:], cfg.Channel)
+	// --quick-compose opens the quick compose window alone (quickcompose.go).
+	quickAtLaunch := slices.Contains(os.Args[1:], quickComposeFlag)
+	app.startedHidden = quickAtLaunch || startHidden(os.Args[1:], cfg.Channel)
 
 	// a mailto: click that launched the app arrives as argv on Linux/Windows.
 	// stash it so the first webview mount can open the prefilled compose. macOS
@@ -101,6 +104,9 @@ func Run(cfg Config) error {
 		},
 		Assets: application.AssetOptions{
 			Handler: application.AssetFileServerFS(dist),
+			// while the app lock is engaged, bound calls are refused here
+			// (lockgate.go).
+			Middleware: newLockGate(app.locked).middleware,
 		},
 		// saving the window frame and closing the store happen here, before
 		// wails tears the window down.
@@ -111,6 +117,10 @@ func Run(cfg Config) error {
 		SingleInstance: &application.SingleInstanceOptions{
 			UniqueID: instanceID,
 			OnSecondInstanceLaunch: func(data application.SecondInstanceData) {
+				if slices.Contains(data.Args, quickComposeFlag) {
+					app.openQuickCompose()
+					return
+				}
 				if raw := firstMailtoArg(data.Args); raw != "" {
 					app.deliverMailto(raw)
 				}
@@ -133,6 +143,7 @@ func Run(cfg Config) error {
 		},
 	})
 	app.wapp = wapp
+	app.startQuickCompose(quickAtLaunch)
 
 	// macOS delivers a mailto: click as an Apple event, not argv.
 	wapp.Event.OnApplicationEvent(events.Common.ApplicationLaunchedWithUrl, func(e *application.ApplicationEvent) {
