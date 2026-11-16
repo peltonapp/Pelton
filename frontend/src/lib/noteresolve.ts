@@ -6,7 +6,6 @@
 
 /** A lookup over every file of the notes folder. */
 export interface Resolver {
-  files: string[]
   byKey: Map<string, string[]>
   byPath: Map<string, string>
 }
@@ -71,7 +70,7 @@ export function createResolver(files: readonly string[]): Resolver {
       byKey.set(base, [f])
     }
   }
-  return { files: sorted, byKey, byPath }
+  return { byKey, byPath }
 }
 
 function pick(hits: string[] | undefined, from: string): string {
@@ -149,18 +148,4 @@ export function linkText(r: Resolver, path: string): string {
     return name
   }
   return isNote(path) ? path.slice(0, -3) : path
-}
-
-/** The relative path from folder dir to a vault path, for a Markdown link. */
-export function relativePath(dir: string, to: string): string {
-  if (!dir || dir === '.') {
-    return to
-  }
-  const from = dir.split('/')
-  const parts = to.split('/')
-  let i = 0
-  while (i < from.length && i < parts.length - 1 && from[i] === parts[i]) {
-    i++
-  }
-  return '../'.repeat(from.length - i) + parts.slice(i).join('/')
 }

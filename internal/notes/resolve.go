@@ -11,7 +11,6 @@ import (
 // name finds the file of that name wherever it is, and when several share it
 // the one beside the linking note wins, then the one with the shortest path.
 type Resolver struct {
-	files  []string
 	byKey  map[string][]string
 	byPath map[string]string
 }
@@ -19,9 +18,10 @@ type Resolver struct {
 // NewResolver builds a resolver over every file of a vault, notes and
 // attachments alike.
 func NewResolver(files []string) *Resolver {
-	r := &Resolver{files: append([]string(nil), files...), byKey: map[string][]string{}, byPath: map[string]string{}}
-	sort.Strings(r.files)
-	for _, f := range r.files {
+	sorted := append([]string(nil), files...)
+	sort.Strings(sorted)
+	r := &Resolver{byKey: map[string][]string{}, byPath: map[string]string{}}
+	for _, f := range sorted {
 		k := fileKey(f)
 		r.byPath[k] = f
 		base := path.Base(k)
@@ -128,9 +128,4 @@ func (r *Resolver) LinkText(p string) string {
 		return strings.TrimSuffix(p, path.Ext(p))
 	}
 	return p
-}
-
-// Files returns every file the resolver knows, in order.
-func (r *Resolver) Files() []string {
-	return r.files
 }

@@ -175,7 +175,8 @@
     if (!view || view.state.readOnly) {
       return
     }
-    view.dispatch(view.state.replaceSelection(value), { userEvent: 'input' })
+    // line breaks follow the note's own, so a CRLF file stays CRLF.
+    view.dispatch(view.state.replaceSelection(view.state.toText(value.replace(/\r?\n/g, view.state.lineBreak))), { userEvent: 'input' })
     view.focus()
   }
 
@@ -240,12 +241,14 @@
     if (!view) {
       return
     }
-    const sel = view.state.selection.main
-    view.dispatch({
-      changes: { from: 0, to: view.state.doc.length, insert: content },
-      selection: EditorSelection.cursor(Math.min(sel.head, content.length)),
-      annotations: fromDisk.of(true),
-    })
+    // a fresh state, since the file may have changed its line endings too.
+    const head = view.state.selection.main.head
+    const scroll = view.scrollDOM.scrollTop
+    view.setState(makeState(content))
+    view.dispatch({ selection: EditorSelection.cursor(Math.min(head, view.state.doc.length)), annotations: fromDisk.of(true) })
+    view.scrollDOM.scrollTop = scroll
+    refreshCompletion()
+    dispatch('headings')
   }
 
   // a change on disk: a clean editor takes it, a dirty one asks.

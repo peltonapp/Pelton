@@ -88,21 +88,6 @@ export function tagCounts(notes: readonly VaultNote[]): { tag: string; count: nu
   return [...counts.values()].sort((a, b) => a.tag.localeCompare(b.tag))
 }
 
-/** How many other notes link to each note, by path. */
-export const backlinkCounts = derived(vaultNotes, ($n) => {
-  const out = new Map<string, number>()
-  for (const n of $n) {
-    const seen = new Set<string>()
-    for (const l of n.links) {
-      if (l.resolved && l.resolved !== n.path && !seen.has(l.resolved)) {
-        seen.add(l.resolved)
-        out.set(l.resolved, (out.get(l.resolved) ?? 0) + 1)
-      }
-    }
-  }
-  return out
-})
-
 /** The notes open in tabs, in order. */
 export const openNotes = writable<string[]>([])
 

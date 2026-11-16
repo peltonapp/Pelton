@@ -403,11 +403,6 @@ export function reheat(l: Layout, alpha = 0.3): void {
   l.alpha = Math.max(l.alpha, alpha)
 }
 
-/** Runs a layout until it settles or the step cap is reached; for reduced motion and tests. */
-export function settleLayout(l: Layout, maxSteps = 600): void {
-  stepLayout(l, maxSteps)
-}
-
 /** The node nearest a graph-space point within radius, or -1. */
 export function nodeAt(l: Layout, x: number, y: number, radius: number): number {
   let best = -1

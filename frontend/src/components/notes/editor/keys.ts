@@ -70,7 +70,8 @@ export const continueList: Command = (view) => {
     view.dispatch({ changes: { from: line.from, to: line.to, insert: '' }, selection: EditorSelection.cursor(line.from), userEvent: 'delete' })
     return true
   }
-  const insert = state.lineBreak + next.prefix
+  // a CRLF note counts its line break as one position, like any other.
+  const insert = state.toText(state.lineBreak + next.prefix)
   view.dispatch({
     changes: { from: sel.from, to: sel.to, insert },
     selection: EditorSelection.cursor(sel.from + insert.length),
@@ -198,7 +199,7 @@ export async function insertImages(view: EditorView, files: File[], pos: number)
     parts.push(`![[${saved.slice(saved.lastIndexOf('/') + 1)}]]`)
   }
   if (parts.length) {
-    const insert = parts.join('\n')
+    const insert = view.state.toText(parts.join(view.state.lineBreak))
     view.dispatch({ changes: { from: pos, insert }, selection: EditorSelection.cursor(pos + insert.length), userEvent: 'input.paste' })
   }
 }

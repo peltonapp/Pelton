@@ -38,9 +38,6 @@ type Change struct {
 // ErrNoVault is any call made before a vault is open.
 var ErrNoVault = errors.New("notes: no notes folder is open")
 
-// ErrConflict is a save whose note changed on disk since it was read.
-var ErrConflict = errors.New("notes: the note changed on disk")
-
 // Service owns one open vault: its files, the index of its notes, the
 // search over them and the operations that change them. Reads are cheap and
 // concurrent; every change runs one at a time.

@@ -50,13 +50,13 @@
     openNote,
     openNotes,
     recentNotes,
-    reloadVault,
     startNotes,
     starredNotes,
     templateNotes,
     toggleStar,
     vaultIndex,
     vaultInfo,
+    vaultSwitched,
     vaultNotes,
   } from '../../stores/notes'
   import { getSetting, setSetting, SettingKeys, vaultChooseFolder, vaultFileData, vaultRead, vaultRescan, vaultSaveAttachment, vaultSearch } from '../../lib/api'
@@ -404,11 +404,10 @@
       if (!info.folder && !info.error) {
         return
       }
-      setNotesVaultPref(info.folder)
-      openNotes.set([])
-      activeNote.set(null)
-      vaultInfo.set(info)
-      await reloadVault()
+      if (info.folder) {
+        setNotesVaultPref(info.folder)
+      }
+      await vaultSwitched(info)
       scope = { kind: 'all' }
     } catch (err) {
       toastError(errorMessage(err))
