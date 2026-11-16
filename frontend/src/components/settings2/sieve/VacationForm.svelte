@@ -8,7 +8,8 @@
   import ToggleSwitch from '../../common/ToggleSwitch.svelte'
   import DateTimePicker from '../../common/DateTimePicker.svelte'
   import PieProgress from '../../common/PieProgress.svelte'
-  import { blankVacation, localDay, sameModel, vacationPhase } from '../../../lib/sieve'
+  import { blankVacation, sameModel, vacationPhase } from '../../../lib/sieve'
+  import { dayKey } from '../../../lib/caldate'
   import { formatDateTimeMedium } from '../../../lib/format'
   import { t } from '../../../lib/i18n'
   import type { SieveVacation } from '../../../lib/types'
@@ -26,7 +27,7 @@
   /** The server's objection to the last save, '' for none. */
   export let problem: string = ''
   /** Today, YYYY-MM-DD; the state line is worked out against it. */
-  export let today: string = localDay()
+  export let today: string = dayKey(new Date())
 
   const dispatch = createEventDispatcher<{ save: SieveVacation }>()
 

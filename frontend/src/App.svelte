@@ -6,6 +6,7 @@
   import { onMount, onDestroy, type ComponentType } from 'svelte'
   import { get } from 'svelte/store'
   import { t } from './lib/i18n'
+  import { isEditableTarget } from './lib/editable'
 
   import Sidebar from './components/sidebar/Sidebar.svelte'
   import MenuBar from './components/common/MenuBar.svelte'
@@ -2066,16 +2067,6 @@
     clearSettingsRequest()
   }
 
-  // isEditableTarget reports whether the event originated in a text field, so
-  // plain-key shortcuts do not fire while the user is typing.
-  function isEditableTarget(target: EventTarget | null): boolean {
-    const el = target as HTMLElement | null
-    if (!el) {
-      return false
-    }
-    const tag = el.tagName
-    return tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || el.isContentEditable
-  }
 
   // pane resize. clamps keep each column usable; widths persist on release.
   function clamp(value: number, min: number, max: number): number {

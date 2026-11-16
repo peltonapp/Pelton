@@ -217,7 +217,7 @@ func (s *PGPKeyStore) ImportFile(path string) ([]KeyInfo, error) {
 // a key that is not there is not an error, so a retry after a partial failure
 // converges instead of complaining.
 func (s *PGPKeyStore) Delete(fingerprint string) error {
-	want := normalizeFingerprint(fingerprint)
+	want := NormalizeFingerprint(fingerprint)
 	found := false
 	for _, file := range []string{secringFile, pubringFile} {
 		list, err := s.load(file)
@@ -226,7 +226,7 @@ func (s *PGPKeyStore) Delete(fingerprint string) error {
 		}
 		kept := make(openpgp.EntityList, 0, len(list))
 		for _, ent := range list {
-			if normalizeFingerprint(Fingerprint(ent)) == want {
+			if NormalizeFingerprint(Fingerprint(ent)) == want {
 				found = true
 				continue
 			}
@@ -298,9 +298,9 @@ func (s *PGPKeyStore) byFingerprint(fingerprint string, private bool) (*openpgp.
 	if err != nil {
 		return nil, err
 	}
-	want := normalizeFingerprint(fingerprint)
+	want := NormalizeFingerprint(fingerprint)
 	for _, ent := range list {
-		if normalizeFingerprint(Fingerprint(ent)) == want {
+		if NormalizeFingerprint(Fingerprint(ent)) == want {
 			if private && ent.PrivateKey == nil {
 				return nil, fmt.Errorf("%w: %s has no private key material", ErrSenderKeyNotFound, fingerprint)
 			}
@@ -322,11 +322,11 @@ func (s *PGPKeyStore) merge(file string, incoming openpgp.EntityList) error {
 	}
 	replacing := make(map[string]bool, len(incoming))
 	for _, ent := range incoming {
-		replacing[normalizeFingerprint(Fingerprint(ent))] = true
+		replacing[NormalizeFingerprint(Fingerprint(ent))] = true
 	}
 	merged := make(openpgp.EntityList, 0, len(existing)+len(incoming))
 	for _, ent := range existing {
-		if !replacing[normalizeFingerprint(Fingerprint(ent))] {
+		if !replacing[NormalizeFingerprint(Fingerprint(ent))] {
 			merged = append(merged, ent)
 		}
 	}
@@ -415,11 +415,6 @@ func readKeys(data []byte) (openpgp.EntityList, error) {
 // value pasted from `gpg --list-keys` matches one from Fingerprint.
 func NormalizeFingerprint(fp string) string {
 	return strings.ToUpper(strings.ReplaceAll(strings.TrimSpace(fp), " ", ""))
-}
-
-// normalizeFingerprint is the package-internal spelling.
-func normalizeFingerprint(fp string) string {
-	return NormalizeFingerprint(fp)
 }
 
 // EnsureKeyDir creates the key directory with owner-only permissions, and

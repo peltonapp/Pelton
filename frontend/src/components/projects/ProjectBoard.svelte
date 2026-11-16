@@ -59,6 +59,7 @@
   import { popupIsOpen } from '../../lib/popups'
   import { dur, motion } from '../../lib/motion'
   import { locale, t } from '../../lib/i18n'
+  import { isEditableTarget } from '../../lib/editable'
   import type { TimeFormat } from '../../lib/format'
   import type { Project, ProjectCard, ProjectColumn } from '../../lib/types'
 
@@ -291,13 +292,8 @@
 
   const arrows = ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight']
 
-  function editable(target: EventTarget | null): boolean {
-    const el = target as HTMLElement | null
-    return !!el && (el.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(el.tagName))
-  }
-
   function onKeydown(event: KeyboardEvent): void {
-    if (editable(event.target) || popupIsOpen() || event.metaKey || event.ctrlKey) {
+    if (isEditableTarget(event.target) || popupIsOpen() || event.metaKey || event.ctrlKey) {
       return
     }
     const el = (event.target as HTMLElement).closest<HTMLElement>('[data-card-uid]')

@@ -49,6 +49,7 @@
   import { dur, motion } from '../../lib/motion'
   import { formatListDate, type TimeFormat } from '../../lib/format'
   import { t } from '../../lib/i18n'
+  import { isEditableTarget } from '../../lib/editable'
   import type { EditorMode, FeedEntryDetail, FeedScope, MessageDetail } from '../../lib/types'
 
   const dispatch = createEventDispatcher<{ compose: { subject: string; body: string } }>()
@@ -301,21 +302,16 @@
 
   // --- keys -----------------------------------------------------------------------------
 
-  function editableTarget(target: EventTarget | null): boolean {
-    const el = target as HTMLElement | null
-    return !!el && (el.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(el.tagName))
-  }
-
   function onKeydown(event: KeyboardEvent): void {
     if (event.metaKey || event.ctrlKey || event.altKey || popupIsOpen() || adding || settingsFor !== null) {
       return
     }
-    if (event.key === 'Escape' && foldReader && readerOpen && !editableTarget(event.target)) {
+    if (event.key === 'Escape' && foldReader && readerOpen && !isEditableTarget(event.target)) {
       event.preventDefault()
       closeReader()
       return
     }
-    if (editableTarget(event.target) || (event.target as HTMLElement).closest('.side')) {
+    if (isEditableTarget(event.target) || (event.target as HTMLElement).closest('.side')) {
       return
     }
     const row = current()

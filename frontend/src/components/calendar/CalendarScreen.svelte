@@ -94,6 +94,7 @@
   import { errorMessage, pushActions, toastError } from '../../stores/toast'
   import { dur, motion } from '../../lib/motion'
   import { locale, shortcutLabel, t } from '../../lib/i18n'
+  import { isEditableTarget } from '../../lib/editable'
   import type { TimeFormat } from '../../lib/format'
   import type { CalendarView, EventDraft, EventScope, ICSFile, MailEventSource, Occurrence } from '../../lib/types'
 
@@ -829,13 +830,8 @@
 
   // --- keys -------------------------------------------------------------------------
 
-  function editableTarget(target: EventTarget | null): boolean {
-    const el = target as HTMLElement | null
-    return !!el && (el.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(el.tagName))
-  }
-
   function onKeydown(event: KeyboardEvent): void {
-    if (event.metaKey || event.ctrlKey || event.altKey || editableTarget(event.target) || popupIsOpen() || editing || scopeFor || quickAdd || importing) {
+    if (event.metaKey || event.ctrlKey || event.altKey || isEditableTarget(event.target) || popupIsOpen() || editing || scopeFor || quickAdd || importing) {
       return
     }
     const back = rtl ? 'ArrowRight' : 'ArrowLeft'
