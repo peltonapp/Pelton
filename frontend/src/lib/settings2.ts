@@ -18,6 +18,7 @@ import snippetsIcon from '@phosphor-icons/core/assets/duotone/text-indent-duoton
 import contactsIcon from '@phosphor-icons/core/assets/duotone/address-book-duotone.svg?raw'
 import calendarIcon from '@phosphor-icons/core/assets/duotone/calendar-blank-duotone.svg?raw'
 import tasksIcon from '@phosphor-icons/core/assets/duotone/list-checks-duotone.svg?raw'
+import feedsIcon from '@phosphor-icons/core/assets/duotone/rss-duotone.svg?raw'
 import accountsIcon from '@phosphor-icons/core/assets/duotone/at-duotone.svg?raw'
 import vacationIcon from '@phosphor-icons/core/assets/duotone/airplane-takeoff-duotone.svg?raw'
 import filtersIcon from '@phosphor-icons/core/assets/duotone/funnel-duotone.svg?raw'
@@ -86,6 +87,7 @@ export const settingsPages2: SettingsPage[] = [
   { key: 'notifications', group: 'mail', labelKey: 'settings2.page.notifications', icon: notificationsIcon },
   { key: 'calendar', group: 'people', labelKey: 'settings2.page.calendar', icon: calendarIcon },
   { key: 'tasks', group: 'people', labelKey: 'settings2.page.tasks', icon: tasksIcon },
+  { key: 'feeds', group: 'people', labelKey: 'settings2.page.feeds', icon: feedsIcon },
   { key: 'insights', group: 'mail', labelKey: 'settings2.page.insights', icon: insightsIcon },
   { key: 'contacts', group: 'people', labelKey: 'settings2.page.contacts', icon: contactsIcon },
   { key: 'accounts', group: 'accounts', labelKey: 'settings2.page.accounts', icon: accountsIcon },

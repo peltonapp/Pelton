@@ -6,6 +6,7 @@ import mailIcon from '@phosphor-icons/core/assets/duotone/envelope-simple-duoton
 import contactsIcon from '@phosphor-icons/core/assets/duotone/address-book-duotone.svg?raw'
 import calendarIcon from '@phosphor-icons/core/assets/duotone/calendar-blank-duotone.svg?raw'
 import tasksIcon from '@phosphor-icons/core/assets/duotone/list-checks-duotone.svg?raw'
+import feedsIcon from '@phosphor-icons/core/assets/duotone/rss-duotone.svg?raw'
 import { get } from 'svelte/store'
 import type { Space } from './types'
 import type { MailDropOptions } from '../stores/maildrag'
@@ -74,4 +75,5 @@ export const spaces: SpaceEntry[] = [
   { key: 'calendar', labelKey: 'space.calendar', icon: calendarIcon },
   { key: 'tasks', labelKey: 'space.tasks', icon: tasksIcon },
   { key: 'contacts', labelKey: 'space.contacts', icon: contactsIcon },
+  { key: 'feeds', labelKey: 'space.feeds', icon: feedsIcon },
 ]

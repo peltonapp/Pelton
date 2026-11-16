@@ -40,6 +40,9 @@ export const EventNames = {
   followUpsChanged: 'followups:changed',
   focusChanged: 'focus:changed',
   focusEnded: 'focus:ended',
+  feedsProgress: 'feeds:progress',
+  feedsChanged: 'feeds:changed',
+  feedsOpen: 'feeds:open',
   // sent between windows by the frontend, not by go.
   archiveAfterSend: 'compose:archive-after-send',
 } as const
@@ -387,4 +390,35 @@ export function onCalendarChanged(cb: (e: CalendarChangedEvent) => void): Unsubs
 /** onCalendarReminder fires when an event's reminder is due. */
 export function onCalendarReminder(cb: (e: CalendarReminderEvent) => void): Unsubscribe {
   return EventsOn(EventNames.calendarReminder, (e: CalendarReminderEvent) => cb(e))
+}
+
+/** FeedsProgressEvent reports a feed refresh in progress, and its end. */
+export interface FeedsProgressEvent {
+  running: boolean
+  done: number
+  total: number
+  /** The feed just fetched. */
+  feed: string
+  failed: number
+}
+
+/** FeedsChangedEvent says feeds or entries changed; no ids means any. */
+export interface FeedsChangedEvent {
+  feedIds: number[]
+  added: number
+}
+
+/** onFeedsProgress fires as feeds are fetched, and once more when the run ends. */
+export function onFeedsProgress(cb: (e: FeedsProgressEvent) => void): Unsubscribe {
+  return EventsOn(EventNames.feedsProgress, (e: FeedsProgressEvent) => cb(e))
+}
+
+/** onFeedsChanged fires when feeds or their entries changed. */
+export function onFeedsChanged(cb: (e: FeedsChangedEvent) => void): Unsubscribe {
+  return EventsOn(EventNames.feedsChanged, (e: FeedsChangedEvent | null) => cb({ feedIds: e?.feedIds ?? [], added: e?.added ?? 0 }))
+}
+
+/** onFeedsOpen fires when a clicked notification asks for a feed entry. */
+export function onFeedsOpen(cb: (entryId: number) => void): Unsubscribe {
+  return EventsOn(EventNames.feedsOpen, (e: { entryId: number }) => cb(e.entryId))
 }

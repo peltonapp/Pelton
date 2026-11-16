@@ -193,6 +193,9 @@
   import { setSenderPanel } from './stores/prefs'
   import './lib/palette-tasks'
   import './lib/palette-availability'
+  import './lib/palette-feeds'
+  import { startFeeds, feedFocus } from './stores/feeds'
+  import { onFeedsOpen } from './lib/events'
   import { startTasks, toggleDone, tasks as taskStore, taskFromMailRequest } from './stores/tasks'
   import { createTasksFromMail, openTask } from './lib/taskmail'
   import { getTask } from './lib/api'
@@ -458,6 +461,26 @@
   }
   onDestroy(() => stopTasks?.())
 
+  // the feeds store feeds the rail's unread dot, so it runs alongside.
+  let stopFeeds: (() => void) | undefined
+  $: if (!classic && !stopFeeds) {
+    stopFeeds = startFeeds()
+  } else if (classic && stopFeeds) {
+    stopFeeds()
+    stopFeeds = undefined
+  }
+  onDestroy(() => stopFeeds?.())
+
+  // shareFromFeeds opens a new message carrying a feed entry's title and link.
+  function shareFromFeeds(mail: { subject: string; body: string }): void {
+    const accountId = composeAccountId()
+    if (accountId === null) {
+      toastError(get(t)('app.toast.addMailboxFirst'))
+      return
+    }
+    openComposeWith(accountId, editorMode, { to: '', cc: '', bcc: '', subject: mail.subject, body: mail.body })
+  }
+
   // the newsletter manager and the insights page in the palette, with their
   // live shortcut as the hint.
   registerPaletteSource('mailtools', (tr) => {
@@ -659,6 +682,15 @@
     // time this arrives; all that is left is to go to the message.
     unsubscribers.push(
       onOpenMessage((e) => revealMessage(e.messageId, e.accountId, e.folderId, get(sidebar).data ?? null)),
+    )
+    // a clicked notification about a new feed entry.
+    unsubscribers.push(
+      onFeedsOpen((id) => {
+        if (!classic) {
+          feedFocus.set(id)
+          openSpace('feeds')
+        }
+      }),
     )
     // a send and archive from a compose window, which closes as it sends.
     unsubscribers.push(
@@ -1152,6 +1184,9 @@
         if (!classic) {
           openSpace('tasks')
         }
+        break
+      case 'go-feeds':
+        goToSpace('feeds')
         break
       case 'create-task':
         if (!classic) {
@@ -2064,6 +2099,12 @@
       <div class="space-host">
         {#await import('./components/tasks/TasksScreen.svelte') then m}
           <svelte:component this={m.default} />
+        {/await}
+      </div>
+    {:else if $space === 'feeds'}
+      <div class="space-host">
+        {#await import('./components/feeds/FeedsScreen.svelte') then m}
+          <svelte:component this={m.default} on:compose={(e) => shareFromFeeds(e.detail)} />
         {/await}
       </div>
     {/if}
