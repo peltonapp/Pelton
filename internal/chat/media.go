@@ -38,6 +38,9 @@ const cacheLimit = 8 << 20
 // cacheAge is how long a cached download is kept.
 const cacheAge = 30 * 24 * time.Hour
 
+// pruneEvery is how often a running session prunes the media cache.
+const pruneEvery = 24 * time.Hour
+
 // MediaContent is a file's bytes for showing in the app.
 type MediaContent struct {
 	Name string `json:"name"`
@@ -288,6 +291,16 @@ func (s *session) fetch(ctx context.Context, src mediaSource) ([]byte, string, e
 		mime = http.DetectContentType(data)
 	}
 	return data, mime, nil
+}
+
+// pruneMediaCacheDue prunes the media cache on its first call and then once
+// pruneEvery has passed since the last prune.
+func (s *session) pruneMediaCacheDue(now time.Time) {
+	if !s.lastPrune.IsZero() && now.Sub(s.lastPrune) < pruneEvery {
+		return
+	}
+	s.lastPrune = now
+	s.pruneMediaCache()
 }
 
 // pruneMediaCache removes cached downloads older than cacheAge.

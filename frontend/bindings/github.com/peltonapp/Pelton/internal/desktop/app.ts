@@ -558,15 +558,6 @@ export function ChatRetryDecryption(roomID: string, eventIDs: string[]): $Cancel
 }
 
 /**
- * ChatRoom returns one room.
- */
-export function ChatRoom(roomID: string): $CancellablePromise<chat$0.Room> {
-    return $Call.ByID(2349951475, roomID).then(($result: any) => {
-        return $$createType27($result);
-    });
-}
-
-/**
  * ChatRooms lists the rooms, direct chats, spaces and invites.
  */
 export function ChatRooms(): $CancellablePromise<chat$0.Room[]> {
@@ -3811,8 +3802,7 @@ export function SetSeen(id: number, seen: boolean): $CancellablePromise<void> {
 }
 
 /**
- * SetSetting writes a single setting. The frontend uses the known keys above
- * (theme/accent/density/show_*) plus editor_mode.
+ * SetSetting writes a single setting.
  */
 export function SetSetting(key: string, value: string): $CancellablePromise<void> {
     return $Call.ByID(225717314, key, value);

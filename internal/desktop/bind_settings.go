@@ -7,7 +7,7 @@ import (
 	"github.com/peltonapp/Pelton/internal/storage"
 )
 
-// ui setting keys. theme and editor mode already exist in storage; the rest are
+// ui setting keys. theme already exists in storage; the rest are
 // ui-only and defined here. raw strings keep the contract in one place next to
 // the defaults.
 const (
@@ -247,10 +247,9 @@ const (
 	// order.
 	settingUnifiedViewOrder = "sidebar_unified_view_order"
 	// what Pelton opens on launch: "view:<key>", "folder:<id>", or "last" to
-	// restore whatever was open when the app last closed. settingLastSelection
-	// holds that remembered selection in the same "view:"/"folder:" form.
+	// restore whatever was open when the app last closed. the frontend keeps
+	// that remembered selection under "last_selection" in the same form.
 	settingStartupSelection = "startup_selection"
-	settingLastSelection    = "last_selection"
 	// the notes space: the folder of Markdown files (empty means the Notes
 	// folder in the data directory), where daily notes go and how they are
 	// named, the note a daily note starts from, the folders of templates, of
@@ -856,8 +855,7 @@ func (a *App) GetSetting(key string) (SettingResult, error) {
 	return SettingResult{Value: value, Found: true}, nil
 }
 
-// SetSetting writes a single setting. The frontend uses the known keys above
-// (theme/accent/density/show_*) plus editor_mode.
+// SetSetting writes a single setting.
 func (a *App) SetSetting(key, value string) error {
 	if err := a.ready(); err != nil {
 		return err

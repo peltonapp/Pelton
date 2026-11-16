@@ -22,7 +22,7 @@
   import { onDestroy } from 'svelte'
   import Ph from '../common/Ph.svelte'
   import AnchoredPopover from '../common/AnchoredPopover.svelte'
-  import { history, historyAvailable, historyOpen, redoEntry, undoEntry, type HistoryKind, type HistoryReason } from '../../stores/undohistory'
+  import { history, historyOpen, redoEntry, undoEntry, type HistoryKind, type HistoryReason } from '../../stores/undohistory'
   import { formatRelative } from '../../lib/format'
   import { bindings } from '../../stores/shortcuts'
   import { tip } from '../../lib/tip'

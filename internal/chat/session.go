@@ -76,6 +76,9 @@ type session struct {
 	uploadLimit int64
 	// synced is set after the first sync, before which nothing notifies.
 	synced bool
+
+	// lastPrune is when the sync loop last pruned the media cache.
+	lastPrune time.Time
 }
 
 // newSession sets up the client, the encryption machine and the verification
@@ -225,6 +228,7 @@ func backoff(n int) time.Duration {
 func (s *session) loop() {
 	defer close(s.done)
 	ctx := s.ctx
+	s.pruneMediaCacheDue(time.Now())
 	filterID, err := s.filterID(ctx)
 	failures := 0
 	for err != nil {
@@ -236,6 +240,7 @@ func (s *session) loop() {
 	}
 	failures = 0
 	for ctx.Err() == nil {
+		s.pruneMediaCacheDue(time.Now())
 		since, err := s.cryptoStore.LoadNextBatch(ctx, s.cli.UserID)
 		if err != nil {
 			s.log.Error("chat: read sync position", "err", err)

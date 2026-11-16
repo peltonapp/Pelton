@@ -60,6 +60,7 @@
   import { errorMessage, toastError } from '../../stores/toast'
   import { dur, motion } from '../../lib/motion'
   import { locale, t } from '../../lib/i18n'
+  import { isEditableTarget } from '../../lib/editable'
   import type { TimeFormat } from '../../lib/format'
   import type { Task, TaskSort } from '../../lib/types'
 
@@ -388,21 +389,16 @@
 
   // --- keys -------------------------------------------------------------------------
 
-  function editableTarget(target: EventTarget | null): boolean {
-    const el = target as HTMLElement | null
-    return !!el && (el.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(el.tagName))
-  }
-
   function onKeydown(event: KeyboardEvent): void {
     if (event.metaKey || event.ctrlKey || event.altKey || popupIsOpen() || $taskConflict) {
       return
     }
-    if (event.key === 'Escape' && detailOpen && !editableTarget(event.target)) {
+    if (event.key === 'Escape' && detailOpen && !isEditableTarget(event.target)) {
       event.preventDefault()
       detailOpen = false
       return
     }
-    if (editableTarget(event.target) || (event.target as HTMLElement).closest('.detail')) {
+    if (isEditableTarget(event.target) || (event.target as HTMLElement).closest('.detail')) {
       return
     }
     const run: Record<string, () => void> = {

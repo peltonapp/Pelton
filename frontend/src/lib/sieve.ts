@@ -168,12 +168,6 @@ export function vacationPhase(v: SieveVacation | null, scriptActive: boolean, to
   return 'active'
 }
 
-/** Today as YYYY-MM-DD in local time. */
-export function localDay(d: Date = new Date()): string {
-  const pad = (n: number): string => String(n).padStart(2, '0')
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
-}
-
 /** A state with the lists Go sends as null turned into empty arrays. */
 export function normalizeState(s: SieveState): SieveState {
   const script = s.script ?? { vacation: null, rules: [], includes: [] }

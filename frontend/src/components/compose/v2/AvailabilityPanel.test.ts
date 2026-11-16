@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { render, screen, waitFor } from '@testing-library/svelte'
+import { render, screen } from '@testing-library/svelte'
 import userEvent from '@testing-library/user-event'
 import type { Calendar, Occurrence } from '../../../lib/types'
 

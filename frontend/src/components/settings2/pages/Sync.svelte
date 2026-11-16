@@ -26,7 +26,8 @@
   import { downloadRange, cancelDownload, getLogStatus, openLogFolder, deleteLogs } from '../../../lib/api'
   import { downloadProgress } from '../../../stores/progress'
   import { toastInfo, toastError, errorMessage } from '../../../stores/toast'
-  import { isMac, t } from '../../../lib/i18n'
+  import { t } from '../../../lib/i18n'
+  import { formatBytes } from '../../../lib/format'
   import type { LogLevel, LogStatus } from '../../../lib/types'
   import '../../../theme/settings2-sections-system.css'
 
@@ -139,16 +140,6 @@
     } catch (err) {
       toastError(errorMessage(err))
     }
-  }
-
-  function formatBytes(bytes: number): string {
-    if (bytes < 1024) {
-      return `${bytes} B`
-    }
-    if (bytes < 1024 * 1024) {
-      return `${Math.round(bytes / 1024)} KB`
-    }
-    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
   }
 </script>
 

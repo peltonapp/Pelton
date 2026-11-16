@@ -3,7 +3,7 @@
   // category nav on the left and the selected category's controls on the right,
   // so the (many) preferences stay übersichtlich instead of one long scroll.
   // every control has a short hint/tooltip. no preference was removed in the
-  // reorganization — they are only grouped.
+  // reorganization - they are only grouped.
   import {
     IconX,
     IconSearch,

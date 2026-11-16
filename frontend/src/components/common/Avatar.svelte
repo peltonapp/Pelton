@@ -1,6 +1,6 @@
 <script lang="ts">
   // a circular sender avatar. it tries the configured remote photo candidates in
-  // order (BIMI logo, Gravatar — per the user's fallback chain) and, when they
+  // order (BIMI logo, Gravatar - per the user's fallback chain) and, when they
   // all fail or none exist, draws a generated placeholder ("pfp") in the chosen
   // style. the placeholder is a deterministic inline SVG, so it needs no network
   // and is stable per sender. accent stays reserved for selection and links.

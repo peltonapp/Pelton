@@ -6,6 +6,7 @@
   import { onMount, onDestroy, type ComponentType } from 'svelte'
   import { get } from 'svelte/store'
   import { t } from './lib/i18n'
+  import { isEditableTarget } from './lib/editable'
 
   import Sidebar from './components/sidebar/Sidebar.svelte'
   import MenuBar from './components/common/MenuBar.svelte'
@@ -58,7 +59,7 @@
   import Composer2 from './components/compose/Composer2.svelte'
   import ComposeTabLayer from './components/compose/ComposeTabLayer.svelte'
   import { openSnooze, openSnoozeMany } from './stores/snooze'
-  import { patchInList, removeFromList } from './stores/messages'
+  import { patchInList } from './stores/messages'
   import {
     triggerSync,
     getSetting,
@@ -131,7 +132,7 @@
     restoreTabs,
   } from './stores/tabs'
   import { messageDetail } from './stores/message'
-  import { profiles, currentProfile, loadProfiles, switchTo, switchRelative } from './stores/profiles'
+  import { profiles, loadProfiles, switchTo, switchRelative } from './stores/profiles'
   import { loadProposals } from './stores/agent'
   import { settingsRequest, clearSettingsRequest, openSettingsAt } from './stores/settingsnav'
   import { errorMessage, toastError, toastInfo, pushAction, pushActions, withBusyToast } from './stores/toast'
@@ -227,7 +228,7 @@
     promptForMissingPasswords,
     refreshMissingPasswords,
   } from './stores/passwordprompt'
-  import type { EditorMode, MessageSummary, ThemePref, ThemeInfo, Folder, Account, Space } from './lib/types'
+  import type { EditorMode, MessageSummary, ThemePref, ThemeInfo, Folder, Space } from './lib/types'
 
   let settingsOpen = false
   // the settings screen is code-split and loaded on first open. A load that
@@ -2066,16 +2067,6 @@
     clearSettingsRequest()
   }
 
-  // isEditableTarget reports whether the event originated in a text field, so
-  // plain-key shortcuts do not fire while the user is typing.
-  function isEditableTarget(target: EventTarget | null): boolean {
-    const el = target as HTMLElement | null
-    if (!el) {
-      return false
-    }
-    const tag = el.tagName
-    return tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || el.isContentEditable
-  }
 
   // pane resize. clamps keep each column usable; widths persist on release.
   function clamp(value: number, min: number, max: number): number {

@@ -304,11 +304,6 @@ export interface SMIMERevocation {
   checked: string
 }
 
-// good means still in force, revoked means the authority has withdrawn it, and
-// unknown means the question could not be answered. unknown is not evidence
-// either way and must not read as one.
-export type SMIMERevocationStatus = '' | 'good' | 'revoked' | 'unknown'
-
 
 // PhishingSignal is one finding. kind is a stable identifier the ui turns into
 // a sentence; detail is the domain, address or url it is about, and target the
@@ -1288,10 +1283,6 @@ export interface SenderOverview {
   automated: boolean
 }
 
-// the eight flag colors. index 0 means "no color"; 1..8 map to the palette in
-// theme/flagcolors.ts and to imap $Label1..$Label8 when syncing is on.
-export type FlagColor = 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8
-
 // swipe gesture actions for message rows.
 export type SwipeAction = 'none' | 'delete' | 'read' | 'unread' | 'flag' | 'archive' | 'snooze'
 
@@ -1306,11 +1297,6 @@ export type ToastPosition =
   | 'bottom-left'
   | 'bottom-center'
   | 'bottom-right'
-
-export interface SettingResult {
-  value: string
-  found: boolean
-}
 
 // a reusable header/footer block. kind places it (top/bottom of a new message);
 // format picks how the content is inserted into the compose body.
@@ -1536,25 +1522,11 @@ export interface PasswordCheck {
   error: string
 }
 
-// folder roles mirror the backend's folderRole classification.
-export type FolderRole =
-  | 'inbox'
-  | 'sent'
-  | 'drafts'
-  | 'trash'
-  | 'junk'
-  | 'archive'
-  | 'normal'
-
 // unified view keys mirror the backend view constants.
 export type ViewKey = 'inbox' | 'unread' | 'flagged' | 'sent' | 'drafts' | 'archive' | 'junk' | 'trash'
 
 // pgp status mirrors mailview.PGPStatus.
 export type PGPStatus = 'none' | 'signed' | 'encrypted'
-
-// auth status placeholder. only "unavailable" exists until the backend parses
-// Authentication-Results headers (documented follow-up).
-export type AuthStatus = 'unavailable'
 
 // editor modes for the compose pane.
 export type EditorMode = 'plaintext' | 'markdown' | 'wysiwyg'

@@ -4,9 +4,6 @@
 // derivation (selection background, dark-mode link) is done in tokens.css with
 // color-mix so we only ever store one color.
 
-// the default accent, also defined in tokens.css and in the backend defaults.
-export const DEFAULT_ACCENT = '#465AF2'
-
 // preset swatches offered alongside the free hex input. neutral, calm choices
 // that read well as a dezent selection/link accent in both themes.
 export const ACCENT_PRESETS: readonly string[] = [

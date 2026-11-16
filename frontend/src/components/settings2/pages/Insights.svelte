@@ -21,7 +21,6 @@
     gridWeekdays,
     hourGrid,
     insightsRanges,
-    localDay,
     senderLabel,
     volumeBuckets,
     type InsightsPeople,
@@ -31,6 +30,7 @@
     type InsightsVolume,
     type VolumeBucket,
   } from '../../../lib/mailstats'
+  import { dayKey } from '../../../lib/caldate'
   import { clearInsights, peopleInsights, storageInsights, volumeInsights } from '../../../stores/insights'
   import { prefs } from '../../../stores/prefs'
   import { errorMessage } from '../../../stores/toast'
@@ -79,7 +79,7 @@
   }
 
   function bars(v: InsightsVolume, r: InsightsRange): { label: string; received: number; sent: number }[] {
-    return volumeBuckets(v.days, r, localDay(new Date())).map((b) => ({ label: barLabel(b, r), received: b.received, sent: b.sent }))
+    return volumeBuckets(v.days, r, dayKey(new Date())).map((b) => ({ label: barLabel(b, r), received: b.received, sent: b.sent }))
   }
 
   function sum(v: InsightsVolume, key: 'received' | 'sent'): number {

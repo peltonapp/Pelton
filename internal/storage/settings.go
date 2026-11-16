@@ -16,11 +16,8 @@ var ErrSettingNotFound = errors.New("storage: setting not found")
 
 // Known ui setting keys. Callers should use these rather than raw strings.
 const (
-	SettingTheme               = "theme"
-	SettingEditorMode          = "editor_mode"
-	SettingWindowSize          = "window_size"
-	SettingLastSelectedAccount = "last_selected_account"
-	SettingLastSelectedFolder  = "last_selected_folder"
+	SettingTheme      = "theme"
+	SettingWindowSize = "window_size"
 	// SettingProxy holds the outbound proxy preference as json (everything but
 	// the password, which lives in the keyring).
 	SettingProxy = "proxy"
@@ -144,18 +141,4 @@ func (d *DB) AllSettings(ctx context.Context) ([]Setting, error) {
 		return nil, fmt.Errorf("storage: iterate settings: %w", err)
 	}
 	return out, nil
-}
-
-// SetIfNewer writes key to value only if there is no existing row or the
-// existing row's updated_at is not newer than updatedAt, so importing a
-// snapshot never clobbers a more recent local change (last write wins).
-func (d *DB) SetIfNewer(ctx context.Context, key, value, updatedAt string) error {
-	const query = `
-INSERT INTO settings (key, profile_id, value, updated_at) VALUES (?, ?, ?, ?)
-ON CONFLICT(key, profile_id) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at
-WHERE excluded.updated_at >= settings.updated_at`
-	if _, err := d.sql.ExecContext(ctx, query, key, d.settingsProfile(), value, updatedAt); err != nil {
-		return fmt.Errorf("storage: set setting if newer %q: %w", key, err)
-	}
-	return nil
 }

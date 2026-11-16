@@ -314,7 +314,6 @@ export function setNavStyle(navStyle: NavStyle): void {
   void setSetting(SettingKeys.navStyle, navStyle)
 }
 
-/** Moves the rail to the left or right window edge. */
 /** The ids of the views pinned to the rail, in display order. */
 export function railPinIds(railPins: string): string[] {
   return railPins === '' ? [] : railPins.split(',')
@@ -331,6 +330,7 @@ export function toggleRailPin(id: string): void {
   })
 }
 
+/** Moves the rail to the left or right window edge. */
 export function setRailSide(railSide: RailSide): void {
   prefs.update((p) => ({ ...p, railSide }))
   void setSetting(SettingKeys.railSide, railSide)

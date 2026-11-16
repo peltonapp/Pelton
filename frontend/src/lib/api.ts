@@ -1001,13 +1001,6 @@ export function saveDraft(id: number, req: ComposeRequest): Promise<number> {
   return App.SaveDraft(id, new desktop.ComposeRequest(req))
 }
 
-export function listDrafts(): Promise<Draft[]> {
-  if (isDemoActive()) {
-    return Promise.resolve([])
-  }
-  return App.ListDrafts()
-}
-
 export function deleteDraft(id: number): Promise<void> {
   if (isDemoActive()) {
     return Promise.resolve()
@@ -1867,12 +1860,6 @@ export function changeLockPassphrase(current: string, next: string): Promise<Loc
   return App.ChangeLockPassphrase(current, next) as unknown as Promise<LockAuthResult>
 }
 
-/** Whether a bound call was refused because the app is locked. */
-export function isLockedError(err: unknown): boolean {
-  const cause = (err as { cause?: { code?: unknown } } | null)?.cause
-  return typeof cause === 'object' && cause !== null && cause.code === 'locked'
-}
-
 // --- quick compose ---
 
 /** The quick compose setting and whether its shortcut is registered. */
@@ -1972,7 +1959,6 @@ export const SettingKeys = {
   // lets search see inside encrypted mail, at the cost of writing the decrypted
   // text into the on-disk index. off by default; toggling rebuilds the index.
   indexDecrypted: 'search_index_decrypted',
-  editorMode: 'editor_mode',
   toastPosition: 'toast_position',
   paneLocked: 'pane_locked',
   sidebarWidth: 'sidebar_width',
@@ -2101,9 +2087,6 @@ export const SettingKeys = {
   signatureAboveQuote: 'signature_above_quote',
   closeAction: 'close_button_action',
   startHidden: 'start_hidden',
-  quickCompose: 'quick_compose',
-  quickComposeShortcut: 'quick_compose_shortcut',
-  appLock: 'app_lock',
   appLockIdleMinutes: 'app_lock_idle_minutes',
   appLockOnLaunch: 'app_lock_on_launch',
   appLockHideNotifications: 'app_lock_hide_notifications',
@@ -3515,11 +3498,6 @@ export function chatRooms(): Promise<ChatRoom[]> {
     return Promise.resolve([])
   }
   return App.ChatRooms().then((list) => (list ?? []) as unknown as ChatRoom[])
-}
-
-/** One room. */
-export function chatRoom(roomId: string): Promise<ChatRoom> {
-  return App.ChatRoom(roomId) as unknown as Promise<ChatRoom>
 }
 
 /** Up to limit messages older than before, or the newest when before is empty. */

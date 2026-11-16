@@ -62,7 +62,6 @@
     backfillFailed,
     runSearch,
     patchInList,
-    removeFromList,
     restoreToList,
     searchSortKind,
     rowPinned,
@@ -104,7 +103,6 @@
   import {
     setSeen,
     getMessage,
-    removeOffline,
     archiveMessage,
     openDraft,
     openMessageWindow,
@@ -113,7 +111,6 @@
   import { sidebar } from '../../stores/accounts'
   import { openSnooze, openSnoozeMany } from '../../stores/snooze'
   import { openMove, openMoveMany } from '../../stores/move'
-  import { recordDeleted } from '../../stores/undodelete'
   import { recordArchived } from '../../stores/undoarchive'
   import { openContextMenu, type MenuEntry } from '../../stores/contextmenu'
   import { bindings, menuHint, shortcutTitle } from '../../stores/shortcuts'

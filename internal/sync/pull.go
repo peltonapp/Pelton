@@ -66,17 +66,6 @@ func storageKeywordsToImap(f storage.Flag) []imap.Flag {
 	return nil
 }
 
-// fetchAndStore pulls a full message by uid and inserts it with its
-// attachments. body and attachments are fetched with BODY.PEEK so caching does
-// not set \Seen on the server.
-func (e *Engine) fetchAndStore(ctx context.Context, folder storage.Folder, uid uint32) (int64, error) {
-	msg, err := e.client.FetchMessage(imap.UID(uid))
-	if err != nil {
-		return 0, fmt.Errorf("sync: fetch message uid %d: %w", uid, err)
-	}
-	return e.storeMessage(ctx, folder, msg)
-}
-
 // fetchBatch pulls a run of messages in one command and stores each as it
 // arrives, returning the ids it stored. A message that cannot be fetched or
 // parsed is logged and skipped: the rest of the batch is already on its way
