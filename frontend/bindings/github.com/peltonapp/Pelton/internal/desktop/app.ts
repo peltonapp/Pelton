@@ -119,6 +119,15 @@ export function AddMailToProject(projectID: number, messageIDs: number[], taskUI
 }
 
 /**
+ * AddNoteToProject puts a note of the notes folder in a project by writing
+ * the project into its front matter. A note in another project moves to this
+ * one. Nothing else in the file changes.
+ */
+export function AddNoteToProject(rel: string, projectID: number): $CancellablePromise<void> {
+    return $Call.ByID(3137963977, rel, projectID);
+}
+
+/**
  * AddOAuthAccount creates an oauth account: it runs the interactive PKCE flow
  * (opening the system browser), stores the resulting refresh token in the
  * keyring, then discovers folders and syncs. ClientID is the user's own
@@ -290,6 +299,14 @@ export function ArchiveMessages(ids: number[]): $CancellablePromise<$models.Bulk
  */
 export function AttachProjectNote(noteID: number, taskUID: string): $CancellablePromise<void> {
     return $Call.ByID(554748560, noteID, taskUID);
+}
+
+/**
+ * AttachVaultNote attaches a note of the notes folder to a card. A note in no
+ * project yet joins the card's project.
+ */
+export function AttachVaultNote(rel: string, taskUID: string): $CancellablePromise<void> {
+    return $Call.ByID(2609321113, rel, taskUID);
 }
 
 /**
@@ -993,11 +1010,22 @@ export function CreateProjectNote(projectID: number, title: string, body: string
 }
 
 /**
+ * CreateProjectVaultNote writes a new note of a project into the project's
+ * folder, under a free name made from title. body is the note's text, usually
+ * a filled template; the project goes into its front matter.
+ */
+export function CreateProjectVaultNote(projectID: number, title: string, body: string): $CancellablePromise<$models.ProjectVaultNoteDTO> {
+    return $Call.ByID(383901013, projectID, title, body).then(($result: any) => {
+        return $$createType51($result);
+    });
+}
+
+/**
  * CreateTask stores a new task and writes it to its list's server.
  */
 export function CreateTask(req: $models.TaskRequest): $CancellablePromise<$models.TaskSaveResultDTO> {
     return $Call.ByID(689347879, req).then(($result: any) => {
-        return $$createType51($result);
+        return $$createType52($result);
     });
 }
 
@@ -1006,7 +1034,7 @@ export function CreateTask(req: $models.TaskRequest): $CancellablePromise<$model
  */
 export function CreateTaskList(name: string, color: string): $CancellablePromise<$models.TaskListDTO> {
     return $Call.ByID(2974598415, name, color).then(($result: any) => {
-        return $$createType52($result);
+        return $$createType53($result);
     });
 }
 
@@ -1016,7 +1044,7 @@ export function CreateTaskList(name: string, color: string): $CancellablePromise
  */
 export function DecodeEventLink(link: string): $CancellablePromise<$models.EventLinkResultDTO> {
     return $Call.ByID(1678222880, link).then(($result: any) => {
-        return $$createType53($result);
+        return $$createType54($result);
     });
 }
 
@@ -1026,7 +1054,7 @@ export function DecodeEventLink(link: string): $CancellablePromise<$models.Event
  */
 export function DecodeJSCalendar(text: string): $CancellablePromise<$models.EventLinkResultDTO> {
     return $Call.ByID(4013099069, text).then(($result: any) => {
-        return $$createType53($result);
+        return $$createType54($result);
     });
 }
 
@@ -1037,7 +1065,7 @@ export function DecodeJSCalendar(text: string): $CancellablePromise<$models.Even
  */
 export function DefaultCalendarFileStatus(): $CancellablePromise<$models.DefaultMailStatusDTO> {
     return $Call.ByID(4083604353).then(($result: any) => {
-        return $$createType54($result);
+        return $$createType55($result);
     });
 }
 
@@ -1047,7 +1075,7 @@ export function DefaultCalendarFileStatus(): $CancellablePromise<$models.Default
  */
 export function DefaultMailClientStatus(): $CancellablePromise<$models.DefaultMailStatusDTO> {
     return $Call.ByID(3213425133).then(($result: any) => {
-        return $$createType54($result);
+        return $$createType55($result);
     });
 }
 
@@ -1075,7 +1103,7 @@ export function DeleteAddress(email: string): $CancellablePromise<void> {
  */
 export function DeleteContact(id: number, force: boolean): $CancellablePromise<$models.ContactConflictDTO> {
     return $Call.ByID(2336934415, id, force).then(($result: any) => {
-        return $$createType55($result);
+        return $$createType56($result);
     });
 }
 
@@ -1159,7 +1187,7 @@ export function DeleteMessage(id: number): $CancellablePromise<void> {
  */
 export function DeleteMessages(ids: number[]): $CancellablePromise<$models.BulkResultDTO> {
     return $Call.ByID(1439497785, ids).then(($result: any) => {
-        return $$createType56($result);
+        return $$createType57($result);
     });
 }
 
@@ -1233,7 +1261,7 @@ export function DeleteSnippet(id: number): $CancellablePromise<void> {
  */
 export function DeleteTask(id: number, force: boolean): $CancellablePromise<$models.TaskDeleteResultDTO> {
     return $Call.ByID(3133708696, id, force).then(($result: any) => {
-        return $$createType57($result);
+        return $$createType58($result);
     });
 }
 
@@ -1270,7 +1298,7 @@ export function DeleteView(id: number): $CancellablePromise<void> {
  */
 export function DevActivity(after: number): $CancellablePromise<$models.DevActivityDTO> {
     return $Call.ByID(834755164, after).then(($result: any) => {
-        return $$createType58($result);
+        return $$createType59($result);
     });
 }
 
@@ -1281,7 +1309,7 @@ export function DevActivity(after: number): $CancellablePromise<$models.DevActiv
  */
 export function DevProcessStats(): $CancellablePromise<$models.DevProcessDTO> {
     return $Call.ByID(3854388265).then(($result: any) => {
-        return $$createType59($result);
+        return $$createType60($result);
     });
 }
 
@@ -1328,7 +1356,7 @@ export function DiscardFailedSend(id: number): $CancellablePromise<boolean> {
  */
 export function DiscoverAddressBooks(req: $models.AddressBookRequest): $CancellablePromise<$models.DiscoveredBookDTO[]> {
     return $Call.ByID(1666200171, req).then(($result: any) => {
-        return $$createType61($result);
+        return $$createType62($result);
     });
 }
 
@@ -1340,7 +1368,7 @@ export function DiscoverAddressBooks(req: $models.AddressBookRequest): $Cancella
  */
 export function DiscoverCalendars(req: $models.CalendarAccountRequest): $CancellablePromise<$models.CalendarDiscoveryDTO> {
     return $Call.ByID(478875368, req).then(($result: any) => {
-        return $$createType62($result);
+        return $$createType63($result);
     });
 }
 
@@ -1351,7 +1379,7 @@ export function DiscoverCalendars(req: $models.CalendarAccountRequest): $Cancell
  */
 export function DiscoverConfig(email: string): $CancellablePromise<$models.DiscoveredDTO> {
     return $Call.ByID(2312054947, email).then(($result: any) => {
-        return $$createType63($result);
+        return $$createType64($result);
     });
 }
 
@@ -1362,7 +1390,7 @@ export function DiscoverConfig(email: string): $CancellablePromise<$models.Disco
  */
 export function DiscoverFeeds(address: string): $CancellablePromise<$models.FeedCandidateDTO[]> {
     return $Call.ByID(2312573270, address).then(($result: any) => {
-        return $$createType65($result);
+        return $$createType66($result);
     });
 }
 
@@ -1428,7 +1456,7 @@ export function DownloadRange(startDateRFC3339: string, includeAttachments: bool
  */
 export function EditOutboxMessage(id: number): $CancellablePromise<$models.OutboxEditDTO> {
     return $Call.ByID(3604846874, id).then(($result: any) => {
-        return $$createType66($result);
+        return $$createType67($result);
     });
 }
 
@@ -1511,7 +1539,7 @@ export function ExportMessagePrintView(id: number): $CancellablePromise<void> {
  */
 export function ExportMessagesEML(ids: number[]): $CancellablePromise<$models.EmlExportDTO> {
     return $Call.ByID(1073714382, ids).then(($result: any) => {
-        return $$createType67($result);
+        return $$createType68($result);
     });
 }
 
@@ -1548,7 +1576,7 @@ export function ExportTheme(id: string): $CancellablePromise<string> {
  */
 export function FetchAttachment(attachmentID: number): $CancellablePromise<$models.AttachmentEntryDTO> {
     return $Call.ByID(715403391, attachmentID).then(($result: any) => {
-        return $$createType68($result);
+        return $$createType69($result);
     });
 }
 
@@ -1561,7 +1589,7 @@ export function FetchAttachment(attachmentID: number): $CancellablePromise<$mode
  */
 export function FetchOlderMessages(req: $models.ListMessagesRequest): $CancellablePromise<$models.FetchOlderResult> {
     return $Call.ByID(3795637664, req).then(($result: any) => {
-        return $$createType69($result);
+        return $$createType70($result);
     });
 }
 
@@ -1571,7 +1599,7 @@ export function FetchOlderMessages(req: $models.ListMessagesRequest): $Cancellab
  */
 export function FindDuplicateContacts(): $CancellablePromise<$models.DuplicatesDTO> {
     return $Call.ByID(3156031779).then(($result: any) => {
-        return $$createType70($result);
+        return $$createType71($result);
     });
 }
 
@@ -1580,7 +1608,7 @@ export function FindDuplicateContacts(): $CancellablePromise<$models.DuplicatesD
  */
 export function FindEventByUID(uid: string): $CancellablePromise<$models.EventRefDTO> {
     return $Call.ByID(2721927300, uid).then(($result: any) => {
-        return $$createType71($result);
+        return $$createType72($result);
     });
 }
 
@@ -1590,7 +1618,7 @@ export function FindEventByUID(uid: string): $CancellablePromise<$models.EventRe
  */
 export function FindMessageByLink(link: string): $CancellablePromise<$models.MessageRefDTO> {
     return $Call.ByID(3669298833, link).then(($result: any) => {
-        return $$createType72($result);
+        return $$createType73($result);
     });
 }
 
@@ -1626,7 +1654,7 @@ export function GetAccountPGPKey(accountID: number): $CancellablePromise<string>
  */
 export function GetAccountSignatures(accountID: number): $CancellablePromise<$models.AccountSignaturesDTO> {
     return $Call.ByID(1545977002, accountID).then(($result: any) => {
-        return $$createType73($result);
+        return $$createType74($result);
     });
 }
 
@@ -1635,7 +1663,7 @@ export function GetAccountSignatures(accountID: number): $CancellablePromise<$mo
  */
 export function GetCalendarSettings(): $CancellablePromise<$models.CalendarSettingsDTO> {
     return $Call.ByID(4188187489).then(($result: any) => {
-        return $$createType74($result);
+        return $$createType75($result);
     });
 }
 
@@ -1659,7 +1687,7 @@ export function GetDiagnostics(): $CancellablePromise<string> {
  */
 export function GetEvent(id: number, recurrenceID: string): $CancellablePromise<$models.EventDTO> {
     return $Call.ByID(2126340470, id, recurrenceID).then(($result: any) => {
-        return $$createType75($result);
+        return $$createType76($result);
     });
 }
 
@@ -1669,7 +1697,7 @@ export function GetEvent(id: number, recurrenceID: string): $CancellablePromise<
  */
 export function GetFeedEntry(id: number): $CancellablePromise<$models.FeedEntryDetailDTO> {
     return $Call.ByID(3877120778, id).then(($result: any) => {
-        return $$createType76($result);
+        return $$createType77($result);
     });
 }
 
@@ -1687,7 +1715,7 @@ export function GetFeedEntryHTML(id: number, allowRemote: boolean, includeTracke
  */
 export function GetFocus(): $CancellablePromise<$models.FocusDTO> {
     return $Call.ByID(3017201390).then(($result: any) => {
-        return $$createType77($result);
+        return $$createType78($result);
     });
 }
 
@@ -1696,7 +1724,7 @@ export function GetFocus(): $CancellablePromise<$models.FocusDTO> {
  */
 export function GetFocusSchedule(): $CancellablePromise<$models.FocusScheduleDTO> {
     return $Call.ByID(1343157435).then(($result: any) => {
-        return $$createType78($result);
+        return $$createType79($result);
     });
 }
 
@@ -1706,7 +1734,7 @@ export function GetFocusSchedule(): $CancellablePromise<$models.FocusScheduleDTO
  */
 export function GetLockState(): $CancellablePromise<$models.LockStateDTO> {
     return $Call.ByID(1065182406).then(($result: any) => {
-        return $$createType79($result);
+        return $$createType80($result);
     });
 }
 
@@ -1716,7 +1744,7 @@ export function GetLockState(): $CancellablePromise<$models.LockStateDTO> {
  */
 export function GetLogStatus(): $CancellablePromise<$models.LogStatusDTO> {
     return $Call.ByID(3089254226).then(($result: any) => {
-        return $$createType80($result);
+        return $$createType81($result);
     });
 }
 
@@ -1725,7 +1753,7 @@ export function GetLogStatus(): $CancellablePromise<$models.LogStatusDTO> {
  */
 export function GetMCPConfig(): $CancellablePromise<$models.MCPConfigDTO> {
     return $Call.ByID(1836574608).then(($result: any) => {
-        return $$createType81($result);
+        return $$createType82($result);
     });
 }
 
@@ -1736,7 +1764,7 @@ export function GetMCPConfig(): $CancellablePromise<$models.MCPConfigDTO> {
  */
 export function GetMessage(id: number): $CancellablePromise<$models.MessageDetailDTO> {
     return $Call.ByID(2499058337, id).then(($result: any) => {
-        return $$createType82($result);
+        return $$createType83($result);
     });
 }
 
@@ -1769,7 +1797,7 @@ export function GetMessageSource(id: number): $CancellablePromise<string> {
  */
 export function GetNote(messageID: number, conversation: boolean): $CancellablePromise<$models.NoteDTO> {
     return $Call.ByID(3578938214, messageID, conversation).then(($result: any) => {
-        return $$createType83($result);
+        return $$createType84($result);
     });
 }
 
@@ -1789,7 +1817,7 @@ export function GetProject(id: number): $CancellablePromise<$models.ProjectDTO> 
  */
 export function GetProjectBoard(id: number): $CancellablePromise<$models.ProjectBoardDTO> {
     return $Call.ByID(3059376097, id).then(($result: any) => {
-        return $$createType84($result);
+        return $$createType85($result);
     });
 }
 
@@ -1799,7 +1827,7 @@ export function GetProjectBoard(id: number): $CancellablePromise<$models.Project
  */
 export function GetProxyConfig(): $CancellablePromise<$models.ProxyConfigDTO> {
     return $Call.ByID(3373558576).then(($result: any) => {
-        return $$createType85($result);
+        return $$createType86($result);
     });
 }
 
@@ -1809,7 +1837,7 @@ export function GetProxyConfig(): $CancellablePromise<$models.ProxyConfigDTO> {
  */
 export function GetQuickComposeStatus(): $CancellablePromise<$models.QuickComposeStatusDTO> {
     return $Call.ByID(858488621).then(($result: any) => {
-        return $$createType86($result);
+        return $$createType87($result);
     });
 }
 
@@ -1819,7 +1847,7 @@ export function GetQuickComposeStatus(): $CancellablePromise<$models.QuickCompos
  */
 export function GetSetting(key: string): $CancellablePromise<$models.SettingResult> {
     return $Call.ByID(1031241110, key).then(($result: any) => {
-        return $$createType87($result);
+        return $$createType88($result);
     });
 }
 
@@ -1828,7 +1856,7 @@ export function GetSetting(key: string): $CancellablePromise<$models.SettingResu
  */
 export function GetTask(id: number): $CancellablePromise<$models.TaskDTO> {
     return $Call.ByID(1878759607, id).then(($result: any) => {
-        return $$createType88($result);
+        return $$createType89($result);
     });
 }
 
@@ -1837,7 +1865,7 @@ export function GetTask(id: number): $CancellablePromise<$models.TaskDTO> {
  */
 export function GetTaskSettings(): $CancellablePromise<$models.TaskSettingsDTO> {
     return $Call.ByID(3167124586).then(($result: any) => {
-        return $$createType89($result);
+        return $$createType90($result);
     });
 }
 
@@ -1848,7 +1876,7 @@ export function GetTaskSettings(): $CancellablePromise<$models.TaskSettingsDTO> 
  */
 export function GetThemeApply(id: string): $CancellablePromise<$models.ThemeApplyDTO> {
     return $Call.ByID(2754380765, id).then(($result: any) => {
-        return $$createType90($result);
+        return $$createType91($result);
     });
 }
 
@@ -1857,7 +1885,7 @@ export function GetThemeApply(id: string): $CancellablePromise<$models.ThemeAppl
  */
 export function GetThemeDraft(id: string): $CancellablePromise<$models.ThemeDraftDTO> {
     return $Call.ByID(2964546614, id).then(($result: any) => {
-        return $$createType91($result);
+        return $$createType92($result);
     });
 }
 
@@ -1871,7 +1899,7 @@ export function GetThemeDraft(id: string): $CancellablePromise<$models.ThemeDraf
  */
 export function GetThread(threadID: number): $CancellablePromise<$models.ThreadDTO> {
     return $Call.ByID(1547003774, threadID).then(($result: any) => {
-        return $$createType92($result);
+        return $$createType93($result);
     });
 }
 
@@ -1881,7 +1909,7 @@ export function GetThread(threadID: number): $CancellablePromise<$models.ThreadD
  */
 export function GetUIPrefs(): $CancellablePromise<$models.UIPrefsDTO> {
     return $Call.ByID(1337377406).then(($result: any) => {
-        return $$createType93($result);
+        return $$createType94($result);
     });
 }
 
@@ -1891,7 +1919,7 @@ export function GetUIPrefs(): $CancellablePromise<$models.UIPrefsDTO> {
  */
 export function GetUserLocale(id: string): $CancellablePromise<$models.UserLocaleApplyDTO> {
     return $Call.ByID(2206708415, id).then(($result: any) => {
-        return $$createType94($result);
+        return $$createType95($result);
     });
 }
 
@@ -1900,7 +1928,7 @@ export function GetUserLocale(id: string): $CancellablePromise<$models.UserLocal
  */
 export function GetVirusTotalConfig(): $CancellablePromise<$models.VirusTotalConfigDTO> {
     return $Call.ByID(1998762525).then(($result: any) => {
-        return $$createType95($result);
+        return $$createType96($result);
     });
 }
 
@@ -1929,7 +1957,7 @@ export function ImportData(path: string, categories: string[], credentialPasswor
  */
 export function ImportICSData(calendarID: number, data: string): $CancellablePromise<$models.ICSImportResultDTO> {
     return $Call.ByID(3029197892, calendarID, data).then(($result: any) => {
-        return $$createType96($result);
+        return $$createType97($result);
     });
 }
 
@@ -1953,7 +1981,7 @@ export function ImportMailFiles(paths: string[]): $CancellablePromise<void> {
  */
 export function ImportOPML(): $CancellablePromise<$models.FeedImportDTO> {
     return $Call.ByID(2579033373).then(($result: any) => {
-        return $$createType97($result);
+        return $$createType98($result);
     });
 }
 
@@ -1964,7 +1992,7 @@ export function ImportOPML(): $CancellablePromise<$models.FeedImportDTO> {
  */
 export function ImportPGPKey(): $CancellablePromise<$models.PGPKeyDTO[]> {
     return $Call.ByID(3919503765).then(($result: any) => {
-        return $$createType99($result);
+        return $$createType100($result);
     });
 }
 
@@ -1999,7 +2027,7 @@ export function ImportThunderbirdFolders(paths: string[]): $CancellablePromise<v
  */
 export function InsightsPeople(days: number): $CancellablePromise<$models.InsightsPeopleDTO> {
     return $Call.ByID(4239708520, days).then(($result: any) => {
-        return $$createType100($result);
+        return $$createType101($result);
     });
 }
 
@@ -2010,7 +2038,7 @@ export function InsightsPeople(days: number): $CancellablePromise<$models.Insigh
  */
 export function InsightsStorage(): $CancellablePromise<$models.InsightsStorageDTO> {
     return $Call.ByID(445209120).then(($result: any) => {
-        return $$createType101($result);
+        return $$createType102($result);
     });
 }
 
@@ -2020,7 +2048,7 @@ export function InsightsStorage(): $CancellablePromise<$models.InsightsStorageDT
  */
 export function InsightsVolume(days: number): $CancellablePromise<$models.InsightsVolumeDTO> {
     return $Call.ByID(2447478925, days).then(($result: any) => {
-        return $$createType102($result);
+        return $$createType103($result);
     });
 }
 
@@ -2030,7 +2058,7 @@ export function InsightsVolume(days: number): $CancellablePromise<$models.Insigh
  */
 export function InspectBackupFile(): $CancellablePromise<$models.BackupInfoDTO> {
     return $Call.ByID(4117739970).then(($result: any) => {
-        return $$createType103($result);
+        return $$createType104($result);
     });
 }
 
@@ -2107,7 +2135,7 @@ export function ListAccounts(): $CancellablePromise<$models.AccountDTO[]> {
  */
 export function ListAddressBooks(): $CancellablePromise<$models.AddressBookDTO[]> {
     return $Call.ByID(1212279500).then(($result: any) => {
-        return $$createType104($result);
+        return $$createType105($result);
     });
 }
 
@@ -2117,7 +2145,7 @@ export function ListAddressBooks(): $CancellablePromise<$models.AddressBookDTO[]
  */
 export function ListAddresses(): $CancellablePromise<$models.AddressBookEntryDTO[]> {
     return $Call.ByID(274872050).then(($result: any) => {
-        return $$createType106($result);
+        return $$createType107($result);
     });
 }
 
@@ -2126,7 +2154,7 @@ export function ListAddresses(): $CancellablePromise<$models.AddressBookEntryDTO
  */
 export function ListCalendarAccounts(): $CancellablePromise<$models.CalendarAccountDTO[]> {
     return $Call.ByID(909285760).then(($result: any) => {
-        return $$createType107($result);
+        return $$createType108($result);
     });
 }
 
@@ -2136,7 +2164,7 @@ export function ListCalendarAccounts(): $CancellablePromise<$models.CalendarAcco
  */
 export function ListCalendars(): $CancellablePromise<$models.CalendarDTO[]> {
     return $Call.ByID(2034585149).then(($result: any) => {
-        return $$createType108($result);
+        return $$createType109($result);
     });
 }
 
@@ -2145,7 +2173,7 @@ export function ListCalendars(): $CancellablePromise<$models.CalendarDTO[]> {
  */
 export function ListCardLinks(taskUID: string): $CancellablePromise<$models.ProjectLinkDTO[]> {
     return $Call.ByID(2332573161, taskUID).then(($result: any) => {
-        return $$createType110($result);
+        return $$createType111($result);
     });
 }
 
@@ -2155,7 +2183,7 @@ export function ListCardLinks(taskUID: string): $CancellablePromise<$models.Proj
  */
 export function ListContacts(bookID: number): $CancellablePromise<$models.ContactDTO[]> {
     return $Call.ByID(1294704787, bookID).then(($result: any) => {
-        return $$createType112($result);
+        return $$createType113($result);
     });
 }
 
@@ -2166,7 +2194,7 @@ export function ListContacts(bookID: number): $CancellablePromise<$models.Contac
  */
 export function ListDrafts(): $CancellablePromise<$models.DraftDTO[]> {
     return $Call.ByID(2552292942).then(($result: any) => {
-        return $$createType114($result);
+        return $$createType115($result);
     });
 }
 
@@ -2175,7 +2203,7 @@ export function ListDrafts(): $CancellablePromise<$models.DraftDTO[]> {
  */
 export function ListFeedEntries(scope: $models.FeedScopeDTO, limit: number, offset: number): $CancellablePromise<$models.FeedEntryDTO[]> {
     return $Call.ByID(1394665338, scope, limit, offset).then(($result: any) => {
-        return $$createType116($result);
+        return $$createType117($result);
     });
 }
 
@@ -2185,7 +2213,7 @@ export function ListFeedEntries(scope: $models.FeedScopeDTO, limit: number, offs
  */
 export function ListFeedSidebar(): $CancellablePromise<$models.FeedSidebarDTO> {
     return $Call.ByID(4144613278).then(($result: any) => {
-        return $$createType117($result);
+        return $$createType118($result);
     });
 }
 
@@ -2196,7 +2224,7 @@ export function ListFeedSidebar(): $CancellablePromise<$models.FeedSidebarDTO> {
  */
 export function ListFolders(accountID: number): $CancellablePromise<$models.FolderDTO[]> {
     return $Call.ByID(3934291747, accountID).then(($result: any) => {
-        return $$createType118($result);
+        return $$createType119($result);
     });
 }
 
@@ -2206,7 +2234,7 @@ export function ListFolders(accountID: number): $CancellablePromise<$models.Fold
  */
 export function ListFollowUps(): $CancellablePromise<$models.FollowUpDTO[]> {
     return $Call.ByID(2944834227).then(($result: any) => {
-        return $$createType120($result);
+        return $$createType121($result);
     });
 }
 
@@ -2216,7 +2244,7 @@ export function ListFollowUps(): $CancellablePromise<$models.FollowUpDTO[]> {
  */
 export function ListImageAllowlist(): $CancellablePromise<$models.ImageAllowEntryDTO[]> {
     return $Call.ByID(3551399056).then(($result: any) => {
-        return $$createType122($result);
+        return $$createType123($result);
     });
 }
 
@@ -2227,7 +2255,7 @@ export function ListImageAllowlist(): $CancellablePromise<$models.ImageAllowEntr
  */
 export function ListMessages(req: $models.ListMessagesRequest): $CancellablePromise<$models.MessageListDTO> {
     return $Call.ByID(386262390, req).then(($result: any) => {
-        return $$createType123($result);
+        return $$createType124($result);
     });
 }
 
@@ -2238,7 +2266,7 @@ export function ListMessages(req: $models.ListMessagesRequest): $CancellableProm
  */
 export function ListNewsletterMail(limit: number, offset: number, unreadOnly: boolean): $CancellablePromise<$models.MessageSummaryDTO[]> {
     return $Call.ByID(1126207110, limit, offset, unreadOnly).then(($result: any) => {
-        return $$createType125($result);
+        return $$createType126($result);
     });
 }
 
@@ -2248,7 +2276,7 @@ export function ListNewsletterMail(limit: number, offset: number, unreadOnly: bo
  */
 export function ListNewsletters(): $CancellablePromise<$models.NewsletterSenderDTO[]> {
     return $Call.ByID(4120281850).then(($result: any) => {
-        return $$createType127($result);
+        return $$createType128($result);
     });
 }
 
@@ -2258,7 +2286,7 @@ export function ListNewsletters(): $CancellablePromise<$models.NewsletterSenderD
  */
 export function ListOAuthProviders(): $CancellablePromise<{ [_ in string]?: string }> {
     return $Call.ByID(1477266713).then(($result: any) => {
-        return $$createType128($result);
+        return $$createType129($result);
     });
 }
 
@@ -2269,7 +2297,7 @@ export function ListOAuthProviders(): $CancellablePromise<{ [_ in string]?: stri
  */
 export function ListOccurrences($from: string, to: string, calendarIDs: number[]): $CancellablePromise<$models.OccurrenceDTO[]> {
     return $Call.ByID(2055436096, $from, to, calendarIDs).then(($result: any) => {
-        return $$createType130($result);
+        return $$createType131($result);
     });
 }
 
@@ -2279,7 +2307,7 @@ export function ListOccurrences($from: string, to: string, calendarIDs: number[]
  */
 export function ListOutbox(): $CancellablePromise<$models.OutboxRowDTO[]> {
     return $Call.ByID(2551398283).then(($result: any) => {
-        return $$createType132($result);
+        return $$createType133($result);
     });
 }
 
@@ -2288,7 +2316,7 @@ export function ListOutbox(): $CancellablePromise<$models.OutboxRowDTO[]> {
  */
 export function ListPGPKeys(): $CancellablePromise<$models.PGPKeyDTO[]> {
     return $Call.ByID(2321425041).then(($result: any) => {
-        return $$createType99($result);
+        return $$createType100($result);
     });
 }
 
@@ -2299,7 +2327,7 @@ export function ListPGPKeys(): $CancellablePromise<$models.PGPKeyDTO[]> {
  */
 export function ListPinnedFolders(): $CancellablePromise<$models.FolderDTO[]> {
     return $Call.ByID(3537515353).then(($result: any) => {
-        return $$createType118($result);
+        return $$createType119($result);
     });
 }
 
@@ -2308,7 +2336,7 @@ export function ListPinnedFolders(): $CancellablePromise<$models.FolderDTO[]> {
  */
 export function ListProfiles(): $CancellablePromise<$models.ProfileDTO[]> {
     return $Call.ByID(415269388).then(($result: any) => {
-        return $$createType133($result);
+        return $$createType134($result);
     });
 }
 
@@ -2318,7 +2346,7 @@ export function ListProfiles(): $CancellablePromise<$models.ProfileDTO[]> {
  */
 export function ListProjectDismissals(): $CancellablePromise<number[]> {
     return $Call.ByID(4218177605).then(($result: any) => {
-        return $$createType134($result);
+        return $$createType135($result);
     });
 }
 
@@ -2329,7 +2357,7 @@ export function ListProjectDismissals(): $CancellablePromise<number[]> {
  */
 export function ListProjectEvents(projectID: number): $CancellablePromise<$models.ProjectEventDTO[]> {
     return $Call.ByID(2397458206, projectID).then(($result: any) => {
-        return $$createType136($result);
+        return $$createType137($result);
     });
 }
 
@@ -2339,7 +2367,7 @@ export function ListProjectEvents(projectID: number): $CancellablePromise<$model
  */
 export function ListProjectMailMarks(): $CancellablePromise<$models.ProjectMailMarkDTO[]> {
     return $Call.ByID(2580055786).then(($result: any) => {
-        return $$createType138($result);
+        return $$createType139($result);
     });
 }
 
@@ -2348,7 +2376,7 @@ export function ListProjectMailMarks(): $CancellablePromise<$models.ProjectMailM
  */
 export function ListProjectNotes(projectID: number): $CancellablePromise<$models.ProjectNoteDTO[]> {
     return $Call.ByID(731708936, projectID).then(($result: any) => {
-        return $$createType139($result);
+        return $$createType140($result);
     });
 }
 
@@ -2358,7 +2386,18 @@ export function ListProjectNotes(projectID: number): $CancellablePromise<$models
  */
 export function ListProjectThreads(projectID: number): $CancellablePromise<$models.ThreadSummaryDTO[]> {
     return $Call.ByID(3608551664, projectID).then(($result: any) => {
-        return $$createType141($result);
+        return $$createType142($result);
+    });
+}
+
+/**
+ * ListProjectVaultNotes returns a project's notes in the notes folder and the
+ * notes that link to it. The first call with a folder open moves the notes
+ * kept in the database into it.
+ */
+export function ListProjectVaultNotes(projectID: number): $CancellablePromise<$models.ProjectVaultNotesDTO> {
+    return $Call.ByID(2425807202, projectID).then(($result: any) => {
+        return $$createType143($result);
     });
 }
 
@@ -2368,7 +2407,7 @@ export function ListProjectThreads(projectID: number): $CancellablePromise<$mode
  */
 export function ListProjects(): $CancellablePromise<$models.ProjectDTO[]> {
     return $Call.ByID(2945013416).then(($result: any) => {
-        return $$createType142($result);
+        return $$createType144($result);
     });
 }
 
@@ -2377,7 +2416,7 @@ export function ListProjects(): $CancellablePromise<$models.ProjectDTO[]> {
  */
 export function ListSignatures(): $CancellablePromise<$models.SignatureDTO[]> {
     return $Call.ByID(1369021977).then(($result: any) => {
-        return $$createType144($result);
+        return $$createType146($result);
     });
 }
 
@@ -2386,7 +2425,7 @@ export function ListSignatures(): $CancellablePromise<$models.SignatureDTO[]> {
  */
 export function ListSnippets(): $CancellablePromise<$models.SnippetDTO[]> {
     return $Call.ByID(304860672).then(($result: any) => {
-        return $$createType146($result);
+        return $$createType148($result);
     });
 }
 
@@ -2405,7 +2444,7 @@ export function ListSystemFonts(): $CancellablePromise<string[]> {
  */
 export function ListTaskLists(): $CancellablePromise<$models.TaskListDTO[]> {
     return $Call.ByID(2827377572).then(($result: any) => {
-        return $$createType147($result);
+        return $$createType149($result);
     });
 }
 
@@ -2415,7 +2454,7 @@ export function ListTaskLists(): $CancellablePromise<$models.TaskListDTO[]> {
  */
 export function ListTaskMailMarks(): $CancellablePromise<$models.TaskMailMarkDTO[]> {
     return $Call.ByID(3916931110).then(($result: any) => {
-        return $$createType149($result);
+        return $$createType151($result);
     });
 }
 
@@ -2425,7 +2464,7 @@ export function ListTaskMailMarks(): $CancellablePromise<$models.TaskMailMarkDTO
  */
 export function ListTasks(): $CancellablePromise<$models.TaskDTO[]> {
     return $Call.ByID(892994540).then(($result: any) => {
-        return $$createType150($result);
+        return $$createType152($result);
     });
 }
 
@@ -2435,7 +2474,7 @@ export function ListTasks(): $CancellablePromise<$models.TaskDTO[]> {
  */
 export function ListThemes(): $CancellablePromise<$models.ThemeInfoDTO[]> {
     return $Call.ByID(2466908024).then(($result: any) => {
-        return $$createType151($result);
+        return $$createType153($result);
     });
 }
 
@@ -2447,7 +2486,7 @@ export function ListThemes(): $CancellablePromise<$models.ThemeInfoDTO[]> {
  */
 export function ListThreads(req: $models.ListMessagesRequest): $CancellablePromise<$models.ThreadListDTO> {
     return $Call.ByID(227770071, req).then(($result: any) => {
-        return $$createType152($result);
+        return $$createType154($result);
     });
 }
 
@@ -2458,7 +2497,7 @@ export function ListThreads(req: $models.ListMessagesRequest): $CancellablePromi
  */
 export function ListUnifiedViews(): $CancellablePromise<$models.UnifiedViewDTO[]> {
     return $Call.ByID(2069212062).then(($result: any) => {
-        return $$createType154($result);
+        return $$createType156($result);
     });
 }
 
@@ -2469,7 +2508,7 @@ export function ListUnifiedViews(): $CancellablePromise<$models.UnifiedViewDTO[]
  */
 export function ListUserLocales(): $CancellablePromise<$models.UserLocaleDTO[]> {
     return $Call.ByID(495255492).then(($result: any) => {
-        return $$createType156($result);
+        return $$createType158($result);
     });
 }
 
@@ -2488,7 +2527,7 @@ export function ListVIPSenders(): $CancellablePromise<string[]> {
  */
 export function ListViews(): $CancellablePromise<$models.ViewDTO[]> {
     return $Call.ByID(2155571936).then(($result: any) => {
-        return $$createType158($result);
+        return $$createType160($result);
     });
 }
 
@@ -2509,7 +2548,7 @@ export function LockNow(): $CancellablePromise<void> {
  */
 export function LookupFreeBusy(req: $models.FreeBusyRequest): $CancellablePromise<$models.FreeBusyDTO> {
     return $Call.ByID(2750404971, req).then(($result: any) => {
-        return $$createType159($result);
+        return $$createType161($result);
     });
 }
 
@@ -2518,7 +2557,7 @@ export function LookupFreeBusy(req: $models.FreeBusyRequest): $CancellablePromis
  */
 export function MCPPermissions(): $CancellablePromise<$models.MCPPermissionDTO[]> {
     return $Call.ByID(1132143466).then(($result: any) => {
-        return $$createType161($result);
+        return $$createType163($result);
     });
 }
 
@@ -2527,7 +2566,7 @@ export function MCPPermissions(): $CancellablePromise<$models.MCPPermissionDTO[]
  */
 export function MailEventSource(messageID: number): $CancellablePromise<$models.MailEventSourceDTO> {
     return $Call.ByID(1848767666, messageID).then(($result: any) => {
-        return $$createType162($result);
+        return $$createType164($result);
     });
 }
 
@@ -2537,7 +2576,7 @@ export function MailEventSource(messageID: number): $CancellablePromise<$models.
  */
 export function MarkFeedScopeRead(scope: $models.FeedScopeDTO): $CancellablePromise<number[]> {
     return $Call.ByID(1828476769, scope).then(($result: any) => {
-        return $$createType134($result);
+        return $$createType135($result);
     });
 }
 
@@ -2580,7 +2619,7 @@ export function MarkSpam(id: number): $CancellablePromise<$models.ArchiveUndoDTO
  */
 export function MergeContacts(req: $models.MergeContactsRequest): $CancellablePromise<$models.MergeResultDTO> {
     return $Call.ByID(1900325159, req).then(($result: any) => {
-        return $$createType163($result);
+        return $$createType165($result);
     });
 }
 
@@ -2592,7 +2631,7 @@ export function MergeContacts(req: $models.MergeContactsRequest): $CancellablePr
  */
 export function MessageIDs(req: $models.ListMessagesRequest): $CancellablePromise<$models.MessageIDsDTO> {
     return $Call.ByID(3727472753, req).then(($result: any) => {
-        return $$createType164($result);
+        return $$createType166($result);
     });
 }
 
@@ -2630,7 +2669,7 @@ export function MoveMessage(id: number, destFolderID: number): $CancellablePromi
  */
 export function MoveProjectCard(taskUID: string, columnID: number, index: number): $CancellablePromise<$models.ProjectMoveResultDTO> {
     return $Call.ByID(2901483814, taskUID, columnID, index).then(($result: any) => {
-        return $$createType165($result);
+        return $$createType167($result);
     });
 }
 
@@ -2641,7 +2680,7 @@ export function MoveProjectCard(taskUID: string, columnID: number, index: number
  */
 export function NewsletterMessageIDs(sel: $models.NewsletterSelectionDTO): $CancellablePromise<number[]> {
     return $Call.ByID(3205105362, sel).then(($result: any) => {
-        return $$createType134($result);
+        return $$createType135($result);
     });
 }
 
@@ -2687,7 +2726,7 @@ export function OpenCrashReport(): $CancellablePromise<void> {
  */
 export function OpenDraft(messageID: number): $CancellablePromise<$models.DraftDTO> {
     return $Call.ByID(1449483965, messageID).then(($result: any) => {
-        return $$createType113($result);
+        return $$createType114($result);
     });
 }
 
@@ -2697,7 +2736,7 @@ export function OpenDraft(messageID: number): $CancellablePromise<$models.DraftD
  */
 export function OpenICSFile(): $CancellablePromise<$models.ICSFileDTO> {
     return $Call.ByID(3931373229).then(($result: any) => {
-        return $$createType166($result);
+        return $$createType168($result);
     });
 }
 
@@ -2750,7 +2789,7 @@ export function OpenThemesFolder(): $CancellablePromise<void> {
  */
 export function ParseInvite(messageID: number): $CancellablePromise<$models.InviteDTO> {
     return $Call.ByID(3416305756, messageID).then(($result: any) => {
-        return $$createType167($result);
+        return $$createType169($result);
     });
 }
 
@@ -2765,7 +2804,7 @@ export function ParseInvite(messageID: number): $CancellablePromise<$models.Invi
  */
 export function PrepareMeeting(eventID: number, recurrenceID: string): $CancellablePromise<$models.MeetingPrepDTO> {
     return $Call.ByID(3001780658, eventID, recurrenceID).then(($result: any) => {
-        return $$createType168($result);
+        return $$createType170($result);
     });
 }
 
@@ -2787,7 +2826,7 @@ export function PreviewArchiveExportName(template: string, subfolders: string): 
  */
 export function PreviewThemeImport(): $CancellablePromise<$models.ThemeImportPreviewDTO> {
     return $Call.ByID(4097141706).then(($result: any) => {
-        return $$createType169($result);
+        return $$createType171($result);
     });
 }
 
@@ -2806,7 +2845,7 @@ export function PrioritiseOutboxSend(id: number): $CancellablePromise<boolean> {
  */
 export function ProbeAccountCertificates(accountID: number): $CancellablePromise<$models.UntrustedCertDTO[]> {
     return $Call.ByID(1000865495, accountID).then(($result: any) => {
-        return $$createType171($result);
+        return $$createType173($result);
     });
 }
 
@@ -2829,7 +2868,7 @@ export function ProjectOfTask(taskUID: string): $CancellablePromise<number> {
  */
 export function ProjectsOfEvent(uid: string): $CancellablePromise<number[]> {
     return $Call.ByID(3862382143, uid).then(($result: any) => {
-        return $$createType134($result);
+        return $$createType135($result);
     });
 }
 
@@ -2840,7 +2879,7 @@ export function ProjectsOfEvent(uid: string): $CancellablePromise<number[]> {
  */
 export function QueryAttachments(req: $models.AttachmentQueryRequest): $CancellablePromise<$models.AttachmentPageDTO> {
     return $Call.ByID(1777505748, req).then(($result: any) => {
-        return $$createType172($result);
+        return $$createType174($result);
     });
 }
 
@@ -2857,7 +2896,7 @@ export function QuitApp(): $CancellablePromise<void> {
  */
 export function ReadAttachment(messageID: number, attachmentID: number): $CancellablePromise<$models.AttachmentContentDTO> {
     return $Call.ByID(3319094499, messageID, attachmentID).then(($result: any) => {
-        return $$createType173($result);
+        return $$createType175($result);
     });
 }
 
@@ -2867,7 +2906,7 @@ export function ReadAttachment(messageID: number, attachmentID: number): $Cancel
  */
 export function ReadICSFiles(paths: string[]): $CancellablePromise<$models.ICSFileDTO[]> {
     return $Call.ByID(4072265058, paths).then(($result: any) => {
-        return $$createType174($result);
+        return $$createType176($result);
     });
 }
 
@@ -2877,7 +2916,7 @@ export function ReadICSFiles(paths: string[]): $CancellablePromise<$models.ICSFi
  */
 export function ReadOutboxLog(): $CancellablePromise<$models.OutboxLogEntryDTO[]> {
     return $Call.ByID(994291703).then(($result: any) => {
-        return $$createType176($result);
+        return $$createType178($result);
     });
 }
 
@@ -2908,7 +2947,7 @@ export function RebuildMenu(): $CancellablePromise<void> {
  */
 export function RecheckSieve(accountID: number): $CancellablePromise<$models.SieveStateDTO> {
     return $Call.ByID(533567617, accountID).then(($result: any) => {
-        return $$createType177($result);
+        return $$createType179($result);
     });
 }
 
@@ -2965,6 +3004,15 @@ export function RemoveCalendarAccount(id: number): $CancellablePromise<void> {
  */
 export function RemoveImageAllow(kind: string, value: string): $CancellablePromise<void> {
     return $Call.ByID(3954120632, kind, value);
+}
+
+/**
+ * RemoveNoteFromProject takes a note out of a project: the project leaves
+ * its front matter when it is this one, and the project's cards let go of
+ * it. The file stays.
+ */
+export function RemoveNoteFromProject(rel: string, projectID: number): $CancellablePromise<void> {
+    return $Call.ByID(2642488179, rel, projectID);
 }
 
 /**
@@ -3136,7 +3184,7 @@ export function ResetDismissedDuplicates(): $CancellablePromise<number> {
  */
 export function ResolveEventConflict(id: number, keepMine: boolean): $CancellablePromise<$models.EventDTO> {
     return $Call.ByID(523357160, id, keepMine).then(($result: any) => {
-        return $$createType75($result);
+        return $$createType76($result);
     });
 }
 
@@ -3146,7 +3194,7 @@ export function ResolveEventConflict(id: number, keepMine: boolean): $Cancellabl
  */
 export function ResolveTaskConflict(id: number, keepMine: boolean): $CancellablePromise<$models.TaskDTO> {
     return $Call.ByID(2502896921, id, keepMine).then(($result: any) => {
-        return $$createType88($result);
+        return $$createType89($result);
     });
 }
 
@@ -3169,7 +3217,7 @@ export function RestoreMessage(rfcMessageID: string, fromFolderID: number, toFol
  */
 export function RestoreSievePrevious(accountID: number): $CancellablePromise<$models.SieveStateDTO> {
     return $Call.ByID(1563920075, accountID).then(($result: any) => {
-        return $$createType177($result);
+        return $$createType179($result);
     });
 }
 
@@ -3241,7 +3289,7 @@ export function SaveAttachmentsTo(refs: $models.AttachmentRefDTO[]): $Cancellabl
  */
 export function SaveContact(req: $models.ContactRequest): $CancellablePromise<$models.ContactConflictDTO> {
     return $Call.ByID(3816472717, req).then(($result: any) => {
-        return $$createType55($result);
+        return $$createType56($result);
     });
 }
 
@@ -3282,7 +3330,7 @@ export function SaveLocaleTemplate(content: string): $CancellablePromise<string>
  */
 export function SaveNote(messageID: number, conversation: boolean, body: string): $CancellablePromise<$models.NoteDTO> {
     return $Call.ByID(3350745451, messageID, conversation, body).then(($result: any) => {
-        return $$createType83($result);
+        return $$createType84($result);
     });
 }
 
@@ -3322,7 +3370,7 @@ export function SaveSieveVacation(accountID: number, vacation: sieve$0.Vacation)
  */
 export function SaveSignature(dto: $models.SignatureDTO): $CancellablePromise<$models.SignatureDTO> {
     return $Call.ByID(94196479, dto).then(($result: any) => {
-        return $$createType143($result);
+        return $$createType145($result);
     });
 }
 
@@ -3333,7 +3381,7 @@ export function SaveSignature(dto: $models.SignatureDTO): $CancellablePromise<$m
  */
 export function SaveSnippet(dto: $models.SnippetDTO): $CancellablePromise<$models.SnippetDTO> {
     return $Call.ByID(3712814544, dto).then(($result: any) => {
-        return $$createType145($result);
+        return $$createType147($result);
     });
 }
 
@@ -3343,7 +3391,7 @@ export function SaveSnippet(dto: $models.SnippetDTO): $CancellablePromise<$model
  */
 export function SaveView(dto: $models.ViewDTO): $CancellablePromise<$models.ViewDTO> {
     return $Call.ByID(4262619006, dto).then(($result: any) => {
-        return $$createType157($result);
+        return $$createType159($result);
     });
 }
 
@@ -3354,7 +3402,7 @@ export function SaveView(dto: $models.ViewDTO): $CancellablePromise<$models.View
  */
 export function ScanAttachment(messageID: number, attachmentID: number): $CancellablePromise<$models.VerdictDTO> {
     return $Call.ByID(453863286, messageID, attachmentID).then(($result: any) => {
-        return $$createType178($result);
+        return $$createType180($result);
     });
 }
 
@@ -3366,7 +3414,7 @@ export function ScanAttachment(messageID: number, attachmentID: number): $Cancel
  */
 export function ScanMessage(messageID: number, links: boolean, attachments: boolean): $CancellablePromise<$models.MessageScanDTO> {
     return $Call.ByID(300497314, messageID, links, attachments).then(($result: any) => {
-        return $$createType179($result);
+        return $$createType181($result);
     });
 }
 
@@ -3377,7 +3425,7 @@ export function ScanMessage(messageID: number, links: boolean, attachments: bool
  */
 export function ScanURL(rawURL: string): $CancellablePromise<$models.VerdictDTO> {
     return $Call.ByID(3387403308, rawURL).then(($result: any) => {
-        return $$createType178($result);
+        return $$createType180($result);
     });
 }
 
@@ -3388,7 +3436,7 @@ export function ScanURL(rawURL: string): $CancellablePromise<$models.VerdictDTO>
  */
 export function Search(req: $models.SearchRequestDTO): $CancellablePromise<$models.SearchResultDTO> {
     return $Call.ByID(2859382430, req).then(($result: any) => {
-        return $$createType180($result);
+        return $$createType182($result);
     });
 }
 
@@ -3401,7 +3449,7 @@ export function Search(req: $models.SearchRequestDTO): $CancellablePromise<$mode
  */
 export function SearchAddresses(query: string, limit: number): $CancellablePromise<$models.AddressBookEntryDTO[]> {
     return $Call.ByID(682961006, query, limit).then(($result: any) => {
-        return $$createType106($result);
+        return $$createType107($result);
     });
 }
 
@@ -3412,7 +3460,7 @@ export function SearchAddresses(query: string, limit: number): $CancellablePromi
  */
 export function SearchMessageIDs(req: $models.SearchRequestDTO): $CancellablePromise<$models.MessageIDsDTO> {
     return $Call.ByID(2278013345, req).then(($result: any) => {
-        return $$createType164($result);
+        return $$createType166($result);
     });
 }
 
@@ -3446,7 +3494,7 @@ export function SendOutboxNow(id: number): $CancellablePromise<boolean> {
  */
 export function SenderOverview(address: string): $CancellablePromise<$models.SenderOverviewDTO> {
     return $Call.ByID(3937500380, address).then(($result: any) => {
-        return $$createType181($result);
+        return $$createType183($result);
     });
 }
 
@@ -3576,7 +3624,7 @@ export function SetEventProject(uid: string, summary: string, projectID: number)
  */
 export function SetFeedEntriesRead(ids: number[], read: boolean): $CancellablePromise<number[]> {
     return $Call.ByID(1851150870, ids, read).then(($result: any) => {
-        return $$createType134($result);
+        return $$createType135($result);
     });
 }
 
@@ -3739,7 +3787,7 @@ export function SetProxyConfig(dto: $models.ProxyConfigDTO): $CancellablePromise
  */
 export function SetQuickCompose(enabled: boolean, shortcut: string): $CancellablePromise<$models.QuickComposeStatusDTO> {
     return $Call.ByID(1805433743, enabled, shortcut).then(($result: any) => {
-        return $$createType86($result);
+        return $$createType87($result);
     });
 }
 
@@ -3777,7 +3825,7 @@ export function SetSetting(key: string, value: string): $CancellablePromise<void
  */
 export function SetSieveConnection(accountID: number, host: string, port: number, tls: string): $CancellablePromise<$models.SieveStateDTO> {
     return $Call.ByID(4012515732, accountID, host, port, tls).then(($result: any) => {
-        return $$createType177($result);
+        return $$createType179($result);
     });
 }
 
@@ -3788,7 +3836,7 @@ export function SetSieveConnection(accountID: number, host: string, port: number
  */
 export function SetTaskDone(id: number, done: boolean): $CancellablePromise<$models.TaskSaveResultDTO> {
     return $Call.ByID(2184723991, id, done).then(($result: any) => {
-        return $$createType51($result);
+        return $$createType52($result);
     });
 }
 
@@ -3799,7 +3847,7 @@ export function SetTaskDone(id: number, done: boolean): $CancellablePromise<$mod
  */
 export function SetTaskDue(id: number, due: string): $CancellablePromise<$models.TaskSaveResultDTO> {
     return $Call.ByID(1752573607, id, due).then(($result: any) => {
-        return $$createType51($result);
+        return $$createType52($result);
     });
 }
 
@@ -3893,7 +3941,7 @@ export function ShowMessageInMainWindow(id: number): $CancellablePromise<void> {
  */
 export function SieveState(accountID: number): $CancellablePromise<$models.SieveStateDTO> {
     return $Call.ByID(3369919137, accountID).then(($result: any) => {
-        return $$createType177($result);
+        return $$createType179($result);
     });
 }
 
@@ -3922,7 +3970,7 @@ export function SnoozeMessage(id: number, untilRFC3339: string, hideNow: boolean
  */
 export function SplitCounts(req: $models.ListMessagesRequest): $CancellablePromise<$models.SplitTabDTO[]> {
     return $Call.ByID(1877442994, req).then(($result: any) => {
-        return $$createType183($result);
+        return $$createType185($result);
     });
 }
 
@@ -3944,7 +3992,7 @@ export function StartAccountSync(accountID: number): $CancellablePromise<void> {
  */
 export function StartFocus(untilRFC3339: string): $CancellablePromise<$models.FocusDTO> {
     return $Call.ByID(1824555394, untilRFC3339).then(($result: any) => {
-        return $$createType77($result);
+        return $$createType78($result);
     });
 }
 
@@ -4022,7 +4070,7 @@ export function TestAccountRoute(req: $models.RouteTestRequest): $CancellablePro
  */
 export function TestConnection(req: $models.TestConnectionRequest): $CancellablePromise<$models.ConnectionTestDTO> {
     return $Call.ByID(1152861202, req).then(($result: any) => {
-        return $$createType184($result);
+        return $$createType186($result);
     });
 }
 
@@ -4066,7 +4114,18 @@ export function ToggleMaximiseWindow(): $CancellablePromise<void> {
  */
 export function TrafficLights(composeToken: string): $CancellablePromise<$models.TrafficLightsDTO> {
     return $Call.ByID(1219898178, composeToken).then(($result: any) => {
-        return $$createType185($result);
+        return $$createType187($result);
+    });
+}
+
+/**
+ * TrashProjectNote moves a project's note to the trash folder of the notes
+ * folder and lets the project's cards go of it. VaultUndo with the returned
+ * id brings the file back.
+ */
+export function TrashProjectNote(rel: string, projectID: number): $CancellablePromise<$models.VaultOpDTO> {
+    return $Call.ByID(2025348081, rel, projectID).then(($result: any) => {
+        return $$createType188($result);
     });
 }
 
@@ -4103,7 +4162,7 @@ export function TrustSenderImages(messageID: number): $CancellablePromise<void> 
  */
 export function UndoContactMerge(token: string): $CancellablePromise<$models.ContactDTO[]> {
     return $Call.ByID(55003932, token).then(($result: any) => {
-        return $$createType112($result);
+        return $$createType113($result);
     });
 }
 
@@ -4120,7 +4179,7 @@ export function UndoDelete(id: number): $CancellablePromise<void> {
  */
 export function UndoDeletes(ids: number[]): $CancellablePromise<$models.BulkResultDTO> {
     return $Call.ByID(1884254860, ids).then(($result: any) => {
-        return $$createType56($result);
+        return $$createType57($result);
     });
 }
 
@@ -4182,7 +4241,7 @@ export function UnmarkSenderVIP(messageID: number): $CancellablePromise<void> {
  */
 export function UnsealDraft(id: number, passphrase: string): $CancellablePromise<$models.DraftDTO> {
     return $Call.ByID(945085147, id, passphrase).then(($result: any) => {
-        return $$createType113($result);
+        return $$createType114($result);
     });
 }
 
@@ -4268,7 +4327,8 @@ export function UpdateProfile(req: $models.ProfileRequest): $CancellablePromise<
 
 /**
  * UpdateProject saves a project's name, look, description, dates and task
- * list.
+ * list. A new name is written into the front matter of the project's notes
+ * in the background.
  */
 export function UpdateProject(req: $models.ProjectRequest): $CancellablePromise<$models.ProjectDTO> {
     return $Call.ByID(3855724100, req).then(($result: any) => {
@@ -4299,7 +4359,7 @@ export function UpdateProjectNote(id: number, title: string, body: string): $Can
  */
 export function UpdateTask(req: $models.TaskRequest): $CancellablePromise<$models.TaskSaveResultDTO> {
     return $Call.ByID(3561727934, req).then(($result: any) => {
-        return $$createType51($result);
+        return $$createType52($result);
     });
 }
 
@@ -4320,7 +4380,7 @@ export function UploadDraft(id: number): $CancellablePromise<string> {
  */
 export function VaultBacklinks(rel: string): $CancellablePromise<$models.VaultMentionDTO[]> {
     return $Call.ByID(4068549330, rel).then(($result: any) => {
-        return $$createType187($result);
+        return $$createType190($result);
     });
 }
 
@@ -4330,7 +4390,7 @@ export function VaultBacklinks(rel: string): $CancellablePromise<$models.VaultMe
  */
 export function VaultChooseFolder(): $CancellablePromise<$models.VaultInfoDTO> {
     return $Call.ByID(1120436343).then(($result: any) => {
-        return $$createType188($result);
+        return $$createType191($result);
     });
 }
 
@@ -4354,7 +4414,7 @@ export function VaultCreateFolder(rel: string): $CancellablePromise<string> {
  */
 export function VaultDelete(rel: string): $CancellablePromise<$models.VaultOpDTO> {
     return $Call.ByID(3444939485, rel).then(($result: any) => {
-        return $$createType189($result);
+        return $$createType188($result);
     });
 }
 
@@ -4384,11 +4444,12 @@ export function VaultLinkMention(source: string, line: number, match: string, ta
 
 /**
  * VaultMove renames or moves a note, file or folder and updates the links
- * to it in every other note. VaultUndo with the returned id takes it back.
+ * to it in every other note and on project cards. VaultUndo with the
+ * returned id takes it back.
  */
 export function VaultMove($from: string, to: string): $CancellablePromise<$models.VaultOpDTO> {
     return $Call.ByID(2983040191, $from, to).then(($result: any) => {
-        return $$createType189($result);
+        return $$createType188($result);
     });
 }
 
@@ -4399,7 +4460,7 @@ export function VaultMove($from: string, to: string): $CancellablePromise<$model
  */
 export function VaultOpen(): $CancellablePromise<$models.VaultInfoDTO> {
     return $Call.ByID(1596692746).then(($result: any) => {
-        return $$createType188($result);
+        return $$createType191($result);
     });
 }
 
@@ -4408,7 +4469,7 @@ export function VaultOpen(): $CancellablePromise<$models.VaultInfoDTO> {
  */
 export function VaultRead(rel: string): $CancellablePromise<$models.VaultFileDTO> {
     return $Call.ByID(344669642, rel).then(($result: any) => {
-        return $$createType190($result);
+        return $$createType192($result);
     });
 }
 
@@ -4428,7 +4489,7 @@ export function VaultRescan(): $CancellablePromise<void> {
  */
 export function VaultSave(rel: string, content: string, baseHash: string, force: boolean): $CancellablePromise<$models.VaultSaveDTO> {
     return $Call.ByID(4197725615, rel, content, baseHash, force).then(($result: any) => {
-        return $$createType191($result);
+        return $$createType193($result);
     });
 }
 
@@ -4446,7 +4507,7 @@ export function VaultSaveAttachment(name: string, data: string): $CancellablePro
  */
 export function VaultSearch(query: string): $CancellablePromise<$models.VaultHitDTO[]> {
     return $Call.ByID(93598346, query).then(($result: any) => {
-        return $$createType193($result);
+        return $$createType195($result);
     });
 }
 
@@ -4456,7 +4517,7 @@ export function VaultSearch(query: string): $CancellablePromise<$models.VaultHit
  */
 export function VaultSnapshot(): $CancellablePromise<$models.VaultSnapshotDTO> {
     return $Call.ByID(3840242766).then(($result: any) => {
-        return $$createType194($result);
+        return $$createType196($result);
     });
 }
 
@@ -4480,7 +4541,7 @@ export function VaultUniquePath(rel: string): $CancellablePromise<string> {
  */
 export function VaultUnlinkedMentions(rel: string): $CancellablePromise<$models.VaultMentionDTO[]> {
     return $Call.ByID(691679119, rel).then(($result: any) => {
-        return $$createType187($result);
+        return $$createType190($result);
     });
 }
 
@@ -4489,7 +4550,7 @@ export function VaultUnlinkedMentions(rel: string): $CancellablePromise<$models.
  */
 export function VaultUseDefaultFolder(): $CancellablePromise<$models.VaultInfoDTO> {
     return $Call.ByID(1213391166).then(($result: any) => {
-        return $$createType188($result);
+        return $$createType191($result);
     });
 }
 
@@ -4563,147 +4624,149 @@ const $$createType47 = $models.FolderDTO.createFrom;
 const $$createType48 = $models.CalendarDTO.createFrom;
 const $$createType49 = $models.ProjectDTO.createFrom;
 const $$createType50 = $models.ProjectNoteDTO.createFrom;
-const $$createType51 = $models.TaskSaveResultDTO.createFrom;
-const $$createType52 = $models.TaskListDTO.createFrom;
-const $$createType53 = $models.EventLinkResultDTO.createFrom;
-const $$createType54 = $models.DefaultMailStatusDTO.createFrom;
-const $$createType55 = $models.ContactConflictDTO.createFrom;
-const $$createType56 = $models.BulkResultDTO.createFrom;
-const $$createType57 = $models.TaskDeleteResultDTO.createFrom;
-const $$createType58 = $models.DevActivityDTO.createFrom;
-const $$createType59 = $models.DevProcessDTO.createFrom;
-const $$createType60 = $models.DiscoveredBookDTO.createFrom;
-const $$createType61 = $Create.Array($$createType60);
-const $$createType62 = $models.CalendarDiscoveryDTO.createFrom;
-const $$createType63 = $models.DiscoveredDTO.createFrom;
-const $$createType64 = $models.FeedCandidateDTO.createFrom;
-const $$createType65 = $Create.Array($$createType64);
-const $$createType66 = $models.OutboxEditDTO.createFrom;
-const $$createType67 = $models.EmlExportDTO.createFrom;
-const $$createType68 = $models.AttachmentEntryDTO.createFrom;
-const $$createType69 = $models.FetchOlderResult.createFrom;
-const $$createType70 = $models.DuplicatesDTO.createFrom;
-const $$createType71 = $models.EventRefDTO.createFrom;
-const $$createType72 = $models.MessageRefDTO.createFrom;
-const $$createType73 = $models.AccountSignaturesDTO.createFrom;
-const $$createType74 = $models.CalendarSettingsDTO.createFrom;
-const $$createType75 = $models.EventDTO.createFrom;
-const $$createType76 = $models.FeedEntryDetailDTO.createFrom;
-const $$createType77 = $models.FocusDTO.createFrom;
-const $$createType78 = $models.FocusScheduleDTO.createFrom;
-const $$createType79 = $models.LockStateDTO.createFrom;
-const $$createType80 = $models.LogStatusDTO.createFrom;
-const $$createType81 = $models.MCPConfigDTO.createFrom;
-const $$createType82 = $models.MessageDetailDTO.createFrom;
-const $$createType83 = $models.NoteDTO.createFrom;
-const $$createType84 = $models.ProjectBoardDTO.createFrom;
-const $$createType85 = $models.ProxyConfigDTO.createFrom;
-const $$createType86 = $models.QuickComposeStatusDTO.createFrom;
-const $$createType87 = $models.SettingResult.createFrom;
-const $$createType88 = $models.TaskDTO.createFrom;
-const $$createType89 = $models.TaskSettingsDTO.createFrom;
-const $$createType90 = $models.ThemeApplyDTO.createFrom;
-const $$createType91 = $models.ThemeDraftDTO.createFrom;
-const $$createType92 = $models.ThreadDTO.createFrom;
-const $$createType93 = $models.UIPrefsDTO.createFrom;
-const $$createType94 = $models.UserLocaleApplyDTO.createFrom;
-const $$createType95 = $models.VirusTotalConfigDTO.createFrom;
-const $$createType96 = $models.ICSImportResultDTO.createFrom;
-const $$createType97 = $models.FeedImportDTO.createFrom;
-const $$createType98 = $models.PGPKeyDTO.createFrom;
-const $$createType99 = $Create.Array($$createType98);
-const $$createType100 = $models.InsightsPeopleDTO.createFrom;
-const $$createType101 = $models.InsightsStorageDTO.createFrom;
-const $$createType102 = $models.InsightsVolumeDTO.createFrom;
-const $$createType103 = $models.BackupInfoDTO.createFrom;
-const $$createType104 = $Create.Array($$createType5);
-const $$createType105 = $models.AddressBookEntryDTO.createFrom;
-const $$createType106 = $Create.Array($$createType105);
-const $$createType107 = $Create.Array($$createType6);
-const $$createType108 = $Create.Array($$createType48);
-const $$createType109 = $models.ProjectLinkDTO.createFrom;
-const $$createType110 = $Create.Array($$createType109);
-const $$createType111 = $models.ContactDTO.createFrom;
-const $$createType112 = $Create.Array($$createType111);
-const $$createType113 = $models.DraftDTO.createFrom;
-const $$createType114 = $Create.Array($$createType113);
-const $$createType115 = $models.FeedEntryDTO.createFrom;
-const $$createType116 = $Create.Array($$createType115);
-const $$createType117 = $models.FeedSidebarDTO.createFrom;
-const $$createType118 = $Create.Array($$createType47);
-const $$createType119 = $models.FollowUpDTO.createFrom;
-const $$createType120 = $Create.Array($$createType119);
-const $$createType121 = $models.ImageAllowEntryDTO.createFrom;
-const $$createType122 = $Create.Array($$createType121);
-const $$createType123 = $models.MessageListDTO.createFrom;
-const $$createType124 = $models.MessageSummaryDTO.createFrom;
-const $$createType125 = $Create.Array($$createType124);
-const $$createType126 = $models.NewsletterSenderDTO.createFrom;
-const $$createType127 = $Create.Array($$createType126);
-const $$createType128 = $Create.Map($Create.Any, $Create.Any);
-const $$createType129 = $models.OccurrenceDTO.createFrom;
-const $$createType130 = $Create.Array($$createType129);
-const $$createType131 = $models.OutboxRowDTO.createFrom;
-const $$createType132 = $Create.Array($$createType131);
-const $$createType133 = $Create.Array($$createType4);
-const $$createType134 = $Create.Array($Create.Any);
-const $$createType135 = $models.ProjectEventDTO.createFrom;
-const $$createType136 = $Create.Array($$createType135);
-const $$createType137 = $models.ProjectMailMarkDTO.createFrom;
-const $$createType138 = $Create.Array($$createType137);
-const $$createType139 = $Create.Array($$createType50);
-const $$createType140 = $models.ThreadSummaryDTO.createFrom;
-const $$createType141 = $Create.Array($$createType140);
-const $$createType142 = $Create.Array($$createType49);
-const $$createType143 = $models.SignatureDTO.createFrom;
-const $$createType144 = $Create.Array($$createType143);
-const $$createType145 = $models.SnippetDTO.createFrom;
+const $$createType51 = $models.ProjectVaultNoteDTO.createFrom;
+const $$createType52 = $models.TaskSaveResultDTO.createFrom;
+const $$createType53 = $models.TaskListDTO.createFrom;
+const $$createType54 = $models.EventLinkResultDTO.createFrom;
+const $$createType55 = $models.DefaultMailStatusDTO.createFrom;
+const $$createType56 = $models.ContactConflictDTO.createFrom;
+const $$createType57 = $models.BulkResultDTO.createFrom;
+const $$createType58 = $models.TaskDeleteResultDTO.createFrom;
+const $$createType59 = $models.DevActivityDTO.createFrom;
+const $$createType60 = $models.DevProcessDTO.createFrom;
+const $$createType61 = $models.DiscoveredBookDTO.createFrom;
+const $$createType62 = $Create.Array($$createType61);
+const $$createType63 = $models.CalendarDiscoveryDTO.createFrom;
+const $$createType64 = $models.DiscoveredDTO.createFrom;
+const $$createType65 = $models.FeedCandidateDTO.createFrom;
+const $$createType66 = $Create.Array($$createType65);
+const $$createType67 = $models.OutboxEditDTO.createFrom;
+const $$createType68 = $models.EmlExportDTO.createFrom;
+const $$createType69 = $models.AttachmentEntryDTO.createFrom;
+const $$createType70 = $models.FetchOlderResult.createFrom;
+const $$createType71 = $models.DuplicatesDTO.createFrom;
+const $$createType72 = $models.EventRefDTO.createFrom;
+const $$createType73 = $models.MessageRefDTO.createFrom;
+const $$createType74 = $models.AccountSignaturesDTO.createFrom;
+const $$createType75 = $models.CalendarSettingsDTO.createFrom;
+const $$createType76 = $models.EventDTO.createFrom;
+const $$createType77 = $models.FeedEntryDetailDTO.createFrom;
+const $$createType78 = $models.FocusDTO.createFrom;
+const $$createType79 = $models.FocusScheduleDTO.createFrom;
+const $$createType80 = $models.LockStateDTO.createFrom;
+const $$createType81 = $models.LogStatusDTO.createFrom;
+const $$createType82 = $models.MCPConfigDTO.createFrom;
+const $$createType83 = $models.MessageDetailDTO.createFrom;
+const $$createType84 = $models.NoteDTO.createFrom;
+const $$createType85 = $models.ProjectBoardDTO.createFrom;
+const $$createType86 = $models.ProxyConfigDTO.createFrom;
+const $$createType87 = $models.QuickComposeStatusDTO.createFrom;
+const $$createType88 = $models.SettingResult.createFrom;
+const $$createType89 = $models.TaskDTO.createFrom;
+const $$createType90 = $models.TaskSettingsDTO.createFrom;
+const $$createType91 = $models.ThemeApplyDTO.createFrom;
+const $$createType92 = $models.ThemeDraftDTO.createFrom;
+const $$createType93 = $models.ThreadDTO.createFrom;
+const $$createType94 = $models.UIPrefsDTO.createFrom;
+const $$createType95 = $models.UserLocaleApplyDTO.createFrom;
+const $$createType96 = $models.VirusTotalConfigDTO.createFrom;
+const $$createType97 = $models.ICSImportResultDTO.createFrom;
+const $$createType98 = $models.FeedImportDTO.createFrom;
+const $$createType99 = $models.PGPKeyDTO.createFrom;
+const $$createType100 = $Create.Array($$createType99);
+const $$createType101 = $models.InsightsPeopleDTO.createFrom;
+const $$createType102 = $models.InsightsStorageDTO.createFrom;
+const $$createType103 = $models.InsightsVolumeDTO.createFrom;
+const $$createType104 = $models.BackupInfoDTO.createFrom;
+const $$createType105 = $Create.Array($$createType5);
+const $$createType106 = $models.AddressBookEntryDTO.createFrom;
+const $$createType107 = $Create.Array($$createType106);
+const $$createType108 = $Create.Array($$createType6);
+const $$createType109 = $Create.Array($$createType48);
+const $$createType110 = $models.ProjectLinkDTO.createFrom;
+const $$createType111 = $Create.Array($$createType110);
+const $$createType112 = $models.ContactDTO.createFrom;
+const $$createType113 = $Create.Array($$createType112);
+const $$createType114 = $models.DraftDTO.createFrom;
+const $$createType115 = $Create.Array($$createType114);
+const $$createType116 = $models.FeedEntryDTO.createFrom;
+const $$createType117 = $Create.Array($$createType116);
+const $$createType118 = $models.FeedSidebarDTO.createFrom;
+const $$createType119 = $Create.Array($$createType47);
+const $$createType120 = $models.FollowUpDTO.createFrom;
+const $$createType121 = $Create.Array($$createType120);
+const $$createType122 = $models.ImageAllowEntryDTO.createFrom;
+const $$createType123 = $Create.Array($$createType122);
+const $$createType124 = $models.MessageListDTO.createFrom;
+const $$createType125 = $models.MessageSummaryDTO.createFrom;
+const $$createType126 = $Create.Array($$createType125);
+const $$createType127 = $models.NewsletterSenderDTO.createFrom;
+const $$createType128 = $Create.Array($$createType127);
+const $$createType129 = $Create.Map($Create.Any, $Create.Any);
+const $$createType130 = $models.OccurrenceDTO.createFrom;
+const $$createType131 = $Create.Array($$createType130);
+const $$createType132 = $models.OutboxRowDTO.createFrom;
+const $$createType133 = $Create.Array($$createType132);
+const $$createType134 = $Create.Array($$createType4);
+const $$createType135 = $Create.Array($Create.Any);
+const $$createType136 = $models.ProjectEventDTO.createFrom;
+const $$createType137 = $Create.Array($$createType136);
+const $$createType138 = $models.ProjectMailMarkDTO.createFrom;
+const $$createType139 = $Create.Array($$createType138);
+const $$createType140 = $Create.Array($$createType50);
+const $$createType141 = $models.ThreadSummaryDTO.createFrom;
+const $$createType142 = $Create.Array($$createType141);
+const $$createType143 = $models.ProjectVaultNotesDTO.createFrom;
+const $$createType144 = $Create.Array($$createType49);
+const $$createType145 = $models.SignatureDTO.createFrom;
 const $$createType146 = $Create.Array($$createType145);
-const $$createType147 = $Create.Array($$createType52);
-const $$createType148 = $models.TaskMailMarkDTO.createFrom;
-const $$createType149 = $Create.Array($$createType148);
-const $$createType150 = $Create.Array($$createType88);
-const $$createType151 = $Create.Array($$createType42);
-const $$createType152 = $models.ThreadListDTO.createFrom;
-const $$createType153 = $models.UnifiedViewDTO.createFrom;
-const $$createType154 = $Create.Array($$createType153);
-const $$createType155 = $models.UserLocaleDTO.createFrom;
+const $$createType147 = $models.SnippetDTO.createFrom;
+const $$createType148 = $Create.Array($$createType147);
+const $$createType149 = $Create.Array($$createType53);
+const $$createType150 = $models.TaskMailMarkDTO.createFrom;
+const $$createType151 = $Create.Array($$createType150);
+const $$createType152 = $Create.Array($$createType89);
+const $$createType153 = $Create.Array($$createType42);
+const $$createType154 = $models.ThreadListDTO.createFrom;
+const $$createType155 = $models.UnifiedViewDTO.createFrom;
 const $$createType156 = $Create.Array($$createType155);
-const $$createType157 = $models.ViewDTO.createFrom;
+const $$createType157 = $models.UserLocaleDTO.createFrom;
 const $$createType158 = $Create.Array($$createType157);
-const $$createType159 = $models.FreeBusyDTO.createFrom;
-const $$createType160 = $models.MCPPermissionDTO.createFrom;
-const $$createType161 = $Create.Array($$createType160);
-const $$createType162 = $models.MailEventSourceDTO.createFrom;
-const $$createType163 = $models.MergeResultDTO.createFrom;
-const $$createType164 = $models.MessageIDsDTO.createFrom;
-const $$createType165 = $models.ProjectMoveResultDTO.createFrom;
-const $$createType166 = $models.ICSFileDTO.createFrom;
-const $$createType167 = $models.InviteDTO.createFrom;
-const $$createType168 = $models.MeetingPrepDTO.createFrom;
-const $$createType169 = $models.ThemeImportPreviewDTO.createFrom;
-const $$createType170 = $models.UntrustedCertDTO.createFrom;
-const $$createType171 = $Create.Array($$createType170);
-const $$createType172 = $models.AttachmentPageDTO.createFrom;
-const $$createType173 = $models.AttachmentContentDTO.createFrom;
-const $$createType174 = $Create.Array($$createType166);
-const $$createType175 = $models.OutboxLogEntryDTO.createFrom;
-const $$createType176 = $Create.Array($$createType175);
-const $$createType177 = $models.SieveStateDTO.createFrom;
-const $$createType178 = $models.VerdictDTO.createFrom;
-const $$createType179 = $models.MessageScanDTO.createFrom;
-const $$createType180 = $models.SearchResultDTO.createFrom;
-const $$createType181 = $models.SenderOverviewDTO.createFrom;
-const $$createType182 = $models.SplitTabDTO.createFrom;
-const $$createType183 = $Create.Array($$createType182);
-const $$createType184 = $models.ConnectionTestDTO.createFrom;
-const $$createType185 = $models.TrafficLightsDTO.createFrom;
-const $$createType186 = $models.VaultMentionDTO.createFrom;
-const $$createType187 = $Create.Array($$createType186);
-const $$createType188 = $models.VaultInfoDTO.createFrom;
-const $$createType189 = $models.VaultOpDTO.createFrom;
-const $$createType190 = $models.VaultFileDTO.createFrom;
-const $$createType191 = $models.VaultSaveDTO.createFrom;
-const $$createType192 = $models.VaultHitDTO.createFrom;
-const $$createType193 = $Create.Array($$createType192);
-const $$createType194 = $models.VaultSnapshotDTO.createFrom;
+const $$createType159 = $models.ViewDTO.createFrom;
+const $$createType160 = $Create.Array($$createType159);
+const $$createType161 = $models.FreeBusyDTO.createFrom;
+const $$createType162 = $models.MCPPermissionDTO.createFrom;
+const $$createType163 = $Create.Array($$createType162);
+const $$createType164 = $models.MailEventSourceDTO.createFrom;
+const $$createType165 = $models.MergeResultDTO.createFrom;
+const $$createType166 = $models.MessageIDsDTO.createFrom;
+const $$createType167 = $models.ProjectMoveResultDTO.createFrom;
+const $$createType168 = $models.ICSFileDTO.createFrom;
+const $$createType169 = $models.InviteDTO.createFrom;
+const $$createType170 = $models.MeetingPrepDTO.createFrom;
+const $$createType171 = $models.ThemeImportPreviewDTO.createFrom;
+const $$createType172 = $models.UntrustedCertDTO.createFrom;
+const $$createType173 = $Create.Array($$createType172);
+const $$createType174 = $models.AttachmentPageDTO.createFrom;
+const $$createType175 = $models.AttachmentContentDTO.createFrom;
+const $$createType176 = $Create.Array($$createType168);
+const $$createType177 = $models.OutboxLogEntryDTO.createFrom;
+const $$createType178 = $Create.Array($$createType177);
+const $$createType179 = $models.SieveStateDTO.createFrom;
+const $$createType180 = $models.VerdictDTO.createFrom;
+const $$createType181 = $models.MessageScanDTO.createFrom;
+const $$createType182 = $models.SearchResultDTO.createFrom;
+const $$createType183 = $models.SenderOverviewDTO.createFrom;
+const $$createType184 = $models.SplitTabDTO.createFrom;
+const $$createType185 = $Create.Array($$createType184);
+const $$createType186 = $models.ConnectionTestDTO.createFrom;
+const $$createType187 = $models.TrafficLightsDTO.createFrom;
+const $$createType188 = $models.VaultOpDTO.createFrom;
+const $$createType189 = $models.VaultMentionDTO.createFrom;
+const $$createType190 = $Create.Array($$createType189);
+const $$createType191 = $models.VaultInfoDTO.createFrom;
+const $$createType192 = $models.VaultFileDTO.createFrom;
+const $$createType193 = $models.VaultSaveDTO.createFrom;
+const $$createType194 = $models.VaultHitDTO.createFrom;
+const $$createType195 = $Create.Array($$createType194);
+const $$createType196 = $models.VaultSnapshotDTO.createFrom;

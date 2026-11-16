@@ -156,6 +156,8 @@ import type {
   ProjectLink,
   ProjectEvent,
   ProjectNoteRecord,
+  ProjectVaultNote,
+  ProjectVaultNotes,
   ProjectMailMark,
   ThreadSummary,
   LockState,
@@ -2121,6 +2123,7 @@ export const SettingKeys = {
   notesDailyTemplate: 'notes_daily_template',
   notesTemplatesFolder: 'notes_templates_folder',
   notesAttachmentsFolder: 'notes_attachments_folder',
+  notesProjectsFolder: 'notes_projects_folder',
   notesEditorMode: 'notes_editor_mode',
   notesLineWidth: 'notes_line_width',
   notesStarred: 'notes_starred',
@@ -3068,6 +3071,40 @@ export function updateProjectNote(id: number, title: string, body: string): Prom
 /** deleteProjectNote removes a note and the card links to it. */
 export function deleteProjectNote(id: number): Promise<void> {
   return App.DeleteProjectNote(id)
+}
+
+/**
+ * listProjectVaultNotes returns a project's notes in the notes folder and the
+ * notes linking to it; the first call with a folder open moves the notes kept
+ * in the database there.
+ */
+export function listProjectVaultNotes(projectId: number): Promise<ProjectVaultNotes> {
+  return App.ListProjectVaultNotes(projectId) as unknown as Promise<ProjectVaultNotes>
+}
+
+/** createProjectVaultNote writes a new note of a project into its folder; body gets the project in its front matter. */
+export function createProjectVaultNote(projectId: number, title: string, body: string): Promise<ProjectVaultNote> {
+  return App.CreateProjectVaultNote(projectId, title, body) as unknown as Promise<ProjectVaultNote>
+}
+
+/** addNoteToProject puts a note of the notes folder in a project through its front matter. */
+export function addNoteToProject(path: string, projectId: number): Promise<void> {
+  return App.AddNoteToProject(path, projectId)
+}
+
+/** removeNoteFromProject takes a note out of a project and its cards; the file stays. */
+export function removeNoteFromProject(path: string, projectId: number): Promise<void> {
+  return App.RemoveNoteFromProject(path, projectId)
+}
+
+/** attachVaultNote attaches a note of the notes folder to a card. */
+export function attachVaultNote(path: string, taskUid: string): Promise<void> {
+  return App.AttachVaultNote(path, taskUid)
+}
+
+/** trashProjectNote moves a project's note to the trash folder of the notes folder; vaultUndo brings it back. */
+export function trashProjectNote(path: string, projectId: number): Promise<VaultOp> {
+  return App.TrashProjectNote(path, projectId) as unknown as Promise<VaultOp>
 }
 
 /** createEventDraftFromMessage prefills an event from a mail dropped on the calendar. */

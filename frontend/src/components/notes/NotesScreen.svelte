@@ -1,7 +1,7 @@
 <script lang="ts">
   // the Notes space of the new design: a folder of Markdown files shown in
-  // three panes like mail. the sidebar holds the folder tree, tags, starred
-  // and recent notes and the daily notes calendar; the list shows the notes of
+  // three panes like mail. the sidebar holds the folder tree, tags, projects,
+  // starred and recent notes and the daily notes calendar; the list shows the notes of
   // what the sidebar chose; the editor shows open notes in tabs, with a panel
   // beside it for backlinks, the outline, outgoing links and the local graph.
   // the graph of the whole folder takes the editor's place when asked for.
@@ -30,7 +30,8 @@
   import NotePanel from './NotePanel.svelte'
   import NoteGraph from './NoteGraph.svelte'
   import NoteSwitcher from './NoteSwitcher.svelte'
-  import type { CompletionItem, FollowedLink, NoteContext, PreviewMode } from './editor/context'
+  import NoteProjectChip from './NoteProjectChip.svelte'
+  import type { FollowedLink, PreviewMode } from './editor/context'
   import {
     activeNote,
     closeNote,
@@ -58,12 +59,12 @@
     vaultSwitched,
     vaultNotes,
   } from '../../stores/notes'
-  import { getSetting, setSetting, SettingKeys, vaultChooseFolder, vaultFileData, vaultRead, vaultRescan, vaultSaveAttachment, vaultSearch } from '../../lib/api'
+  import { getSetting, setSetting, SettingKeys, vaultChooseFolder, vaultRescan, vaultSearch } from '../../lib/api'
   import { onVaultChanged } from '../../lib/events'
-  import { fuzzyMatch } from '../../lib/fuzzy'
+  import { noteEditorContext } from '../../lib/noteeditorcontext'
   import { buildGraph, defaultGraphOptions, type GraphOptions } from '../../lib/notegraph'
   import { notesInScope, sortNotes, noteSorts, type NoteScope, type NoteSort } from '../../lib/notelist'
-  import { isImagePath, joinPath, noteFolder, noteHeadings, noteTitle, safeNoteName } from '../../lib/notemd'
+  import { joinPath, noteFolder, noteHeadings, noteTitle, safeNoteName } from '../../lib/notemd'
   import { linkText, resolveLink, resolveMarkdownLink } from '../../lib/noteresolve'
   import { dailyNoteDate } from '../../lib/notetemplate'
   import { openPeltonUrl } from '../../lib/peltonopen'
@@ -163,6 +164,8 @@
         return `#${s.tag}`
       case 'folder':
         return s.path.split('/').pop() || $t('notes.allNotes')
+      case 'project':
+        return s.name
     }
   }
 
@@ -573,79 +576,14 @@
     }
   }
 
-  function completeNotes(q: string): CompletionItem[] {
-    const text = q.trim()
-    const r = $noteResolver
-    const items: { item: CompletionItem; score: number }[] = []
-    for (const n of $vaultNotes) {
-      if (n.path === active) {
-        continue
-      }
-      const name = linkText(r, n.path)
-      if (!text) {
-        items.push({ item: { label: n.title, detail: noteFolder(n.path), insert: name }, score: n.mtime })
-        continue
-      }
-      const s = fuzzyMatch(text, n.title)?.score
-      if (s !== undefined) {
-        items.push({ item: { label: n.title, detail: noteFolder(n.path), insert: name }, score: s * 1e13 })
-      }
-      for (const a of n.aliases) {
-        const sa = fuzzyMatch(text, a)?.score
-        if (sa !== undefined) {
-          items.push({ item: { label: a, detail: n.title, insert: `${name}|${a}` }, score: sa * 1e13 - 1 })
-        }
-      }
-    }
-    for (const f of $vaultIndex?.files ?? []) {
-      if (!isImagePath(f)) {
-        continue
-      }
-      const base = f.split('/').pop() ?? f
-      const s = text ? fuzzyMatch(text, base)?.score : 0
-      if (s !== undefined) {
-        items.push({ item: { label: base, detail: noteFolder(f), insert: linkText(r, f) }, score: text ? s * 1e13 - 2 : -1 })
-      }
-    }
-    const out = items.sort((a, b) => b.score - a.score).slice(0, 12).map((x) => x.item)
-    if (text && !$vaultNotes.some((n) => n.title.toLowerCase() === text.toLowerCase())) {
-      out.push({ label: text, detail: $t('notes.switcher.create'), insert: text, create: true })
-    }
-    return out
-  }
+  $: context = noteEditorContext(
+    { notes: $vaultNotes, files: $vaultIndex?.files ?? [], resolver: $noteResolver, tags: $noteTags, byPath: $notesByPath },
+    { active, headings: currentHeadings, follow: (link, newTab) => void follow(link, newTab), t: $t },
+  )
 
-  function completeHeadings(note: string, q: string): CompletionItem[] {
-    const path = note.trim() ? resolveLink($noteResolver, note, active ?? '') : active
-    if (!path) {
-      return []
-    }
-    const list = path === active ? headings : ($notesByPath.get(path)?.headings ?? [])
-    const lower = q.toLowerCase()
-    return list
-      .filter((h) => h.text && h.text.toLowerCase().includes(lower))
-      .slice(0, 12)
-      .map((h) => ({ label: h.text, detail: '#'.repeat(h.level), insert: h.text }))
+  function currentHeadings(): typeof headings {
+    return headings
   }
-
-  function completeTags(q: string): CompletionItem[] {
-    const lower = q.toLowerCase()
-    return $noteTags
-      .filter((x) => x.tag.toLowerCase().startsWith(lower) && x.tag.toLowerCase() !== lower)
-      .slice(0, 10)
-      .map((x) => ({ label: `#${x.tag}`, detail: String(x.count), insert: x.tag }))
-  }
-
-  $: context = {
-    resolve: (target: string, markdown: boolean) => (markdown ? resolveMarkdownLink($noteResolver, target, active ?? '') : resolveLink($noteResolver, target, active ?? '')),
-    fileData: (path: string) => vaultFileData(path),
-    readNote: (path: string) => vaultRead(path).then((f) => f.content),
-    follow: (link: FollowedLink, newTab: boolean) => void follow(link, newTab),
-    completeNotes,
-    completeHeadings,
-    completeTags,
-    saveAttachment: (name: string, base64: string) => vaultSaveAttachment(name, base64),
-    t: (key: string) => $t(key),
-  } satisfies Omit<NoteContext, 'path'>
 
   function graphOpenNode(id: string, kind: string, newTab: boolean): void {
     if (kind === 'note') {
@@ -812,6 +750,7 @@
           }}
           on:blur={() => void renameActive()}
         />
+        <NoteProjectChip props={activeInfo?.props} />
         {#if dailyDate}
           <div class="day-nav">
             <button type="button" class="cal-icon" aria-label={$t('notes.daily.previous')} on:click={() => dailyDate && void goDay(addDays(dailyDate, -1))}>

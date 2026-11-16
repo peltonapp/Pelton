@@ -251,5 +251,8 @@ export const builtinDailyTemplate = '# {{date:dddd, D MMMM YYYY}}\n\n## Agenda\n
 /** The template a meeting note starts from when the templates folder has no "Meeting" note. */
 export const builtinMeetingTemplate = '# {{event.title}}\n\n{{event.link}}\n**When:** {{event.start}}\n**Attendees:**\n{{event.attendees}}\n\n## Notes\n\n\n## Actions\n- [ ] \n'
 
+/** The template a project's note starts from when the templates folder has no "Project" note. */
+export const builtinProjectTemplate = '---\ncreated: {{date}}\n---\n# {{title}}\n\n{{link}}\n\n'
+
 /** The template a note about a mail, contact or task starts from when none is chosen. */
 export const builtinAboutTemplate = '# {{title}}\n\n{{link}}\n\n'

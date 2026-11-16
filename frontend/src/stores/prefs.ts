@@ -162,6 +162,7 @@ const defaults: UIPrefs = {
   notesDailyTemplate: '',
   notesTemplatesFolder: 'Templates',
   notesAttachmentsFolder: 'Attachments',
+  notesProjectsFolder: 'Projects',
   notesEditorMode: 'live',
   notesLineWidth: 'medium',
 }
@@ -1119,6 +1120,7 @@ export type NotesPrefKey =
   | 'notesDailyTemplate'
   | 'notesTemplatesFolder'
   | 'notesAttachmentsFolder'
+  | 'notesProjectsFolder'
 
 /** setNotesPref stores one of the notes space's folder and naming settings. */
 export function setNotesPref(key: NotesPrefKey, value: string): void {

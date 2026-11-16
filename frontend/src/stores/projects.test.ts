@@ -82,6 +82,7 @@ function card(uid: string, columnId: number, position: number): ProjectCard {
 function project(id: number, name: string): Project {
   return {
     id,
+    uid: `p${id}`,
     name,
     color: '',
     icon: '',

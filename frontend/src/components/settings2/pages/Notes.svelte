@@ -1,7 +1,8 @@
 <script lang="ts">
   // the Notes page: which folder holds the notes, where daily notes go and
   // how they are named, the template a daily note starts from, the folders of
-  // templates and pasted images, how a note opens and how wide its text runs.
+  // templates, pasted images and project notes, how a note opens and how
+  // wide its text runs.
   import { onMount } from 'svelte'
   import '../../calendar/controls.css'
   import Card from '../ui/Card.svelte'
@@ -76,6 +77,9 @@
   </Row>
   <Row id="notes-attachments" label={$t('notesSettings.attachments')} hint={$t('notesSettings.attachments.hint')}>
     <input class="cal-field field" value={$prefs.notesAttachmentsFolder} aria-label={$t('notesSettings.attachments')} on:change={(e) => text('notesAttachmentsFolder', e.currentTarget.value)} />
+  </Row>
+  <Row id="notes-projects" label={$t('notesSettings.projects')} hint={$t('notesSettings.projects.hint')}>
+    <input class="cal-field field" value={$prefs.notesProjectsFolder} aria-label={$t('notesSettings.projects')} on:change={(e) => text('notesProjectsFolder', e.currentTarget.value)} />
   </Row>
 </Card>
 

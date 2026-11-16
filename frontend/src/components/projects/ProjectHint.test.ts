@@ -23,6 +23,7 @@ import { prefs } from '../../stores/prefs'
 function project(id: number, name: string, people: string[]): Project {
   return {
     id,
+    uid: `p${id}`,
     name,
     color: '',
     icon: '',

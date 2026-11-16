@@ -1,6 +1,6 @@
 // peltonopen.ts follows a pelton:// link out of a note: it finds the mail,
-// event, contact or task the link names and shows it in its space, or says
-// that it is no longer there.
+// event, contact, task or project the link names and shows it in its space,
+// or says that it is no longer there.
 
 import { get } from 'svelte/store'
 import { findEventByUID } from './api'
@@ -13,6 +13,7 @@ import { calendarFocus } from '../stores/calendar'
 import { contacts, loadContacts } from '../stores/contacts'
 import { selectedContactId } from '../stores/contactsview'
 import { loadTasks, tasks } from '../stores/tasks'
+import { loadProjects, openCard, openProject, projects } from '../stores/projects'
 import { openSpace } from '../stores/space'
 import { errorMessage, toastError, toastInfo } from '../stores/toast'
 
@@ -63,6 +64,22 @@ export async function openPeltonUrl(url: string): Promise<boolean> {
           break
         }
         openTask(found.id)
+        break
+      }
+      case 'project': {
+        if (get(projects).length === 0) {
+          await loadProjects()
+        }
+        const found = get(projects).find((p) => p.uid === link.id)
+        if (!found) {
+          toastInfo(tr('notes.object.gone'))
+          break
+        }
+        if (link.sub) {
+          openCard(found.id, link.sub)
+        } else {
+          openProject(found.id)
+        }
         break
       }
     }

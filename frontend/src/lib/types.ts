@@ -1040,14 +1040,15 @@ export interface UIPrefs {
   // the notes space: the chosen notes folder ('' for the Notes folder in the
   // data directory), where daily notes go and how they are named
   // (YYYY-MM-DD style), the template a daily note starts from ('' for the
-  // built-in one), the folders of templates and pasted images, how a note
-  // opens and how wide its text runs.
+  // built-in one), the folders of templates, pasted images and project
+  // notes, how a note opens and how wide its text runs.
   notesVault: string
   notesDailyFolder: string
   notesDailyFormat: string
   notesDailyTemplate: string
   notesTemplatesFolder: string
   notesAttachmentsFolder: string
+  notesProjectsFolder: string
   notesEditorMode: NoteEditorMode
   notesLineWidth: ReaderWidth
 }
@@ -2454,6 +2455,8 @@ export interface ProjectPerson {
  */
 export interface Project {
   id: number
+  // names the project in notes' front matter and pelton://project links.
+  uid: string
   name: string
   // #rrggbb, empty for the palette color picked by id.
   color: string
@@ -2600,6 +2603,25 @@ export interface ProjectNoteRecord {
   updatedAt: string
 }
 
+/** ProjectVaultNote is a note of the notes folder as the Projects space lists it; mtime is unix ms. */
+export interface ProjectVaultNote {
+  path: string
+  title: string
+  snippet: string
+  mtime: number
+}
+
+/**
+ * ProjectVaultNotes is what the notes folder holds for a project: its notes
+ * and the other notes linking to it or its cards, mail and events. available
+ * is false when no notes folder is open.
+ */
+export interface ProjectVaultNotes {
+  available: boolean
+  notes: ProjectVaultNote[]
+  linked: ProjectVaultNote[]
+}
+
 /** ProjectMailMark says a conversation belongs to a project. */
 export interface ProjectMailMark {
   threadId: number
@@ -2647,6 +2669,14 @@ export interface VaultNote {
   headings: VaultHeading[]
   snippet: string
   links: VaultLink[]
+  props: VaultProp[]
+}
+
+/** VaultProp is one front matter property of a note: its value, or its items for a list. */
+export interface VaultProp {
+  key: string
+  value: string
+  list: string[]
 }
 
 /** VaultSnapshot is the whole index of the notes folder. */

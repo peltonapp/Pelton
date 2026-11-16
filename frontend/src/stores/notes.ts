@@ -29,6 +29,7 @@ import {
   builtinAboutTemplate,
   builtinDailyTemplate,
   builtinMeetingTemplate,
+  builtinProjectTemplate,
   dailyNotePath,
   expandTemplate,
   type TemplateEvent,
@@ -493,6 +494,18 @@ function noteTitleOf(path: string): string {
 /** The template note named name (case does not matter) in the templates folder, if any. */
 function namedTemplate(name: string): VaultNote | undefined {
   return get(templateNotes).find((n) => n.title.toLowerCase() === name.toLowerCase())
+}
+
+/**
+ * The text a new note of a project starts with: the "Project" note of the
+ * templates folder, or the built-in template, with the title, a link to the
+ * project and the date filled in. The project itself goes into the front
+ * matter when the note is written.
+ */
+export async function projectNoteText(project: { uid: string; name: string }, title: string): Promise<string> {
+  const named = namedTemplate('Project')
+  const template = named ? await readTemplate(named.path) : builtinProjectTemplate
+  return expandTemplate(template, { ...baseVars(title), link: peltonMarkdownLink('project', project.uid, project.name) })
 }
 
 /** What a "new note about this" is about. */

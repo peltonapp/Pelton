@@ -50,7 +50,7 @@ import { runSpaceAction } from '../../stores/space'
 import { spaceSearchProviders } from '../../lib/spacesearch'
 
 function note(path: string, over: Partial<VaultNote> = {}): VaultNote {
-  return { path, title: path.replace(/^.*\//, '').replace(/\.md$/, ''), mtime: Date.now(), size: 1, tags: [], aliases: [], headings: [], snippet: '', links: [], ...over }
+  return { path, title: path.replace(/^.*\//, '').replace(/\.md$/, ''), mtime: Date.now(), size: 1, tags: [], aliases: [], headings: [], snippet: '', links: [], props: [], ...over }
 }
 
 let snapshot: VaultSnapshot
