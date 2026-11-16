@@ -238,6 +238,46 @@ func TestFeedRefreshFailures(t *testing.T) {
 	}
 }
 
+func TestFeedSchedule(t *testing.T) {
+	a := newCalendarTestApp(t)
+	srv := newFeedServer(t)
+	srv.setItems("One")
+	feed, err := a.AddFeed(srv.URL+"/feed.xml", 0, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := a.UpdateFeed(FeedSettingsDTO{ID: feed.ID, Notify: true}); err != nil {
+		t.Fatal(err)
+	}
+	if due, _ := a.dueFeeds(); len(due) != 0 {
+		t.Fatalf("a feed fetched a moment ago is due: %+v", due)
+	}
+
+	// pretend the interval passed: the run fetches it, finds the new entry and
+	// raises its notification without a notifier to deliver it.
+	stored, _ := a.store.GetFeed(a.ctx, feed.ID)
+	_ = a.store.RecordFeedFetch(a.ctx, feed.ID, storage.FeedFetch{At: stored.LastFetchedAt, Next: time.Now().Add(-time.Minute), ETag: stored.ETag})
+	srv.setItems("One", "Two")
+	due, err := a.dueFeeds()
+	if err != nil || len(due) != 1 {
+		t.Fatalf("due = %+v, %v", due, err)
+	}
+	a.runFeedRefresh(a.ctx, due)
+	side, _ := a.ListFeedSidebar()
+	if side.Feeds[0].Unread != 2 {
+		t.Errorf("unread after the scheduled run = %d", side.Feeds[0].Unread)
+	}
+
+	// only by hand: nothing is due however late it is.
+	if err := a.store.Set(a.ctx, settingFeedsRefresh, "0"); err != nil {
+		t.Fatal(err)
+	}
+	_ = a.store.RecordFeedFetch(a.ctx, feed.ID, storage.FeedFetch{At: time.Now(), Next: time.Now().Add(-time.Minute)})
+	if due, _ := a.dueFeeds(); len(due) != 0 {
+		t.Errorf("manual refresh still schedules: %+v", due)
+	}
+}
+
 func TestDiscoverFeeds(t *testing.T) {
 	a := newCalendarTestApp(t)
 	srv := newFeedServer(t)
