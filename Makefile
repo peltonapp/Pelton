@@ -15,6 +15,11 @@ export VERSION
 WAILS_VERSION := $(shell go list -m -f '{{.Version}}' github.com/wailsapp/wails/v3 2>/dev/null)
 WAILS3 := go run -tags gtk3 github.com/wailsapp/wails/v3/cmd/wails3@$(WAILS_VERSION)
 
+# goolm selects mautrix's pure Go Olm for chat encryption. Without it the
+# crypto package links libolm through cgo, which Pelton does not ship. Every
+# go build, test and vet of the app needs it.
+GO_TAGS := goolm
+
 # production build for this OS into build/bin (the .app on macOS). see
 # scripts/build.sh.
 build:
@@ -62,12 +67,12 @@ build-linux:
 # git or network (packaging/nix/package.nix passes VERSION).
 build-nix:
 	cd frontend && pnpm run build
-	go build -tags "production gtk3" -trimpath -ldflags "-s -w -X main.version=$(VERSION)" -o build/bin/pelton .
+	go build -tags "production gtk3 $(GO_TAGS)" -trimpath -ldflags "-s -w -X main.version=$(VERSION)" -o build/bin/pelton .
 
 # regenerate the typescript bindings in frontend/bindings from the bound go
 # methods. run after adding or changing a method on desktop.App.
 bindings:
-	$(WAILS3) generate bindings -ts -d frontend/bindings -silent ./...
+	$(WAILS3) generate bindings -ts -d frontend/bindings -silent -f "-tags=$(GO_TAGS)" ./...
 
 # run the whole app in dev mode: vite serves the frontend with hot reload and
 # the app loads it from there. PELTON_DEV points the app at a separate
