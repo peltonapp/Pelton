@@ -8,6 +8,8 @@
   import ContactAvatar from './ContactAvatar.svelte'
   import envelopeIcon from '@phosphor-icons/core/assets/duotone/envelope-simple-duotone.svg?raw'
   import phoneIcon from '@phosphor-icons/core/assets/duotone/phone-duotone.svg?raw'
+  import chatIcon from '@phosphor-icons/core/assets/duotone/chat-circle-text-duotone.svg?raw'
+  import { chatAvailable, chatWith } from '../../lib/chatavailable'
   import noteIcon from '@phosphor-icons/core/assets/duotone/note-duotone.svg?raw'
   import pencilIcon from '@phosphor-icons/core/assets/duotone/pencil-simple-duotone.svg?raw'
   import trashIcon from '@phosphor-icons/core/assets/duotone/trash-duotone.svg?raw'
@@ -97,6 +99,12 @@
             {$t('contacts.action.write')}
           </button>
         {/if}
+        {#if $chatAvailable && contact.matrixId}
+          <button type="button" class="btn" on:click={() => void chatWith(contact.matrixId)}>
+            <Ph svg={chatIcon} size={16} />
+            {$t('contacts.matrix.chat')}
+          </button>
+        {/if}
         {#if !contact.readOnly}
           <button type="button" class="btn" on:click={() => dispatch('edit', contact)}>
             <Ph svg={pencilIcon} size={16} />
@@ -143,6 +151,15 @@
                 {#if phone.label}<span class="label">{phone.label}</span>{/if}
               </li>
             {/each}
+          </ul>
+        </section>
+      {/if}
+
+      {#if contact.matrixId}
+        <section>
+          <h3><Ph svg={chatIcon} size={14} />{$t('contacts.matrix')}</h3>
+          <ul class="values">
+            <li><span dir="ltr">{contact.matrixId}</span></li>
           </ul>
         </section>
       {/if}

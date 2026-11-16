@@ -81,12 +81,14 @@
   // the event before the message.
   $: groupRank = (
     $space === 'calendar'
-      ? ['calendar', 'action', 'mail', 'navigate', 'tasks', 'contacts', 'setting']
+      ? ['calendar', 'action', 'mail', 'navigate', 'tasks', 'contacts', 'chat', 'setting']
       : $space === 'contacts'
-        ? ['contacts', 'action', 'mail', 'navigate', 'calendar', 'tasks', 'setting']
+        ? ['contacts', 'action', 'mail', 'navigate', 'calendar', 'tasks', 'chat', 'setting']
         : $space === 'tasks'
-          ? ['tasks', 'action', 'mail', 'navigate', 'calendar', 'contacts', 'setting']
-          : ['action', 'mail', 'calendar', 'tasks', 'contacts', 'navigate', 'setting']
+          ? ['tasks', 'action', 'mail', 'navigate', 'calendar', 'contacts', 'chat', 'setting']
+          : $space === 'chat'
+            ? ['chat', 'action', 'mail', 'navigate', 'calendar', 'tasks', 'contacts', 'setting']
+            : ['action', 'mail', 'calendar', 'tasks', 'contacts', 'chat', 'navigate', 'setting']
   ) as CommandGroup[]
 
   /**
@@ -127,6 +129,9 @@
     }
     if (group === 'tasks') {
       return $t('space.tasks')
+    }
+    if (group === 'chat') {
+      return $t('space.chat')
     }
     return $t('palette.group.settings')
   }

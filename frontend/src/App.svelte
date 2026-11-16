@@ -22,7 +22,8 @@
   import { space, openSpace, runSpaceAction, isMailOnlyAction } from './stores/space'
   import { mailScreen, openMailScreen, closeMailScreen } from './stores/mailscreen'
   import { IconMailX, IconChartBar } from '@tabler/icons-svelte'
-  import { spaces } from './lib/spaces'
+  import { visibleSpaces } from './lib/spaces'
+  import { startChat, stopChat } from './stores/chat'
   import { popupIsOpen } from './lib/popups'
   import { calendarFocus, calendarImport, calendarQuickAdd } from './stores/calendar'
   import { formatTime } from './lib/calformat'
@@ -192,6 +193,9 @@
   import { attachmentsOpen, toggleAttachments } from './stores/attachments'
   import { setSenderPanel } from './stores/prefs'
   import './lib/palette-tasks'
+  import './lib/palette-chat'
+  import './lib/palette-chatshare'
+  import ShareToChatDialog from './components/chat/ShareToChatDialog.svelte'
   import './lib/palette-availability'
   import { startTasks, toggleDone, tasks as taskStore, taskFromMailRequest } from './stores/tasks'
   import { createTasksFromMail, openTask } from './lib/taskmail'
@@ -457,6 +461,26 @@
     stopTasks = undefined
   }
   onDestroy(() => stopTasks?.())
+
+  // chat runs only while the user has it turned on, in the new design. Off
+  // again, the space closes and its state is dropped.
+  let chatRunning = false
+  $: chatWanted = !classic && $prefs.chatEnabled
+  $: if (chatWanted && !chatRunning) {
+    chatRunning = true
+    void startChat()
+  } else if (!chatWanted && chatRunning) {
+    chatRunning = false
+    stopChat()
+  }
+  $: if (!chatWanted && $space === 'chat') {
+    openSpace('mail')
+  }
+  onDestroy(() => {
+    if (chatRunning) {
+      stopChat()
+    }
+  })
 
   // the newsletter manager and the insights page in the palette, with their
   // live shortcut as the hint.
@@ -1198,6 +1222,9 @@
       case 'go-contacts':
         goToSpace('contacts')
         break
+      case 'go-chat':
+        goToSpace('chat')
+        break
       case 'open-attachments':
         if (!classic && !overlayOpen) {
           openSpace('mail')
@@ -1663,7 +1690,7 @@
       }
       return
     }
-    if (overlayOpen || !spaces.some((s) => s.key === key)) {
+    if (overlayOpen || !get(visibleSpaces).some((s) => s.key === key)) {
       return
     }
     openSpace(key)
@@ -2066,6 +2093,12 @@
           <svelte:component this={m.default} />
         {/await}
       </div>
+    {:else if $space === 'chat' && chatWanted}
+      <div class="space-host">
+        {#await import('./components/chat/ChatSpace.svelte') then m}
+          <svelte:component this={m.default} />
+        {/await}
+      </div>
     {/if}
   </div>
 
@@ -2183,6 +2216,13 @@
 
 {#if !classic}
   <CoachLayer suspended={overlayOpen} />
+{/if}
+
+{#if chatWanted}
+  <ShareToChatDialog />
+  {#await import('./components/chat/VerificationDialog.svelte') then m}
+    <svelte:component this={m.default} />
+  {/await}
 {/if}
 
 <AccountPasswordDialog account={$passwordPrompt} onDone={answerPasswordPrompt} />

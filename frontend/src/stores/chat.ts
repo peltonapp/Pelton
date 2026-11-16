@@ -17,6 +17,7 @@ import {
   chatSendFilePaths,
   chatSendFileData,
   chatTypists,
+  chatOpenDirect,
 } from '../lib/api'
 import {
   onChatStatus,
@@ -302,6 +303,17 @@ export async function openRoom(roomId: string): Promise<void> {
   if (!get(timelines)[roomId]) {
     await reloadTimeline(roomId)
   }
+}
+
+/**
+ * Opens the direct chat with a person in the chat space, starting one when
+ * there is none. It rejects with a readable message when that fails.
+ */
+export async function openDirectChat(userId: string): Promise<void> {
+  const roomId = await chatOpenDirect(userId)
+  openSpace('chat')
+  await refreshRooms()
+  await openRoom(roomId)
 }
 
 /** Leaves the room on screen. */

@@ -6,7 +6,9 @@ import mailIcon from '@phosphor-icons/core/assets/duotone/envelope-simple-duoton
 import contactsIcon from '@phosphor-icons/core/assets/duotone/address-book-duotone.svg?raw'
 import calendarIcon from '@phosphor-icons/core/assets/duotone/calendar-blank-duotone.svg?raw'
 import tasksIcon from '@phosphor-icons/core/assets/duotone/list-checks-duotone.svg?raw'
-import { get } from 'svelte/store'
+import chatIcon from '@phosphor-icons/core/assets/duotone/chats-circle-duotone.svg?raw'
+import { derived, get } from 'svelte/store'
+import { prefs } from '../stores/prefs'
 import type { Space } from './types'
 import type { MailDropOptions } from '../stores/maildrag'
 import { contactSeed } from '../stores/contacts'
@@ -74,4 +76,13 @@ export const spaces: SpaceEntry[] = [
   { key: 'calendar', labelKey: 'space.calendar', icon: calendarIcon },
   { key: 'tasks', labelKey: 'space.tasks', icon: tasksIcon },
   { key: 'contacts', labelKey: 'space.contacts', icon: contactsIcon },
+  { key: 'chat', labelKey: 'space.chat', icon: chatIcon },
 ]
+
+/** Whether a space is switched on: chat only shows once the user turned it on. */
+export function spaceEnabled(key: Space, p: { chatEnabled: boolean }): boolean {
+  return key !== 'chat' || p.chatEnabled
+}
+
+/** The spaces to show, in display order. */
+export const visibleSpaces = derived(prefs, ($p) => spaces.filter((s) => spaceEnabled(s.key, $p)))

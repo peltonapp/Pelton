@@ -89,6 +89,8 @@ export type ShortcutAction =
   | 'toggle-my-day'
   // shows the Tasks space.
   | 'go-tasks'
+  // shows the Chat space, when chat is on.
+  | 'go-chat'
   // makes a task from the open message, or from each selected one.
   | 'create-task'
   // the split inbox tabs, only while the message list has focus.
@@ -253,6 +255,8 @@ export const shortcuts: Shortcut[] = [
   { action: 'toggle-my-day', combo: 'mod+shift+y', labelKey: 'shortcut.toggleMyDay' },
   // the key Thunderbird shows its task list with.
   { action: 'go-tasks', combo: 'mod+shift+d', labelKey: 'shortcut.goTasks' },
+  // x for chat: the letters nearer the meaning are taken.
+  { action: 'go-chat', combo: 'mod+shift+x', labelKey: 'shortcut.goChat', newDesignOnly: true },
   // t for task, free among the message letters.
   { action: 'create-task', combo: 't', labelKey: 'shortcut.createTask' },
   // Tab only moves between splits while the list has focus; everywhere else it
