@@ -3313,6 +3313,15 @@ export function VaultFileData(rel: string): $CancellablePromise<string> {
 }
 
 /**
+ * VaultImportFile copies a file the user dropped from the system onto a note
+ * into the attachments folder of the vault, under a free name, and returns
+ * its vault path. The original is left where it was.
+ */
+export function VaultImportFile(src: string): $CancellablePromise<string> {
+    return $Call.ByID(4225390801, src);
+}
+
+/**
  * VaultLinkMention turns an unlinked mention into a link to target.
  */
 export function VaultLinkMention(source: string, line: number, match: string, target: string): $CancellablePromise<void> {
@@ -3326,16 +3335,6 @@ export function VaultLinkMention(source: string, line: number, match: string, ta
 export function VaultMove($from: string, to: string): $CancellablePromise<$models.VaultOpDTO> {
     return $Call.ByID(2983040191, $from, to).then(($result: any) => {
         return $$createType142($result);
-    });
-}
-
-/**
- * VaultNotesLinkingTo returns the notes that link to a pelton:// address,
- * such as the one of a mail or an event. With no folder open it is empty.
- */
-export function VaultNotesLinkingTo(target: string): $CancellablePromise<string[]> {
-    return $Call.ByID(2043684812, target).then(($result: any) => {
-        return $$createType20($result);
     });
 }
 

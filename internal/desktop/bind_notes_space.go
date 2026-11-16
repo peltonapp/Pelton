@@ -490,16 +490,6 @@ func (a *App) VaultSearch(query string) ([]VaultHitDTO, error) {
 	return out, nil
 }
 
-// VaultNotesLinkingTo returns the notes that link to a pelton:// address,
-// such as the one of a mail or an event. With no folder open it is empty.
-func (a *App) VaultNotesLinkingTo(target string) ([]string, error) {
-	svc, err := a.openedVault()
-	if err != nil {
-		return []string{}, nil
-	}
-	return nonNil(svc.NotesLinkingTo(target)), nil
-}
-
 // VaultSaveAttachment stores a pasted or dropped file in the attachments
 // folder of the vault under a free name and returns its path. data is
 // base64.
@@ -512,6 +502,35 @@ func (a *App) VaultSaveAttachment(name, data string) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("notes: attachment data: %w", err)
 	}
+	return a.storeAttachment(svc, name, raw)
+}
+
+// vaultImportLimit caps a file dropped from the system into a note.
+const vaultImportLimit = 200 << 20
+
+// VaultImportFile copies a file the user dropped from the system onto a note
+// into the attachments folder of the vault, under a free name, and returns
+// its vault path. The original is left where it was.
+func (a *App) VaultImportFile(src string) (string, error) {
+	svc, err := a.openedVault()
+	if err != nil {
+		return "", err
+	}
+	fi, err := os.Stat(src)
+	if err != nil {
+		return "", err
+	}
+	if !fi.Mode().IsRegular() || fi.Size() > vaultImportLimit {
+		return "", fmt.Errorf("notes: %q cannot be added to a note", filepath.Base(src))
+	}
+	data, err := os.ReadFile(src)
+	if err != nil {
+		return "", err
+	}
+	return a.storeAttachment(svc, filepath.Base(src), data)
+}
+
+func (a *App) storeAttachment(svc *notes.Service, name string, data []byte) (string, error) {
 	name = path.Base(strings.ReplaceAll(strings.TrimSpace(name), "\\", "/"))
 	if name == "" || name == "." || name == "/" || strings.HasPrefix(name, ".") {
 		name = "Pasted " + time.Now().Format("2006-01-02 150405") + ".png"
@@ -525,7 +544,7 @@ func (a *App) VaultSaveAttachment(name, data string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return svc.Create(a.ctx, free, raw)
+	return svc.Create(a.ctx, free, data)
 }
 
 // VaultFileData returns a file of the vault, such as an image a note

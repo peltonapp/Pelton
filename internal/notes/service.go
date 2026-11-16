@@ -1227,21 +1227,3 @@ func trimAround(line, word string) string {
 	}
 	return out
 }
-
-// NotesLinkingTo returns the notes that carry a link whose target is
-// exactly target, such as the pelton:// address of one mail.
-func (s *Service) NotesLinkingTo(target string) []string {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-	var out []string
-	for p, n := range s.notes {
-		for _, l := range n.Links {
-			if l.Target == target {
-				out = append(out, p)
-				break
-			}
-		}
-	}
-	sort.Strings(out)
-	return out
-}

@@ -37,6 +37,7 @@
   import { openMailLink } from '../../lib/maillink'
   import { searchAddresses } from '../../lib/api'
   import { draftOf, localZone, saveTask, toggleDone } from '../../stores/tasks'
+  import NoteMentions from '../notes/NoteMentions.svelte'
   import { t } from '../../lib/i18n'
   import type { TimeFormat } from '../../lib/format'
   import type { AddressBookEntry, Reminder, Task, TaskContact, TaskDraft, TaskList } from '../../lib/types'
@@ -519,6 +520,15 @@
       <span class="icon" aria-hidden="true"><Ph svg={tagIcon} size={16} /></span>
       <input class="field" bind:value={tags} placeholder={$t('tasks.addTags')} aria-label={$t('tasks.tags')} readonly={readOnly} on:blur={commitText} on:keydown={onFieldKey} />
     </div>
+
+    {#if task.uid}
+      <div class="row">
+        <span class="icon" aria-hidden="true"></span>
+        <div class="cell">
+          <NoteMentions about={{ kind: 'task', id: task.uid, title: task.title || $t('tasks.untitled') }} />
+        </div>
+      </div>
+    {/if}
 
     <div class="row top">
       <span class="icon" aria-hidden="true"><Ph svg={notesIcon} size={16} /></span>

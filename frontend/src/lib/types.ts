@@ -964,7 +964,23 @@ export interface UIPrefs {
   logLevel: LogLevel
   logMessageMetadata: boolean
   crashLogs: boolean
+  // the notes space: the chosen notes folder ('' for the Notes folder in the
+  // data directory), where daily notes go and how they are named
+  // (YYYY-MM-DD style), the template a daily note starts from ('' for the
+  // built-in one), the folders of templates and pasted images, how a note
+  // opens and how wide its text runs.
+  notesVault: string
+  notesDailyFolder: string
+  notesDailyFormat: string
+  notesDailyTemplate: string
+  notesTemplatesFolder: string
+  notesAttachmentsFolder: string
+  notesEditorMode: NoteEditorMode
+  notesLineWidth: ReaderWidth
 }
+
+/** How a note opens: rendered as it is typed, as plain source, or read-only. */
+export type NoteEditorMode = 'live' | 'source' | 'reading'
 
 // how much detail the log records.
 export type LogLevel = 'debug' | 'info' | 'warn' | 'error'
@@ -1459,7 +1475,7 @@ export type AfterReplySend = 'nothing' | 'archive'
 /** When a follow-up reminder set from a preset comes: each lands at nine. */
 export type FollowUpInterval = 'tomorrow' | 'threeDays' | 'week'
 /** One of the top-level areas of the app. */
-export type Space = 'mail' | 'contacts' | 'calendar' | 'tasks'
+export type Space = 'mail' | 'contacts' | 'calendar' | 'tasks' | 'notes'
 export type SelectAllScope = 'offer' | 'all' | 'loaded'
 
 // SearchSort is an order search results can actually come back in. The backend
@@ -2183,4 +2199,98 @@ export interface TaskSettings {
   // how long a completed task stays listed, -1 for good.
   completedDays: number
   sort: TaskSort
+}
+
+/** VaultInfo describes the open notes folder; folder is '' when none is open. */
+export interface VaultInfo {
+  folder: string
+  ready: boolean
+  /** The folder is the Notes folder in the data directory. */
+  default: boolean
+  error: string
+}
+
+/** VaultHeading is one heading of a note; line counts from 0. */
+export interface VaultHeading {
+  level: number
+  text: string
+  line: number
+}
+
+/** VaultLinkKind says what a link points at. */
+export type VaultLinkKind = 'wiki' | 'markdown' | 'external' | 'pelton'
+
+/** VaultLink is one link a note makes; resolved is the vault path, or ''. */
+export interface VaultLink {
+  kind: VaultLinkKind
+  embed: boolean
+  target: string
+  subpath: string
+  display: string
+  line: number
+  resolved: string
+}
+
+/** VaultNote is what the notes space knows of a note without opening it; mtime is unix ms. */
+export interface VaultNote {
+  path: string
+  title: string
+  mtime: number
+  size: number
+  tags: string[]
+  aliases: string[]
+  headings: VaultHeading[]
+  snippet: string
+  links: VaultLink[]
+}
+
+/** VaultSnapshot is the whole index of the notes folder. */
+export interface VaultSnapshot {
+  folder: string
+  ready: boolean
+  notes: VaultNote[]
+  folders: string[]
+  /** Every file that is not a note, such as images. */
+  files: string[]
+}
+
+/** VaultFile is a note's text as it is on disk. */
+export interface VaultFile {
+  path: string
+  content: string
+  hash: string
+  mtime: number
+  /** Not valid UTF-8: shown, never written. */
+  readOnly: boolean
+}
+
+/** VaultSave is what a save did; on a conflict disk is the text on disk now. */
+export interface VaultSave {
+  hash: string
+  mtime: number
+  conflict: boolean
+  disk: string
+  diskHash: string
+}
+
+/** VaultOp is what a rename, move or delete did, with the id undo takes. */
+export interface VaultOp {
+  undoId: string
+  moves: Record<string, string>
+  rewritten: string[]
+}
+
+/** VaultMention is a line of a note naming another one; match is set for an unlinked one. */
+export interface VaultMention {
+  source: string
+  line: number
+  text: string
+  match: string
+}
+
+/** VaultHit is one search result with the line that matched. */
+export interface VaultHit {
+  path: string
+  title: string
+  context: string
 }

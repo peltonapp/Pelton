@@ -21,6 +21,7 @@
   import { threadedOn, threadMessages, cardDetails, loadThread, loadCard } from '../../stores/threads'
   import { messageList, patchInList, rowPinned } from '../../stores/messages'
   import NoteCard from './NoteCard.svelte'
+  import NoteMentions from '../notes/NoteMentions.svelte'
   import { setSeen } from '../../lib/api'
   import { sameMessage } from '../../lib/threadrows'
   import { errorMessage, toastError } from '../../stores/toast'
@@ -312,6 +313,10 @@
 
     <NoteCard messageId={detail.id} {threadId} />
 
+    <div class="vault-notes">
+      <NoteMentions about={{ kind: 'mail', id: detail.messageId.replace(/^<|>$/g, ''), title: detail.subject }} alsoKinds={['conversation']} />
+    </div>
+
     {#if threadError}
       <p class="thread-error">{threadError}</p>
     {/if}
@@ -501,6 +506,10 @@
     align-self: stretch;
     margin-inline: var(--space-1);
     background: var(--border-default);
+  }
+
+  .vault-notes {
+    margin: 0 0 var(--space-3);
   }
 
   .thread-error {

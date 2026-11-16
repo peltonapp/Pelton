@@ -23,6 +23,7 @@
   import Ph from '../common/Ph.svelte'
   import PieProgress from '../common/PieProgress.svelte'
   import AnchoredPopover from '../common/AnchoredPopover.svelte'
+  import NoteMentions from '../notes/NoteMentions.svelte'
   import { getEvent } from '../../lib/api'
   import { placeOccurrence } from '../../lib/caldate'
   import { formatWhen } from '../../lib/calformat'
@@ -183,6 +184,27 @@
             <dd><button type="button" class="cal-btn" on:click={() => openMailLink(link)}>{$t('calendar.openMail')}</button></dd>
           </div>
         {/each}
+      {/if}
+      {#if occ.uid}
+        <div class="line">
+          <dt></dt>
+          <dd>
+            <NoteMentions
+              about={{
+                kind: 'event',
+                id: occ.uid,
+                title: occ.summary || $t('calendar.untitled'),
+                event: {
+                  title: occ.summary || $t('calendar.untitled'),
+                  start: when,
+                  end: '',
+                  location: occ.location,
+                  attendees: attendees.map((a) => (a.name ? `${a.name} <${a.email}>` : a.email)),
+                },
+              }}
+            />
+          </dd>
+        </div>
       {/if}
       {#if occ.conflict || event?.syncError}
         <div class="line warn">

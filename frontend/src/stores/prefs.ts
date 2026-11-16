@@ -5,7 +5,7 @@
 // source of truth.
 
 import { writable } from 'svelte/store'
-import type { UIPrefs, ThemePref, DensityPref, EditorMode, ViewsPlacement, CloseAction, LogLevel, SelectAllScope, SearchKind, SearchSortPref, DesignPref, LayoutMode, NavStyle, RailSide, PaneStyle, AvatarPlacement, ContactsView, ComposeOpenIn, ReaderWidth, AfterMove, AfterReplySend, FollowUpInterval } from '../lib/types'
+import type { UIPrefs, ThemePref, DensityPref, EditorMode, ViewsPlacement, CloseAction, LogLevel, SelectAllScope, SearchKind, SearchSortPref, DesignPref, LayoutMode, NavStyle, RailSide, PaneStyle, AvatarPlacement, ContactsView, ComposeOpenIn, ReaderWidth, AfterMove, AfterReplySend, FollowUpInterval, NoteEditorMode } from '../lib/types'
 import { getUIPrefs, setSetting, SettingKeys, systemColorScheme, setWindowTheme, getThemeApply } from '../lib/api'
 import { applyTheme, applyDensity, applyAccent, applyScale, applyReduceMotion, applyHandCursor, setThemeSchedule, applyUIFont, applyMonoFont, applyCorners, applyDesign, watchSystemTheme, setSystemSchemeOverride, resolveTheme } from '../theme/theme'
 import { applyUserTheme } from '../theme/usertheme'
@@ -134,6 +134,14 @@ const defaults: UIPrefs = {
   logLevel: 'info',
   logMessageMetadata: false,
   crashLogs: false,
+  notesVault: '',
+  notesDailyFolder: 'Daily',
+  notesDailyFormat: 'YYYY-MM-DD',
+  notesDailyTemplate: '',
+  notesTemplatesFolder: 'Templates',
+  notesAttachmentsFolder: 'Attachments',
+  notesEditorMode: 'live',
+  notesLineWidth: 'medium',
 }
 
 export const prefs = writable<UIPrefs>(defaults)
@@ -970,6 +978,37 @@ export function setLogMessageMetadata(value: boolean): void {
 export function setCrashLogs(value: boolean): void {
   prefs.update((p) => ({ ...p, crashLogs: value }))
   void setSetting(SettingKeys.crashLogs, String(value))
+}
+
+/** The notes preferences that are plain strings, settable through setNotesPref. */
+export type NotesPrefKey =
+  | 'notesDailyFolder'
+  | 'notesDailyFormat'
+  | 'notesDailyTemplate'
+  | 'notesTemplatesFolder'
+  | 'notesAttachmentsFolder'
+
+/** setNotesPref stores one of the notes space's folder and naming settings. */
+export function setNotesPref(key: NotesPrefKey, value: string): void {
+  prefs.update((p) => ({ ...p, [key]: value }))
+  void setSetting(SettingKeys[key], value)
+}
+
+/** setNotesEditorMode sets the mode a note opens in. */
+export function setNotesEditorMode(value: NoteEditorMode): void {
+  prefs.update((p) => ({ ...p, notesEditorMode: value }))
+  void setSetting(SettingKeys.notesEditorMode, value)
+}
+
+/** setNotesLineWidth caps how wide a note's text runs. */
+export function setNotesLineWidth(value: ReaderWidth): void {
+  prefs.update((p) => ({ ...p, notesLineWidth: value }))
+  void setSetting(SettingKeys.notesLineWidth, value)
+}
+
+/** setNotesVaultPref mirrors the notes folder after the backend changed it. */
+export function setNotesVaultPref(value: string): void {
+  prefs.update((p) => ({ ...p, notesVault: value }))
 }
 
 // setSidebarIndentGuides toggles the nested-folder guide lines.

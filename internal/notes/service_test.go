@@ -104,8 +104,14 @@ func TestServiceIndexesAndFindsBacklinks(t *testing.T) {
 	if len(unlinked) != 1 || unlinked[0].Line != 1 || unlinked[0].Match != "alpha" {
 		t.Errorf("unlinked %+v", unlinked)
 	}
-	if got := ts.NotesLinkingTo("pelton://mail/m1%40x"); len(got) != 1 || got[0] != "folder/Gamma.md" {
-		t.Errorf("object notes %v", got)
+	var gamma NoteInfo
+	for _, n := range snap.Notes {
+		if n.Path == "folder/Gamma.md" {
+			gamma = n
+		}
+	}
+	if len(gamma.Links) != 2 || gamma.Links[1].Kind != string(LinkPelton) || gamma.Links[1].Target != "pelton://mail/m1%40x" {
+		t.Errorf("gamma links %+v", gamma.Links)
 	}
 	hits, err := ts.Search("mentions", 10)
 	if err != nil || len(hits) != 1 || hits[0].Path != "Beta.md" || !strings.Contains(hits[0].Context, "Mentions") {

@@ -104,6 +104,15 @@ export type ShortcutAction =
   // the shortcut sheet and focus mode, new design only.
   | 'shortcut-sheet'
   | 'focus-mode'
+  // the Notes space: showing it, a new note, today's daily note, the quick
+  // switcher, the editor's reading mode and the graph. The last two only act
+  // while Notes is on screen; the others bring it up from anywhere.
+  | 'go-notes'
+  | 'notes-new'
+  | 'notes-today'
+  | 'notes-switcher'
+  | 'notes-toggle-mode'
+  | 'notes-graph'
   // composer actions of the new design. They act on the composer that last
   // had focus, so they carry a modifier and work while typing.
   | ComposeAction
@@ -267,6 +276,14 @@ export const shortcuts: Shortcut[] = [
   // "?" is shifted on every common layout, so the key arrives with shift held.
   { action: 'shortcut-sheet', combo: 'shift+?', labelKey: 'shortcut.shortcutSheet', newDesignOnly: true },
   { action: 'focus-mode', combo: 'mod+shift+h', labelKey: 'shortcut.focusMode', newDesignOnly: true },
+  // k for knowledge, beside the other spaces' mod+shift letters. Quick open
+  // and the reading-mode toggle take the keys Obsidian uses for them.
+  { action: 'go-notes', combo: 'mod+shift+k', labelKey: 'shortcut.goNotes', newDesignOnly: true },
+  { action: 'notes-new', combo: 'mod+shift+n', labelKey: 'shortcut.notesNew', newDesignOnly: true },
+  { action: 'notes-today', combo: 'mod+shift+t', labelKey: 'shortcut.notesToday', newDesignOnly: true },
+  { action: 'notes-switcher', combo: 'mod+o', labelKey: 'shortcut.notesSwitcher', newDesignOnly: true },
+  { action: 'notes-toggle-mode', combo: 'mod+e', labelKey: 'shortcut.notesToggleMode', newDesignOnly: true },
+  { action: 'notes-graph', combo: 'mod+shift+g', labelKey: 'shortcut.notesGraph', newDesignOnly: true },
   // the send key with one more modifier, so the variants sit beside it.
   { action: 'compose-send-archive', combo: 'mod+shift+enter', labelKey: 'sendVariant.archive' },
   { action: 'compose-send-remind', combo: 'mod+alt+enter', labelKey: 'sendVariant.remind' },

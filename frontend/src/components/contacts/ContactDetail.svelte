@@ -20,6 +20,7 @@
   import { formatListDate, formatRelative, type TimeFormat } from '../../lib/format'
   import { dur, motion } from '../../lib/motion'
   import ContactTasks from '../tasks/ContactTasks.svelte'
+  import NoteMentions from '../notes/NoteMentions.svelte'
   import { t } from '../../lib/i18n'
   import type { Contact, MessageSummary } from '../../lib/types'
 
@@ -151,6 +152,12 @@
         <section>
           <h3><Ph svg={noteIcon} size={14} />{$t('contacts.field.note')}</h3>
           <p class="note">{contact.note}</p>
+        </section>
+      {/if}
+
+      {#if contact.uid || contact.emails.length > 0}
+        <section class="vault-notes">
+          <NoteMentions about={{ kind: 'contact', id: contact.uid || contact.emails[0].value, title: contact.fullName || contact.emails[0]?.value || '' }} />
         </section>
       {/if}
 

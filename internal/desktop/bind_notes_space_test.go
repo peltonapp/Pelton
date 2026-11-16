@@ -94,10 +94,6 @@ func TestVaultRoundTrip(t *testing.T) {
 	if err != nil || res.Conflict {
 		t.Fatalf("save %+v %v", res, err)
 	}
-	linking, _ := a.VaultNotesLinkingTo("pelton://mail/x%40y")
-	if len(linking) != 1 || linking[0] != p {
-		t.Errorf("linking %v", linking)
-	}
 	img, err := a.VaultSaveAttachment("shot.png", base64.StdEncoding.EncodeToString([]byte("png")))
 	if err != nil || img != "Attachments/shot.png" {
 		t.Fatalf("attachment %q %v", img, err)

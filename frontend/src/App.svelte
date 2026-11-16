@@ -192,6 +192,8 @@
   import { attachmentsOpen, toggleAttachments } from './stores/attachments'
   import { setSenderPanel } from './stores/prefs'
   import './lib/palette-tasks'
+  import './lib/palette-notes'
+  import { reloadVault, requestNotes, startNotes } from './stores/notes'
   import './lib/palette-availability'
   import { startTasks, toggleDone, tasks as taskStore, taskFromMailRequest } from './stores/tasks'
   import { createTasksFromMail, openTask } from './lib/taskmail'
@@ -457,6 +459,19 @@
     stopTasks = undefined
   }
   onDestroy(() => stopTasks?.())
+
+  // the notes index feeds the palette and the notes listed beside mail,
+  // events, contacts and tasks. It loads the folder the backend opened at
+  // startup, if any, without creating one.
+  let stopNotes: (() => void) | undefined
+  $: if (!classic && !stopNotes) {
+    stopNotes = startNotes()
+    void reloadVault()
+  } else if (classic && stopNotes) {
+    stopNotes()
+    stopNotes = undefined
+  }
+  onDestroy(() => stopNotes?.())
 
   // the newsletter manager and the insights page in the palette, with their
   // live shortcut as the hint.
@@ -1152,6 +1167,32 @@
         if (!classic) {
           openSpace('tasks')
         }
+        break
+      case 'go-notes':
+        goToSpace('notes')
+        break
+      case 'notes-new':
+        if (!classic && !overlayOpen) {
+          requestNotes({ kind: 'new' })
+        }
+        break
+      case 'notes-today':
+        if (!classic && !overlayOpen) {
+          requestNotes({ kind: 'today' })
+        }
+        break
+      case 'notes-switcher':
+        if (!classic && !overlayOpen) {
+          requestNotes({ kind: 'switcher' })
+        }
+        break
+      case 'notes-graph':
+        if (!classic && !overlayOpen) {
+          requestNotes({ kind: 'graph' })
+        }
+        break
+      case 'notes-toggle-mode':
+        // the editor's mode only means something with a note on screen.
         break
       case 'create-task':
         if (!classic) {
@@ -2063,6 +2104,12 @@
     {:else if $space === 'tasks'}
       <div class="space-host">
         {#await import('./components/tasks/TasksScreen.svelte') then m}
+          <svelte:component this={m.default} />
+        {/await}
+      </div>
+    {:else if $space === 'notes'}
+      <div class="space-host">
+        {#await import('./components/notes/NotesScreen.svelte') then m}
           <svelte:component this={m.default} />
         {/await}
       </div>
