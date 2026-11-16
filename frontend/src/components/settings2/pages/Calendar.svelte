@@ -61,6 +61,7 @@
     { key: 'week', label: $t('calendar.view.week') },
     { key: 'month', label: $t('calendar.view.month') },
     { key: 'agenda', label: $t('calendar.view.agenda') },
+    { key: 'year', label: $t('calendar.view.year') },
   ]
 
   $: weekStartOptions = [

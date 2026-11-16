@@ -20,6 +20,7 @@
   import Rail from './components/shell/Rail.svelte'
   import SpaceSwitcher from './components/shell/SpaceSwitcher.svelte'
   import { space, openSpace, runSpaceAction, isMailOnlyAction } from './stores/space'
+  import { meetingPrepTarget, openMeetingPrep, closeMeetingPrep } from './stores/meetingprep'
   import { mailScreen, openMailScreen, closeMailScreen } from './stores/mailscreen'
   import { IconMailX, IconChartBar } from '@tabler/icons-svelte'
   import { spaces } from './lib/spaces'
@@ -662,7 +663,11 @@
     unsubscribers.push(
       onCalendarReminder((e) => {
         if (!classic) {
-          pushAction('info', reminderText(e), { label: $t('calendar.show'), run: () => showReminder(e) }, 10000)
+          const actions = [{ label: $t('calendar.show'), run: () => showReminder(e) }]
+          if (e.hasAttendees) {
+            actions.push({ label: $t('prep.button'), run: () => openMeetingPrep(e.eventId, e.recurrenceId) })
+          }
+          pushActions('info', reminderText(e), actions, 10000)
         }
       }),
     )
@@ -779,13 +784,13 @@
 
   // startComposeTo opens a new message addressed to one contact, which is what
   // clicking an address on the contacts screen does (#168).
-  function startComposeTo(email: string, projectId = 0): void {
+  function startComposeTo(email: string, subject = '', projectId = 0): void {
     const accountId = composeAccountId()
     if (accountId === null) {
       toastError(get(t)('app.toast.addMailboxFirst'))
       return
     }
-    const id = openComposeWith(accountId, editorMode, { to: email, cc: '', bcc: '', subject: '', body: '' })
+    const id = openComposeWith(accountId, editorMode, { to: email, cc: '', bcc: '', subject, body: '' })
     if (projectId) {
       updateCompose(id, { projectId })
     }
@@ -2107,7 +2112,7 @@
         {#await import('./components/projects/ProjectsScreen.svelte') then m}
           <svelte:component
             this={m.default}
-            on:compose={(e) => { openSpace('mail'); startComposeTo(e.detail.email, e.detail.projectId) }}
+            on:compose={(e) => { openSpace('mail'); startComposeTo(e.detail.email, '', e.detail.projectId) }}
           />
         {/await}
       </div>
@@ -2211,6 +2216,17 @@
       accounts={$sidebar.data?.accounts ?? []}
       on:close={closeViewEditor}
       on:saved={closeViewEditor}
+    />
+  {/await}
+{/if}
+
+{#if !classic && $meetingPrepTarget}
+  {#await import('./components/calendar/MeetingPrep.svelte') then m}
+    <svelte:component
+      this={m.default}
+      target={$meetingPrepTarget}
+      on:close={closeMeetingPrep}
+      on:compose={(e) => { closeMeetingPrep(); openSpace('mail'); startComposeTo(e.detail.to, e.detail.subject) }}
     />
   {/await}
 {/if}

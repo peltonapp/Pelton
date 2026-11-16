@@ -18,7 +18,9 @@
   import taskIcon from '@phosphor-icons/core/assets/duotone/check-square-duotone.svg?raw'
   import closeIcon from '@phosphor-icons/core/assets/regular/x.svg?raw'
   import envelopeIcon from '@phosphor-icons/core/assets/duotone/envelope-simple-duotone.svg?raw'
+  import prepareIcon from '@phosphor-icons/core/assets/duotone/clipboard-text-duotone.svg?raw'
   import { mailLinks, openMailLink } from '../../lib/maillink'
+  import { openMeetingPrep } from '../../stores/meetingprep'
   import './controls.css'
   import Ph from '../common/Ph.svelte'
   import PieProgress from '../common/PieProgress.svelte'
@@ -88,6 +90,11 @@
     }
   }
 
+  function prepare(): void {
+    openMeetingPrep(occ.eventId, occ.recurrenceId)
+    dispatch('close')
+  }
+
   function askDelete(): void {
     if (occ.recurring) {
       confirming = true
@@ -104,6 +111,11 @@
       <span class="swatch" aria-hidden="true"></span>
       <h3 class:cancelled={occ.status === 'CANCELLED'}>{occ.summary || $t('calendar.untitled')}</h3>
       <div class="tools">
+        {#if attendees.length > 0 && !occ.task}
+          <button type="button" class="cal-icon" aria-label={$t('prep.button')} title={$t('prep.button')} on:click={prepare}>
+            <Ph svg={prepareIcon} size={15} />
+          </button>
+        {/if}
         {#if !occ.readOnly}
           <button type="button" class="cal-icon" aria-label={$t('calendar.edit')} disabled={!event} on:click={() => event && dispatch('edit', event)}>
             <Ph svg={pencilIcon} size={15} />

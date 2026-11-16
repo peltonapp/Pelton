@@ -45,6 +45,7 @@
   import { reminderChoices, reminderLabel, partStatKey } from './labels'
   import { localZone } from './occurrence'
   import { mailLinks, openMailLink } from '../../lib/maillink'
+  import { openMeetingPrep } from '../../stores/meetingprep'
   import { dur, motion } from '../../lib/motion'
   import { isMac, t } from '../../lib/i18n'
   import type { TimeFormat } from '../../lib/format'
@@ -635,6 +636,9 @@
     <div class="foot">
       {#if draft.id !== 0}
         <button type="button" class="cal-btn danger" on:click={() => dispatch('remove')}>{$t('calendar.delete')}</button>
+        {#if attendees.length > 0}
+          <button type="button" class="cal-btn" on:click={() => openMeetingPrep(draft.id, draft.recurrenceId)}>{$t('prep.button')}</button>
+        {/if}
       {/if}
       <span class="spacer"></span>
       <kbd class="hint" aria-hidden="true">{saveHint}</kbd>

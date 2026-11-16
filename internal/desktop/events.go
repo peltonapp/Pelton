@@ -144,6 +144,9 @@ type CalendarReminderEvent struct {
 	Start        string `json:"start"`
 	End          string `json:"end"`
 	AllDay       bool   `json:"allDay"`
+	// HasAttendees is true when others are invited, so the reminder can offer
+	// to prepare for the meeting.
+	HasAttendees bool `json:"hasAttendees"`
 }
 
 // TaskReminderEvent is the payload for EventTaskReminder. Due is a date

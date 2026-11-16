@@ -107,6 +107,9 @@ type App struct {
 	// draftsMu serializes draft changes: the drafts live in one settings value
 	// and every change is a load, modify, write.
 	draftsMu sync.Mutex
+	// merges holds this session's contact merges that can still be undone. See
+	// bind_contacts_merge.go.
+	merges mergeHistory
 	// queuedSyncs holds the ids of accounts with a queueSync waiting for
 	// syncMu, so a burst of changes queues one sync rather than one each.
 	queuedSyncs sync.Map

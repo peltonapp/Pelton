@@ -10,6 +10,7 @@ import {
   IconCalendarEvent,
   IconCalendarWeek,
   IconCalendarMonth,
+  IconCalendarStats,
   IconListDetails,
   IconBolt,
   IconRefresh,
@@ -30,6 +31,7 @@ const views: { key: CalendarView; labelKey: string; icon: PaletteCommand['icon']
   { key: 'week', labelKey: 'calendar.view.week', icon: IconCalendarWeek },
   { key: 'month', labelKey: 'calendar.view.month', icon: IconCalendarMonth },
   { key: 'agenda', labelKey: 'calendar.view.agenda', icon: IconListDetails },
+  { key: 'year', labelKey: 'calendar.view.year', icon: IconCalendarStats },
 ]
 
 // a step listing every calendar; picking one shows or hides it.

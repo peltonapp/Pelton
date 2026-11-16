@@ -1667,6 +1667,49 @@ export interface ContactConflict {
   saved: Contact
 }
 
+/** What makes a group of contacts look like one person. */
+export interface DuplicateReason {
+  kind: 'email' | 'phone' | 'name'
+  /** The shared address, number or name. */
+  value: string
+  /** What backs up a shared name: organization, domain (same company) or empty (one has no address or number). */
+  overlap: ('organization' | 'domain' | 'empty')[]
+}
+
+/** Contacts that probably are the same person, with the reasons. */
+export interface DuplicateGroup {
+  contacts: Contact[]
+  /** 60 to 100: how sure the match is. */
+  score: number
+  reasons: DuplicateReason[]
+}
+
+/** The answer of the duplicate search. */
+export interface Duplicates {
+  groups: DuplicateGroup[]
+  /** How many pairs were marked as not duplicates. */
+  dismissed: number
+}
+
+/** A merge: the contacts in mergeIds are folded into survivorId. */
+export interface MergeRequest {
+  survivorId: number
+  mergeIds: number[]
+  /** The address book the merged contact goes in; required when the contacts are in several. */
+  targetBookId: number
+  /** Field name (name, organization, title, note) to the id of the contact it comes from; -1 keeps both notes. */
+  choices: Record<string, number>
+}
+
+/** What a merge did. */
+export interface MergeResult {
+  contact: Contact
+  /** Undoes the merge for the rest of the session. */
+  token: string
+  /** Merged contacts the server refused to delete; they are still there. */
+  kept: number
+}
+
 // ContactDraft is the editor's shape. id 0 creates, and then bookId says which
 // address book it goes in.
 export interface ContactDraft {
@@ -1790,7 +1833,7 @@ export interface CalendarSettings {
 }
 
 /** The views of the calendar screen. */
-export type CalendarView = 'month' | 'week' | 'day' | 'agenda'
+export type CalendarView = 'month' | 'week' | 'day' | 'agenda' | 'year'
 
 /** How the time grid names time zones. */
 export type TimeZoneDisplay = 'off' | 'label' | 'dual'
@@ -1822,6 +1865,9 @@ export interface Occurrence {
   transparency: string
   readOnly: boolean
   hasReminders: boolean
+  // others are invited, so preparing for the meeting has something to show.
+  // unset on the entries the calendar draws for tasks.
+  hasAttendees?: boolean
   // a change made here has not reached the server yet.
   pending: boolean
   conflict: boolean
@@ -1851,6 +1897,75 @@ export interface Attendee {
   // NEEDS-ACTION, ACCEPTED, TENTATIVE, DECLINED or DELEGATED.
   partStat: string
   rsvp: boolean
+}
+
+/** A person invited to a meeting, with the address book's card for them. */
+export interface PrepAttendee {
+  email: string
+  name: string
+  role: string
+  // NEEDS-ACTION, ACCEPTED, TENTATIVE, DECLINED or DELEGATED.
+  partStat: string
+  organizer: boolean
+  /** The user's own address. */
+  self: boolean
+  contact: Contact | null
+}
+
+/** A conversation worth a look before a meeting. */
+export interface PrepThread {
+  threadId: number
+  subject: string
+  /** rfc3339 of the newest message found. */
+  last: string
+  messages: number
+  /** The invited who take part, by name or address. */
+  people: string[]
+  titleMatch: boolean
+  /** The newest message, to open in the reader. */
+  message: MessageSummary
+}
+
+/** An earlier meeting with the same people. */
+export interface PrepMeeting {
+  eventId: number
+  recurrenceId: string
+  title: string
+  start: string
+  end: string
+  allDay: boolean
+  /** An earlier occurrence of the same recurring event. */
+  sameSeries: boolean
+  /** The invited of this meeting who were at that one too. */
+  shared: string[]
+}
+
+/** How to join a call. */
+export interface JoinLink {
+  url: string
+  /** The service, when the address is a known one. */
+  provider: string
+}
+
+/** Everything the Prepare panel shows for one meeting. */
+export interface MeetingPrep {
+  eventId: number
+  recurrenceId: string
+  uid: string
+  title: string
+  description: string
+  location: string
+  url: string
+  start: string
+  end: string
+  allDay: boolean
+  recurring: boolean
+  join: JoinLink | null
+  attendees: PrepAttendee[]
+  threads: PrepThread[]
+  files: AttachmentEntry[]
+  tasks: Task[]
+  previous: PrepMeeting[]
 }
 
 /** CalendarEvent is one event, or one occurrence of a series, for the editor. */

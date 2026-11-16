@@ -20,7 +20,9 @@
   import TimeGrid from '../calendar/TimeGrid.svelte'
   import TaskCheck from '../tasks/TaskCheck.svelte'
   import { listOccurrences, getEvent } from '../../lib/api'
-  import { addDays, dayKey, minutesOfDay, placeOccurrence, startOfDay, toRFC3339, type Placed } from '../../lib/caldate'
+  import { addDays, dayKey, minutesOfDay, parseEventTime, placeOccurrence, startOfDay, toRFC3339, type Placed } from '../../lib/caldate'
+  import { nextMeeting } from '../../lib/meetingprep'
+  import { openMeetingPrep } from '../../stores/meetingprep'
   import { calendarColor, formatLongDay, formatTime, formatWhen } from '../../lib/calformat'
   import { parsePhrase, type ChronoLike } from '../../lib/eventphrase'
   import { parseTaskPhrase } from '../../lib/taskphrase'
@@ -69,6 +71,10 @@
   $: void load(day)
   $: colors = new Map($calendars.map((c) => [c.id, calendarColor(c)]))
   $: dayTasks = myDayTasks($tasks, day, now)
+  $: next = nextMeeting(
+    occurrences.map((p) => p.occ),
+    now,
+  )
   $: dayOptions = [
     { key: 'today', label: $t('myday.today') },
     { key: 'tomorrow', label: $t('myday.tomorrow') },
@@ -287,6 +293,14 @@
     </button>
   </header>
 
+  {#if next}
+    <div class="next" role="group" aria-label={$t('prep.next')}>
+      <span class="next-when">{formatTime(parseEventTime(next.start, false), timeFormat)}</span>
+      <span class="next-what" title={next.summary}>{next.summary || $t('calendar.untitled')}</span>
+      <button type="button" class="cal-btn" on:click={() => openMeetingPrep(next.eventId, next.recurrenceId)}>{$t('prep.button')}</button>
+    </div>
+  {/if}
+
   <section class="agenda" aria-label={$t('myday.agenda')}>
     {#key dayId}
       <TimeGrid
@@ -397,6 +411,30 @@
     color: var(--text-secondary);
     font-size: var(--fz-meta);
     overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .next {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+    padding: var(--space-2) var(--space-3);
+    border-bottom: var(--hairline) solid var(--border-subtle);
+    background: var(--surface-sunken);
+    font-size: var(--fz-label);
+  }
+
+  .next-when {
+    color: var(--text-secondary);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .next-what {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    font-weight: var(--fw-medium);
     text-overflow: ellipsis;
     white-space: nowrap;
   }

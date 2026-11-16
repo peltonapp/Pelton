@@ -173,6 +173,7 @@ func (a *App) raiseReminder(r dueReminder) {
 		Start:        formatEventTime(r.occ.Start, r.occ.AllDay),
 		End:          formatEventTime(r.occ.End, r.occ.AllDay),
 		AllDay:       r.occ.AllDay,
+		HasAttendees: len(r.occ.Event.Attendees) > 0,
 	})
 }
 
