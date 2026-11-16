@@ -133,6 +133,18 @@ import type {
   SieveSave,
   SieveVacation,
   SieveRule,
+  Project,
+  ProjectDraft,
+  ProjectBoard,
+  ProjectColumn,
+  ProjectCard,
+  ProjectCardDraft,
+  ProjectMoveResult,
+  ProjectLink,
+  ProjectEvent,
+  ProjectNoteRecord,
+  ProjectMailMark,
+  ThreadSummary,
 } from './types'
 import { normalizeState } from './sieve'
 
@@ -1942,6 +1954,8 @@ export const SettingKeys = {
   senderPanel: 'sender_panel',
   mailDates: 'mail_dates',
   myDayPanel: 'my_day_panel',
+  projectsView: 'projects_view',
+  projectSuggestions: 'project_suggestions',
   themeId: 'theme_id',
   menuBarInApp: 'menu_bar_in_app',
   menuBarNativeMinimal: 'menu_bar_native_minimal',
@@ -2693,6 +2707,203 @@ export function getTaskSettings(): Promise<TaskSettings> {
 /** setTaskSettings saves the task preferences. */
 export function setTaskSettings(settings: TaskSettings): Promise<void> {
   return App.SetTaskSettings(new desktop.TaskSettingsDTO(settings))
+}
+
+/** listProjects returns every project in its manual order, with its tile counts. */
+export function listProjects(): Promise<Project[]> {
+  if (isDemoActive()) {
+    return Promise.resolve([])
+  }
+  return App.ListProjects().then((list) => (list ?? []) as unknown as Project[])
+}
+
+/** getProject returns one project with its counts. */
+export function getProject(id: number): Promise<Project> {
+  return App.GetProject(id) as unknown as Promise<Project>
+}
+
+/** createProject makes a project with the columns the draft names. */
+export function createProject(draft: ProjectDraft): Promise<Project> {
+  return App.CreateProject(new desktop.ProjectRequest(draft)) as unknown as Promise<Project>
+}
+
+/** updateProject saves a project's name, look, description, dates and task list. */
+export function updateProject(draft: ProjectDraft): Promise<Project> {
+  return App.UpdateProject(new desktop.ProjectRequest(draft)) as unknown as Promise<Project>
+}
+
+/** setProjectStatus archives a project or makes it active again. */
+export function setProjectStatus(id: number, status: 'active' | 'archived'): Promise<void> {
+  return App.SetProjectStatus(id, status)
+}
+
+/** deleteProject removes a project with its board, links and notes; tasks and mail stay. */
+export function deleteProject(id: number): Promise<void> {
+  return App.DeleteProject(id)
+}
+
+/** reorderProjects gives the projects the order of ids. */
+export function reorderProjects(ids: number[]): Promise<void> {
+  return App.ReorderProjects(ids)
+}
+
+/** getProjectBoard returns a project's columns and cards. */
+export function getProjectBoard(id: number): Promise<ProjectBoard> {
+  return App.GetProjectBoard(id).then((b) => {
+    const board = b as unknown as ProjectBoard
+    return { ...board, columns: board.columns ?? [], cards: board.cards ?? [] }
+  })
+}
+
+/** addProjectColumn adds a column at the end of a board. */
+export function addProjectColumn(projectId: number, name: string): Promise<ProjectColumn> {
+  return App.AddProjectColumn(projectId, name) as unknown as Promise<ProjectColumn>
+}
+
+/** updateProjectColumn renames a column and sets its WIP limit, 0 for none. */
+export function updateProjectColumn(id: number, name: string, wipLimit: number): Promise<void> {
+  return App.UpdateProjectColumn(id, name, wipLimit)
+}
+
+/** setProjectDoneColumn makes a column the done column, or none for 0. */
+export function setProjectDoneColumn(projectId: number, columnId: number): Promise<void> {
+  return App.SetProjectDoneColumn(projectId, columnId)
+}
+
+/** reorderProjectColumns gives a board's columns the order of ids. */
+export function reorderProjectColumns(projectId: number, ids: number[]): Promise<void> {
+  return App.ReorderProjectColumns(projectId, ids)
+}
+
+/** deleteProjectColumn removes a column; its cards go to moveTo, or off the board for 0. */
+export function deleteProjectColumn(id: number, moveTo: number): Promise<void> {
+  return App.DeleteProjectColumn(id, moveTo)
+}
+
+/** createProjectCard makes a task and puts it on a board. */
+export function createProjectCard(draft: ProjectCardDraft): Promise<ProjectCard> {
+  return App.CreateProjectCard(new desktop.ProjectCardRequest(draft)) as unknown as Promise<ProjectCard>
+}
+
+/** addTaskToProject puts an existing task on a board; columnId 0 picks one. */
+export function addTaskToProject(projectId: number, taskUid: string, columnId = 0): Promise<ProjectCard> {
+  return App.AddTaskToProject(projectId, taskUid, columnId) as unknown as Promise<ProjectCard>
+}
+
+/** moveProjectCard moves a card to index in a column; the done column completes its task. */
+export function moveProjectCard(taskUid: string, columnId: number, index: number): Promise<ProjectMoveResult> {
+  return App.MoveProjectCard(taskUid, columnId, index) as unknown as Promise<ProjectMoveResult>
+}
+
+/** removeProjectCard takes a card off its board; the task stays. */
+export function removeProjectCard(taskUid: string): Promise<void> {
+  return App.RemoveProjectCard(taskUid)
+}
+
+/** projectOfTask returns the project a task is a card of, 0 for none. */
+export function projectOfTask(taskUid: string): Promise<number> {
+  return App.ProjectOfTask(taskUid)
+}
+
+/** addMailToProject files the conversations of messages under a project or one of its cards. */
+export function addMailToProject(projectId: number, messageIds: number[], taskUid = ''): Promise<number> {
+  return App.AddMailToProject(projectId, messageIds, taskUid)
+}
+
+/** removeProjectThread takes a conversation out of a project; the mail stays. */
+export function removeProjectThread(projectId: number, threadId: number): Promise<void> {
+  return App.RemoveProjectThread(projectId, threadId)
+}
+
+/** listProjectThreads returns a project's conversations as list rows, newest first. */
+export function listProjectThreads(projectId: number): Promise<ThreadSummary[]> {
+  return App.ListProjectThreads(projectId).then((list) => (list ?? []) as unknown as ThreadSummary[])
+}
+
+/** listProjectMailMarks says which conversations belong to which projects. */
+export function listProjectMailMarks(): Promise<ProjectMailMark[]> {
+  if (isDemoActive()) {
+    return Promise.resolve([])
+  }
+  return App.ListProjectMailMarks().then((list) => (list ?? []) as unknown as ProjectMailMark[])
+}
+
+/** dismissProjectSuggestion stops a conversation being suggested for a project again. */
+export function dismissProjectSuggestion(threadId: number): Promise<void> {
+  return App.DismissProjectSuggestion(threadId)
+}
+
+/** listProjectDismissals returns the conversations whose suggestion was dismissed. */
+export function listProjectDismissals(): Promise<number[]> {
+  if (isDemoActive()) {
+    return Promise.resolve([])
+  }
+  return App.ListProjectDismissals().then((list) => list ?? [])
+}
+
+/** setEventProject files an event under a project by UID; 0 takes it out of all. */
+export function setEventProject(uid: string, summary: string, projectId: number): Promise<void> {
+  return App.SetEventProject(uid, summary, projectId)
+}
+
+/** linkEventToCard attaches an event to a card by UID. */
+export function linkEventToCard(taskUid: string, uid: string, summary: string): Promise<void> {
+  return App.LinkEventToCard(taskUid, uid, summary)
+}
+
+/** projectsOfEvent returns the projects an event is filed under. */
+export function projectsOfEvent(uid: string): Promise<number[]> {
+  return App.ProjectsOfEvent(uid).then((list) => list ?? [])
+}
+
+/** listProjectEvents returns a project's events, coming ones first. */
+export function listProjectEvents(projectId: number): Promise<ProjectEvent[]> {
+  return App.ListProjectEvents(projectId).then((list) => (list ?? []) as unknown as ProjectEvent[])
+}
+
+/** addProjectPerson adds someone to a project by address. */
+export function addProjectPerson(projectId: number, email: string, name: string): Promise<void> {
+  return App.AddProjectPerson(projectId, email, name)
+}
+
+/** removeProjectPerson takes someone off a project. */
+export function removeProjectPerson(projectId: number, email: string): Promise<void> {
+  return App.RemoveProjectPerson(projectId, email)
+}
+
+/** listCardLinks returns the mail, events and notes a card holds. */
+export function listCardLinks(taskUid: string): Promise<ProjectLink[]> {
+  return App.ListCardLinks(taskUid).then((list) => (list ?? []) as unknown as ProjectLink[])
+}
+
+/** removeProjectLink removes one link of a project or a card. */
+export function removeProjectLink(id: number): Promise<void> {
+  return App.RemoveProjectLink(id)
+}
+
+/** attachProjectNote attaches a project's note to one of its cards. */
+export function attachProjectNote(noteId: number, taskUid: string): Promise<void> {
+  return App.AttachProjectNote(noteId, taskUid)
+}
+
+/** listProjectNotes returns a project's notes, the last edited first. */
+export function listProjectNotes(projectId: number): Promise<ProjectNoteRecord[]> {
+  return App.ListProjectNotes(projectId).then((list) => (list ?? []) as unknown as ProjectNoteRecord[])
+}
+
+/** createProjectNote adds a note to a project. */
+export function createProjectNote(projectId: number, title: string, body: string): Promise<ProjectNoteRecord> {
+  return App.CreateProjectNote(projectId, title, body) as unknown as Promise<ProjectNoteRecord>
+}
+
+/** updateProjectNote saves a note's title and body. */
+export function updateProjectNote(id: number, title: string, body: string): Promise<ProjectNoteRecord> {
+  return App.UpdateProjectNote(id, title, body) as unknown as Promise<ProjectNoteRecord>
+}
+
+/** deleteProjectNote removes a note and the card links to it. */
+export function deleteProjectNote(id: number): Promise<void> {
+  return App.DeleteProjectNote(id)
 }
 
 /** createEventDraftFromMessage prefills an event from a mail dropped on the calendar. */

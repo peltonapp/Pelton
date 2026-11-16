@@ -4,7 +4,8 @@
   // how it repeats, reminders, priority and progress, the list it is in, its
   // subtasks, the people it is for, the mail and events it links to, a web
   // link, tags and notes. every change is saved as it is made; text saves when
-  // the field is left or Enter is pressed.
+  // the field is left or Enter is pressed. the "extra" slot adds rows under
+  // the notes, which the Projects board uses for what a card holds.
   import { createEventDispatcher, onDestroy } from 'svelte'
   import closeIcon from '@phosphor-icons/core/assets/regular/x.svg?raw'
   import plusIcon from '@phosphor-icons/core/assets/regular/plus.svg?raw'
@@ -524,6 +525,7 @@
       <span class="icon" aria-hidden="true"><Ph svg={notesIcon} size={16} /></span>
       <textarea class="field notes" rows="3" bind:value={notes} use:grow={notes} placeholder={$t('calendar.addNotes')} aria-label={$t('calendar.notes')} readonly={readOnly} on:blur={commitText}></textarea>
     </div>
+    <slot name="extra" />
   </div>
 
   <footer class="foot">

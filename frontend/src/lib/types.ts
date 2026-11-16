@@ -464,6 +464,9 @@ export interface ComposeRequest {
   // followUpAt is an optional RFC3339 time to be reminded at when nobody has
   // replied by then. Empty or left out sets no reminder.
   followUpAt?: string
+  // projectId files the message, and the replies it gets, under a project.
+  // 0 or left out files it nowhere.
+  projectId?: number
 }
 
 /**
@@ -886,6 +889,11 @@ export interface UIPrefs {
   // myDayPanel shows today's agenda and tasks beside the mail surface in the
   // new design.
   myDayPanel: boolean
+  // projectsView is how the Projects space lists projects.
+  projectsView: ProjectsView
+  // projectSuggestions offers, in the reader, to file mail from a project's
+  // people under that project.
+  projectSuggestions: boolean
   // themeId selects an installed custom theme; empty means the built-in
   // default themes driven by the theme (light/dark/system) setting.
   themeId: string
@@ -1459,7 +1467,9 @@ export type AfterReplySend = 'nothing' | 'archive'
 /** When a follow-up reminder set from a preset comes: each lands at nine. */
 export type FollowUpInterval = 'tomorrow' | 'threeDays' | 'week'
 /** One of the top-level areas of the app. */
-export type Space = 'mail' | 'contacts' | 'calendar' | 'tasks'
+export type Space = 'mail' | 'contacts' | 'calendar' | 'tasks' | 'projects'
+/** How the Projects space lists projects. */
+export type ProjectsView = 'grid' | 'list'
 export type SelectAllScope = 'offer' | 'all' | 'loaded'
 
 // SearchSort is an order search results can actually come back in. The backend
@@ -2183,4 +2193,172 @@ export interface TaskSettings {
   // how long a completed task stays listed, -1 for good.
   completedDays: number
   sort: TaskSort
+}
+
+/** Whether a project is worked on or put away. */
+export type ProjectStatus = 'active' | 'archived'
+
+/** ProjectPerson is someone a project is with; their mail is suggested for it. */
+export interface ProjectPerson {
+  email: string
+  name: string
+}
+
+/**
+ * Project is one project with what its tile counts: cards whose task exists,
+ * done ones, overdue open ones, the earliest open due date (a date or rfc3339,
+ * empty for none), conversations, events and notes.
+ */
+export interface Project {
+  id: number
+  name: string
+  // #rrggbb, empty for the palette color picked by id.
+  color: string
+  // the name of an icon from lib/projecticons, empty for the default.
+  icon: string
+  description: string
+  status: ProjectStatus
+  // dates as 2006-01-02, empty for none.
+  startDate: string
+  dueDate: string
+  position: number
+  // the task list new cards go to, 0 for the default.
+  listId: number
+  createdAt: string
+  updatedAt: string
+  archivedAt: string
+  cards: number
+  done: number
+  overdue: number
+  nextDue: string
+  mail: number
+  events: number
+  notes: number
+  people: ProjectPerson[]
+}
+
+/** ProjectColumnDraft is a column made with a new project. */
+export interface ProjectColumnDraft {
+  name: string
+  wipLimit: number
+  done: boolean
+}
+
+/** ProjectDraft is the project editor's project; id 0 creates one with columns. */
+export interface ProjectDraft {
+  id: number
+  name: string
+  color: string
+  icon: string
+  description: string
+  startDate: string
+  dueDate: string
+  listId: number
+  columns: ProjectColumnDraft[]
+}
+
+/** ProjectColumn is one column of a board. wipLimit 0 means no limit. */
+export interface ProjectColumn {
+  id: number
+  projectId: number
+  name: string
+  position: number
+  wipLimit: number
+  // completed tasks gather here, and a card dropped here completes its task.
+  done: boolean
+}
+
+/**
+ * ProjectCard is a task on a board. mail, events and notes count what is
+ * attached, the task's own links included. sourceKind and sourceRef are empty
+ * for a card made in Pelton and name the outside item a mirrored card stands
+ * for.
+ */
+export interface ProjectCard {
+  task: Task
+  projectId: number
+  columnId: number
+  position: number
+  mail: number
+  events: number
+  notes: number
+  sourceKind: string
+  sourceRef: string
+}
+
+/** ProjectBoard is a project with its columns in order and its cards. */
+export interface ProjectBoard {
+  project: Project
+  columns: ProjectColumn[]
+  cards: ProjectCard[]
+}
+
+/** ProjectCardDraft makes a task and puts it in a column; index -1 appends. */
+export interface ProjectCardDraft {
+  projectId: number
+  columnId: number
+  title: string
+  notes: string
+  due: string
+  timeZone: string
+  priority: number
+  index: number
+}
+
+/** ProjectMoveResult is a card after a move; advanced when a repeating task moved on instead. */
+export interface ProjectMoveResult {
+  card: ProjectCard
+  advanced: boolean
+}
+
+/** What a project link points at. */
+export type ProjectLinkKind = 'mail' | 'event' | 'contact' | 'note'
+
+/** ProjectLink is something a card or a project points at; taskUid is empty for the project's own. */
+export interface ProjectLink {
+  id: number
+  projectId: number
+  taskUid: string
+  kind: ProjectLinkKind
+  accountId: number
+  threadId: number
+  ref: string
+  label: string
+  createdAt: string
+}
+
+/**
+ * ProjectEvent is an event filed under a project, at its next occurrence or
+ * its last one when past. found is false when no calendar has it any more.
+ */
+export interface ProjectEvent {
+  uid: string
+  taskUid: string
+  label: string
+  found: boolean
+  eventId: number
+  calendarColor: string
+  summary: string
+  start: string
+  end: string
+  allDay: boolean
+  recurring: boolean
+  recurrenceId: string
+  past: boolean
+}
+
+/** ProjectNoteRecord is a note as the backend stores it, its body Markdown. */
+export interface ProjectNoteRecord {
+  id: number
+  projectId: number
+  title: string
+  body: string
+  createdAt: string
+  updatedAt: string
+}
+
+/** ProjectMailMark says a conversation belongs to a project. */
+export interface ProjectMailMark {
+  threadId: number
+  projectId: number
 }

@@ -210,6 +210,7 @@ const messageActions = [
   'toggle-mute',
   'edit-note',
   'create-task',
+  'add-to-project',
   'open-in-tab',
   'download-offline',
   'remove-offline',

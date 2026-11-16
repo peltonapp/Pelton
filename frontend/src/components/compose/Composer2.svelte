@@ -32,6 +32,7 @@
   import FormatBar from './v2/FormatBar.svelte'
   import ReplyContext from './v2/ReplyContext.svelte'
   import FollowUpMenu from './v2/FollowUpMenu.svelte'
+  import ProjectMenu from '../projects/ProjectMenu.svelte'
   import SnippetPicker from './v2/SnippetPicker.svelte'
   import SendCheckBar from './v2/SendCheckBar.svelte'
   import { sendIssues, type SendIssue } from '../../lib/sendcheck'
@@ -753,6 +754,7 @@
         value={session.followUpAt ?? ''}
         on:change={(e) => updateCompose(session.id, { followUpAt: e.detail || undefined })}
       />
+      <ProjectMenu compact value={session.projectId ?? 0} on:change={(e) => updateCompose(session.id, { projectId: e.detail || undefined })} />
       <SnippetPicker bind:this={snippetPicker} id={`compose-${session.id}`} canManage={mainWindow} on:pick={(e) => void insertSnippet(e.detail, 0)} />
       <button
         type="button"
@@ -884,6 +886,7 @@
           value={session.followUpAt ?? ''}
           on:change={(e) => updateCompose(session.id, { followUpAt: e.detail || undefined })}
         />
+        <ProjectMenu compact menuAbove value={session.projectId ?? 0} on:change={(e) => updateCompose(session.id, { projectId: e.detail || undefined })} />
         <SnippetPicker
           bind:this={snippetPicker}
           menuAbove

@@ -5,7 +5,7 @@
 // source of truth.
 
 import { writable } from 'svelte/store'
-import type { UIPrefs, ThemePref, DensityPref, EditorMode, ViewsPlacement, CloseAction, LogLevel, SelectAllScope, SearchKind, SearchSortPref, DesignPref, LayoutMode, NavStyle, RailSide, PaneStyle, AvatarPlacement, ContactsView, ComposeOpenIn, ReaderWidth, AfterMove, AfterReplySend, FollowUpInterval } from '../lib/types'
+import type { UIPrefs, ThemePref, DensityPref, EditorMode, ViewsPlacement, CloseAction, LogLevel, SelectAllScope, SearchKind, SearchSortPref, DesignPref, LayoutMode, NavStyle, RailSide, PaneStyle, AvatarPlacement, ContactsView, ComposeOpenIn, ReaderWidth, AfterMove, AfterReplySend, FollowUpInterval, ProjectsView } from '../lib/types'
 import { getUIPrefs, setSetting, SettingKeys, systemColorScheme, setWindowTheme, getThemeApply } from '../lib/api'
 import { applyTheme, applyDensity, applyAccent, applyScale, applyReduceMotion, applyHandCursor, setThemeSchedule, applyUIFont, applyMonoFont, applyCorners, applyDesign, watchSystemTheme, setSystemSchemeOverride, resolveTheme } from '../theme/theme'
 import { applyUserTheme } from '../theme/usertheme'
@@ -102,6 +102,8 @@ const defaults: UIPrefs = {
   senderPanel: false,
   mailDates: true,
   myDayPanel: false,
+  projectsView: 'grid',
+  projectSuggestions: true,
   themeId: '',
   menuBarInApp: false,
   menuBarNativeMinimal: false,
@@ -428,6 +430,18 @@ export function setMailDates(mailDates: boolean): void {
 export function setMyDayPanel(myDayPanel: boolean): void {
   prefs.update((p) => ({ ...p, myDayPanel }))
   void setSetting(SettingKeys.myDayPanel, String(myDayPanel))
+}
+
+/** Lists projects as a grid of tiles or as rows. */
+export function setProjectsView(projectsView: ProjectsView): void {
+  prefs.update((p) => ({ ...p, projectsView }))
+  void setSetting(SettingKeys.projectsView, projectsView)
+}
+
+/** Turns the reader's "add to project" suggestions on or off. */
+export function setProjectSuggestions(projectSuggestions: boolean): void {
+  prefs.update((p) => ({ ...p, projectSuggestions }))
+  void setSetting(SettingKeys.projectSuggestions, String(projectSuggestions))
 }
 
 /** Turns the gliding caret of the compose editor on or off. */

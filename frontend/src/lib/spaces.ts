@@ -6,6 +6,7 @@ import mailIcon from '@phosphor-icons/core/assets/duotone/envelope-simple-duoton
 import contactsIcon from '@phosphor-icons/core/assets/duotone/address-book-duotone.svg?raw'
 import calendarIcon from '@phosphor-icons/core/assets/duotone/calendar-blank-duotone.svg?raw'
 import tasksIcon from '@phosphor-icons/core/assets/duotone/list-checks-duotone.svg?raw'
+import projectsIcon from '@phosphor-icons/core/assets/duotone/kanban-duotone.svg?raw'
 import { get } from 'svelte/store'
 import type { Space } from './types'
 import type { MailDropOptions } from '../stores/maildrag'
@@ -15,6 +16,7 @@ import { taskSeed } from '../stores/tasks'
 import { openSpace, space } from '../stores/space'
 import { mailDropHint } from '../components/calendar/maildrop'
 import { createTasksFromMail } from './taskmail'
+import { pickProjectFor } from './projectpicker'
 import { t } from './i18n'
 
 /** One entry of the space switcher. */
@@ -29,11 +31,12 @@ export interface SpaceEntry {
 /**
  * What a space does with mail dropped on its entry in the switcher: contacts
  * starts a new contact from the sender, the calendar a new event from the
- * message, tasks a task from each message, mail takes nothing.
+ * message, tasks a task from each message, projects asks which project the
+ * conversations go to, mail takes nothing.
  */
 export function spaceDrop(key: Space): MailDropOptions {
   return {
-    accepts: () => key === 'contacts' || key === 'calendar' || key === 'tasks',
+    accepts: () => key === 'contacts' || key === 'calendar' || key === 'tasks' || key === 'projects',
     onDrop: (items, info) => {
       const first = items[0]
       if (key === 'contacts' && first) {
@@ -54,6 +57,9 @@ export function spaceDrop(key: Space): MailDropOptions {
           void createTasksFromMail(ids)
         }
       }
+      if (key === 'projects' && first) {
+        pickProjectFor(items.map((m) => m.id))
+      }
     },
     hint: (items, shift) => {
       if (key === 'calendar') {
@@ -62,6 +68,9 @@ export function spaceDrop(key: Space): MailDropOptions {
       if (key === 'tasks') {
         const tr = get(t)
         return items.length > 1 ? tr('tasks.drop.many').replace('{n}', String(items.length)) : tr('tasks.drop.one')
+      }
+      if (key === 'projects') {
+        return get(t)('projects.drop.pick')
       }
       return ''
     },
@@ -73,5 +82,6 @@ export const spaces: SpaceEntry[] = [
   { key: 'mail', labelKey: 'space.mail', icon: mailIcon },
   { key: 'calendar', labelKey: 'space.calendar', icon: calendarIcon },
   { key: 'tasks', labelKey: 'space.tasks', icon: tasksIcon },
+  { key: 'projects', labelKey: 'space.projects', icon: projectsIcon },
   { key: 'contacts', labelKey: 'space.contacts', icon: contactsIcon },
 ]
