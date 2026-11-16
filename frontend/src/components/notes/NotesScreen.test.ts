@@ -2,7 +2,32 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { render, screen, waitFor, within } from '@testing-library/svelte'
 import userEvent from '@testing-library/user-event'
 import { get } from 'svelte/store'
-import type { VaultNote, VaultSnapshot } from '../../lib/types'
+import type { Project, VaultNote, VaultSnapshot } from '../../lib/types'
+
+const launch: Project = {
+  id: 1,
+  uid: 'u1',
+  name: 'Launch',
+  color: '',
+  icon: '',
+  description: '',
+  status: 'active',
+  startDate: '',
+  dueDate: '',
+  position: 0,
+  listId: 0,
+  createdAt: '',
+  updatedAt: '',
+  archivedAt: '',
+  cards: 0,
+  done: 0,
+  overdue: 0,
+  nextDue: '',
+  mail: 0,
+  events: 0,
+  notes: 1,
+  people: [],
+}
 
 const api = vi.hoisted(() => ({
   vaultOpen: vi.fn(),
@@ -46,6 +71,7 @@ vi.stubGlobal(
 import NotesScreen from './NotesScreen.svelte'
 import NoteSwitcher from './NoteSwitcher.svelte'
 import { activeNote, openNotes, vaultIndex, vaultInfo } from '../../stores/notes'
+import { projects } from '../../stores/projects'
 import { runSpaceAction } from '../../stores/space'
 import { spaceSearchProviders } from '../../lib/spacesearch'
 
@@ -116,6 +142,20 @@ describe('NotesScreen', () => {
     await userEvent.click(screen.getByRole('button', { name: /^work/ }))
     const list = await screen.findByRole('listbox', { name: '#work' })
     expect(within(list).getAllByRole('option')).toHaveLength(1)
+  })
+
+  it('narrows the list to a project and shows the project of the open note', async () => {
+    snapshot = { ...snapshot, notes: [...snapshot.notes, note('Projects/Launch/Plan.md', { props: [{ key: 'project-id', value: 'u1', list: [] }] })] }
+    projects.set([launch])
+    render(NotesScreen)
+    await screen.findByRole('listbox', { name: 'All notes' })
+    const group = screen.getByRole('list', { name: 'Projects' })
+    await userEvent.click(within(group).getByRole('button', { name: /Launch/ }))
+    const list = await screen.findByRole('listbox', { name: 'Launch' })
+    expect(within(list).getAllByRole('option')).toHaveLength(1)
+    await userEvent.click(within(list).getByText('Plan'))
+    expect(await screen.findByRole('button', { name: 'Launch' })).toBeInTheDocument()
+    projects.set([])
   })
 
   it('answers the space search and the quick switcher shortcut', async () => {
