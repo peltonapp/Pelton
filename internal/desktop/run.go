@@ -80,8 +80,9 @@ func Run(cfg Config) error {
 
 	// new-mail notifications and the macOS Dock badge, through the Wails
 	// services rather than per-platform code of Pelton's own (#568).
-	app.notifier = notifications.New()
-	app.notifier.OnNotificationResponse(app.onNotificationResponse)
+	notifier := notifications.New()
+	notifier.OnNotificationResponse(app.onNotificationResponse)
+	app.notifier = notifier
 	app.dock = dock.New()
 
 	dist, err := fs.Sub(cfg.Assets, "frontend/dist")

@@ -18,8 +18,8 @@
   import TabBar from './TabBar.svelte'
   import { visibleMessageId, hasTabs, activeTabId, tabs, markTabStale, labelTab, closeTab } from '../../stores/tabs'
   import { messageDetail, loadMessage, clearMessage } from '../../stores/message'
-  import { setFlagged, deleteMessage, archiveMessage, scanMessage, openMessageWindow } from '../../lib/api'
-  import { reportArchiveExport, dropDeleted, leaveList, exportEml, markSeen } from '../../lib/messageactions'
+  import { deleteMessage, archiveMessage, scanMessage, openMessageWindow } from '../../lib/api'
+  import { reportArchiveExport, dropDeleted, leaveList, exportEml, markFlagged, markSeen } from '../../lib/messageactions'
   import { editNote, toggleMute, togglePin } from '../../lib/organize'
   import {
     virusTotal,
@@ -30,7 +30,6 @@
     putAttachmentVerdict,
     currentVerdictMessage,
   } from '../../stores/virustotal'
-  import { patchInList } from '../../stores/messages'
   import { recordDeleted } from '../../stores/undodelete'
   import { recordArchived } from '../../stores/undoarchive'
   import { openReply, openForward } from '../../stores/compose'
@@ -238,18 +237,7 @@
   }
 
   async function toggleFlag(detail: MessageDetail): Promise<void> {
-    const next = !detail.flagged
-    const apply = (flagged: boolean) => {
-      messageDetail.update((s) => (s.data?.id === detail.id ? { ...s, data: { ...s.data, flagged } } : s))
-      patchInList(detail.id, { flagged })
-    }
-    apply(next)
-    try {
-      await setFlagged(detail.id, next)
-    } catch (err) {
-      apply(!next)
-      toastError(errorMessage(err))
-    }
+    await markFlagged(detail, !detail.flagged)
   }
 
   async function remove(detail: MessageDetail): Promise<void> {

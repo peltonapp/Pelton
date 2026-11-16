@@ -31,39 +31,120 @@ import { recordDeleted, recordDeletedBatch } from '../stores/undodelete'
 import { recordArchived, archivedEntry, recordArchivedBatch, type ArchivedMessage } from '../stores/undoarchive'
 import { askConfirm } from '../stores/confirm'
 import { isVIPAddress, addVIP, removeVIP } from '../stores/vip'
+import { messageDetail } from '../stores/message'
+import { recordHistory, stateKey, subjectDetail, type HistoryKind } from '../stores/undohistory'
 import { errorMessage, toastError, toastInfo, toastSuccess, withBusyToast } from '../stores/toast'
 import { sidebar } from '../stores/accounts'
 import { t } from './i18n'
 import { get } from 'svelte/store'
 
-/** Marks one message read or unread. */
-export async function markSeen(item: MessageSummary, seen: boolean): Promise<void> {
-  patchInList(item.id, { seen })
-  try {
-    await setSeen(item.id, seen)
-  } catch (err) {
-    toastError(errorMessage(err))
+// patchView carries a change into the list and into the reading pane when it
+// shows the message.
+function patchView(id: number, patch: Partial<MessageSummary>): void {
+  patchInList(id, patch)
+  messageDetail.update((s) => (s.data?.id === id ? { ...s, data: { ...s.data, ...patch } } : s))
+}
+
+// AttrSpec describes one per-message setting the history can restore: how to
+// read it off a summary, how it shows in the view and how it reaches the backend.
+interface AttrSpec<V> {
+  domain: 'seen' | 'flag' | 'color'
+  kind: HistoryKind
+  read: (m: MessageSummary) => V
+  patch: (v: V) => Partial<MessageSummary>
+  send: (id: number, v: V) => Promise<void>
+  label: (v: V) => string
+}
+
+const seenSpec: AttrSpec<boolean> = {
+  domain: 'seen',
+  kind: 'seen',
+  read: (m) => m.seen,
+  patch: (seen) => ({ seen }),
+  send: setSeen,
+  label: (v) => get(t)(v ? 'history.kind.read' : 'history.kind.unread'),
+}
+
+const flagSpec: AttrSpec<boolean> = {
+  domain: 'flag',
+  kind: 'flag',
+  read: (m) => m.flagged,
+  patch: (flagged) => ({ flagged }),
+  send: setFlagged,
+  label: (v) => get(t)(v ? 'history.kind.flagged' : 'history.kind.unflagged'),
+}
+
+const colorSpec: AttrSpec<number> = {
+  domain: 'color',
+  kind: 'color',
+  read: (m) => m.flagColor,
+  patch: (flagColor) => ({ flagColor }),
+  send: setFlagColor,
+  label: (v) => get(t)(v === 0 ? 'history.kind.colorCleared' : 'history.kind.color'),
+}
+
+// changeAttr sets one attribute on every item and records the ones that really
+// changed as one history entry, remembering each one's earlier value so undo
+// puts every message back to what it was.
+async function changeAttr<V>(spec: AttrSpec<V>, items: MessageSummary[], next: V): Promise<void> {
+  const changed: { item: MessageSummary; prev: V }[] = []
+  await Promise.all(
+    items.map(async (item) => {
+      const prev = spec.read(item)
+      patchView(item.id, spec.patch(next))
+      try {
+        await spec.send(item.id, next)
+        if (prev !== next) {
+          changed.push({ item, prev })
+        }
+      } catch (err) {
+        patchView(item.id, spec.patch(prev))
+        toastError(errorMessage(err))
+      }
+    }),
+  )
+  if (changed.length === 0) {
+    return
   }
+  const apply = async (value: (c: { prev: V }) => V): Promise<void> => {
+    let failure: unknown = null
+    for (const c of changed) {
+      const v = value(c)
+      try {
+        await spec.send(c.item.id, v)
+        patchView(c.item.id, spec.patch(v))
+      } catch (err) {
+        failure = failure ?? err
+      }
+    }
+    if (failure !== null) {
+      throw failure
+    }
+  }
+  recordHistory({
+    kind: spec.kind,
+    label: spec.label(next),
+    detail: subjectDetail(changed.map((c) => c.item.subject)),
+    count: changed.length,
+    touches: changed.map((c) => stateKey(spec.domain, c.item.id)),
+    undo: () => apply((c) => c.prev),
+    redo: () => apply(() => next),
+  })
+}
+
+/** Marks one message read or unread. */
+export function markSeen(item: MessageSummary, seen: boolean): Promise<void> {
+  return changeAttr(seenSpec, [item], seen)
 }
 
 /** Flags or unflags one message. */
-export async function markFlagged(item: MessageSummary, flagged: boolean): Promise<void> {
-  patchInList(item.id, { flagged })
-  try {
-    await setFlagged(item.id, flagged)
-  } catch (err) {
-    toastError(errorMessage(err))
-  }
+export function markFlagged(item: MessageSummary, flagged: boolean): Promise<void> {
+  return changeAttr(flagSpec, [item], flagged)
 }
 
 /** Sets a message's color label; 0 clears it. */
-export async function markColor(item: MessageSummary, color: number): Promise<void> {
-  patchInList(item.id, { flagColor: color })
-  try {
-    await setFlagColor(item.id, color)
-  } catch (err) {
-    toastError(errorMessage(err))
-  }
+export function markColor(item: MessageSummary, color: number): Promise<void> {
+  return changeAttr(colorSpec, [item], color)
 }
 
 /** Stars or unstars the message's sender. */
@@ -192,12 +273,12 @@ export async function moveToFolder(items: MessageSummary[], folder: Folder): Pro
       failure = errorMessage(err)
     }
   }
-  recordArchivedBatch(undone)
+  const say = get(t)
+  recordArchivedBatch(undone, { kind: 'move', label: say('history.kind.move').replace('{folder}', folder.name) })
   if (failure !== '') {
     toastError(failure)
     return
   }
-  const say = get(t)
   toastInfo(
     targets.length === 1
       ? say('detail.moveDialog.moved').replace('{folder}', folder.name)
@@ -244,7 +325,7 @@ export async function toggleSpam(item: MessageSummary): Promise<boolean> {
   }
   try {
     const undo = state === 'spam' ? await markNotSpam(item.id) : await markSpam(item.id)
-    recordArchived(item, undo)
+    recordArchived(item, undo, { kind: 'spam', label: get(t)(state === 'spam' ? 'history.kind.notSpam' : 'history.kind.spam') })
     leaveList([item.id])
     toastSuccess(get(t)(state === 'spam' ? 'spam.toast.notSpam' : 'spam.toast.marked'))
     return true
@@ -263,19 +344,19 @@ export async function toggleSpam(item: MessageSummary): Promise<boolean> {
 /** Marks every given message read or unread. */
 export async function bulkMarkSeen(items: MessageSummary[], seen: boolean): Promise<void> {
   clearSelection()
-  await Promise.all(items.map((item) => markSeen(item, seen)))
+  await changeAttr(seenSpec, items, seen)
 }
 
 /** Flags or unflags every given message. */
 export async function bulkMarkFlagged(items: MessageSummary[], flagged: boolean): Promise<void> {
   clearSelection()
-  await Promise.all(items.map((item) => markFlagged(item, flagged)))
+  await changeAttr(flagSpec, items, flagged)
 }
 
 /** Sets the same color label on every given message. */
 export async function bulkMarkColor(items: MessageSummary[], color: number): Promise<void> {
   clearSelection()
-  await Promise.all(items.map((item) => markColor(item, color)))
+  await changeAttr(colorSpec, items, color)
 }
 
 /** Downloads every given message for offline reading, or drops the copies. */

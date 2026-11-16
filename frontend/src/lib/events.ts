@@ -31,6 +31,7 @@ export const EventNames = {
   filesDropped: 'files:dropped',
   agentProposals: 'agent:proposals',
   openMessage: 'message:open',
+  replyMessage: 'message:reply',
   composeCloseRequest: 'compose:close-request',
   calendarSync: 'calendar:sync',
   calendarChanged: 'calendar:changed',
@@ -344,6 +345,12 @@ export function onAgentProposals(cb: () => void): Unsubscribe {
 // shown. Today that is a clicked new-mail notification on Windows.
 export function onOpenMessage(cb: (e: OpenMessageEvent) => void): Unsubscribe {
   return EventsOn(EventNames.openMessage, (e: OpenMessageEvent) => cb(e))
+}
+
+// onReplyMessage fires when something outside the ui asks for a reply to one
+// message in a composer: the Reply button of a new-mail notification.
+export function onReplyMessage(cb: (e: OpenMessageEvent) => void): Unsubscribe {
+  return EventsOn(EventNames.replyMessage, (e: OpenMessageEvent) => cb(e))
 }
 
 /** Fires when focus mode starts, ends or changes its end time. */

@@ -78,6 +78,10 @@ const (
 	// It carries the folder as well as the message so the list can move to
 	// where the message actually lives rather than opening it out of context.
 	EventOpenMessage = "message:open"
+	// EventReplyMessage fires when something outside the ui asks for a reply
+	// to one message to be opened in a composer. Today that is the Reply
+	// button of a new-mail notification.
+	EventReplyMessage = "message:reply"
 	// EventCalendarSync fires as calendars sync, and once more with Running
 	// false when the run ends, carrying any error.
 	EventCalendarSync = "calendar:sync"

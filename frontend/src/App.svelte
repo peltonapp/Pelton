@@ -64,8 +64,6 @@
     SettingKeys,
     exportMessagePrintView,
     setWindowTitle,
-    setSeen,
-    setFlagged,
     deleteMessage,
     getMessage,
     downloadMessageOffline,
@@ -91,7 +89,7 @@
   import { liabilityAccepted } from './lib/liability'
   import { setDemoActive } from './lib/demo'
   import { recordArchived } from './stores/undoarchive'
-  import { onMailNew, onMailRepaired, onSyncState, onSyncProgress, onOutboxChanged, onMenu, onViewsChanged, onFoldersChanged, onProfileChanged, onMailtoCompose, onAgentProposals, onOpenMessage, onArchiveAfterSend, onCalendarReminder, onTaskReminder, onICSOpen, type Unsubscribe, type MailtoDraft, type CalendarReminderEvent, type TaskReminderEvent } from './lib/events'
+  import { onMailNew, onMailRepaired, onSyncState, onSyncProgress, onOutboxChanged, onMenu, onViewsChanged, onFoldersChanged, onProfileChanged, onMailtoCompose, onAgentProposals, onOpenMessage, onReplyMessage, onArchiveAfterSend, onCalendarReminder, onTaskReminder, onICSOpen, type Unsubscribe, type MailtoDraft, type CalendarReminderEvent, type TaskReminderEvent } from './lib/events'
   import { loadViews, editingView, closeViewEditor, openViewEditor, views as savedViews } from './stores/views'
   import { selectSavedView } from './stores/selection'
   import { isMac } from './lib/i18n'
@@ -113,9 +111,9 @@
   import { cyclePane, focusPane as focusPaneArea } from './lib/panes'
   import { bindings, recording, initShortcuts } from './stores/shortcuts'
   import { initMenuBar } from './stores/menubar'
-  import { triggerUndo } from './stores/undosend'
-  import { recordDeleted, triggerUndoDelete } from './stores/undodelete'
-  import { triggerUndoArchive } from './stores/undoarchive'
+  import { recordDeleted } from './stores/undodelete'
+  import { historyOpen, redoOrSay, undoOrSay } from './stores/undohistory'
+  import './lib/palette-history'
   import { openMessageId, openMessage } from './stores/selection'
   import {
     visibleMessageId,
@@ -569,7 +567,10 @@
     unsubscribers.push(
       onMailRepaired(() => {
         // the subjects and bodies changed underneath the list, so what is on
-        // screen is stale rather than merely incomplete.
+        // screen is stale rather than merely incomplete. the unread counts
+        // beside it can be too, after a notification button archived or read
+        // a message.
+        void refreshSidebar()
         void loadList(get(selection))
       }),
     )
@@ -659,6 +660,15 @@
     // time this arrives; all that is left is to go to the message.
     unsubscribers.push(
       onOpenMessage((e) => revealMessage(e.messageId, e.accountId, e.folderId, get(sidebar).data ?? null)),
+    )
+    unsubscribers.push(
+      onReplyMessage(async (e) => {
+        try {
+          openReply(await getMessage(e.messageId), editorMode, false)
+        } catch (err) {
+          toastError(errorMessage(err))
+        }
+      }),
     )
     // a send and archive from a compose window, which closes as it sends.
     unsubscribers.push(
@@ -947,16 +957,13 @@
           openForward(await getMessage(msg.id), editorMode)
           break
         case 'mark-read':
-          patchInList(msg.id, { seen: true })
-          await setSeen(msg.id, true)
+          await markSeen(msg, true)
           break
         case 'mark-unread':
-          patchInList(msg.id, { seen: false })
-          await setSeen(msg.id, false)
+          await markSeen(msg, false)
           break
         case 'flag':
-          patchInList(msg.id, { flagged: !msg.flagged })
-          await setFlagged(msg.id, !msg.flagged)
+          await markFlagged(msg, !msg.flagged)
           break
         case 'snooze':
           openSnooze(msg.id, msg.subject)
@@ -1011,7 +1018,6 @@
   type MenuAction =
     | ShortcutAction
     | 'about'
-    | 'undo'
     | 'toggle-low-power'
     | 'open-mailboxes'
     | 'open-contacts'
@@ -1170,9 +1176,13 @@
         }
         break
       case 'undo':
-        if (!triggerUndo() && !triggerUndoDelete() && !triggerUndoArchive()) {
-          toastInfo(get(t)('app.toast.nothingToUndo'))
-        }
+        void undoOrSay()
+        break
+      case 'redo':
+        void redoOrSay()
+        break
+      case 'undo-history':
+        historyOpen.update((open) => !open)
         break
       case 'toggle-low-power':
         setLowPowerMode(!$prefs.lowPowerMode)
@@ -1780,29 +1790,12 @@
       event.preventDefault()
       return
     }
-    // cmd/ctrl+z undoes a pending delayed send, when one is in its window. it
-    // takes priority over other shortcuts and is swallowed only if it acted.
-    if ((event.metaKey || event.ctrlKey) && !event.shiftKey && event.key.toLowerCase() === 'z') {
-      // another space undoes its own last change, outside a text field.
-      if (!classic && !isEditableTarget(event.target) && runSpaceAction($space, 'undo')) {
-        event.preventDefault()
-        return
-      }
-      // undo-send takes priority; otherwise undo the last message deletion.
-      if (triggerUndo()) {
-        event.preventDefault()
-        return
-      }
-      if (triggerUndoDelete()) {
-        event.preventDefault()
-        return
-      }
-      if (triggerUndoArchive()) {
-        event.preventDefault()
-        return
-      }
-    }
     const action = matchShortcut(event, $bindings)
+    // undo and redo belong to a text field, a composer or an editor while one
+    // has focus, and are the history's everywhere else.
+    if ((action === 'undo' || action === 'redo') && isEditableTarget(event.target)) {
+      return
+    }
     // the split keys belong to the message list, which takes them itself while
     // it has focus; anywhere else Tab keeps moving focus.
     if (action === 'next-split' || action === 'prev-split') {

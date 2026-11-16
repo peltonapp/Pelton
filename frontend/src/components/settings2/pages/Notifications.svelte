@@ -9,7 +9,7 @@
   import ToastPreview from '../skeletons/ToastPreview.svelte'
   import DesktopPreview from '../skeletons/DesktopPreview.svelte'
   import FocusSchedule from '../FocusSchedule.svelte'
-  import { prefs, setToastPosition, setNotifyNewMail, setUnreadBadgeEnabled } from '../../../stores/prefs'
+  import { prefs, setToastPosition, setNotifyNewMail, setNotifyAction, setUnreadBadgeEnabled } from '../../../stores/prefs'
   import { isMac, t } from '../../../lib/i18n'
 
   // the unread badge is a count on the dock tile on macOS and a dot on the tray
@@ -51,6 +51,18 @@
     <button type="button" class="action" on:click={() => (vipOpen = true)}>
       {$t('vip.manage')}
     </button>
+  </Row>
+</Card>
+
+<Card title={$t('notify.actions.title')}>
+  <Row id="notify-action-archive" label={$t('notify.actions.archive')} hint={$t('notify.actions.hint')}>
+    <ToggleSwitch checked={$prefs.notifyActionArchive} label={$t('notify.actions.archive')} on:change={(e) => setNotifyAction('archive', e.detail)} />
+  </Row>
+  <Row id="notify-action-mark-read" label={$t('notify.actions.markRead')}>
+    <ToggleSwitch checked={$prefs.notifyActionMarkRead} label={$t('notify.actions.markRead')} on:change={(e) => setNotifyAction('markRead', e.detail)} />
+  </Row>
+  <Row id="notify-action-reply" label={$t('notify.actions.reply')}>
+    <ToggleSwitch checked={$prefs.notifyActionReply} label={$t('notify.actions.reply')} on:change={(e) => setNotifyAction('reply', e.detail)} />
   </Row>
 </Card>
 

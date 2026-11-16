@@ -59,7 +59,6 @@ import { isMac } from './i18n'
 export type MenuActionId =
   | ShortcutAction
   | 'about'
-  | 'undo'
   | 'toggle-low-power'
   | 'open-mailboxes'
   | 'open-contacts'
@@ -105,7 +104,7 @@ export const menuActionCatalog: MenuActionDef[] = [
   { action: 'open-contacts', labelKey: 'menu.contacts', iconName: 'address-book', icon: IconAddressBook },
   { action: 'search', labelKey: 'shortcut.search', iconName: 'search', icon: IconSearch },
   { action: 'command-palette', labelKey: 'shortcut.commandPalette', iconName: 'command', icon: IconCommand },
-  { action: 'undo', labelKey: 'menu.undo', iconName: 'arrow-back-up', icon: IconArrowBackUp, hint: 'mod+z' },
+  { action: 'undo', labelKey: 'menu.undo', iconName: 'arrow-back-up', icon: IconArrowBackUp },
   { action: 'reply', labelKey: 'shortcut.reply', iconName: 'corner-up-left', icon: IconCornerUpLeft, needsMessage: true },
   { action: 'reply-all', labelKey: 'shortcut.replyAll', iconName: 'corner-up-left-double', icon: IconCornerUpLeftDouble, needsMessage: true },
   { action: 'forward', labelKey: 'shortcut.forward', iconName: 'arrow-forward-up', icon: IconArrowForwardUp, needsMessage: true },

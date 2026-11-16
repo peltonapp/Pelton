@@ -206,6 +206,14 @@ const (
 	// general new-mail OS notifications (#126). VIP senders are stored
 	// separately in bind_vip.go and notify even when this is off.
 	settingNotifyNewMail = "notify_new_mail"
+	// the buttons a new-mail notification carries where the system supports
+	// them. All on by default.
+	settingNotifyActionArchive  = "notify_action_archive"
+	settingNotifyActionMarkRead = "notify_action_mark_read"
+	settingNotifyActionReply    = "notify_action_reply"
+	// links opened from a mail have tracking parameters and redirect wrappers
+	// taken off. Off by default.
+	settingCleanLinks = "clean_links"
 	// verbose sync surfaces the mailbox currently being synced in the status
 	// line instead of a plain "Syncing" (#128). Off by default.
 	settingVerboseSync = "verbose_sync"
@@ -540,6 +548,14 @@ type UIPrefsDTO struct {
 	// inbox. Off by default. VIP-sender notifications fire regardless of this
 	// (see bind_vip.go), so important senders cut through when it is off.
 	NotifyNewMail bool `json:"notifyNewMail"`
+	// NotifyActionArchive, NotifyActionMarkRead and NotifyActionReply choose
+	// which buttons a new-mail notification carries.
+	NotifyActionArchive  bool `json:"notifyActionArchive"`
+	NotifyActionMarkRead bool `json:"notifyActionMarkRead"`
+	NotifyActionReply    bool `json:"notifyActionReply"`
+	// CleanLinks removes tracking parameters and redirect wrappers from links
+	// opened from a mail.
+	CleanLinks bool `json:"cleanLinks"`
 	// VerboseSync shows which mailbox is currently syncing in the status line,
 	// with the account and server it is talking to. SyncProgressBar puts a real
 	// progress bar next to it, counting message bodies rather than mailboxes.
@@ -694,6 +710,10 @@ func (a *App) GetUIPrefs() (UIPrefsDTO, error) {
 		MonoFont:                   a.stringSetting(settingMonoFont, "default"),
 		SenderFonts:                a.senderFonts(),
 		NotifyNewMail:              a.boolSetting(settingNotifyNewMail, false),
+		NotifyActionArchive:        a.boolSetting(settingNotifyActionArchive, true),
+		NotifyActionMarkRead:       a.boolSetting(settingNotifyActionMarkRead, true),
+		NotifyActionReply:          a.boolSetting(settingNotifyActionReply, true),
+		CleanLinks:                 a.boolSetting(settingCleanLinks, false),
 		VerboseSync:                a.boolSetting(settingVerboseSync, false),
 		SyncProgressBar:            a.boolSetting(settingSyncProgress, true),
 		StatusClock:                a.boolSetting(settingStatusClock, true),
