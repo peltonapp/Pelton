@@ -10,6 +10,7 @@ const api = vi.hoisted(() => ({
   syncContacts: vi.fn(),
   saveContact: vi.fn(),
   deleteContact: vi.fn(),
+  findDuplicateContacts: vi.fn(),
   search: vi.fn(),
   setSetting: vi.fn(),
 }))
@@ -21,6 +22,7 @@ vi.mock('../../lib/api', async (importOriginal) => ({
   syncContacts: api.syncContacts,
   saveContact: api.saveContact,
   deleteContact: api.deleteContact,
+  findDuplicateContacts: api.findDuplicateContacts,
   search: api.search,
   setSetting: api.setSetting,
 }))
@@ -102,6 +104,7 @@ beforeEach(() => {
   api.syncContacts.mockReset().mockResolvedValue(undefined)
   api.saveContact.mockReset().mockResolvedValue({ conflict: false })
   api.deleteContact.mockReset().mockResolvedValue({ conflict: false })
+  api.findDuplicateContacts.mockReset().mockResolvedValue({ groups: [], dismissed: 0 })
   api.search.mockReset().mockResolvedValue({ messages: [], total: 0 })
   api.setSetting.mockReset().mockResolvedValue(undefined)
   contactBookFilter.set(0)

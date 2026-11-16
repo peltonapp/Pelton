@@ -1649,6 +1649,49 @@ export interface ContactConflict {
   saved: Contact
 }
 
+/** What makes a group of contacts look like one person. */
+export interface DuplicateReason {
+  kind: 'email' | 'phone' | 'name'
+  /** The shared address, number or name. */
+  value: string
+  /** What backs up a shared name: organization, domain (same company) or empty (one has no address or number). */
+  overlap: ('organization' | 'domain' | 'empty')[]
+}
+
+/** Contacts that probably are the same person, with the reasons. */
+export interface DuplicateGroup {
+  contacts: Contact[]
+  /** 60 to 100: how sure the match is. */
+  score: number
+  reasons: DuplicateReason[]
+}
+
+/** The answer of the duplicate search. */
+export interface Duplicates {
+  groups: DuplicateGroup[]
+  /** How many pairs were marked as not duplicates. */
+  dismissed: number
+}
+
+/** A merge: the contacts in mergeIds are folded into survivorId. */
+export interface MergeRequest {
+  survivorId: number
+  mergeIds: number[]
+  /** The address book the merged contact goes in; required when the contacts are in several. */
+  targetBookId: number
+  /** Field name (name, organization, title, note) to the id of the contact it comes from; -1 keeps both notes. */
+  choices: Record<string, number>
+}
+
+/** What a merge did. */
+export interface MergeResult {
+  contact: Contact
+  /** Undoes the merge for the rest of the session. */
+  token: string
+  /** Merged contacts the server refused to delete; they are still there. */
+  kept: number
+}
+
 // ContactDraft is the editor's shape. id 0 creates, and then bookId says which
 // address book it goes in.
 export interface ContactDraft {

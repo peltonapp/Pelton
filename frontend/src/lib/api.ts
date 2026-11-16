@@ -70,6 +70,9 @@ import type {
   Contact,
   ContactConflict,
   ContactDraft,
+  Duplicates,
+  MergeRequest,
+  MergeResult,
   CalendarAccount,
   CalendarAccountDraft,
   CalendarDiscovery,
@@ -2386,6 +2389,34 @@ export function saveContact(draft: ContactDraft): Promise<ContactConflict> {
 // a conflict the user has already been shown.
 export function deleteContact(id: number, force: boolean): Promise<ContactConflict> {
   return App.DeleteContact(id, force) as unknown as Promise<ContactConflict>
+}
+
+/** findDuplicateContacts lists the groups of contacts that look like one person. */
+export function findDuplicateContacts(): Promise<Duplicates> {
+  if (isDemoActive()) {
+    return Promise.resolve({ groups: [], dismissed: 0 })
+  }
+  return App.FindDuplicateContacts() as unknown as Promise<Duplicates>
+}
+
+/** mergeContacts folds contacts into one, here and on their servers. */
+export function mergeContacts(req: MergeRequest): Promise<MergeResult> {
+  return App.MergeContacts(new desktop.MergeContactsRequest(req)) as unknown as Promise<MergeResult>
+}
+
+/** undoContactMerge puts the contacts of a merge back and returns them. */
+export function undoContactMerge(token: string): Promise<Contact[]> {
+  return App.UndoContactMerge(token).then((list) => (list ?? []) as unknown as Contact[])
+}
+
+/** dismissDuplicateContacts marks the contacts as not duplicates of each other. */
+export function dismissDuplicateContacts(ids: number[]): Promise<void> {
+  return App.DismissDuplicateContacts(ids)
+}
+
+/** resetDismissedDuplicates forgets the not-duplicates answers and returns how many there were. */
+export function resetDismissedDuplicates(): Promise<number> {
+  return App.ResetDismissedDuplicates()
 }
 
 /** listCalendarAccounts returns every CalDAV login. */
