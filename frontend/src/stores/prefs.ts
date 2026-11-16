@@ -118,6 +118,10 @@ const defaults: UIPrefs = {
   uiFont: 'default',
   monoFont: 'default',
   notifyNewMail: false,
+  notifyActionArchive: true,
+  notifyActionMarkRead: true,
+  notifyActionReply: true,
+  cleanLinks: false,
   verboseSync: false,
   syncProgressBar: true,
   statusClock: true,
@@ -485,6 +489,28 @@ export function setFlagColorSync(value: boolean): void {
 export function setNotifyNewMail(value: boolean): void {
   prefs.update((p) => ({ ...p, notifyNewMail: value }))
   void setSetting(SettingKeys.notifyNewMail, String(value))
+}
+
+/** The buttons a new-mail notification can carry. */
+export type NotifyAction = 'archive' | 'markRead' | 'reply'
+
+const notifyActionKeys = {
+  archive: ['notifyActionArchive', SettingKeys.notifyActionArchive],
+  markRead: ['notifyActionMarkRead', SettingKeys.notifyActionMarkRead],
+  reply: ['notifyActionReply', SettingKeys.notifyActionReply],
+} as const
+
+// setNotifyAction shows or hides one button on new-mail notifications.
+export function setNotifyAction(action: NotifyAction, value: boolean): void {
+  const [field, key] = notifyActionKeys[action]
+  prefs.update((p) => ({ ...p, [field]: value }))
+  void setSetting(key, String(value))
+}
+
+// setCleanLinks turns tracking and redirect cleaning of opened links on or off.
+export function setCleanLinks(value: boolean): void {
+  prefs.update((p) => ({ ...p, cleanLinks: value }))
+  void setSetting(SettingKeys.cleanLinks, String(value))
 }
 
 // setShowOfflineIndicator toggles the little downloaded badge on pinned messages.

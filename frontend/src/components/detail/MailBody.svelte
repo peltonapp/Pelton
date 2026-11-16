@@ -10,11 +10,12 @@
   import { onDestroy, tick } from 'svelte'
   import { get } from 'svelte/store'
   import { openURL } from '../../lib/browser'
-  import { IconPhoto, IconUserCheck, IconWorldCheck, IconMailCheck, IconShieldSearch, IconChevronDown, IconEyeOff } from '@tabler/icons-svelte'
+  import { IconPhoto, IconUserCheck, IconWorldCheck, IconMailCheck, IconShieldSearch, IconChevronDown, IconEyeOff, IconCopy, IconExternalLink } from '@tabler/icons-svelte'
+  import { resolveLink } from '../../lib/linkclean'
   import { prefs } from '../../stores/prefs'
   import { getMessageHtml, trustSenderImages, allowDomainImages, allowRemoteForMessage, scanUrl } from '../../lib/api'
   import { setBodyHtml } from '../../stores/message'
-  import { openContextMenu } from '../../stores/contextmenu'
+  import { openContextMenu, type MenuItem } from '../../stores/contextmenu'
   import { virusTotal, linkVerdicts, putLinkVerdict, scanEnabled } from '../../stores/virustotal'
   import VerdictBadge from '../common/VerdictBadge.svelte'
   import { errorMessage, toastError, toastSuccess } from '../../stores/toast'
@@ -44,6 +45,11 @@
   export let collapseQuotes: boolean = false
 
   $: canScan = scanEnabled($virusTotal)
+  // the link menu offers copy and open original as well as the scan. The
+  // classic design has none of that, so it keeps the system menu unless a
+  // scan is on offer.
+  $: offerMenu = canScan || $prefs.design !== 'classic'
+  $: cleanOn = $prefs.cleanLinks
 
   // the quoted original, split off when it is folded. showQuote resets with
   // the message.
@@ -121,7 +127,7 @@
   // click handler that runs natively inside the iframe's own document, using
   // postMessage to hand the url back to the parent, has no such dependency on
   // cross-frame event delivery.
-  function buildSrcdoc(html: string, allowRemote: boolean, fontSize: number, bodyFont: string, nonce: string, offerScan: boolean, still: boolean): string {
+  function buildSrcdoc(html: string, allowRemote: boolean, fontSize: number, bodyFont: string, nonce: string, offerMenu: boolean, still: boolean): string {
     // the reader font preference sets the base font-family, so it applies to
     // mail that declares none. Mail that declares its own overrides it, unless
     // the sender-fonts setting is off, in which case the sanitizer has already
@@ -167,10 +173,9 @@
     // do nothing). runs inside the iframe's own document so it's a normal,
     // same-document click listener - no cross-frame event delivery involved.
     //
-    // the contextmenu half is only wired up when a scan can actually be
-    // offered: with the integration off there is nothing to put in a menu, and
+    // the contextmenu half is only wired up when there is a menu to show:
     // suppressing the default one to show nothing would just look broken.
-    const contextHandler = offerScan
+    const contextHandler = offerMenu
       ? 'document.addEventListener("contextmenu",function(e){var a=e.target&&e.target.closest("a");if(!a)return;var href=(a.getAttribute("href")||"").trim();if(!/^https?:/i.test(href))return;e.preventDefault();window.parent.postMessage({peltonContextLink:href,x:e.clientX,y:e.clientY},"*")});'
       : ''
     const hoverHandler =
@@ -239,7 +244,7 @@
     nonce = makeNonce()
   }
 
-  $: srcdoc = buildSrcdoc(shownHtml, remoteLoaded, $prefs.messageFontSize, $prefs.bodyFont, nonce, canScan, $prefs.reduceMotion)
+  $: srcdoc = buildSrcdoc(shownHtml, remoteLoaded, $prefs.messageFontSize, $prefs.bodyFont, nonce, offerMenu, $prefs.reduceMotion)
 
   // plain-text bodies render in a <pre>, not the sandboxed iframe, so bare
   // urls need their own linkification: nothing upstream turns them into real
@@ -620,14 +625,24 @@
   }
 
   let hoverUrl = ''
+  let hoverCleaned = false
 
-  // showHover updates the status overlay with the address of the hovered link,
-  // or hides it for an empty href. mailto links show just the address. The
-  // overlay is anchored to the message pane, outside its scroll area.
+  // openLink opens a link in the system browser, cleaned when that is on.
+  function openLink(href: string): void {
+    openURL(resolveLink(href, cleanOn).url)
+  }
+
+  // showHover updates the status overlay with the address a hovered link goes
+  // to, or hides it for an empty href: the cleaned address, marked as such,
+  // when cleaning changed it. mailto links show just the address. The overlay
+  // is anchored to the message pane, outside its scroll area.
   function showHover(href: string): void {
-    const shown = /^mailto:/i.test(href) ? href.slice(7).split('?')[0] : /^https?:/i.test(href) ? href : ''
-    if (shown === hoverUrl) return
+    const link = /^https?:/i.test(href) ? resolveLink(href, cleanOn) : null
+    const shown = /^mailto:/i.test(href) ? href.slice(7).split('?')[0] : (link?.url ?? '')
+    const cleaned = link?.changed ?? false
+    if (shown === hoverUrl && cleaned === hoverCleaned) return
     hoverUrl = shown
+    hoverCleaned = cleaned
     hoverSlide = 0
     if (shown) void measureHover()
   }
@@ -687,7 +702,7 @@
     }
     const href = data?.peltonOpenUrl
     if (typeof href === 'string' && /^(https?:|mailto:)/i.test(href)) {
-      openURL(href)
+      openLink(href)
       return
     }
     const link = data?.peltonContextLink
@@ -702,27 +717,49 @@
   // the measured ratio between the element's rendered and internal widths
   // rather than by reasoning about the zoom factor.
   function openLinkMenu(url: string, frameX: number, frameY: number): void {
-    if (!canScan || !frame) {
+    if (!offerMenu || !frame) {
       return
     }
     const rect = frame.getBoundingClientRect()
     const inner = frame.contentDocument?.documentElement.clientWidth ?? 0
     const scale = inner > 0 ? rect.width / inner : 1
-    openContextMenu(rect.left + frameX * scale, rect.top + frameY * scale, [
-      { label: $t('virustotal.scanLink'), icon: IconShieldSearch, action: () => void scanLink(url) },
-    ])
+    openContextMenu(rect.left + frameX * scale, rect.top + frameY * scale, linkMenuItems(url))
+  }
+
+  // linkMenuItems is the menu of a link: copy it as it would open, open the
+  // original when cleaning changed it, and scan it when that is set up.
+  function linkMenuItems(url: string): MenuItem[] {
+    const link = resolveLink(url, cleanOn)
+    const items: MenuItem[] = []
+    if ($prefs.design !== 'classic') {
+      items.push({ label: $t('links.copy'), icon: IconCopy, action: () => void copyLink(link.url) })
+      if (link.changed) {
+        items.push({ label: $t('links.openOriginal'), icon: IconExternalLink, action: () => openURL(url) })
+      }
+    }
+    if (canScan) {
+      items.push({ label: $t('virustotal.scanLink'), icon: IconShieldSearch, action: () => void scanLink(url) })
+    }
+    return items
+  }
+
+  async function copyLink(url: string): Promise<void> {
+    try {
+      await navigator.clipboard.writeText(url)
+      toastSuccess($t('links.copied'))
+    } catch (err) {
+      toastError(errorMessage(err))
+    }
   }
 
   // the plain-text body is rendered by svelte rather than in the iframe, so its
   // links get the same menu directly.
   function onPlainContext(event: MouseEvent, url: string): void {
-    if (!canScan || url === '') {
+    if (!offerMenu || url === '') {
       return
     }
     event.preventDefault()
-    openContextMenu(event.clientX, event.clientY, [
-      { label: $t('virustotal.scanLink'), icon: IconShieldSearch, action: () => void scanLink(url) },
-    ])
+    openContextMenu(event.clientX, event.clientY, linkMenuItems(url))
   }
 
   async function scanLink(url: string): Promise<void> {
@@ -1017,7 +1054,7 @@
   <pre dir="auto" class="body-plain mono selectable" style={`font-size:${$prefs.messageFontSize}px;--date-glyph:url("${calendarGlyph('currentColor')}")`} bind:this={plainBox}>{#each plainSegments as segment, si}{#if segment.href}<a
         class="plain-link"
         href={segment.href}
-        on:click|preventDefault={() => openURL(segment.href ?? '')}
+        on:click|preventDefault={() => openLink(segment.href ?? '')}
         on:contextmenu={(e) => onPlainContext(e, segment.href ?? '')}
         on:mouseenter={() => showHover(segment.href ?? '')}
         on:mouseleave={() => showHover('')}
@@ -1077,6 +1114,9 @@
       style={`--slide:-${hoverSlide}px;--slide-time:${Math.max(3, hoverSlide / 40)}s`}
       bind:this={hoverText}>{hoverUrl}</span
     >
+    {#if hoverCleaned}
+      <span class="link-hover-tag">{$t('links.cleaned')}</span>
+    {/if}
   </div>
 {/if}
 
@@ -1130,6 +1170,19 @@
   .link-hover-text {
     display: inline-block;
     padding: var(--space-1) var(--space-2);
+  }
+
+  .link-hover-tag {
+    position: absolute;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    display: flex;
+    align-items: center;
+    padding: 0 var(--space-2) 0 var(--space-3);
+    background: var(--surface-overlay);
+    color: var(--text-tertiary);
+    font-family: var(--font-ui);
   }
 
   .link-hover-text.sliding {

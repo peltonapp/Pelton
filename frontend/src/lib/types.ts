@@ -925,6 +925,14 @@ export interface UIPrefs {
   // notifyNewMail raises a native OS notification for new inbox mail. VIP
   // senders notify regardless of this (see stores/vip.ts).
   notifyNewMail: boolean
+  // notifyActionArchive, notifyActionMarkRead and notifyActionReply choose the
+  // buttons a new-mail notification carries where the system supports them.
+  notifyActionArchive: boolean
+  notifyActionMarkRead: boolean
+  notifyActionReply: boolean
+  // cleanLinks takes known tracking parameters and redirect wrappers off links
+  // opened from a mail. Off by default: it can break a sign-in or verification link.
+  cleanLinks: boolean
   // verboseSync shows which mailbox is currently syncing in the status line,
   // with the account and the server it is talking to.
   verboseSync: boolean

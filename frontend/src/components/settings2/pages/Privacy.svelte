@@ -1,13 +1,14 @@
 <script lang="ts">
   // the Privacy page: what mail may load from the network, the allowlist of
-  // trusted senders, and the proxy all of Pelton's connections go through.
+  // trusted senders, link cleaning, and the proxy all of Pelton's connections
+  // go through.
   import { createEventDispatcher } from 'svelte'
   import Card from '../ui/Card.svelte'
   import Row from '../ui/Row.svelte'
   import ToggleSwitch from '../../common/ToggleSwitch.svelte'
   import NetworkSection from '../../settings/NetworkSection.svelte'
   import RemoteContentPreview from '../skeletons/RemoteContentPreview.svelte'
-  import { prefs, setAlwaysLoadImages, setBlockTrackingPixels } from '../../../stores/prefs'
+  import { prefs, setAlwaysLoadImages, setBlockTrackingPixels, setCleanLinks } from '../../../stores/prefs'
   import { t } from '../../../lib/i18n'
   import '../../../theme/settings2-sections-system.css'
 
@@ -60,6 +61,12 @@
     <button type="button" class="s2-btn" on:click={() => (allowlistOpen = true)}>
       {$t('settingsPanel.button.manageWhitelist')}
     </button>
+  </Row>
+</Card>
+
+<Card title={$t('settings2.privacy.links')}>
+  <Row id="clean-links" label={$t('links.clean.label')} hint={$t('links.clean.hint')}>
+    <ToggleSwitch checked={$prefs.cleanLinks} label={$t('links.clean.label')} on:change={(e) => setCleanLinks(e.detail)} />
   </Row>
 </Card>
 
