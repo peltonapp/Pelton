@@ -104,6 +104,8 @@ export type ShortcutAction =
   // the shortcut sheet and focus mode, new design only.
   | 'shortcut-sheet'
   | 'focus-mode'
+  // locks the app, when the app lock is on.
+  | 'lock-app'
   // composer actions of the new design. They act on the composer that last
   // had focus, so they carry a modifier and work while typing.
   | ComposeAction
@@ -267,6 +269,9 @@ export const shortcuts: Shortcut[] = [
   // "?" is shifted on every common layout, so the key arrives with shift held.
   { action: 'shortcut-sheet', combo: 'shift+?', labelKey: 'shortcut.shortcutSheet', newDesignOnly: true },
   { action: 'focus-mode', combo: 'mod+shift+h', labelKey: 'shortcut.focusMode', newDesignOnly: true },
+  // a letter no other Shift combo here or in the editors uses; Alt would type
+  // a symbol on macOS and never match.
+  { action: 'lock-app', combo: 'mod+shift+n', labelKey: 'shortcut.lockApp' },
   // the send key with one more modifier, so the variants sit beside it.
   { action: 'compose-send-archive', combo: 'mod+shift+enter', labelKey: 'sendVariant.archive' },
   { action: 'compose-send-remind', combo: 'mod+alt+enter', labelKey: 'sendVariant.remind' },

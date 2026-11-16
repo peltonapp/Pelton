@@ -44,6 +44,12 @@ var backupSkipSettings = map[string]bool{
 	settingRemoteDomains:   true,
 	draftsKey:              true,
 	settingThemesSeeded:    true,
+	// the app lock belongs to this install: a backup must neither carry the
+	// passphrase hash away nor switch the lock off on import.
+	settingAppLock:           true,
+	settingAppLockMethod:     true,
+	settingAppLockPassphrase: true,
+	settingAppLockFailures:   true,
 }
 
 // whitelistBackup is the trusted-sender allowlist as exported.

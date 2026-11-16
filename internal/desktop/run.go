@@ -100,6 +100,9 @@ func Run(cfg Config) error {
 		},
 		Assets: application.AssetOptions{
 			Handler: application.AssetFileServerFS(dist),
+			// while the app lock is engaged, bound calls are refused here
+			// (lockgate.go).
+			Middleware: newLockGate(app.locked).middleware,
 		},
 		// saving the window frame and closing the store happen here, before
 		// wails tears the window down.

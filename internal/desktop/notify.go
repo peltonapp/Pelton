@@ -115,6 +115,10 @@ type notifyStrings struct {
 	focusOneVIP     string // one message, from a VIP
 	focusManyVIP    string // %d messages, %d of them from VIPs
 	focusManyOneVIP string // %d messages, one of them from a VIP
+
+	// the body that stands in for any notification while the app is locked
+	// with notifications hidden (applock.go).
+	locked string
 }
 
 var notifyLocales = map[string]notifyStrings{
@@ -123,72 +127,84 @@ var notifyLocales = map[string]notifyStrings{
 		followUp: "No reply yet", followUpTo: "To %s",
 		focusEnded: "Focus ended", focusOne: "1 new message", focusOneVIP: "1 new message, from a VIP",
 		focusManyVIP: "%d new messages, %d from VIPs", focusManyOneVIP: "%d new messages, 1 from a VIP",
+		locked: "Unlock Pelton to see what is new.",
 	},
 	"de": {
 		newMail: "Neue Nachricht", vipNewMail: "Neue Nachricht von einem VIP", noSubject: "(kein Betreff)", fromUnknown: "Unbekannter Absender", summary: "%d neue Nachrichten",
 		followUp: "Noch keine Antwort", followUpTo: "An %s",
 		focusEnded: "Fokus beendet", focusOne: "1 neue Nachricht", focusOneVIP: "1 neue Nachricht, von einem VIP",
 		focusManyVIP: "%d neue Nachrichten, %d von VIPs", focusManyOneVIP: "%d neue Nachrichten, 1 von einem VIP",
+		locked: "Entsperre Pelton, um zu sehen, was neu ist.",
 	},
 	"fr": {
 		newMail: "Nouveau message", vipNewMail: "Nouveau message d'un VIP", noSubject: "(sans objet)", fromUnknown: "Expéditeur inconnu", summary: "%d nouveaux messages",
 		followUp: "Pas encore de réponse", followUpTo: "À %s",
 		focusEnded: "Concentration terminée", focusOne: "1 nouveau message", focusOneVIP: "1 nouveau message, d'un VIP",
 		focusManyVIP: "%d nouveaux messages, dont %d de VIP", focusManyOneVIP: "%d nouveaux messages, dont 1 d'un VIP",
+		locked: "Déverrouille Pelton pour voir les nouveautés.",
 	},
 	"nl": {
 		newMail: "Nieuw bericht", vipNewMail: "Nieuw bericht van een VIP", noSubject: "(geen onderwerp)", fromUnknown: "Onbekende afzender", summary: "%d nieuwe berichten",
 		followUp: "Nog geen antwoord", followUpTo: "Aan %s",
 		focusEnded: "Focus beëindigd", focusOne: "1 nieuw bericht", focusOneVIP: "1 nieuw bericht, van een VIP",
 		focusManyVIP: "%d nieuwe berichten, %d van VIP's", focusManyOneVIP: "%d nieuwe berichten, 1 van een VIP",
+		locked: "Ontgrendel Pelton om te zien wat er nieuw is.",
 	},
 	"es": {
 		newMail: "Nuevo mensaje", vipNewMail: "Nuevo mensaje de un VIP", noSubject: "(sin asunto)", fromUnknown: "Remitente desconocido", summary: "%d mensajes nuevos",
 		followUp: "Aún sin respuesta", followUpTo: "Para %s",
 		focusEnded: "Concentración terminada", focusOne: "1 mensaje nuevo", focusOneVIP: "1 mensaje nuevo, de un VIP",
 		focusManyVIP: "%d mensajes nuevos, %d de VIP", focusManyOneVIP: "%d mensajes nuevos, 1 de un VIP",
+		locked: "Desbloquea Pelton para ver las novedades.",
 	},
 	"it": {
 		newMail: "Nuova email", vipNewMail: "Nuova email da un VIP", noSubject: "(nessun oggetto)", fromUnknown: "Mittente sconosciuto", summary: "%d nuove email",
 		followUp: "Ancora nessuna risposta", followUpTo: "A %s",
 		focusEnded: "Concentrazione terminata", focusOne: "1 nuova email", focusOneVIP: "1 nuova email, da un VIP",
 		focusManyVIP: "%d nuove email, %d da VIP", focusManyOneVIP: "%d nuove email, 1 da un VIP",
+		locked: "Sblocca Pelton per vedere le novità.",
 	},
 	"pl": {
 		newMail: "Nowa wiadomość", vipNewMail: "Nowa wiadomość od VIP-a", noSubject: "(bez tematu)", fromUnknown: "Nieznany nadawca", summary: "Nowe wiadomości: %d",
 		followUp: "Brak odpowiedzi", followUpTo: "Do: %s",
 		focusEnded: "Skupienie zakończone", focusOne: "1 nowa wiadomość", focusOneVIP: "1 nowa wiadomość, od VIP-a",
 		focusManyVIP: "Nowe wiadomości: %d, od VIP-ów: %d", focusManyOneVIP: "Nowe wiadomości: %d, od VIP-a: 1",
+		locked: "Odblokuj Pelton, aby zobaczyć, co nowego.",
 	},
 	"ru": {
 		newMail: "Новая почта", vipNewMail: "Новая почта от VIP-отправителя", noSubject: "(без темы)", fromUnknown: "Неизвестный отправитель", summary: "Новых писем: %d",
 		followUp: "Ответа пока нет", followUpTo: "Кому: %s",
 		focusEnded: "Режим фокуса завершён", focusOne: "1 новое письмо", focusOneVIP: "1 новое письмо, от VIP-отправителя",
 		focusManyVIP: "Новых писем: %d, от VIP: %d", focusManyOneVIP: "Новых писем: %d, от VIP: 1",
+		locked: "Разблокируйте Pelton, чтобы увидеть новое.",
 	},
 	"tr": {
 		newMail: "Yeni posta", vipNewMail: "Bir VIP'ten yeni posta", noSubject: "(konu yok)", fromUnknown: "Bilinmeyen gönderici", summary: "%d yeni posta",
 		followUp: "Henüz yanıt yok", followUpTo: "Alıcı: %s",
 		focusEnded: "Odak sona erdi", focusOne: "1 yeni posta", focusOneVIP: "1 yeni posta, bir VIP'ten",
 		focusManyVIP: "%d yeni posta, %d tanesi VIP'lerden", focusManyOneVIP: "%d yeni posta, 1 tanesi bir VIP'ten",
+		locked: "Yenilikleri görmek için Pelton'un kilidini açın.",
 	},
 	"pt": {
 		newMail: "Correio novo", vipNewMail: "Correio novo de um VIP", noSubject: "(sem assunto)", fromUnknown: "Remetente desconhecido", summary: "%d mensagens novas",
 		followUp: "Ainda sem resposta", followUpTo: "Para %s",
 		focusEnded: "Foco terminado", focusOne: "1 mensagem nova", focusOneVIP: "1 mensagem nova, de um VIP",
 		focusManyVIP: "%d mensagens novas, %d de VIPs", focusManyOneVIP: "%d mensagens novas, 1 de um VIP",
+		locked: "Desbloqueie o Pelton para ver as novidades.",
 	},
 	"ar": {
 		newMail: "بريد جديد", vipNewMail: "بريد جديد من جهة مهمة", noSubject: "(بلا موضوع)", fromUnknown: "مرسل غير معروف", summary: "رسائل جديدة: %d",
 		followUp: "لا رد بعد", followUpTo: "إلى %s",
 		focusEnded: "انتهى وضع التركيز", focusOne: "رسالة جديدة واحدة", focusOneVIP: "رسالة جديدة واحدة من جهة مهمة",
 		focusManyVIP: "رسائل جديدة: %d، من جهات مهمة: %d", focusManyOneVIP: "رسائل جديدة: %d، من جهة مهمة: 1",
+		locked: "افتح قفل Pelton لرؤية الجديد.",
 	},
 	"zh-CN": {
 		newMail: "新邮件", vipNewMail: "来自 VIP 的新邮件", noSubject: "（无主题）", fromUnknown: "未知发件人", summary: "%d 封新邮件",
 		followUp: "尚无回复", followUpTo: "收件人：%s",
 		focusEnded: "专注已结束", focusOne: "1 封新邮件", focusOneVIP: "1 封新邮件，来自 VIP",
 		focusManyVIP: "%d 封新邮件，其中 %d 封来自 VIP", focusManyOneVIP: "%d 封新邮件，其中 1 封来自 VIP",
+		locked: "解锁 Pelton 以查看新内容。",
 	},
 }
 
@@ -301,6 +317,7 @@ func notifyBody(m *storage.Message, s notifyStrings) string {
 // The delivery itself is per platform: see notify_darwin.go, notify_windows.go
 // and notify_other.go.
 func (a *App) sendNotification(n notification) {
+	n = a.maskForLock(n)
 	if err := a.deliverNotification(n); err != nil {
 		a.log.Warn("notify", "err", err)
 	}

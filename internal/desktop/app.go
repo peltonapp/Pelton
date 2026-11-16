@@ -15,6 +15,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/peltonapp/Pelton/internal/applock"
 	"github.com/peltonapp/Pelton/internal/certtrust"
 	"github.com/peltonapp/Pelton/internal/configsync"
 	pimap "github.com/peltonapp/Pelton/internal/imap"
@@ -226,6 +227,21 @@ type App struct {
 	// focusMu serialises changes to the stored focus state (bind_focus.go),
 	// which the ticker, the bindings and the new-mail path all write.
 	focusMu sync.Mutex
+
+	// lock is the app lock (applock.go) and sysAuth the system's own
+	// authentication prompt behind it. authMu keeps to one prompt at a time,
+	// and lockHidden, under lockWinMu, names the windows the lock hid.
+	lock       *applock.Locker
+	sysAuth    systemAuth
+	authMu     sync.Mutex
+	lockWinMu  sync.Mutex
+	lockHidden []string
+}
+
+// locked reports whether the app lock is engaged. An App built without one,
+// as most tests build it, is never locked.
+func (a *App) locked() bool {
+	return a.lock != nil && a.lock.Locked()
 }
 
 // IsDemoMode reports whether the app was launched in the cosmetic demo mode. The
@@ -257,6 +273,9 @@ func newApp(version, channel string) *App {
 		storeReady: make(chan struct{}),
 	}
 	a.activity = outbox.NewActivityLog(activityLogSize, a.emitActivity)
+	a.lock = applock.New(nil)
+	a.lock.OnChange(a.onLockChanged)
+	a.sysAuth = newSystemAuth()
 	return a
 }
 
@@ -309,6 +328,9 @@ func (a *App) startup(ctx context.Context) {
 	a.applyCharsetFallback()
 	a.queue = outbox.NewQueue(store)
 	a.loadProxy()
+	// before the window exists, so a lock that starts locked is in place
+	// before anything can ask for mail.
+	a.initLock()
 	close(a.storeReady)
 
 	// as early as the store allows, so the window opens at its remembered

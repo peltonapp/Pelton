@@ -127,6 +127,10 @@ const defaults: UIPrefs = {
   signatureAboveQuote: false,
   closeAction: 'background',
   startHidden: false,
+  appLock: false,
+  appLockIdleMinutes: 5,
+  appLockOnLaunch: true,
+  appLockHideNotifications: true,
   syncMessageLimit: 50,
   syncAutoBackfill: true,
   startupSelection: 'view:inbox',
@@ -801,6 +805,29 @@ export function setCloseAction(value: CloseAction): void {
 export function setStartHidden(value: boolean): void {
   prefs.update((p) => ({ ...p, startHidden: value }))
   void setSetting(SettingKeys.startHidden, String(value))
+}
+
+/** Records in the store that the app lock was turned on or off by the backend. */
+export function noteAppLock(on: boolean): void {
+  prefs.update((p) => ({ ...p, appLock: on }))
+}
+
+/** Sets how many idle minutes lock the app; 0 locks only on demand and at launch. */
+export function setAppLockIdleMinutes(value: number): void {
+  prefs.update((p) => ({ ...p, appLockIdleMinutes: value }))
+  void setSetting(SettingKeys.appLockIdleMinutes, String(value))
+}
+
+/** Picks whether Pelton starts locked while the lock is on. */
+export function setAppLockOnLaunch(value: boolean): void {
+  prefs.update((p) => ({ ...p, appLockOnLaunch: value }))
+  void setSetting(SettingKeys.appLockOnLaunch, String(value))
+}
+
+/** Picks whether notifications leave out senders and subjects while locked. */
+export function setAppLockHideNotifications(value: boolean): void {
+  prefs.update((p) => ({ ...p, appLockHideNotifications: value }))
+  void setSetting(SettingKeys.appLockHideNotifications, String(value))
 }
 
 // setSyncMessageLimit caps how many of a folder's newest messages a first sync

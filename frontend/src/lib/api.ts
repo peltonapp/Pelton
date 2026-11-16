@@ -133,6 +133,8 @@ import type {
   SieveSave,
   SieveVacation,
   SieveRule,
+  LockState,
+  LockAuthResult,
 } from './types'
 import { normalizeState } from './sieve'
 
@@ -1775,6 +1777,57 @@ export function hideApp(): void {
   void App.HideApp()
 }
 
+// --- app lock ---
+
+/** Whether the lock is on and the app locked, and the look the lock screen takes. */
+export function getLockState(): Promise<LockState> {
+  return App.GetLockState() as unknown as Promise<LockState>
+}
+
+/** Locks the app, when the lock is on. */
+export function lockNow(): Promise<void> {
+  return App.LockNow()
+}
+
+/** Tells the idle check the app is in use. */
+export function noteActivity(): Promise<void> {
+  return App.NoteActivity()
+}
+
+/** Shows the system prompt with reason and unlocks when it passes. */
+export function unlockWithSystem(reason: string): Promise<LockAuthResult> {
+  return App.UnlockWithSystem(reason) as unknown as Promise<LockAuthResult>
+}
+
+/** Unlocks with the lock passphrase. */
+export function unlockWithPassphrase(passphrase: string): Promise<LockAuthResult> {
+  return App.UnlockWithPassphrase(passphrase) as unknown as Promise<LockAuthResult>
+}
+
+/**
+ * Turns the lock on: with a passphrase when one is given, otherwise with the
+ * system prompt, which has to pass once first.
+ */
+export function enableAppLock(passphrase: string, reason: string): Promise<LockAuthResult> {
+  return App.EnableAppLock(passphrase, reason) as unknown as Promise<LockAuthResult>
+}
+
+/** Turns the lock off once the system prompt or the passphrase has passed. */
+export function disableAppLock(passphrase: string, reason: string): Promise<LockAuthResult> {
+  return App.DisableAppLock(passphrase, reason) as unknown as Promise<LockAuthResult>
+}
+
+/** Replaces the lock passphrase once the current one has been checked. */
+export function changeLockPassphrase(current: string, next: string): Promise<LockAuthResult> {
+  return App.ChangeLockPassphrase(current, next) as unknown as Promise<LockAuthResult>
+}
+
+/** Whether a bound call was refused because the app is locked. */
+export function isLockedError(err: unknown): boolean {
+  const cause = (err as { cause?: { code?: unknown } } | null)?.cause
+  return typeof cause === 'object' && cause !== null && cause.code === 'locked'
+}
+
 // isFullscreen reports whether the window is fullscreen.
 export function isFullscreen(): Promise<boolean> {
   return App.IsFullscreen()
@@ -1971,6 +2024,10 @@ export const SettingKeys = {
   signatureAboveQuote: 'signature_above_quote',
   closeAction: 'close_button_action',
   startHidden: 'start_hidden',
+  appLock: 'app_lock',
+  appLockIdleMinutes: 'app_lock_idle_minutes',
+  appLockOnLaunch: 'app_lock_on_launch',
+  appLockHideNotifications: 'app_lock_hide_notifications',
   syncMessageLimit: 'sync_message_limit',
   syncAutoBackfill: 'sync_auto_backfill',
   startupSelection: 'startup_selection',

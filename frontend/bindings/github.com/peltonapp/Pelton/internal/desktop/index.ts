@@ -85,6 +85,8 @@ export {
     InviteDTO,
     LinkVerdictDTO,
     ListMessagesRequest,
+    LockAuthResultDTO,
+    LockStateDTO,
     LogStatusDTO,
     MCPConfigDTO,
     MCPPermissionDTO,
