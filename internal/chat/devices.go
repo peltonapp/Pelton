@@ -137,7 +137,7 @@ func (s *session) notify(ctx context.Context, list []incomingMessage) {
 		n.Sender = s.member(ctx, in.room, in.evt.Sender).Name
 		if dec, err := s.decrypt(ctx, in.evt); err == nil {
 			if c, ok := dec.Content.Parsed.(*event.MessageEventContent); ok {
-				c.RemoveReplyFallback()
+				stripReplyFallback(c)
 				n.Body = previewText(dec.Type, c)
 				n.Mention = s.mentions(c)
 			}

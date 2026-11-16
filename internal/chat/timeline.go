@@ -326,7 +326,7 @@ func (s *session) toMessage(ctx context.Context, roomID id.RoomID, row eventRow,
 			msg.Edited = true
 		}
 	}
-	content.RemoveReplyFallback()
+	stripReplyFallback(content)
 	fillContent(msg, dec.Type, content)
 	msg.Mentioned = !msg.Own && s.mentions(content)
 
@@ -407,11 +407,24 @@ func (s *session) replyPreview(ctx context.Context, roomID id.RoomID, target id.
 	}
 	if dec, err := s.decrypt(ctx, evt); err == nil {
 		if c, ok := dec.Content.Parsed.(*event.MessageEventContent); ok {
-			c.RemoveReplyFallback()
+			stripReplyFallback(c)
 			rep.Body = previewText(dec.Type, c)
 		}
 	}
 	return rep
+}
+
+// stripReplyFallback removes the quote of the original that older clients put
+// at the top of a reply, in the HTML and in the plain body. The reply itself
+// shows the original.
+func stripReplyFallback(c *event.MessageEventContent) {
+	if c.RelatesTo.GetReplyTo() == "" {
+		return
+	}
+	if c.Format == event.FormatHTML {
+		c.FormattedBody = event.TrimReplyFallbackHTML(c.FormattedBody)
+	}
+	c.Body = event.TrimReplyFallbackText(c.Body)
 }
 
 // previewText is a one-line rendering of a message, for replies and the room

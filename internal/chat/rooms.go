@@ -232,7 +232,7 @@ func (s *session) fillPreview(ctx context.Context, r roomRow, room *Room) {
 	var msg Message
 	fillContent(&msg, dec.Type, c)
 	room.PreviewKind = msg.Kind
-	c.RemoveReplyFallback()
+	stripReplyFallback(c)
 	room.Preview = previewText(dec.Type, c)
 }
 
