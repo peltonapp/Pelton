@@ -4,7 +4,7 @@
   // changed anywhere. Both versions are shown and the user picks which one
   // survives. Nothing is decided for them: either choice loses something.
   import Modal from '../common/Modal.svelte'
-  import { contactConflict, dismissConflict, saveContact, loadContacts } from '../../stores/contacts'
+  import { dismissConflict, saveContact, loadContacts } from '../../stores/contacts'
   import { t } from '../../lib/i18n'
   import type { Contact, ContactConflict } from '../../lib/types'
 

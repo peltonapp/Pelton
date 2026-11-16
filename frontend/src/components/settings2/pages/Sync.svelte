@@ -26,7 +26,7 @@
   import { downloadRange, cancelDownload, getLogStatus, openLogFolder, deleteLogs } from '../../../lib/api'
   import { downloadProgress } from '../../../stores/progress'
   import { toastInfo, toastError, errorMessage } from '../../../stores/toast'
-  import { isMac, t } from '../../../lib/i18n'
+  import { t } from '../../../lib/i18n'
   import type { LogLevel, LogStatus } from '../../../lib/types'
   import '../../../theme/settings2-sections-system.css'
 
