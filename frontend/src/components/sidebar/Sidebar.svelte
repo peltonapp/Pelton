@@ -8,6 +8,7 @@
   import AccountTree from './AccountTree.svelte'
   import PinnedFolders from './PinnedFolders.svelte'
   import SavedViews from './SavedViews.svelte'
+  import SidebarProjects from './SidebarProjects.svelte'
   import Spinner from '../common/Spinner.svelte'
   import ErrorState from '../common/ErrorState.svelte'
   import EmptyState from '../common/EmptyState.svelte'
@@ -157,6 +158,9 @@
           {/if}
           {#if placement === 'sidebar'}
             <SavedViews views={$views} on:new={openNew} on:edit={(e) => openEdit(e.detail)} />
+          {/if}
+          {#if $prefs.design !== 'classic'}
+            <SidebarProjects />
           {/if}
           <div use:reorder on:reorder={onReorderAccounts}>
             {#each $sidebar.data.accounts as account (account.id)}

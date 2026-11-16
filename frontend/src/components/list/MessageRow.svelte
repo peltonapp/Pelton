@@ -39,6 +39,8 @@
   import mutedIcon from '@phosphor-icons/core/assets/duotone/bell-slash-duotone.svg?raw'
   import pinIcon from '@phosphor-icons/core/assets/duotone/push-pin-duotone.svg?raw'
   import { taskMailMarks } from '../../stores/tasks'
+  import { projectMailMarks, projects } from '../../stores/projects'
+  import { projectColor } from '../../lib/projectlogic'
   import { highlightTerms } from '../../stores/search'
 
   export let message: MessageSummary
@@ -74,6 +76,9 @@
   // such task is done.
   $: taskMark = newDesign ? $taskMailMarks.get(message.id) : undefined
   $: pinned = newDesign && !child && (!!message.pinned || !!thread?.pinned)
+  // the project the conversation is filed under, the first when several.
+  $: projectIds = newDesign && !child && message.threadId ? ($projectMailMarks.get(message.threadId) ?? []) : []
+  $: inProject = projectIds.length ? $projects.find((p) => p.id === projectIds[0]) : undefined
 
   // a reply under its conversation repeats the subject above it, so it shows
   // what it says instead.
@@ -329,6 +334,15 @@
           <span dir="auto" class="subject inline"><Highlight text={secondLine} terms={$highlightTerms} /></span>
         {/if}
         <span class="meta">
+          {#if inProject}
+            <span
+              class="project"
+              style={`--project:${projectColor(inProject)}`}
+              title={projectIds.length > 1 ? $t('projects.chip.many').replace('{name}', inProject.name).replace('{n}', String(projectIds.length - 1)) : $t('projects.chip.one').replace('{name}', inProject.name)}
+            >
+              <span class="project-dot" aria-hidden="true"></span><span class="project-name">{inProject.name}</span>
+            </span>
+          {/if}
           {#if expandable && !child && thread}
             <span
               class="count"
@@ -709,6 +723,36 @@
 
   .marker.task.done {
     color: var(--text-tertiary);
+  }
+
+  /* the project a conversation is filed under: a dot in its color and its
+     name, cut short so the date keeps its place. */
+  .project {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-1);
+    max-width: calc(var(--space-6) * 4);
+    padding: 0 var(--space-1);
+    border: var(--hairline) solid var(--border-subtle);
+    border-radius: var(--radius-control);
+    color: var(--text-secondary);
+    font-size: var(--fz-meta);
+    line-height: 1.5;
+  }
+
+  .project-name {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .project-dot {
+    flex-shrink: 0;
+    width: 0.55em;
+    height: 0.55em;
+    border-radius: 50%;
+    background: var(--project);
   }
 
   .subject.reply-text {

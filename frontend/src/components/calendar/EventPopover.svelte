@@ -23,12 +23,14 @@
   import Ph from '../common/Ph.svelte'
   import PieProgress from '../common/PieProgress.svelte'
   import AnchoredPopover from '../common/AnchoredPopover.svelte'
-  import { getEvent } from '../../lib/api'
+  import { getEvent, projectsOfEvent, setEventProject } from '../../lib/api'
+  import kanbanIcon from '@phosphor-icons/core/assets/duotone/kanban-duotone.svg?raw'
+  import ProjectMenu from '../projects/ProjectMenu.svelte'
   import { placeOccurrence } from '../../lib/caldate'
   import { formatWhen } from '../../lib/calformat'
   import { describeRRule } from '../../lib/recurrence'
   import { reminderLabel, partStatKey } from './labels'
-  import { errorMessage } from '../../stores/toast'
+  import { errorMessage, toastError } from '../../stores/toast'
   import { dur, motion } from '../../lib/motion'
   import { t } from '../../lib/i18n'
   import type { TimeFormat } from '../../lib/format'
@@ -64,11 +66,27 @@
   onMount(async () => {
     try {
       event = await getEvent(occ.eventId, occ.recurrenceId)
+      projectId = (await projectsOfEvent(occ.uid))[0] ?? 0
     } catch (err) {
       error = errorMessage(err)
     }
     popover?.reposition()
   })
+
+  // the project the event is filed under, 0 for none. filing is kept on this
+  // device and never written into the event.
+  let projectId = 0
+
+  async function fileUnder(id: number): Promise<void> {
+    const before = projectId
+    projectId = id
+    try {
+      await setEventProject(occ.uid, occ.summary, id)
+    } catch (err) {
+      projectId = before
+      toastError(errorMessage(err))
+    }
+  }
 
   function askDelete(): void {
     if (occ.recurring) {
@@ -183,6 +201,12 @@
             <dd><button type="button" class="cal-btn" on:click={() => openMailLink(link)}>{$t('calendar.openMail')}</button></dd>
           </div>
         {/each}
+      {/if}
+      {#if event}
+        <div class="line">
+          <dt><Ph svg={kanbanIcon} size={15} /></dt>
+          <dd><ProjectMenu value={projectId} buttonClass="cal-btn project" on:change={(e) => void fileUnder(e.detail)} /></dd>
+        </div>
       {/if}
       {#if occ.conflict || event?.syncError}
         <div class="line warn">

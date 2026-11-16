@@ -19,6 +19,7 @@
     setOpenOnArrow,
     setSenderPanel,
     setMailDates,
+    setProjectSuggestions,
   } from '../../../stores/prefs'
   import { bodyFonts, bodyFontStack } from '../../../lib/fonts'
   import { listSystemFonts, getSetting, setSetting } from '../../../lib/api'
@@ -162,6 +163,9 @@
   </Row>
   <Row id="sender-panel" label={$t('senderPanel.setting')} hint={$t('senderPanel.settingHint')}>
     <ToggleSwitch checked={$prefs.senderPanel} label={$t('senderPanel.setting')} on:change={(e) => setSenderPanel(e.detail)} />
+  </Row>
+  <Row id="project-suggestions" label={$t('projects.settings.suggestions')} hint={$t('projects.settings.suggestionsHint')}>
+    <ToggleSwitch checked={$prefs.projectSuggestions} label={$t('projects.settings.suggestions')} on:change={(e) => setProjectSuggestions(e.detail)} />
   </Row>
 </Card>
 
