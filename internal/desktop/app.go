@@ -226,6 +226,9 @@ type App struct {
 	// focusMu serialises changes to the stored focus state (bind_focus.go),
 	// which the ticker, the bindings and the new-mail path all write.
 	focusMu sync.Mutex
+
+	// chat is the opt in Matrix chat of the active profile (bind_chat.go).
+	chat chatState
 }
 
 // IsDemoMode reports whether the app was launched in the cosmetic demo mode. The
@@ -405,6 +408,7 @@ func (a *App) shutdown() {
 	a.saveGeometry()
 	a.stopTray()
 	a.stopMCP()
+	a.stopChat()
 	// a message sent just before quitting may still be on its way to Sent.
 	copied := make(chan struct{})
 	go func() {

@@ -26,11 +26,16 @@ type notification struct {
 	title     string
 	body      string
 	messageID int64
+	// chatRoom is the chat room a chat notification is about.
+	chatRoom string
 }
 
 // notifyDataMessageID is the key of the message id in a notification's data.
 // The OS hands the data back on a click.
 const notifyDataMessageID = "messageId"
+
+// notifyDataChatRoom is the key of the chat room id in a notification's data.
+const notifyDataChatRoom = "chatRoom"
 
 // notifySeq makes notification ids unique within a run.
 var notifySeq atomic.Int64
@@ -71,6 +76,9 @@ func (a *App) deliverNotification(n notification) error {
 	if n.messageID > 0 {
 		data[notifyDataMessageID] = n.messageID
 	}
+	if n.chatRoom != "" {
+		data[notifyDataChatRoom] = n.chatRoom
+	}
 	return a.notifier.SendNotification(notifications.NotificationOptions{
 		ID:    "pelton-" + strconv.FormatInt(notifySeq.Add(1), 10),
 		Title: n.title,
@@ -90,6 +98,10 @@ func (a *App) onNotificationResponse(result notifications.NotificationResult) {
 	}
 	if id, ok := notifyMessageID(result.Response.UserInfo); ok {
 		a.openFromNotification(id)
+		return
+	}
+	if room, ok := result.Response.UserInfo[notifyDataChatRoom].(string); ok && room != "" {
+		a.openChatFromNotification(room)
 		return
 	}
 	a.showWindow()
