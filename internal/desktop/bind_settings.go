@@ -238,6 +238,19 @@ const (
 	// holds that remembered selection in the same "view:"/"folder:" form.
 	settingStartupSelection = "startup_selection"
 	settingLastSelection    = "last_selection"
+	// the notes space: the folder of Markdown files (empty means the Notes
+	// folder in the data directory), where daily notes go and how they are
+	// named, the note a daily note starts from, the folders of templates and
+	// of pasted images, the mode a note opens in (live, source or reading)
+	// and how wide its text runs (narrow, medium or full).
+	settingNotesVault         = "notes_vault"
+	settingNotesDailyFolder   = "notes_daily_folder"
+	settingNotesDailyFormat   = "notes_daily_format"
+	settingNotesDailyTemplate = "notes_daily_template"
+	settingNotesTemplates     = "notes_templates_folder"
+	settingNotesAttachments   = "notes_attachments_folder"
+	settingNotesEditorMode    = "notes_editor_mode"
+	settingNotesLineWidth     = "notes_line_width"
 )
 
 // defaultStartupSelection is the unified inbox, which is where every version
@@ -582,6 +595,22 @@ type UIPrefsDTO struct {
 	LogLevel           string `json:"logLevel"`
 	LogMessageMetadata bool   `json:"logMessageMetadata"`
 	CrashLogs          bool   `json:"crashLogs"`
+	// NotesVault is the notes folder the user chose, empty for the Notes
+	// folder in the data directory. NotesDailyFolder and NotesDailyFormat
+	// place and name the daily notes (YYYY-MM-DD style tokens);
+	// NotesDailyTemplate is the template note a daily note starts from, empty
+	// for the built-in one. NotesTemplatesFolder holds the templates and
+	// NotesAttachmentsFolder pasted images. NotesEditorMode is how a note
+	// opens: live, source or reading. NotesLineWidth caps the text: narrow,
+	// medium or full.
+	NotesVault             string `json:"notesVault"`
+	NotesDailyFolder       string `json:"notesDailyFolder"`
+	NotesDailyFormat       string `json:"notesDailyFormat"`
+	NotesDailyTemplate     string `json:"notesDailyTemplate"`
+	NotesTemplatesFolder   string `json:"notesTemplatesFolder"`
+	NotesAttachmentsFolder string `json:"notesAttachmentsFolder"`
+	NotesEditorMode        string `json:"notesEditorMode"`
+	NotesLineWidth         string `json:"notesLineWidth"`
 }
 
 // GetUIPrefs returns all ui preferences with defaults filled in, so startup is a
@@ -710,6 +739,14 @@ func (a *App) GetUIPrefs() (UIPrefsDTO, error) {
 		LogLevel:                   logging.LevelName(a.logLevel()),
 		LogMessageMetadata:         a.boolSetting(settingLogMessageMetadata, false),
 		CrashLogs:                  a.crashLogsOn(),
+		NotesVault:                 a.stringSetting(settingNotesVault, ""),
+		NotesDailyFolder:           a.stringSetting(settingNotesDailyFolder, "Daily"),
+		NotesDailyFormat:           a.stringSetting(settingNotesDailyFormat, "YYYY-MM-DD"),
+		NotesDailyTemplate:         a.stringSetting(settingNotesDailyTemplate, ""),
+		NotesTemplatesFolder:       a.stringSetting(settingNotesTemplates, "Templates"),
+		NotesAttachmentsFolder:     a.stringSetting(settingNotesAttachments, defaultAttachmentsDir),
+		NotesEditorMode:            a.stringSetting(settingNotesEditorMode, "live"),
+		NotesLineWidth:             a.stringSetting(settingNotesLineWidth, "medium"),
 	}, nil
 }
 

@@ -9297,6 +9297,25 @@ export class UIPrefsDTO {
     "logMessageMetadata": boolean;
     "crashLogs": boolean;
 
+    /**
+     * NotesVault is the notes folder the user chose, empty for the Notes
+     * folder in the data directory. NotesDailyFolder and NotesDailyFormat
+     * place and name the daily notes (YYYY-MM-DD style tokens);
+     * NotesDailyTemplate is the template note a daily note starts from, empty
+     * for the built-in one. NotesTemplatesFolder holds the templates and
+     * NotesAttachmentsFolder pasted images. NotesEditorMode is how a note
+     * opens: live, source or reading. NotesLineWidth caps the text: narrow,
+     * medium or full.
+     */
+    "notesVault": string;
+    "notesDailyFolder": string;
+    "notesDailyFormat": string;
+    "notesDailyTemplate": string;
+    "notesTemplatesFolder": string;
+    "notesAttachmentsFolder": string;
+    "notesEditorMode": string;
+    "notesLineWidth": string;
+
     /** Creates a new UIPrefsDTO instance. */
     constructor($$source: Partial<UIPrefsDTO> = {}) {
         if (!("theme" in $$source)) {
@@ -9652,6 +9671,30 @@ export class UIPrefsDTO {
         }
         if (!("crashLogs" in $$source)) {
             this["crashLogs"] = false;
+        }
+        if (!("notesVault" in $$source)) {
+            this["notesVault"] = "";
+        }
+        if (!("notesDailyFolder" in $$source)) {
+            this["notesDailyFolder"] = "";
+        }
+        if (!("notesDailyFormat" in $$source)) {
+            this["notesDailyFormat"] = "";
+        }
+        if (!("notesDailyTemplate" in $$source)) {
+            this["notesDailyTemplate"] = "";
+        }
+        if (!("notesTemplatesFolder" in $$source)) {
+            this["notesTemplatesFolder"] = "";
+        }
+        if (!("notesAttachmentsFolder" in $$source)) {
+            this["notesAttachmentsFolder"] = "";
+        }
+        if (!("notesEditorMode" in $$source)) {
+            this["notesEditorMode"] = "";
+        }
+        if (!("notesLineWidth" in $$source)) {
+            this["notesLineWidth"] = "";
         }
 
         Object.assign(this, $$source);
@@ -10092,6 +10135,439 @@ export class UserLocaleDTO {
 }
 
 /**
+ * VaultFileDTO is a note's text as it is on disk.
+ */
+export class VaultFileDTO {
+    "path": string;
+    "content": string;
+    "hash": string;
+    "mtime": number;
+    "readOnly": boolean;
+
+    /** Creates a new VaultFileDTO instance. */
+    constructor($$source: Partial<VaultFileDTO> = {}) {
+        if (!("path" in $$source)) {
+            this["path"] = "";
+        }
+        if (!("content" in $$source)) {
+            this["content"] = "";
+        }
+        if (!("hash" in $$source)) {
+            this["hash"] = "";
+        }
+        if (!("mtime" in $$source)) {
+            this["mtime"] = 0;
+        }
+        if (!("readOnly" in $$source)) {
+            this["readOnly"] = false;
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new VaultFileDTO instance from a string or object.
+     */
+    static createFrom($$source: any = {}): VaultFileDTO {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new VaultFileDTO($$parsedSource as Partial<VaultFileDTO>);
+    }
+}
+
+/**
+ * VaultHeadingDTO is one heading of a note; line counts from 0.
+ */
+export class VaultHeadingDTO {
+    "level": number;
+    "text": string;
+    "line": number;
+
+    /** Creates a new VaultHeadingDTO instance. */
+    constructor($$source: Partial<VaultHeadingDTO> = {}) {
+        if (!("level" in $$source)) {
+            this["level"] = 0;
+        }
+        if (!("text" in $$source)) {
+            this["text"] = "";
+        }
+        if (!("line" in $$source)) {
+            this["line"] = 0;
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new VaultHeadingDTO instance from a string or object.
+     */
+    static createFrom($$source: any = {}): VaultHeadingDTO {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new VaultHeadingDTO($$parsedSource as Partial<VaultHeadingDTO>);
+    }
+}
+
+/**
+ * VaultHitDTO is one search result with the line that matched.
+ */
+export class VaultHitDTO {
+    "path": string;
+    "title": string;
+    "context": string;
+
+    /** Creates a new VaultHitDTO instance. */
+    constructor($$source: Partial<VaultHitDTO> = {}) {
+        if (!("path" in $$source)) {
+            this["path"] = "";
+        }
+        if (!("title" in $$source)) {
+            this["title"] = "";
+        }
+        if (!("context" in $$source)) {
+            this["context"] = "";
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new VaultHitDTO instance from a string or object.
+     */
+    static createFrom($$source: any = {}): VaultHitDTO {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new VaultHitDTO($$parsedSource as Partial<VaultHitDTO>);
+    }
+}
+
+/**
+ * VaultInfoDTO describes the open notes folder. Folder is empty when none is
+ * open; Default is set when it is the one in the data directory.
+ */
+export class VaultInfoDTO {
+    "folder": string;
+    "ready": boolean;
+    "default": boolean;
+    "error": string;
+
+    /** Creates a new VaultInfoDTO instance. */
+    constructor($$source: Partial<VaultInfoDTO> = {}) {
+        if (!("folder" in $$source)) {
+            this["folder"] = "";
+        }
+        if (!("ready" in $$source)) {
+            this["ready"] = false;
+        }
+        if (!("default" in $$source)) {
+            this["default"] = false;
+        }
+        if (!("error" in $$source)) {
+            this["error"] = "";
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new VaultInfoDTO instance from a string or object.
+     */
+    static createFrom($$source: any = {}): VaultInfoDTO {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new VaultInfoDTO($$parsedSource as Partial<VaultInfoDTO>);
+    }
+}
+
+/**
+ * VaultLinkDTO is one link a note makes. Resolved is the vault path it
+ * points at, empty when it points at nothing or outside the vault.
+ */
+export class VaultLinkDTO {
+    "kind": string;
+    "embed": boolean;
+    "target": string;
+    "subpath": string;
+    "display": string;
+    "line": number;
+    "resolved": string;
+
+    /** Creates a new VaultLinkDTO instance. */
+    constructor($$source: Partial<VaultLinkDTO> = {}) {
+        if (!("kind" in $$source)) {
+            this["kind"] = "";
+        }
+        if (!("embed" in $$source)) {
+            this["embed"] = false;
+        }
+        if (!("target" in $$source)) {
+            this["target"] = "";
+        }
+        if (!("subpath" in $$source)) {
+            this["subpath"] = "";
+        }
+        if (!("display" in $$source)) {
+            this["display"] = "";
+        }
+        if (!("line" in $$source)) {
+            this["line"] = 0;
+        }
+        if (!("resolved" in $$source)) {
+            this["resolved"] = "";
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new VaultLinkDTO instance from a string or object.
+     */
+    static createFrom($$source: any = {}): VaultLinkDTO {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new VaultLinkDTO($$parsedSource as Partial<VaultLinkDTO>);
+    }
+}
+
+/**
+ * VaultMentionDTO is a line of a note that names another one. Match is the
+ * name as written, for a mention that is not a link yet.
+ */
+export class VaultMentionDTO {
+    "source": string;
+    "line": number;
+    "text": string;
+    "match": string;
+
+    /** Creates a new VaultMentionDTO instance. */
+    constructor($$source: Partial<VaultMentionDTO> = {}) {
+        if (!("source" in $$source)) {
+            this["source"] = "";
+        }
+        if (!("line" in $$source)) {
+            this["line"] = 0;
+        }
+        if (!("text" in $$source)) {
+            this["text"] = "";
+        }
+        if (!("match" in $$source)) {
+            this["match"] = "";
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new VaultMentionDTO instance from a string or object.
+     */
+    static createFrom($$source: any = {}): VaultMentionDTO {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new VaultMentionDTO($$parsedSource as Partial<VaultMentionDTO>);
+    }
+}
+
+/**
+ * VaultNoteDTO is what the notes space knows about a note without opening
+ * it. MTime is unix milliseconds.
+ */
+export class VaultNoteDTO {
+    "path": string;
+    "title": string;
+    "mtime": number;
+    "size": number;
+    "tags": string[];
+    "aliases": string[];
+    "headings": VaultHeadingDTO[];
+    "snippet": string;
+    "links": VaultLinkDTO[];
+
+    /** Creates a new VaultNoteDTO instance. */
+    constructor($$source: Partial<VaultNoteDTO> = {}) {
+        if (!("path" in $$source)) {
+            this["path"] = "";
+        }
+        if (!("title" in $$source)) {
+            this["title"] = "";
+        }
+        if (!("mtime" in $$source)) {
+            this["mtime"] = 0;
+        }
+        if (!("size" in $$source)) {
+            this["size"] = 0;
+        }
+        if (!("tags" in $$source)) {
+            this["tags"] = [];
+        }
+        if (!("aliases" in $$source)) {
+            this["aliases"] = [];
+        }
+        if (!("headings" in $$source)) {
+            this["headings"] = [];
+        }
+        if (!("snippet" in $$source)) {
+            this["snippet"] = "";
+        }
+        if (!("links" in $$source)) {
+            this["links"] = [];
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new VaultNoteDTO instance from a string or object.
+     */
+    static createFrom($$source: any = {}): VaultNoteDTO {
+        const $$createField4_0 = $$createType0;
+        const $$createField5_0 = $$createType0;
+        const $$createField6_0 = $$createType87;
+        const $$createField8_0 = $$createType89;
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        if ("tags" in $$parsedSource) {
+            $$parsedSource["tags"] = $$createField4_0($$parsedSource["tags"]);
+        }
+        if ("aliases" in $$parsedSource) {
+            $$parsedSource["aliases"] = $$createField5_0($$parsedSource["aliases"]);
+        }
+        if ("headings" in $$parsedSource) {
+            $$parsedSource["headings"] = $$createField6_0($$parsedSource["headings"]);
+        }
+        if ("links" in $$parsedSource) {
+            $$parsedSource["links"] = $$createField8_0($$parsedSource["links"]);
+        }
+        return new VaultNoteDTO($$parsedSource as Partial<VaultNoteDTO>);
+    }
+}
+
+/**
+ * VaultOpDTO is what a rename, move or delete did, with the id Undo takes.
+ */
+export class VaultOpDTO {
+    "undoId": string;
+    "moves": { [_ in string]?: string };
+    "rewritten": string[];
+
+    /** Creates a new VaultOpDTO instance. */
+    constructor($$source: Partial<VaultOpDTO> = {}) {
+        if (!("undoId" in $$source)) {
+            this["undoId"] = "";
+        }
+        if (!("moves" in $$source)) {
+            this["moves"] = {};
+        }
+        if (!("rewritten" in $$source)) {
+            this["rewritten"] = [];
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new VaultOpDTO instance from a string or object.
+     */
+    static createFrom($$source: any = {}): VaultOpDTO {
+        const $$createField1_0 = $$createType66;
+        const $$createField2_0 = $$createType0;
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        if ("moves" in $$parsedSource) {
+            $$parsedSource["moves"] = $$createField1_0($$parsedSource["moves"]);
+        }
+        if ("rewritten" in $$parsedSource) {
+            $$parsedSource["rewritten"] = $$createField2_0($$parsedSource["rewritten"]);
+        }
+        return new VaultOpDTO($$parsedSource as Partial<VaultOpDTO>);
+    }
+}
+
+/**
+ * VaultSaveDTO is what a save did. On a conflict nothing was written and
+ * Disk holds the text on disk now.
+ */
+export class VaultSaveDTO {
+    "hash": string;
+    "mtime": number;
+    "conflict": boolean;
+    "disk": string;
+    "diskHash": string;
+
+    /** Creates a new VaultSaveDTO instance. */
+    constructor($$source: Partial<VaultSaveDTO> = {}) {
+        if (!("hash" in $$source)) {
+            this["hash"] = "";
+        }
+        if (!("mtime" in $$source)) {
+            this["mtime"] = 0;
+        }
+        if (!("conflict" in $$source)) {
+            this["conflict"] = false;
+        }
+        if (!("disk" in $$source)) {
+            this["disk"] = "";
+        }
+        if (!("diskHash" in $$source)) {
+            this["diskHash"] = "";
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new VaultSaveDTO instance from a string or object.
+     */
+    static createFrom($$source: any = {}): VaultSaveDTO {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new VaultSaveDTO($$parsedSource as Partial<VaultSaveDTO>);
+    }
+}
+
+/**
+ * VaultSnapshotDTO is the whole index of the open folder.
+ */
+export class VaultSnapshotDTO {
+    "folder": string;
+    "ready": boolean;
+    "notes": VaultNoteDTO[];
+    "folders": string[];
+    "files": string[];
+
+    /** Creates a new VaultSnapshotDTO instance. */
+    constructor($$source: Partial<VaultSnapshotDTO> = {}) {
+        if (!("folder" in $$source)) {
+            this["folder"] = "";
+        }
+        if (!("ready" in $$source)) {
+            this["ready"] = false;
+        }
+        if (!("notes" in $$source)) {
+            this["notes"] = [];
+        }
+        if (!("folders" in $$source)) {
+            this["folders"] = [];
+        }
+        if (!("files" in $$source)) {
+            this["files"] = [];
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new VaultSnapshotDTO instance from a string or object.
+     */
+    static createFrom($$source: any = {}): VaultSnapshotDTO {
+        const $$createField2_0 = $$createType91;
+        const $$createField3_0 = $$createType0;
+        const $$createField4_0 = $$createType0;
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        if ("notes" in $$parsedSource) {
+            $$parsedSource["notes"] = $$createField2_0($$parsedSource["notes"]);
+        }
+        if ("folders" in $$parsedSource) {
+            $$parsedSource["folders"] = $$createField3_0($$parsedSource["folders"]);
+        }
+        if ("files" in $$parsedSource) {
+            $$parsedSource["files"] = $$createField4_0($$parsedSource["files"]);
+        }
+        return new VaultSnapshotDTO($$parsedSource as Partial<VaultSnapshotDTO>);
+    }
+}
+
+/**
  * VerdictDTO is one scan result for the ui. Status is "clean", "flagged" or
  * "unknown"; Error is set instead when that particular lookup failed, so one
  * rate-limited target does not discard the results either side of it.
@@ -10368,3 +10844,9 @@ const $$createType82 = ThunderbirdAccountDTO.createFrom;
 const $$createType83 = $Create.Array($$createType82);
 const $$createType84 = ThunderbirdFolderDTO.createFrom;
 const $$createType85 = $Create.Array($$createType84);
+const $$createType86 = VaultHeadingDTO.createFrom;
+const $$createType87 = $Create.Array($$createType86);
+const $$createType88 = VaultLinkDTO.createFrom;
+const $$createType89 = $Create.Array($$createType88);
+const $$createType90 = VaultNoteDTO.createFrom;
+const $$createType91 = $Create.Array($$createType90);

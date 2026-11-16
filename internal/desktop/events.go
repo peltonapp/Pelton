@@ -102,6 +102,9 @@ const (
 	// EventFocusEnded fires once when focus mode ends, with a FocusSummaryDTO
 	// saying what arrived meanwhile.
 	EventFocusEnded = "focus:ended"
+	// EventVaultChanged fires when notes in the notes folder changed, through
+	// Pelton or another app, with a VaultChangeEvent as payload.
+	EventVaultChanged = "notes:changed"
 )
 
 // CalendarSyncEvent is the payload for EventCalendarSync. Done and Total
