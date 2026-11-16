@@ -71,6 +71,7 @@ import type {
   ContactConflict,
   ContactDraft,
   Duplicates,
+  MeetingPrep,
   MergeRequest,
   MergeResult,
   CalendarAccount,
@@ -2389,6 +2390,11 @@ export function saveContact(draft: ContactDraft): Promise<ContactConflict> {
 // a conflict the user has already been shown.
 export function deleteContact(id: number, force: boolean): Promise<ContactConflict> {
   return App.DeleteContact(id, force) as unknown as Promise<ContactConflict>
+}
+
+/** prepareMeeting gathers what helps with a meeting from local data. */
+export function prepareMeeting(eventId: number, recurrenceId: string): Promise<MeetingPrep> {
+  return App.PrepareMeeting(eventId, recurrenceId) as unknown as Promise<MeetingPrep>
 }
 
 /** findDuplicateContacts lists the groups of contacts that look like one person. */

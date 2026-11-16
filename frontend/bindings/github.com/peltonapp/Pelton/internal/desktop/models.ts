@@ -5877,6 +5877,12 @@ export class OccurrenceDTO {
     "hasReminders": boolean;
 
     /**
+     * HasAttendees is true when others are invited, which is when preparing
+     * for the meeting has something to show.
+     */
+    "hasAttendees": boolean;
+
+    /**
      * Pending is true while a change made here has not reached the server.
      */
     "pending": boolean;
@@ -5931,6 +5937,9 @@ export class OccurrenceDTO {
         }
         if (!("hasReminders" in $$source)) {
             this["hasReminders"] = false;
+        }
+        if (!("hasAttendees" in $$source)) {
+            this["hasAttendees"] = false;
         }
         if (!("pending" in $$source)) {
             this["pending"] = false;
