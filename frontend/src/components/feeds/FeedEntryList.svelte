@@ -99,6 +99,9 @@
   }
 
   $: iconOf = new Map(feeds.map((f) => [f.id, f.icon]))
+  // a feed renamed, or a list loaded before the sidebar, still names its feed.
+  $: titleOf = new Map(feeds.map((f) => [f.id, f.title]))
+  $: shown = rows.map((r) => (r.mail ? r : { ...r, source: titleOf.get(r.feedId) ?? r.source }))
   $: imagesOf = new Map(feeds.map((f) => [f.id, f.loadImages || loadImages]))
   $: progressValue = progress && progress.total > 0 ? progress.done / progress.total : null
   $: unreadCount = rows.filter((r) => !r.read).length
@@ -222,7 +225,7 @@
         </EmptyState>
       {/if}
     {:else}
-      {#each rows as row (row.key)}
+      {#each shown as row (row.key)}
         <FeedEntryRow
           {row}
           icon={iconOf.get(row.feedId) ?? ''}
