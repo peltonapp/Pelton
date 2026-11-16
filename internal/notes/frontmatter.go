@@ -18,7 +18,8 @@ const (
 // comments, their order and quoting, the line endings and a byte order mark
 // stay as they were byte for byte. A key that is already there with the same
 // value keeps its line. New keys go at the end of the block; a note without
-// front matter gets a block at the top when there is something to set.
+// front matter gets a block at the top when there is something to set, and a
+// block left empty by removing keys is taken out again.
 func SetProperties(text string, set []Property, remove []string) string {
 	lead := ""
 	if strings.HasPrefix(text, bom) {
@@ -56,10 +57,9 @@ func SetProperties(text string, set []Property, remove []string) string {
 		lines = lines[:len(lines)-1]
 	}
 	var b strings.Builder
-	b.WriteString(lead)
-	b.WriteString(lines[0])
 	done := map[int]bool{}
 	body := lines[1 : len(lines)-1]
+	dropped := false
 	for i := 0; i < len(body); i++ {
 		line := body[i]
 		key, ok := topKey(line)
@@ -73,6 +73,7 @@ func SetProperties(text string, set []Property, remove []string) string {
 			b.WriteString(line)
 			continue
 		}
+		dropped = dropped || !setting
 		// the key's own value may run over the lines below it.
 		j := i + 1
 		for j < len(body) && continues(body[j]) {
@@ -94,9 +95,11 @@ func SetProperties(text string, set []Property, remove []string) string {
 			b.WriteString(p.Key + ": " + yamlScalar(p.Value) + nl)
 		}
 	}
-	b.WriteString(lines[len(lines)-1])
-	b.WriteString(text[end:])
-	return b.String()
+	// a block emptied by removing keys goes, as it was most likely made for them.
+	if dropped && b.Len() == 0 {
+		return lead + text[end:]
+	}
+	return lead + lines[0] + b.String() + lines[len(lines)-1] + text[end:]
 }
 
 // topKey returns the key of a top level "key: value" line of front matter.
@@ -131,16 +134,20 @@ func lineEnd(line, fallback string) string {
 	return fallback
 }
 
-var plainScalar = regexp.MustCompile(`^\p{L}[\p{L}\p{N} _./()&+-]*$`)
+var (
+	plainScalar = regexp.MustCompile(`^\p{L}[\p{L}\p{N} _./()&+-]*$`)
+	plainDate   = regexp.MustCompile(`^\d{4}-\d{2}-\d{2}$`)
+)
 
 // yamlScalar writes a value so YAML reads it back as the same string: plain
-// when that is safe, double-quoted otherwise.
+// when that is safe, double-quoted otherwise. A date stays plain, the way
+// Obsidian writes date properties.
 func yamlScalar(v string) string {
 	switch strings.ToLower(v) {
 	case "true", "false", "yes", "no", "on", "off", "null", "y", "n":
 		return `"` + v + `"`
 	}
-	if plainScalar.MatchString(v) && strings.TrimSpace(v) == v {
+	if plainDate.MatchString(v) || plainScalar.MatchString(v) && strings.TrimSpace(v) == v {
 		return v
 	}
 	return `"` + strings.NewReplacer(`\`, `\\`, `"`, `\"`).Replace(v) + `"`

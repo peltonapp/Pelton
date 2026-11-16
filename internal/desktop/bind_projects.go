@@ -43,9 +43,11 @@ type ProjectPersonDTO struct {
 // ProjectDTO is one project with the counts its tile shows. Cards counts the
 // cards whose task still exists and Done those completed; NextDue is the
 // earliest due date of an open card, a date or rfc3339, empty for none, and
-// Overdue how many open cards are past theirs. Mail counts conversations.
+// Overdue how many open cards are past theirs. Mail counts conversations. UID
+// is what notes and pelton://project links name the project by.
 type ProjectDTO struct {
 	ID          int64              `json:"id"`
+	UID         string             `json:"uid"`
 	Name        string             `json:"name"`
 	Color       string             `json:"color"`
 	Icon        string             `json:"icon"`
@@ -254,7 +256,8 @@ func (a *App) CreateProject(req ProjectRequest) (ProjectDTO, error) {
 }
 
 // UpdateProject saves a project's name, look, description, dates and task
-// list.
+// list. A new name is written into the front matter of the project's notes
+// in the background.
 func (a *App) UpdateProject(req ProjectRequest) (ProjectDTO, error) {
 	if err := a.ready(); err != nil {
 		return ProjectDTO{}, err
@@ -263,8 +266,17 @@ func (a *App) UpdateProject(req ProjectRequest) (ProjectDTO, error) {
 	if err != nil {
 		return ProjectDTO{}, err
 	}
+	before, err := a.store.GetProject(a.ctx, p.ID)
+	if err != nil {
+		return ProjectDTO{}, err
+	}
 	if err := a.store.UpdateProject(a.ctx, p); err != nil {
 		return ProjectDTO{}, err
+	}
+	if before.Name != p.Name {
+		after := *before
+		after.Name = p.Name
+		goSafe("renaming a project in its notes", func() { a.renameProjectNotes(before, &after) })
 	}
 	a.emitProjects(p.ID)
 	return a.projectWithStats(p.ID)
@@ -1347,23 +1359,24 @@ func (a *App) projectStats(projectID int64) (map[int64]*projectStat, error) {
 			}
 		}
 	}
-	projects := []int64{projectID}
+	var projects []storage.Project
 	if projectID == 0 {
-		all, err := a.store.ListProjects(a.ctx)
+		if projects, err = a.store.ListProjects(a.ctx); err != nil {
+			return nil, err
+		}
+	} else {
+		p, err := a.store.GetProject(a.ctx, projectID)
 		if err != nil {
 			return nil, err
 		}
-		projects = projects[:0]
-		for _, p := range all {
-			projects = append(projects, p.ID)
-		}
+		projects = []storage.Project{*p}
 	}
-	for _, id := range projects {
-		notes, err := a.store.ListProjectNotes(a.ctx, id)
-		if err != nil {
-			return nil, err
-		}
-		stat(id).notes = len(notes)
+	notes, err := a.projectNoteCounts(projects)
+	if err != nil {
+		return nil, err
+	}
+	for id, n := range notes {
+		stat(id).notes = n
 	}
 	return out, nil
 }
@@ -1429,7 +1442,7 @@ func projectFromRequest(req ProjectRequest) (storage.Project, error) {
 
 func projectDTO(p storage.Project, s *projectStat) ProjectDTO {
 	dto := ProjectDTO{
-		ID: p.ID, Name: p.Name, Color: p.Color, Icon: p.Icon, Description: p.Description, Status: p.Status,
+		ID: p.ID, UID: p.UID, Name: p.Name, Color: p.Color, Icon: p.Icon, Description: p.Description, Status: p.Status,
 		StartDate: p.StartDate, DueDate: p.DueDate, Position: p.Position, ListID: p.ListID,
 		CreatedAt: p.CreatedAt, UpdatedAt: p.UpdatedAt, ArchivedAt: p.ArchivedAt,
 		People: []ProjectPersonDTO{},

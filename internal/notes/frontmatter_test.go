@@ -47,6 +47,18 @@ func TestSetProperties(t *testing.T) {
 			want:   "---\ntags: [a]\n---\nbody",
 		},
 		{
+			name:   "a block left empty goes",
+			in:     "---\nproject: Launch\nproject-id: x\n---\nbody",
+			remove: []string{PropProject, PropProjectID},
+			want:   "body",
+		},
+		{
+			name: "an empty block that was there stays",
+			in:   "---\n---\nbody",
+			set:  nil,
+			want: "---\n---\nbody",
+		},
+		{
 			name:   "removing from a note without front matter changes nothing",
 			in:     "plain",
 			remove: []string{PropProject},

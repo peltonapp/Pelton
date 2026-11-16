@@ -253,8 +253,9 @@ const (
 	settingLastSelection    = "last_selection"
 	// the notes space: the folder of Markdown files (empty means the Notes
 	// folder in the data directory), where daily notes go and how they are
-	// named, the note a daily note starts from, the folders of templates and
-	// of pasted images, the mode a note opens in (live, source or reading)
+	// named, the note a daily note starts from, the folders of templates, of
+	// pasted images and of project notes, the mode a note opens in (live,
+	// source or reading)
 	// and how wide its text runs (narrow, medium or full).
 	settingNotesVault         = "notes_vault"
 	settingNotesDailyFolder   = "notes_daily_folder"
@@ -262,6 +263,7 @@ const (
 	settingNotesDailyTemplate = "notes_daily_template"
 	settingNotesTemplates     = "notes_templates_folder"
 	settingNotesAttachments   = "notes_attachments_folder"
+	settingNotesProjects      = "notes_projects_folder"
 	settingNotesEditorMode    = "notes_editor_mode"
 	settingNotesLineWidth     = "notes_line_width"
 )
@@ -664,15 +666,16 @@ type UIPrefsDTO struct {
 	// place and name the daily notes (YYYY-MM-DD style tokens);
 	// NotesDailyTemplate is the template note a daily note starts from, empty
 	// for the built-in one. NotesTemplatesFolder holds the templates and
-	// NotesAttachmentsFolder pasted images. NotesEditorMode is how a note
-	// opens: live, source or reading. NotesLineWidth caps the text: narrow,
-	// medium or full.
+	// NotesAttachmentsFolder pasted images. NotesProjectsFolder holds a
+	// folder of notes per project. NotesEditorMode is how a note opens: live,
+	// source or reading. NotesLineWidth caps the text: narrow, medium or full.
 	NotesVault             string `json:"notesVault"`
 	NotesDailyFolder       string `json:"notesDailyFolder"`
 	NotesDailyFormat       string `json:"notesDailyFormat"`
 	NotesDailyTemplate     string `json:"notesDailyTemplate"`
 	NotesTemplatesFolder   string `json:"notesTemplatesFolder"`
 	NotesAttachmentsFolder string `json:"notesAttachmentsFolder"`
+	NotesProjectsFolder    string `json:"notesProjectsFolder"`
 	NotesEditorMode        string `json:"notesEditorMode"`
 	NotesLineWidth         string `json:"notesLineWidth"`
 }
@@ -831,6 +834,7 @@ func (a *App) GetUIPrefs() (UIPrefsDTO, error) {
 		NotesDailyTemplate:         a.stringSetting(settingNotesDailyTemplate, ""),
 		NotesTemplatesFolder:       a.stringSetting(settingNotesTemplates, "Templates"),
 		NotesAttachmentsFolder:     a.stringSetting(settingNotesAttachments, defaultAttachmentsDir),
+		NotesProjectsFolder:        a.stringSetting(settingNotesProjects, defaultProjectsDir),
 		NotesEditorMode:            a.stringSetting(settingNotesEditorMode, "live"),
 		NotesLineWidth:             a.stringSetting(settingNotesLineWidth, "medium"),
 	}, nil

@@ -55,6 +55,14 @@ type VaultChangeEvent struct {
 	Tree    bool     `json:"tree"`
 }
 
+// VaultPropDTO is one front matter property of a note: its value, or its
+// items when it is a list.
+type VaultPropDTO struct {
+	Key   string   `json:"key"`
+	Value string   `json:"value"`
+	List  []string `json:"list"`
+}
+
 // VaultHeadingDTO is one heading of a note; line counts from 0.
 type VaultHeadingDTO struct {
 	Level int    `json:"level"`
@@ -86,6 +94,7 @@ type VaultNoteDTO struct {
 	Headings []VaultHeadingDTO `json:"headings"`
 	Snippet  string            `json:"snippet"`
 	Links    []VaultLinkDTO    `json:"links"`
+	Props    []VaultPropDTO    `json:"props"`
 }
 
 // VaultSnapshotDTO is the whole index of the open folder.
@@ -171,6 +180,7 @@ func (a *App) vaultService() *notes.Service {
 	defer a.vaultMu.Unlock()
 	if a.vault == nil {
 		a.vault = notes.NewService(a.store, filepath.Join(a.dataDir, vaultSearchDir), a.log, func(c notes.Change) {
+			a.followNoteMoves(c.Moved)
 			a.emit(EventVaultChanged, VaultChangeEvent{Changed: c.Changed, Removed: c.Removed, Reset: c.Reset, Tree: c.Tree})
 		})
 	}
@@ -322,7 +332,10 @@ func (a *App) VaultSnapshot() (VaultSnapshotDTO, error) {
 	}
 	out := VaultSnapshotDTO{Folder: snap.Root, Ready: snap.Ready, Folders: nonNil(snap.Folders), Files: nonNil(snap.Files), Notes: make([]VaultNoteDTO, 0, len(snap.Notes))}
 	for _, n := range snap.Notes {
-		d := VaultNoteDTO{Path: n.Path, Title: n.Title, MTime: n.MTime, Size: n.Size, Tags: nonNil(n.Tags), Aliases: nonNil(n.Aliases), Snippet: n.Snippet, Headings: []VaultHeadingDTO{}, Links: []VaultLinkDTO{}}
+		d := VaultNoteDTO{Path: n.Path, Title: n.Title, MTime: n.MTime, Size: n.Size, Tags: nonNil(n.Tags), Aliases: nonNil(n.Aliases), Snippet: n.Snippet, Headings: []VaultHeadingDTO{}, Links: []VaultLinkDTO{}, Props: []VaultPropDTO{}}
+		for _, p := range n.Props {
+			d.Props = append(d.Props, VaultPropDTO{Key: p.Key, Value: p.Value, List: nonNil(p.List)})
+		}
 		for _, h := range n.Headings {
 			d.Headings = append(d.Headings, VaultHeadingDTO{Level: h.Level, Text: h.Text, Line: h.Line})
 		}
@@ -398,7 +411,8 @@ func (a *App) VaultCreateFolder(rel string) (string, error) {
 }
 
 // VaultMove renames or moves a note, file or folder and updates the links
-// to it in every other note. VaultUndo with the returned id takes it back.
+// to it in every other note and on project cards. VaultUndo with the
+// returned id takes it back.
 func (a *App) VaultMove(from, to string) (VaultOpDTO, error) {
 	svc, err := a.openedVault()
 	if err != nil {
@@ -408,6 +422,7 @@ func (a *App) VaultMove(from, to string) (VaultOpDTO, error) {
 	if err != nil {
 		return VaultOpDTO{}, err
 	}
+	a.followNoteMoves(r.Moves)
 	return VaultOpDTO{UndoID: r.UndoID, Moves: r.Moves, Rewritten: nonNil(r.Rewritten)}, nil
 }
 
