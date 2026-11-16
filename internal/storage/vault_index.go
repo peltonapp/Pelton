@@ -25,6 +25,14 @@ type VaultLink struct {
 	Line    int
 }
 
+// VaultProp is one front matter property of an indexed note: its value, or
+// its items when the value is a list.
+type VaultProp struct {
+	Key   string   `json:"key"`
+	Value string   `json:"value"`
+	List  []string `json:"list,omitempty"`
+}
+
 // VaultNote is the index row of one Markdown note in a vault. Path is
 // relative to the vault with forward slashes; MTime is unix nanoseconds.
 type VaultNote struct {
@@ -37,6 +45,7 @@ type VaultNote struct {
 	Aliases  []string
 	Tags     []string
 	Links    []VaultLink
+	Props    []VaultProp
 	// Snippet is the opening words of the note's text.
 	Snippet string
 }
@@ -45,7 +54,7 @@ type VaultNote struct {
 // links. A vault that was never indexed returns no rows.
 func (d *DB) LoadVaultNotes(ctx context.Context, vault string) ([]VaultNote, error) {
 	rows, err := d.sql.QueryContext(ctx,
-		`SELECT id, path, title, mtime, size, hash, headings, aliases, snippet FROM vault_notes WHERE vault = ? ORDER BY id`, vault)
+		`SELECT id, path, title, mtime, size, hash, headings, aliases, props, snippet FROM vault_notes WHERE vault = ? ORDER BY id`, vault)
 	if err != nil {
 		return nil, fmt.Errorf("storage: load vault notes: %w", err)
 	}
@@ -53,16 +62,17 @@ func (d *DB) LoadVaultNotes(ctx context.Context, vault string) ([]VaultNote, err
 	var out []VaultNote
 	for rows.Next() {
 		var (
-			id                int64
-			n                 VaultNote
-			headings, aliases string
+			id                       int64
+			n                        VaultNote
+			headings, aliases, props string
 		)
-		if err := rows.Scan(&id, &n.Path, &n.Title, &n.MTime, &n.Size, &n.Hash, &headings, &aliases, &n.Snippet); err != nil {
+		if err := rows.Scan(&id, &n.Path, &n.Title, &n.MTime, &n.Size, &n.Hash, &headings, &aliases, &props, &n.Snippet); err != nil {
 			rows.Close()
 			return nil, fmt.Errorf("storage: scan vault note: %w", err)
 		}
 		_ = json.Unmarshal([]byte(headings), &n.Headings)
 		_ = json.Unmarshal([]byte(aliases), &n.Aliases)
+		_ = json.Unmarshal([]byte(props), &n.Props)
 		byID[id] = len(out)
 		out = append(out, n)
 	}
@@ -132,14 +142,15 @@ func (d *DB) SaveVaultNotes(ctx context.Context, vault string, notes []VaultNote
 	for _, n := range notes {
 		headings, _ := json.Marshal(nonNilHeadings(n.Headings))
 		aliases, _ := json.Marshal(nonNilStrings(n.Aliases))
+		props, _ := json.Marshal(nonNilProps(n.Props))
 		var id int64
 		err := tx.QueryRowContext(ctx, `
-INSERT INTO vault_notes (vault, path, title, mtime, size, hash, headings, aliases, snippet)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+INSERT INTO vault_notes (vault, path, title, mtime, size, hash, headings, aliases, props, snippet)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 ON CONFLICT (vault, path) DO UPDATE SET title = excluded.title, mtime = excluded.mtime,
     size = excluded.size, hash = excluded.hash, headings = excluded.headings, aliases = excluded.aliases,
-    snippet = excluded.snippet
-RETURNING id`, vault, n.Path, n.Title, n.MTime, n.Size, n.Hash, string(headings), string(aliases), n.Snippet).Scan(&id)
+    props = excluded.props, snippet = excluded.snippet
+RETURNING id`, vault, n.Path, n.Title, n.MTime, n.Size, n.Hash, string(headings), string(aliases), string(props), n.Snippet).Scan(&id)
 		if err != nil {
 			return fmt.Errorf("storage: save vault note %q: %w", n.Path, err)
 		}
@@ -200,6 +211,13 @@ func nonNilHeadings(h []VaultHeading) []VaultHeading {
 		return []VaultHeading{}
 	}
 	return h
+}
+
+func nonNilProps(p []VaultProp) []VaultProp {
+	if p == nil {
+		return []VaultProp{}
+	}
+	return p
 }
 
 func nonNilStrings(s []string) []string {

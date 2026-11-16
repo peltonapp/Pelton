@@ -38,7 +38,10 @@ const (
 
 // Project is one project: its name and look, its dates and where it sorts.
 type Project struct {
-	ID          int64
+	ID int64
+	// UID names the project outside the database: in a note's front matter
+	// and in pelton://project links.
+	UID         string
 	Name        string
 	Color       string
 	Icon        string
@@ -94,14 +97,18 @@ type ProjectLink struct {
 	CreatedAt string
 }
 
-// ProjectNote is a note kept with a project.
+// ProjectNote is a note kept with a project in the database. VaultPath is
+// the file it is being or was written to in the notes folder, and MigratedAt
+// is set once that is done.
 type ProjectNote struct {
-	ID        int64
-	ProjectID int64
-	Title     string
-	Body      string
-	CreatedAt string
-	UpdatedAt string
+	ID         int64
+	ProjectID  int64
+	Title      string
+	Body       string
+	CreatedAt  string
+	UpdatedAt  string
+	VaultPath  string
+	MigratedAt string
 }
 
 // ProjectTaskRow is a card's task as the overview counts need it: whether it
@@ -119,19 +126,19 @@ type ProjectThread struct {
 	ProjectID int64
 }
 
-const projectColumns = `id, name, color, icon, description, status, start_date, due_date, position, list_id,
+const projectColumns = `id, uid, name, color, icon, description, status, start_date, due_date, position, list_id,
        created_at, updated_at, archived_at`
 
 // CreateProject inserts a project at the end of the list and returns it with
-// its id. An empty status is stored as active.
+// its id and a new random uid. An empty status is stored as active.
 func (d *DB) CreateProject(ctx context.Context, p *Project) error {
 	if p.Status == "" {
 		p.Status = ProjectActive
 	}
 	now := nowText()
 	res, err := d.sql.ExecContext(ctx, `
-INSERT INTO projects (name, color, icon, description, status, start_date, due_date, position, list_id, created_at, updated_at)
-VALUES (?, ?, ?, ?, ?, ?, ?, (SELECT coalesce(max(position), -1) + 1 FROM projects), ?, ?, ?)`,
+INSERT INTO projects (uid, name, color, icon, description, status, start_date, due_date, position, list_id, created_at, updated_at)
+VALUES (lower(hex(randomblob(16))), ?, ?, ?, ?, ?, ?, ?, (SELECT coalesce(max(position), -1) + 1 FROM projects), ?, ?, ?)`,
 		p.Name, p.Color, p.Icon, p.Description, p.Status, p.StartDate, p.DueDate, p.ListID, now, now)
 	if err != nil {
 		return fmt.Errorf("storage: insert project %q: %w", p.Name, err)
@@ -842,15 +849,95 @@ func (d *DB) CreateProjectNote(ctx context.Context, n *ProjectNote) error {
 	return nil
 }
 
-// ListProjectNotes returns a project's notes, the last edited first.
+const projectNoteColumns = `id, project_id, title, body, created_at, updated_at, vault_path, migrated_at`
+
+// ListProjectNotes returns a project's notes that were not moved into the
+// notes folder yet, the last edited first.
 func (d *DB) ListProjectNotes(ctx context.Context, projectID int64) ([]ProjectNote, error) {
-	return d.queryNotes(ctx, `SELECT id, project_id, title, body, created_at, updated_at FROM project_notes
-WHERE project_id = ? ORDER BY updated_at DESC, id DESC`, projectID)
+	return d.queryNotes(ctx, `SELECT `+projectNoteColumns+` FROM project_notes
+WHERE project_id = ? AND migrated_at = '' ORDER BY updated_at DESC, id DESC`, projectID)
+}
+
+// PendingProjectNotes returns every note of every project that was not moved
+// into the notes folder yet, oldest first.
+func (d *DB) PendingProjectNotes(ctx context.Context) ([]ProjectNote, error) {
+	return d.queryNotes(ctx, `SELECT `+projectNoteColumns+` FROM project_notes WHERE migrated_at = '' ORDER BY id`)
+}
+
+// SetProjectNoteVaultPath records the file a note is about to be written to.
+func (d *DB) SetProjectNoteVaultPath(ctx context.Context, id int64, path string) error {
+	res, err := d.sql.ExecContext(ctx, `UPDATE project_notes SET vault_path = ? WHERE id = ?`, path, id)
+	if err != nil {
+		return fmt.Errorf("storage: set project note path %d: %w", id, err)
+	}
+	return requireOneRow(res, ErrProjectNoteNotFound)
+}
+
+// FinishProjectNoteMigration marks a note as moved to path in the notes
+// folder and points the card links that named it by row id at path instead,
+// in one transaction. A card that already links to path keeps that one link.
+func (d *DB) FinishProjectNoteMigration(ctx context.Context, id int64, path string) error {
+	tx, err := d.sql.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("storage: begin note migration: %w", err)
+	}
+	defer tx.Rollback()
+	var projectID int64
+	if err := tx.QueryRowContext(ctx, `SELECT project_id FROM project_notes WHERE id = ?`, id).Scan(&projectID); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return ErrProjectNoteNotFound
+		}
+		return fmt.Errorf("storage: read project note: %w", err)
+	}
+	old := fmt.Sprint(id)
+	if _, err := tx.ExecContext(ctx, `UPDATE OR IGNORE project_links SET ref = ? WHERE project_id = ? AND kind = 'note' AND ref = ?`, path, projectID, old); err != nil {
+		return fmt.Errorf("storage: repoint note links: %w", err)
+	}
+	if _, err := tx.ExecContext(ctx, `DELETE FROM project_links WHERE project_id = ? AND kind = 'note' AND ref = ?`, projectID, old); err != nil {
+		return fmt.Errorf("storage: drop duplicate note links: %w", err)
+	}
+	if _, err := tx.ExecContext(ctx, `UPDATE project_notes SET vault_path = ?, migrated_at = ? WHERE id = ?`, path, nowText(), id); err != nil {
+		return fmt.Errorf("storage: mark project note migrated: %w", err)
+	}
+	return tx.Commit()
+}
+
+// RepointNoteLinks follows notes that moved in the notes folder: every note
+// link to an old path in moves names the new path after it. A card that
+// already links to the new path keeps that one link. It reports whether any
+// link changed.
+func (d *DB) RepointNoteLinks(ctx context.Context, moves map[string]string) (bool, error) {
+	if len(moves) == 0 {
+		return false, nil
+	}
+	tx, err := d.sql.BeginTx(ctx, nil)
+	if err != nil {
+		return false, fmt.Errorf("storage: begin note link move: %w", err)
+	}
+	defer tx.Rollback()
+	changed := false
+	for from, to := range moves {
+		res, err := tx.ExecContext(ctx, `UPDATE OR IGNORE project_links SET ref = ? WHERE kind = 'note' AND ref = ?`, to, from)
+		if err != nil {
+			return false, fmt.Errorf("storage: move note links: %w", err)
+		}
+		if n, _ := res.RowsAffected(); n > 0 {
+			changed = true
+		}
+		res, err = tx.ExecContext(ctx, `DELETE FROM project_links WHERE kind = 'note' AND ref = ?`, from)
+		if err != nil {
+			return false, fmt.Errorf("storage: drop duplicate note links: %w", err)
+		}
+		if n, _ := res.RowsAffected(); n > 0 {
+			changed = true
+		}
+	}
+	return changed, tx.Commit()
 }
 
 // GetProjectNote returns one note, or ErrProjectNoteNotFound.
 func (d *DB) GetProjectNote(ctx context.Context, id int64) (*ProjectNote, error) {
-	notes, err := d.queryNotes(ctx, `SELECT id, project_id, title, body, created_at, updated_at FROM project_notes WHERE id = ?`, id)
+	notes, err := d.queryNotes(ctx, `SELECT `+projectNoteColumns+` FROM project_notes WHERE id = ?`, id)
 	if err != nil {
 		return nil, err
 	}
@@ -869,7 +956,7 @@ func (d *DB) queryNotes(ctx context.Context, query string, args ...any) ([]Proje
 	var out []ProjectNote
 	for rows.Next() {
 		var n ProjectNote
-		if err := rows.Scan(&n.ID, &n.ProjectID, &n.Title, &n.Body, &n.CreatedAt, &n.UpdatedAt); err != nil {
+		if err := rows.Scan(&n.ID, &n.ProjectID, &n.Title, &n.Body, &n.CreatedAt, &n.UpdatedAt, &n.VaultPath, &n.MigratedAt); err != nil {
 			return nil, fmt.Errorf("storage: scan project note: %w", err)
 		}
 		out = append(out, n)
@@ -929,7 +1016,7 @@ func (d *DB) ListProjectDismissals(ctx context.Context) ([]int64, error) {
 
 func scanProject(row rowScanner) (*Project, error) {
 	var p Project
-	if err := row.Scan(&p.ID, &p.Name, &p.Color, &p.Icon, &p.Description, &p.Status, &p.StartDate, &p.DueDate,
+	if err := row.Scan(&p.ID, &p.UID, &p.Name, &p.Color, &p.Icon, &p.Description, &p.Status, &p.StartDate, &p.DueDate,
 		&p.Position, &p.ListID, &p.CreatedAt, &p.UpdatedAt, &p.ArchivedAt); err != nil {
 		return nil, err
 	}

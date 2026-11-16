@@ -21,7 +21,7 @@ const (
 	// LinkExternal is a Markdown link to a web address or another scheme.
 	LinkExternal LinkKind = "external"
 	// LinkPelton is a Markdown link to a pelton:// object: a mail, an event,
-	// a contact or a task.
+	// a contact, a task or a project.
 	LinkPelton LinkKind = "pelton"
 )
 
