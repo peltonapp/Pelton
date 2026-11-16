@@ -91,6 +91,8 @@ export interface CalendarReminderEvent {
   start: string
   end: string
   allDay: boolean
+  /** Others are invited, so the reminder can offer to prepare for the meeting. */
+  hasAttendees: boolean
 }
 
 // payloads, mirroring the go event structs.
