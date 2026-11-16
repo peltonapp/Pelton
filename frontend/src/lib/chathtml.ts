@@ -37,9 +37,15 @@ export function prepareHTML(html: string): PreparedBody {
   for (const a of Array.from(tpl.content.querySelectorAll('a'))) {
     const href = a.getAttribute('href') ?? ''
     a.removeAttribute('target')
-    const user = href.match(userLink)
+    let decoded = href
+    try {
+      decoded = decodeURIComponent(href)
+    } catch {
+      // a malformed escape keeps the link as written
+    }
+    const user = decoded.match(userLink)
     if (user) {
-      a.setAttribute('data-chat-user', decodeURIComponent(user[1]))
+      a.setAttribute('data-chat-user', user[1])
       a.classList.add('pill')
       continue
     }
