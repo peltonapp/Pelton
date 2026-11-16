@@ -29,6 +29,8 @@ type ContactRequest struct {
 	Note         string            `json:"note"`
 	Emails       []ContactValueDTO `json:"emails"`
 	Phones       []ContactValueDTO `json:"phones"`
+	// MatrixID is the person's Matrix user id; empty removes it.
+	MatrixID string `json:"matrixId"`
 	// Force resolves a conflict the user has already been shown: write anyway,
 	// over whatever the server now holds. It is only ever set by the "keep
 	// mine" button on the conflict dialog.
@@ -167,6 +169,7 @@ func (a *App) contactFromRequest(req ContactRequest, existing *storage.Contact) 
 		Note:         strings.TrimSpace(req.Note),
 		Emails:       fromDTOValues(req.Emails),
 		Phones:       fromDTOValues(req.Phones),
+		MatrixID:     strings.TrimSpace(req.MatrixID),
 	}
 	if existing != nil {
 		contact.Path = existing.Path

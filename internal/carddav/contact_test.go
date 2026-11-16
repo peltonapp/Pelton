@@ -134,3 +134,38 @@ func TestNewContactEncodes(t *testing.T) {
 		}
 	}
 }
+
+func TestMatrixIDRoundTripsThroughIMPP(t *testing.T) {
+	cases := []struct {
+		card string
+		want string
+	}{
+		{"BEGIN:VCARD\nVERSION:4.0\nFN:A\nIMPP:matrix:u/alice:example.org\nEND:VCARD\n", "@alice:example.org"},
+		{"BEGIN:VCARD\nVERSION:4.0\nFN:A\nIMPP:matrix:@alice:example.org\nEND:VCARD\n", "@alice:example.org"},
+		{"BEGIN:VCARD\nVERSION:4.0\nFN:A\nIMPP:xmpp:alice@example.org\nEND:VCARD\n", ""},
+		{"BEGIN:VCARD\nVERSION:4.0\nFN:A\nIMPP:matrix:r/room:example.org\nEND:VCARD\n", ""},
+	}
+	for _, c := range cases {
+		contact, err := ParseCard(c.card)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if contact.MatrixID != c.want {
+			t.Errorf("MatrixID of %q = %q, want %q", c.card, contact.MatrixID, c.want)
+		}
+	}
+
+	// setting one keeps other messaging accounts, and clearing it removes
+	// only the matrix entry.
+	contact, _ := ParseCard("BEGIN:VCARD\nVERSION:4.0\nFN:A\nIMPP:xmpp:alice@example.org\nIMPP:matrix:@old:example.org\nEND:VCARD\n")
+	contact.MatrixID = "@alice:example.org"
+	encoded, _ := EncodeCard(contact.ToCard())
+	if !strings.Contains(encoded, "IMPP:matrix:u/alice:example.org") || !strings.Contains(encoded, "xmpp:alice@example.org") || strings.Contains(encoded, "old:example.org") {
+		t.Errorf("after setting:\n%s", encoded)
+	}
+	contact.MatrixID = ""
+	encoded, _ = EncodeCard(contact.ToCard())
+	if strings.Contains(encoded, "matrix:") || !strings.Contains(encoded, "xmpp:") {
+		t.Errorf("after clearing:\n%s", encoded)
+	}
+}
