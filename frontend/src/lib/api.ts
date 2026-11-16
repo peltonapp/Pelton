@@ -152,6 +152,13 @@ import type {
   LockState,
   LockAuthResult,
   QuickComposeStatus,
+  VaultInfo,
+  VaultSnapshot,
+  VaultFile,
+  VaultSave,
+  VaultOp,
+  VaultMention,
+  VaultHit,
 } from './types'
 import { normalizeState } from './sieve'
 
@@ -2079,6 +2086,17 @@ export const SettingKeys = {
   logMessageMetadata: 'log_message_metadata',
   crashLogs: 'crash_logs',
   blockTrackingPixels: 'block_tracking_pixels',
+  notesVault: 'notes_vault',
+  notesDailyFolder: 'notes_daily_folder',
+  notesDailyFormat: 'notes_daily_format',
+  notesDailyTemplate: 'notes_daily_template',
+  notesTemplatesFolder: 'notes_templates_folder',
+  notesAttachmentsFolder: 'notes_attachments_folder',
+  notesEditorMode: 'notes_editor_mode',
+  notesLineWidth: 'notes_line_width',
+  notesStarred: 'notes_starred',
+  notesRecent: 'notes_recent',
+  notesSort: 'notes_sort',
 } as const
 
 // listSystemFonts returns the installed font family names for the body font
@@ -3108,4 +3126,108 @@ export function saveSieveScript(accountId: number, text: string): Promise<SieveS
 // restoreSievePrevious undoes the last sieve save.
 export function restoreSievePrevious(accountId: number): Promise<SieveState> {
   return sieveCall(App.RestoreSievePrevious(accountId))
+}
+
+// --- the notes space -----------------------------------------------------------
+// the folder of Markdown notes. These are not the private notes on a message
+// above (getNote and friends), which live in the database.
+
+/** vaultOpen opens the notes folder in the settings, creating the default one on first use. */
+export function vaultOpen(): Promise<VaultInfo> {
+  return App.VaultOpen() as unknown as Promise<VaultInfo>
+}
+
+/** vaultChooseFolder asks for a notes folder and opens it; an empty folder means cancelled. */
+export function vaultChooseFolder(): Promise<VaultInfo> {
+  return App.VaultChooseFolder() as unknown as Promise<VaultInfo>
+}
+
+/** vaultUseDefaultFolder goes back to the Notes folder in the data directory. */
+export function vaultUseDefaultFolder(): Promise<VaultInfo> {
+  return App.VaultUseDefaultFolder() as unknown as Promise<VaultInfo>
+}
+
+/** vaultRescan checks the notes folder for changes made by other apps now. */
+export function vaultRescan(): Promise<void> {
+  return App.VaultRescan()
+}
+
+/** vaultSnapshot returns every note, folder and other file of the notes folder. */
+export function vaultSnapshot(): Promise<VaultSnapshot> {
+  return App.VaultSnapshot() as unknown as Promise<VaultSnapshot>
+}
+
+/** vaultRead returns a note's text and the hash a save passes back. */
+export function vaultRead(path: string): Promise<VaultFile> {
+  return App.VaultRead(path) as unknown as Promise<VaultFile>
+}
+
+/** vaultSave writes a note edited from the version with baseHash; force overwrites a newer one. */
+export function vaultSave(path: string, content: string, baseHash: string, force = false): Promise<VaultSave> {
+  return App.VaultSave(path, content, baseHash, force) as unknown as Promise<VaultSave>
+}
+
+/** vaultCreate writes a new note and fails when the name is taken. */
+export function vaultCreate(path: string, content: string): Promise<string> {
+  return App.VaultCreate(path, content)
+}
+
+/** vaultUniquePath returns path, or path with a number added when it is taken. */
+export function vaultUniquePath(path: string): Promise<string> {
+  return App.VaultUniquePath(path)
+}
+
+/** vaultCreateFolder makes a folder. */
+export function vaultCreateFolder(path: string): Promise<string> {
+  return App.VaultCreateFolder(path)
+}
+
+/** vaultMove renames or moves a note or folder and updates the links to it. */
+export function vaultMove(from: string, to: string): Promise<VaultOp> {
+  return App.VaultMove(from, to) as unknown as Promise<VaultOp>
+}
+
+/** vaultDelete moves a note or folder to the trash folder of the vault. */
+export function vaultDelete(path: string): Promise<VaultOp> {
+  return App.VaultDelete(path) as unknown as Promise<VaultOp>
+}
+
+/** vaultUndo takes back a rename, move or delete. */
+export function vaultUndo(id: string): Promise<void> {
+  return App.VaultUndo(id)
+}
+
+/** vaultBacklinks lists the lines in other notes that link to a note. */
+export function vaultBacklinks(path: string): Promise<VaultMention[]> {
+  return App.VaultBacklinks(path).then((m) => (m ?? []) as VaultMention[])
+}
+
+/** vaultUnlinkedMentions lists the lines that name a note without linking to it. */
+export function vaultUnlinkedMentions(path: string): Promise<VaultMention[]> {
+  return App.VaultUnlinkedMentions(path).then((m) => (m ?? []) as VaultMention[])
+}
+
+/** vaultLinkMention turns an unlinked mention into a link to target. */
+export function vaultLinkMention(source: string, line: number, match: string, target: string): Promise<void> {
+  return App.VaultLinkMention(source, line, match, target)
+}
+
+/** vaultSearch finds notes by text, name, aliases, headings and tags. */
+export function vaultSearch(query: string): Promise<VaultHit[]> {
+  return App.VaultSearch(query).then((h) => (h ?? []) as VaultHit[])
+}
+
+/** vaultSaveAttachment stores a pasted file (base64) in the attachments folder and returns its path. */
+export function vaultSaveAttachment(name: string, base64: string): Promise<string> {
+  return App.VaultSaveAttachment(name, base64)
+}
+
+/** vaultImportFile copies a file dropped from the system into the attachments folder and returns its path. */
+export function vaultImportFile(path: string): Promise<string> {
+  return App.VaultImportFile(path)
+}
+
+/** vaultFileData returns a file of the notes folder as a data: URL. */
+export function vaultFileData(path: string): Promise<string> {
+  return App.VaultFileData(path)
 }

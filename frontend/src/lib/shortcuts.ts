@@ -115,6 +115,15 @@ export type ShortcutAction =
   | 'focus-mode'
   // locks the app, when the app lock is on.
   | 'lock-app'
+  // the Notes space: showing it, a new note, today's daily note, the quick
+  // switcher, the editor's reading mode and the graph. The last two only act
+  // while Notes is on screen; the others bring it up from anywhere.
+  | 'go-notes'
+  | 'notes-new'
+  | 'notes-today'
+  | 'notes-switcher'
+  | 'notes-toggle-mode'
+  | 'notes-graph'
   // composer actions of the new design. They act on the composer that last
   // had focus, so they carry a modifier and work while typing.
   | ComposeAction
@@ -289,6 +298,14 @@ export const shortcuts: Shortcut[] = [
   // a letter no other Shift combo here or in the editors uses; Alt would type
   // a symbol on macOS and never match.
   { action: 'lock-app', combo: 'mod+shift+n', labelKey: 'shortcut.lockApp' },
+  // k for knowledge, beside the other spaces' mod+shift letters. Quick open
+  // and the reading-mode toggle take the keys Obsidian uses for them.
+  { action: 'go-notes', combo: 'mod+shift+k', labelKey: 'shortcut.goNotes', newDesignOnly: true },
+  { action: 'notes-new', combo: '', labelKey: 'shortcut.notesNew', newDesignOnly: true },
+  { action: 'notes-today', combo: '', labelKey: 'shortcut.notesToday', newDesignOnly: true },
+  { action: 'notes-switcher', combo: 'mod+o', labelKey: 'shortcut.notesSwitcher', newDesignOnly: true },
+  { action: 'notes-toggle-mode', combo: 'mod+e', labelKey: 'shortcut.notesToggleMode', newDesignOnly: true },
+  { action: 'notes-graph', combo: '', labelKey: 'shortcut.notesGraph', newDesignOnly: true },
   // the send key with one more modifier, so the variants sit beside it.
   { action: 'compose-send-archive', combo: 'mod+shift+enter', labelKey: 'sendVariant.archive' },
   { action: 'compose-send-remind', combo: 'mod+alt+enter', labelKey: 'sendVariant.remind' },

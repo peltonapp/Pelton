@@ -81,14 +81,16 @@
   // the event before the message.
   $: groupRank = (
     $space === 'calendar'
-      ? ['calendar', 'action', 'mail', 'navigate', 'tasks', 'projects', 'contacts', 'setting']
+      ? ['calendar', 'action', 'mail', 'navigate', 'tasks', 'projects', 'notes', 'contacts', 'setting']
       : $space === 'contacts'
-        ? ['contacts', 'action', 'mail', 'navigate', 'calendar', 'tasks', 'projects', 'setting']
+        ? ['contacts', 'action', 'mail', 'navigate', 'calendar', 'tasks', 'projects', 'notes', 'setting']
         : $space === 'tasks'
-          ? ['tasks', 'action', 'mail', 'navigate', 'calendar', 'projects', 'contacts', 'setting']
+          ? ['tasks', 'action', 'mail', 'navigate', 'calendar', 'projects', 'notes', 'contacts', 'setting']
           : $space === 'projects'
-            ? ['projects', 'action', 'mail', 'navigate', 'tasks', 'calendar', 'contacts', 'setting']
-            : ['action', 'mail', 'calendar', 'tasks', 'projects', 'contacts', 'navigate', 'setting']
+            ? ['projects', 'action', 'mail', 'navigate', 'tasks', 'calendar', 'notes', 'contacts', 'setting']
+            : $space === 'notes'
+              ? ['notes', 'action', 'navigate', 'mail', 'calendar', 'tasks', 'projects', 'contacts', 'setting']
+              : ['action', 'mail', 'calendar', 'tasks', 'projects', 'notes', 'contacts', 'navigate', 'setting']
   ) as CommandGroup[]
 
   /**
@@ -132,6 +134,9 @@
     }
     if (group === 'projects') {
       return $t('space.projects')
+    }
+    if (group === 'notes') {
+      return $t('space.notes')
     }
     return $t('palette.group.settings')
   }

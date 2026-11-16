@@ -21,6 +21,7 @@ import (
 	pimap "github.com/peltonapp/Pelton/internal/imap"
 	"github.com/peltonapp/Pelton/internal/logging"
 	"github.com/peltonapp/Pelton/internal/mcpserver"
+	"github.com/peltonapp/Pelton/internal/notes"
 	"github.com/peltonapp/Pelton/internal/outbox"
 	"github.com/peltonapp/Pelton/internal/proxy"
 	"github.com/peltonapp/Pelton/internal/search"
@@ -246,6 +247,13 @@ type App struct {
 	// compose, empty while none is (quickcompose.go).
 	quickMu    sync.Mutex
 	quickAccel string
+
+	// vault is the notes folder of the notes space, created on first use;
+	// vaultStop ends the scan loop of the folder that is open. See
+	// bind_notes_space.go.
+	vault     *notes.Service
+	vaultMu   sync.Mutex
+	vaultStop context.CancelFunc
 }
 
 // locked reports whether the app lock is engaged. An App built without one,
@@ -395,6 +403,10 @@ func (a *App) startup(ctx context.Context) {
 
 	a.startBackgroundServices()
 
+	// the notes folder, when the user has one: the mail reader and the other
+	// spaces list the notes about what they show.
+	goSafe("opening the notes folder", a.startVault)
+
 	// off by default; only runs at all if the user turned on a check
 	// frequency in settings. backgrounded so a slow/unreachable network never
 	// delays startup.
@@ -448,6 +460,7 @@ func (a *App) shutdown() {
 	case <-time.After(5 * time.Second):
 		a.log.Warn("quit before a sent message was copied to Sent")
 	}
+	a.closeVault()
 	if a.index != nil {
 		if err := a.index.Close(); err != nil {
 			a.log.Error("close search index", "err", err)

@@ -3749,6 +3749,184 @@ export function UploadDraft(id: number): $CancellablePromise<string> {
 }
 
 /**
+ * VaultBacklinks lists the lines in other notes that link to a note.
+ */
+export function VaultBacklinks(rel: string): $CancellablePromise<$models.VaultMentionDTO[]> {
+    return $Call.ByID(4068549330, rel).then(($result: any) => {
+        return $$createType162($result);
+    });
+}
+
+/**
+ * VaultChooseFolder asks for a notes folder, stores it as the setting and
+ * opens it. An empty folder means the user cancelled and nothing changed.
+ */
+export function VaultChooseFolder(): $CancellablePromise<$models.VaultInfoDTO> {
+    return $Call.ByID(1120436343).then(($result: any) => {
+        return $$createType163($result);
+    });
+}
+
+/**
+ * VaultCreate writes a new note and returns its path. It fails when the
+ * name is taken; VaultUniquePath finds a free one.
+ */
+export function VaultCreate(rel: string, content: string): $CancellablePromise<string> {
+    return $Call.ByID(3164923094, rel, content);
+}
+
+/**
+ * VaultCreateFolder makes a folder in the notes folder.
+ */
+export function VaultCreateFolder(rel: string): $CancellablePromise<string> {
+    return $Call.ByID(1802184166, rel);
+}
+
+/**
+ * VaultDelete moves a note, file or folder to the trash folder of the vault.
+ */
+export function VaultDelete(rel: string): $CancellablePromise<$models.VaultOpDTO> {
+    return $Call.ByID(3444939485, rel).then(($result: any) => {
+        return $$createType164($result);
+    });
+}
+
+/**
+ * VaultFileData returns a file of the vault, such as an image a note
+ * embeds, as a data: URL. Large files are refused.
+ */
+export function VaultFileData(rel: string): $CancellablePromise<string> {
+    return $Call.ByID(228393356, rel);
+}
+
+/**
+ * VaultImportFile copies a file the user dropped from the system onto a note
+ * into the attachments folder of the vault, under a free name, and returns
+ * its vault path. The original is left where it was.
+ */
+export function VaultImportFile(src: string): $CancellablePromise<string> {
+    return $Call.ByID(4225390801, src);
+}
+
+/**
+ * VaultLinkMention turns an unlinked mention into a link to target.
+ */
+export function VaultLinkMention(source: string, line: number, match: string, target: string): $CancellablePromise<void> {
+    return $Call.ByID(569519108, source, line, match, target);
+}
+
+/**
+ * VaultMove renames or moves a note, file or folder and updates the links
+ * to it in every other note. VaultUndo with the returned id takes it back.
+ */
+export function VaultMove($from: string, to: string): $CancellablePromise<$models.VaultOpDTO> {
+    return $Call.ByID(2983040191, $from, to).then(($result: any) => {
+        return $$createType164($result);
+    });
+}
+
+/**
+ * VaultOpen opens the notes folder in the settings, creating the default
+ * one in the data directory the first time the notes space is used. A
+ * folder the user chose is never created: when it is gone, the error says so.
+ */
+export function VaultOpen(): $CancellablePromise<$models.VaultInfoDTO> {
+    return $Call.ByID(1596692746).then(($result: any) => {
+        return $$createType163($result);
+    });
+}
+
+/**
+ * VaultRead returns a note's text and the hash a save must pass back.
+ */
+export function VaultRead(rel: string): $CancellablePromise<$models.VaultFileDTO> {
+    return $Call.ByID(344669642, rel).then(($result: any) => {
+        return $$createType165($result);
+    });
+}
+
+/**
+ * VaultRescan checks the open folder for changes made by other apps now,
+ * rather than at the next scan. The frontend calls it when the window gets
+ * focus back.
+ */
+export function VaultRescan(): $CancellablePromise<void> {
+    return $Call.ByID(2461422294);
+}
+
+/**
+ * VaultSave writes a note. baseHash is the hash of the version the text was
+ * edited from; when the file changed on disk since, nothing is written and
+ * the result carries the text on disk, unless force is set.
+ */
+export function VaultSave(rel: string, content: string, baseHash: string, force: boolean): $CancellablePromise<$models.VaultSaveDTO> {
+    return $Call.ByID(4197725615, rel, content, baseHash, force).then(($result: any) => {
+        return $$createType166($result);
+    });
+}
+
+/**
+ * VaultSaveAttachment stores a pasted or dropped file in the attachments
+ * folder of the vault under a free name and returns its path. data is
+ * base64.
+ */
+export function VaultSaveAttachment(name: string, data: string): $CancellablePromise<string> {
+    return $Call.ByID(112877162, name, data);
+}
+
+/**
+ * VaultSearch finds notes by their text, name, aliases, headings and tags.
+ */
+export function VaultSearch(query: string): $CancellablePromise<$models.VaultHitDTO[]> {
+    return $Call.ByID(93598346, query).then(($result: any) => {
+        return $$createType168($result);
+    });
+}
+
+/**
+ * VaultSnapshot returns every note, folder and other file of the open folder.
+ * With no folder open it is empty, with an empty Folder; nothing is created.
+ */
+export function VaultSnapshot(): $CancellablePromise<$models.VaultSnapshotDTO> {
+    return $Call.ByID(3840242766).then(($result: any) => {
+        return $$createType169($result);
+    });
+}
+
+/**
+ * VaultUndo takes back a rename, move or delete.
+ */
+export function VaultUndo(id: string): $CancellablePromise<void> {
+    return $Call.ByID(2947753776, id);
+}
+
+/**
+ * VaultUniquePath returns rel, or rel with a number added when it is taken.
+ */
+export function VaultUniquePath(rel: string): $CancellablePromise<string> {
+    return $Call.ByID(1837263086, rel);
+}
+
+/**
+ * VaultUnlinkedMentions lists the lines in other notes that write a note's
+ * name or alias without linking to it.
+ */
+export function VaultUnlinkedMentions(rel: string): $CancellablePromise<$models.VaultMentionDTO[]> {
+    return $Call.ByID(691679119, rel).then(($result: any) => {
+        return $$createType162($result);
+    });
+}
+
+/**
+ * VaultUseDefaultFolder goes back to the Notes folder in the data directory.
+ */
+export function VaultUseDefaultFolder(): $CancellablePromise<$models.VaultInfoDTO> {
+    return $Call.ByID(1213391166).then(($result: any) => {
+        return $$createType163($result);
+    });
+}
+
+/**
  * WindowFrameIntegrated reports whether the running main window draws its own
  * title bar, which tells the frontend to show window buttons and a drag
  * region. It can differ from the setting until the next launch on macOS.
@@ -3928,3 +4106,12 @@ const $$createType157 = $models.SplitTabDTO.createFrom;
 const $$createType158 = $Create.Array($$createType157);
 const $$createType159 = $models.ConnectionTestDTO.createFrom;
 const $$createType160 = $models.TrafficLightsDTO.createFrom;
+const $$createType161 = $models.VaultMentionDTO.createFrom;
+const $$createType162 = $Create.Array($$createType161);
+const $$createType163 = $models.VaultInfoDTO.createFrom;
+const $$createType164 = $models.VaultOpDTO.createFrom;
+const $$createType165 = $models.VaultFileDTO.createFrom;
+const $$createType166 = $models.VaultSaveDTO.createFrom;
+const $$createType167 = $models.VaultHitDTO.createFrom;
+const $$createType168 = $Create.Array($$createType167);
+const $$createType169 = $models.VaultSnapshotDTO.createFrom;

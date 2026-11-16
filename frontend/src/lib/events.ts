@@ -43,6 +43,7 @@ export const EventNames = {
   focusChanged: 'focus:changed',
   focusEnded: 'focus:ended',
   projectsChanged: 'projects:changed',
+  vaultChanged: 'notes:changed',
   // sent between windows by the frontend, not by go.
   archiveAfterSend: 'compose:archive-after-send',
 } as const
@@ -59,6 +60,23 @@ export interface TaskReminderEvent {
 /** onTaskReminder fires when a task's reminder is due. */
 export function onTaskReminder(cb: (e: TaskReminderEvent) => void): Unsubscribe {
   return EventsOn(EventNames.taskReminder, (e: TaskReminderEvent) => cb(e))
+}
+
+/**
+ * VaultChangeEvent says which notes changed in the notes folder, through
+ * Pelton or another app. reset means the folder was (re)loaded; tree that
+ * files or folders came or went.
+ */
+export interface VaultChangeEvent {
+  changed: string[] | null
+  removed: string[] | null
+  reset: boolean
+  tree: boolean
+}
+
+/** onVaultChanged fires when notes in the notes folder changed. */
+export function onVaultChanged(cb: (e: VaultChangeEvent) => void): Unsubscribe {
+  return EventsOn(EventNames.vaultChanged, (e: VaultChangeEvent) => cb(e))
 }
 
 /** onICSOpen fires when the system asks the running app to open .ics files; collect them with consumePendingICS. */

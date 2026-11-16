@@ -28,6 +28,7 @@
   import { getEvent, projectsOfEvent, setEventProject } from '../../lib/api'
   import kanbanIcon from '@phosphor-icons/core/assets/duotone/kanban-duotone.svg?raw'
   import ProjectMenu from '../projects/ProjectMenu.svelte'
+  import NoteMentions from '../notes/NoteMentions.svelte'
   import { placeOccurrence } from '../../lib/caldate'
   import { formatWhen } from '../../lib/calformat'
   import { describeRRule } from '../../lib/recurrence'
@@ -218,6 +219,27 @@
         <div class="line">
           <dt><Ph svg={kanbanIcon} size={15} /></dt>
           <dd><ProjectMenu value={projectId} buttonClass="cal-btn project" on:change={(e) => void fileUnder(e.detail)} /></dd>
+        </div>
+      {/if}
+      {#if occ.uid}
+        <div class="line">
+          <dt></dt>
+          <dd>
+            <NoteMentions
+              about={{
+                kind: 'event',
+                id: occ.uid,
+                title: occ.summary || $t('calendar.untitled'),
+                event: {
+                  title: occ.summary || $t('calendar.untitled'),
+                  start: when,
+                  end: '',
+                  location: occ.location,
+                  attendees: attendees.map((a) => (a.name ? `${a.name} <${a.email}>` : a.email)),
+                },
+              }}
+            />
+          </dd>
         </div>
       {/if}
       {#if occ.conflict || event?.syncError}
