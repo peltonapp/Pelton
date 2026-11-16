@@ -29,14 +29,9 @@ const (
 	settingChatMarkdown     = "chat_markdown"
 )
 
-// Chat event names, forwarded as the chat package emits them.
+// Chat event names emitted from here. The rest are the chat package's own
+// Event constants, which it emits through Options.Emit.
 const (
-	EventChatStatus        = chat.EventStatus
-	EventChatRooms         = chat.EventRooms
-	EventChatTimeline      = chat.EventTimeline
-	EventChatTyping        = chat.EventTyping
-	EventChatReceipts      = chat.EventReceipts
-	EventChatVerification  = chat.EventVerification
 	EventChatMediaProgress = chat.EventMediaProgress
 	// EventChatOpen asks the frontend to show a room, after a click on a
 	// chat notification.
@@ -263,15 +258,6 @@ func (a *App) ChatRooms() ([]chat.Room, error) {
 		return nil, err
 	}
 	return m.Rooms(a.ctx)
-}
-
-// ChatRoom returns one room.
-func (a *App) ChatRoom(roomID string) (chat.Room, error) {
-	m, err := a.chatManager()
-	if err != nil {
-		return chat.Room{}, err
-	}
-	return m.Room(a.ctx, roomID)
 }
 
 // ChatTimeline returns up to limit messages of a room older than before, or

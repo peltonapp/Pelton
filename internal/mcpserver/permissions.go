@@ -47,13 +47,3 @@ type Permissions map[string]bool
 func (p Permissions) Allows(tool string) bool {
 	return p[tool]
 }
-
-// Any reports whether any write tool is permitted at all.
-func (p Permissions) Any() bool {
-	for _, tool := range WriteTools {
-		if p[tool] {
-			return true
-		}
-	}
-	return false
-}
