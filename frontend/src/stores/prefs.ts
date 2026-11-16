@@ -5,7 +5,7 @@
 // source of truth.
 
 import { writable } from 'svelte/store'
-import type { UIPrefs, ThemePref, DensityPref, EditorMode, ViewsPlacement, CloseAction, LogLevel, SelectAllScope, SearchKind, SearchSortPref, DesignPref, LayoutMode, NavStyle, RailSide, PaneStyle, AvatarPlacement, ContactsView, ComposeOpenIn, ReaderWidth, AfterMove, AfterReplySend, FollowUpInterval } from '../lib/types'
+import type { UIPrefs, ThemePref, DensityPref, EditorMode, ViewsPlacement, CloseAction, LogLevel, SelectAllScope, SearchKind, SearchSortPref, DesignPref, LayoutMode, NavStyle, RailSide, PaneStyle, AvatarPlacement, ContactsView, ComposeOpenIn, ReaderWidth, AfterMove, AfterReplySend, FollowUpInterval, ChatNotifyMode } from '../lib/types'
 import { getUIPrefs, setSetting, SettingKeys, systemColorScheme, setWindowTheme, getThemeApply } from '../lib/api'
 import { applyTheme, applyDensity, applyAccent, applyScale, applyReduceMotion, applyHandCursor, setThemeSchedule, applyUIFont, applyMonoFont, applyCorners, applyDesign, watchSystemTheme, setSystemSchemeOverride, resolveTheme } from '../theme/theme'
 import { applyUserTheme } from '../theme/usertheme'
@@ -122,6 +122,11 @@ const defaults: UIPrefs = {
   syncProgressBar: true,
   statusClock: true,
   statusUnread: true,
+  chatEnabled: false,
+  chatSendReceipts: true,
+  chatSendTyping: true,
+  chatNotify: 'mentions',
+  chatMarkdown: true,
   markReadOnOpen: true,
   openOnArrow: false,
   signatureAboveQuote: false,
@@ -770,6 +775,37 @@ export function setStatusClock(value: boolean): void {
 export function setStatusUnread(value: boolean): void {
   prefs.update((p) => ({ ...p, statusUnread: value }))
   void setSetting(SettingKeys.statusUnread, String(value))
+}
+
+// setChatEnabled turns the chat space on or off. The backend starts or stops
+// the chat account to match.
+export function setChatEnabled(value: boolean): void {
+  prefs.update((p) => ({ ...p, chatEnabled: value }))
+  void setSetting(SettingKeys.chatEnabled, String(value))
+}
+
+// setChatSendReceipts picks public (on) or private (off) chat read receipts.
+export function setChatSendReceipts(value: boolean): void {
+  prefs.update((p) => ({ ...p, chatSendReceipts: value }))
+  void setSetting(SettingKeys.chatSendReceipts, String(value))
+}
+
+// setChatSendTyping picks whether chat rooms see the user typing.
+export function setChatSendTyping(value: boolean): void {
+  prefs.update((p) => ({ ...p, chatSendTyping: value }))
+  void setSetting(SettingKeys.chatSendTyping, String(value))
+}
+
+// setChatNotify picks which chat messages raise a notification.
+export function setChatNotify(value: ChatNotifyMode): void {
+  prefs.update((p) => ({ ...p, chatNotify: value }))
+  void setSetting(SettingKeys.chatNotify, value)
+}
+
+// setChatMarkdown picks whether chat messages are sent as Markdown.
+export function setChatMarkdown(value: boolean): void {
+  prefs.update((p) => ({ ...p, chatMarkdown: value }))
+  void setSetting(SettingKeys.chatMarkdown, String(value))
 }
 
 // setMarkReadOnOpen picks whether opening a message marks it read.

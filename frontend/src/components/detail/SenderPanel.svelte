@@ -120,6 +120,7 @@
       note: contact.note,
       emails: contact.emails.map((e) => ({ ...e })),
       phones: contact.phones.map((p) => ({ ...p })),
+      matrixId: contact.matrixId,
       force: false,
     }
   }

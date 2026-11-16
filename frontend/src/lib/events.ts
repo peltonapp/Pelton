@@ -3,7 +3,16 @@
 // single unsubscribe function, and keeps the event-name strings in one place.
 
 import { Events } from '@wailsio/runtime'
-import type { AccountSyncState, OutboxLogEntry, FocusInfo, FocusSummary } from './types'
+import type {
+  AccountSyncState,
+  OutboxLogEntry,
+  FocusInfo,
+  FocusSummary,
+  ChatStatus,
+  ChatMember,
+  ChatVerification,
+  ChatMediaProgress,
+} from './types'
 
 // EventsOn subscribes to a backend event and hands the callback its payload.
 function EventsOn<T>(name: string, cb: (data: T) => void): () => void {
@@ -40,6 +49,14 @@ export const EventNames = {
   followUpsChanged: 'followups:changed',
   focusChanged: 'focus:changed',
   focusEnded: 'focus:ended',
+  chatStatus: 'chat:status',
+  chatRooms: 'chat:rooms',
+  chatTimeline: 'chat:timeline',
+  chatTyping: 'chat:typing',
+  chatReceipts: 'chat:receipts',
+  chatVerification: 'chat:verification',
+  chatMediaProgress: 'chat:media-progress',
+  chatOpen: 'chat:open',
   // sent between windows by the frontend, not by go.
   archiveAfterSend: 'compose:archive-after-send',
 } as const
@@ -349,6 +366,46 @@ export function onOpenMessage(cb: (e: OpenMessageEvent) => void): Unsubscribe {
 /** Fires when focus mode starts, ends or changes its end time. */
 export function onFocusChanged(cb: (e: FocusInfo) => void): Unsubscribe {
   return EventsOn(EventNames.focusChanged, (e: FocusInfo) => cb(e))
+}
+
+/** Fires when the chat account's state changes. */
+export function onChatStatus(cb: (e: ChatStatus) => void): Unsubscribe {
+  return EventsOn(EventNames.chatStatus, (e: ChatStatus) => cb(e))
+}
+
+/** Fires when chat rooms changed; the list names them. */
+export function onChatRooms(cb: (roomIds: string[]) => void): Unsubscribe {
+  return EventsOn(EventNames.chatRooms, (e: { roomIds: string[] | null } | null) => cb(e?.roomIds ?? []))
+}
+
+/** Fires when a room's timeline changed; an empty id means any room. */
+export function onChatTimeline(cb: (roomId: string) => void): Unsubscribe {
+  return EventsOn(EventNames.chatTimeline, (e: { roomId: string } | null) => cb(e?.roomId ?? ''))
+}
+
+/** Fires when someone's read marker in a room moved. */
+export function onChatReceipts(cb: (roomId: string) => void): Unsubscribe {
+  return EventsOn(EventNames.chatReceipts, (e: { roomId: string } | null) => cb(e?.roomId ?? ''))
+}
+
+/** Fires with who is typing in a room. */
+export function onChatTyping(cb: (roomId: string, users: ChatMember[]) => void): Unsubscribe {
+  return EventsOn(EventNames.chatTyping, (e: { roomId: string; users: ChatMember[] | null }) => cb(e.roomId, e.users ?? []))
+}
+
+/** Fires when a device verification moves on. */
+export function onChatVerification(cb: (e: ChatVerification) => void): Unsubscribe {
+  return EventsOn(EventNames.chatVerification, (e: ChatVerification) => cb(e))
+}
+
+/** Fires while a chat file is saved or sent. */
+export function onChatMediaProgress(cb: (e: ChatMediaProgress) => void): Unsubscribe {
+  return EventsOn(EventNames.chatMediaProgress, (e: ChatMediaProgress) => cb(e))
+}
+
+/** Fires when a clicked notification asks for a chat room. */
+export function onChatOpen(cb: (roomId: string) => void): Unsubscribe {
+  return EventsOn(EventNames.chatOpen, (e: { roomId: string }) => cb(e.roomId))
 }
 
 /** Fires once when focus mode ends, with what arrived meanwhile. */

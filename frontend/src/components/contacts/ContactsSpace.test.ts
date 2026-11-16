@@ -83,6 +83,7 @@ function contact(id: number, fullName: string, patch: Partial<Contact> = {}): Co
     note: '',
     emails: [{ value: `${fullName.split(' ')[0].toLowerCase()}@example.com`, label: 'work' }],
     phones: [],
+    matrixId: '',
     readOnly: false,
     updated: '',
     extra: [],
