@@ -33,6 +33,7 @@ const now = new Date(2026, 10, 16, 10, 0)
 function project(id: number, over: Partial<Project> = {}): Project {
   return {
     id,
+    uid: `p${id}`,
     name: `Project ${id}`,
     color: '',
     icon: '',

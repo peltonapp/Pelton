@@ -4,6 +4,7 @@
   // notes and events are attached from here; mail by dropping it on the card.
   // the card can leave the board without its task being deleted.
   import { createEventDispatcher, onDestroy } from 'svelte'
+  import { get } from 'svelte/store'
   import { fade } from 'svelte/transition'
   import closeIcon from '@phosphor-icons/core/assets/regular/x.svg?raw'
   import plusIcon from '@phosphor-icons/core/assets/regular/plus.svg?raw'
@@ -23,6 +24,7 @@
   import { addDays, parseEventTime, toRFC3339 } from '../../lib/caldate'
   import { onProjectsChanged } from '../../lib/events'
   import { tasks } from '../../stores/tasks'
+  import { reloadVault, vaultIndex, vaultNotes } from '../../stores/notes'
   import { errorMessage, toastError } from '../../stores/toast'
   import { dur, motion } from '../../lib/motion'
   import { t } from '../../lib/i18n'
@@ -68,7 +70,7 @@
   $: noteLinks = links.filter((l) => l.kind === 'note')
   $: attachedNotes = new Set(noteLinks.map((l) => l.ref))
   $: attachedEvents = new Set(eventLinks.map((l) => l.ref))
-  $: pickNotes = notes.filter((n) => !attachedNotes.has(n.id) && match(noteTitle(n, ''), pickQuery))
+  $: pickNotes = notes.filter((n) => !attachedNotes.has(n.id) && match(noteTitle(n, ''), pickQuery)).slice(0, 50)
   $: pickEvents = events.filter((e) => !attachedEvents.has(e.uid) && match(e.summary, pickQuery)).slice(0, 30)
 
   function match(text: string, q: string): boolean {
@@ -111,7 +113,19 @@
     picking = kind
     try {
       if (kind === 'note') {
-        notes = await projectNotes().list(card.projectId)
+        const list = await projectNotes().list(card.projectId)
+        notes = list.notes
+        if (list.files) {
+          // any note of the notes folder can be attached, the project's own first.
+          if (!get(vaultIndex)) {
+            await reloadVault()
+          }
+          const own = new Set(notes.map((n) => n.id))
+          const others = get(vaultNotes)
+            .filter((n) => !own.has(n.path))
+            .map((n): ProjectNote => ({ id: n.path, projectId: card.projectId, title: n.title, body: '', snippet: n.snippet, path: n.path, updatedAt: '' }))
+          notes = [...notes, ...others]
+        }
       } else {
         const from = new Date()
         events = (await listOccurrences(toRFC3339(addDays(from, -7)), toRFC3339(addDays(from, 60)))).filter(

@@ -44,7 +44,7 @@ import { space } from './space'
 import { toasts } from './toast'
 
 function note(path: string, tags: string[] = []): VaultNote {
-  return { path, title: path.replace(/^.*\//, '').replace(/\.md$/, ''), mtime: 1, size: 1, tags, aliases: [], headings: [], snippet: '', links: [] }
+  return { path, title: path.replace(/^.*\//, '').replace(/\.md$/, ''), mtime: 1, size: 1, tags, aliases: [], headings: [], snippet: '', links: [], props: [] }
 }
 
 let snapshot: VaultSnapshot

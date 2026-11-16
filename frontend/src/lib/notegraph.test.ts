@@ -7,7 +7,7 @@ function link(resolved: string, over: Partial<VaultLink> = {}): VaultLink {
 }
 
 function note(path: string, links: VaultLink[] = [], tags: string[] = []): VaultNote {
-  return { path, title: path.replace(/^.*\//, '').replace(/\.md$/, ''), mtime: 0, size: 0, tags, aliases: [], headings: [], snippet: '', links }
+  return { path, title: path.replace(/^.*\//, '').replace(/\.md$/, ''), mtime: 0, size: 0, tags, aliases: [], headings: [], snippet: '', links, props: [] }
 }
 
 const notes = [

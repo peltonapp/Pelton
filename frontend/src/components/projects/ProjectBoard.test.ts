@@ -83,6 +83,7 @@ function card(uid: string, columnId: number, position: number, over: Partial<Tas
 
 const project: Project = {
   id: 1,
+  uid: 'p1',
   name: 'Launch',
   color: '',
   icon: '',

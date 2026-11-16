@@ -1,8 +1,9 @@
 <script lang="ts">
   // the left pane of the notes space: the notes folder with its actions, the
-  // daily notes calendar, starred and recent notes, the folder tree and the
-  // tags. a folder or tag chosen here fills the note list. notes and folders
-  // dragged onto a folder move there, links following.
+  // daily notes calendar, starred and recent notes, the folder tree, the tags
+  // and the projects notes belong to. a folder, tag or project chosen here
+  // fills the note list. notes and folders dragged onto a folder move there,
+  // links following.
   import { createEventDispatcher } from 'svelte'
   import plusIcon from '@phosphor-icons/core/assets/regular/plus.svg?raw'
   import folderPlusIcon from '@phosphor-icons/core/assets/duotone/folder-simple-plus-duotone.svg?raw'
@@ -18,14 +19,19 @@
   import sunIcon from '@phosphor-icons/core/assets/duotone/sun-duotone.svg?raw'
   import graphIcon from '@phosphor-icons/core/assets/duotone/graph-duotone.svg?raw'
   import templateIcon from '@phosphor-icons/core/assets/duotone/files-duotone.svg?raw'
+  import kanbanIcon from '@phosphor-icons/core/assets/duotone/kanban-duotone.svg?raw'
   import Ph from '../common/Ph.svelte'
   import MiniMonth from '../calendar/MiniMonth.svelte'
   import { folderCounts, folderRows, type NoteScope } from '../../lib/notelist'
   import { noteTitle } from '../../lib/notemd'
+  import { projectOfNote } from '../../lib/noteprojects'
+  import { projectColor } from '../../lib/projectlogic'
   import { dailyNoteDate } from '../../lib/notetemplate'
   import { dayKey } from '../../lib/caldate'
   import { vaultIndex, vaultNotes, noteTags, starredNotes, recentNotes, notesByPath } from '../../stores/notes'
+  import { projects } from '../../stores/projects'
   import { prefs } from '../../stores/prefs'
+  import type { Project, VaultNote } from '../../lib/types'
   import { t } from '../../lib/i18n'
 
   /** What the note list shows. */
@@ -56,6 +62,7 @@
   let expanded = new Set<string>()
   let showRecent = true
   let showTags = true
+  let showProjects = true
   let showDaily = true
   let dragOver: string | null = null
 
@@ -66,6 +73,19 @@
   $: recent = $recentNotes.filter((p) => $notesByPath.has(p)).slice(0, 6)
   $: currentFolder = scope.kind === 'folder' ? scope.path : ''
   $: folderName = ($vaultIndex?.folder ?? '').split(/[\\/]/).filter(Boolean).pop() ?? $t('space.notes')
+
+  $: projectRows = notesPerProject($vaultNotes, $projects)
+
+  function notesPerProject(notes: readonly VaultNote[], list: readonly Project[]): { project: Project; count: number }[] {
+    const counts = new Map<number, number>()
+    for (const n of notes) {
+      const p = projectOfNote(n.props, list)
+      if (p) {
+        counts.set(p.id, (counts.get(p.id) ?? 0) + 1)
+      }
+    }
+    return list.filter((p) => counts.has(p.id)).map((project) => ({ project, count: counts.get(project.id) ?? 0 }))
+  }
 
   function dailyDays(paths: string[], folder: string, format: string): Set<string> {
     const out = new Set<string>()
@@ -307,6 +327,34 @@
         {/if}
       </section>
     {/if}
+
+    {#if projectRows.length}
+      <section class="group">
+        <button type="button" class="group-head" aria-expanded={showProjects} on:click={() => (showProjects = !showProjects)}>
+          <Ph svg={showProjects ? caretDown : caretRight} size={12} />
+          <span>{$t('notes.projects')}</span>
+        </button>
+        {#if showProjects}
+          <ul class="tags" aria-label={$t('notes.projects')}>
+            {#each projectRows as row (row.project.id)}
+              <li>
+                <button
+                  type="button"
+                  class="row tag project"
+                  class:selected={scope.kind === 'project' && scope.uid === row.project.uid}
+                  style={`--depth:0;--project-color:${projectColor(row.project)}`}
+                  on:click={() => dispatch('scope', { kind: 'project', uid: row.project.uid, name: row.project.name })}
+                >
+                  <Ph svg={kanbanIcon} size={13} />
+                  <span class="name">{row.project.name}</span>
+                  <span class="count">{row.count}</span>
+                </button>
+              </li>
+            {/each}
+          </ul>
+        {/if}
+      </section>
+    {/if}
   </div>
 </nav>
 
@@ -480,6 +528,10 @@
 
   .row.tag {
     padding-inline-start: calc(var(--space-2) + var(--depth) * var(--space-4));
+  }
+
+  .row.project :global(.ph) {
+    color: var(--project-color);
   }
 
   .twisty {

@@ -255,6 +255,12 @@ type App struct {
 	vaultMu   sync.Mutex
 	vaultStop context.CancelFunc
 
+	// projectNotesMu runs one move of project notes into the notes folder at
+	// a time; projectNotesMoved is the folder that move finished for. See
+	// bind_project_notes.go.
+	projectNotesMu    sync.Mutex
+	projectNotesMoved string
+
 	// feedState holds the feed fetcher and the refresh lock. See
 	// feeds_refresh.go.
 	feedState feedFetchState

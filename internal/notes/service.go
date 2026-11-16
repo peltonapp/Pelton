@@ -27,10 +27,13 @@ type Store interface {
 
 // Change says which notes changed on disk or through Pelton. Reset means
 // the whole vault was (re)loaded and anything may have changed; Tree means
-// files or folders came or went.
+// files or folders came or went. Moved maps an old path to its new one for a
+// note that was renamed or moved outside Pelton: one path went and one came
+// with exactly the same bytes in the same scan.
 type Change struct {
 	Changed []string
 	Removed []string
+	Moved   map[string]string
 	Reset   bool
 	Tree    bool
 }
@@ -251,6 +254,7 @@ func (s *Service) scanLocked(ctx context.Context) (Change, error) {
 			removed = append(removed, p)
 		}
 	}
+	moved := detectMoves(known, removed, saves)
 	sort.Strings(changed)
 	sort.Strings(removed)
 	sort.Strings(folders)
@@ -295,10 +299,43 @@ func (s *Service) scanLocked(ctx context.Context) (Change, error) {
 	change := Change{
 		Changed: changed,
 		Removed: removed,
+		Moved:   moved,
 		Reset:   !wasReady,
 		Tree:    filesChanged || strings.Join(oldFolders, "\n") != strings.Join(folders, "\n"),
 	}
 	return change, nil
+}
+
+// detectMoves pairs notes that vanished with notes that appeared holding the
+// same bytes. A hash shared by more than one vanished or new note is left
+// alone, since which went where cannot be told.
+func detectMoves(known map[string]*storage.VaultNote, removed []string, saves []storage.VaultNote) map[string]string {
+	if len(removed) == 0 {
+		return nil
+	}
+	gone := map[string][]string{}
+	for _, p := range removed {
+		if h := known[p].Hash; h != "" {
+			gone[h] = append(gone[h], p)
+		}
+	}
+	came := map[string][]string{}
+	for _, n := range saves {
+		if known[n.Path] == nil {
+			came[n.Hash] = append(came[n.Hash], n.Path)
+		}
+	}
+	var out map[string]string
+	for h, from := range gone {
+		to := came[h]
+		if len(from) == 1 && len(to) == 1 {
+			if out == nil {
+				out = map[string]string{}
+			}
+			out[from[0]] = to[0]
+		}
+	}
+	return out
 }
 
 func (s *Service) emit(c Change) {
@@ -341,6 +378,9 @@ func buildNote(rel string, data []byte, mtime, size int64, hash string) (storage
 	}
 	p := Parse(text)
 	n := storage.VaultNote{Path: rel, Title: Title(rel), MTime: mtime, Size: size, Hash: hash, Aliases: p.Aliases, Tags: p.Tags}
+	for _, prop := range p.Props {
+		n.Props = append(n.Props, storage.VaultProp{Key: prop.Key, Value: prop.Value, List: prop.List})
+	}
 	headings := make([]string, 0, len(p.Headings))
 	for _, h := range p.Headings {
 		n.Headings = append(n.Headings, storage.VaultHeading{Level: h.Level, Text: h.Text, Line: h.Line})
@@ -840,6 +880,15 @@ type NoteInfo struct {
 	Headings []Heading
 	Snippet  string
 	Links    []OutLink
+	Props    []Property
+}
+
+func propsOf(in []storage.VaultProp) []Property {
+	out := make([]Property, 0, len(in))
+	for _, p := range in {
+		out = append(out, Property{Key: p.Key, Value: p.Value, List: p.List})
+	}
+	return out
 }
 
 // Snapshot is the whole index: every note, folder and other file.
@@ -866,7 +915,7 @@ func (s *Service) Snapshot() (Snapshot, error) {
 	}
 	sort.Strings(out.Files)
 	for p, n := range s.notes {
-		info := NoteInfo{Path: p, Title: n.Title, MTime: n.MTime / int64(time.Millisecond), Size: n.Size, Tags: n.Tags, Aliases: n.Aliases, Snippet: n.Snippet}
+		info := NoteInfo{Path: p, Title: n.Title, MTime: n.MTime / int64(time.Millisecond), Size: n.Size, Tags: n.Tags, Aliases: n.Aliases, Snippet: n.Snippet, Props: propsOf(n.Props)}
 		for _, h := range n.Headings {
 			info.Headings = append(info.Headings, Heading{Level: h.Level, Text: h.Text, Line: h.Line})
 		}
@@ -884,6 +933,75 @@ func (s *Service) Snapshot() (Snapshot, error) {
 	}
 	sort.Slice(out.Notes, func(i, j int) bool { return out.Notes[i].Path < out.Notes[j].Path })
 	return out, nil
+}
+
+// Brief is a note as a list of notes about something shows it: its name,
+// opening words, front matter and the pelton:// links it makes. MTime is
+// unix milliseconds.
+type Brief struct {
+	Path    string
+	Title   string
+	Snippet string
+	MTime   int64
+	Props   []Property
+	Pelton  []string
+}
+
+// Briefs returns every note of the open vault in short, by path. It does not
+// resolve links, so it stays cheap for a large vault.
+func (s *Service) Briefs() ([]Brief, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	if s.vault == nil {
+		return nil, ErrNoVault
+	}
+	out := make([]Brief, 0, len(s.notes))
+	for p, n := range s.notes {
+		b := Brief{Path: p, Title: n.Title, Snippet: n.Snippet, MTime: n.MTime / int64(time.Millisecond), Props: propsOf(n.Props)}
+		for _, l := range n.Links {
+			if LinkKind(l.Kind) == LinkPelton {
+				b.Pelton = append(b.Pelton, l.Target)
+			}
+		}
+		out = append(out, b)
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].Path < out[j].Path })
+	return out, nil
+}
+
+// SetProperties sets and removes front matter properties of one note, as
+// SetProperties on its text does, and reports whether the file changed. A
+// note whose text would stay the same is not written.
+func (s *Service) SetProperties(ctx context.Context, rel string, set []Property, remove []string) (bool, error) {
+	s.op.Lock()
+	defer s.op.Unlock()
+	v, err := s.current()
+	if err != nil {
+		return false, err
+	}
+	clean, err := CleanRel(rel)
+	if err != nil {
+		return false, err
+	}
+	if !IsNote(clean) {
+		return false, ErrNotFound
+	}
+	data, err := v.Read(clean)
+	if err != nil {
+		return false, err
+	}
+	if !utf8.Valid(data) {
+		return false, fmt.Errorf("notes: %q is not UTF-8 text and is kept read-only", clean)
+	}
+	next := SetProperties(string(data), set, remove)
+	if next == string(data) {
+		return false, nil
+	}
+	if err := v.Write(clean, []byte(next)); err != nil {
+		return false, err
+	}
+	s.emit(s.refreshLocked(ctx, clean))
+	return true, nil
 }
 
 // Mention is a line of one note that names another: a link to it, or its

@@ -1,11 +1,17 @@
-// notelist.ts decides what the note list shows: the notes of a folder, a tag
-// or the starred ones, in the chosen order, and the folder tree the sidebar
-// draws. Everything is pure, so the screen and the tests agree.
+// notelist.ts decides what the note list shows: the notes of a folder, a tag,
+// a project or the starred ones, in the chosen order, and the folder tree the
+// sidebar draws. Everything is pure, so the screen and the tests agree.
 
+import { inProject } from './noteprojects'
 import type { VaultNote } from './types'
 
-/** What the note list is showing. */
-export type NoteScope = { kind: 'all' } | { kind: 'folder'; path: string } | { kind: 'tag'; tag: string } | { kind: 'starred' }
+/** What the note list is showing. A project is named by its uid and name, as front matter names it. */
+export type NoteScope =
+  | { kind: 'all' }
+  | { kind: 'folder'; path: string }
+  | { kind: 'tag'; tag: string }
+  | { kind: 'starred' }
+  | { kind: 'project'; uid: string; name: string }
 
 /** How the note list is ordered. */
 export type NoteSort = 'modified' | 'modifiedOld' | 'title' | 'titleDesc'
@@ -31,6 +37,8 @@ export function notesInScope(notes: readonly VaultNote[], scope: NoteScope, star
       return scope.path ? notes.filter((n) => n.path.startsWith(`${scope.path}/`)) : [...notes]
     case 'tag':
       return notes.filter((n) => hasTag(n, scope.tag))
+    case 'project':
+      return notes.filter((n) => inProject(n.props, scope))
     case 'starred': {
       const order = new Map(starred.map((p, i) => [p, i]))
       return notes.filter((n) => order.has(n.path)).sort((a, b) => order.get(a.path)! - order.get(b.path)!)

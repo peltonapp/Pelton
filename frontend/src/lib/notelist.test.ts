@@ -3,7 +3,7 @@ import { folderCounts, folderRows, hasTag, notesInScope, sortNotes } from './not
 import type { VaultNote } from './types'
 
 function note(path: string, mtime: number, tags: string[] = []): VaultNote {
-  return { path, title: path.replace(/^.*\//, '').replace(/\.md$/, ''), mtime, size: 0, tags, aliases: [], headings: [], snippet: '', links: [] }
+  return { path, title: path.replace(/^.*\//, '').replace(/\.md$/, ''), mtime, size: 0, tags, aliases: [], headings: [], snippet: '', links: [], props: [] }
 }
 
 const notes = [note('b.md', 3, ['Work/Plan']), note('a/x.md', 1), note('a/b/y.md', 2, ['other']), note('c 10.md', 5), note('c 9.md', 4)]
@@ -16,6 +16,13 @@ describe('notesInScope', () => {
     expect(notesInScope(notes, { kind: 'all' })).toHaveLength(5)
     expect(hasTag(notes[0], 'work/plan')).toBe(true)
     expect(hasTag(notes[0], 'wor')).toBe(false)
+  })
+
+  it('takes the notes whose front matter puts them in a project', () => {
+    const inIt = { ...note('p/one.md', 1), props: [{ key: 'project-id', value: 'u1', list: [] }] }
+    const byName = { ...note('two.md', 1), props: [{ key: 'Project', value: '[[Launch]]', list: [] }] }
+    const other = { ...note('three.md', 1), props: [{ key: 'project-id', value: 'u2', list: [] }, { key: 'project', value: 'Launch', list: [] }] }
+    expect(notesInScope([...notes, inIt, byName, other], { kind: 'project', uid: 'u1', name: 'launch' }).map((n) => n.path)).toEqual(['p/one.md', 'two.md'])
   })
 })
 
