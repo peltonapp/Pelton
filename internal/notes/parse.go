@@ -74,7 +74,7 @@ type Parsed struct {
 const bom = "\xef\xbb\xbf"
 
 var (
-	headingRe =regexp.MustCompile(`^ {0,3}(#{1,6})(?:[ \t]+(.*?))?[ \t]*$`)
+	headingRe = regexp.MustCompile(`^ {0,3}(#{1,6})(?:[ \t]+(.*?))?[ \t]*$`)
 	fenceRe   = regexp.MustCompile("^ {0,3}(`{3,}|~{3,})")
 	closingRe = regexp.MustCompile(`[ \t]+#+$`)
 )
