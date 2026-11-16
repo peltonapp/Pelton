@@ -79,6 +79,9 @@ function mount(props: Record<string, unknown> = {}, events: Record<string, (e: C
 // which for the 07:00 to 19:00 stretch the event's day shows is 100 per hour.
 let restore: () => void = () => {}
 beforeEach(() => {
+  // early on the event's day, so its working hours are still ahead.
+  vi.useFakeTimers({ toFake: ['Date'] })
+  vi.setSystemTime(at(16, 6))
   api.lookupFreeBusy.mockReset()
   api.lookupFreeBusy.mockImplementation(() => reply(Promise.resolve(answer)))
   calendarSettingsLoaded.set(false)
@@ -95,7 +98,10 @@ beforeEach(() => {
   }
 })
 
-afterEach(() => restore())
+afterEach(() => {
+  restore()
+  vi.useRealTimers()
+})
 
 const x = (h: number, m = 0): number => (h - 7) * 100 + (m / 60) * 100
 

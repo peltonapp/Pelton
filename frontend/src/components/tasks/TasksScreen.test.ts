@@ -50,7 +50,7 @@ vi.stubGlobal(
 import TasksScreen from './TasksScreen.svelte'
 import TaskDetail from './TaskDetail.svelte'
 import MonthView from '../calendar/MonthView.svelte'
-import { tasks, taskLists, taskSettings, defaultTaskSettings } from '../../stores/tasks'
+import { tasks, taskLists, taskSettings, defaultTaskSettings, taskClock } from '../../stores/tasks'
 import { runSpaceAction } from '../../stores/space'
 import { spaceSearchProviders } from '../../lib/spacesearch'
 import { toasts } from '../../stores/toast'
@@ -115,6 +115,7 @@ async function ready(): Promise<void> {
 beforeEach(() => {
   vi.useFakeTimers({ toFake: ['Date'] })
   vi.setSystemTime(now)
+  taskClock.set(now)
   vi.clearAllMocks()
   nextId = 1
   stored = [
