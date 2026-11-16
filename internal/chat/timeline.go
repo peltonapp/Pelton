@@ -328,6 +328,7 @@ func (s *session) toMessage(ctx context.Context, roomID id.RoomID, row eventRow,
 	}
 	stripReplyFallback(content)
 	fillContent(msg, dec.Type, content)
+	msg.HTML = sanitizeHTML(msg.HTML)
 	msg.Mentioned = !msg.Own && s.mentions(content)
 
 	if list := reactions[evt.ID]; len(list) > 0 {
