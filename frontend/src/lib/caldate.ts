@@ -207,6 +207,8 @@ export function viewRange(view: CalendarView, focus: Date, weekStart: number): D
       const from = startOfDay(focus)
       return { from, to: addDays(from, agendaDays) }
     }
+    case 'year':
+      return { from: new Date(focus.getFullYear(), 0, 1), to: new Date(focus.getFullYear() + 1, 0, 1) }
   }
 }
 
@@ -221,6 +223,8 @@ export function stepFocus(view: CalendarView, focus: Date, dir: number): Date {
       return addDays(focus, dir)
     case 'agenda':
       return addDays(focus, agendaDays * dir)
+    case 'year':
+      return addMonths(focus, 12 * dir)
   }
 }
 

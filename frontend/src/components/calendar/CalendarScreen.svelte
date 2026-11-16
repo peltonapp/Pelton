@@ -24,6 +24,7 @@
   import MonthView from './MonthView.svelte'
   import TimeGrid from './TimeGrid.svelte'
   import AgendaView from './AgendaView.svelte'
+  import YearView from './YearView.svelte'
   import EventPopover from './EventPopover.svelte'
   import QuickCreate from './QuickCreate.svelte'
   import QuickAdd from './QuickAdd.svelte'
@@ -127,6 +128,8 @@
   $: writable = $calendars.filter((c) => !c.readOnly)
   $: defaultCalendar = defaultCalendarId($calendars, $calendarSettings)
   $: busyDays = daysWithEvents(placed)
+  $: visibleCalendars = new Set($calendars.filter((c) => c.visible).map((c) => c.id))
+  $: yearPlaced = view === 'year' ? placed.filter((p) => !p.occ.task && visibleCalendars.has(p.occ.calendarId)) : []
   $: title = formatViewTitle(view, range.from, range.to, focus)
   $: rtl = typeof document !== 'undefined' && document.documentElement.dir === 'rtl'
   $: quickAddKey = $bindings['calendar-quick-add'] ? shortcutLabel($bindings['calendar-quick-add']) : ''
@@ -305,6 +308,13 @@
     calendarView.set('day')
   }
 
+  function openMonth(day: Date): void {
+    closeFloating()
+    direction = 0
+    calendarFocus.set(day)
+    calendarView.set('month')
+  }
+
   function showDay(day: Date): void {
     if (day < range.from || day >= range.to) {
       direction = day > focus ? 1 : -1
@@ -317,6 +327,7 @@
     { key: 'week', label: $t('calendar.view.week') },
     { key: 'month', label: $t('calendar.view.month') },
     { key: 'agenda', label: $t('calendar.view.agenda') },
+    { key: 'year', label: $t('calendar.view.year') },
   ]
 
   // --- popovers -----------------------------------------------------------------
@@ -835,12 +846,15 @@
       w: () => setView('week'),
       m: () => setView('month'),
       a: () => setView('agenda'),
+      y: () => setView('year'),
       n: newEvent,
       [back]: () => go(-1),
       [forward]: () => go(1),
     }
     const run = actions[event.key]
-    if (run && !(event.target as HTMLElement).closest('.mini')) {
+    const target = event.target as HTMLElement
+    const ownsKey = target.closest('.mini') || (target.closest('.year') && event.key.startsWith('Arrow'))
+    if (run && !ownsKey) {
       event.preventDefault()
       event.stopPropagation()
       run()
@@ -939,6 +953,18 @@
               on:menu={(e) => onCellMenu(e.detail)}
               on:toggleTask={(e) => toggleTask(e.detail)}
               on:moveTask={(e) => moveTaskToDay(e.detail.occ, e.detail.day)}
+            />
+          {:else if view === 'year'}
+            <YearView
+              year={focus.getFullYear()}
+              {focus}
+              {now}
+              {weekStart}
+              placed={yearPlaced}
+              {colors}
+              {timeFormat}
+              on:day={(e) => openDay(e.detail)}
+              on:month={(e) => openMonth(e.detail)}
             />
           {:else if view === 'agenda'}
             <AgendaView

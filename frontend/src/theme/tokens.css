@@ -143,6 +143,14 @@
   --cal-gutter: 56px;
   --cal-lane-height: 20px;
   --cal-edge: 3px;
+  /* the year view: four neutral steps a day is shaded in by how busy it is,
+     the thickness of a multi-day bar and the width of the day popover. */
+  --year-busy-1: color-mix(in srgb, var(--text-primary) 5%, transparent);
+  --year-busy-2: color-mix(in srgb, var(--text-primary) 10%, transparent);
+  --year-busy-3: color-mix(in srgb, var(--text-primary) 17%, transparent);
+  --year-busy-4: color-mix(in srgb, var(--text-primary) 26%, transparent);
+  --year-bar: 3px;
+  --year-popover-width: 240px;
   --cal-popover-width: 320px;
   --cal-editor-width: 600px;
   --cal-hour-height: 46px;

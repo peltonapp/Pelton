@@ -1772,7 +1772,7 @@ export interface CalendarSettings {
 }
 
 /** The views of the calendar screen. */
-export type CalendarView = 'month' | 'week' | 'day' | 'agenda'
+export type CalendarView = 'month' | 'week' | 'day' | 'agenda' | 'year'
 
 /** How the time grid names time zones. */
 export type TimeZoneDisplay = 'off' | 'label' | 'dual'
