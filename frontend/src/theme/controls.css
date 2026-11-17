@@ -1,9 +1,9 @@
 /*
-  controls.css holds the plain controls the calendar's screens share: buttons,
-  icon buttons, text fields and menu items. they are global classes so the
-  sidebar, the popovers, the editor, the invitation card and the settings page
-  look the same without each carrying its own copy. the accent fill is kept for
-  the primary action.
+  controls.css holds the plain controls every space shares: buttons, icon
+  buttons, text fields and menu items. they are global classes so sidebars,
+  popovers, editors, dialogs and settings pages look the same without each
+  carrying its own copy. the accent fill is kept for the primary action. the
+  cal- prefix is historical; the classes are not calendar specific.
 */
 
 .cal-btn {

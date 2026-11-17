@@ -20,7 +20,7 @@
   import flagIcon from '@phosphor-icons/core/assets/duotone/flag-duotone.svg?raw'
   import columnsIcon from '@phosphor-icons/core/assets/duotone/columns-plus-right-duotone.svg?raw'
   import taskIcon from '@phosphor-icons/core/assets/duotone/list-checks-duotone.svg?raw'
-  import '../calendar/controls.css'
+  import '../../theme/controls.css'
   import Ph from '../common/Ph.svelte'
   import Select from '../common/Select.svelte'
   import EmptyState from '../common/EmptyState.svelte'

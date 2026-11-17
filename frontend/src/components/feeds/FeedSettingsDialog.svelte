@@ -4,7 +4,7 @@
   // feed's address, when it was last fetched and why that failed if it did.
   // unsubscribing asks first, since the entries go with the feed.
   import { createEventDispatcher } from 'svelte'
-  import '../calendar/controls.css'
+  import '../../theme/controls.css'
   import Modal from '../common/Modal.svelte'
   import Select from '../common/Select.svelte'
   import ToggleSwitch from '../common/ToggleSwitch.svelte'

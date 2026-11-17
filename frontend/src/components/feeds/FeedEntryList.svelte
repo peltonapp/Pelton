@@ -10,7 +10,7 @@
   import sidebarIcon from '@phosphor-icons/core/assets/duotone/sidebar-simple-duotone.svg?raw'
   import rssIcon from '@phosphor-icons/core/assets/duotone/rss-duotone.svg?raw'
   import emptyIcon from '@phosphor-icons/core/assets/duotone/tray-duotone.svg?raw'
-  import '../calendar/controls.css'
+  import '../../theme/controls.css'
   import Ph from '../common/Ph.svelte'
   import PieProgress from '../common/PieProgress.svelte'
   import EmptyState from '../common/EmptyState.svelte'

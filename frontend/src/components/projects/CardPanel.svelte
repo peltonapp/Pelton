@@ -12,7 +12,7 @@
   import eventIcon from '@phosphor-icons/core/assets/duotone/calendar-check-duotone.svg?raw'
   import noteIcon from '@phosphor-icons/core/assets/duotone/note-duotone.svg?raw'
   import clipIcon from '@phosphor-icons/core/assets/duotone/paperclip-duotone.svg?raw'
-  import '../calendar/controls.css'
+  import '../../theme/controls.css'
   import Ph from '../common/Ph.svelte'
   import PieProgress from '../common/PieProgress.svelte'
   import AnchoredPopover from '../common/AnchoredPopover.svelte'

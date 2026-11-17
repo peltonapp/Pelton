@@ -18,7 +18,7 @@
   import listIcon from '@phosphor-icons/core/assets/duotone/list-bullets-duotone.svg?raw'
   import moreIcon from '@phosphor-icons/core/assets/regular/dots-three.svg?raw'
   import notesIcon from '@phosphor-icons/core/assets/duotone/notebook-duotone.svg?raw'
-  import '../calendar/controls.css'
+  import '../../theme/controls.css'
   import Ph from '../common/Ph.svelte'
   import Modal from '../common/Modal.svelte'
   import PieProgress from '../common/PieProgress.svelte'

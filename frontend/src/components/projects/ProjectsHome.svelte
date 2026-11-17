@@ -14,7 +14,7 @@
   import kanbanIcon from '@phosphor-icons/core/assets/duotone/kanban-duotone.svg?raw'
   import mailIcon from '@phosphor-icons/core/assets/duotone/envelope-simple-duotone.svg?raw'
   import clockIcon from '@phosphor-icons/core/assets/duotone/clock-duotone.svg?raw'
-  import '../calendar/controls.css'
+  import '../../theme/controls.css'
   import Ph from '../common/Ph.svelte'
   import Avatar from '../common/Avatar.svelte'
   import EmptyState from '../common/EmptyState.svelte'

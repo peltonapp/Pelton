@@ -12,7 +12,7 @@
   import videoIcon from '@phosphor-icons/core/assets/duotone/video-camera-duotone.svg?raw'
   import mapPinIcon from '@phosphor-icons/core/assets/duotone/map-pin-duotone.svg?raw'
   import clockIcon from '@phosphor-icons/core/assets/duotone/clock-duotone.svg?raw'
-  import '../calendar/controls.css'
+  import '../../theme/controls.css'
   import Modal from '../common/Modal.svelte'
   import Ph from '../common/Ph.svelte'
   import PieProgress from '../common/PieProgress.svelte'

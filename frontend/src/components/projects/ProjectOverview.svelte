@@ -6,7 +6,7 @@
   import closeIcon from '@phosphor-icons/core/assets/regular/x.svg?raw'
   import clockIcon from '@phosphor-icons/core/assets/duotone/clock-duotone.svg?raw'
   import calendarIcon from '@phosphor-icons/core/assets/duotone/calendar-blank-duotone.svg?raw'
-  import '../calendar/controls.css'
+  import '../../theme/controls.css'
   import Ph from '../common/Ph.svelte'
   import Avatar from '../common/Avatar.svelte'
   import PieProgress from '../common/PieProgress.svelte'

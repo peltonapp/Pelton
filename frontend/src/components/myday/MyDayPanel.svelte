@@ -14,7 +14,7 @@
   import xIcon from '@phosphor-icons/core/assets/regular/x.svg?raw'
   import lightningIcon from '@phosphor-icons/core/assets/duotone/lightning-duotone.svg?raw'
   import plusIcon from '@phosphor-icons/core/assets/duotone/plus-circle-duotone.svg?raw'
-  import '../calendar/controls.css'
+  import '../../theme/controls.css'
   import Ph from '../common/Ph.svelte'
   import Segmented from '../settings2/ui/Segmented.svelte'
   import TimeGrid from '../calendar/TimeGrid.svelte'

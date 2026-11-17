@@ -14,7 +14,7 @@
   import mapPinIcon from '@phosphor-icons/core/assets/duotone/map-pin-duotone.svg?raw'
   import bellIcon from '@phosphor-icons/core/assets/duotone/bell-duotone.svg?raw'
   import infoIcon from '@phosphor-icons/core/assets/duotone/info-duotone.svg?raw'
-  import './controls.css'
+  import '../../theme/controls.css'
   import Ph from '../common/Ph.svelte'
   import Select from '../common/Select.svelte'
   import { parsePhrase, type ChronoLike, type PhraseResult, type PartKind } from '../../lib/eventphrase'

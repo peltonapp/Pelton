@@ -20,7 +20,7 @@
   import { reminderChoices, reminderLabel } from '../../calendar/labels'
   import { prefs } from '../../../stores/prefs'
   import { t } from '../../../lib/i18n'
-  import '../../calendar/controls.css'
+  import '../../../theme/controls.css'
   import { defaultCalendarFileStatus, setDefaultCalendarFileHandler } from '../../../lib/api'
   import { errorMessage, toastError } from '../../../stores/toast'
   import type { TimeFormat } from '../../../lib/format'

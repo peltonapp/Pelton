@@ -3,7 +3,7 @@
   // and whether completed tasks gather in it. deleting a column asks where its
   // cards go: to another column, or off the board, their tasks kept.
   import { createEventDispatcher } from 'svelte'
-  import '../calendar/controls.css'
+  import '../../theme/controls.css'
   import Modal from '../common/Modal.svelte'
   import Select from '../common/Select.svelte'
   import ToggleSwitch from '../common/ToggleSwitch.svelte'

@@ -7,7 +7,7 @@
   import { fade } from 'svelte/transition'
   import closeIcon from '@phosphor-icons/core/assets/regular/x.svg?raw'
   import mailIcon from '@phosphor-icons/core/assets/duotone/envelope-simple-open-duotone.svg?raw'
-  import '../calendar/controls.css'
+  import '../../theme/controls.css'
   import Ph from '../common/Ph.svelte'
   import PieProgress from '../common/PieProgress.svelte'
   import EmptyState from '../common/EmptyState.svelte'

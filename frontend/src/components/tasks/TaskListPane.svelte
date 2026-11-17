@@ -13,7 +13,7 @@
   import usersIcon from '@phosphor-icons/core/assets/duotone/users-duotone.svg?raw'
   import flagIcon from '@phosphor-icons/core/assets/duotone/flag-duotone.svg?raw'
   import bellIcon from '@phosphor-icons/core/assets/duotone/bell-duotone.svg?raw'
-  import '../calendar/controls.css'
+  import '../../theme/controls.css'
   import Ph from '../common/Ph.svelte'
   import TaskCheck from './TaskCheck.svelte'
   import { calendarColor } from '../../lib/calformat'

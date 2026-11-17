@@ -9,7 +9,7 @@
   import closeIcon from '@phosphor-icons/core/assets/regular/x.svg?raw'
   import userPlusIcon from '@phosphor-icons/core/assets/duotone/user-plus-duotone.svg?raw'
   import usersIcon from '@phosphor-icons/core/assets/duotone/users-three-duotone.svg?raw'
-  import '../calendar/controls.css'
+  import '../../theme/controls.css'
   import Ph from '../common/Ph.svelte'
   import Avatar from '../common/Avatar.svelte'
   import EmptyState from '../common/EmptyState.svelte'

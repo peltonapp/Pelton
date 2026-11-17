@@ -12,7 +12,7 @@
   import syncIcon from '@phosphor-icons/core/assets/duotone/arrows-clockwise-duotone.svg?raw'
   import sidebarIcon from '@phosphor-icons/core/assets/duotone/sidebar-simple-duotone.svg?raw'
   import warningIcon from '@phosphor-icons/core/assets/duotone/warning-duotone.svg?raw'
-  import '../calendar/controls.css'
+  import '../../theme/controls.css'
   import Ph from '../common/Ph.svelte'
   import Select from '../common/Select.svelte'
   import Modal from '../common/Modal.svelte'

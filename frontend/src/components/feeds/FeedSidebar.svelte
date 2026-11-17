@@ -17,7 +17,7 @@
   import starIcon from '@phosphor-icons/core/assets/duotone/star-duotone.svg?raw'
   import laterIcon from '@phosphor-icons/core/assets/duotone/bookmark-simple-duotone.svg?raw'
   import newsIcon from '@phosphor-icons/core/assets/duotone/newspaper-duotone.svg?raw'
-  import '../calendar/controls.css'
+  import '../../theme/controls.css'
   import Ph from '../common/Ph.svelte'
   import AnchoredPopover from '../common/AnchoredPopover.svelte'
   import SpaceSwitcher from '../shell/SpaceSwitcher.svelte'

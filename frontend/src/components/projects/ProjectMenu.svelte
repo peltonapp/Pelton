@@ -5,7 +5,7 @@
   import { createEventDispatcher } from 'svelte'
   import kanbanIcon from '@phosphor-icons/core/assets/duotone/kanban-duotone.svg?raw'
   import checkIcon from '@phosphor-icons/core/assets/regular/check.svg?raw'
-  import '../calendar/controls.css'
+  import '../../theme/controls.css'
   import Ph from '../common/Ph.svelte'
   import AnchoredPopover from '../common/AnchoredPopover.svelte'
   import { projectColor } from '../../lib/projectlogic'

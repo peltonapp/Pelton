@@ -16,7 +16,7 @@
   import linkIcon from '@phosphor-icons/core/assets/duotone/link-simple-duotone.svg?raw'
   import unlinkIcon from '@phosphor-icons/core/assets/duotone/link-simple-break-duotone.svg?raw'
   import noteIcon from '@phosphor-icons/core/assets/duotone/note-pencil-duotone.svg?raw'
-  import '../calendar/controls.css'
+  import '../../theme/controls.css'
   import Ph from '../common/Ph.svelte'
   import PieProgress from '../common/PieProgress.svelte'
   import EmptyState from '../common/EmptyState.svelte'

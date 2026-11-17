@@ -8,7 +8,7 @@
   import plusIcon from '@phosphor-icons/core/assets/regular/plus.svg?raw'
   import warningIcon from '@phosphor-icons/core/assets/duotone/warning-duotone.svg?raw'
   import cloudIcon from '@phosphor-icons/core/assets/duotone/cloud-check-duotone.svg?raw'
-  import './controls.css'
+  import '../../theme/controls.css'
   import Ph from '../common/Ph.svelte'
   import PieProgress from '../common/PieProgress.svelte'
   import { calendarAccounts, loadCalendars, refreshCalendars, calendarSync } from '../../stores/calendar'
