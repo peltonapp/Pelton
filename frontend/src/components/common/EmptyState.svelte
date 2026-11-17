@@ -42,17 +42,21 @@
   /** Runs the secondary action. */
   export let onSecondary: (() => void) | null = null
 
-  $: headingLevel = level ?? (size === 'full' ? 3 : null)
+  $: classic = $prefs.design === 'classic'
+  $: headingLevel = classic ? null : (level ?? (size === 'full' ? 3 : null))
   $: combo = shortcut && $prefs.showShortcutHints ? ($bindings[shortcut] ?? '') : ''
   $: hint = combo ? shortcutLabel(combo) : ''
-  $: hasIcon = !!icon || !!$$slots.default
+  $: hasIcon = classic || !!icon || !!$$slots.default
+  $: role = kind === 'error' ? 'alert' : classic ? undefined : 'status'
 </script>
 
-<div class="empty {size}" class:error={kind === 'error'} role={kind === 'error' ? 'alert' : 'status'} data-kind={kind}>
+<div class="empty {size}" class:classic class:error={kind === 'error'} {role} data-kind={classic ? undefined : kind}>
   {#if hasIcon}
     <div class="icon" aria-hidden="true">
       <slot>
-        <Ph svg={icon} size={size === 'full' ? 32 : 18} />
+        {#if icon}
+          <Ph svg={icon} size={size === 'full' ? 32 : 18} />
+        {/if}
       </slot>
     </div>
   {/if}
@@ -88,15 +92,18 @@
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    justify-content: safe center;
-    flex: 1;
     gap: var(--space-3);
-    box-sizing: border-box;
     height: 100%;
-    min-height: 0;
     padding: var(--space-6);
     text-align: center;
     color: var(--text-tertiary);
+  }
+
+  .empty:not(.classic) {
+    justify-content: safe center;
+    flex: 1;
+    box-sizing: border-box;
+    min-height: 0;
   }
 
   .empty.compact {
@@ -110,9 +117,12 @@
   }
 
   .icon {
-    display: inline-flex;
     color: var(--text-tertiary);
     opacity: 0.7;
+  }
+
+  .empty:not(.classic) .icon {
+    display: inline-flex;
   }
 
   .title {
@@ -134,9 +144,13 @@
 
   .detail {
     margin: 0;
-    max-width: 36ch;
+    max-width: 32ch;
     font-size: var(--fz-label);
     line-height: 1.5;
+  }
+
+  .empty:not(.classic) .detail {
+    max-width: 36ch;
     word-break: break-word;
   }
 
