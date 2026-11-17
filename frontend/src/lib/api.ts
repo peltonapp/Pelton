@@ -2021,6 +2021,8 @@ export const SettingKeys = {
   navStyle: 'nav_style',
   railSide: 'rail_side',
   railPins: 'rail_pins',
+  spaceOrder: 'space_order',
+  hiddenSpaces: 'hidden_spaces',
   paneStyle: 'pane_style',
   avatarPlacement: 'avatar_placement',
   contactsView: 'contacts_view',

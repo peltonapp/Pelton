@@ -24,7 +24,7 @@
   import { meetingPrepTarget, openMeetingPrep, closeMeetingPrep } from './stores/meetingprep'
   import { mailScreen, openMailScreen, closeMailScreen } from './stores/mailscreen'
   import { IconMailX, IconChartBar } from '@tabler/icons-svelte'
-  import { visibleSpaces } from './lib/spaces'
+  import { orderedSpaces } from './lib/spaces'
   import { startChat, stopChat } from './stores/chat'
   import { popupIsOpen } from './lib/popups'
   import { calendarFocus, calendarImport, calendarQuickAdd } from './stores/calendar'
@@ -1842,7 +1842,9 @@
       }
       return
     }
-    if (overlayOpen || !get(visibleSpaces).some((s) => s.key === key)) {
+    // a space left out of the navigation still opens; only one switched off
+    // does not.
+    if (overlayOpen || !get(orderedSpaces).some((s) => s.key === key)) {
       return
     }
     openSpace(key)

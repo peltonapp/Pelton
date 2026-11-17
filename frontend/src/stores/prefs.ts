@@ -82,6 +82,8 @@ const defaults: UIPrefs = {
   navStyle: 'rail',
   railSide: 'left',
   railPins: '',
+  spaceOrder: '',
+  hiddenSpaces: '',
   paneStyle: 'hybrid',
   avatarPlacement: 'inline',
   contactsView: 'panes',
@@ -328,6 +330,18 @@ export function toggleRailPin(id: string): void {
     void setSetting(SettingKeys.railPins, railPins)
     return { ...p, railPins }
   })
+}
+
+/** Stores the order of the spaces in the navigation, as a comma list of keys. */
+export function setSpaceOrder(spaceOrder: string): void {
+  prefs.update((p) => ({ ...p, spaceOrder }))
+  void setSetting(SettingKeys.spaceOrder, spaceOrder)
+}
+
+/** Stores the spaces left out of the navigation, as a comma list of keys. */
+export function setHiddenSpaces(hiddenSpaces: string): void {
+  prefs.update((p) => ({ ...p, hiddenSpaces }))
+  void setSetting(SettingKeys.hiddenSpaces, hiddenSpaces)
 }
 
 /** Moves the rail to the left or right window edge. */
