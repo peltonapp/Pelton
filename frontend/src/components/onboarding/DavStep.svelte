@@ -218,6 +218,9 @@
       </button>
     {/if}
   </div>
+  {#if fromMailbox && !(looked && canAdd)}
+    <p class="muted">{$t('setup.dav.lookAtHint').replace('{domain}', domain)}</p>
+  {/if}
 </form>
 
 <style>
