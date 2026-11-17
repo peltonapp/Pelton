@@ -8,6 +8,7 @@
   import { fade, fly } from 'svelte/transition'
   import { cubicOut } from 'svelte/easing'
   import Ph from '../common/Ph.svelte'
+  import EmptyState from '../common/EmptyState.svelte'
   import ContactSidebar from './ContactSidebar.svelte'
   import ContactList from './ContactList.svelte'
   import ContactGrid from './ContactGrid.svelte'
@@ -335,11 +336,14 @@
   {/if}
 
   {#if $addressBooks.length === 0 && ready}
-    <div class="empty">
-      <Ph svg={bookIcon} size={32} />
-      <p>{$t('contacts.noBooks')}</p>
-      <button type="button" class="btn primary" on:click={manageBooks}>{$t('contacts.addBook')}</button>
-    </div>
+    <EmptyState
+      kind="setup"
+      icon={bookIcon}
+      title={$t('contacts.noBooksTitle')}
+      detail={$t('contacts.noBooksDetail')}
+      actionLabel={$t('contacts.addBook')}
+      onAction={manageBooks}
+    />
   {:else if duplicatesOpen}
     <ContactDuplicates on:back={() => (duplicatesOpen = false)} />
   {:else}
@@ -349,9 +353,9 @@
       {/if}
 
       {#if view === 'grid'}
-        <ContactGrid on:select={(e) => select(e.detail)} />
+        <ContactGrid on:select={(e) => select(e.detail)} on:create={() => startCreate()} />
       {:else if mode !== 'narrow' || !paneOpen}
-        <ContactList on:select={(e) => select(e.detail)} />
+        <ContactList on:select={(e) => select(e.detail)} on:create={() => startCreate()} />
       {/if}
 
       {#if view === 'panes' && mode !== 'narrow'}
@@ -663,24 +667,6 @@
 
   .drawer.full {
     width: 100%;
-  }
-
-  .empty {
-    display: flex;
-    flex: 1;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    gap: var(--space-3);
-    padding: var(--space-5);
-    color: var(--text-tertiary);
-    font-size: var(--fz-body);
-    text-align: center;
-  }
-
-  .empty p {
-    margin: 0;
-    max-width: 360px;
   }
 
   @media (prefers-reduced-motion: reduce) {
