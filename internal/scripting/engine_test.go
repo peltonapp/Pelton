@@ -246,6 +246,24 @@ func TestRiskyCallAsks(t *testing.T) {
 	}
 }
 
+type slowConfirm struct{ wait time.Duration }
+
+func (c slowConfirm) Confirm(context.Context, ConfirmRequest) (ConfirmAnswer, error) {
+	time.Sleep(c.wait)
+	return ConfirmAnswer{Allow: true}, nil
+}
+
+func TestConfirmationDoesNotUseTheTimeBudget(t *testing.T) {
+	mail := newFakeMail()
+	e := testEngine(t, mail)
+	e.Limits.Timeout = 150 * time.Millisecond
+	e.Hosts.Confirm = slowConfirm{wait: 400 * time.Millisecond}
+	run := runLua(t, e, `mail.send({to = {"a@example.org"}})`, PermMailSend)
+	if run.Status != StatusOK || len(mail.Calls()) != 1 {
+		t.Fatalf("%s %q %v", run.Status, run.Error, mail.Calls())
+	}
+}
+
 func TestRiskyWithoutConfirmerIsDenied(t *testing.T) {
 	e := testEngine(t, newFakeMail())
 	run := runLua(t, e, `mail.send({to = {"a@example.org"}})`, PermMailSend)

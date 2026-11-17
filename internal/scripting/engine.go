@@ -220,6 +220,12 @@ type runState struct {
 	cancel context.CancelFunc
 	start  time.Time
 	limits Limits
+	// deadline ends the run when its time budget runs out. The clock stops
+	// while the user is asked to confirm a call: remaining is what is left
+	// and clockFrom when the clock last started.
+	deadline  *time.Timer
+	remaining time.Duration
+	clockFrom time.Time
 
 	mu       sync.Mutex
 	run      *Run
@@ -248,7 +254,7 @@ func (e *Engine) Run(ctx context.Context, req RunRequest) *Run {
 		Started:  e.Hosts.now(),
 		Status:   StatusRunning,
 	}
-	ctx, cancel := context.WithTimeout(ctx, limits.Timeout)
+	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 	ctx = WithRunInfo(ctx, RunInfo{
 		RunID:      req.RunID,
@@ -269,6 +275,13 @@ func (e *Engine) Run(ctx context.Context, req RunRequest) *Run {
 		regexps: map[string]*regexpEntry{},
 	}
 	st.limits = limits
+	st.remaining = limits.Timeout
+	st.clockFrom = time.Now()
+	st.deadline = time.AfterFunc(limits.Timeout, func() {
+		st.setFatal(StatusTimeout, "the script took too long")
+		cancel()
+	})
+	defer st.deadline.Stop()
 
 	done := make(chan struct{})
 	go func() {
@@ -284,12 +297,14 @@ func (e *Engine) Run(ctx context.Context, req RunRequest) *Run {
 		go st.watchMemory(done, limits.Memory)
 	}
 
-	grace := time.NewTimer(limits.Timeout + 2*time.Second)
-	defer grace.Stop()
 	select {
 	case <-done:
-	case <-grace.C:
-		st.setFatal(StatusTimeout, "the script took too long")
+	case <-ctx.Done():
+		select {
+		case <-done:
+		case <-time.After(2 * time.Second):
+			st.setFatal(StatusTimeout, "the script took too long")
+		}
 	}
 	return st.finish()
 }
@@ -808,18 +823,42 @@ func (st *runState) isAllowed(full string) bool {
 	return slices.Contains(st.allowed, full)
 }
 
+// pauseClock stops the run's time budget while the user is asked, so reading
+// a confirmation does not use it up. It reports false when the budget had
+// already run out.
+func (st *runState) pauseClock() bool {
+	st.mu.Lock()
+	defer st.mu.Unlock()
+	if !st.deadline.Stop() {
+		return false
+	}
+	st.remaining -= time.Since(st.clockFrom)
+	return true
+}
+
+func (st *runState) resumeClock() {
+	st.mu.Lock()
+	defer st.mu.Unlock()
+	st.clockFrom = time.Now()
+	st.deadline.Reset(max(st.remaining, time.Millisecond))
+}
+
 func (st *runState) confirm(full, summary string) error {
 	hosts := st.e.Hosts
 	if hosts == nil || hosts.Confirm == nil {
 		st.addStep(Step{Kind: StepDeclined, Function: full, Summary: summary, Error: "nobody to ask"})
 		return st.setFatal(StatusDenied, full+" needs your confirmation, and there was no way to ask")
 	}
+	stopped := st.pauseClock()
 	ans, err := hosts.Confirm.Confirm(st.ctx, ConfirmRequest{
 		ScriptID:   st.req.Script.ID,
 		ScriptName: st.req.Script.Name,
 		Function:   full,
 		Summary:    summary,
 	})
+	if stopped {
+		st.resumeClock()
+	}
 	if err != nil || !ans.Allow {
 		st.addStep(Step{Kind: StepDeclined, Function: full, Summary: summary})
 		if st.ctx.Err() != nil {

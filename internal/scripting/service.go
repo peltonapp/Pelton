@@ -291,6 +291,19 @@ func (s *Service) prune(ctx context.Context, now time.Time) {
 	}
 }
 
+// Wants reports whether an enabled script is started by trigger, so a hook can
+// skip building an event nobody listens to.
+func (s *Service) Wants(trigger string) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	for _, sc := range s.scripts {
+		if sc.Enabled && sc.Trigger.Type == trigger {
+			return true
+		}
+	}
+	return false
+}
+
 // Emit hands an event to every enabled script started by its trigger. It
 // returns at once; the runs happen on the scripts' own queues.
 func (s *Service) Emit(ev Event) {
