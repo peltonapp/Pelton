@@ -206,6 +206,8 @@
   import { startProjects, fileMailRequest } from './stores/projects'
   import { pickProjectFor } from './lib/projectpicker'
   import './lib/palette-feeds'
+  import './lib/palette-automations'
+  import AutomationsHost from './components/automations/AutomationsHost.svelte'
   import './lib/palette-navhistory'
   import './lib/location-mail'
   import './lib/location-calendar'
@@ -215,6 +217,7 @@
   import './lib/location-notes'
   import './lib/location-feeds'
   import './lib/location-chat'
+  import './lib/location-automations'
   import { startNavHistory, clearNavHistory, goBack, goForward } from './stores/navhistory'
   import { startFeeds, feedFocus } from './stores/feeds'
   import { startTasks, toggleDone, tasks as taskStore, taskFromMailRequest } from './stores/tasks'
@@ -331,7 +334,9 @@
   }
   // an overlay covers the top bar, so the window needs another handle to be
   // dragged by while one is open.
-  $: overlayOpen = settingsOpen || onboardingOpen || wizardOpen || contactsOpen
+  $: overlayOpen = settingsOpen || onboardingOpen || wizardOpen || contactsOpen || automationsOpen
+  // classic shows automations as an overlay too.
+  let automationsOpen = false
 
   // the in-app menu bar is the only menu on Windows/Linux (no native menu is
   // created there); on macOS the native bar stays and the in-app one is opt-in.
@@ -1428,6 +1433,13 @@
       case 'go-chat':
         goToSpace('chat')
         break
+      case 'go-automations':
+        if (classic) {
+          automationsOpen = !settingsOpen && !onboardingOpen && !wizardOpen
+        } else {
+          goToSpace('automations')
+        }
+        break
       case 'open-attachments':
         if (!classic && !overlayOpen) {
           openSpace('mail')
@@ -2214,7 +2226,7 @@
 {/if}
 
 {#if !classic}
-<div class="frame" class:rail-right={$prefs.railSide === 'right'} class:has-rail={showRail}>
+<div class="frame" class:rail-right={$prefs.railSide === 'right'} class:has-rail={showRail} data-file-drop-target="app">
   <TopBar tabs={$prefs.navStyle === 'tabs' || railFolded}>
     <svelte:fragment slot="menu">
       {#if showMenuBar}
@@ -2336,13 +2348,19 @@
           <svelte:component this={m.default} />
         {/await}
       </div>
+    {:else if $space === 'automations'}
+      <div class="space-host">
+        {#await import('./components/automations/AutomationsSpace.svelte') then m}
+          <svelte:component this={m.default} />
+        {/await}
+      </div>
     {/if}
   </div>
 
   <StatusBar />
 </div>
 {:else}
-<div class="shell" class:with-topbar={showMenuBar || macTitlebar}>
+<div class="shell" class:with-topbar={showMenuBar || macTitlebar} data-file-drop-target="app">
   {#if showMenuBar}
     <MenuBar on:action={(e) => handleMenu(e.detail)} />
   {:else if macTitlebar}
@@ -2378,6 +2396,14 @@
 
 <!-- settings and the wizard are code-split: their js/css load only when opened,
      so they cost nothing at startup. compose stays eager (used constantly). -->
+{#if automationsOpen && classic}
+  {#await import('./components/automations/AutomationsOverlay.svelte') then m}
+    <svelte:component this={m.default} on:close={() => (automationsOpen = false)} />
+  {/await}
+{/if}
+
+<AutomationsHost />
+
 {#if contactsOpen}
   {#await import('./components/contacts/ContactsScreen.svelte') then m}
     <svelte:component

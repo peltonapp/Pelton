@@ -34,6 +34,7 @@ export type HistoryKind =
   | 'project'
   | 'task'
   | 'event'
+  | 'script'
 
 /** The most entries kept; the oldest fall off first. */
 export const historyCap = 50

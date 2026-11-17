@@ -13,6 +13,7 @@ import type {
   ChatVerification,
   ChatMediaProgress,
 } from './types'
+import type { ScriptCatchUp, ScriptConfirmRequest, ScriptRun, ScriptToast } from './scripting'
 
 // EventsOn subscribes to a backend event and hands the callback its payload.
 function EventsOn<T>(name: string, cb: (data: T) => void): () => void {
@@ -64,6 +65,11 @@ export const EventNames = {
   chatVerification: 'chat:verification',
   chatMediaProgress: 'chat:media-progress',
   chatOpen: 'chat:open',
+  scriptRun: 'scripts:run',
+  scriptsChanged: 'scripts:changed',
+  scriptConfirm: 'scripts:confirm',
+  scriptCatchUp: 'scripts:catchup',
+  scriptToast: 'scripts:toast',
   // sent between windows by the frontend, not by go.
   archiveAfterSend: 'compose:archive-after-send',
 } as const
@@ -522,4 +528,29 @@ export function onFeedsChanged(cb: (e: FeedsChangedEvent) => void): Unsubscribe 
 /** onFeedsOpen fires when a clicked notification asks for a feed entry. */
 export function onFeedsOpen(cb: (entryId: number) => void): Unsubscribe {
   return EventsOn(EventNames.feedsOpen, (e: { entryId: number }) => cb(e.entryId))
+}
+
+/** onScriptRun fires when a script run ends, test runs included. */
+export function onScriptRun(cb: (run: ScriptRun) => void): Unsubscribe {
+  return EventsOn(EventNames.scriptRun, (r: ScriptRun) => cb(r))
+}
+
+/** onScriptsChanged fires when scripts were added, changed or removed. */
+export function onScriptsChanged(cb: () => void): Unsubscribe {
+  return EventsOn(EventNames.scriptsChanged, () => cb())
+}
+
+/** onScriptConfirm fires when a script asks before a risky call. */
+export function onScriptConfirm(cb: (req: ScriptConfirmRequest) => void): Unsubscribe {
+  return EventsOn(EventNames.scriptConfirm, (r: ScriptConfirmRequest) => cb(r))
+}
+
+/** onScriptCatchUp fires when a script asks whether to run over mail that arrived while Pelton was closed. */
+export function onScriptCatchUp(cb: (c: ScriptCatchUp) => void): Unsubscribe {
+  return EventsOn(EventNames.scriptCatchUp, (c: ScriptCatchUp) => cb(c))
+}
+
+/** onScriptToast fires when a script shows a message. */
+export function onScriptToast(cb: (toast: ScriptToast) => void): Unsubscribe {
+  return EventsOn(EventNames.scriptToast, (e: ScriptToast) => cb(e))
 }

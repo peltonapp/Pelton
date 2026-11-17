@@ -19,6 +19,7 @@
   import projectIcon from '@phosphor-icons/core/assets/duotone/kanban-duotone.svg?raw'
   import taskIcon from '@phosphor-icons/core/assets/duotone/check-square-duotone.svg?raw'
   import eventIcon from '@phosphor-icons/core/assets/duotone/calendar-blank-duotone.svg?raw'
+  import scriptIcon from '@phosphor-icons/core/assets/duotone/lightning-duotone.svg?raw'
   import undoIcon from '@phosphor-icons/core/assets/duotone/arrow-u-up-left-duotone.svg?raw'
   import redoIcon from '@phosphor-icons/core/assets/duotone/arrow-u-up-right-duotone.svg?raw'
   import xIcon from '@phosphor-icons/core/assets/regular/x.svg?raw'
@@ -49,6 +50,7 @@
     project: projectIcon,
     task: taskIcon,
     event: eventIcon,
+    script: scriptIcon,
   }
 
   // a slow tick keeps the relative times honest while the list is open.

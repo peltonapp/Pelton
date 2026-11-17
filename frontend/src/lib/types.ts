@@ -1585,7 +1585,7 @@ export type AfterReplySend = 'nothing' | 'archive'
 /** When a follow-up reminder set from a preset comes: each lands at nine. */
 export type FollowUpInterval = 'tomorrow' | 'threeDays' | 'week'
 /** One of the top-level areas of the app. */
-export type Space = 'mail' | 'contacts' | 'calendar' | 'tasks' | 'projects' | 'notes' | 'feeds' | 'chat'
+export type Space = 'mail' | 'contacts' | 'calendar' | 'tasks' | 'projects' | 'notes' | 'feeds' | 'chat' | 'automations'
 /** How the Projects space lists projects. */
 export type ProjectsView = 'grid' | 'list'
 /** Which chat messages notify: all, direct messages and mentions, or none. */
