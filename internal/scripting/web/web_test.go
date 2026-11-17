@@ -158,7 +158,9 @@ func TestRedirects(t *testing.T) {
 	mux.HandleFunc("/away", func(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "http://localhost:"+u.Port()+"/end", http.StatusFound)
 	})
-	mux.HandleFunc("/file", func(w http.ResponseWriter, r *http.Request) { http.Redirect(w, r, "file:///etc/passwd", http.StatusFound) })
+	mux.HandleFunc("/file", func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, "file:///etc/passwd", http.StatusFound)
+	})
 	mux.HandleFunc("/end", func(w http.ResponseWriter, r *http.Request) { fmt.Fprint(w, "end") })
 	r := registry(t, Config{})
 	got := run(t, r, fmt.Sprintf(`
