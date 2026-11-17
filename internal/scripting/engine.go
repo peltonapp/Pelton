@@ -630,24 +630,30 @@ func strRep(L *lua.LState) int {
 	s := L.CheckString(1)
 	n := L.CheckInt(2)
 	sep := L.OptString(3, "")
-	if n <= 0 {
+	unit := len(s) + len(sep)
+	if n <= 0 || unit == 0 {
 		L.Push(lua.LString(""))
 		return 1
 	}
-	if (len(s)+len(sep))*n > maxBuiltString {
+	if n > maxBuiltString/unit {
 		L.RaiseError("string.rep would build more than %d bytes", maxBuiltString)
 	}
-	parts := make([]string, n)
-	for i := range parts {
-		parts[i] = s
+	var b strings.Builder
+	b.Grow(unit * n)
+	for i := range n {
+		if i > 0 {
+			b.WriteString(sep)
+		}
+		b.WriteString(s)
 	}
-	L.Push(lua.LString(strings.Join(parts, sep)))
+	L.Push(lua.LString(b.String()))
 	return 1
 }
 
 func strFormat(orig lua.LValue) lua.LGFunction {
 	return func(L *lua.LState) int {
 		f := L.CheckString(1)
+		size := len(f)
 		for i := 0; i < len(f); i++ {
 			if f[i] != '%' {
 				continue
@@ -656,19 +662,32 @@ func strFormat(orig lua.LValue) lua.LGFunction {
 			for j < len(f) && strings.IndexByte("-+ #0", f[j]) >= 0 {
 				j++
 			}
-			digits := 0
+			digits, num := 0, 0
 			for j < len(f) && (f[j] >= '0' && f[j] <= '9' || f[j] == '.') {
-				if f[j] != '.' {
+				if f[j] == '.' {
+					size += num
+					num = 0
+				} else {
 					digits++
+					num = num*10 + int(f[j]-'0')
 				}
 				j++
 			}
 			if digits > 4 {
 				L.RaiseError("string.format width or precision too large")
 			}
+			size += num + 32
 			i = j
 		}
 		top := L.GetTop()
+		for i := 2; i <= top; i++ {
+			if s, ok := L.Get(i).(lua.LString); ok {
+				size += len(s)
+			}
+		}
+		if size > maxBuiltString {
+			L.RaiseError("string.format would build more than %d bytes", maxBuiltString)
+		}
 		L.Push(orig)
 		for i := 1; i <= top; i++ {
 			L.Push(L.Get(i))
