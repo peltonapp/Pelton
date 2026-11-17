@@ -456,9 +456,9 @@
     display: flex;
     align-items: center;
     gap: var(--space-3);
-    padding: var(--space-2) var(--space-3);
+    min-height: calc(var(--control-height) + 2 * var(--space-3));
+    padding: var(--space-3) var(--space-4);
     border-bottom: var(--hairline) solid var(--border-default);
-    background: var(--surface-raised);
   }
 
   .title {
