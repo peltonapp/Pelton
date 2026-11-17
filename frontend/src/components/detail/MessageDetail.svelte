@@ -13,6 +13,8 @@
   import InviteCard from './InviteCard.svelte'
   import InfoModal from './InfoModal.svelte'
   import SourceModal from './SourceModal.svelte'
+  import ClassicInfoModal from './classic/InfoModal.svelte'
+  import ClassicSourceModal from './classic/SourceModal.svelte'
   import Spinner from '../common/Spinner.svelte'
   import ErrorState from '../common/ErrorState.svelte'
   import TabBar from './TabBar.svelte'
@@ -455,12 +457,16 @@ ${bodyHtml}
     </div>
   {/if}
 
-  {#if infoFor}
+  {#if infoFor && newDesign}
     <InfoModal detail={infoFor} on:close={() => (infoFor = null)} />
+  {:else if infoFor}
+    <ClassicInfoModal detail={infoFor} on:close={() => (infoFor = null)} />
   {/if}
 
-  {#if sourceFor !== null}
+  {#if sourceFor !== null && newDesign}
     <SourceModal messageId={sourceFor} on:close={() => (sourceFor = null)} />
+  {:else if sourceFor !== null}
+    <ClassicSourceModal messageId={sourceFor} on:close={() => (sourceFor = null)} />
   {/if}
 </section>
 
