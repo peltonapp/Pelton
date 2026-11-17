@@ -768,6 +768,9 @@ func (st *runState) invoke(L *lua.LState, full string, f Function, args []any) (
 	}
 	script := st.req.Script
 	summary := summarize(full, args)
+	if f.Summary != nil {
+		summary = full + ": " + f.Summary(args)
+	}
 	if !script.granted(f.Permission, st.req.Dry) {
 		st.addStep(Step{Kind: StepDenied, Function: full, Summary: summary, Error: "needs " + f.Permission})
 		return nil, st.setFatal(StatusDenied, fmt.Sprintf("%s needs the permission %q, which the script does not have", full, f.Permission))

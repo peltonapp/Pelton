@@ -16,6 +16,240 @@ import * as sieve$0 from "../sieve/models.js";
 import * as themepack$0 from "../themepack/models.js";
 
 /**
+ * AIKindDTO is a kind of provider the user can add.
+ */
+export class AIKindDTO {
+    "id": string;
+    "label": string;
+    "baseUrl": string;
+
+    /**
+     * Key is "required", "optional" or "none".
+     */
+    "key": string;
+    "model": string;
+
+    /** Creates a new AIKindDTO instance. */
+    constructor($$source: Partial<AIKindDTO> = {}) {
+        if (!("id" in $$source)) {
+            this["id"] = "";
+        }
+        if (!("label" in $$source)) {
+            this["label"] = "";
+        }
+        if (!("baseUrl" in $$source)) {
+            this["baseUrl"] = "";
+        }
+        if (!("key" in $$source)) {
+            this["key"] = "";
+        }
+        if (!("model" in $$source)) {
+            this["model"] = "";
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new AIKindDTO instance from a string or object.
+     */
+    static createFrom($$source: any = {}): AIKindDTO {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new AIKindDTO($$parsedSource as Partial<AIKindDTO>);
+    }
+}
+
+/**
+ * AIProviderDTO is a provider as the settings show it.
+ */
+export class AIProviderDTO {
+    "id": string;
+    "name": string;
+    "kind": string;
+    "baseUrl": string;
+    "model": string;
+    "models": string[];
+    "default": boolean;
+    "hasKey": boolean;
+
+    /**
+     * Local is set when the address names this device or a private network
+     * outright; anything else counts as leaving the device.
+     */
+    "local": boolean;
+
+    /** Creates a new AIProviderDTO instance. */
+    constructor($$source: Partial<AIProviderDTO> = {}) {
+        if (!("id" in $$source)) {
+            this["id"] = "";
+        }
+        if (!("name" in $$source)) {
+            this["name"] = "";
+        }
+        if (!("kind" in $$source)) {
+            this["kind"] = "";
+        }
+        if (!("baseUrl" in $$source)) {
+            this["baseUrl"] = "";
+        }
+        if (!("model" in $$source)) {
+            this["model"] = "";
+        }
+        if (!("models" in $$source)) {
+            this["models"] = [];
+        }
+        if (!("default" in $$source)) {
+            this["default"] = false;
+        }
+        if (!("hasKey" in $$source)) {
+            this["hasKey"] = false;
+        }
+        if (!("local" in $$source)) {
+            this["local"] = false;
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new AIProviderDTO instance from a string or object.
+     */
+    static createFrom($$source: any = {}): AIProviderDTO {
+        const $$createField5_0 = $$createType0;
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        if ("models" in $$parsedSource) {
+            $$parsedSource["models"] = $$createField5_0($$parsedSource["models"]);
+        }
+        return new AIProviderDTO($$parsedSource as Partial<AIProviderDTO>);
+    }
+}
+
+/**
+ * AIProviderInput is a provider being added (empty ID) or changed. Key is a
+ * new API key, "" to keep the stored one; ClearKey removes it.
+ */
+export class AIProviderInput {
+    "id": string;
+    "name": string;
+    "kind": string;
+    "baseUrl": string;
+    "model": string;
+    "models": string[];
+    "key": string;
+    "clearKey": boolean;
+
+    /** Creates a new AIProviderInput instance. */
+    constructor($$source: Partial<AIProviderInput> = {}) {
+        if (!("id" in $$source)) {
+            this["id"] = "";
+        }
+        if (!("name" in $$source)) {
+            this["name"] = "";
+        }
+        if (!("kind" in $$source)) {
+            this["kind"] = "";
+        }
+        if (!("baseUrl" in $$source)) {
+            this["baseUrl"] = "";
+        }
+        if (!("model" in $$source)) {
+            this["model"] = "";
+        }
+        if (!("models" in $$source)) {
+            this["models"] = [];
+        }
+        if (!("key" in $$source)) {
+            this["key"] = "";
+        }
+        if (!("clearKey" in $$source)) {
+            this["clearKey"] = false;
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new AIProviderInput instance from a string or object.
+     */
+    static createFrom($$source: any = {}): AIProviderInput {
+        const $$createField5_0 = $$createType0;
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        if ("models" in $$parsedSource) {
+            $$parsedSource["models"] = $$createField5_0($$parsedSource["models"]);
+        }
+        return new AIProviderInput($$parsedSource as Partial<AIProviderInput>);
+    }
+}
+
+/**
+ * AIScriptOptionsDTO are the AI switches of one script.
+ */
+export class AIScriptOptionsDTO {
+    /**
+     * LogText puts the text sent to the model and its answers in the run log.
+     */
+    "logText": boolean;
+
+    /** Creates a new AIScriptOptionsDTO instance. */
+    constructor($$source: Partial<AIScriptOptionsDTO> = {}) {
+        if (!("logText" in $$source)) {
+            this["logText"] = false;
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new AIScriptOptionsDTO instance from a string or object.
+     */
+    static createFrom($$source: any = {}): AIScriptOptionsDTO {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new AIScriptOptionsDTO($$parsedSource as Partial<AIScriptOptionsDTO>);
+    }
+}
+
+/**
+ * AITestDTO is the outcome of a connection test.
+ */
+export class AITestDTO {
+    "ok": boolean;
+
+    /**
+     * Message is the provider's error when the test failed.
+     */
+    "message": string;
+
+    /**
+     * Local is set when the address resolved to this device or a private
+     * network only.
+     */
+    "local": boolean;
+
+    /** Creates a new AITestDTO instance. */
+    constructor($$source: Partial<AITestDTO> = {}) {
+        if (!("ok" in $$source)) {
+            this["ok"] = false;
+        }
+        if (!("message" in $$source)) {
+            this["message"] = "";
+        }
+        if (!("local" in $$source)) {
+            this["local"] = false;
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new AITestDTO instance from a string or object.
+     */
+    static createFrom($$source: any = {}): AITestDTO {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new AITestDTO($$parsedSource as Partial<AITestDTO>);
+    }
+}
+
+/**
  * AccountDTO is non sensitive account metadata for the sidebar.
  */
 export class AccountDTO {

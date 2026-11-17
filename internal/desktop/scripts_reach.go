@@ -45,6 +45,9 @@ func (a *App) registerScriptReach(r *scripting.Registry) error {
 	if err := system.Register(r, scriptDesktop{app: a}); err != nil {
 		return err
 	}
+	if err := a.registerScriptAI(r); err != nil {
+		return err
+	}
 	spaces.SetChatAvailable(r, a.chatEnabled())
 	return nil
 }
