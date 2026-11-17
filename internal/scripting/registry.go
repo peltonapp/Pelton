@@ -208,6 +208,7 @@ type Catalog struct {
 	InputKinds    []InputKind    `json:"inputKinds"`
 	ResultActions []ResultAction `json:"resultActions"`
 	Placements    []Placement    `json:"placements"`
+	Templates     []Template     `json:"templates"`
 }
 
 // Registry holds everything scripts can use. It is safe for concurrent use;
@@ -223,6 +224,7 @@ type Registry struct {
 	inputKinds    entries[InputKind]
 	resultActions entries[ResultAction]
 	placements    entries[Placement]
+	templates     entries[Template]
 }
 
 type entries[T any] struct {
@@ -270,7 +272,7 @@ var luaKeywords = []string{
 }
 
 // reservedGlobals are names the engine itself defines in a run.
-var reservedGlobals = []string{"event", "script", "stop", "vars", "steps", "print"}
+var reservedGlobals = []string{"event", "script", "stop", "vars", "steps", "print", "require"}
 
 func checkMeta(m Meta) error {
 	if !idPattern.MatchString(m.ID) {
@@ -579,6 +581,12 @@ func (r *Registry) Function(full string) (Function, bool) {
 
 // Catalog returns the registry as data for the editor and the references.
 func (r *Registry) Catalog() Catalog {
+	c := r.entriesCatalog()
+	c.Templates = r.Templates()
+	return c
+}
+
+func (r *Registry) entriesCatalog() Catalog {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 	return Catalog{
