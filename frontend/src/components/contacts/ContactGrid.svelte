@@ -6,8 +6,7 @@
   import ContactListEmpty from './ContactListEmpty.svelte'
   import ContactAvatar from './ContactAvatar.svelte'
   import ContactFilterBar from './ContactFilterBar.svelte'
-  import { contacts, contactsLoading } from '../../stores/contacts'
-  import { contactQuery, contactSort, selectedContactId, visibleContacts } from '../../stores/contactsview'
+  import { contactSort, selectedContactId, visibleContacts } from '../../stores/contactsview'
   import { displayName, sectionContacts } from '../../lib/contactlist'
   import { t } from '../../lib/i18n'
 

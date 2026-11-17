@@ -6,12 +6,12 @@
   // menu edits, archives or deletes it.
   import { createEventDispatcher } from 'svelte'
   import { flip } from 'svelte/animate'
-  import { fade } from 'svelte/transition'
   import plusIcon from '@phosphor-icons/core/assets/regular/plus.svg?raw'
   import moreIcon from '@phosphor-icons/core/assets/regular/dots-three.svg?raw'
   import gridIcon from '@phosphor-icons/core/assets/duotone/squares-four-duotone.svg?raw'
   import listIcon from '@phosphor-icons/core/assets/duotone/rows-duotone.svg?raw'
   import kanbanIcon from '@phosphor-icons/core/assets/duotone/kanban-duotone.svg?raw'
+  import searchIcon from '@phosphor-icons/core/assets/duotone/magnifying-glass-duotone.svg?raw'
   import mailIcon from '@phosphor-icons/core/assets/duotone/envelope-simple-duotone.svg?raw'
   import clockIcon from '@phosphor-icons/core/assets/duotone/clock-duotone.svg?raw'
   import '../../theme/controls.css'
@@ -152,14 +152,30 @@
 
   <div class="scroll">
     {#if $projectsLoaded && $projects.length === 0}
-      <EmptyState title={$t('projects.empty.title')} detail={$t('projects.empty.detail')}>
-        <Ph svg={kanbanIcon} size={30} />
-        <button slot="action" type="button" class="cal-btn primary" on:click={() => dispatch('create')}>
-          <Ph svg={plusIcon} size={13} />{$t('projects.empty.action')}
-        </button>
-      </EmptyState>
+      <EmptyState
+        icon={kanbanIcon}
+        title={$t('projects.empty.title')}
+        detail={$t('projects.empty.detail')}
+        actionLabel={$t('projects.empty.action')}
+        onAction={() => dispatch('create')}
+      />
+    {:else if $projectsLoaded && shown.length === 0 && query.trim()}
+      <EmptyState
+        kind="filtered"
+        icon={searchIcon}
+        title={$t('projects.noMatches')}
+        detail={$t('projects.noMatchesDetail')}
+        actionLabel={$t('common.clearSearch')}
+        onAction={() => (query = '')}
+      />
     {:else if $projectsLoaded && shown.length === 0}
-      <p class="none" in:fade={{ duration: dur(motion.fast) }}>{$t('projects.noMatches')}</p>
+      <EmptyState
+        icon={kanbanIcon}
+        title={$t('projects.noneActive')}
+        detail={$t('projects.noneActiveDetail')}
+        actionLabel={$t('projects.empty.action')}
+        onAction={() => dispatch('create')}
+      />
     {:else if view === 'grid'}
       <ul class="grid" aria-label={$t('space.projects')}>
         {#each shown as p (p.id)}
@@ -309,13 +325,6 @@
     min-height: 0;
     overflow-y: auto;
     padding: var(--space-5);
-  }
-
-  .none {
-    margin: var(--space-6) 0;
-    text-align: center;
-    color: var(--text-tertiary);
-    font-size: var(--fz-list);
   }
 
   .grid {

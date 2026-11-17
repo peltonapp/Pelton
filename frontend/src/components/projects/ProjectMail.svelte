@@ -4,9 +4,9 @@
   // leaves the mail where it is. mail dropped here joins the project.
   import { onDestroy } from 'svelte'
   import { flip } from 'svelte/animate'
-  import { fade } from 'svelte/transition'
   import closeIcon from '@phosphor-icons/core/assets/regular/x.svg?raw'
   import mailIcon from '@phosphor-icons/core/assets/duotone/envelope-simple-open-duotone.svg?raw'
+  import searchIcon from '@phosphor-icons/core/assets/duotone/magnifying-glass-duotone.svg?raw'
   import '../../theme/controls.css'
   import Ph from '../common/Ph.svelte'
   import PieProgress from '../common/PieProgress.svelte'
@@ -124,11 +124,16 @@
   {#if !loaded}
     <div class="loading"><PieProgress label={$t('projects.loading')} /></div>
   {:else if threads.length === 0}
-    <EmptyState title={$t('projects.mail.emptyTitle')} detail={$t('projects.mail.emptyDetail')}>
-      <Ph svg={mailIcon} size={28} />
-    </EmptyState>
+    <EmptyState icon={mailIcon} title={$t('projects.mail.emptyTitle')} detail={$t('projects.mail.emptyDetail')} />
   {:else if shown.length === 0}
-    <p class="none" in:fade={{ duration: dur(motion.fast) }}>{$t('projects.noMatches')}</p>
+    <EmptyState
+      kind="filtered"
+      icon={searchIcon}
+      title={$t('projects.mail.noMatches')}
+      detail={$t('projects.mail.noMatchesDetail')}
+      actionLabel={$t('common.clearFilter')}
+      onAction={() => (filter = '')}
+    />
   {:else}
     <!-- svelte-ignore a11y-no-noninteractive-tabindex -->
     <div class="list" role="listbox" tabindex="0" aria-label={$t('projects.tab.mail')} on:keydown={onKey}>
@@ -195,12 +200,6 @@
     padding: var(--space-6);
   }
 
-  .none {
-    margin: var(--space-6) 0;
-    text-align: center;
-    font-size: var(--fz-list);
-    color: var(--text-tertiary);
-  }
 
   .list {
     flex: 1;

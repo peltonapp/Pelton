@@ -134,9 +134,7 @@
   <p class="lead">{$t('projects.people.lead')}</p>
 
   {#if project.people.length === 0}
-    <EmptyState title={$t('projects.people.emptyTitle')} detail={$t('projects.people.emptyDetail')}>
-      <Ph svg={usersIcon} size={28} />
-    </EmptyState>
+    <EmptyState icon={usersIcon} title={$t('projects.people.emptyTitle')} detail={$t('projects.people.emptyDetail')} />
   {:else}
     <ul class="list" aria-label={$t('projects.tab.people')}>
       {#each project.people as person (person.email)}

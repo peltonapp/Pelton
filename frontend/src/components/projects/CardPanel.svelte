@@ -15,6 +15,7 @@
   import '../../theme/controls.css'
   import Ph from '../common/Ph.svelte'
   import PieProgress from '../common/PieProgress.svelte'
+  import EmptyState from '../common/EmptyState.svelte'
   import AnchoredPopover from '../common/AnchoredPopover.svelte'
   import TaskDetail from '../tasks/TaskDetail.svelte'
   import { linkEventToCard, listCardLinks, listOccurrences, removeProjectLink } from '../../lib/api'
@@ -186,7 +187,7 @@
         {/if}
       </div>
       {#if !loading && links.length === 0}
-        <p class="empty" in:fade={{ duration: dur(motion.fast) }}>{$t('projects.card.nothingAttached')}</p>
+        <div class="empty" in:fade={{ duration: dur(motion.fast) }}><EmptyState size="compact" title={$t('projects.card.nothingAttached')} /></div>
       {/if}
       <ul class="links">
         {#each mail as link (link.id)}
@@ -245,7 +246,7 @@
               <Ph svg={noteIcon} size={14} /><span class="text">{noteTitle(n, $t('projects.notes.untitled'))}</span>
             </button>
           {:else}
-            <p class="none">{notes.length === 0 ? $t('projects.card.noNotes') : $t('projects.noMatches')}</p>
+            <EmptyState size="compact" kind={notes.length === 0 ? 'empty' : 'filtered'} title={notes.length === 0 ? $t('projects.card.noNotes') : $t('projects.noMatches')} />
           {/each}
         {:else}
           {#each pickEvents as o (o.uid)}
@@ -255,7 +256,7 @@
               <span class="when">{when(o)}</span>
             </button>
           {:else}
-            <p class="none">{$t('projects.card.noEvents')}</p>
+            <EmptyState size="compact" title={$t('projects.card.noEvents')} />
           {/each}
         {/if}
       </div>
@@ -300,6 +301,9 @@
   .tip {
     margin: 0;
     padding-inline-start: calc(var(--space-6) + var(--space-3));
+  }
+
+  .tip {
     font-size: var(--fz-meta);
     color: var(--text-tertiary);
   }
@@ -427,9 +431,4 @@
     border-radius: 50%;
   }
 
-  .none {
-    margin: var(--space-2);
-    font-size: var(--fz-label);
-    color: var(--text-tertiary);
-  }
 </style>

@@ -320,9 +320,15 @@
       {#if !loaded}
         <div class="loading"><PieProgress label={$t('projects.loading')} /></div>
       {:else if sections.length === 0}
-        <EmptyState title={$t('projects.notes.emptyTitle')} detail={$t('projects.notes.filesEmpty')}>
-          <Ph svg={noteIcon} size={26} />
-        </EmptyState>
+        <EmptyState
+          icon={noteIcon}
+          title={$t('projects.notes.emptyTitle')}
+          detail={$t('projects.notes.filesEmpty')}
+          actionLabel={$t('projects.notes.new')}
+          onAction={() => void startCreate()}
+          secondaryLabel={$t('projects.notes.add')}
+          onSecondary={() => (picking = true)}
+        />
       {:else}
         <div class="scroll">
           {#each sections as section (section.key)}

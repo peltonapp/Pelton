@@ -7,6 +7,7 @@
   import checkIcon from '@phosphor-icons/core/assets/regular/check.svg?raw'
   import '../../theme/controls.css'
   import Ph from '../common/Ph.svelte'
+  import EmptyState from '../common/EmptyState.svelte'
   import AnchoredPopover from '../common/AnchoredPopover.svelte'
   import { projectColor } from '../../lib/projectlogic'
   import { tip } from '../../lib/tip'
@@ -88,7 +89,7 @@
             {#if p.id === value}<Ph svg={checkIcon} size={13} />{/if}
           </button>
         {:else}
-          <p class="none">{$activeProjects.length === 0 ? $t('projects.compose.none') : $t('projects.noMatches')}</p>
+          <EmptyState size="compact" kind={$activeProjects.length === 0 ? 'empty' : 'filtered'} title={$activeProjects.length === 0 ? $t('projects.compose.none') : $t('projects.noMatches')} />
         {/each}
       </div>
       {#if value}
@@ -182,9 +183,4 @@
     padding-top: var(--space-3);
   }
 
-  .none {
-    margin: var(--space-2) var(--space-3);
-    font-size: var(--fz-label);
-    color: var(--text-tertiary);
-  }
 </style>

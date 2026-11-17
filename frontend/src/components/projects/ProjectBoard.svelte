@@ -638,12 +638,13 @@
     </div>
 
     {#if columns.length === 0}
-      <EmptyState title={$t('projects.board.noColumns')} detail={$t('projects.board.noColumnsDetail')}>
-        <Ph svg={columnsIcon} size={28} />
-        <button slot="action" type="button" class="cal-btn primary" on:click={() => (addingColumn = true)}>
-          <Ph svg={plusIcon} size={13} />{$t('projects.board.addColumn')}
-        </button>
-      </EmptyState>
+      <EmptyState
+        icon={columnsIcon}
+        title={$t('projects.board.noColumns')}
+        detail={$t('projects.board.noColumnsDetail')}
+        actionLabel={$t('projects.board.addColumn')}
+        onAction={() => (addingColumn = true)}
+      />
     {/if}
 
     <!-- svelte-ignore a11y-no-static-element-interactions -->
@@ -788,7 +789,7 @@
             <span class="text">{task.title || $t('tasks.untitled')}</span>
           </button>
         {:else}
-          <p class="none">{$t('projects.board.noTasks')}</p>
+          <EmptyState size="compact" title={$t('projects.board.noTasks')} />
         {/each}
       </div>
     </div>
@@ -1120,11 +1121,6 @@
     border-radius: 50%;
   }
 
-  .none {
-    margin: var(--space-2);
-    font-size: var(--fz-label);
-    color: var(--text-tertiary);
-  }
 
   .sr {
     position: absolute;
