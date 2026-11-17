@@ -224,6 +224,7 @@ func (a *App) archiveFromFolder(client mailClient, account storage.Account, sour
 				a.log.Error("archive export: write file", "id", m.ID, "err", err)
 			}
 		}
+		a.scriptMoved(a.ctx, m, dest)
 		res.Done = append(res.Done, m.ID)
 		res.Undo = append(res.Undo, ArchiveUndoDTO{
 			MessageID:        m.MessageID,

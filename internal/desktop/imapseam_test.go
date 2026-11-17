@@ -33,6 +33,7 @@ type fakeIMAP struct {
 	// moved records each Move as the uid it was given and the destination, and
 	// moveCalls counts the MoveMessages commands.
 	moved     []movedMessage
+	copied    []movedMessage
 	moveCalls int
 	// searchResult is what SearchByMessageID returns.
 	searchResult []imap.UID
@@ -172,6 +173,13 @@ func (f *fakeIMAP) MoveMessages(uids []imap.UID, mailbox string) error {
 		f.moved = append(f.moved, movedMessage{uid: uid, dest: mailbox})
 	}
 	f.moveCalls++
+	return nil
+}
+
+func (f *fakeIMAP) CopyMessages(uids []imap.UID, mailbox string) error {
+	for _, uid := range uids {
+		f.copied = append(f.copied, movedMessage{uid: uid, dest: mailbox})
+	}
 	return nil
 }
 

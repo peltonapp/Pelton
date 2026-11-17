@@ -435,6 +435,9 @@ func (a *App) syncFolders(client mailClient, accountID int64) error {
 			goSafe("announcing new mail", func() { a.notifyNewMail(f, res.NewIDs) })
 			a.scriptMailArrived(res.NewIDs, firstSync)
 		}
+		if !firstSync {
+			a.scriptServerFlags(res.FlagChanges)
+		}
 		a.afterRepairs(f, res.RepairedIDs)
 		a.afterReplyStateSync(f, res.ReplyStateChanged)
 	}
@@ -508,6 +511,7 @@ func (a *App) syncOneFolder(client mailClient, folder storage.Folder) error {
 	}
 	a.afterRepairs(folder, res.RepairedIDs)
 	a.afterReplyStateSync(folder, res.ReplyStateChanged)
+	a.scriptServerFlags(res.FlagChanges)
 	if res.New > 0 {
 		a.emit(EventMailNew, MailNewEvent{AccountID: folder.AccountID, FolderID: folder.ID, Count: res.New})
 		goSafe("announcing new mail", func() { a.notifyNewMail(folder, res.NewIDs) })

@@ -78,6 +78,8 @@ type MailHost interface {
 	Message(ctx context.Context, id int64) (Message, error)
 	Body(ctx context.Context, id int64) (string, error)
 	Move(ctx context.Context, id int64, folder string) error
+	// Copy puts a copy of the message in another folder of its account.
+	Copy(ctx context.Context, id int64, folder string) error
 	Archive(ctx context.Context, id int64) error
 	// Delete moves to the trash; it never expunges.
 	Delete(ctx context.Context, id int64) error

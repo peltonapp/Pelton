@@ -379,6 +379,9 @@ func (a *App) VaultSave(rel, content, baseHash string, force bool) (VaultSaveDTO
 	if err != nil {
 		return VaultSaveDTO{}, err
 	}
+	if !r.Conflict {
+		a.scriptNoteSaved(a.ctx, rel)
+	}
 	return VaultSaveDTO{Hash: r.Hash, MTime: r.MTime, Conflict: r.Conflict, Disk: r.Disk, DiskHash: r.DiskHash}, nil
 }
 
@@ -389,7 +392,11 @@ func (a *App) VaultCreate(rel, content string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return svc.Create(a.ctx, rel, []byte(content))
+	p, err := svc.Create(a.ctx, rel, []byte(content))
+	if err == nil {
+		a.scriptNoteSaved(a.ctx, p)
+	}
+	return p, err
 }
 
 // VaultUniquePath returns rel, or rel with a number added when it is taken.

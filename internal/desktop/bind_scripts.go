@@ -295,7 +295,10 @@ func (a *App) DeleteScript(id int64) error {
 	if err != nil {
 		return err
 	}
-	return svc.Delete(a.ctx, id)
+	if err := svc.Delete(a.ctx, id); err != nil {
+		return err
+	}
+	return a.setScriptFolder(id, "")
 }
 
 // SetScriptEnabled switches a script on, approving the given permissions,

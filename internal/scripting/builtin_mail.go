@@ -259,12 +259,9 @@ func registerMailActions(r *Registry) error {
 		a.Triggers = []string{TriggerBeforeSend}
 		return a
 	}
-	copyAction := act("mail.copy", PermMailModify, "mail.copy({{message}}, {{folder}})", msg, folder)
-	copyAction.Missing = "the IMAP client has no COPY command (internal/desktop/imapseam.go mailClient)"
-
 	actions := []Action{
 		act("mail.move", PermMailModify, "mail.move({{message}}, {{folder}})", msg, folder),
-		copyAction,
+		act("mail.copy", PermMailModify, "mail.copy({{message}}, {{folder}})", msg, folder),
 		act("mail.archive", PermMailModify, "mail.archive({{message}})", msg),
 		act("mail.delete", PermMailDelete, "mail.delete({{message}})", msg),
 		act("mail.mark_read", PermMailModify, "mail.mark_read({{message}}, {{on}})", msg, on),
@@ -476,6 +473,13 @@ func registerMailModules(r *Registry) error {
 				return err
 			}
 			return h.Move(c.Ctx, id, f)
+		}), msg, folder)),
+		effect(PermMailModify, fn("copy", onMessage(func(c *Call, h MailHost, id int64) error {
+			f, err := c.String(1)
+			if err != nil {
+				return err
+			}
+			return h.Copy(c.Ctx, id, f)
 		}), msg, folder)),
 		effect(PermMailModify, fn("archive", onMessage(func(c *Call, h MailHost, id int64) error {
 			return h.Archive(c.Ctx, id)

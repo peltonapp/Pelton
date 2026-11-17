@@ -64,6 +64,9 @@ func (f *fakeMail) Body(_ context.Context, id int64) (string, error) {
 func (f *fakeMail) Move(_ context.Context, id int64, folder string) error {
 	return f.record("move %d %s", id, folder)
 }
+func (f *fakeMail) Copy(_ context.Context, id int64, folder string) error {
+	return f.record("copy %d %s", id, folder)
+}
 func (f *fakeMail) Archive(_ context.Context, id int64) error { return f.record("archive %d", id) }
 func (f *fakeMail) Delete(_ context.Context, id int64) error  { return f.record("delete %d", id) }
 func (f *fakeMail) SetRead(_ context.Context, id int64, read bool) error {

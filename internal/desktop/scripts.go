@@ -11,6 +11,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/emersion/go-imap/v2"
 	"github.com/microcosm-cc/bluemonday"
 
 	"github.com/peltonapp/Pelton/internal/scripting"
@@ -82,11 +83,16 @@ func (a *App) startScripts() {
 		a.log.Error("scripts: set up", "err", err)
 		return
 	}
+	if err := a.registerScriptReach(svc.Registry()); err != nil {
+		a.log.Error("scripts: register the spaces", "err", err)
+		return
+	}
 	if err := svc.Start(a.ctx); err != nil {
 		a.log.Error("scripts: start", "err", err)
 		return
 	}
 	a.scripts = svc
+	goSafe("script clock", a.runScriptClock)
 }
 
 func (a *App) stopScripts() {
@@ -106,6 +112,7 @@ func (a *App) emitScript(ev scripting.Event) {
 // scriptMailArrived reports new mail to the scripts. Mail from an account's
 // first full sync in this session is marked for catch-up.
 func (a *App) scriptMailArrived(ids []int64, firstSync bool) {
+	a.scriptInvitations(ids, firstSync)
 	if a.scripts == nil || !a.scripts.Wants(scripting.TriggerMailArrived) {
 		return
 	}
@@ -139,18 +146,18 @@ func (a *App) scriptMoved(ctx context.Context, m *storage.Message, dest storage.
 	if err != nil {
 		return
 	}
-	a.scripts.Emit(scripting.Event{Trigger: scripting.TriggerMailMoved, Depth: scripting.EventDepth(ctx), Data: map[string]any{
+	a.scripts.Emit(scripting.EventFrom(ctx, scripting.TriggerMailMoved, map[string]any{
 		"message": scripting.MessageObject(msg), "to_folder": dest.IMAPPath, "to_role": folderRole(dest),
-	}})
+	}))
 }
 
 // scriptFlagChanged reports a read or flag change.
 func (a *App) scriptFlagChanged(ctx context.Context, id int64, flag storage.Flag, on bool) {
 	switch flag {
 	case storage.FlagSeen:
-		a.emitScript(scripting.Event{Trigger: scripting.TriggerMailReadMark, Depth: scripting.EventDepth(ctx), Data: map[string]any{"message_id": id, "read": on}})
+		a.emitScript(scripting.EventFrom(ctx, scripting.TriggerMailReadMark, map[string]any{"message_id": id, "read": on}))
 	case storage.FlagFlagged:
-		a.emitScript(scripting.Event{Trigger: scripting.TriggerMailFlagged, Depth: scripting.EventDepth(ctx), Data: map[string]any{"message_id": id, "flagged": on}})
+		a.emitScript(scripting.EventFrom(ctx, scripting.TriggerMailFlagged, map[string]any{"message_id": id, "flagged": on}))
 	}
 }
 
@@ -234,11 +241,7 @@ func (a *App) beforeSendScripts(ctx context.Context, req ComposeRequest) (Compos
 	if a.scripts == nil || !a.scripts.Wants(scripting.TriggerBeforeSend) {
 		return req, nil
 	}
-	runs := a.scripts.RunSync(ctx, scripting.Event{
-		Trigger: scripting.TriggerBeforeSend,
-		Data:    map[string]any{"draft": draftEvent(req)},
-		Depth:   scripting.EventDepth(ctx),
-	})
+	runs := a.scripts.RunSync(ctx, scripting.EventFrom(ctx, scripting.TriggerBeforeSend, map[string]any{"draft": draftEvent(req)}))
 	if len(runs) == 0 {
 		return req, nil
 	}
@@ -415,6 +418,51 @@ func (s *scriptMail) moveTo(ctx context.Context, id int64, dest func(m *storage.
 
 func (s *scriptMail) Move(ctx context.Context, id int64, folder string) error {
 	return s.moveTo(ctx, id, func(m *storage.Message) (storage.Folder, error) { return s.folder(m.AccountID, folder) })
+}
+
+// Copy puts a copy of a message in another folder of its account on the
+// server. The copy arrives with the next sync of that folder; nothing is
+// journalled, since a copy takes nothing away.
+func (s *scriptMail) Copy(_ context.Context, id int64, folder string) error {
+	a := s.app
+	m, err := a.store.GetMessage(a.ctx, id)
+	if err != nil {
+		return err
+	}
+	dest, err := s.folder(m.AccountID, folder)
+	if err != nil {
+		return err
+	}
+	if dest.ID == m.FolderID {
+		return fmt.Errorf("pelton: this message is already in %s", dest.Name)
+	}
+	source, err := a.store.GetFolder(a.ctx, m.FolderID)
+	if err != nil {
+		return err
+	}
+	account, err := a.store.GetAccount(a.ctx, m.AccountID)
+	if err != nil {
+		return err
+	}
+	cfg, err := a.resolveIMAP(*account)
+	if err != nil {
+		return err
+	}
+	syncMu.Lock()
+	defer syncMu.Unlock()
+	client, err := a.connectIMAP(cfg)
+	if err != nil {
+		return err
+	}
+	defer client.Close()
+	if err := client.Login(); err != nil {
+		return err
+	}
+	defer client.Logout()
+	if _, err := client.Select(source.IMAPPath); err != nil {
+		return fmt.Errorf("copy: select %q: %w", source.IMAPPath, err)
+	}
+	return client.CopyMessages([]imap.UID{imap.UID(m.UID)}, dest.IMAPPath)
 }
 
 func (s *scriptMail) Archive(ctx context.Context, id int64) error {

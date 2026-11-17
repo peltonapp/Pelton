@@ -48,6 +48,7 @@ type mailClient interface {
 	RemoveFlags(uid imap.UID, flags ...imap.Flag) error
 	Move(uid imap.UID, mailbox string) error
 	MoveMessages(uids []imap.UID, mailbox string) error
+	CopyMessages(uids []imap.UID, mailbox string) error
 	DeleteMessages(uids ...imap.UID) error
 
 	SearchByMessageID(messageID string) ([]imap.UID, error)

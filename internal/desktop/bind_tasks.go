@@ -283,6 +283,14 @@ func (a *App) GetTask(id int64) (TaskDTO, error) {
 
 // CreateTask stores a new task and writes it to its list's server.
 func (a *App) CreateTask(req TaskRequest) (TaskSaveResultDTO, error) {
+	res, err := a.createTask(req)
+	if err == nil {
+		a.scriptTaskSaved(a.ctx, res, true, false)
+	}
+	return res, err
+}
+
+func (a *App) createTask(req TaskRequest) (TaskSaveResultDTO, error) {
 	if err := a.ready(); err != nil {
 		return TaskSaveResultDTO{}, err
 	}
@@ -313,6 +321,15 @@ func (a *App) CreateTask(req TaskRequest) (TaskSaveResultDTO, error) {
 // subtasks, to that list. Completing a repeating task moves it on to its
 // next occurrence.
 func (a *App) UpdateTask(req TaskRequest) (TaskSaveResultDTO, error) {
+	wasDone := a.taskDone(req.ID)
+	res, err := a.updateTask(req)
+	if err == nil {
+		a.scriptTaskSaved(a.ctx, res, false, wasDone)
+	}
+	return res, err
+}
+
+func (a *App) updateTask(req TaskRequest) (TaskSaveResultDTO, error) {
 	if err := a.ready(); err != nil {
 		return TaskSaveResultDTO{}, err
 	}
@@ -348,6 +365,15 @@ func (a *App) UpdateTask(req TaskRequest) (TaskSaveResultDTO, error) {
 // completed moves on to its next occurrence and stays open, which the result
 // says with Advanced.
 func (a *App) SetTaskDone(id int64, done bool) (TaskSaveResultDTO, error) {
+	wasDone := a.taskDone(id)
+	res, err := a.setTaskDone(id, done)
+	if err == nil {
+		a.scriptTaskSaved(a.ctx, res, false, wasDone)
+	}
+	return res, err
+}
+
+func (a *App) setTaskDone(id int64, done bool) (TaskSaveResultDTO, error) {
 	if err := a.ready(); err != nil {
 		return TaskSaveResultDTO{}, err
 	}

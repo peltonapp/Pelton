@@ -1652,6 +1652,7 @@ const en: Record<string, string> = {
   'scripts.field.ok': 'Succeeded',
   'scripts.field.url': 'Address',
   'scripts.field.json': 'JSON',
+  'scripts.fn.mail.copy': 'Puts a copy of a message in another folder of its account.',
   'scripts.perm.files.read': 'Read files',
   'scripts.perm.files.read.desc': 'Read and list the files in the folder you pick for this script.',
   'scripts.perm.files.write': 'Write files',
