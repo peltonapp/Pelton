@@ -33,13 +33,16 @@
   import { frameIntegrated } from './stores/windowframe'
   import { setDraft, submitSearch, searchOpenedId } from './stores/search'
   import SnoozeDialog from './components/detail/SnoozeDialog.svelte'
+  import ClassicSnoozeDialog from './components/detail/classic/SnoozeDialog.svelte'
   import DragStack from './components/list/DragStack.svelte'
   import ConfirmDialog from './components/common/ConfirmDialog.svelte'
   import SyncFailureDialog from './components/common/SyncFailureDialog.svelte'
   import { loadSyncStates, watchSyncStates } from './stores/syncfailures'
   import FolderDialog from './components/sidebar/FolderDialog.svelte'
+  import ClassicFolderDialog from './components/sidebar/classic/FolderDialog.svelte'
   import AttachmentPreview from './components/detail/AttachmentPreview.svelte'
   import MoveDialog from './components/detail/MoveDialog.svelte'
+  import ClassicMoveDialog from './components/detail/classic/MoveDialog.svelte'
   import CommandPalette from './components/common/CommandPalette.svelte'
 
   import { initPrefs, prefs, setPaneWidths, setListHeight, setLowPowerMode } from './stores/prefs'
@@ -2550,10 +2553,19 @@
 <ContextMenu />
 <ConfirmDialog />
 <DragStack />
-<SnoozeDialog />
-<FolderDialog />
+{#if classic}
+  <ClassicSnoozeDialog />
+  <ClassicFolderDialog />
+{:else}
+  <SnoozeDialog />
+  <FolderDialog />
+{/if}
 <AttachmentPreview />
-<MoveDialog />
+{#if classic}
+  <ClassicMoveDialog />
+{:else}
+  <MoveDialog />
+{/if}
 
 <CommandPalette commands={paletteCommands} mail={paletteMailCommands} />
 

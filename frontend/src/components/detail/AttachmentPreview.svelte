@@ -11,6 +11,7 @@
   import { previewKind } from '../../lib/filetype'
   import { popupIsOpen } from '../../lib/popups'
   import { formatBytes } from '../../lib/format'
+  import { prefs } from '../../stores/prefs'
   import { errorMessage, toastError, toastSuccess } from '../../stores/toast'
   import { t } from '../../lib/i18n'
   import type { AttachmentContent } from '../../lib/types'
@@ -128,7 +129,7 @@
   }
 
   function onKeydown(event: KeyboardEvent): void {
-    if (event.key === 'Escape' && !popupIsOpen()) {
+    if (event.key === 'Escape' && ($prefs.design === 'classic' || !popupIsOpen())) {
       closePreview()
     }
   }
