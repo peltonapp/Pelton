@@ -112,6 +112,10 @@ func Register(r *scripting.Registry, cfg Config) error {
 			Lua:        lua,
 		}
 	}
+	withPerms := func(a scripting.Action, perms ...string) scripting.Action {
+		a.Permissions = append([]string{a.Permission}, perms...)
+		return a
+	}
 	actions := []scripting.Action{
 		action("ai.ask", "ai.ask({{prompt}}, {input = {{input}}, system = {{system}}, "+pick+"})",
 			[]string{"text:text"}, prompt, inputRef, systemParam),
@@ -123,10 +127,10 @@ func Register(r *scripting.Registry, cfg Config) error {
 			[]string{"text:text"}, inputMsg, length, optLanguage),
 		action("ai.extract", "ai.extract({{input}}, {{fields}}, {"+pick+"})",
 			[]string{"data:table"}, inputMsg, fieldList),
-		action("ai.draft_reply",
+		withPerms(action("ai.draft_reply",
 			"(function() local r = ai.draft_reply({{message}}, {instructions = {{instructions}}, language = {{language}}, "+pick+"}) "+
 				"if r.ok then r.draft_id = mail.reply({{message}}, {body = r.text, all = {{all}}}).id end return r end)()",
-			[]string{"text:text", "draft_id:number"}, message, instructions, optLanguage, all),
+			[]string{"text:text", "draft_id:number"}, message, instructions, optLanguage, all), scripting.PermMailCompose),
 		action("ai.rewrite", "ai.rewrite({{text}}, {{instructions}}, {"+pick+"})",
 			[]string{"text:text"}, textParam, required(instructions)),
 		action("ai.translate", "ai.translate({{text}}, {{language}}, {"+pick+"})",

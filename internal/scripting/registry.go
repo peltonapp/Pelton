@@ -101,6 +101,9 @@ type Condition struct {
 	Meta
 	Params     []Param `json:"params"`
 	Permission string  `json:"permission,omitempty"`
+	// Permissions lists every permission the condition needs. Registration
+	// puts Permission first in it, so either field may be used to declare.
+	Permissions []string `json:"permissions,omitempty"`
 	// Lua is the expression the condition compiles to, with {{param}}
 	// placeholders, e.g. `text.test({{message}}.subject, {{op}}, {{value}})`.
 	Lua string `json:"lua"`
@@ -116,7 +119,11 @@ type Action struct {
 	// Permission is what the action needs, so the editor can add it to the
 	// script's declared permissions. The host function enforces it.
 	Permission string `json:"permission,omitempty"`
-	Risky      bool   `json:"risky,omitempty"`
+	// Permissions lists every permission the action needs, for an action
+	// that calls more than one function. Registration puts Permission first
+	// in it.
+	Permissions []string `json:"permissions,omitempty"`
+	Risky       bool     `json:"risky,omitempty"`
 	// Lua is the call the action compiles to, with {{param}} placeholders.
 	Lua string `json:"lua"`
 	// Triggers limits the action to scripts started by these triggers, e.g.
@@ -143,6 +150,9 @@ type Function struct {
 	Returns     []Field `json:"returns,omitempty"`
 	// Permission must be declared and approved for the call to run.
 	Permission string `json:"permission,omitempty"`
+	// Permissions lists every permission the call needs; all must be held.
+	// Registration puts Permission first in it.
+	Permissions []string `json:"permissions,omitempty"`
 	// Risky calls ask the user first unless the script is allowed to make
 	// them without asking.
 	Risky bool `json:"risky,omitempty"`
@@ -283,6 +293,26 @@ func (r *Registry) checkPermission(id, owner string) error {
 	return nil
 }
 
+// permList returns single followed by the entries of list, each once.
+func permList(single string, list []string) []string {
+	var out []string
+	for _, p := range append([]string{single}, list...) {
+		if p != "" && !slices.Contains(out, p) {
+			out = append(out, p)
+		}
+	}
+	return out
+}
+
+func (r *Registry) checkPermissions(ids []string, owner string) error {
+	for _, id := range ids {
+		if err := r.checkPermission(id, owner); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func (r *Registry) checkParams(owner string, params []Param) error {
 	seen := map[string]bool{}
 	for _, p := range params {
@@ -323,6 +353,7 @@ func (r *Registry) RegisterPermission(p Permission) error {
 	default:
 		return fmt.Errorf("scripting: permission %q has risk %q, want low, medium or high", p.ID, p.Risk)
 	}
+	englishMeta(&p.Meta)
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	return r.permissions.add(p.ID, p)
@@ -332,6 +363,14 @@ func (r *Registry) RegisterPermission(p Permission) error {
 func (r *Registry) RegisterValueType(v ValueType) error {
 	if err := checkMeta(v.Meta); err != nil {
 		return err
+	}
+	englishMeta(&v.Meta)
+	v.Fields = englishFields(v.Fields)
+	v.Conditions = slices.Clone(v.Conditions)
+	for i := range v.Conditions {
+		if v.Conditions[i].Label == "" {
+			v.Conditions[i].Label = englishFor(v.Conditions[i].LabelKey)
+		}
 	}
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -343,6 +382,9 @@ func (r *Registry) RegisterTrigger(t Trigger) error {
 	if err := checkMeta(t.Meta); err != nil {
 		return err
 	}
+	englishMeta(&t.Meta)
+	t.Params = englishParams(t.Params)
+	t.Event = englishFields(t.Event)
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	if err := r.checkParams(t.ID, t.Params); err != nil {
@@ -359,12 +401,15 @@ func (r *Registry) RegisterCondition(c Condition) error {
 	if err := checkMeta(c.Meta); err != nil {
 		return err
 	}
+	c.Permissions = permList(c.Permission, c.Permissions)
+	englishMeta(&c.Meta)
+	c.Params = englishParams(c.Params)
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	if err := r.checkParams(c.ID, c.Params); err != nil {
 		return err
 	}
-	if err := r.checkPermission(c.Permission, c.ID); err != nil {
+	if err := r.checkPermissions(c.Permissions, c.ID); err != nil {
 		return err
 	}
 	if err := checkTemplate(c.ID, c.Lua, c.Params); err != nil {
@@ -378,12 +423,16 @@ func (r *Registry) RegisterAction(a Action) error {
 	if err := checkMeta(a.Meta); err != nil {
 		return err
 	}
+	a.Permissions = permList(a.Permission, a.Permissions)
+	englishMeta(&a.Meta)
+	a.Params = englishParams(a.Params)
+	a.Outputs = englishFields(a.Outputs)
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	if err := r.checkParams(a.ID, a.Params); err != nil {
 		return err
 	}
-	if err := r.checkPermission(a.Permission, a.ID); err != nil {
+	if err := r.checkPermissions(a.Permissions, a.ID); err != nil {
 		return err
 	}
 	if err := checkTemplate(a.ID, a.Lua, a.Params); err != nil {
@@ -400,6 +449,17 @@ func (r *Registry) RegisterModule(m Module) error {
 	}
 	if !luaName.MatchString(m.ID) || strings.HasPrefix(m.ID, "__") || slices.Contains(luaKeywords, m.ID) || slices.Contains(reservedGlobals, m.ID) || slices.Contains(sandboxGlobals, m.ID) {
 		return fmt.Errorf("scripting: %q cannot be a module name", m.ID)
+	}
+	englishMeta(&m.Meta)
+	m.Functions = slices.Clone(m.Functions)
+	for i := range m.Functions {
+		f := &m.Functions[i]
+		f.Permissions = permList(f.Permission, f.Permissions)
+		if f.Description == "" {
+			f.Description = englishFor(f.DescKey)
+		}
+		f.Params = englishParams(f.Params)
+		f.Returns = englishFields(f.Returns)
 	}
 	r.mu.Lock()
 	defer r.mu.Unlock()
@@ -419,7 +479,7 @@ func (r *Registry) RegisterModule(m Module) error {
 		if err := r.checkParams(owner, f.Params); err != nil {
 			return err
 		}
-		if err := r.checkPermission(f.Permission, owner); err != nil {
+		if err := r.checkPermissions(f.Permissions, owner); err != nil {
 			return err
 		}
 	}

@@ -850,9 +850,11 @@ func (st *runState) invoke(L *lua.LState, full string, f Function, args []any) (
 	if f.Summary != nil {
 		summary = full + ": " + f.Summary(args)
 	}
-	if !script.granted(f.Permission, st.req.Dry) {
-		st.addStep(Step{Kind: StepDenied, Function: full, Summary: summary, Error: "needs " + f.Permission})
-		return nil, st.setFatal(StatusDenied, fmt.Sprintf("%s needs the permission %q, which the script does not have", full, f.Permission))
+	for _, perm := range permList(f.Permission, f.Permissions) {
+		if !script.granted(perm, st.req.Dry) {
+			st.addStep(Step{Kind: StepDenied, Function: full, Summary: summary, Error: "needs " + perm})
+			return nil, st.setFatal(StatusDenied, fmt.Sprintf("%s needs the permission %q, which the script does not have", full, perm))
+		}
 	}
 	call := &Call{Ctx: st.ctx, Args: args, Dry: st.req.Dry, Hosts: st.e.Hosts, Function: full, st: st}
 	if f.Effect && st.req.Dry {
@@ -879,7 +881,7 @@ func (st *runState) invoke(L *lua.LState, full string, f Function, args []any) (
 			step.Error = err.Error()
 		}
 		st.addStep(step)
-	case f.Permission != "":
+	case f.Permission != "" || len(f.Permissions) > 0:
 		step := Step{Kind: StepRead, Function: full, Summary: summary}
 		if err != nil {
 			step.Error = err.Error()

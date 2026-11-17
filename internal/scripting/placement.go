@@ -86,6 +86,8 @@ func (r *Registry) RegisterPlacement(p Placement) error {
 	if p.List != "" && (p.ValueType == "" || !luaName.MatchString(p.List)) {
 		return fmt.Errorf("scripting: placement %q has an invalid list field %q", p.ID, p.List)
 	}
+	englishMeta(&p.Meta)
+	p.Options = englishParams(p.Options)
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	if err := r.checkParams(p.ID, p.Options); err != nil {
@@ -124,7 +126,7 @@ func (r *Registry) acceptOnManual(p Placement) {
 	}
 	addField := func(f Field) {
 		if !slices.ContainsFunc(t.Event, func(x Field) bool { return x.Name == f.Name }) {
-			t.Event = append(slices.Clone(t.Event), f)
+			t.Event = append(slices.Clone(t.Event), englishFields([]Field{f})...)
 		}
 	}
 	addField(NewField(p.ValueType, p.ValueType))

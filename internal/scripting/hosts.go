@@ -95,6 +95,15 @@ type MailHost interface {
 	Compose(ctx context.Context, d Draft, send bool) (int64, error)
 }
 
+// MailLister is what a MailHost implements to let scripts and the match
+// tester look through a folder.
+type MailLister interface {
+	// Recent returns up to limit stored messages of a folder, named by path
+	// or role, newest first: of one account, or of every account that has
+	// such a folder when accountID is 0.
+	Recent(ctx context.Context, folder string, accountID int64, limit int) ([]Message, error)
+}
+
 // NotifyHost shows a script's messages to the user.
 type NotifyHost interface {
 	// Toast shows a short in-app message; level is info, success, warning or
