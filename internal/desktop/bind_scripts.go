@@ -36,9 +36,11 @@ type ScriptDTO struct {
 	CatchUp        string            `json:"catchUp"`
 	CatchUpCap     int               `json:"catchUpCap"`
 	AllowUnasked   []string          `json:"allowUnasked"`
-	CreatedAt      string            `json:"createdAt"`
-	UpdatedAt      string            `json:"updatedAt"`
-	LastRunAt      string            `json:"lastRunAt"`
+	// Placements are where in the app the script is offered.
+	Placements []scripting.PlacementConfig `json:"placements"`
+	CreatedAt  string                      `json:"createdAt"`
+	UpdatedAt  string                      `json:"updatedAt"`
+	LastRunAt  string                      `json:"lastRunAt"`
 }
 
 // ScriptTriggerDTO is a script's trigger and its parameters.
@@ -83,6 +85,52 @@ type ScriptRunDTO struct {
 	// Messages are the messages they touched.
 	Undoable bool    `json:"undoable"`
 	Messages []int64 `json:"messages"`
+	// ErrorLine is the Lua line a failed run stopped on, 0 when unknown, and
+	// ErrorBlock the block of a block script that was running.
+	ErrorLine  int    `json:"errorLine"`
+	ErrorBlock string `json:"errorBlock"`
+	// NotReached lists the blocks of a block script the run never got to.
+	NotReached []string `json:"notReached"`
+}
+
+// ScriptAskDTO is a question a running script puts to the user. Control
+// names the control that asks; Params are the question kind's own, e.g. the
+// options of a choice. TimeoutSeconds is how long it waits for a script
+// nobody started, 0 for as long as it takes.
+type ScriptAskDTO struct {
+	ID             string         `json:"id"`
+	ScriptID       int64          `json:"scriptId"`
+	ScriptName     string         `json:"scriptName"`
+	Kind           string         `json:"kind"`
+	Control        string         `json:"control"`
+	Prompt         string         `json:"prompt"`
+	Params         map[string]any `json:"params"`
+	Default        any            `json:"default"`
+	Dry            bool           `json:"dry"`
+	Attended       bool           `json:"attended"`
+	TimeoutSeconds int            `json:"timeoutSeconds"`
+}
+
+// ScriptResultDTO is longer output a script shows in the result panel, with
+// the ids of the result actions on offer.
+type ScriptResultDTO struct {
+	ID         string   `json:"id"`
+	ScriptID   int64    `json:"scriptId"`
+	ScriptName string   `json:"scriptName"`
+	Title      string   `json:"title"`
+	Text       string   `json:"text"`
+	Format     string   `json:"format"`
+	Actions    []string `json:"actions"`
+	Dry        bool     `json:"dry"`
+}
+
+// PlacedScriptDTO is a script offered at a placement, with the options it
+// set there.
+type PlacedScriptDTO struct {
+	ScriptID    int64          `json:"scriptId"`
+	Name        string         `json:"name"`
+	Description string         `json:"description"`
+	Options     map[string]any `json:"options"`
 }
 
 // ScriptConfirmDTO asks about one risky call.
@@ -158,6 +206,7 @@ func toScriptDTO(sc *scripting.Script) ScriptDTO {
 		CatchUp:        string(sc.CatchUp),
 		CatchUpCap:     sc.CatchUpCap,
 		AllowUnasked:   orEmpty(sc.AllowUnasked),
+		Placements:     orEmpty(sc.Placements),
 		CreatedAt:      fmtStamp(sc.CreatedAt),
 		UpdatedAt:      fmtStamp(sc.UpdatedAt),
 		LastRunAt:      fmtStamp(sc.LastRunAt),
@@ -197,6 +246,7 @@ func (a *App) runDTO(name string, r *scripting.Run) ScriptRunDTO {
 		Error: r.Error, Steps: orEmpty(r.Steps), Changes: r.Changes(), Cancelled: r.Cancelled,
 		CancelReason: r.CancelReason, LogTruncated: r.LogTruncated,
 		Undoable: undoable && !r.Dry, Messages: messages,
+		ErrorLine: r.ErrorLine, ErrorBlock: r.ErrorBlock, NotReached: orEmpty(r.NotReached),
 	}
 }
 
@@ -535,6 +585,148 @@ func (a *App) AnswerScriptConfirm(id string, allow, always bool) {
 	case ch <- scripting.ConfirmAnswer{Allow: allow, Always: allow && always}:
 	default:
 	}
+}
+
+// AnswerScriptAsk answers a question a running script asked. cancelled
+// ends the run as cancelled.
+func (a *App) AnswerScriptAsk(id string, value any, cancelled bool) {
+	st := &a.scriptState
+	st.mu.Lock()
+	ch := st.asks[id]
+	delete(st.asks, id)
+	st.mu.Unlock()
+	if ch == nil {
+		return
+	}
+	select {
+	case ch <- scripting.AskAnswer{Value: value, Cancelled: cancelled}:
+	default:
+	}
+}
+
+// CancelScriptRun cancels a run in progress by the id its progress reports
+// carry.
+func (a *App) CancelScriptRun(liveID int64) error {
+	svc, err := a.scriptService()
+	if err != nil {
+		return err
+	}
+	if !svc.Cancel(liveID) {
+		return fmt.Errorf("pelton: the run already ended")
+	}
+	return nil
+}
+
+// ScriptLiveRuns lists the runs in progress, for a window opened while they
+// run.
+func (a *App) ScriptLiveRuns() ([]scripting.LiveRun, error) {
+	svc, err := a.scriptService()
+	if err != nil {
+		return nil, err
+	}
+	return svc.Live(), nil
+}
+
+// ScriptPlacements lists, per placement id, the scripts offered there.
+func (a *App) ScriptPlacements() (map[string][]PlacedScriptDTO, error) {
+	svc, err := a.scriptService()
+	if err != nil {
+		return nil, err
+	}
+	out := map[string][]PlacedScriptDTO{}
+	for id, list := range svc.Placed() {
+		for _, p := range list {
+			out[id] = append(out[id], PlacedScriptDTO{ScriptID: p.ScriptID, Name: p.Name, Description: p.Description, Options: p.Options})
+		}
+	}
+	return out, nil
+}
+
+// SetScriptPlacements sets where in the app a script is offered.
+func (a *App) SetScriptPlacements(id int64, placements []scripting.PlacementConfig) (ScriptDTO, error) {
+	svc, err := a.scriptService()
+	if err != nil {
+		return ScriptDTO{}, err
+	}
+	out, err := svc.SetPlacements(a.ctx, id, placements)
+	if err != nil {
+		return ScriptDTO{}, err
+	}
+	return toScriptDTO(out), nil
+}
+
+// RunPlacedScript runs a script from a placement on the items it was used
+// on: ids to load, or for a value nothing loads, its fields.
+func (a *App) RunPlacedScript(id int64, placement string, items []scripting.PlacedItem) (ScriptRunDTO, error) {
+	svc, err := a.scriptService()
+	if err != nil {
+		return ScriptRunDTO{}, err
+	}
+	sc, err := svc.Script(a.ctx, id)
+	if err != nil {
+		return ScriptRunDTO{}, err
+	}
+	run, err := svc.RunPlaced(a.ctx, id, placement, items)
+	if err != nil {
+		return ScriptRunDTO{}, err
+	}
+	return a.runDTO(sc.Name, run), nil
+}
+
+// RunScriptResultAction carries out a result action that runs in the
+// backend, such as saving a result as a note, and returns what to tell the
+// user. A result is kept for its buttons while it is among the latest shown.
+func (a *App) RunScriptResultAction(resultID, action string) (string, error) {
+	svc, err := a.scriptService()
+	if err != nil {
+		return "", err
+	}
+	st := &a.scriptState
+	st.mu.Lock()
+	res, ok := st.results[resultID]
+	st.mu.Unlock()
+	if !ok {
+		return "", fmt.Errorf("pelton: this result is no longer available")
+	}
+	if !slices.Contains(res.Actions, action) {
+		return "", fmt.Errorf("pelton: this result does not offer %q", action)
+	}
+	ra, ok := svc.Registry().ResultAction(action)
+	if !ok || ra.Run == nil {
+		return "", fmt.Errorf("pelton: %q is not an action the app carries out", action)
+	}
+	if res.Dry {
+		return "", fmt.Errorf("pelton: a test run changes nothing")
+	}
+	return ra.Run(a.ctx, res)
+}
+
+// ScriptValue loads an item as scripts see it, e.g. a message by its id, so
+// the editor can build a rule from its fields.
+func (a *App) ScriptValue(valueType, id string) (map[string]any, error) {
+	svc, err := a.scriptService()
+	if err != nil {
+		return nil, err
+	}
+	return svc.Value(a.ctx, valueType, id)
+}
+
+// ScriptAskSeconds returns how long a question of a script nobody started
+// waits before it takes its default.
+func (a *App) ScriptAskSeconds() int {
+	return int(a.scriptAskTimeout() / time.Second)
+}
+
+// SetScriptAskSeconds sets how long such a question waits, 10 seconds to a
+// day.
+func (a *App) SetScriptAskSeconds(seconds int) error {
+	if err := a.ready(); err != nil {
+		return err
+	}
+	if seconds < 10 || seconds > 86400 {
+		return fmt.Errorf("pelton: a question waits 10 seconds to a day")
+	}
+	return a.store.Set(a.ctx, settingScriptAskSeconds, strconv.Itoa(seconds))
 }
 
 // ResolveScriptCatchUp answers a catch-up question: run over the mail that

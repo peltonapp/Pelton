@@ -1,6 +1,7 @@
 package desktop
 
 import (
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -186,5 +187,85 @@ func TestScriptExportImportRoundTrip(t *testing.T) {
 	comp, err := a.CompileScriptBlocks(`{"version":1,"blocks":[{"id":"a","kind":"action","type":"mail.flag"}]}`, scripting.TriggerMailArrived)
 	if err != nil || len(comp.Errors) != 0 || !strings.Contains(comp.Lua, "mail.flag(event.message, true)") {
 		t.Fatalf("compile %v %+v", err, comp)
+	}
+	if comp.Lines["a"].From != 2 {
+		t.Fatalf("line map %+v", comp.Lines)
+	}
+}
+
+func TestPlacedScriptRunsOnTheSelection(t *testing.T) {
+	a, id := newScriptTestApp(t)
+	in := luaInput(`ui.show(event.message.subject .. " / " .. #event.messages, { title = "Picked" })`)
+	in.Trigger.Params = map[string]any{"scope": "message"}
+	sc, err := a.CreateScript(in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := a.SetScriptPlacements(sc.ID, []scripting.PlacementConfig{{ID: "mail.row"}}); err != nil {
+		t.Fatal(err)
+	}
+	if got, _ := a.ScriptPlacements(); len(got) != 0 {
+		t.Fatalf("a switched off script is offered: %v", got)
+	}
+	if _, err := a.SetScriptEnabled(sc.ID, true, nil); err != nil {
+		t.Fatal(err)
+	}
+	got, err := a.ScriptPlacements()
+	if err != nil || len(got["mail.row"]) != 1 || got["mail.row"][0].ScriptID != sc.ID {
+		t.Fatalf("%v %+v", err, got)
+	}
+	ref := strconv.FormatInt(id, 10)
+	run, err := a.RunPlacedScript(sc.ID, "mail.row", []scripting.PlacedItem{{ID: ref}})
+	if err != nil || run.Status != "ok" {
+		t.Fatalf("%v %+v", err, run)
+	}
+	st := &a.scriptState
+	st.mu.Lock()
+	var resultID string
+	var shown scripting.Result
+	for k, v := range st.results {
+		resultID, shown = k, v
+	}
+	st.mu.Unlock()
+	if shown.Text != "Invoice 7 / 1" || shown.Title != "Picked" {
+		t.Fatalf("result %+v", shown)
+	}
+	if _, err := a.RunScriptResultAction(resultID, "copy"); err == nil {
+		t.Fatal("a window only action ran in the backend")
+	}
+	if _, err := a.RunScriptResultAction("gone", "notes.save"); err == nil {
+		t.Fatal("a forgotten result was used")
+	}
+	if _, err := a.RunPlacedScript(sc.ID, "palette", nil); err == nil {
+		t.Fatal("ran from a placement the script is not at")
+	}
+	fields, err := a.ScriptValue("message", ref)
+	if err != nil || fields["subject"] != "Invoice 7" {
+		t.Fatalf("%v %v", err, fields)
+	}
+}
+
+func TestQuestionWithoutWindowTakesTheDefault(t *testing.T) {
+	a, _ := newScriptTestApp(t)
+	sc, err := a.CreateScript(luaInput(`log.info(ui.text("Name?", { default = "anon" }))`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := a.SetScriptEnabled(sc.ID, true, nil); err != nil {
+		t.Fatal(err)
+	}
+	run, err := a.RunScript(sc.ID, 0)
+	if err != nil || run.Status != "ok" || run.Steps[len(run.Steps)-1].Summary != "anon" {
+		t.Fatalf("%v %+v", err, run)
+	}
+	a.AnswerScriptAsk("nobody", "x", false)
+	if err := a.CancelScriptRun(12345); err == nil {
+		t.Fatal("cancelled a run that is not going")
+	}
+	if err := a.SetScriptAskSeconds(5); err == nil {
+		t.Fatal("accepted a five second wait")
+	}
+	if err := a.SetScriptAskSeconds(300); err != nil || a.ScriptAskSeconds() != 300 {
+		t.Fatalf("%v %d", err, a.ScriptAskSeconds())
 	}
 }

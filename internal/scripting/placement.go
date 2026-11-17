@@ -331,6 +331,24 @@ func (s *Service) RunPlaced(ctx context.Context, id int64, placement string, ite
 	return s.run(ctx, sc, sc.Trigger.Type, event, EventDepth(ctx), false, true)
 }
 
+// Value loads a value of a value type by its id, through a placement that
+// hands such values over, and returns its fields as plain data. It is how the
+// editor reads an item to build a rule from it.
+func (s *Service) Value(ctx context.Context, valueType, id string) (map[string]any, error) {
+	for _, p := range s.reg.Catalog().Placements {
+		if p.ValueType != valueType || p.Load == nil {
+			continue
+		}
+		obj, err := p.Load(&PrepareContext{Ctx: ctx, Hosts: s.cfg.Hosts}, id)
+		if err != nil {
+			return nil, err
+		}
+		fields, _ := plainValue(obj.Fields).(map[string]any)
+		return fields, nil
+	}
+	return nil, fmt.Errorf("scripting: no way to load a %q", valueType)
+}
+
 // MessageLoad loads a message placement's value by its id.
 func MessageLoad(c *PrepareContext, id string) (Object, error) {
 	n, err := strconv.ParseInt(id, 10, 64)
