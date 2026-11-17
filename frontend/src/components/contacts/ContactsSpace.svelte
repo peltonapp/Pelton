@@ -9,6 +9,7 @@
   import { cubicOut } from 'svelte/easing'
   import Ph from '../common/Ph.svelte'
   import EmptyState from '../common/EmptyState.svelte'
+  import PieProgress from '../common/PieProgress.svelte'
   import ContactSidebar from './ContactSidebar.svelte'
   import ContactList from './ContactList.svelte'
   import ContactGrid from './ContactGrid.svelte'
@@ -313,7 +314,11 @@
         {#if $duplicateGroups.length > 0}<span class="badge" aria-hidden="true">{$duplicateGroups.length}</span>{/if}
       </button>
       <button type="button" class="btn" on:click={refreshContacts} disabled={$contactsLoading}>
-        <span class="spin" class:on={$contactsLoading}><Ph svg={syncIcon} size={16} /></span>
+        {#if $contactsLoading}
+          <PieProgress size={16} label={$t('contacts.loading')} />
+        {:else}
+          <Ph svg={syncIcon} size={16} />
+        {/if}
         {#if mode !== 'narrow'}{$t('contacts.sync')}{/if}
       </button>
       <button type="button" class="btn primary" on:click={() => startCreate()} disabled={$addressBooks.length === 0}>
@@ -553,19 +558,6 @@
     cursor: default;
   }
 
-  .spin {
-    display: inline-flex;
-  }
-
-  .spin.on {
-    animation: spin 900ms linear infinite;
-  }
-
-  @keyframes spin {
-    to {
-      transform: rotate(360deg);
-    }
-  }
 
   .icon {
     display: inline-flex;
