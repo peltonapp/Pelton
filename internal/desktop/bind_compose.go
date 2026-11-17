@@ -1,6 +1,7 @@
 package desktop
 
 import (
+	"context"
 	"encoding/base64"
 	"errors"
 	"fmt"
@@ -88,7 +89,18 @@ type ComposeRequest struct {
 // quietly putting a message the user marked as protected on the wire in
 // plaintext.
 func (a *App) SendMessage(req ComposeRequest) (int64, error) {
+	return a.sendMessage(a.ctx, req)
+}
+
+// sendMessage is SendMessage for a caller with a context of its own: a
+// script's send carries its run, so the before-send scripts it sets off know
+// how deep the chain is.
+func (a *App) sendMessage(ctx context.Context, req ComposeRequest) (int64, error) {
 	if err := a.ready(); err != nil {
+		return 0, err
+	}
+	req, err := a.beforeSendScripts(ctx, req)
+	if err != nil {
 		return 0, err
 	}
 

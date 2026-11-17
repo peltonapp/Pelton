@@ -101,6 +101,8 @@ export type ShortcutAction =
   | 'add-to-project'
   // shows the Feeds space.
   | 'go-feeds'
+  // shows the Automations space, or its overlay in the classic design.
+  | 'go-automations'
   // the split inbox tabs, only while the message list has focus.
   | 'next-split'
   | 'prev-split'
@@ -309,6 +311,8 @@ export const shortcuts: Shortcut[] = [
   // in the reader it takes that one without asking.
   { action: 'add-to-project', combo: 'p', labelKey: 'shortcut.addToProject', newDesignOnly: true },
   { action: 'go-feeds', combo: 'mod+shift+g', labelKey: 'shortcut.goFeeds', newDesignOnly: true },
+  // s for scripts.
+  { action: 'go-automations', combo: 'mod+shift+s', labelKey: 'shortcut.goAutomations' },
   // Tab only moves between splits while the list has focus; everywhere else it
   // keeps moving focus between controls.
   { action: 'next-split', combo: 'tab', labelKey: 'shortcut.nextSplit' },

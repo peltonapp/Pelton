@@ -182,6 +182,15 @@ import type {
   ChatDevice,
 } from './types'
 import { normalizeState } from './sieve'
+import type {
+  CompileResult,
+  Script,
+  ScriptCatalog,
+  ScriptCatchUp,
+  ScriptFile,
+  ScriptInput,
+  ScriptRun,
+} from './scripting'
 
 // isDemoMode reports whether the app launched in the cosmetic --potatoes-are-nice
 // screenshot mode; the frontend reads it once to switch the data layer to samples.
@@ -3750,4 +3759,158 @@ export function chatSetViewing(roomId: string): Promise<void> {
     return Promise.resolve()
   }
   return App.ChatSetViewing(roomId)
+}
+
+// automations. The generated models type enums and maps their own way, so the
+// values cross this boundary as the shapes lib/scripting.ts declares.
+
+function asScript(s: desktop.ScriptDTO): Script {
+  return s as unknown as Script
+}
+
+function asRun(r: desktop.ScriptRunDTO): ScriptRun {
+  return r as unknown as ScriptRun
+}
+
+function toDTO(input: ScriptInput): desktop.ScriptInput {
+  return input as unknown as desktop.ScriptInput
+}
+
+/** Everything scripts can use, as data. */
+export function scriptRegistry(): Promise<ScriptCatalog> {
+  return App.ScriptRegistry().then((c) => c as unknown as ScriptCatalog)
+}
+
+/** Every script, by name. */
+export function listScripts(): Promise<Script[]> {
+  if (isDemoActive()) {
+    return Promise.resolve([])
+  }
+  return App.ListScripts().then((list) => (list ?? []).map(asScript))
+}
+
+/** Stores a new script, switched off. */
+export function createScript(input: ScriptInput): Promise<Script> {
+  return App.CreateScript(toDTO(input)).then(asScript)
+}
+
+/** Saves a script's content; a new permission switches it off until approved. */
+export function updateScript(id: number, input: ScriptInput): Promise<Script> {
+  return App.UpdateScript(id, toDTO(input)).then(asScript)
+}
+
+/** Removes a script with its log and storage. */
+export function deleteScript(id: number): Promise<void> {
+  return App.DeleteScript(id)
+}
+
+/** Switches a script on, approving the given permissions, or off. */
+export function setScriptEnabled(id: number, enabled: boolean, approve: string[]): Promise<Script> {
+  return App.SetScriptEnabled(id, enabled, approve).then(asScript)
+}
+
+/** Lets a script make a risky call, e.g. "mail.send", without asking, or takes that back. */
+export function setScriptAllowUnasked(id: number, fn: string, allow: boolean): Promise<Script> {
+  return App.SetScriptAllowUnasked(id, fn, allow).then(asScript)
+}
+
+/** Stores the values of a script's settings. */
+export function setScriptSettings(id: number, values: Record<string, unknown>): Promise<Script> {
+  return App.SetScriptSettings(id, values).then(asScript)
+}
+
+/** Sets what a mail script does with mail that arrived while Pelton was closed. */
+export function setScriptCatchUp(id: number, mode: string, cap: number): Promise<Script> {
+  return App.SetScriptCatchUp(id, mode, cap).then(asScript)
+}
+
+/** Compiles a block tree (JSON) to Lua for a trigger, with every problem found. */
+export function compileScriptBlocks(blocks: string, trigger: string): Promise<CompileResult> {
+  return App.CompileScriptBlocks(blocks, trigger).then((r) => r as unknown as CompileResult)
+}
+
+/** A syntax error in Lua, or '' when it parses. */
+export function checkScriptLua(source: string): Promise<string> {
+  return App.CheckScriptLua(source)
+}
+
+/** Turns a block script into a Lua script for good. */
+export function convertScriptToLua(id: number): Promise<Script> {
+  return App.ConvertScriptToLua(id).then(asScript)
+}
+
+/** Runs an enabled script now, on a message when it takes one (0 for none). */
+export function runScript(id: number, messageId: number): Promise<ScriptRun> {
+  return App.RunScript(id, messageId).then(asRun)
+}
+
+/** Dry runs a script as written, against a message (0 for the sample). Nothing changes. */
+export function testScript(input: ScriptInput, messageId: number): Promise<ScriptRun> {
+  return App.TestScript(toDTO(input), messageId).then(asRun)
+}
+
+/** The latest runs of a script, or of every script for 0, newest first. */
+export function scriptRuns(scriptId: number, limit: number): Promise<ScriptRun[]> {
+  if (isDemoActive()) {
+    return Promise.resolve([])
+  }
+  return App.ScriptRuns(scriptId, limit).then((list) => (list ?? []).map(asRun))
+}
+
+/** Empties the log of a script, or every log for 0. */
+export function clearScriptRuns(scriptId: number): Promise<void> {
+  return App.ClearScriptRuns(scriptId)
+}
+
+/** How many days the run log keeps. */
+export function scriptLogDays(): Promise<number> {
+  return App.ScriptLogDays()
+}
+
+/** Sets how many days the run log keeps, 1 to 365. */
+export function setScriptLogDays(days: number): Promise<void> {
+  return App.SetScriptLogDays(days)
+}
+
+/** Reverses the mail changes of a run. */
+export function undoScriptRun(runId: number): Promise<void> {
+  return App.UndoScriptRun(runId)
+}
+
+/** Answers a confirmation a script asked for. */
+export function answerScriptConfirm(id: string, allow: boolean, always: boolean): Promise<void> {
+  return App.AnswerScriptConfirm(id, allow, always)
+}
+
+/** Answers whether a script runs over mail that arrived while Pelton was closed. */
+export function resolveScriptCatchUp(scriptId: number, run: boolean): Promise<void> {
+  return App.ResolveScriptCatchUp(scriptId, run)
+}
+
+/** The catch-up questions still open. */
+export function pendingScriptCatchUps(): Promise<ScriptCatchUp[]> {
+  if (isDemoActive()) {
+    return Promise.resolve([])
+  }
+  return App.PendingScriptCatchUps().then((list) => (list ?? []) as ScriptCatchUp[])
+}
+
+/** Writes a script to a file the user picks; resolves to the path, '' when cancelled. */
+export function exportScript(id: number): Promise<string> {
+  return App.ExportScript(id)
+}
+
+/** Asks for a script file; resolves to its path, '' when cancelled. */
+export function pickScriptFile(): Promise<string> {
+  return App.PickScriptFile()
+}
+
+/** Reads a script file for the import dialog, storing and running nothing. */
+export function readScriptFile(path: string): Promise<ScriptFile> {
+  return App.ReadScriptFile(path).then((f) => ({ script: asScript(f.script), text: f.text }))
+}
+
+/** Stores the script in a file's text, switched off and marked as imported. */
+export function importScript(text: string): Promise<Script> {
+  return App.ImportScript(text).then(asScript)
 }

@@ -42,13 +42,13 @@ describe('spaces of a purpose', () => {
   })
 
   it('hides what was not chosen, but never chat', () => {
-    expect(hiddenFor(['mail'])).toBe('calendar,tasks,projects,contacts,notes,feeds')
-    expect(hiddenFor(spacesFor('mailcal', []))).toBe('projects,notes,feeds')
+    expect(hiddenFor(['mail'])).toBe('calendar,tasks,projects,contacts,notes,feeds,automations')
+    expect(hiddenFor(spacesFor('mailcal', []))).toBe('projects,notes,feeds,automations')
     expect(hiddenFor(setupSpaces)).toBe('')
   })
 
   it('reads the shown spaces from the stored list and the chat switch', () => {
-    expect(shownSpaces('projects,notes,feeds', false)).toEqual(['mail', 'calendar', 'tasks', 'contacts'])
+    expect(shownSpaces('projects,notes,feeds,automations', false)).toEqual(['mail', 'calendar', 'tasks', 'contacts'])
     expect(shownSpaces('', true)).toEqual(setupSpaces)
     expect(shownSpaces('mail', false)).toContain('mail')
   })

@@ -67,8 +67,15 @@ export interface ChatLocation {
   room?: string
 }
 
+/** The script open in Automations. */
+export interface AutomationsLocation {
+  space: 'automations'
+  script?: number
+}
+
 /** Each space's location type. */
 export interface LocationMap {
+  automations: AutomationsLocation
   mail: MailLocation
   calendar: CalendarLocation
   tasks: TasksLocation

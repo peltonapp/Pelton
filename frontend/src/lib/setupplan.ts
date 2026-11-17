@@ -20,7 +20,7 @@ export type SetupPiece = 'mailbox' | 'dav' | 'notes' | 'feeds' | 'chat'
 export type StepOutcome = 'done' | 'skipped'
 
 /** Every space, in the default order of the navigation. */
-export const setupSpaces: readonly Space[] = ['mail', 'calendar', 'tasks', 'projects', 'contacts', 'notes', 'feeds', 'chat']
+export const setupSpaces: readonly Space[] = ['mail', 'calendar', 'tasks', 'projects', 'contacts', 'notes', 'feeds', 'chat', 'automations']
 
 /** The purposes in the order the first step offers them. */
 export const purposes: readonly Purpose[] = ['mail', 'mailcal', 'everything', 'custom']

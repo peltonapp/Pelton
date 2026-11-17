@@ -75,7 +75,7 @@ describe('setup flow', () => {
 
     await userEvent.click(screen.getByRole('button', { name: 'Continue' }))
     await heading('Choose your language')
-    expect(api.setSetting).toHaveBeenCalledWith('hidden_spaces', 'calendar,tasks,projects,contacts,notes,feeds')
+    expect(api.setSetting).toHaveBeenCalledWith('hidden_spaces', 'calendar,tasks,projects,contacts,notes,feeds,automations')
     expect(api.setSetting).not.toHaveBeenCalledWith('chat_enabled', expect.anything())
   })
 
@@ -165,7 +165,7 @@ describe('setup flow', () => {
   })
 
   it('preselects the purpose that matches the spaces shown on a re-run', async () => {
-    prefs.update((p) => ({ ...p, hiddenSpaces: 'projects,notes,feeds' }))
+    prefs.update((p) => ({ ...p, hiddenSpaces: 'projects,notes,feeds,automations' }))
     render(Setup, { props: { rerun: true } })
     await heading('What will you use Pelton for?')
     expect(screen.getByRole('radio', { name: /Mail and calendar/ })).toHaveAttribute('aria-checked', 'true')

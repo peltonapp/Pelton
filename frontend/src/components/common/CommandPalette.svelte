@@ -79,7 +79,7 @@
   // the same name.
   // the entries of the space on screen lead, so in the calendar "new" finds
   // the event before the message.
-  $: groupRank = (
+  $: groupRank = withAutomations(
     $space === 'calendar'
       ? ['calendar', 'action', 'mail', 'navigate', 'tasks', 'projects', 'notes', 'contacts', 'feeds', 'chat', 'setting']
       : $space === 'contacts'
@@ -94,8 +94,16 @@
                 ? ['feeds', 'action', 'mail', 'navigate', 'calendar', 'tasks', 'projects', 'notes', 'contacts', 'chat', 'setting']
                 : $space === 'chat'
                   ? ['chat', 'action', 'mail', 'navigate', 'calendar', 'tasks', 'projects', 'notes', 'contacts', 'feeds', 'setting']
-                  : ['action', 'mail', 'calendar', 'tasks', 'projects', 'notes', 'contacts', 'feeds', 'chat', 'navigate', 'setting']
-  ) as CommandGroup[]
+                  : ['action', 'mail', 'calendar', 'tasks', 'projects', 'notes', 'contacts', 'feeds', 'chat', 'navigate', 'setting'],
+    $space === 'automations',
+  )
+
+  // automations lead while their space is on screen and otherwise come just
+  // before the settings.
+  function withAutomations(rank: string[], leading: boolean): CommandGroup[] {
+    const rest = rank.filter((g) => g !== 'setting') as CommandGroup[]
+    return leading ? ['automations', ...rest, 'setting'] : [...rest, 'automations', 'setting']
+  }
 
   /**
    * Buckets ranked results by group. The buckets are in a fixed order rather
@@ -147,6 +155,9 @@
     }
     if (group === 'chat') {
       return $t('space.chat')
+    }
+    if (group === 'automations') {
+      return $t('space.automations')
     }
     return $t('palette.group.settings')
   }

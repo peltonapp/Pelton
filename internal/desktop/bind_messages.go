@@ -319,12 +319,21 @@ func (a *App) inlineDataURLs(atts []storage.Attachment) map[string]string {
 // SetSeen sets or clears the \Seen flag on a message and queues the change for
 // the next sync to push to the server.
 func (a *App) SetSeen(id int64, seen bool) error {
-	return a.updateFlag(id, storage.FlagSeen, seen)
+	return a.userFlag(id, storage.FlagSeen, seen)
 }
 
 // SetFlagged sets or clears the \Flagged flag and queues the push.
 func (a *App) SetFlagged(id int64, flagged bool) error {
-	return a.updateFlag(id, storage.FlagFlagged, flagged)
+	return a.userFlag(id, storage.FlagFlagged, flagged)
+}
+
+// userFlag is updateFlag for a change the user made, which scripts hear about.
+func (a *App) userFlag(id int64, flag storage.Flag, on bool) error {
+	if err := a.updateFlag(id, flag, on); err != nil {
+		return err
+	}
+	a.scriptFlagChanged(a.ctx, id, flag, on)
+	return nil
 }
 
 // updateFlag toggles one flag bit on a message and marks it pending so sync
