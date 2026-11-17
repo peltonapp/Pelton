@@ -1075,8 +1075,9 @@ func (s *Service) UnlinkedMentions(rel string) ([]Mention, error) {
 	s.mu.RLock()
 	n := s.notes[rel]
 	if n == nil {
+		// a note not indexed yet has no name to look for.
 		s.mu.RUnlock()
-		return nil, ErrNotFound
+		return nil, nil
 	}
 	names := append([]string{n.Title}, n.Aliases...)
 	search := s.search
