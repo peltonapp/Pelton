@@ -57,6 +57,30 @@ async function heading(name: string): Promise<HTMLElement> {
 }
 
 describe('setup flow', () => {
+  it('opens on the acknowledgement when it is owed, and lets nothing past it unaccepted', async () => {
+    storeProgress({ step: 'keys', purpose: 'mail', custom: ['mail'] })
+    render(Setup, { props: { legal: true } })
+    await heading('Before you start')
+    expect(screen.queryByRole('button', { name: 'Skip setup' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Back' })).not.toBeInTheDocument()
+    const go = screen.getByRole('button', { name: 'Continue' })
+    expect(go).toBeDisabled()
+    await userEvent.keyboard('{Enter}')
+    expect(screen.getByRole('heading', { level: 2, name: 'Before you start' })).toBeVisible()
+
+    await userEvent.click(screen.getByRole('checkbox'))
+    await userEvent.click(go)
+    await heading('What will you use Pelton for?')
+    expect(api.setSetting).toHaveBeenCalledWith('liability_accepted', expect.stringContaining('"terms"'))
+    expect(screen.getByText('2 of 6')).toBeInTheDocument()
+  })
+
+  it('leaves the acknowledgement out once it was given', async () => {
+    render(Setup, { props: { rerun: true } })
+    await heading('What will you use Pelton for?')
+    expect(screen.queryByRole('heading', { name: 'Before you start' })).not.toBeInTheDocument()
+  })
+
   it('asks what Pelton is for first, with everything picked', async () => {
     render(Setup)
     await heading('What will you use Pelton for?')

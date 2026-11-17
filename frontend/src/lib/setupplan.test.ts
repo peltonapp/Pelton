@@ -76,6 +76,11 @@ describe('step planner', () => {
     ])
   })
 
+  it('puts the acknowledgement first while it is owed', () => {
+    expect(planSteps(['mail'], true)).toEqual(['legal', 'purpose', 'language', 'look', 'mailbox', 'keys', 'summary'])
+    expect(planSteps(['mail'], false)[0]).toBe('purpose')
+  })
+
   it('follows a custom pick', () => {
     expect(planSteps(spacesFor('custom', ['feeds']))).toEqual(['purpose', 'language', 'look', 'mailbox', 'keys', 'summary'])
     expect(planSteps(spacesFor('custom', ['notes']))).toEqual(['purpose', 'language', 'look', 'mailbox', 'notes', 'keys', 'summary'])
@@ -104,6 +109,12 @@ describe('progress', () => {
       outcomes: { mailbox: 'done' },
       rerun: false,
     })
+  })
+
+  it('resumes on the acknowledgement while it is owed, whatever was stored', () => {
+    const p: SetupProgress = { ...startProgress(false, []), step: 'keys', outcomes: { legal: 'done', purpose: 'done' } }
+    expect(resumeStep(p, planSteps(setupSpaces, true))).toBe('legal')
+    expect(resumeStep(p, planSteps(setupSpaces, false))).toBe('keys')
   })
 
   it('resumes on the stored step while it still applies', () => {

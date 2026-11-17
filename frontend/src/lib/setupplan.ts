@@ -11,7 +11,7 @@ import type { Space } from './types'
 export type Purpose = 'mail' | 'mailcal' | 'everything' | 'custom'
 
 /** One step of the flow. */
-export type SetupStep = 'purpose' | 'language' | 'look' | 'mailbox' | 'dav' | 'notes' | 'chat' | 'keys' | 'summary'
+export type SetupStep = 'legal' | 'purpose' | 'language' | 'look' | 'mailbox' | 'dav' | 'notes' | 'chat' | 'keys' | 'summary'
 
 /** The steps that set something up, and so can be skipped and set up later. */
 export type SetupPiece = 'mailbox' | 'dav' | 'notes' | 'chat'
@@ -76,10 +76,15 @@ export function hiddenFor(chosen: readonly Space[]): string {
   return serializeHidden(setupSpaces, hidden)
 }
 
-/** The steps that apply to a choice of spaces, in the order they run. */
-export function planSteps(chosen: readonly Space[]): SetupStep[] {
+/**
+ * The steps that apply to a choice of spaces, in the order they run. legal puts
+ * the warranty and liability acknowledgement first, for an install that has
+ * not given it for the current terms.
+ */
+export function planSteps(chosen: readonly Space[], legal = false): SetupStep[] {
   const has = (k: Space): boolean => chosen.includes(k)
-  const steps: SetupStep[] = ['purpose', 'language', 'look', 'mailbox']
+  const steps: SetupStep[] = legal ? ['legal'] : []
+  steps.push('purpose', 'language', 'look', 'mailbox')
   if (has('calendar') || has('contacts') || has('tasks')) {
     steps.push('dav')
   }
@@ -135,7 +140,7 @@ export function startProgress(rerun: boolean, shown: readonly Space[]): SetupPro
   return { step: 'purpose', purpose, custom, outcomes: {}, rerun }
 }
 
-const stepNames = new Set<string>(['purpose', 'language', 'look', 'mailbox', 'dav', 'notes', 'chat', 'keys', 'summary'])
+const stepNames = new Set<string>(['legal', 'purpose', 'language', 'look', 'mailbox', 'dav', 'notes', 'chat', 'keys', 'summary'])
 
 // steps an earlier version had, and the step that followed them there.
 const retiredSteps: Record<string, SetupStep> = { feeds: 'chat' }
@@ -172,10 +177,15 @@ export function serializeProgress(p: SetupProgress): string {
 }
 
 /**
- * The step a resumed run opens on: the stored one while it still applies,
- * else the first applicable step not yet left, else the summary.
+ * The step a resumed run opens on: the acknowledgement while it is owed, else
+ * the stored one while it still applies, else the first applicable step not
+ * yet left, else the summary.
  */
 export function resumeStep(p: SetupProgress, steps: readonly SetupStep[]): SetupStep {
+  // nothing is reachable before the acknowledgement, whatever was stored.
+  if (steps.includes('legal')) {
+    return 'legal'
+  }
   if (steps.includes(p.step)) {
     return p.step
   }
