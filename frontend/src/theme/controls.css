@@ -51,6 +51,13 @@
   color: var(--danger);
 }
 
+.cal-btn.primary.danger,
+.cal-btn.primary.danger:hover:not(:disabled) {
+  border-color: var(--danger);
+  background: var(--danger);
+  color: var(--text-inverse);
+}
+
 .cal-btn.on {
   border-color: var(--accent);
   background: var(--selection-bg);

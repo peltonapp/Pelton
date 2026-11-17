@@ -108,7 +108,7 @@
       {#if deleting}
         <button type="button" class="cal-btn" on:click={() => (deleting = false)}>{$t('projects.dialog.cancel')}</button>
         <span class="spacer"></span>
-        <button type="button" class="cal-btn primary danger-fill" disabled={busy} on:click={() => void remove()}>{$t('projects.column.delete')}</button>
+        <button type="button" class="cal-btn primary danger" disabled={busy} on:click={() => void remove()}>{$t('projects.column.delete')}</button>
       {:else}
         <button type="button" class="cal-btn danger" on:click={() => (deleting = true)}>{$t('projects.column.delete')}</button>
         <span class="spacer"></span>
@@ -172,11 +172,5 @@
 
   .spacer {
     flex: 1;
-  }
-
-  .danger-fill {
-    border-color: var(--danger);
-    background: var(--danger);
-    color: var(--text-inverse);
   }
 </style>
