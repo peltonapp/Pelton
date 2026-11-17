@@ -88,8 +88,11 @@
     flex-direction: column;
     align-items: center;
     justify-content: center;
+    flex: 1;
     gap: var(--space-3);
+    box-sizing: border-box;
     height: 100%;
+    min-height: 0;
     padding: var(--space-6);
     text-align: center;
     color: var(--text-tertiary);
@@ -98,6 +101,7 @@
   .empty.compact {
     align-items: flex-start;
     justify-content: flex-start;
+    flex: none;
     gap: var(--space-2);
     height: auto;
     padding: var(--space-3) var(--space-2);

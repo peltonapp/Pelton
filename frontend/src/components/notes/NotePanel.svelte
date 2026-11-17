@@ -7,6 +7,7 @@
   import xIcon from '@phosphor-icons/core/assets/regular/x.svg?raw'
   import Ph from '../common/Ph.svelte'
   import PieProgress from '../common/PieProgress.svelte'
+  import EmptyState from '../common/EmptyState.svelte'
   import Select from '../common/Select.svelte'
   import NoteGraph from './NoteGraph.svelte'
   import { vaultBacklinks, vaultLinkMention, vaultUnlinkedMentions } from '../../lib/api'
@@ -139,7 +140,7 @@
       {#if loading && !linked.length}
         <div class="loading"><PieProgress label={$t('notes.loading')} /></div>
       {:else if groups.length === 0}
-        <p class="empty">{$t('notes.backlinks.none')}</p>
+        <EmptyState size="compact" title={$t('notes.backlinks.none')} />
       {/if}
       {#each groups as g (g.source)}
         <section class="source">
@@ -156,7 +157,7 @@
       </button>
       {#if showUnlinked}
         {#if unlinkedGroups.length === 0}
-          <p class="empty">{$t('notes.backlinks.noneUnlinked')}</p>
+          <EmptyState size="compact" title={$t('notes.backlinks.noneUnlinked')} />
         {/if}
         {#each unlinkedGroups as g (g.source)}
           <section class="source">
@@ -172,7 +173,7 @@
       {/if}
     {:else if tab === 'outline'}
       {#if headings.length === 0}
-        <p class="empty">{$t('notes.outline.none')}</p>
+        <EmptyState size="compact" title={$t('notes.outline.none')} detail={$t('notes.outline.noneDetail')} />
       {:else}
         <ul class="outline">
           {#each headings as h (h.line)}
@@ -184,7 +185,7 @@
       {/if}
     {:else if tab === 'links'}
       {#if noteLinks.length + objectLinks.length + webLinks.length === 0}
-        <p class="empty">{$t('notes.links.none')}</p>
+        <EmptyState size="compact" title={$t('notes.links.none')} />
       {/if}
       {#if noteLinks.length}
         <h3 class="sub">{$t('notes.links.notes')}</h3>
@@ -281,12 +282,6 @@
     min-height: 0;
     overflow-y: auto;
     padding: var(--space-3) var(--space-4) var(--space-5);
-  }
-
-  .empty {
-    margin: var(--space-3) 0;
-    color: var(--text-tertiary);
-    font-size: var(--fz-label);
   }
 
   .loading {
