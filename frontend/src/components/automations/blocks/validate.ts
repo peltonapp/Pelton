@@ -28,7 +28,7 @@ export type IssueCode =
 export interface Issue {
   block: string
   code: IssueCode
-  /** The parameter, or "as", "list" and "value" of a for each or set block. */
+  /** The parameter, or "list" and "value" of a for each or set block. */
   param?: string
   cond?: CondPath
   /** Extra text, e.g. the triggers an action works with. */
@@ -112,16 +112,16 @@ function checkBlock(b: Block, tree: BlockTree, ctx: ScopeContext, out: Issue[]):
       ;(b.branches ?? []).forEach((br, i) => {
         checkCond(br.when, { block: b.id, branch: i, path: [] }, ctx, scope, out)
         if (!br.body || br.body.length === 0) {
-          out.push({ ...at, code: 'emptyBranch', param: String(i) })
+          out.push({ ...at, code: 'emptyBranch' })
         }
       })
       if (b.else && b.else.length === 0) {
-        out.push({ ...at, code: 'emptyBranch', param: 'else' })
+        out.push({ ...at, code: 'emptyBranch' })
       }
       return
     case 'foreach':
       if (!b.as || !varNamePattern.test(b.as)) {
-        out.push({ ...at, code: 'noVar', param: 'as' })
+        out.push({ ...at, code: 'noVar' })
       }
       if (isEmptyArg(b.list)) {
         out.push({ ...at, code: 'noList', param: 'list' })
@@ -134,7 +134,7 @@ function checkBlock(b: Block, tree: BlockTree, ctx: ScopeContext, out: Issue[]):
       return
     case 'set':
       if (!b.as || !varNamePattern.test(b.as)) {
-        out.push({ ...at, code: 'noVar', param: 'as' })
+        out.push({ ...at, code: 'noVar' })
       }
       if (b.value?.ref && !refInScope(b.value.ref, scope(), ctx.catalog)) {
         out.push({ ...at, code: 'badRef', param: 'value', detail: b.value.ref })

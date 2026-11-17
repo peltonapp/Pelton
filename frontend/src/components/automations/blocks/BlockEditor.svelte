@@ -257,6 +257,7 @@
     if (event.button !== 0 || drag) {
       return
     }
+    event.preventDefault()
     scale = currentUIScale()
     drag = { payload, label, x: event.clientX, y: event.clientY, startX: event.clientX, startY: event.clientY, moved: false }
     window.addEventListener('pointermove', onMove)
