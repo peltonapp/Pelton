@@ -997,6 +997,7 @@
               on:mailDrop={(e) => onMailDrop(e.detail)}
               on:menu={(e) => onCellMenu(e.detail)}
               on:toggleTask={(e) => toggleTask(e.detail)}
+              on:quickAdd={() => openQuickAdd()}
             />
           {/if}
         </div>

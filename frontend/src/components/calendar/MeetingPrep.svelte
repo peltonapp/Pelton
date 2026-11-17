@@ -14,6 +14,8 @@
   import clockIcon from '@phosphor-icons/core/assets/duotone/clock-duotone.svg?raw'
   import '../../theme/controls.css'
   import Modal from '../common/Modal.svelte'
+  import EmptyState from '../common/EmptyState.svelte'
+  import ErrorState from '../common/ErrorState.svelte'
   import Ph from '../common/Ph.svelte'
   import PieProgress from '../common/PieProgress.svelte'
   import ContactAvatar from '../contacts/ContactAvatar.svelte'
@@ -53,13 +55,16 @@
   $: others = prep ? otherAttendees(prep) : []
   $: when = prep ? formatWhen(parseEventTime(prep.start, prep.allDay), parseEventTime(prep.end, prep.allDay), prep.allDay, timeFormat) : ''
 
-  onMount(async () => {
+  async function load(): Promise<void> {
+    error = ''
     try {
       prep = await prepareMeeting(target.eventId, target.recurrenceId)
     } catch (err) {
       error = errorMessage(err)
     }
-  })
+  }
+
+  onMount(load)
 
   function openConversation(m: MeetingPrep['threads'][number]['message']): void {
     revealMessage(m.id, m.accountId, m.folderId, $sidebar.data ?? null)
@@ -111,9 +116,9 @@
 
 <Modal title={$t('prep.title').replace('{title}', title)} hint={$t('prep.hint')} size="large" on:close={() => dispatch('close')}>
   {#if error}
-    <p class="problem" role="alert">{error}</p>
+    <ErrorState message={error} onRetry={() => void load()} />
   {:else if !prep}
-    <p class="state"><PieProgress label={$t('prep.loading')} /> {$t('prep.loading')}</p>
+    <p class="state"><PieProgress size={20} label={$t('prep.loading')} /></p>
   {:else}
     <div class="prep">
       <section class="meeting" aria-label={$t('prep.meeting')}>
@@ -137,7 +142,7 @@
       <section class="block" aria-label={$t('prep.attendees')}>
         <h3>{$t('prep.attendees')}</h3>
         {#if others.length === 0}
-          <p class="none">{$t('prep.nobody')}</p>
+          <EmptyState size="compact" title={$t('prep.nobody')} />
         {/if}
         {#if prep.attendees.length > 0}
           <ul class="people">
@@ -169,7 +174,7 @@
       <section class="block" aria-label={$t('prep.conversations')}>
         <h3>{$t('prep.conversations')}</h3>
         {#if prep.threads.length === 0}
-          <p class="none">{$t('prep.conversationsNone')}</p>
+          <EmptyState size="compact" title={$t('prep.conversationsNone')} />
         {:else}
           <ul class="rows">
             {#each prep.threads as th (th.message.id)}
@@ -192,7 +197,7 @@
       <section class="block" aria-label={$t('prep.files')}>
         <h3>{$t('prep.files')}</h3>
         {#if prep.files.length === 0}
-          <p class="none">{$t('prep.filesNone')}</p>
+          <EmptyState size="compact" title={$t('prep.filesNone')} />
         {:else}
           <ul class="rows">
             {#each prep.files as f (f.id)}
@@ -212,7 +217,7 @@
       <section class="block" aria-label={$t('prep.tasks')}>
         <h3>{$t('prep.tasks')}</h3>
         {#if prep.tasks.length === 0}
-          <p class="none">{$t('prep.tasksNone')}</p>
+          <EmptyState size="compact" title={$t('prep.tasksNone')} />
         {:else}
           <ul class="rows">
             {#each prep.tasks as task (task.id)}
@@ -239,7 +244,7 @@
       <section class="block" aria-label={$t('prep.previous')}>
         <h3>{$t('prep.previous')}</h3>
         {#if prep.previous.length === 0}
-          <p class="none">{$t('prep.previousNone')}</p>
+          <EmptyState size="compact" title={$t('prep.previousNone')} />
         {:else}
           <ul class="rows">
             {#each prep.previous as m (`${m.eventId}|${m.recurrenceId}`)}
@@ -329,12 +334,6 @@
     list-style: none;
   }
 
-  .none {
-    margin: 0;
-    color: var(--text-tertiary);
-    font-size: var(--fz-label);
-  }
-
   .state {
     display: flex;
     align-items: center;
@@ -342,15 +341,6 @@
     gap: var(--space-2);
     margin: var(--space-6) 0;
     color: var(--text-secondary);
-  }
-
-  .problem {
-    margin: 0;
-    padding: var(--space-3);
-    border-radius: var(--radius-control);
-    background: var(--danger-bg);
-    color: var(--danger);
-    font-size: var(--fz-label);
   }
 
   .people {
