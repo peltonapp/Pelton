@@ -169,6 +169,8 @@ export {
     ScriptDTO,
     ScriptFileDTO,
     ScriptInput,
+    ScriptLibraryDTO,
+    ScriptLibraryInput,
     ScriptRunDTO,
     ScriptTriggerDTO,
     SearchRequestDTO,
