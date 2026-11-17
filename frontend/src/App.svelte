@@ -24,7 +24,7 @@
   import { meetingPrepTarget, openMeetingPrep, closeMeetingPrep } from './stores/meetingprep'
   import { mailScreen, openMailScreen, closeMailScreen } from './stores/mailscreen'
   import { IconMailX, IconChartBar } from '@tabler/icons-svelte'
-  import { orderedSpaces } from './lib/spaces'
+  import { orderedSpaces, visibleSpaces } from './lib/spaces'
   import { startChat, stopChat } from './stores/chat'
   import { popupIsOpen } from './lib/popups'
   import { calendarFocus, calendarImport, calendarQuickAdd } from './stores/calendar'
@@ -103,6 +103,7 @@
     isComposeAction,
     chipActions,
     sendActions,
+    spaceNumber,
     shortcuts as shortcutRegistry,
     type ShortcutAction,
   } from './lib/shortcuts'
@@ -1170,6 +1171,13 @@
     if (screenInPlace && isMailOnlyAction(action)) {
       return
     }
+    const place = spaceNumber(action)
+    if (place !== null) {
+      if (!classic) {
+        goToSpaceNumber(place)
+      }
+      return
+    }
     switch (action) {
       case 'open-newsletters':
         if (!classic) {
@@ -1833,6 +1841,14 @@
     }
   }
 
+  // goToSpaceNumber shows the nth space of the navigation, from 1.
+  function goToSpaceNumber(n: number): void {
+    const entry = get(visibleSpaces)[n - 1]
+    if (entry) {
+      goToSpace(entry.key)
+    }
+  }
+
   // goToSpace shows one of the spaces from its shortcut. classic has no spaces
   // but does have a contacts screen; a space this build lacks is left alone.
   function goToSpace(key: Space): void {
@@ -1978,6 +1994,9 @@
         return
       }
       if (classic && newDesignOnly.has(action)) {
+        if (selectTabByNumber(event)) {
+          event.preventDefault()
+        }
         return
       }
       // a recipient move only means something on a focused recipient chip;
@@ -2000,21 +2019,28 @@
     // cmd/ctrl+1 to 9 jump between the reading-pane chips, the way they jump
     // between tabs in a browser: 1 is the pane, 9 is the last tab. Checked after
     // the bindings, so a key the user assigned themselves still wins, and only
-    // while tabs exist, so the combination is otherwise left alone.
+    // while tabs exist, so the combination is otherwise left alone. The new
+    // design gives those keys to the spaces, so there the chips also answer
+    // with alt added.
     if (selectTabByNumber(event)) {
       event.preventDefault()
     }
   }
 
-  // selectTabByNumber handles cmd/ctrl+1 to 9 and reports whether it acted. The
-  // chips are the untabbed pane followed by the tabs, so 1 is the pane and the
+  // selectTabByNumber handles cmd/ctrl+1 to 9, and cmd/ctrl+alt+1 to 9 in the
+  // new design outside a text field, and reports whether it acted. The chips
+  // are the untabbed pane followed by the tabs, so 1 is the pane and the
   // numbers after it count along the bar. 9 is the last chip however many there
   // are, which is what a browser does.
   function selectTabByNumber(event: KeyboardEvent): boolean {
-    if (!(event.metaKey || event.ctrlKey) || event.shiftKey || event.altKey) {
+    if (!(event.metaKey || event.ctrlKey) || event.shiftKey) {
       return false
     }
-    const slot = Number(event.key)
+    if (event.altKey && (classic || isEditableTarget(event.target))) {
+      return false
+    }
+    // alt turns a digit into a symbol on some layouts, so its key code counts.
+    const slot = event.altKey ? Number(/^Digit([1-9])$/.exec(event.code)?.[1]) : Number(event.key)
     if (!Number.isInteger(slot) || slot < 1 || slot > 9) {
       return false
     }

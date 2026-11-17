@@ -11,7 +11,7 @@
   import userIcon from '@phosphor-icons/core/assets/duotone/user-circle-duotone.svg?raw'
   import moreIcon from '@phosphor-icons/core/assets/duotone/dots-three-duotone.svg?raw'
   import Ph from '../common/Ph.svelte'
-  import { navSpaces as spaces, spaceDrop, spaceMenu, moveSpaceShown, reorderShownSpaces, type NavEntry } from '../../lib/spaces'
+  import { navSpaces as spaces, visibleSpaces, spaceDrop, spaceMenu, moveSpaceShown, reorderShownSpaces, type NavEntry } from '../../lib/spaces'
   import { reorder, type ReorderDetail } from '../../lib/reorder'
   import { dur, motion } from '../../lib/motion'
   import { chatUnreadRooms, chatHasHighlight } from '../../stores/chat'
@@ -26,7 +26,7 @@
   import type { ShortcutAction } from '../../lib/shortcuts'
   import type { ComponentType } from 'svelte'
   import { IconPinnedOff } from '@tabler/icons-svelte'
-  import type { RailSide, ViewKey } from '../../lib/types'
+  import type { RailSide, Space, ViewKey } from '../../lib/types'
   import { prefs, railPinIds, toggleRailPin } from '../../stores/prefs'
   import { sidebar } from '../../stores/accounts'
   import { views } from '../../stores/views'
@@ -103,7 +103,7 @@
     openContextMenu(
       x,
       rect.top,
-      folded.map((s) => ({ label: $t(s.labelKey), hint: keysFor(`go-${s.key}`) ?? '', action: () => openSpace(s.key) })),
+      folded.map((s) => ({ label: $t(s.labelKey), hint: spaceKeys(s.key) ?? '', action: () => openSpace(s.key) })),
     )
   }
 
@@ -175,6 +175,13 @@
     moveSpaceShown(entry.key, event.key === 'ArrowUp' ? -1 : 1)
     await tick()
     groupEl.querySelector<HTMLElement>(`[data-space="${entry.key}"]`)?.focus()
+  }
+
+  // the number key of a space's place in the navigation, or its own key when
+  // it has no number.
+  $: spaceKeys = (key: Space): string | undefined => {
+    const place = $visibleSpaces.findIndex((s) => s.key === key)
+    return (place >= 0 && place < 9 ? keysFor(`go-space-${place + 1}`) : undefined) ?? keysFor(`go-${key}`)
   }
 
   function spaceTip(entry: NavEntry): string {
@@ -270,7 +277,7 @@
         data-reorder-handle={entry.transient ? undefined : ''}
         aria-label={spaceTip(entry)}
         aria-current={$space === entry.key ? 'page' : undefined}
-        use:tip={{ text: spaceTip(entry), shortcut: keysFor(`go-${entry.key}`), side: tipSide }}
+        use:tip={{ text: spaceTip(entry), shortcut: spaceKeys(entry.key), side: tipSide }}
         use:maildrop={spaceDrop(entry.key)}
         animate:flip={{ duration: dur(motion.base) }}
         on:click={() => openSpace(entry.key)}

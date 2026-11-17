@@ -148,6 +148,8 @@ export interface SheetContext {
   space: string
   /** Every space the app offers, for the keys that switch between them. */
   spaces: string[]
+  /** The spaces in the navigation, in order, for the number keys. */
+  numbered?: string[]
   /** A message is open or selected. */
   message: boolean
   /** A composer is open, and whether it holds the focus. */
@@ -239,6 +241,14 @@ export function buildSheet(ctx: SheetContext, src: SheetSource): SheetGroup[] {
   }
   const items = (list: (SheetItem | null)[]): SheetItem[] => list.filter((i): i is SheetItem => i !== null)
   const mail = ctx.space === 'mail'
+  // a space lists its own key and its number key on one line.
+  const spaceItem = (key: string): SheetItem | null => {
+    const action = `go-${key}`
+    const place = (ctx.numbered ?? []).indexOf(key)
+    const combos = [src.bindings[action] ?? '', place >= 0 && place < 9 ? (src.bindings[`go-space-${place + 1}`] ?? '') : '']
+    const keys = combos.filter((c) => c !== '').map(src.format)
+    return keys.length > 0 ? { id: action, labelKey: src.labelFor(action), keys } : null
+  }
 
   const navigation: SheetGroup = {
     id: 'navigation',
@@ -246,7 +256,7 @@ export function buildSheet(ctx: SheetContext, src: SheetSource): SheetGroup[] {
     items: items([
       item('command-palette'),
       item('search'),
-      ...ctx.spaces.filter((s) => s !== ctx.space).map((s) => item(`go-${s}`)),
+      ...ctx.spaces.filter((s) => s !== ctx.space).map(spaceItem),
       ...(ctx.space !== 'calendar' ? [item('calendar-quick-add')] : []),
       ...(mail ? [item('next-pane'), item('prev-pane'), item('focus-sidebar'), item('focus-list'), item('focus-reader')] : []),
       item('sync'),
