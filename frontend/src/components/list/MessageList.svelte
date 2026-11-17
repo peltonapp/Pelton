@@ -31,6 +31,7 @@
     IconClockPause,
     IconChecklist,
     IconLayoutKanban,
+    IconFilterPlus,
     IconDownload,
     IconDownloadOff,
     IconFolderSymlink,
@@ -99,6 +100,7 @@
   import { prefs, setSearchSort, setSplitActive } from '../../stores/prefs'
   import { createTasksFromMail } from '../../lib/taskmail'
   import { pickProjectFor } from '../../lib/projectpicker'
+  import { createRuleFromMail } from '../automations/blocks/rulefrommail'
   import { maildragSource } from '../../stores/maildrag'
   import { threadedOn, threadMessages, loadThread } from '../../stores/threads'
   import { listRows, threadAware, type ListRow } from '../../lib/threadrows'
@@ -1059,6 +1061,7 @@
         : [
             { label: $t('shortcut.createTask'), icon: IconChecklist, hint: menuHint('create-task'), action: () => void createTasksFromMail([item.id]) },
             { label: $t('projects.addTo'), icon: IconLayoutKanban, hint: menuHint('add-to-project'), action: () => pickProjectFor([item.id], item.threadId) },
+            { label: $t('scripts.blocks.ruleFromMail'), icon: IconFilterPlus, action: () => void createRuleFromMail(item.id) },
           ]),
       { label: $t('messageList.menu.moveTo'), icon: IconFolderSymlink, hint: menuHint('move-to'), action: () => openMove(item) },
       ...(classic ? [] : [{ label: $t('shortcut.done'), icon: IconCircleCheck, hint: menuHint('done'), action: () => void markDone([item]) }]),
