@@ -52,6 +52,9 @@ var backupSkipSettings = map[string]bool{
 	settingAppLockFailures:   true,
 	// a script's folder is a path on this device the user granted here.
 	settingScriptFolders: true,
+	// AI providers and their keys are set up per device.
+	settingAIProviders:     true,
+	settingAIScriptOptions: true,
 }
 
 // whitelistBackup is the trusted-sender allowlist as exported.
