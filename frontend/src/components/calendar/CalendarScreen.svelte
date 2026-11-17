@@ -16,7 +16,7 @@
   import sidebarIcon from '@phosphor-icons/core/assets/duotone/sidebar-simple-duotone.svg?raw'
   import warningIcon from '@phosphor-icons/core/assets/duotone/warning-duotone.svg?raw'
   import lightningIcon from '@phosphor-icons/core/assets/duotone/lightning-duotone.svg?raw'
-  import './controls.css'
+  import '../../theme/controls.css'
   import Ph from '../common/Ph.svelte'
   import PieProgress from '../common/PieProgress.svelte'
   import Segmented from '../settings2/ui/Segmented.svelte'
@@ -997,6 +997,7 @@
               on:mailDrop={(e) => onMailDrop(e.detail)}
               on:menu={(e) => onCellMenu(e.detail)}
               on:toggleTask={(e) => toggleTask(e.detail)}
+              on:quickAdd={() => openQuickAdd()}
             />
           {/if}
         </div>

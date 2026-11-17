@@ -137,7 +137,9 @@ describe('ContactsSpace list', () => {
     expect(screen.getByText('Grace Hopper')).toBeInTheDocument()
     await user.clear(screen.getByRole('searchbox', { name: 'Search contacts' }))
     await user.type(screen.getByRole('searchbox', { name: 'Search contacts' }), 'nobody')
-    expect(screen.getByText('No contact matches that.')).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'No contacts match' })).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Clear filter' }))
+    expect(screen.getByText('Ada Lovelace')).toBeInTheDocument()
   })
 
   it('narrows to an organization picked in the book pane', async () => {

@@ -10,6 +10,9 @@
   import Ph from '../common/Ph.svelte'
   import Select from '../common/Select.svelte'
   import PieProgress from '../common/PieProgress.svelte'
+  import EmptyState from '../common/EmptyState.svelte'
+  import searchIcon from '@phosphor-icons/core/assets/duotone/magnifying-glass-duotone.svg?raw'
+  import noteIcon from '@phosphor-icons/core/assets/duotone/note-duotone.svg?raw'
   import { noteSorts, type NoteSort } from '../../lib/notelist'
   import { noteFolder } from '../../lib/notemd'
   import { formatTime } from '../../lib/calformat'
@@ -137,7 +140,25 @@
   </div>
 
   {#if notes.length === 0}
-    <p class="empty">{query.trim() ? $t('notes.noMatches') : $t('notes.emptyList')}</p>
+    {#if query.trim()}
+      <EmptyState
+        kind="filtered"
+        icon={searchIcon}
+        title={$t('notes.noMatches')}
+        detail={$t('notes.noMatchesDetail')}
+        actionLabel={$t('common.clearSearch')}
+        onAction={() => dispatch('query', '')}
+      />
+    {:else}
+      <EmptyState
+        icon={noteIcon}
+        title={$t('notes.emptyList')}
+        detail={$t('notes.emptyListDetail')}
+        actionLabel={$t('notes.newNote')}
+        onAction={() => dispatch('newNote')}
+        shortcut="notes-new"
+      />
+    {/if}
   {:else}
     <!-- svelte-ignore a11y-no-noninteractive-element-interactions -->
     <ul class="rows" bind:this={listEl} role="listbox" aria-label={title} on:keydown={onKeydown}>
@@ -307,10 +328,4 @@
     text-overflow: ellipsis;
   }
 
-  .empty {
-    margin: var(--space-6) var(--space-4);
-    font-size: var(--fz-list);
-    color: var(--text-tertiary);
-    text-align: center;
-  }
 </style>

@@ -4,8 +4,9 @@
   // button that starts a new task for them. it reads the tasks store, so it
   // can sit in whichever contact pane shows a person.
   import plusIcon from '@phosphor-icons/core/assets/regular/plus.svg?raw'
-  import '../calendar/controls.css'
+  import '../../theme/controls.css'
   import Ph from '../common/Ph.svelte'
+  import EmptyState from '../common/EmptyState.svelte'
   import TaskCheck from './TaskCheck.svelte'
   import { taskForContact, taskLists, tasks, toggleDone } from '../../stores/tasks'
   import { openSpace } from '../../stores/space'
@@ -46,7 +47,7 @@
     </button>
   </header>
   {#if open.length === 0}
-    <p class="none">{$t('tasks.forContactNone')}</p>
+    <EmptyState size="compact" title={$t('tasks.forContactNone')} />
   {:else}
     <ul>
       {#each open as task (task.id)}
@@ -92,12 +93,6 @@
   header .cal-item {
     font-size: var(--fz-label);
     color: var(--text-secondary);
-  }
-
-  .none {
-    margin: 0;
-    font-size: var(--fz-label);
-    color: var(--text-tertiary);
   }
 
   ul {

@@ -7,6 +7,8 @@
   import caretLeft from '@phosphor-icons/core/assets/regular/caret-left.svg?raw'
   import Ph from '../common/Ph.svelte'
   import PieProgress from '../common/PieProgress.svelte'
+  import EmptyState from '../common/EmptyState.svelte'
+  import mergeIcon from '@phosphor-icons/core/assets/duotone/git-merge-duotone.svg?raw'
   import ContactMergeCompare from './ContactMergeCompare.svelte'
   import { addressBooks } from '../../stores/contacts'
   import {
@@ -52,9 +54,9 @@
 
   <div class="body">
     {#if $duplicatesLoading && $duplicateGroups.length === 0}
-      <p class="state"><PieProgress label={$t('contacts.duplicates.finding')} /> {$t('contacts.duplicates.finding')}</p>
+      <p class="state"><PieProgress size={20} label={$t('contacts.duplicates.finding')} /></p>
     {:else if $duplicateGroups.length === 0}
-      <p class="state">{$t('contacts.duplicates.none')}</p>
+      <EmptyState icon={mergeIcon} title={$t('contacts.duplicates.none')} detail={$t('contacts.duplicates.noneDetail')} />
     {:else}
       <ul class="groups">
         {#each $duplicateGroups as group, i (i)}

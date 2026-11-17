@@ -9,6 +9,7 @@
   import { previewTarget, closePreview } from '../../stores/preview'
   import { readAttachment, saveAttachment } from '../../lib/api'
   import { previewKind } from '../../lib/filetype'
+  import { popupIsOpen } from '../../lib/popups'
   import { formatBytes } from '../../lib/format'
   import { errorMessage, toastError, toastSuccess } from '../../stores/toast'
   import { t } from '../../lib/i18n'
@@ -127,7 +128,7 @@
   }
 
   function onKeydown(event: KeyboardEvent): void {
-    if (event.key === 'Escape') {
+    if (event.key === 'Escape' && !popupIsOpen()) {
       closePreview()
     }
   }

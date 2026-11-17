@@ -2,15 +2,14 @@
   // the middle pane of the contacts space: the contacts under alphabetical (or
   // organization) headers, with a selection band that slides to the open one.
   import { createEventDispatcher, tick } from 'svelte'
-  import Spinner from '../common/Spinner.svelte'
+  import ContactListEmpty from './ContactListEmpty.svelte'
   import ContactAvatar from './ContactAvatar.svelte'
   import ContactFilterBar from './ContactFilterBar.svelte'
-  import { contacts, contactsLoading } from '../../stores/contacts'
-  import { contactQuery, contactSort, selectedContactId, visibleContacts } from '../../stores/contactsview'
+  import { contactSort, selectedContactId, visibleContacts } from '../../stores/contactsview'
   import { displayName, sectionContacts } from '../../lib/contactlist'
   import { t } from '../../lib/i18n'
 
-  const dispatch = createEventDispatcher<{ select: number }>()
+  const dispatch = createEventDispatcher<{ select: number; create: void }>()
 
   let scroller: HTMLElement | undefined
   // snap places the band without sliding it, for the first selection after none.
@@ -48,10 +47,8 @@
 <div class="list">
   <ContactFilterBar />
   <div class="scroller" bind:this={scroller}>
-    {#if $contactsLoading && $contacts.length === 0}
-      <div class="note"><Spinner /></div>
-    {:else if $visibleContacts.length === 0}
-      <p class="note">{$contactQuery.trim() ? $t('contacts.noMatches') : $t('contacts.emptyBook')}</p>
+    {#if $visibleContacts.length === 0}
+      <ContactListEmpty on:create={() => dispatch('create')} />
     {:else}
       <div class="rows" on:keydown={onKeydown} role="presentation">
         <div
@@ -124,7 +121,7 @@
     top: 0;
     z-index: 2;
     margin: 0;
-    padding: var(--space-1) var(--space-3);
+    padding: var(--space-1) var(--row-pad-x);
     border-bottom: var(--hairline) solid var(--border-subtle);
     background: var(--surface-sunken);
     color: var(--text-tertiary);
@@ -137,7 +134,7 @@
     align-items: center;
     gap: var(--space-3);
     width: 100%;
-    padding: var(--row-pad-y) var(--space-3);
+    padding: var(--row-pad-y) var(--row-pad-x);
     border: none;
     background: transparent;
     color: var(--text-primary);
@@ -198,17 +195,6 @@
 
   .band.snap {
     transition: opacity var(--motion-fast) var(--ease-out);
-  }
-
-  .note {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    margin: 0;
-    padding: var(--space-5);
-    color: var(--text-tertiary);
-    font-size: var(--fz-body);
-    text-align: center;
   }
 
   @media (prefers-reduced-motion: reduce) {

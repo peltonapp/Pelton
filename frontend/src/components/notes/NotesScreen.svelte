@@ -18,10 +18,11 @@
   import listIcon from '@phosphor-icons/core/assets/duotone/list-bullets-duotone.svg?raw'
   import moreIcon from '@phosphor-icons/core/assets/regular/dots-three.svg?raw'
   import notesIcon from '@phosphor-icons/core/assets/duotone/notebook-duotone.svg?raw'
-  import '../calendar/controls.css'
+  import '../../theme/controls.css'
   import Ph from '../common/Ph.svelte'
   import Modal from '../common/Modal.svelte'
   import PieProgress from '../common/PieProgress.svelte'
+  import EmptyState from '../common/EmptyState.svelte'
   import Select from '../common/Select.svelte'
   import Segmented from '../settings2/ui/Segmented.svelte'
   import NoteSidebar from './NoteSidebar.svelte'
@@ -800,22 +801,36 @@
         {#if loading}
           <PieProgress label={$t('notes.loading')} />
         {:else if $vaultInfo?.error}
-          <Ph svg={notesIcon} size={28} />
-          <p class="empty-title">{$t('notes.vaultError')}</p>
-          <p class="empty-body">{$vaultInfo.error}</p>
-          <button type="button" class="cal-btn primary" on:click={() => void chooseVault()}>{$t('notes.chooseFolder')}</button>
+          <EmptyState
+            kind="error"
+            icon={notesIcon}
+            title={$t('notes.vaultError')}
+            detail={$vaultInfo.error}
+            actionLabel={$t('notes.chooseFolder')}
+            onAction={() => void chooseVault()}
+          />
+        {:else if $vaultNotes.length}
+          <EmptyState
+            icon={notesIcon}
+            title={$t('notes.empty.pick')}
+            detail={$t('notes.empty.pickDetail')}
+            actionLabel={$t('notes.newNote')}
+            onAction={() => void newNote(currentFolder())}
+            shortcut="notes-new"
+            secondaryLabel={$t('notes.switcher.open')}
+            onSecondary={() => (switcher = 'open')}
+          />
         {:else}
-          <Ph svg={notesIcon} size={28} />
-          <p class="empty-title">{$vaultNotes.length ? $t('notes.empty.pick') : $t('notes.empty.first')}</p>
-          <div class="empty-actions">
-            <button type="button" class="cal-btn primary" on:click={() => void newNote(currentFolder())}>{$t('notes.newNote')}</button>
-            <button type="button" class="cal-btn" on:click={() => void today()}>{$t('notes.today')}</button>
-            <button type="button" class="cal-btn" on:click={() => (switcher = 'open')}>{$t('notes.switcher.open')}</button>
-          </div>
-          {#if $vaultInfo?.default}
-            <p class="empty-hint">{$t('notes.defaultFolderHint')}</p>
-            <button type="button" class="cal-btn" on:click={() => void chooseVault()}>{$t('notes.chooseFolder')}</button>
-          {/if}
+          <EmptyState
+            icon={notesIcon}
+            title={$t('notes.empty.first')}
+            detail={$vaultInfo?.default ? $t('notes.defaultFolderHint') : $t('notes.empty.firstDetail')}
+            actionLabel={$t('notes.newNote')}
+            onAction={() => void newNote(currentFolder())}
+            shortcut="notes-new"
+            secondaryLabel={$vaultInfo?.default ? $t('notes.chooseFolder') : $t('notes.today')}
+            onSecondary={() => void ($vaultInfo?.default ? chooseVault() : today())}
+          />
         {/if}
       </div>
     {/if}
@@ -1121,34 +1136,7 @@
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    gap: var(--space-3);
-    padding: var(--space-6);
-    color: var(--text-tertiary);
-    text-align: center;
-  }
-
-  .empty-title {
-    margin: 0;
-    font-size: var(--fz-heading);
-    color: var(--text-secondary);
-  }
-
-  .empty-body,
-  .empty-hint {
-    margin: 0;
-    max-width: var(--reader-width-narrow);
-    font-size: var(--fz-label);
-  }
-
-  .empty-actions {
-    display: flex;
-    flex-wrap: wrap;
-    justify-content: center;
-    gap: var(--space-2);
-  }
-
-  .empty-hint {
-    margin-top: var(--space-4);
+    min-height: 0;
   }
 
   .prompt .cal-field {

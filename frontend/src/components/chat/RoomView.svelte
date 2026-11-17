@@ -178,8 +178,9 @@
     display: flex;
     align-items: center;
     gap: var(--space-3);
-    padding: var(--space-3) var(--pane-pad);
-    border-bottom: var(--hairline) solid var(--border-subtle);
+    min-height: calc(var(--control-height) + 2 * var(--space-3));
+    padding: var(--space-3) var(--space-4);
+    border-bottom: var(--hairline) solid var(--border-default);
   }
 
   .title {

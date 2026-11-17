@@ -5,7 +5,7 @@
   // empty.
   import { createEventDispatcher } from 'svelte'
   import closeIcon from '@phosphor-icons/core/assets/regular/x.svg?raw'
-  import '../calendar/controls.css'
+  import '../../theme/controls.css'
   import Modal from '../common/Modal.svelte'
   import Ph from '../common/Ph.svelte'
   import Select from '../common/Select.svelte'

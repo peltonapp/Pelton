@@ -3,6 +3,7 @@
   // sees the exact text before pressing Post; nothing is sent before that. It
   // lives once at the app root and opens when shareToChat holds a message.
   import Modal from '../common/Modal.svelte'
+  import EmptyState from '../common/EmptyState.svelte'
   import { shareToChat, closeShareToChat } from '../../stores/chatshare'
   import { chatRooms, refreshRooms, chatError } from '../../stores/chat'
   import { prefs } from '../../stores/prefs'
@@ -67,7 +68,7 @@
               <span class="name" dir="auto">{room.name}</span>
             </button>
           {:else}
-            <p class="empty">{$t('chat.share.noRooms')}</p>
+            <EmptyState size="compact" kind={filter.trim() ? 'filtered' : 'empty'} title={$t('chat.share.noRooms')} />
           {/each}
         </div>
       </section>
@@ -162,12 +163,6 @@
     white-space: nowrap;
   }
 
-  .empty {
-    margin: 0;
-    padding: var(--space-3);
-    color: var(--text-tertiary);
-    font-size: var(--fz-label);
-  }
 
   .field {
     display: flex;

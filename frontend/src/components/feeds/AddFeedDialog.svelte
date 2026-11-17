@@ -5,7 +5,7 @@
   // to a folder, under its own name or one the user gives it.
   import { createEventDispatcher, onMount, tick } from 'svelte'
   import rssIcon from '@phosphor-icons/core/assets/duotone/rss-duotone.svg?raw'
-  import '../calendar/controls.css'
+  import '../../theme/controls.css'
   import Modal from '../common/Modal.svelte'
   import Select from '../common/Select.svelte'
   import PieProgress from '../common/PieProgress.svelte'
@@ -235,7 +235,7 @@
   }
 
   .candidate input {
-    margin: 2px 0 0;
+    margin: var(--space-1) 0 0;
     accent-color: var(--accent);
   }
 

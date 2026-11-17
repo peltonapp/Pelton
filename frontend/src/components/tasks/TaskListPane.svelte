@@ -13,8 +13,11 @@
   import usersIcon from '@phosphor-icons/core/assets/duotone/users-duotone.svg?raw'
   import flagIcon from '@phosphor-icons/core/assets/duotone/flag-duotone.svg?raw'
   import bellIcon from '@phosphor-icons/core/assets/duotone/bell-duotone.svg?raw'
-  import '../calendar/controls.css'
+  import '../../theme/controls.css'
   import Ph from '../common/Ph.svelte'
+  import EmptyState from '../common/EmptyState.svelte'
+  import searchIcon from '@phosphor-icons/core/assets/duotone/magnifying-glass-duotone.svg?raw'
+  import checksIcon from '@phosphor-icons/core/assets/duotone/checks-duotone.svg?raw'
   import TaskCheck from './TaskCheck.svelte'
   import { calendarColor } from '../../lib/calformat'
   import { isOverdue, type TaskRow } from '../../lib/tasklogic'
@@ -36,8 +39,8 @@
   export let canAdd: boolean = true
   export let timeFormat: TimeFormat = 'auto'
   export let now: Date
-  /** What the empty list says. */
-  export let emptyText: string
+  /** What the empty list says, and whether a filter emptied it. */
+  export let empty: { title: string; detail: string; filtered: boolean }
   /** Placeholder of the quick entry line. */
   export let entryPlaceholder: string
   /** Describes what the line being typed will make, under it. */
@@ -52,6 +55,7 @@
     reorder: number[]
     drop: { task: Task; target: string }
     menu: { task: Task; x: number; y: number }
+    clearFilter: void
   }>()
 
   let entry = ''
@@ -212,7 +216,24 @@
   {/if}
 
   {#if rows.length === 0}
-    <p class="empty">{emptyText}</p>
+    {#if empty.filtered}
+      <EmptyState
+        kind="filtered"
+        icon={searchIcon}
+        title={empty.title}
+        detail={empty.detail}
+        actionLabel={$t('common.clearFilter')}
+        onAction={() => dispatch('clearFilter')}
+      />
+    {:else}
+      <EmptyState
+        icon={checksIcon}
+        title={empty.title}
+        detail={empty.detail}
+        actionLabel={canAdd ? $t('tasks.newTask') : ''}
+        onAction={canAdd ? focusEntry : null}
+      />
+    {/if}
   {:else}
     <ul class="rows" role="listbox" aria-label={$t('tasks.listLabel')}>
       {#each rows as row, i (row.task.id)}
@@ -342,13 +363,6 @@
     padding-inline: var(--space-3);
     font-size: var(--fz-label);
     color: var(--text-secondary);
-  }
-
-  .empty {
-    margin: var(--space-6) var(--space-4);
-    font-size: var(--fz-list);
-    color: var(--text-tertiary);
-    text-align: center;
   }
 
   .rows {

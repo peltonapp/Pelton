@@ -9,7 +9,7 @@
   import closeIcon from '@phosphor-icons/core/assets/regular/x.svg?raw'
   import userPlusIcon from '@phosphor-icons/core/assets/duotone/user-plus-duotone.svg?raw'
   import usersIcon from '@phosphor-icons/core/assets/duotone/users-three-duotone.svg?raw'
-  import '../calendar/controls.css'
+  import '../../theme/controls.css'
   import Ph from '../common/Ph.svelte'
   import Avatar from '../common/Avatar.svelte'
   import EmptyState from '../common/EmptyState.svelte'
@@ -134,9 +134,7 @@
   <p class="lead">{$t('projects.people.lead')}</p>
 
   {#if project.people.length === 0}
-    <EmptyState title={$t('projects.people.emptyTitle')} detail={$t('projects.people.emptyDetail')}>
-      <Ph svg={usersIcon} size={28} />
-    </EmptyState>
+    <EmptyState icon={usersIcon} title={$t('projects.people.emptyTitle')} detail={$t('projects.people.emptyDetail')} />
   {:else}
     <ul class="list" aria-label={$t('projects.tab.people')}>
       {#each project.people as person (person.email)}
@@ -279,7 +277,7 @@
   .who {
     display: flex;
     flex-direction: column;
-    gap: 2px;
+    gap: var(--space-1);
     flex: 1;
     min-width: 0;
     padding: 0;

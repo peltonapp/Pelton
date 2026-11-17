@@ -4,6 +4,7 @@
   // same list picks a template for "new from template".
   import { createEventDispatcher, onDestroy, onMount, tick } from 'svelte'
   import { fade } from 'svelte/transition'
+  import EmptyState from '../common/EmptyState.svelte'
   import { fuzzyMatch } from '../../lib/fuzzy'
   import { noteFolder } from '../../lib/notemd'
   import { popPopup, pushPopup } from '../../lib/popups'
@@ -150,7 +151,7 @@
       </li>
     {/each}
     {#if rows.length === 0}
-      <li class="empty">{$t('notes.switcher.none')}</li>
+      <li class="empty" role="presentation"><EmptyState size="compact" kind="filtered" title={$t('notes.switcher.none')} /></li>
     {/if}
   </ul>
   <footer class="hints">
@@ -247,8 +248,7 @@
   }
 
   .empty {
-    padding: var(--space-4);
-    color: var(--text-tertiary);
+    padding: 0 var(--space-2);
   }
 
   .hints {
