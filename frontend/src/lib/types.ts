@@ -804,6 +804,18 @@ export interface UIPrefs {
   swipeEnabled: boolean
   swipeLeftAction: string
   swipeRightAction: string
+  // the new design's swipes: a short and a long one each way, each a row
+  // action id or 'none'.
+  swipeLeftShort: string
+  swipeLeftLong: string
+  swipeRightShort: string
+  swipeRightLong: string
+  // quick buttons over a hovered row in the new design, and which ones in
+  // what order (comma separated row action ids, five at most).
+  rowActions: boolean
+  rowActionList: string
+  // how html mail is coloured in a dark theme.
+  htmlColors: HtmlColors
   // composeVimMode enables vim keybindings in the compose editor.
   composeVimMode: boolean
   // downloadIncludeAttachments is the remembered default for the range download.
@@ -1285,6 +1297,13 @@ export interface SenderOverview {
 
 // swipe gesture actions for message rows.
 export type SwipeAction = 'none' | 'delete' | 'read' | 'unread' | 'flag' | 'archive' | 'snooze'
+
+/**
+ * How html mail is coloured in a dark theme: 'auto' adapts plain and lightly
+ * styled mail and keeps designed mail on a light sheet, 'adapt' adapts all of
+ * it, 'original' keeps every message as it was sent.
+ */
+export type HtmlColors = 'auto' | 'adapt' | 'original'
 
 // list row layouts, from most spacious to a single dense line.
 export type RowTemplate = 'relaxed' | 'comfortable' | 'compact' | 'single'

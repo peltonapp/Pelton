@@ -11049,6 +11049,29 @@ export class UIPrefsDTO {
     "swipeRightAction": string;
 
     /**
+     * The new design's swipes act by distance: a short swipe and a long one in
+     * each direction, each an action id or "none".
+     */
+    "swipeLeftShort": string;
+    "swipeLeftLong": string;
+    "swipeRightShort": string;
+    "swipeRightLong": string;
+
+    /**
+     * RowActions shows quick buttons over a hovered row in the new design;
+     * RowActionList names them in order, comma separated, five at most.
+     */
+    "rowActions": boolean;
+    "rowActionList": string;
+
+    /**
+     * HTMLColors is how html mail is coloured in a dark theme: "auto" adapts
+     * plain and lightly styled mail and keeps designed mail on a light sheet,
+     * "adapt" adapts all of it, "original" keeps every message as sent.
+     */
+    "htmlColors": string;
+
+    /**
      * ComposeVimMode enables vim keybindings in the compose editor.
      */
     "composeVimMode": boolean;
@@ -11673,6 +11696,27 @@ export class UIPrefsDTO {
         }
         if (!("swipeRightAction" in $$source)) {
             this["swipeRightAction"] = "";
+        }
+        if (!("swipeLeftShort" in $$source)) {
+            this["swipeLeftShort"] = "";
+        }
+        if (!("swipeLeftLong" in $$source)) {
+            this["swipeLeftLong"] = "";
+        }
+        if (!("swipeRightShort" in $$source)) {
+            this["swipeRightShort"] = "";
+        }
+        if (!("swipeRightLong" in $$source)) {
+            this["swipeRightLong"] = "";
+        }
+        if (!("rowActions" in $$source)) {
+            this["rowActions"] = false;
+        }
+        if (!("rowActionList" in $$source)) {
+            this["rowActionList"] = "";
+        }
+        if (!("htmlColors" in $$source)) {
+            this["htmlColors"] = "";
         }
         if (!("composeVimMode" in $$source)) {
             this["composeVimMode"] = false;

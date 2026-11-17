@@ -100,6 +100,10 @@
   import { threadedOn, threadMessages, loadThread } from '../../stores/threads'
   import { listRows, threadAware, type ListRow } from '../../lib/threadrows'
   import { motion } from '../../lib/motion'
+  import { parseRowActions, rowActionView, type RowActionId } from '../../lib/rowactions'
+  import { runRowAction } from '../../lib/rowactionrun'
+  import { newestHistoryId, offerUndo } from '../../stores/undohistory'
+  import { noteAction } from '../../lib/coach'
   import {
     setSeen,
     getMessage,
@@ -927,6 +931,30 @@
     await setOffline(item, !item.offline)
   }
 
+  // the quick buttons over a hovered row, new design only, and out of the
+  // way while a selection is being built.
+  $: rowActionList = !classic && $prefs.rowActions && selectionCount === 0 ? parseRowActions($prefs.rowActionList) : []
+
+  // onRowAction runs a quick button or a swipe of the new design on its row
+  // alone, through the same functions as the action's shortcut. A swipe also
+  // offers its undo, since nothing on screen says what the gesture did. A
+  // button that took its row away hands the focus back to the list.
+  async function onRowAction(item: MessageSummary, id: RowActionId, via: 'button' | 'swipe'): Promise<void> {
+    if (via === 'button') {
+      noteAction(rowActionView(id, { seen: item.seen, flagged: item.flagged, pinned: false, muted: false, inSpam: false }).shortcut)
+    }
+    const hadFocus = listEl?.contains(document.activeElement) ?? false
+    const since = newestHistoryId()
+    await runRowAction(id, item)
+    if (via === 'swipe') {
+      offerUndo(since)
+    }
+    await tick()
+    if (hadFocus && listEl && !listEl.contains(document.activeElement)) {
+      listEl.focus()
+    }
+  }
+
   // performSwipe runs the configured action for a swipe direction on a row.
   function performSwipe(item: MessageSummary, dir: 'left' | 'right'): void {
     const action = (dir === 'left' ? $prefs.swipeLeftAction : $prefs.swipeRightAction) as SwipeAction
@@ -1361,6 +1389,9 @@
             accountColor={mixedAccounts ? (accountColors[item.accountId] ?? '') : ''}
             selected={item.id === $openMessageId || index === activeIndex}
             checked={$selectedIds.has(item.id)}
+            actions={rowActionList}
+            active={index === activeIndex}
+            on:rowaction={(e) => void onRowAction(item, e.detail.id, e.detail.via)}
             on:click={(e) => onRowClick(e, item.id)}
             on:auxclick={(e) => onRowAux(e, item)}
             on:dblclick={() => void openMessageWindow(item.id, item.subject)}

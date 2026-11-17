@@ -79,14 +79,25 @@ const (
 	settingFlaggedCount     = "show_flagged_count"
 	settingViewsPlacement   = "views_placement"
 	// newer feature settings.
-	settingFlagColorSync       = "flag_color_sync"
-	settingShowOffline         = "show_offline_indicator"
-	settingShowUnsyncedFolder  = "show_unsynced_folder"
-	settingRestoreTabs         = "restore_reading_tabs"
-	settingPaletteProfiles     = "palette_profiles"
-	settingSwipeEnabled        = "swipe_enabled"
-	settingSwipeLeft           = "swipe_left_action"
-	settingSwipeRight          = "swipe_right_action"
+	settingFlagColorSync      = "flag_color_sync"
+	settingShowOffline        = "show_offline_indicator"
+	settingShowUnsyncedFolder = "show_unsynced_folder"
+	settingRestoreTabs        = "restore_reading_tabs"
+	settingPaletteProfiles    = "palette_profiles"
+	settingSwipeEnabled       = "swipe_enabled"
+	settingSwipeLeft          = "swipe_left_action"
+	settingSwipeRight         = "swipe_right_action"
+	// the new design's swipes: a short and a long one in each direction.
+	settingSwipeLeftShort  = "swipe_left_short"
+	settingSwipeLeftLong   = "swipe_left_long"
+	settingSwipeRightShort = "swipe_right_short"
+	settingSwipeRightLong  = "swipe_right_long"
+	// the quick buttons over a hovered row in the new design, and which ones
+	// in what order, comma separated.
+	settingRowActions    = "row_actions"
+	settingRowActionList = "row_action_list"
+	// how html mail is coloured in a dark theme: auto, adapt or original.
+	settingHTMLColors          = "html_colors"
 	settingVimMode             = "compose_vim_mode"
 	settingDownloadAtts        = "download_include_attachments"
 	settingDownloadPending     = "download_pending_since"
@@ -419,6 +430,20 @@ type UIPrefsDTO struct {
 	SwipeEnabled     bool   `json:"swipeEnabled"`
 	SwipeLeftAction  string `json:"swipeLeftAction"`
 	SwipeRightAction string `json:"swipeRightAction"`
+	// The new design's swipes act by distance: a short swipe and a long one in
+	// each direction, each an action id or "none".
+	SwipeLeftShort  string `json:"swipeLeftShort"`
+	SwipeLeftLong   string `json:"swipeLeftLong"`
+	SwipeRightShort string `json:"swipeRightShort"`
+	SwipeRightLong  string `json:"swipeRightLong"`
+	// RowActions shows quick buttons over a hovered row in the new design;
+	// RowActionList names them in order, comma separated, five at most.
+	RowActions    bool   `json:"rowActions"`
+	RowActionList string `json:"rowActionList"`
+	// HTMLColors is how html mail is coloured in a dark theme: "auto" adapts
+	// plain and lightly styled mail and keeps designed mail on a light sheet,
+	// "adapt" adapts all of it, "original" keeps every message as sent.
+	HTMLColors string `json:"htmlColors"`
 	// ComposeVimMode enables vim keybindings in the compose editor.
 	ComposeVimMode bool `json:"composeVimMode"`
 	// DownloadIncludeAttachments is the remembered default for the bulk range
@@ -733,6 +758,13 @@ func (a *App) GetUIPrefs() (UIPrefsDTO, error) {
 		SwipeEnabled:               a.boolSetting(settingSwipeEnabled, true),
 		SwipeLeftAction:            a.stringSetting(settingSwipeLeft, "delete"),
 		SwipeRightAction:           a.stringSetting(settingSwipeRight, "unread"),
+		SwipeLeftShort:             a.stringSetting(settingSwipeLeftShort, "archive"),
+		SwipeLeftLong:              a.stringSetting(settingSwipeLeftLong, "delete"),
+		SwipeRightShort:            a.stringSetting(settingSwipeRightShort, "read"),
+		SwipeRightLong:             a.stringSetting(settingSwipeRightLong, "snooze"),
+		RowActions:                 a.boolSetting(settingRowActions, true),
+		RowActionList:              a.stringSetting(settingRowActionList, "archive,delete,done,snooze,pin"),
+		HTMLColors:                 a.stringSetting(settingHTMLColors, "auto"),
 		ComposeVimMode:             a.boolSetting(settingVimMode, false),
 		DownloadIncludeAttachments: a.boolSetting(settingDownloadAtts, true),
 		AppVimMode:                 a.boolSetting(settingAppVimMode, false),

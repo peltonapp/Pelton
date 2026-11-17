@@ -200,6 +200,15 @@
   --thread-twisty: 16px;
   --reader-width-narrow: 640px;
   --reader-width-medium: 820px;
+  /* a message row's quick buttons, and the fade they lie over the text with. */
+  --row-action-size: 26px;
+  --row-action-fade: 32px;
+  /* a swiped row settling back, with a little give. */
+  --ease-spring: cubic-bezier(0.34, 1.4, 0.64, 1);
+  /* the reading view: the column's measure and the room around it. */
+  --reading-measure: 720px;
+  --reading-margin: 72px;
+  --reading-leading: 1.7;
 
   /* the sender panel beside the reader, and the attachments browser's preview
      column and grid tiles. */
