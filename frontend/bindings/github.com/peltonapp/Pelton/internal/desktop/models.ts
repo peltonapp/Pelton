@@ -8944,6 +8944,40 @@ export class SenderOverviewDTO {
 }
 
 /**
+ * SenderReadingDTO is how the reader shows one sender's mail: Colors is
+ * "adapt", "original" or empty to follow the global setting, FontSize the
+ * reader text size in px or 0 to follow the global size.
+ */
+export class SenderReadingDTO {
+    "address": string;
+    "colors": string;
+    "fontSize": number;
+
+    /** Creates a new SenderReadingDTO instance. */
+    constructor($$source: Partial<SenderReadingDTO> = {}) {
+        if (!("address" in $$source)) {
+            this["address"] = "";
+        }
+        if (!("colors" in $$source)) {
+            this["colors"] = "";
+        }
+        if (!("fontSize" in $$source)) {
+            this["fontSize"] = 0;
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new SenderReadingDTO instance from a string or object.
+     */
+    static createFrom($$source: any = {}): SenderReadingDTO {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new SenderReadingDTO($$parsedSource as Partial<SenderReadingDTO>);
+    }
+}
+
+/**
  * SettingResult is a setting lookup that distinguishes unset from empty.
  */
 export class SettingResult {
