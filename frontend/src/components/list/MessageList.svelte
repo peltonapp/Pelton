@@ -12,6 +12,9 @@
   import MessageSkeleton from './MessageSkeleton.svelte'
   import EmptyState from '../common/EmptyState.svelte'
   import ErrorState from '../common/ErrorState.svelte'
+  import funnelIcon from '@phosphor-icons/core/assets/duotone/funnel-duotone.svg?raw'
+  import trayIcon from '@phosphor-icons/core/assets/duotone/tray-duotone.svg?raw'
+  import searchIcon from '@phosphor-icons/core/assets/duotone/magnifying-glass-duotone.svg?raw'
   import {
     IconMail,
     IconArrowBackUp,
@@ -1306,25 +1309,38 @@
     {:else if $messageList.status === 'error'}
       <ErrorState message={$messageList.error} onRetry={() => loadList($selection)} />
     {:else if items.length === 0 && quickOn && loadedItems.length > 0}
-      <EmptyState title={$t('quickFilter.empty')} detail={$t('quickFilter.emptyDetail')}>
-        <IconMail size={28} stroke={1.4} />
-        <button slot="action" type="button" class="load-older-btn" on:click={resetQuickFilter}>{$t('quickFilter.clear')}</button>
-      </EmptyState>
+      <EmptyState
+        kind="filtered"
+        icon={funnelIcon}
+        title={$t('quickFilter.empty')}
+        detail={$t('quickFilter.emptyDetail')}
+        actionLabel={$t('quickFilter.clear')}
+        onAction={resetQuickFilter}
+      />
     {:else if items.length === 0 && inboxShown && splitKey !== ''}
-      <EmptyState title={$t('split.empty')} detail={$t('split.emptyDetail')}>
-        <IconMail size={28} stroke={1.4} />
-      </EmptyState>
+      <EmptyState icon={trayIcon} title={$t('split.empty')} detail={$t('split.emptyDetail')} />
     {:else if items.length === 0 && inboxShown}
       {#if inboxFollowUps.length === 0}
         <InboxZero />
       {/if}
-    {:else if items.length === 0}
+    {:else if items.length === 0 && classic}
       <EmptyState
-        title={$searchQuery || inSearch ? $t('messageList.empty.noMatch') : $t('messageList.empty.noMessages')}
-        detail={$searchQuery || inSearch ? $t('messageList.empty.tryDifferentSearch') : $t('messageList.empty.viewEmpty')}
+        title={$searchQuery ? $t('messageList.empty.noMatch') : $t('messageList.empty.noMessages')}
+        detail={$searchQuery ? $t('messageList.empty.tryDifferentSearch') : $t('messageList.empty.viewEmpty')}
       >
         <IconMail size={28} stroke={1.4} />
       </EmptyState>
+    {:else if items.length === 0 && (inSearch || $searchQuery)}
+      <EmptyState
+        kind="filtered"
+        icon={searchIcon}
+        title={$t('messageList.empty.noMatch')}
+        detail={$t('messageList.empty.searchDetail')}
+        actionLabel={$t('common.clearSearch')}
+        onAction={clearSearch}
+      />
+    {:else if items.length === 0}
+      <EmptyState icon={trayIcon} title={$t('messageList.empty.noMessages')} detail={$t('messageList.empty.folderDetail')} />
     {:else}
       {#if topPad > 0}
         <div class="spacer" style={`height:${topPad}px`} aria-hidden="true"></div>

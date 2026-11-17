@@ -152,7 +152,7 @@ describe('MessageList in the new design', () => {
     let finish!: (value: { messages: MessageSummary[]; total: number }) => void
     api.search.mockImplementation(() => new Promise((resolve) => (finish = resolve)))
     render(MessageList)
-    await screen.findByText('Nothing left in your inbox.')
+    await screen.findByText('Nothing left in your inbox')
     startSearch('nothing')
     await waitFor(() => expect(api.search).toHaveBeenCalled())
     finish({ messages: [], total: 0 })

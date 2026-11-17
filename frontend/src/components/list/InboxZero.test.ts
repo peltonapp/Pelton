@@ -65,20 +65,20 @@ describe('the empty inbox', () => {
   it('shows the inbox zero line in the unified inbox', async () => {
     selection.set({ kind: 'view', view: 'inbox', label: 'Unified Inbox' })
     render(MessageList)
-    expect(await screen.findByText('Nothing left in your inbox.')).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { name: 'Nothing left in your inbox' })).toBeInTheDocument()
   })
 
   it('shows it in an account inbox too', async () => {
     selection.set({ kind: 'folder', folderId: 1, accountId: 1, label: 'INBOX' })
     render(MessageList)
-    expect(await screen.findByRole('status')).toHaveTextContent('Nothing left in your inbox.')
+    expect(await screen.findByRole('status')).toHaveTextContent('Nothing left in your inbox')
   })
 
   it('keeps the plain empty state for any other folder', async () => {
     selection.set({ kind: 'folder', folderId: 2, accountId: 1, label: 'Projects' })
     render(MessageList)
     expect(await screen.findByText('No messages here')).toBeInTheDocument()
-    expect(screen.queryByText('Nothing left in your inbox.')).not.toBeInTheDocument()
+    expect(screen.queryByText('Nothing left in your inbox')).not.toBeInTheDocument()
   })
 
   it('is not part of the classic design', async () => {
