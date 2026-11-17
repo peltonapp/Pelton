@@ -55,6 +55,7 @@
   import { addCard, addTask, board, cardFocus, loadBoard, moveBoardCard, removeCard } from '../../stores/projects'
   import { emptyDraft, localZone, removeTask, saveTask, taskLists, taskSettings, tasks, toggleDone } from '../../stores/tasks'
   import { openContextMenu } from '../../stores/contextmenu'
+  import { menuHint } from '../../stores/shortcuts'
   import { errorMessage, toastError } from '../../stores/toast'
   import { popupIsOpen } from '../../lib/popups'
   import { dur, motion } from '../../lib/motion'
@@ -274,7 +275,7 @@
         .map((c) => ({ label: $t('projects.card.moveTo').replace('{name}', c.name), action: () => void moveTo(card, c.id, Number.MAX_SAFE_INTEGER) })),
       'separator' as const,
       { label: $t('projects.card.openInTasks'), action: () => openTask(task.id) },
-      { label: $t('projects.card.remove'), action: () => void removeCard(card) },
+      { label: $t('projects.card.remove'), action: () => void removeCard(card), hint: menuHint('delete-message') },
       ...(task.readOnly ? [] : [{ label: $t('tasks.delete'), danger: true, action: () => void removeTask(task) }]),
     ])
   }

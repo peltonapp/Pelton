@@ -55,6 +55,7 @@
   import { focusSpaceSearch, matchesQuery, registerSpaceSearch } from '../../lib/spacesearch'
   import { registerSpaceActions, openSpace } from '../../stores/space'
   import { openContextMenu } from '../../stores/contextmenu'
+  import { menuHint } from '../../stores/shortcuts'
   import { popupIsOpen } from '../../lib/popups'
   import { prefs } from '../../stores/prefs'
   import { errorMessage, toastError } from '../../stores/toast'
@@ -366,7 +367,7 @@
         { label: $t('tasks.toEvent'), action: () => void convertTaskToEvent(task) },
       )
     }
-    openContextMenu(x, y, [...entries, ...(task.readOnly ? [] : ['separator' as const, { label: $t('tasks.delete'), action: () => void remove(task), danger: true }])])
+    openContextMenu(x, y, [...entries, ...(task.readOnly ? [] : ['separator' as const, { label: $t('tasks.delete'), action: () => void remove(task), danger: true, hint: menuHint('delete-message') }])])
   }
 
   async function openEvent(uid: string): Promise<void> {
