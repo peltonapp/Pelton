@@ -33,12 +33,18 @@ func (c *Call) ScriptName() string {
 	return c.st.req.Script.Name
 }
 
+// Granted reports whether the script holds perm in this run, without ending
+// the run when it does not.
+func (c *Call) Granted(perm string) bool {
+	return c.st.req.Script.granted(perm, c.Dry)
+}
+
 // Require checks a permission a handler works out from its arguments, e.g.
 // "net:example.org" for a request to that host. A permission the script lacks
 // is recorded as a denied step and ends the run, as a function's own
 // permission does.
 func (c *Call) Require(perm string) error {
-	if c.st.req.Script.granted(perm, c.Dry) {
+	if c.Granted(perm) {
 		return nil
 	}
 	c.st.addStep(Step{Kind: StepDenied, Function: c.Function, Summary: c.Function, Error: "needs " + perm})
