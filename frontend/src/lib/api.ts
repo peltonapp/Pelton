@@ -27,6 +27,7 @@ import {
   demoThread,
 } from './demo'
 import { noteAction } from './coach'
+import type { AIKind, AIProvider, AIProviderInput, AITestResult, AIScriptOptions } from './ai'
 import type {
   Account,
   AccountProxy,
@@ -3932,4 +3933,55 @@ export function readScriptFile(path: string): Promise<ScriptFile> {
 /** Stores the script in a file's text, switched off and marked as imported. */
 export function importScript(text: string): Promise<Script> {
   return App.ImportScript(text).then(asScript)
+}
+
+/** The kinds of AI provider that can be added. */
+export function aiProviderKinds(): Promise<AIKind[]> {
+  return App.AIProviderKinds().then((list) => (list ?? []) as AIKind[])
+}
+
+/** The AI providers the user set up. Contacts nothing. */
+export function aiProviders(): Promise<AIProvider[]> {
+  if (isDemoActive()) {
+    return Promise.resolve([])
+  }
+  return App.AIProviders().then((list) => (list ?? []).map((p) => ({ ...p, models: p.models ?? [] })) as AIProvider[])
+}
+
+/** Adds an AI provider, or changes the one with the input's id. */
+export function saveAIProvider(input: AIProviderInput): Promise<AIProvider> {
+  return App.SaveAIProvider(new desktop.AIProviderInput(input)).then((p) => ({ ...p, models: p.models ?? [] }) as AIProvider)
+}
+
+/** Removes an AI provider and its key. */
+export function deleteAIProvider(id: string): Promise<void> {
+  return App.DeleteAIProvider(id)
+}
+
+/** Makes an AI provider the default. */
+export function setDefaultAIProvider(id: string): Promise<void> {
+  return App.SetDefaultAIProvider(id)
+}
+
+/** Sends one tiny request to a provider, saved or not. */
+export function testAIProvider(input: AIProviderInput): Promise<AITestResult> {
+  return App.TestAIProvider(new desktop.AIProviderInput(input)) as Promise<AITestResult>
+}
+
+/** Asks a provider for its models; a saved provider keeps the list. */
+export function fetchAIModels(input: AIProviderInput): Promise<string[]> {
+  return App.FetchAIModels(new desktop.AIProviderInput(input)).then((list) => list ?? [])
+}
+
+/** A script's AI switches. */
+export function aiScriptOptions(scriptId: number): Promise<AIScriptOptions> {
+  if (isDemoActive()) {
+    return Promise.resolve({ logText: false, liveTest: false })
+  }
+  return App.AIScriptOptions(scriptId) as Promise<AIScriptOptions>
+}
+
+/** Changes a script's AI switches. */
+export function setAIScriptOptions(scriptId: number, options: AIScriptOptions): Promise<void> {
+  return App.SetAIScriptOptions(scriptId, new desktop.AIScriptOptionsDTO(options))
 }
