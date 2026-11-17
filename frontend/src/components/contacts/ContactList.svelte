@@ -121,7 +121,7 @@
     top: 0;
     z-index: 2;
     margin: 0;
-    padding: var(--space-1) var(--space-3);
+    padding: var(--space-1) var(--row-pad-x);
     border-bottom: var(--hairline) solid var(--border-subtle);
     background: var(--surface-sunken);
     color: var(--text-tertiary);
@@ -134,7 +134,7 @@
     align-items: center;
     gap: var(--space-3);
     width: 100%;
-    padding: var(--row-pad-y) var(--space-3);
+    padding: var(--row-pad-y) var(--row-pad-x);
     border: none;
     background: transparent;
     color: var(--text-primary);
