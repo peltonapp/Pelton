@@ -138,6 +138,13 @@ func (d *DB) Path() string {
 	return d.path
 }
 
+// Handle returns the connection pool, for a package that keeps its own
+// tables in this database (internal/scripting). The tables still come from
+// the migrations here.
+func (d *DB) Handle() *sql.DB {
+	return d.sql
+}
+
 // maxOpenConns caps the connection pool. One writer at a time is all sqlite
 // allows whatever this is set to; the rest of the ceiling is for readers, and
 // keeping it small keeps the queue for the write lock short and predictable.
