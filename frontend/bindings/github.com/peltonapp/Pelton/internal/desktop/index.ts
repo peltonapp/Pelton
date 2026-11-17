@@ -7,6 +7,11 @@ export {
 };
 
 export {
+    AIKindDTO,
+    AIProviderDTO,
+    AIProviderInput,
+    AIScriptOptionsDTO,
+    AITestDTO,
     AccountDTO,
     AccountProxyDTO,
     AccountSignaturesDTO,
