@@ -76,7 +76,7 @@ type Script struct {
 	// Placements are the places in the app a manual script is offered at.
 	Placements []PlacementConfig
 	CatchUp    CatchUpMode
-	CatchUpCap     int
+	CatchUpCap int
 	// AllowUnasked lists the risky functions, by full Lua name, the user
 	// lets this script call without a confirmation.
 	AllowUnasked []string

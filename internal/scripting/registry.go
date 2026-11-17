@@ -184,10 +184,10 @@ type Catalog struct {
 	Permissions []Permission `json:"permissions"`
 	ParamTypes  []ParamType  `json:"paramTypes"`
 	// SettingTypes are the parameter types a script setting may have.
-	SettingTypes  []ParamType      `json:"settingTypes"`
-	InputKinds    []InputKind      `json:"inputKinds"`
-	ResultActions []ResultAction   `json:"resultActions"`
-	Placements    []Placement      `json:"placements"`
+	SettingTypes  []ParamType    `json:"settingTypes"`
+	InputKinds    []InputKind    `json:"inputKinds"`
+	ResultActions []ResultAction `json:"resultActions"`
+	Placements    []Placement    `json:"placements"`
 }
 
 // Registry holds everything scripts can use. It is safe for concurrent use;
@@ -512,11 +512,11 @@ func (r *Registry) Catalog() Catalog {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 	return Catalog{
-		Triggers:    r.triggers.list(),
-		Conditions:  r.conditions.list(),
-		Actions:     r.actions.list(),
-		Modules:     r.modules.list(),
-		ValueTypes:  r.valueTypes.list(),
+		Triggers:      r.triggers.list(),
+		Conditions:    r.conditions.list(),
+		Actions:       r.actions.list(),
+		Modules:       r.modules.list(),
+		ValueTypes:    r.valueTypes.list(),
 		Permissions:   r.permissions.list(),
 		ParamTypes:    slices.Clone(paramTypes),
 		SettingTypes:  slices.Clone(settingTypes),
