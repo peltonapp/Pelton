@@ -46,6 +46,9 @@ type Event struct {
 	CatchUp bool
 	// Date is when the mail was sent, for catch-up order and age.
 	Date time.Time
+	// Source is the script whose run caused the event, 0 for none. That
+	// script is not started by it again.
+	Source int64
 }
 
 // EventDepth returns the depth an event caused from ctx gets: one more than
@@ -55,6 +58,16 @@ func EventDepth(ctx context.Context) int {
 		return info.Depth + 1
 	}
 	return 0
+}
+
+// EventFrom builds an event caused from ctx, with the depth and the source
+// script of the run ctx belongs to, if any.
+func EventFrom(ctx context.Context, trigger string, data map[string]any) Event {
+	ev := Event{Trigger: trigger, Data: data, Depth: EventDepth(ctx)}
+	if info, ok := RunInfoFrom(ctx); ok {
+		ev.Source = info.ScriptID
+	}
+	return ev
 }
 
 // Config sets up a Service.
@@ -304,18 +317,44 @@ func (s *Service) Wants(trigger string) bool {
 	return false
 }
 
-// Emit hands an event to every enabled script started by its trigger. It
-// returns at once; the runs happen on the scripts' own queues.
-func (s *Service) Emit(ev Event) {
+// Listening returns the trigger parameters of every enabled script started by
+// trigger, for a hook that works out itself which events are due, such as
+// "an event starts in N minutes".
+func (s *Service) Listening(trigger string) []map[string]any {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	var out []map[string]any
+	for _, sc := range s.scripts {
+		if sc.Enabled && sc.Trigger.Type == trigger {
+			out = append(out, sc.Trigger.Params)
+		}
+	}
+	return out
+}
+
+// listeners returns the enabled scripts ev starts, leaving out the script
+// whose run caused it, in id order. A trigger marked missing starts none.
+func (s *Service) listeners(ev Event) []*Script {
+	if t, ok := s.reg.Trigger(ev.Trigger); ok && t.Missing != "" {
+		return nil
+	}
 	s.mu.Lock()
 	var targets []*Script
 	for _, sc := range s.scripts {
-		if sc.Enabled && sc.Trigger.Type == ev.Trigger {
+		if sc.Enabled && sc.Trigger.Type == ev.Trigger && (ev.Source == 0 || sc.ID != ev.Source) {
 			targets = append(targets, sc)
 		}
 	}
 	s.mu.Unlock()
-	for _, sc := range targets {
+	sort.Slice(targets, func(i, j int) bool { return targets[i].ID < targets[j].ID })
+	return targets
+}
+
+// Emit hands an event to every enabled script started by its trigger, but not
+// to the script that caused it. It returns at once; the runs happen on the
+// scripts' own queues.
+func (s *Service) Emit(ev Event) {
+	for _, sc := range s.listeners(ev) {
 		if ev.CatchUp {
 			s.catchUp(sc, ev)
 			continue
@@ -479,15 +518,7 @@ func (s *Service) finish(ctx context.Context, sc *Script, run *Run) error {
 // each script sees the event as the previous one left it, and the caller
 // reads the last event back from the final run.
 func (s *Service) RunSync(ctx context.Context, ev Event) []*Run {
-	s.mu.Lock()
-	var targets []*Script
-	for _, sc := range s.scripts {
-		if sc.Enabled && sc.Trigger.Type == ev.Trigger {
-			targets = append(targets, sc)
-		}
-	}
-	s.mu.Unlock()
-	sort.Slice(targets, func(i, j int) bool { return targets[i].ID < targets[j].ID })
+	targets := s.listeners(ev)
 	var runs []*Run
 	data := ev.Data
 	for _, sc := range targets {
@@ -496,7 +527,7 @@ func (s *Service) RunSync(ctx context.Context, ev Event) []*Run {
 		}
 		w := s.workerFor(sc.ID)
 		w.mu.Lock()
-		run, err := s.dispatch(ctx, sc, Event{Trigger: ev.Trigger, Data: data, Depth: ev.Depth})
+		run, err := s.dispatch(ctx, sc, Event{Trigger: ev.Trigger, Data: data, Depth: ev.Depth, Source: ev.Source})
 		w.mu.Unlock()
 		if err != nil {
 			s.log.Error("scripting: run", "script", sc.ID, "err", err)

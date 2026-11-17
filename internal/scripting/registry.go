@@ -388,6 +388,28 @@ func (r *Registry) RegisterModule(m Module) error {
 	return r.modules.add(m.ID, m)
 }
 
+// SetMissing marks the trigger and the action registered under id as not
+// available, with reason, or as available again for "". It is for a feature
+// the user can switch off while the app runs, such as chat: the entries stay
+// listed, the compiler refuses the action and the trigger never fires. It
+// reports whether id names a trigger or an action.
+func (r *Registry) SetMissing(id, reason string) bool {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	found := false
+	if t, ok := r.triggers.byID[id]; ok {
+		t.Missing = reason
+		r.triggers.byID[id] = t
+		found = true
+	}
+	if a, ok := r.actions.byID[id]; ok {
+		a.Missing = reason
+		r.actions.byID[id] = a
+		found = true
+	}
+	return found
+}
+
 // Trigger returns a registered trigger.
 func (r *Registry) Trigger(id string) (Trigger, bool) {
 	r.mu.RLock()

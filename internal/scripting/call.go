@@ -33,6 +33,18 @@ func (c *Call) ScriptName() string {
 	return c.st.req.Script.Name
 }
 
+// Require checks a permission a handler works out from its arguments, e.g.
+// "net:example.org" for a request to that host. A permission the script lacks
+// is recorded as a denied step and ends the run, as a function's own
+// permission does.
+func (c *Call) Require(perm string) error {
+	if c.st.req.Script.granted(perm, c.Dry) {
+		return nil
+	}
+	c.st.addStep(Step{Kind: StepDenied, Function: c.Function, Summary: c.Function, Error: "needs " + perm})
+	return c.st.setFatal(StatusDenied, fmt.Sprintf("%s needs the permission %q, which the script does not have", c.Function, perm))
+}
+
 // Arg returns argument i (from 0), nil when it was not given.
 func (c *Call) Arg(i int) any {
 	if i < 0 || i >= len(c.Args) {

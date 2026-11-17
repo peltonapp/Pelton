@@ -32,40 +32,14 @@ const (
 	TriggerMailReadMark = "mail.read_changed"
 )
 
-func meta(kind, id, category string) Meta {
-	return Meta{
-		ID:       id,
-		LabelKey: "scripts." + kind + "." + id,
-		DescKey:  "scripts." + kind + "." + id + ".desc",
-		Category: category,
-	}
-}
-
-func param(name string, t ParamType) Param {
-	return Param{Name: name, Type: t, LabelKey: "scripts.param." + name}
-}
-
-func required(p Param) Param {
-	p.Required = true
-	return p
-}
-
-func withDefault(p Param, v any) Param {
-	p.Default = v
-	return p
-}
-
-func field(name, typ string) Field {
-	return Field{Name: name, Type: typ, LabelKey: "scripts.field." + name}
-}
-
-func options(values ...string) []Option {
-	out := make([]Option, 0, len(values))
-	for _, v := range values {
-		out = append(out, Option{Value: v, LabelKey: "scripts.option." + v})
-	}
-	return out
-}
+var (
+	meta        = EntryMeta
+	param       = NewParam
+	required    = Required
+	withDefault = WithDefault
+	field       = NewField
+	options     = NewOptions
+)
 
 func fn(name string, h Handler, params ...Param) Function {
 	return Function{Name: name, Handler: h, Params: params}
