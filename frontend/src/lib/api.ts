@@ -2012,6 +2012,8 @@ export const SettingKeys = {
   harvestAddresses: 'harvest_addresses',
   accountEmail: 'show_account_email',
   onboarded: 'onboarding_complete',
+  // where a setup run stopped, so the next launch resumes at that step.
+  onboardingProgress: 'onboarding_progress',
   alwaysLoadImages: 'remote_images_always',
   avatarSource: 'avatar_source',
   avatarStyle: 'avatar_style',

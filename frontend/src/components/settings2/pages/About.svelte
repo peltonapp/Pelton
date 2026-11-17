@@ -256,9 +256,9 @@
       {copiedDiagnostics ? $t('about.diagnostics.copied') : $t('about.diagnostics.copy')}
     </button>
   </Row>
-  <Row id="about-tour" label={$t('about.rerunTourLabel')}>
+  <Row id="about-tour" label={$t('setup.runAgain')} hint={$t('setup.runAgain.hint')}>
     <button type="button" class="s2-btn" on:click={() => dispatch('rerunOnboarding')}>
-      {$t('about.rerunOnboarding')}
+      {$t('setup.runAgain.button')}
     </button>
   </Row>
 </Card>

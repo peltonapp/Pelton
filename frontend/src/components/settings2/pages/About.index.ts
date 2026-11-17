@@ -22,8 +22,8 @@ const entries: SettingsIndexEntry[] = [
   {
     page: 'about',
     id: 'about-tour',
-    labelKey: 'about.rerunTourLabel',
-    keywords: 'onboarding tour welcome rerun setup',
+    labelKey: 'setup.runAgain',
+    keywords: 'onboarding tour welcome rerun setup again',
   },
 ]
 
