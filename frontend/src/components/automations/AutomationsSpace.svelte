@@ -2,7 +2,7 @@
   // the Automations space: scripts on the left, the open script in the middle
   // and the run log on the right. a script file dropped on it opens the import
   // dialog; "new" (compose) makes a script.
-  import { onDestroy, onMount } from 'svelte'
+  import { onDestroy, onMount, type ComponentType } from 'svelte'
   import pickIcon from '@phosphor-icons/core/assets/duotone/cursor-click-duotone.svg?raw'
   import errorIcon from '@phosphor-icons/core/assets/duotone/warning-circle-duotone.svg?raw'
   import EmptyState from '../common/EmptyState.svelte'
@@ -11,12 +11,14 @@
   import ScriptEditor from './ScriptEditor.svelte'
   import RunLog from './RunLog.svelte'
   import ApproveDialog from './ApproveDialog.svelte'
+  import BlockEditor from './blocks/BlockEditor.svelte'
   import { t } from '../../lib/i18n'
   import { newInput, type ScriptKind } from '../../lib/scripting'
   import { registerSpaceActions } from '../../stores/space'
   import {
     approvalFor,
     approveAndEnable,
+    blockEditor,
     catalog,
     createScript,
     loadCatalog,
@@ -31,6 +33,8 @@
   let narrowAt = 0
   let failed = ''
   let stopActions: (() => void) | null = null
+
+  blockEditor.set(BlockEditor as unknown as ComponentType)
 
   onMount(async () => {
     narrowAt = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--automation-narrow')) || 0

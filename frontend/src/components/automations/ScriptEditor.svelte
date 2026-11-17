@@ -57,6 +57,7 @@
   let busy = false
   let syntax = ''
   let compiled: CompileResult | null = null
+  let blockPerms: string[] | null = null
   let testOn: 'sample' | 'open' = 'sample'
   let checkTimer: ReturnType<typeof setTimeout> | undefined
 
@@ -65,19 +66,20 @@
     lastUpdated = script.updatedAt
     input = toInput(script)
     compiled = null
+    blockPerms = null
     syntax = ''
   }
   $: dirty = inputsDiffer(input, toInput(script))
   $: trigger = catalog.triggers.find((tr) => tr.id === input.trigger.type)
   $: triggerItems = groupTriggers(catalog)
   $: tree = input.kind === 'blocks' ? parseTree(input.blocks) : null
-  $: if (tree) {
+  $: if (tree && !$blockEditor) {
     void recompile(tree, input.trigger.type)
   }
   $: if (input.kind === 'lua') {
     scheduleCheck(input.source)
   }
-  $: missing = (compiled?.permissions ?? []).filter((p) => !input.permissions.includes(p))
+  $: missing = (blockPerms ?? compiled?.permissions ?? []).filter((p) => !input.permissions.includes(p))
   $: takesMessage = triggerTakesMessage(catalog, input.trigger.type)
   $: risky = riskyFunctions(catalog, script.permissions)
   $: catchUpItems = (['live', 'run', 'ask'] as const).map((m) => ({ value: m, label: $t(`scripts.catchUp.${m}`) }))
@@ -170,8 +172,16 @@
       confirmLabel: $t('scripts.convert'),
       danger: true,
     })
-    if (ok) {
-      await convertToLua(script.id).catch((err) => toastError(errorMessage(err)))
+    if (!ok) {
+      return
+    }
+    try {
+      if (dirty) {
+        await saveScript(script.id, input)
+      }
+      await convertToLua(script.id)
+    } catch (err) {
+      toastError(errorMessage(err))
     }
   }
 
@@ -240,11 +250,22 @@
         <!-- the block editor mounts here; see blockEditor in stores/scripts.ts -->
         <div class="blocks" data-block-editor-mount>
           {#if $blockEditor}
-            <svelte:component this={$blockEditor} {tree} {catalog} trigger={input.trigger.type} on:change={(e) => setTree(e.detail)} />
+            <svelte:component
+              this={$blockEditor}
+              {tree}
+              {catalog}
+              trigger={input.trigger.type}
+              settings={input.settingsSchema}
+              on:change={(e) => setTree(e.detail)}
+              on:permissions={(e) => (blockPerms = e.detail)}
+              on:convert={() => void convert()}
+            />
           {:else}
             <p class="hint">{$t('scripts.blocks.pending')}</p>
           {/if}
         </div>
+      {/if}
+      {#if tree && !$blockEditor}
         <div class="generated-head">
           <span class="label">{$t('scripts.generated')}</span>
           <button type="button" class="cal-btn" disabled={dirty || (compiled?.errors.length ?? 0) > 0} on:click={() => void convert()}>{$t('scripts.convert')}</button>
