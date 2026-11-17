@@ -21,9 +21,15 @@ const entries: SettingsIndexEntry[] = [
   },
   {
     page: 'about',
+    id: 'about-whats-new',
+    labelKey: 'whatsnew.title',
+    keywords: 'whats new release notes changes features changelog',
+  },
+  {
+    page: 'about',
     id: 'about-tour',
-    labelKey: 'about.rerunTourLabel',
-    keywords: 'onboarding tour welcome rerun setup',
+    labelKey: 'setup.runAgain',
+    keywords: 'onboarding tour welcome rerun setup again',
   },
 ]
 

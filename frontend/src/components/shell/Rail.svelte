@@ -35,6 +35,7 @@
   import { viewIconComponent, viewColorCss } from '../../lib/viewicons'
   import { openContextMenu } from '../../stores/contextmenu'
   import { focus } from '../../stores/focus'
+  import { whatsNewUnseen } from '../../stores/whatsnew'
 
   /** Which window edge the rail is on; tooltips open toward the content. */
   export let side: RailSide = 'left'
@@ -247,6 +248,8 @@
       { label: $t('rail.unpin'), icon: IconPinnedOff, action: () => toggleRailPin(pin.id) },
     ])
   }
+
+  $: settingsLabel = $whatsNewUnseen ? `${$t('settings.title')} (${$t('whatsnew.unseen')})` : $t('settings.title')
 </script>
 
 <nav class="rail" class:right={side === 'right'} aria-label={$t('space.switcher')} style="--wails-draggable:drag" bind:this={railEl}>
@@ -373,11 +376,14 @@
     <button
       type="button"
       class="entry"
-      aria-label={$t('settings.title')}
-      use:tip={{ text: $t('settings.title'), shortcut: keysFor('preferences'), side: tipSide }}
+      aria-label={settingsLabel}
+      use:tip={{ text: settingsLabel, shortcut: keysFor('preferences'), side: tipSide }}
       on:click={() => dispatch('settings')}
     >
       <Ph svg={settingsIcon} size={19} />
+      {#if $whatsNewUnseen}
+        <span class="badge" aria-hidden="true"></span>
+      {/if}
     </button>
   </div>
 </nav>

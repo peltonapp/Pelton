@@ -10951,6 +10951,12 @@ export class UIPrefsDTO {
     "coachHold": boolean;
 
     /**
+     * ShowTips shows a one-time tip the first time a feature's context comes
+     * up, in the new design.
+     */
+    "showTips": boolean;
+
+    /**
      * HarvestAddresses keeps learning addresses from the mail that passes
      * through, for compose autocomplete. Off leaves only synced contacts.
      */
@@ -11660,6 +11666,9 @@ export class UIPrefsDTO {
         }
         if (!("coachHold" in $$source)) {
             this["coachHold"] = false;
+        }
+        if (!("showTips" in $$source)) {
+            this["showTips"] = false;
         }
         if (!("harvestAddresses" in $$source)) {
             this["harvestAddresses"] = false;

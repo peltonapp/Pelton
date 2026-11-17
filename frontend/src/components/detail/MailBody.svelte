@@ -41,6 +41,7 @@
   import type { TimeFormat } from '../../lib/format'
   import { adaptHtml, colorMode, defaultMode, mailStyle, type ColorMode, type MailStyle } from '../../lib/mailcolors'
   import { choiceFor, darkTheme, messageColors, rememberColors, senderReading, setMessageColors } from '../../stores/senderreading'
+  import { noteTipContext } from '../../stores/firsttips'
   import paletteIcon from '@phosphor-icons/core/assets/duotone/circle-half-duotone.svg?raw'
 
   export let detail: BodyDetail
@@ -333,6 +334,12 @@
   $: senderOrDefault = senderColors || defaultMode(colorBase)
   $: canKeep = messageColor !== '' && messageColor !== senderOrDefault
   $: canForget = !canKeep && messageColor === '' && senderColors !== ''
+
+  // a long html mail in a dark theme is where the colors button matters most.
+  const longMail = 6000
+  $: if (adaptive && detail.isHtml && $darkTheme && detail.bodyHtmlSafe.length > longMail) {
+    void tick().then(() => noteTipContext('dark-mail'))
+  }
 
   function flipColors(): void {
     setMessageColors(detail.id, adapted ? 'original' : 'adapt')
@@ -1181,7 +1188,7 @@
 
 {#if adaptive && detail.isHtml && $darkTheme}
   <div class="colors-bar">
-    <button type="button" class="colors-btn" on:click={flipColors}>
+    <button type="button" class="colors-btn" data-tip-anchor="mail-colors" on:click={flipColors}>
       <Ph svg={paletteIcon} size={13} />
       {adapted ? $t('reader.colors.original') : $t('reader.colors.adapt')}
     </button>

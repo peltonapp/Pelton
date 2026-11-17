@@ -75,6 +75,7 @@
 <button
   type="button"
   class="history"
+  data-tip-anchor="history"
   class:open={$historyOpen}
   bind:this={button}
   aria-haspopup="dialog"

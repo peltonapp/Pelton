@@ -32,6 +32,7 @@ const defaults: UIPrefs = {
   showShortcutHints: true,
   coachHints: true,
   coachHold: true,
+  showTips: true,
   harvestAddresses: true,
   showAccountEmail: false,
   alwaysLoadImages: false,
@@ -1056,6 +1057,12 @@ export function setCoachHints(value: boolean): void {
 export function setCoachHold(value: boolean): void {
   prefs.update((p) => ({ ...p, coachHold: value }))
   void setSetting(SettingKeys.coachHold, String(value))
+}
+
+/** Turns the one-time tips on or off. */
+export function setShowTips(value: boolean): void {
+  prefs.update((p) => ({ ...p, showTips: value }))
+  void setSetting(SettingKeys.showTips, String(value))
 }
 
 // setHarvestAddresses toggles learning addresses from mail for autocomplete.

@@ -109,7 +109,12 @@
   } from './lib/shortcuts'
   import { runComposeCommand } from './stores/composecommands'
   import CoachLayer from './components/shell/CoachLayer.svelte'
+  import FirstTipLayer from './components/shell/FirstTipLayer.svelte'
   import { initCoach, toggleSheet } from './stores/coach'
+  import { initFirstTips, setTipsSuspended } from './stores/firsttips'
+  import { initWhatsNew, markWhatsNewSeen, whatsNewOpen, whatsNewUnseen } from './stores/whatsnew'
+  import { setupRequested } from './stores/setuprun'
+  import './lib/palette-setup'
   import { noteAction, noteShortcut } from './lib/coach'
   import { initFocus, focusMenuOpen, refreshFocus } from './stores/focus'
   import './lib/palette-focus'
@@ -275,6 +280,11 @@
   let settingsCategory: string | null = null
   let wizardOpen = false
   let onboardingOpen = false
+  // which flow is showing, fixed when it opens: the classic design keeps its
+  // own onboarding, the new one runs the setup flow, and a re-run treats what
+  // exists as set up.
+  let onboardingClassic = false
+  let onboardingRerun = false
   // installs that predate the onboarding liability step have to acknowledge it
   // once before they can carry on.
   let liabilityOpen = false
@@ -332,6 +342,11 @@
   // an overlay covers the top bar, so the window needs another handle to be
   // dragged by while one is open.
   $: overlayOpen = settingsOpen || onboardingOpen || wizardOpen || contactsOpen
+  $: setTipsSuspended(overlayOpen || nightlyOpen || liabilityOpen || $whatsNewOpen)
+  $: if ($setupRequested) {
+    setupRequested.set(false)
+    rerunOnboarding()
+  }
 
   // the in-app menu bar is the only menu on Windows/Linux (no native menu is
   // created there); on macOS the native bar stays and the in-app one is opt-in.
@@ -652,6 +667,8 @@
     await initComposePrefs()
     void initShortcuts()
     void initCoach().then((stop) => unsubscribers.push(stop))
+    void initFirstTips()
+    void initWhatsNew()
     void initFocus().then((stop) => unsubscribers.push(stop))
     void initMenuBar()
     void initPalette()
@@ -687,17 +704,27 @@
       onboardingOpen = false
       syncing.set(true)
     } else {
-      // show the first-run onboarding until it has been completed once.
+      // show the first-run onboarding until it has been completed once. the
+      // new design's setup flow also comes back when a run was left half way.
+      onboardingClassic = get(prefs).design === 'classic'
       try {
         const r = await getSetting(SettingKeys.onboarded)
-        onboardingOpen = !(r.found && r.value === 'true')
+        const done = r.found && r.value === 'true'
+        let resume = false
+        if (done && !onboardingClassic) {
+          const p = await getSetting(SettingKeys.onboardingProgress)
+          resume = p.found && p.value !== ''
+        }
+        onboardingOpen = !done || resume
+        onboardingRerun = done && resume
       } catch {
         // if the lookup fails, do not block the app with onboarding.
         onboardingOpen = false
       }
-      // onboarding collects the acknowledgement itself, so only ask separately
-      // when the flow is not going to run.
-      liabilityOpen = !onboardingOpen && !(await liabilityAccepted())
+      // the classic onboarding collects the acknowledgement itself, so only ask
+      // separately when it is not going to run. the setup flow leaves it to
+      // the dialog, which then shows above it.
+      liabilityOpen = (!onboardingOpen || !onboardingClassic) && !(await liabilityAccepted())
       if (!resumed) {
         void offerCrashReport()
       }
@@ -994,8 +1021,20 @@
     flushPendingMailto()
   }
 
+  // the setup flow reports where to land; its first run also counts as having
+  // seen what is new, since all of it is new then.
+  function finishSetup(event: CustomEvent<{ landing: Space; rerun: boolean }>): void {
+    finishOnboarding()
+    if (!event.detail.rerun) {
+      void markWhatsNewSeen()
+    }
+    openSpace(event.detail.landing)
+  }
+
   function rerunOnboarding(): void {
     settingsOpen = false
+    onboardingClassic = classic
+    onboardingRerun = true
     onboardingOpen = true
   }
 
@@ -2229,7 +2268,7 @@
         side={$prefs.railSide}
         unread={inboxUnread}
         on:search={focusSearch}
-        on:settings={() => { settingsCategory = null; settingsOpen = true }}
+        on:settings={() => { settingsCategory = $whatsNewUnseen ? 'about#about-whats-new' : null; settingsOpen = true }}
       />
     {/if}
 
@@ -2416,9 +2455,26 @@
 {/if}
 
 <!-- onboarding is code-split too: shown only on first run or when re-run. -->
-{#if onboardingOpen}
+{#if onboardingOpen && onboardingClassic}
   {#await import('./components/onboarding/Onboarding.svelte') then m}
     <svelte:component this={m.default} on:finish={finishOnboarding} on:added={onboardingAddedMailbox} />
+  {/await}
+{:else if onboardingOpen}
+  {#await import('./components/onboarding/Setup.svelte') then m}
+    <svelte:component
+      this={m.default}
+      rerun={onboardingRerun}
+      blocked={nightlyOpen || liabilityOpen}
+      on:finish={finishSetup}
+      on:added={onboardingAddedMailbox}
+      on:classic={() => (onboardingClassic = true)}
+    />
+  {/await}
+{/if}
+
+{#if !classic && $whatsNewOpen}
+  {#await import('./components/whatsnew/WhatsNew.svelte') then m}
+    <svelte:component this={m.default} on:close={() => whatsNewOpen.set(false)} />
   {/await}
 {/if}
 
@@ -2464,6 +2520,7 @@
 
 {#if !classic}
   <CoachLayer suspended={overlayOpen} />
+  <FirstTipLayer />
 {/if}
 
 {#if chatWanted}
