@@ -45,6 +45,8 @@
   import { revealMessage } from '../../stores/selection'
   import { prefs, setContactsView } from '../../stores/prefs'
   import { organizationCounts } from '../../lib/contactlist'
+  import { popupIsOpen } from '../../lib/popups'
+  import { isEditableTarget } from '../../lib/editable'
   import { dur, motion } from '../../lib/motion'
   import { t } from '../../lib/i18n'
   import type { Contact, ContactDraft, ContactsView, MessageSummary } from '../../lib/types'
@@ -136,6 +138,11 @@
         }
         input.focus()
         input.select()
+      },
+      sync: () => {
+        if (!$contactsLoading) {
+          void refreshContacts()
+        }
       },
     })
     return () => {
@@ -251,6 +258,16 @@
     if (event.key === 'Escape' && sideOpen) {
       event.stopPropagation()
       sideOpen = false
+    } else if (
+      event.key === 'Escape' &&
+      paneOpen &&
+      editing === null &&
+      (view === 'grid' || mode === 'narrow') &&
+      !popupIsOpen() &&
+      !isEditableTarget(event.target)
+    ) {
+      event.stopPropagation()
+      void dismissPane()
     }
   }
 
