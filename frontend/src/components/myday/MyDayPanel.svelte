@@ -16,6 +16,7 @@
   import plusIcon from '@phosphor-icons/core/assets/duotone/plus-circle-duotone.svg?raw'
   import '../../theme/controls.css'
   import Ph from '../common/Ph.svelte'
+  import EmptyState from '../common/EmptyState.svelte'
   import Segmented from '../settings2/ui/Segmented.svelte'
   import TimeGrid from '../calendar/TimeGrid.svelte'
   import TaskCheck from '../tasks/TaskCheck.svelte'
@@ -324,7 +325,7 @@
   <section class="tasks" aria-label={$t('myday.tasks')} use:maildrop={taskDrop}>
     <h3>{$t('myday.tasks')}</h3>
     {#if dayTasks.length === 0}
-      <p class="empty">{$t(which === 'today' ? 'myday.noTasksToday' : 'myday.noTasksTomorrow')}</p>
+      <EmptyState size="compact" title={$t(which === 'today' ? 'myday.noTasksToday' : 'myday.noTasksTomorrow')} />
     {:else}
       <ul>
         {#each dayTasks as { task, overdue } (task.id)}
@@ -518,12 +519,6 @@
 
   .due.overdue {
     color: var(--danger);
-  }
-
-  .empty {
-    margin: 0;
-    color: var(--text-tertiary);
-    font-size: var(--fz-meta);
   }
 
   footer {

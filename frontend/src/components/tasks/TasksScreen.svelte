@@ -102,7 +102,10 @@
   $: canAdd = targetList !== 0 && !(scope.kind === 'smart' && scope.key === 'completed')
   $: canReorder = scope.kind === 'list' && sort === 'manual' && !filter.trim() && !currentList?.readOnly
   $: title = scope.kind === 'smart' ? $t(`tasks.smart.${scope.key}`) : currentList?.name || $t('tasks.defaultList')
-  $: emptyText = filter.trim() ? $t('tasks.noMatches') : $t(scope.kind === 'smart' ? `tasks.empty.${scope.key}` : 'tasks.empty.list')
+  $: emptyKey = scope.kind === 'smart' ? scope.key : 'list'
+  $: empty = filter.trim()
+    ? { title: $t('tasks.noMatches'), detail: $t('tasks.noMatchesDetail'), filtered: true }
+    : { title: $t(`tasks.empty.${emptyKey}`), detail: $t(`tasks.emptyDetail.${emptyKey}`), filtered: false }
   $: preview = describeEntry(entryText, chrono, contactForNew)
 
   function matchesTask(task: Task, query: string): boolean {
@@ -475,7 +478,7 @@
       {canAdd}
       {timeFormat}
       {now}
-      {emptyText}
+      {empty}
       {preview}
       entryPlaceholder={$t('tasks.entryPlaceholder')}
       on:select={(e) => select(e.detail)}
@@ -486,6 +489,7 @@
       on:reorder={(e) => void reorder(e.detail)}
       on:drop={(e) => void dropOn(e.detail.task, e.detail.target)}
       on:menu={(e) => rowMenu(e.detail.task, e.detail.x, e.detail.y)}
+      on:clearFilter={() => (filter = '')}
     />
   </div>
 
