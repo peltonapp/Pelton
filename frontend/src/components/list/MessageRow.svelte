@@ -243,7 +243,7 @@
     }
     committed = true
     const still = dur(motion.base) === 0
-    const out = newDesign ? leaving.has(result.action) : result.action === 'delete' || result.action === 'archive'
+    const out = !newDesign || leaving.has(result.action)
     offset = out && !still ? Math.sign(offset) * wrapWidth : offset
     setTimeout(
       () => {
