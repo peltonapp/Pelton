@@ -31,6 +31,33 @@ describe('new design accents', () => {
     })
   }
 
+  // the focus ring is the accent; on a selected row it lies over the selection
+  // fill, which is the accent mixed into the surface (--selection-bg-strong in
+  // light, --selection-bg in dark).
+  const over = (surface: string, accent: string, share: number): string =>
+    '#' +
+    [1, 3, 5]
+      .map((i) => {
+        const a = parseInt(surface.slice(i, i + 2), 16)
+        const b = parseInt(accent.slice(i, i + 2), 16)
+        return Math.round(a + (b - a) * share).toString(16).padStart(2, '0')
+      })
+      .join('')
+
+  // rows sit on the base, raised and sunken surfaces of each set of five.
+  const darkRowSurfaces = darkSurfaces.filter((_, i) => i % 5 !== 2 && i % 5 !== 4)
+
+  for (const s of NEW_ACCENTS) {
+    it(`${s.name} keeps the focus ring at 3:1 over a selected row`, () => {
+      for (const surface of lightSurfaces) {
+        expect(contrastRatio(s.light, over(surface, s.light, 0.22)), `${s.light} on ${surface}`).toBeGreaterThanOrEqual(3)
+      }
+      for (const surface of darkRowSurfaces) {
+        expect(contrastRatio(s.dark, over(surface, s.dark, 0.22)), `${s.dark} on ${surface}`).toBeGreaterThanOrEqual(3)
+      }
+    })
+  }
+
   it('paints a preset in its tone for the theme', () => {
     const blue = NEW_ACCENTS[0]
     expect(accentTone(blue.light, 'new', false)).toBe(blue.light)

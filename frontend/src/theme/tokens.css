@@ -444,6 +444,19 @@
   --radius-card: 7px;
 }
 
+/* the new design lifts the text tokens that fall short of 4.5:1 on a surface.
+   theme packs get theirs computed in legible.ts, whose BASE_TOKENS must stay in
+   step with these values. */
+:root[data-design="new"]:not([data-theme="dark"]) {
+  --text-tertiary: #676a72;
+  --success: #197a48;
+  --warning: #916100;
+}
+
+:root[data-design="new"][data-theme="dark"] {
+  --text-tertiary: #8b8f97;
+}
+
 :root[data-design="new"][data-panes="hybrid"],
 :root[data-design="new"][data-panes="soft"] {
   --pane-gap: 6px;
