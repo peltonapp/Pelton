@@ -17,6 +17,11 @@
   import SortOptions from './SortOptions.svelte'
   import { resetQuickFilter } from '../../stores/quickfilter'
   import { clearSearch } from '../../stores/search'
+  import { currentMessageItems, placed, runAt } from '../../lib/scriptplacements'
+  import { placedLabel } from '../../lib/scriptmenu'
+  import { scriptIcon } from '../../lib/scripticons'
+
+  const listScripts = placed('toolbar.list')
 
   /** The folder, view or results name. */
   export let title: string
@@ -94,6 +99,17 @@
       {/if}
     </span>
   </div>
+  {#each $listScripts as script (script.scriptId)}
+    <button
+      type="button"
+      class="icon-btn"
+      aria-label={placedLabel(script)}
+      use:tip={{ text: placedLabel(script), side: 'bottom' }}
+      on:click={() => runAt('toolbar.list', script.scriptId, currentMessageItems())}
+    >
+      <Ph svg={scriptIcon(script.options.icon)} size={15} />
+    </button>
+  {/each}
   <button
     type="button"
     class="icon-btn"
