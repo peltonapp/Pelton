@@ -128,15 +128,27 @@ func (s *Script) Validate(r *Registry) error {
 }
 
 // granted reports whether perm works in this run: declared always, and
-// approved too unless the run is a dry run.
+// approved too unless the run is a dry run. A base permission such as "net"
+// is met by any targeted form of it, e.g. "net:example.org"; the function
+// then checks its own target with Call.Require.
 func (s *Script) granted(perm string, dry bool) bool {
 	if perm == "" {
 		return true
 	}
-	if !slices.Contains(s.Permissions, perm) {
+	if !permIn(s.Permissions, perm) {
 		return false
 	}
-	return dry || slices.Contains(s.Approved, perm)
+	return dry || permIn(s.Approved, perm)
+}
+
+func permIn(list []string, perm string) bool {
+	targeted := strings.Contains(perm, ":")
+	return slices.ContainsFunc(list, func(p string) bool {
+		if strings.EqualFold(p, perm) {
+			return true
+		}
+		return !targeted && len(p) > len(perm) && p[len(perm)] == ':' && p[:len(perm)] == perm
+	})
 }
 
 // Unapproved returns the declared permissions the user has not approved.

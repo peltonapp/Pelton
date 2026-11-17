@@ -50,6 +50,8 @@ var backupSkipSettings = map[string]bool{
 	settingAppLockMethod:     true,
 	settingAppLockPassphrase: true,
 	settingAppLockFailures:   true,
+	// a script's folder is a path on this device the user granted here.
+	settingScriptFolders: true,
 }
 
 // whitelistBackup is the trusted-sender allowlist as exported.

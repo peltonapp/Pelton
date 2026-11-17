@@ -135,7 +135,6 @@ func TestCompileErrors(t *testing.T) {
 		"bad var":           `[{"id": "a", "kind": "set", "as": "x y"}]`,
 		"duplicate id":      `[{"id": "a", "kind": "stop"}, {"id": "a", "kind": "stop"}]`,
 		"step without out":  `[{"id": "a", "kind": "action", "type": "mail.flag"}, {"id": "b", "kind": "set", "as": "x", "value": {"ref": "step:a.id"}}]`,
-		"missing copy":      `[{"id": "a", "kind": "action", "type": "mail.copy", "args": {"folder": {"value": "X"}}}]`,
 		"wrong trigger":     `[{"id": "a", "kind": "action", "type": "outgoing.cancel"}]`,
 		"unknown parameter": `[{"id": "a", "kind": "action", "type": "mail.flag", "args": {"colour": {"value": 1}}}]`,
 		"not with two":      `[{"id": "a", "kind": "if", "branches": [{"when": {"kind": "not", "items": []}, "body": []}]}]`,

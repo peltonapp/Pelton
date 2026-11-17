@@ -10,6 +10,8 @@
   import LuaEditor from './LuaEditor.svelte'
   import ParamField from './ParamField.svelte'
   import PermissionList from './PermissionList.svelte'
+  import ScriptFolder from './ScriptFolder.svelte'
+  import NetHosts from './NetHosts.svelte'
   import RunSteps from './RunSteps.svelte'
   import { t } from '../../lib/i18n'
   import { checkScriptLua } from '../../lib/api'
@@ -293,6 +295,8 @@
         </p>
       {/if}
       <PermissionList {catalog} declared={input.permissions} editable locked={trigger?.permission ?? ''} on:change={(e) => (input = { ...input, permissions: e.detail })} />
+      {#if input.permissions.some((p) => p === 'net' || p.startsWith('net:'))}<NetHosts declared={input.permissions} on:change={(e) => (input = { ...input, permissions: e.detail })} />{/if}
+      {#if script.permissions.some((p) => p.startsWith('files.'))}<ScriptFolder scriptId={script.id} />{/if}
       {#if risky.length > 0}
         <p class="label">{$t('scripts.allowUnasked')}</p>
         <ul class="unasked">
