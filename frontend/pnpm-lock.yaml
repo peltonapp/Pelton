@@ -11,6 +11,9 @@ importers:
       '@codemirror/commands':
         specifier: ^6.11.1
         version: 6.11.1
+      '@codemirror/legacy-modes':
+        specifier: 6.5.4
+        version: 6.5.4
       '@codemirror/state':
         specifier: ^6.7.6
         version: 6.7.6
@@ -163,6 +166,9 @@ packages:
 
   '@codemirror/language@6.12.4':
     resolution: {integrity: sha512-1q4PaT+o6PbgpkJt4Q8Fv5XJxTy4FUZ4MWETtyiDw3J0Pyr9E2vqcKL+k9wcvjNTIsauxvE7OfmWj3FRPHQ76A==}
+
+  '@codemirror/legacy-modes@6.5.4':
+    resolution: {integrity: sha512-/cZr6qZyl08iYNLGsJ862CXXNI51LryRFRE40ejgoIjXZz0C1rGkD3/Ek5jM/8w1ceRjqtt4qx/KLMh4zBTgew==}
 
   '@codemirror/lint@6.9.7':
     resolution: {integrity: sha512-28/+iWLYxKxsvGYhSYL7zaCZqLz5+FFFDq9tVsvGv9kv8RY4fFAchJ5WX9M3YrrRlTIsECjsXPqeNgnSmNP2dg==}
@@ -1294,6 +1300,10 @@ snapshots:
       '@lezer/highlight': 1.2.3
       '@lezer/lr': 1.4.10
       style-mod: 4.1.4
+
+  '@codemirror/legacy-modes@6.5.4':
+    dependencies:
+      '@codemirror/language': 6.12.4
 
   '@codemirror/lint@6.9.7':
     dependencies:
