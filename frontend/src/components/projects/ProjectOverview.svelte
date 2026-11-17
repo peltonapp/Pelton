@@ -383,7 +383,7 @@
 
   .stack {
     display: flex;
-    gap: 2px;
+    gap: var(--space-1);
     height: 6px;
     border-radius: var(--radius-control);
     overflow: hidden;

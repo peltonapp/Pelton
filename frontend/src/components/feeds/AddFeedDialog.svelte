@@ -235,7 +235,7 @@
   }
 
   .candidate input {
-    margin: 2px 0 0;
+    margin: var(--space-1) 0 0;
     accent-color: var(--accent);
   }
 

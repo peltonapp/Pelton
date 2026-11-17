@@ -468,7 +468,7 @@
 
   .switch {
     display: inline-flex;
-    padding: 2px;
+    padding: var(--space-1);
     border: var(--hairline) solid var(--border-default);
     border-radius: var(--radius-control);
     background: var(--surface-sunken);
