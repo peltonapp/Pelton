@@ -15,7 +15,9 @@
   import { feedsUnread } from '../../stores/feeds'
   import { currentProfile, profiles, switchRelative } from '../../stores/profiles'
   import { tip } from '../../lib/tip'
-  import { t } from '../../lib/i18n'
+  import { t, shortcutLabel } from '../../lib/i18n'
+  import { bindings } from '../../stores/shortcuts'
+  import type { ShortcutAction } from '../../lib/shortcuts'
   import type { ComponentType } from 'svelte'
   import { IconPinnedOff } from '@tabler/icons-svelte'
   import type { RailSide, ViewKey } from '../../lib/types'
@@ -36,6 +38,12 @@
   const dispatch = createEventDispatcher<{ search: void; settings: void }>()
 
   $: tipSide = side === 'left' ? ('right' as const) : ('left' as const)
+
+  // the keys bound to an action, as the tooltip shows them; nothing when unbound.
+  $: keysFor = (action: string): string | undefined => {
+    const combo = $bindings[action as ShortcutAction]
+    return combo ? shortcutLabel(combo) : undefined
+  }
   $: activeIndex = Math.max(0, $spaces.findIndex((s) => s.key === $space))
 
   /** A view pinned to the middle of the rail. */
@@ -108,7 +116,7 @@
         class:active={$space === entry.key}
         aria-label={$t(entry.labelKey)}
         aria-current={$space === entry.key ? 'page' : undefined}
-        use:tip={{ text: $t(entry.labelKey), side: tipSide }}
+        use:tip={{ text: $t(entry.labelKey), shortcut: keysFor(`go-${entry.key}`), side: tipSide }}
         use:maildrop={spaceDrop(entry.key)}
         on:click={() => openSpace(entry.key)}
       >
@@ -161,7 +169,7 @@
       type="button"
       class="entry"
       aria-label={$t('shortcut.search')}
-      use:tip={{ text: $t('shortcut.search'), side: tipSide }}
+      use:tip={{ text: $t('shortcut.search'), shortcut: keysFor('search'), side: tipSide }}
       on:click={() => dispatch('search')}
     >
       <Ph svg={searchIcon} size={19} />
@@ -171,7 +179,7 @@
         type="button"
         class="entry profile"
         aria-label={$t('profiles.current').replace('{name}', $currentProfile?.name ?? '')}
-        use:tip={{ text: $t('profiles.current').replace('{name}', $currentProfile?.name ?? ''), side: tipSide }}
+        use:tip={{ text: $t('profiles.current').replace('{name}', $currentProfile?.name ?? ''), shortcut: keysFor('next-profile'), side: tipSide }}
         on:click={() => void switchRelative(1)}
       >
         {#if $currentProfile?.icon}
@@ -185,7 +193,7 @@
       type="button"
       class="entry"
       aria-label={$t('settings.title')}
-      use:tip={{ text: $t('settings.title'), side: tipSide }}
+      use:tip={{ text: $t('settings.title'), shortcut: keysFor('preferences'), side: tipSide }}
       on:click={() => dispatch('settings')}
     >
       <Ph svg={settingsIcon} size={19} />
