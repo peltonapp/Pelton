@@ -3,6 +3,7 @@ package ai
 import (
 	"encoding/json"
 	"fmt"
+	"slices"
 	"strings"
 	"time"
 
@@ -57,10 +58,10 @@ func (m *module) tools(c *scripting.Call, want []string) (map[string]tool, []Too
 					continue
 				}
 				matched[hit] = true
-			} else if f.Permission == "" {
+			} else if len(f.Permissions) == 0 {
 				continue
 			}
-			if !c.Granted(f.Permission) {
+			if slices.ContainsFunc(f.Permissions, func(p string) bool { return !c.Granted(p) }) {
 				continue
 			}
 			name := strings.ReplaceAll(full, ".", "_")

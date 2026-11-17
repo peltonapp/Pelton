@@ -1,6 +1,7 @@
 <script lang="ts">
-  // shows a script file before it is imported: its name, trigger, the
-  // permissions it asks for and its code. nothing is stored until the user
+  // shows a script or library file before it is imported: its name, a
+  // script's trigger and the permissions it asks for, its code, and the
+  // libraries it needs that are not here. nothing is stored until the user
   // says so, and an imported script arrives switched off.
   import { createEventDispatcher } from 'svelte'
   import Modal from '../common/Modal.svelte'
@@ -16,20 +17,34 @@
 
   const dispatch = createEventDispatcher<{ import: void; close: void }>()
 
+  $: library = file.library
+  $: name = library ? library.name : file.script.name
   $: trigger = catalog.triggers.find((tr) => tr.id === file.script.trigger.type)
-  $: code = file.script.kind === 'lua' ? file.script.source : file.text
+  $: code = library ? library.source : file.script.kind === 'lua' ? file.script.source : file.text
 </script>
 
-<Modal title={$t('scripts.importDialog.title').replace('{name}', file.script.name)} hint={$t('scripts.importDialog.hint')} size="large" on:close>
+<Modal
+  title={$t(library ? 'scripts.importDialog.libraryTitle' : 'scripts.importDialog.title').replace('{name}', name)}
+  hint={$t(library ? 'scripts.importDialog.libraryHint' : 'scripts.importDialog.hint')}
+  size="large"
+  on:close
+>
   <div class="body">
-    {#if file.script.description}<p class="desc">{file.script.description}</p>{/if}
-    <p class="fact">
-      <span class="label">{$t('scripts.trigger')}</span>
-      {trigger ? entryLabel($t, trigger) : file.script.trigger.type}
-    </p>
-    <h3 class="heading">{$t('scripts.permissions')}</h3>
-    <PermissionList {catalog} declared={file.script.permissions} approved={file.script.permissions} />
-    <h3 class="heading">{$t(file.script.kind === 'lua' ? 'scripts.code' : 'scripts.importDialog.file')}</h3>
+    {#if library}
+      {#if library.description}<p class="desc">{library.description}</p>{/if}
+    {:else}
+      {#if file.script.description}<p class="desc">{file.script.description}</p>{/if}
+      <p class="fact">
+        <span class="label">{$t('scripts.trigger')}</span>
+        {trigger ? entryLabel($t, trigger) : file.script.trigger.type}
+      </p>
+      <h3 class="heading">{$t('scripts.permissions')}</h3>
+      <PermissionList {catalog} declared={file.script.permissions} approved={file.script.permissions} />
+    {/if}
+    {#if file.missingLibraries.length > 0}
+      <p class="warn" role="note">{$t('scripts.importDialog.missingLibraries').replace('{list}', file.missingLibraries.join(', '))}</p>
+    {/if}
+    <h3 class="heading">{$t(library || file.script.kind === 'lua' ? 'scripts.code' : 'scripts.importDialog.file')}</h3>
     <pre class="code">{code}</pre>
   </div>
   <svelte:fragment slot="footer">
@@ -60,6 +75,14 @@
     margin: 0;
     font-size: var(--fz-label);
     font-weight: var(--fw-semibold);
+  }
+
+  .warn {
+    margin: 0;
+    padding: var(--space-2) var(--space-3);
+    border-inline-start: 2px solid var(--warning);
+    background: var(--warning-bg);
+    font-size: var(--fz-label);
   }
 
   .code {

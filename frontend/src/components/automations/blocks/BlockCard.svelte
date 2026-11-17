@@ -26,7 +26,7 @@
   import CondView from './CondView.svelte'
   import LuaEditor from '../LuaEditor.svelte'
   import { t } from '../../../lib/i18n'
-  import { entryDescription, entryLabel, permissionDef, type Block, type BlockArg, type ScriptParam } from '../../../lib/scripting'
+  import { entryDescription, entryLabel, needs, permissionDef, type Block, type BlockArg, type ScriptParam } from '../../../lib/scripting'
   import { getEditor } from './context'
   import { scopeAt } from './scope'
   import {
@@ -66,7 +66,7 @@
   $: known = block.kind === 'action' ? !!def : block.kind in icons
   $: title = !known ? $t('scripts.blocks.unknownBlock') : def ? entryLabel($t, def) : $t(`scripts.blocks.kind.${block.kind}`)
   $: desc = def ? entryDescription($t, def) : ''
-  $: perm = def?.permission ? permissionDef($catalog, def.permission) : undefined
+  $: perms = needs(def).flatMap((p) => permissionDef($catalog, p) ?? [])
   $: scope = scopeAt($tree, id, $scopeCtx)
   $: mine = $issues.filter((i) => i.block === id)
   $: ownIssues = mine.filter((i) => !i.cond && !i.param)
@@ -159,9 +159,9 @@
     <span class="icon" aria-hidden="true"><Ph svg={known ? icons[block.kind] : unknownIcon} size={15} /></span>
     <span class="title" title={desc || undefined}>{title}</span>
     {#if !known}<code class="raw">{block.kind === 'action' ? block.type : block.kind}</code>{/if}
-    {#if perm}
+    {#each perms as perm (perm.id)}
       <span class="badge risk-{perm.risk}" title={entryDescription($t, perm)}>{entryLabel($t, perm)}</span>
-    {/if}
+    {/each}
     {#if def?.risky}
       <span class="badge risky" title={$t('scripts.blocks.risky.desc')}><Ph svg={riskIcon} size={12} />{$t('scripts.blocks.risky')}</span>
     {/if}

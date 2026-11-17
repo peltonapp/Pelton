@@ -1,19 +1,33 @@
 <script lang="ts">
-  // the left pane of the Automations space: every script with its trigger, a
-  // badge for one that was imported or made by an assistant, and its on/off
-  // switch. switching on a script with permissions still to approve opens the
+  // the left pane of the Automations space: the way into the template
+  // gallery, every script with its trigger, a badge for one that was imported
+  // or made by an assistant, and its on/off switch, then the shared libraries.
+  // switching on a script with permissions still to approve opens the
   // approval dialog instead.
   import { createEventDispatcher } from 'svelte'
   import emptyIcon from '@phosphor-icons/core/assets/duotone/lightning-duotone.svg?raw'
+  import galleryIcon from '@phosphor-icons/core/assets/duotone/squares-four-duotone.svg?raw'
   import EmptyState from '../common/EmptyState.svelte'
+  import Ph from '../common/Ph.svelte'
   import ToggleSwitch from '../common/ToggleSwitch.svelte'
   import { t } from '../../lib/i18n'
   import { entryLabel, type Script } from '../../lib/scripting'
-  import { catalog, scripts, selectedScriptId, selectScript, setEnabled } from '../../stores/scripts'
+  import {
+    catalog,
+    galleryOpen,
+    libraries,
+    openGallery,
+    scripts,
+    selectedLibraryId,
+    selectedScriptId,
+    selectLibrary,
+    selectScript,
+    setEnabled,
+  } from '../../stores/scripts'
   import { errorMessage, toastError } from '../../stores/toast'
   import '../../theme/controls.css'
 
-  const dispatch = createEventDispatcher<{ create: 'lua' | 'blocks'; import: void }>()
+  const dispatch = createEventDispatcher<{ create: 'lua' | 'blocks'; import: void; library: void }>()
 
   function triggerName(s: Script): string {
     const def = $catalog?.triggers.find((tr) => tr.id === s.trigger.type)
@@ -37,37 +51,63 @@
       <button type="button" class="cal-btn primary" on:click={() => dispatch('create', 'lua')}>{$t('scripts.new')}</button>
     </div>
   </header>
-  {#if $scripts.length === 0}
-    <EmptyState
-      icon={emptyIcon}
-      title={$t('scripts.empty.title')}
-      detail={$t('scripts.empty.detail')}
-      actionLabel={$t('scripts.newBlocks')}
-      onAction={() => dispatch('create', 'blocks')}
-      secondaryLabel={$t('scripts.newLua')}
-      onSecondary={() => dispatch('create', 'lua')}
-    />
-  {:else}
-    <ul class="rows">
-      {#each $scripts as s (s.id)}
-        <li class="row" class:active={$selectedScriptId === s.id}>
-          <button type="button" class="pick" aria-current={$selectedScriptId === s.id ? 'true' : undefined} on:click={() => selectScript(s.id)}>
-            <span class="name">{s.name}</span>
-            <span class="meta">
-              {triggerName(s)}
-              {#if s.kind === 'blocks'}<span class="tag">{$t('scripts.kind.blocks')}</span>{/if}
-              {#if s.origin !== 'user'}<span class="tag origin">{$t(`scripts.origin.${s.origin}`)}</span>{/if}
-            </span>
-          </button>
-          <ToggleSwitch
-            label={$t(s.enabled ? 'scripts.switchOff' : 'scripts.switchOn').replace('{name}', s.name)}
-            checked={s.enabled}
-            on:change={(e) => void toggle(s, e.detail)}
-          />
-        </li>
-      {/each}
-    </ul>
-  {/if}
+  <div class="scroll">
+    <button type="button" class="gallery" class:active={$galleryOpen} on:click={openGallery}>
+      <Ph svg={galleryIcon} size={15} />{$t('scripts.gallery.open')}
+    </button>
+    {#if $scripts.length === 0}
+      <EmptyState
+        icon={emptyIcon}
+        title={$t('scripts.empty.title')}
+        detail={$t('scripts.empty.detail')}
+        actionLabel={$t('scripts.newBlocks')}
+        onAction={() => dispatch('create', 'blocks')}
+        secondaryLabel={$t('scripts.newLua')}
+        onSecondary={() => dispatch('create', 'lua')}
+      />
+    {:else}
+      <ul class="rows">
+        {#each $scripts as s (s.id)}
+          <li class="row" class:active={$selectedScriptId === s.id}>
+            <button type="button" class="pick" aria-current={$selectedScriptId === s.id ? 'true' : undefined} on:click={() => selectScript(s.id)}>
+              <span class="name">{s.name}</span>
+              <span class="meta">
+                {triggerName(s)}
+                {#if s.kind === 'blocks'}<span class="tag">{$t('scripts.kind.blocks')}</span>{/if}
+                {#if s.origin !== 'user'}<span class="tag origin">{$t(`scripts.origin.${s.origin}`)}</span>{/if}
+              </span>
+            </button>
+            <ToggleSwitch
+              label={$t(s.enabled ? 'scripts.switchOff' : 'scripts.switchOn').replace('{name}', s.name)}
+              checked={s.enabled}
+              on:change={(e) => void toggle(s, e.detail)}
+            />
+          </li>
+        {/each}
+      </ul>
+    {/if}
+    <div class="section-head">
+      <h3 class="section">{$t('scripts.libraries')}</h3>
+      <button type="button" class="cal-btn" on:click={() => dispatch('library')}>{$t('scripts.library.new')}</button>
+    </div>
+    {#if $libraries.length === 0}
+      <p class="hint">{$t('scripts.libraries.empty')}</p>
+    {:else}
+      <ul class="rows" aria-label={$t('scripts.libraries')}>
+        {#each $libraries as l (l.id)}
+          <li class="row" class:active={$selectedLibraryId === l.id}>
+            <button type="button" class="pick" aria-current={$selectedLibraryId === l.id ? 'true' : undefined} on:click={() => selectLibrary(l.id)}>
+              <span class="name mono">{l.name}</span>
+              <span class="meta">
+                {l.description || $t('scripts.library.kind')}
+                {#if l.origin !== 'user'}<span class="tag origin">{$t(`scripts.origin.${l.origin}`)}</span>{/if}
+              </span>
+            </button>
+          </li>
+        {/each}
+      </ul>
+    {/if}
+  </div>
 </section>
 
 <style>
@@ -101,13 +141,70 @@
     gap: var(--space-1);
   }
 
-  .rows {
+  .scroll {
     flex: 1;
     min-height: 0;
     overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .rows {
     margin: 0;
     padding: 0;
     list-style: none;
+  }
+
+  .gallery {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    margin: var(--space-2) var(--space-3);
+    padding: var(--space-2) var(--space-2);
+    border: var(--hairline) dashed var(--border-default);
+    border-radius: var(--radius-control);
+    background: transparent;
+    color: var(--text-secondary);
+    font: inherit;
+    font-size: var(--fz-label);
+    cursor: var(--cursor-action);
+  }
+
+  .gallery:hover,
+  .gallery.active {
+    background: var(--surface-hover);
+    color: var(--text-primary);
+  }
+
+  .gallery:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+  }
+
+  .section-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-2);
+    padding: var(--space-4) var(--space-4) var(--space-2);
+  }
+
+  .section {
+    margin: 0;
+    font-size: var(--fz-label);
+    font-weight: var(--fw-semibold);
+    color: var(--text-secondary);
+  }
+
+  .hint {
+    margin: 0;
+    padding: 0 var(--space-4);
+    font-size: var(--fz-meta);
+    color: var(--text-tertiary);
+  }
+
+  .mono {
+    font-family: var(--font-mono);
   }
 
   .row {

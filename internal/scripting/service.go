@@ -195,7 +195,7 @@ func NewService(cfg Config) (*Service, error) {
 		pending:    map[int64]*catchUp{},
 		live:       map[int64]*liveRun{},
 	}
-	s.engine = &Engine{Registry: reg, Hosts: cfg.Hosts, KV: s.store, Limits: cfg.Limits, OnAllow: s.allowAlways, AskTimeout: cfg.AskTimeout}
+	s.engine = &Engine{Registry: reg, Hosts: cfg.Hosts, KV: s.store, Limits: cfg.Limits, OnAllow: s.allowAlways, AskTimeout: cfg.AskTimeout, Libraries: s.store}
 	return s, nil
 }
 

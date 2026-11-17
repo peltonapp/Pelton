@@ -171,27 +171,32 @@ func registerMailConditions(r *Registry) error {
 		{Value: "older", LabelKey: "scripts.option.older", Lua: ">"},
 		{Value: "newer", LabelKey: "scripts.option.newer", Lua: "<"},
 	}
-	text := func(id, subject string) Condition {
+	state := required(withDefault(param("state", TypeEnum), "on"))
+	state.Options = options("on", "off")
+	text := func(id, field, subject string) Condition {
 		return Condition{
 			Meta:   meta("cond", id, "mail"),
 			Params: []Param{msg, op, value},
 			Lua:    "text.test(" + subject + ", {{op}}, {{value}})",
+			Field:  field,
 		}
 	}
 	conds := []Condition{
-		text("mail.from", "{ {{message}}.from, {{message}}.from_name }"),
-		text("mail.to", "text.split(({{message}}.to or \"\") .. \",\" .. ({{message}}.cc or \"\"), \",\")"),
-		text("mail.subject", "{{message}}.subject"),
+		text("mail.from", "from", "{ {{message}}.from, {{message}}.from_name }"),
+		text("mail.to", "to", "text.split(({{message}}.to or \"\") .. \",\" .. ({{message}}.cc or \"\"), \",\")"),
+		text("mail.subject", "subject", "{{message}}.subject"),
 		{
 			Meta:       meta("cond", "mail.body", "mail"),
 			Params:     []Param{msg, op, value},
 			Permission: PermMailRead,
 			Lua:        "text.test(mail.body({{message}}), {{op}}, {{value}})",
+			Field:      "body",
 		},
 		{
 			Meta:   meta("cond", "mail.header", "mail"),
 			Params: []Param{msg, required(param("name", TypeString)), op, value},
 			Lua:    "text.test(mail.header({{message}}, {{name}}), {{op}}, {{value}})",
+			Field:  "headers",
 		},
 		{Meta: meta("cond", "mail.has_attachment", "mail"), Params: []Param{msg}, Lua: "{{message}}.has_attachments == true"},
 		{
@@ -214,6 +219,9 @@ func registerMailConditions(r *Registry) error {
 			Params: []Param{msg, age, required(withDefault(param("duration", TypeDuration), "7d"))},
 			Lua:    "time.now() - ({{message}}.date or 0) {{age}} {{duration}}",
 		},
+		{Meta: meta("cond", "mail.is_read", "mail"), Params: []Param{msg, state}, Lua: "({{message}}.read == true) == ({{state}} == \"on\")"},
+		{Meta: meta("cond", "mail.is_flagged", "mail"), Params: []Param{msg, state}, Lua: "({{message}}.flagged == true) == ({{state}} == \"on\")"},
+		TextCondition(meta("cond", "text.value", "utility"), "{{text}}", required(RefParam("text", "", ""))),
 	}
 	for _, c := range conds {
 		if err := r.RegisterCondition(c); err != nil {
@@ -259,7 +267,20 @@ func registerMailActions(r *Registry) error {
 		a.Triggers = []string{TriggerBeforeSend}
 		return a
 	}
+	listFolder := required(withDefault(param("folder", TypeFolder), "inbox"))
+	limit := required(withDefault(param("limit", TypeNumber), float64(defaultListLimit)))
+	unread := withDefault(param("unread", TypeBool), false)
+	messages := field("messages", "list")
+	messages.Of = "message"
+	list := Action{
+		Meta:       meta("action", "mail.list", "mail"),
+		Params:     []Param{listFolder, limit, unread},
+		Outputs:    []Field{messages},
+		Permission: PermMailRead,
+		Lua:        "{ messages = mail.list({{folder}}, {limit = {{limit}}, unread = {{unread}}}) }",
+	}
 	actions := []Action{
+		list,
 		act("mail.move", PermMailModify, "mail.move({{message}}, {{folder}})", msg, folder),
 		act("mail.copy", PermMailModify, "mail.copy({{message}}, {{folder}})", msg, folder),
 		act("mail.archive", PermMailModify, "mail.archive({{message}})", msg),
@@ -381,6 +402,62 @@ func compose(send bool, kind string) Handler {
 	}
 }
 
+// The number of messages mail.list returns unless told otherwise, and the
+// most it returns.
+const (
+	defaultListLimit = 50
+	maxListLimit     = 500
+)
+
+// listMail is mail.list: the newest messages of a folder, optionally only
+// the unread ones and only one account's. A dry run without a mail host
+// lists the sample message.
+func listMail(c *Call) ([]any, error) {
+	folder, err := c.OptString(0, "inbox")
+	if err != nil {
+		return nil, err
+	}
+	opts := c.Table(1)
+	limit := defaultListLimit
+	if n, ok := opts["limit"].(float64); ok {
+		if n < 1 || n > maxListLimit {
+			return nil, fmt.Errorf("mail.list: the limit is 1 to %d", maxListLimit)
+		}
+		limit = int(n)
+	}
+	account, _ := opts["account"].(float64)
+	unread, _ := opts["unread"].(bool)
+	var lister MailLister
+	if c.Hosts != nil {
+		lister, _ = c.Hosts.Mail.(MailLister)
+	}
+	if lister == nil {
+		if c.Dry {
+			return []any{[]any{MessageObject(SampleMessage(c.Now()))}}, nil
+		}
+		return nil, ErrUnavailable
+	}
+	fetch := limit
+	if unread {
+		fetch = maxListLimit
+	}
+	list, err := lister.Recent(c.Ctx, folder, int64(account), fetch)
+	if err != nil {
+		return nil, fmt.Errorf("mail.list: %w", err)
+	}
+	out := []any{}
+	for _, m := range list {
+		if len(out) == limit {
+			break
+		}
+		if unread && m.Read {
+			continue
+		}
+		out = append(out, MessageObject(m))
+	}
+	return []any{out}, nil
+}
+
 func dryDraft(*Call) ([]any, error) {
 	return []any{map[string]any{"id": 0}}, nil
 }
@@ -449,6 +526,7 @@ func registerMailModules(r *Registry) error {
 			}
 			return []any{body}, nil
 		}, msg)),
+		read(fn("list", listMail, folder, param("options", TypeRef))),
 		fn("header", func(c *Call) ([]any, error) {
 			m := c.Table(0)
 			name, err := c.String(1)

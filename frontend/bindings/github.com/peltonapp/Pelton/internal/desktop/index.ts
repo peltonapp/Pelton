@@ -170,6 +170,8 @@ export {
     ScriptDiffLineDTO,
     ScriptFileDTO,
     ScriptInput,
+    ScriptLibraryDTO,
+    ScriptLibraryInput,
     ScriptProposalDTO,
     ScriptRunDTO,
     ScriptTriggerDTO,

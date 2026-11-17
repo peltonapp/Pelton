@@ -139,8 +139,11 @@ type Run struct {
 	CancelReason string
 	// ErrorLine is the line of a Lua script the run failed on, 0 when not
 	// known, and ErrorBlock the block of a block script that was running.
-	ErrorLine  int
-	ErrorBlock string
+	// ErrorLibrary names the library the failing line is in, when it is in
+	// one; ErrorLine then counts in that library.
+	ErrorLine    int
+	ErrorBlock   string
+	ErrorLibrary string
 	// NotReached lists, for a block script, the blocks the run never got
 	// to, in the order they stand.
 	NotReached []string
@@ -222,6 +225,9 @@ type Engine struct {
 	// DefaultAskTimeout when nil or 0. A script may ask for another per
 	// question.
 	AskTimeout func() time.Duration
+	// Libraries is where require finds the user's libraries; with none,
+	// require finds nothing.
+	Libraries LibrarySource
 }
 
 // sandboxGlobals are the standard globals a run keeps. Everything else the
@@ -263,6 +269,10 @@ type runState struct {
 	allowed  []string
 	metas    map[string]*lua.LTable
 	regexps  map[string]*regexpEntry
+	// libs holds the libraries this run loaded, by name, and loading the
+	// ones being loaded, innermost last.
+	libs    map[string]lua.LValue
+	loading []string
 }
 
 // Run executes one run and returns its record. It never panics and never
@@ -302,6 +312,7 @@ func (e *Engine) Run(ctx context.Context, req RunRequest) *Run {
 		allowed: slices.Clone(req.Script.AllowUnasked),
 		regexps: map[string]*regexpEntry{},
 		reached: map[string]bool{},
+		libs:    map[string]lua.LValue{},
 	}
 	st.limits = limits
 	st.remaining = limits.Timeout
@@ -359,7 +370,10 @@ func (st *runState) finish() *Run {
 	}
 	sc := st.req.Script
 	if run.Error != "" {
-		if sc.Kind == KindBlocks {
+		if m := libraryErrorRE.FindStringSubmatch(run.Error); m != nil {
+			run.ErrorLibrary = m[1]
+			run.ErrorLine, _ = strconv.Atoi(m[2])
+		} else if sc.Kind == KindBlocks {
 			run.ErrorBlock = st.block
 		} else {
 			run.ErrorLine = errorLine(run.Error)
@@ -734,6 +748,7 @@ func (st *runState) installGlobals(L *lua.LState) {
 		L.RaiseError("stopped")
 		return 0
 	}))
+	L.SetGlobal("require", L.NewFunction(st.require))
 	L.SetGlobal("print", L.NewFunction(func(L *lua.LState) int {
 		st.log("info", joinArgs(L))
 		return 0
@@ -850,9 +865,11 @@ func (st *runState) invoke(L *lua.LState, full string, f Function, args []any) (
 	if f.Summary != nil {
 		summary = full + ": " + f.Summary(args)
 	}
-	if !script.granted(f.Permission, st.req.Dry) {
-		st.addStep(Step{Kind: StepDenied, Function: full, Summary: summary, Error: "needs " + f.Permission})
-		return nil, st.setFatal(StatusDenied, fmt.Sprintf("%s needs the permission %q, which the script does not have", full, f.Permission))
+	for _, perm := range permList(f.Permission, f.Permissions) {
+		if !script.granted(perm, st.req.Dry) {
+			st.addStep(Step{Kind: StepDenied, Function: full, Summary: summary, Error: "needs " + perm})
+			return nil, st.setFatal(StatusDenied, fmt.Sprintf("%s needs the permission %q, which the script does not have", full, perm))
+		}
 	}
 	call := &Call{Ctx: st.ctx, Args: args, Dry: st.req.Dry, Hosts: st.e.Hosts, Function: full, st: st}
 	if f.Effect && st.req.Dry {
@@ -879,7 +896,7 @@ func (st *runState) invoke(L *lua.LState, full string, f Function, args []any) (
 			step.Error = err.Error()
 		}
 		st.addStep(step)
-	case f.Permission != "":
+	case f.Permission != "" || len(f.Permissions) > 0:
 		step := Step{Kind: StepRead, Function: full, Summary: summary}
 		if err != nil {
 			step.Error = err.Error()
