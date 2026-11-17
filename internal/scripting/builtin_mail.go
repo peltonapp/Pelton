@@ -173,27 +173,30 @@ func registerMailConditions(r *Registry) error {
 	}
 	state := required(withDefault(param("state", TypeEnum), "on"))
 	state.Options = options("on", "off")
-	text := func(id, subject string) Condition {
+	text := func(id, field, subject string) Condition {
 		return Condition{
 			Meta:   meta("cond", id, "mail"),
 			Params: []Param{msg, op, value},
 			Lua:    "text.test(" + subject + ", {{op}}, {{value}})",
+			Field:  field,
 		}
 	}
 	conds := []Condition{
-		text("mail.from", "{ {{message}}.from, {{message}}.from_name }"),
-		text("mail.to", "text.split(({{message}}.to or \"\") .. \",\" .. ({{message}}.cc or \"\"), \",\")"),
-		text("mail.subject", "{{message}}.subject"),
+		text("mail.from", "from", "{ {{message}}.from, {{message}}.from_name }"),
+		text("mail.to", "to", "text.split(({{message}}.to or \"\") .. \",\" .. ({{message}}.cc or \"\"), \",\")"),
+		text("mail.subject", "subject", "{{message}}.subject"),
 		{
 			Meta:       meta("cond", "mail.body", "mail"),
 			Params:     []Param{msg, op, value},
 			Permission: PermMailRead,
 			Lua:        "text.test(mail.body({{message}}), {{op}}, {{value}})",
+			Field:      "body",
 		},
 		{
 			Meta:   meta("cond", "mail.header", "mail"),
 			Params: []Param{msg, required(param("name", TypeString)), op, value},
 			Lua:    "text.test(mail.header({{message}}, {{name}}), {{op}}, {{value}})",
+			Field:  "headers",
 		},
 		{Meta: meta("cond", "mail.has_attachment", "mail"), Params: []Param{msg}, Lua: "{{message}}.has_attachments == true"},
 		{

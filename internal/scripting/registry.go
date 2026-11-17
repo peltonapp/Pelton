@@ -107,6 +107,10 @@ type Condition struct {
 	// Lua is the expression the condition compiles to, with {{param}}
 	// placeholders, e.g. `text.test({{message}}.subject, {{op}}, {{value}})`.
 	Lua string `json:"lua"`
+	// Field names the message field a text condition tests, e.g. "subject",
+	// "body" or "headers" (with the header in a "name" argument), so the
+	// match tester can show where its pattern matched. Empty for others.
+	Field string `json:"field,omitempty"`
 }
 
 // Action is a step a block script can take.
