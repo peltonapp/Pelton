@@ -213,6 +213,9 @@ const (
 	// action done by mouse, and the sheet shown while the modifier is held.
 	settingCoachHints = "coach_hints"
 	settingCoachHold  = "coach_hold"
+	// the one-time tips of the new design, shown the first time a feature's
+	// context comes up.
+	settingShowTips = "show_tips"
 	// mark the dates a mail names in the reader, with a calendar preview on
 	// hover. On by default.
 	settingMailDates = "mail_dates"
@@ -354,6 +357,9 @@ type UIPrefsDTO struct {
 	// CoachHold shows the shortcuts that apply on screen while the platform
 	// modifier is held, in the new design.
 	CoachHold bool `json:"coachHold"`
+	// ShowTips shows a one-time tip the first time a feature's context comes
+	// up, in the new design.
+	ShowTips bool `json:"showTips"`
 	// HarvestAddresses keeps learning addresses from the mail that passes
 	// through, for compose autocomplete. Off leaves only synced contacts.
 	HarvestAddresses bool `json:"harvestAddresses"`
@@ -737,6 +743,7 @@ func (a *App) GetUIPrefs() (UIPrefsDTO, error) {
 		ShowShortcutHints:   a.boolSetting(settingShortcutHints, true),
 		CoachHints:          a.boolSetting(settingCoachHints, true),
 		CoachHold:           a.boolSetting(settingCoachHold, true),
+		ShowTips:            a.boolSetting(settingShowTips, true),
 		HarvestAddresses:    a.harvestAddresses(),
 		ShowAccountEmail:    a.boolSetting(settingAccountEmail, false),
 		AlwaysLoadImages:    a.boolSetting(settingRemoteAlways, false),

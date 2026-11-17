@@ -2009,6 +2009,11 @@ export const SettingKeys = {
   coachHold: 'coach_hold',
   // the shortcut coach's counters: hints shown and keys used, per action.
   coachCounters: 'shortcut_coach',
+  showTips: 'show_tips',
+  // the one-time tips already shown, as a json list of tip ids.
+  tipsSeen: 'tips_seen',
+  // the what's new entries last looked at, as a release line and content hash.
+  lastSeenVersion: 'last_seen_version',
   harvestAddresses: 'harvest_addresses',
   accountEmail: 'show_account_email',
   onboarded: 'onboarding_complete',

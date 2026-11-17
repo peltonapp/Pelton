@@ -109,7 +109,10 @@
   } from './lib/shortcuts'
   import { runComposeCommand } from './stores/composecommands'
   import CoachLayer from './components/shell/CoachLayer.svelte'
+  import FirstTipLayer from './components/shell/FirstTipLayer.svelte'
   import { initCoach, toggleSheet } from './stores/coach'
+  import { initFirstTips, setTipsSuspended } from './stores/firsttips'
+  import { initWhatsNew, markWhatsNewSeen, whatsNewOpen, whatsNewUnseen } from './stores/whatsnew'
   import { setupRequested } from './stores/setuprun'
   import './lib/palette-setup'
   import { noteAction, noteShortcut } from './lib/coach'
@@ -339,6 +342,7 @@
   // an overlay covers the top bar, so the window needs another handle to be
   // dragged by while one is open.
   $: overlayOpen = settingsOpen || onboardingOpen || wizardOpen || contactsOpen
+  $: setTipsSuspended(overlayOpen || nightlyOpen || liabilityOpen || $whatsNewOpen)
   $: if ($setupRequested) {
     setupRequested.set(false)
     rerunOnboarding()
@@ -663,6 +667,8 @@
     await initComposePrefs()
     void initShortcuts()
     void initCoach().then((stop) => unsubscribers.push(stop))
+    void initFirstTips()
+    void initWhatsNew()
     void initFocus().then((stop) => unsubscribers.push(stop))
     void initMenuBar()
     void initPalette()
@@ -1015,9 +1021,13 @@
     flushPendingMailto()
   }
 
-  // the setup flow reports where to land.
+  // the setup flow reports where to land; its first run also counts as having
+  // seen what is new, since all of it is new then.
   function finishSetup(event: CustomEvent<{ landing: Space; rerun: boolean }>): void {
     finishOnboarding()
+    if (!event.detail.rerun) {
+      void markWhatsNewSeen()
+    }
     openSpace(event.detail.landing)
   }
 
@@ -2258,7 +2268,7 @@
         side={$prefs.railSide}
         unread={inboxUnread}
         on:search={focusSearch}
-        on:settings={() => { settingsCategory = null; settingsOpen = true }}
+        on:settings={() => { settingsCategory = $whatsNewUnseen ? 'about#about-whats-new' : null; settingsOpen = true }}
       />
     {/if}
 
@@ -2462,6 +2472,12 @@
   {/await}
 {/if}
 
+{#if !classic && $whatsNewOpen}
+  {#await import('./components/whatsnew/WhatsNew.svelte') then m}
+    <svelte:component this={m.default} on:close={() => whatsNewOpen.set(false)} />
+  {/await}
+{/if}
+
 {#if wizardOpen}
   {#await import('./components/wizard/AddMailboxWizard.svelte') then m}
     <svelte:component this={m.default} on:close={() => (wizardOpen = false)} on:added={onMailboxAdded} />
@@ -2504,6 +2520,7 @@
 
 {#if !classic}
   <CoachLayer suspended={overlayOpen} />
+  <FirstTipLayer />
 {/if}
 
 {#if chatWanted}

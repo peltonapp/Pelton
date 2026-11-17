@@ -8,9 +8,10 @@
   import ShortcutHintPreview from '../skeletons/ShortcutHintPreview.svelte'
   import PalettePreview from '../skeletons/PalettePreview.svelte'
   import AppVimPreview from '../skeletons/AppVimPreview.svelte'
-  import { prefs, setShortcutHints, setAppVimMode, setCoachHints, setCoachHold } from '../../../stores/prefs'
+  import { prefs, setShortcutHints, setAppVimMode, setCoachHints, setCoachHold, setShowTips } from '../../../stores/prefs'
   import { paletteQuickSelect, setPaletteQuickSelect } from '../../../stores/palette'
   import { resetCoachHints } from '../../../stores/coach'
+  import { resetTips } from '../../../stores/firsttips'
   import { isMac, modSymbol, t } from '../../../lib/i18n'
   import '../../../theme/settings2-sections-system.css'
 
@@ -23,6 +24,13 @@
   function reset(): void {
     resetCoachHints()
     resetDone = true
+  }
+
+  let tipsResetDone = false
+
+  function resetAllTips(): void {
+    resetTips()
+    tipsResetDone = true
   }
 </script>
 
@@ -43,6 +51,12 @@
   </Row>
   <Row id="coach-reset" label={$t('coach.settings.reset')} hint={$t('coach.settings.resetHint')}>
     <button type="button" class="action" on:click={reset}>{resetDone ? $t('coach.settings.resetDone') : $t('coach.settings.resetButton')}</button>
+  </Row>
+  <Row id="tips" label={$t('tips.settings.show')} hint={$t('tips.settings.showHint')}>
+    <ToggleSwitch checked={$prefs.showTips} label={$t('tips.settings.show')} on:change={(e) => setShowTips(e.detail)} />
+  </Row>
+  <Row id="tips-reset" label={$t('tips.settings.reset')} hint={$t('tips.settings.resetHint')}>
+    <button type="button" class="action" on:click={resetAllTips}>{tipsResetDone ? $t('coach.settings.resetDone') : $t('tips.settings.resetButton')}</button>
   </Row>
   <Row id="palette-quick-select" label={$t('settingsPanel.toggle.paletteQuickSelect')} hint={$t('settingsPanel.hint.paletteQuickSelect')}>
     <PalettePreview slot="preview" quickSelect={$paletteQuickSelect} />

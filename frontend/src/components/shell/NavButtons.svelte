@@ -71,7 +71,7 @@
   onDestroy(cancelPress)
 </script>
 
-<div class="nav" role="group" aria-label={$t('navHistory.label')}>
+<div class="nav" role="group" aria-label={$t('navHistory.label')} data-tip-anchor="nav">
   <button
     type="button"
     class="step"

@@ -737,6 +737,9 @@ export interface UIPrefs {
   // coachHold shows the shortcuts that apply on screen while the platform
   // modifier is held, in the new design. On by default.
   coachHold: boolean
+  // showTips shows a one-time tip the first time a feature's context comes
+  // up, in the new design. On by default.
+  showTips: boolean
   // harvestAddresses keeps learning addresses from mail for compose
   // autocomplete. off leaves only the contacts from a synced address book.
   harvestAddresses: boolean
