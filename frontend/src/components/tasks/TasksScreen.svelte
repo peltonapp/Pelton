@@ -370,7 +370,7 @@
         { label: $t('tasks.toEvent'), action: () => void convertTaskToEvent(task) },
       )
     }
-    openContextMenu(x, y, [...entries, ...(task.readOnly ? [] : ['separator' as const, { label: $t('tasks.delete'), action: () => void remove(task), danger: true, hint: menuHint('delete-message') }])])
+    openContextMenu(x, y, [...entries, ...(task.readOnly ? [] : ['separator' as const, { label: $t('tasks.delete'), action: () => void remove(task), danger: true, hint: menuHint('delete-message') }])], { place: 'tasks.task', items: [{ id: String(task.id) }] })
   }
 
   async function openEvent(uid: string): Promise<void> {

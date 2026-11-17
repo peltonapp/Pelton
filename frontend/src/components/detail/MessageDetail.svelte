@@ -160,7 +160,7 @@
       'separator',
       { label: $t('action.delete'), icon: IconTrash, danger: true, hint: menuHint('delete-message'), action: () => void remove(message) },
     ]
-    openContextMenu(x, y, entries)
+    openContextMenu(x, y, entries, { place: 'mail.message', items: [{ id: String(message.id) }] })
   }
 
   // the pane follows whichever message is visible: the active tab's, or the one

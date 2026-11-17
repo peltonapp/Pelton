@@ -107,6 +107,7 @@
   import { motion } from '../../lib/motion'
   import { parseRowActions, rowActionView, type RowActionId } from '../../lib/rowactions'
   import { runRowAction } from '../../lib/rowactionrun'
+  import { messageItems } from '../../lib/scriptplacements'
   import { newestHistoryId, offerUndo } from '../../stores/undohistory'
   import { noteAction } from '../../lib/coach'
   import {
@@ -1025,7 +1026,7 @@
         'separator',
         { label: $t('messageList.bulk.deleteCount').replace('{n}', n), icon: IconTrash, danger: true, hint: menuHint('delete-message'), action: () => void bulkDelete() },
       ]
-      openContextMenu(event.clientX, event.clientY, entries)
+      openContextMenu(event.clientX, event.clientY, entries, { place: 'mail.row', items: messageItems(selectedItems.map((m) => m.id)) })
       return
     }
     // right clicking outside the selection is a fresh start: the row under the
@@ -1073,7 +1074,7 @@
       'separator',
       { label: $t('action.delete'), icon: IconTrash, danger: true, hint: menuHint('delete-message'), action: () => void remove(item) },
     ]
-    openContextMenu(event.clientX, event.clientY, entries)
+    openContextMenu(event.clientX, event.clientY, entries, { place: 'mail.row', items: messageItems([item.id]) })
   }
 
   // organizeEntries are pin, mute and the private note, in the new design only.
