@@ -221,6 +221,7 @@ const mailSpaceActions = [
   'compose',
   'open-attachments',
   'toggle-sender-panel',
+  'reading-view',
   'open-newsletters',
   'open-insights',
   'new-folder',

@@ -87,6 +87,8 @@ export type ShortcutAction =
   | 'toggle-sender-panel'
   // shows or hides the My Day panel beside the mail.
   | 'toggle-my-day'
+  // the open conversation alone, set for reading, new design only.
+  | 'reading-view'
   // shows the Tasks space.
   | 'go-tasks'
   // shows the Chat space, when chat is on.
@@ -273,6 +275,8 @@ export const shortcuts: Shortcut[] = [
   // mod+shift+i opens the web inspector in development builds.
   { action: 'open-attachments', combo: 'mod+shift+f', labelKey: 'shortcut.openAttachments' },
   { action: 'toggle-sender-panel', combo: 'i', labelKey: 'shortcut.toggleSenderPanel' },
+  // R for reading, with Shift since plain r replies.
+  { action: 'reading-view', combo: 'shift+r', labelKey: 'shortcut.readingView', newDesignOnly: true },
   // y for "your day"; the letters near it are taken by the spaces and tasks.
   { action: 'toggle-my-day', combo: 'mod+shift+y', labelKey: 'shortcut.toggleMyDay' },
   // the key Thunderbird shows its task list with.
