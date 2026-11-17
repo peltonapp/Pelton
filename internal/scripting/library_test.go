@@ -78,7 +78,7 @@ func TestRequireFailures(t *testing.T) {
 	cases := map[string]string{
 		`require("a")`:        "a -> b -> a",
 		`require("nothing")`:  `no library "nothing"`,
-		`require("../etc")`:   `no library "../etc"`,
+		`require("../etc")`:   `"../etc" is not named`,
 		`require("broken")`:   "broken.lua:2: boom",
 		`require("syntax")`:   `require "syntax"`,
 		`pcall(require, "a")`: "",

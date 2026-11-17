@@ -586,20 +586,16 @@ func (a *App) ScriptProposal(id int64) (ScriptProposalDTO, error) {
 			out.RemovedPermissions = append(out.RemovedPermissions, perm)
 		}
 	}
-	out.ResetsApproval = codeChanged(cur, next) && (cur.Enabled || len(cur.Approved) > 0 || len(cur.AllowUnasked) > 0)
+	out.ResetsApproval = scripting.ResetsApproval(cur, next) && (cur.Enabled || len(cur.Approved) > 0 || len(cur.AllowUnasked) > 0)
 	return out, nil
 }
 
 // AcceptScriptProposal applies a proposed change. When it changes the code,
-// the trigger or the declared permissions of a script that was on or
-// approved, the script is switched off and its approvals and allowances are
-// cleared, so the user approves the new version afresh.
+// the trigger or the declared permissions, the update switches the script
+// off and clears its approvals and allowances, so the user approves the new
+// version afresh.
 func (a *App) AcceptScriptProposal(id int64) (ScriptDTO, error) {
 	svc, err := a.scriptService()
-	if err != nil {
-		return ScriptDTO{}, err
-	}
-	cur, err := svc.Script(a.ctx, id)
 	if err != nil {
 		return ScriptDTO{}, err
 	}
@@ -610,19 +606,9 @@ func (a *App) AcceptScriptProposal(id int64) (ScriptDTO, error) {
 	if p == nil {
 		return ScriptDTO{}, fmt.Errorf("pelton: there is no proposed change to this script")
 	}
-	reset := codeChanged(cur, next)
 	out, err := svc.Update(a.ctx, next)
 	if err != nil {
 		return ScriptDTO{}, err
-	}
-	if reset && (out.Enabled || len(out.Approved) > 0 || len(out.AllowUnasked) > 0) {
-		out.Enabled, out.Approved, out.AllowUnasked = false, nil, nil
-		if err := svc.Store().Update(a.ctx, out); err != nil {
-			return ScriptDTO{}, err
-		}
-		if out, err = svc.SetEnabled(a.ctx, id, false, nil); err != nil {
-			return ScriptDTO{}, err
-		}
 	}
 	a.dropScriptProposal(id)
 	a.recordAgentAction(mcpserver.ToolUpdateScript, 0, fmt.Sprintf("you accepted a proposed change to the script %q", out.Name), nil)
@@ -639,21 +625,6 @@ func (a *App) RejectScriptProposal(id int64) error {
 	a.recordAgentAction(mcpserver.ToolUpdateScript, 0, "you rejected a proposed change to a script", nil)
 	a.emit(EventAssistantScript, AssistantScriptDTO{ScriptID: id, Action: "rejected"})
 	return nil
-}
-
-// codeChanged reports whether next differs from cur in what a run does or
-// may do: kind, code, trigger or declared permissions.
-func codeChanged(cur, next *scripting.Script) bool {
-	if cur.Kind != next.Kind || cur.Source != next.Source || cur.Trigger.Type != next.Trigger.Type {
-		return true
-	}
-	if mustJSONText(cur.Blocks) != mustJSONText(next.Blocks) || mustJSONText(cur.Trigger.Params) != mustJSONText(next.Trigger.Params) {
-		return true
-	}
-	a, b := slices.Clone(cur.Permissions), slices.Clone(next.Permissions)
-	slices.Sort(a)
-	slices.Sort(b)
-	return !slices.Equal(a, b)
 }
 
 func mustJSONText(v any) string {

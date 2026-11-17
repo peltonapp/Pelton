@@ -273,6 +273,10 @@ type runState struct {
 	// ones being loaded, innermost last.
 	libs    map[string]lua.LValue
 	loading []string
+	// requirable holds the libraries the run may load: those named in the
+	// script's code and in the libraries it loaded, which are the ones the
+	// user approved with it.
+	requirable map[string]bool
 }
 
 // Run executes one run and returns its record. It never panics and never
@@ -513,6 +517,10 @@ func (st *runState) execute() {
 	if len(code) > maxSourceBytes {
 		st.setFatal(StatusError, fmt.Sprintf("the script is longer than %d bytes", maxSourceBytes))
 		return
+	}
+	st.requirable = map[string]bool{}
+	for _, n := range RequiredLibraries(code) {
+		st.requirable[n] = true
 	}
 	L := lua.NewState(lua.Options{
 		SkipOpenLibs:        true,

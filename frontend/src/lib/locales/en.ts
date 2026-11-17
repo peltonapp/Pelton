@@ -2800,7 +2800,7 @@ const en: Record<string, string> = {
   'scripts.toast.ran': '{name} ran.',
   'scripts.toast.failed': '{name} failed: {error}',
   'scripts.toast.saved': 'Saved.',
-  'scripts.toast.needsApproval': 'Saved. The script is off until you approve its new permissions.',
+  'scripts.toast.needsApproval': 'Saved. The changed script is off until you switch it on and approve it again.',
   'scripts.toast.exported': 'Exported the script.',
   'scripts.toast.imported': 'Imported {name}. It is switched off.',
   'scripts.history.label': 'Ran {name}',
