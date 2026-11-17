@@ -133,6 +133,10 @@ type Function struct {
 	// Dry, when set, answers the call in a dry run in place of a plain
 	// planned step, so a script that uses the result can keep going.
 	Dry Handler `json:"-"`
+	// Summary, when set, describes the call in the run log and in a
+	// confirmation in place of its arguments, for arguments that must not be
+	// logged.
+	Summary func(args []any) string `json:"-"`
 }
 
 // Handler implements a host function. It returns the Lua results.

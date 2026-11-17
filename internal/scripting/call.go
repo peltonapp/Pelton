@@ -51,6 +51,33 @@ func (c *Call) Require(perm string) error {
 	return c.st.setFatal(StatusDenied, fmt.Sprintf("%s needs the permission %q, which the script does not have", c.Function, perm))
 }
 
+// Invoke calls another registered function, by its full Lua name, the way a
+// script would: through the permission check, the dry run switch and the
+// confirmation, recorded as a step of its own.
+func (c *Call) Invoke(full string, args []any) ([]any, error) {
+	f, ok := c.st.e.Registry.Function(full)
+	if !ok {
+		return nil, fmt.Errorf("%s: there is no function %q", c.Function, full)
+	}
+	return c.st.invoke(nil, full, f, args)
+}
+
+// Ending reports whether the run is being ended, by a refused permission, a
+// declined confirmation, a timeout or a limit, so a handler that called
+// Invoke passes the error on instead of handling it.
+func (c *Call) Ending() bool {
+	return c.st.failed() != nil
+}
+
+// Untimed runs fn with the run's time budget stopped, for a wait the handler
+// bounds itself, such as a slow outside service with its own timeout.
+func (c *Call) Untimed(fn func()) {
+	if c.st.pauseClock() {
+		defer c.st.resumeClock()
+	}
+	fn()
+}
+
 // Arg returns argument i (from 0), nil when it was not given.
 func (c *Call) Arg(i int) any {
 	if i < 0 || i >= len(c.Args) {
