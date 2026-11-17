@@ -147,7 +147,9 @@
 {/if}
 
 <Card id="spaces" title={$t('spaces.settings.title')} description={$t('spaces.settings.description')}>
-  <SpaceNavEditor />
+  <div class:inert={classic}>
+    <SpaceNavEditor />
+  </div>
   <Row id="spaces-reset" label={$t('spaces.settings.reset')} hint={$t('spaces.settings.resetHint')} disabled={classic}>
     <button type="button" class="action" disabled={navDefault} on:click={resetSpaceNav}>{$t('spaces.settings.resetButton')}</button>
   </Row>
@@ -337,6 +339,11 @@
 
   .action:hover:not(:disabled) {
     background: var(--surface-hover);
+  }
+
+  .inert {
+    opacity: 0.5;
+    pointer-events: none;
   }
 
   .action:disabled {

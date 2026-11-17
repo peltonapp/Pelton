@@ -112,7 +112,6 @@
     gap: var(--space-3);
     min-height: calc(var(--control-height) + 2 * var(--space-2));
     padding: var(--space-2) var(--space-4) var(--space-2) var(--space-2);
-    background: var(--surface-raised);
   }
 
   .space + .space {
