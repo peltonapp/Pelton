@@ -8952,6 +8952,40 @@ export class SenderOverviewDTO {
 }
 
 /**
+ * SenderReadingDTO is how the reader shows one sender's mail: Colors is
+ * "adapt", "original" or empty to follow the global setting, FontSize the
+ * reader text size in px or 0 to follow the global size.
+ */
+export class SenderReadingDTO {
+    "address": string;
+    "colors": string;
+    "fontSize": number;
+
+    /** Creates a new SenderReadingDTO instance. */
+    constructor($$source: Partial<SenderReadingDTO> = {}) {
+        if (!("address" in $$source)) {
+            this["address"] = "";
+        }
+        if (!("colors" in $$source)) {
+            this["colors"] = "";
+        }
+        if (!("fontSize" in $$source)) {
+            this["fontSize"] = 0;
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new SenderReadingDTO instance from a string or object.
+     */
+    static createFrom($$source: any = {}): SenderReadingDTO {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new SenderReadingDTO($$parsedSource as Partial<SenderReadingDTO>);
+    }
+}
+
+/**
  * SettingResult is a setting lookup that distinguishes unset from empty.
  */
 export class SettingResult {
@@ -11057,6 +11091,29 @@ export class UIPrefsDTO {
     "swipeRightAction": string;
 
     /**
+     * The new design's swipes act by distance: a short swipe and a long one in
+     * each direction, each an action id or "none".
+     */
+    "swipeLeftShort": string;
+    "swipeLeftLong": string;
+    "swipeRightShort": string;
+    "swipeRightLong": string;
+
+    /**
+     * RowActions shows quick buttons over a hovered row in the new design;
+     * RowActionList names them in order, comma separated, five at most.
+     */
+    "rowActions": boolean;
+    "rowActionList": string;
+
+    /**
+     * HTMLColors is how html mail is coloured in a dark theme: "auto" adapts
+     * plain and lightly styled mail and keeps designed mail on a light sheet,
+     * "adapt" adapts all of it, "original" keeps every message as sent.
+     */
+    "htmlColors": string;
+
+    /**
      * ComposeVimMode enables vim keybindings in the compose editor.
      */
     "composeVimMode": boolean;
@@ -11693,6 +11750,27 @@ export class UIPrefsDTO {
         }
         if (!("swipeRightAction" in $$source)) {
             this["swipeRightAction"] = "";
+        }
+        if (!("swipeLeftShort" in $$source)) {
+            this["swipeLeftShort"] = "";
+        }
+        if (!("swipeLeftLong" in $$source)) {
+            this["swipeLeftLong"] = "";
+        }
+        if (!("swipeRightShort" in $$source)) {
+            this["swipeRightShort"] = "";
+        }
+        if (!("swipeRightLong" in $$source)) {
+            this["swipeRightLong"] = "";
+        }
+        if (!("rowActions" in $$source)) {
+            this["rowActions"] = false;
+        }
+        if (!("rowActionList" in $$source)) {
+            this["rowActionList"] = "";
+        }
+        if (!("htmlColors" in $$source)) {
+            this["htmlColors"] = "";
         }
         if (!("composeVimMode" in $$source)) {
             this["composeVimMode"] = false;

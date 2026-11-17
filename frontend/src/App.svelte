@@ -194,6 +194,7 @@
   import AttachmentsBrowser from './components/attachments/AttachmentsBrowser.svelte'
   import { attachmentsOpen, toggleAttachments } from './stores/attachments'
   import { setSenderPanel } from './stores/prefs'
+  import { toggleReadingView } from './stores/readingview'
   import './lib/palette-tasks'
   import './lib/palette-notes'
   import { reloadVault, requestNotes, startNotes } from './stores/notes'
@@ -1436,6 +1437,11 @@
       case 'toggle-sender-panel':
         if (!classic) {
           setSenderPanel(!$prefs.senderPanel)
+        }
+        break
+      case 'reading-view':
+        if (!classic && get(visibleMessageId) !== null) {
+          toggleReadingView()
         }
         break
       case 'shortcut-sheet':

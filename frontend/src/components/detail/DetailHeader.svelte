@@ -18,6 +18,8 @@
   export let detail: MessageDetail
   /** Drops the subject and sets sender, recipients and date on one address line, for a conversation card. */
   export let compact: boolean = false
+  /** How long the message takes to read, shown beside the date; empty shows nothing. */
+  export let readingTime: string = ''
 
   $: avatarPlacement = $prefs.design === 'classic' ? 'column' : $prefs.avatarPlacement
 
@@ -199,6 +201,9 @@
       </div>
       {/if}
     </div>
+    {#if readingTime}
+      <span class="reading-time">{readingTime}</span>
+    {/if}
     {#if $prefs.showDateTime}
       <time class="date">{formatFullDate(detail.date, $prefs.timeFormat as TimeFormat)}</time>
     {/if}
@@ -355,6 +360,18 @@
     color: var(--text-tertiary);
     flex-shrink: 0;
     white-space: nowrap;
+  }
+
+  .reading-time {
+    flex-shrink: 0;
+    padding: 0 var(--space-2);
+    border: var(--hairline) solid var(--border-subtle);
+    border-radius: var(--radius-control);
+    font-size: var(--fz-meta);
+    line-height: 1.6;
+    color: var(--text-tertiary);
+    white-space: nowrap;
+    font-variant-numeric: tabular-nums;
   }
 
   /* the conversation card's address line: sender, address and recipients on

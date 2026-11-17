@@ -59,6 +59,8 @@
   import { chatAvailable } from '../../lib/chatavailable'
   import { openShareToChat } from '../../stores/chatshare'
   import Conversation from './Conversation.svelte'
+  import ReadingView from './ReadingView.svelte'
+  import { closeReadingView, readingView } from '../../stores/readingview'
   import { openContextMenu, type MenuEntry } from '../../stores/contextmenu'
   import { menuHint } from '../../stores/shortcuts'
   import { createTasksFromMail } from '../../lib/taskmail'
@@ -77,6 +79,11 @@
   let sourceFor: number | null = null
 
   $: newDesign = $prefs.design !== 'classic'
+
+  // the reading view goes once there is no message left to read in it.
+  $: if ($readingView && (!newDesign || $visibleMessageId === null || $messageDetail.status === 'error')) {
+    closeReadingView()
+  }
 
   // the sender panel only shows while the reader keeps room for a readable
   // column beside it; a narrow window leaves it out entirely. The row is
@@ -377,6 +384,15 @@ ${bodyHtml}
     <Spinner label={$t('detail.loadingMessage')} />
   {:else if $messageDetail.status === 'error'}
     <ErrorState message={$messageDetail.error} onRetry={() => $visibleMessageId && loadMessage($visibleMessageId)} />
+  {:else if $messageDetail.data && newDesign && $readingView}
+    <ReadingView label={$t('reading.label').replace('{subject}', $messageDetail.data.subject || $t('detail.noSubject'))}>
+      <Conversation
+        detail={$messageDetail.data}
+        reading
+        on:action={(e) => onReaderAction(e.detail.kind, e.detail.message)}
+        on:more={(e) => openReaderMenu(e.detail.message, e.detail.x, e.detail.y)}
+      />
+    </ReadingView>
   {:else if $messageDetail.data && newDesign}
     <div class="reader-row" bind:clientWidth={rowWidth}>
       <Conversation

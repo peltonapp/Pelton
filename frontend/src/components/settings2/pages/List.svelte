@@ -30,14 +30,18 @@
     setAvatarSource,
     setAvatarStyle,
     setSwipeEnabled,
-    setSwipeLeftAction,
-    setSwipeRightAction,
+    setSwipeSlot,
+    setRowActions,
+    setRowActionList,
     setThreadedList,
     setAfterMove,
     setSplitInbox,
+    type SwipeSlot,
   } from '../../../stores/prefs'
   import AfterMoveSkeleton from '../skeletons/AfterMoveSkeleton.svelte'
   import SplitEditor from '../../list/SplitEditor.svelte'
+  import RowActionsEditor from '../../list/RowActionsEditor.svelte'
+  import { rowActionIds, rowActionSettingKey } from '../../../lib/rowactions'
   import { t } from '../../../lib/i18n'
   import { pfpDataUri, type PfpStyle } from '../../../lib/pfp'
   import { initials } from '../../../lib/format'
@@ -132,13 +136,15 @@
   ]
 
   $: swipeActionItems = [
-    { value: 'none', label: $t('settingsPanel.swipeAction.none') },
-    { value: 'delete', label: $t('settingsPanel.swipeAction.delete') },
-    { value: 'read', label: $t('settingsPanel.swipeAction.read') },
-    { value: 'unread', label: $t('settingsPanel.swipeAction.unread') },
-    { value: 'flag', label: $t('settingsPanel.swipeAction.flag') },
-    { value: 'archive', label: $t('settingsPanel.swipeAction.archive') },
-    { value: 'snooze', label: $t('settingsPanel.swipeAction.snooze') },
+    { value: 'none', label: $t('swipe.off') },
+    ...rowActionIds.map((id) => ({ value: id, label: $t(rowActionSettingKey(id)) })),
+  ]
+
+  const swipeSlots: { key: SwipeSlot; id: string; label: string; dir: 'left' | 'right'; long: boolean }[] = [
+    { key: 'swipeLeftShort', id: 'swipe-left-short', label: 'swipe.leftShort', dir: 'left', long: false },
+    { key: 'swipeLeftLong', id: 'swipe-left-long', label: 'swipe.leftLong', dir: 'left', long: true },
+    { key: 'swipeRightShort', id: 'swipe-right-short', label: 'swipe.rightShort', dir: 'right', long: false },
+    { key: 'swipeRightLong', id: 'swipe-right-long', label: 'swipe.rightLong', dir: 'right', long: true },
   ]
 
   function swipeLabel(action: string): string {
@@ -348,10 +354,19 @@
   </Row>
 </Card>
 
-<Card title={$t('settingsPanel.heading.gestures')} description={$t('settingsPanel.hint.swipeWork')}>
+<Card title={$t('rowActions.card')}>
+  <Row id="row-actions" label={$t('rowActions.toggle')} hint={$t('rowActions.toggleHint')}>
+    <ToggleSwitch checked={$prefs.rowActions} label={$t('rowActions.toggle')} on:change={(e) => setRowActions(e.detail)} />
+  </Row>
+  <Row id="row-action-list" label={$t('rowActions.choose')} hint={$t('rowActions.chooseHint')} stacked disabled={!$prefs.rowActions}>
+    <RowActionsEditor value={$prefs.rowActionList} disabled={!$prefs.rowActions} on:change={(e) => setRowActionList(e.detail)} />
+  </Row>
+</Card>
+
+<Card title={$t('swipe.card')} description={$t('swipe.cardHint')}>
   <Row id="swipe-enabled" label={$t('settingsPanel.toggle.swipeEnabled')} hint={$t('settingsPanel.hint.swipeEnable')}>
     <span slot="preview">
-      <SwipeSkeleton direction="left" action={$prefs.swipeLeftAction} label={swipeLabel($prefs.swipeLeftAction)} />
+      <SwipeSkeleton direction="left" action={$prefs.swipeLeftShort} label={swipeLabel($prefs.swipeLeftShort)} />
     </span>
     <ToggleSwitch
       checked={$prefs.swipeEnabled}
@@ -359,30 +374,25 @@
       on:change={(e) => setSwipeEnabled(e.detail)}
     />
   </Row>
-  <Row id="swipe-left" label={$t('settingsPanel.label.swipeLeft')} disabled={!$prefs.swipeEnabled}>
-    <span slot="preview">
-      <SwipeSkeleton direction="left" action={$prefs.swipeLeftAction} label={swipeLabel($prefs.swipeLeftAction)} />
-    </span>
-    <Select
-      disabled={!$prefs.swipeEnabled}
-      value={$prefs.swipeLeftAction}
-      ariaLabel={$t('settingsPanel.label.swipeLeft')}
-      items={swipeActionItems}
-      on:change={(e) => setSwipeLeftAction(e.detail)}
-    />
-  </Row>
-  <Row id="swipe-right" label={$t('settingsPanel.label.swipeRight')} disabled={!$prefs.swipeEnabled}>
-    <span slot="preview">
-      <SwipeSkeleton direction="right" action={$prefs.swipeRightAction} label={swipeLabel($prefs.swipeRightAction)} />
-    </span>
-    <Select
-      disabled={!$prefs.swipeEnabled}
-      value={$prefs.swipeRightAction}
-      ariaLabel={$t('settingsPanel.label.swipeRight')}
-      items={swipeActionItems}
-      on:change={(e) => setSwipeRightAction(e.detail)}
-    />
-  </Row>
+  {#each swipeSlots as slot (slot.key)}
+    <Row id={slot.id} label={$t(slot.label)} hint={slot.long ? $t('swipe.longHint') : ''} disabled={!$prefs.swipeEnabled}>
+      <span slot="preview">
+        <SwipeSkeleton
+          direction={slot.dir}
+          action={$prefs[slot.key]}
+          label={swipeLabel($prefs[slot.key])}
+          reach={slot.long ? 0.68 : 0.34}
+        />
+      </span>
+      <Select
+        disabled={!$prefs.swipeEnabled}
+        value={$prefs[slot.key]}
+        ariaLabel={$t(slot.label)}
+        items={swipeActionItems}
+        on:change={(e) => setSwipeSlot(slot.key, e.detail)}
+      />
+    </Row>
+  {/each}
 </Card>
 
 <style>

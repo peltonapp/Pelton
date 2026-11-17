@@ -1,6 +1,7 @@
 // undohistory.ts is the one list of recent reversible actions: archive, move,
-// delete, read and flag changes, done, mute, pin, snooze, spam and a send still
-// inside its undo window. It lives for the session only and keeps the last
+// delete, read and flag changes, done, mute, pin, snooze, spam, a send still
+// inside its undo window, mail filed under a project, and tasks and events
+// made from mail. It lives for the session only and keeps the last
 // fifty. Permanent actions (empty trash, permanent delete, a send past its
 // window) are never recorded.
 //
@@ -14,7 +15,7 @@
 
 import { derived, get, writable, type Readable } from 'svelte/store'
 import { t } from '../lib/i18n'
-import { errorMessage, toastError, toastInfo } from './toast'
+import { errorMessage, pushAction, toastError, toastInfo } from './toast'
 
 /** What kind of action an entry records. */
 export type HistoryKind =
@@ -30,6 +31,9 @@ export type HistoryKind =
   | 'mute'
   | 'snooze'
   | 'send'
+  | 'project'
+  | 'task'
+  | 'event'
 
 /** The most entries kept; the oldest fall off first. */
 export const historyCap = 50
@@ -179,6 +183,33 @@ export function recordHistory(input: HistoryInput): number {
     return next.length > historyCap ? next.slice(next.length - historyCap) : next
   })
   return id
+}
+
+/** The id of the newest entry, or 0 while the history is empty. */
+export function newestHistoryId(): number {
+  return get(entries).at(-1)?.id ?? 0
+}
+
+// actions that already put up their own undo toast.
+const ownToast = new Set<HistoryKind>(['pin', 'mute', 'send', 'project', 'task', 'event'])
+
+/** How long an offered undo stays up. */
+export const undoToastTTL = 6000
+
+/**
+ * Puts up an undo toast for the newest entry recorded after since, the id
+ * newestHistoryId gave before the action ran. Nothing shows when the action
+ * recorded nothing (it failed, or opened a dialog instead) or already offered
+ * its own undo.
+ */
+export function offerUndo(since: number): void {
+  const entry = get(entries).at(-1)
+  if (!entry || entry.id <= since || entry.state !== 'applied' || ownToast.has(entry.kind)) {
+    return
+  }
+  const say = get(t)
+  const message = say('undoToast.message').replace('{action}', entry.label).replace('{what}', entry.detail)
+  pushAction('info', message, { label: say('menu.undo'), run: () => void undoEntry(entry.id) }, undoToastTTL)
 }
 
 /** Takes an entry out of the history, for an action that became permanent. */

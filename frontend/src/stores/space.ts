@@ -55,6 +55,7 @@ const mailOnlyActions = new Set<string>([
   'rename-folder',
   'delete-folder',
   'toggle-sender-panel',
+  'reading-view',
   'create-task',
   'add-to-project',
   'done',

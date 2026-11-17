@@ -11,6 +11,7 @@ const api = vi.hoisted(() => ({
   removeProjectCard: vi.fn(),
   addTaskToProject: vi.fn(),
   addMailToProject: vi.fn(),
+  removeProjectThread: vi.fn(),
   dismissProjectSuggestion: vi.fn(),
   setProjectStatus: vi.fn(),
   deleteProject: vi.fn(),
@@ -221,6 +222,23 @@ describe('mail', () => {
     expect(await fileMail(2, [7, 8])).toBe(2)
     expect(api.addMailToProject).toHaveBeenCalledWith(2, [7, 8], '')
     expect(get(toasts).at(-1)?.message).toContain('Garden')
+  })
+
+  it('undoes a filing by taking out only the conversations it brought in', async () => {
+    api.listProjectMailMarks.mockResolvedValueOnce([{ threadId: 5, projectId: 2 }])
+    await loadProjectMarks()
+    api.addMailToProject.mockResolvedValue(2)
+    api.removeProjectThread.mockResolvedValue(undefined)
+    api.listProjectMailMarks.mockResolvedValue([
+      { threadId: 5, projectId: 2 },
+      { threadId: 6, projectId: 2 },
+    ])
+    await fileMail(2, [7, 8])
+    const undo = get(toasts).at(-1)?.more?.find((a) => a.label === 'Undo')
+    expect(undo).toBeDefined()
+    undo?.run()
+    await vi.waitFor(() => expect(api.removeProjectThread).toHaveBeenCalledTimes(1))
+    expect(api.removeProjectThread).toHaveBeenCalledWith(2, 6)
   })
 
   it('remembers a dismissed suggestion at once', async () => {

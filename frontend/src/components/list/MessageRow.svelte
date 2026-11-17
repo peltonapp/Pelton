@@ -5,8 +5,10 @@
   // and a dot (never accent). flagged rows highlight per the user's chosen style
   // (flag icon, a left bar, both icon+bar, or off); a color label paints the left
   // bar and a small dot. offline and snoozed states show little meta icons.
-  // trackpad swipes (horizontal wheel) reveal a configurable action.
-  import { createEventDispatcher } from 'svelte'
+  // trackpad swipes (horizontal wheel) reveal a configurable action, and in
+  // the new design quick buttons lie over the date while the row is hovered or
+  // has the keyboard focus.
+  import { createEventDispatcher, onDestroy } from 'svelte'
   import {
     IconStarFilled,
     IconPaperclip,
@@ -26,7 +28,7 @@
   import { flagColorHex } from '../../theme/flagcolors'
   import { viewColorCss } from '../../lib/viewicons'
   import type { MessageSummary, RowTemplate, SwipeAction, ThreadSummary } from '../../lib/types'
-  import { t } from '../../lib/i18n'
+  import { t, shortcutLabel } from '../../lib/i18n'
   import { vipSenders, bareAddress } from '../../stores/vip'
   import Highlight from '../common/Highlight.svelte'
   import Ph from '../common/Ph.svelte'
@@ -42,6 +44,14 @@
   import { projectMailMarks, projects } from '../../stores/projects'
   import { projectColor } from '../../lib/projectlogic'
   import { highlightTerms } from '../../stores/search'
+  import { idleSwipe, swipeWheel, swipeOutcome, swiping, anySwipe, swipeTuning, type SwipeState } from '../../lib/swipe'
+  import { isRowAction, rowActionApplies, rowActionView, type RowActionId } from '../../lib/rowactions'
+  import { spamState } from '../../lib/messageactions'
+  import { currentUIScale } from '../../theme/theme'
+  import { dur, motion } from '../../lib/motion'
+  import { bindings } from '../../stores/shortcuts'
+  import { tip } from '../../lib/tip'
+  import type { ShortcutAction } from '../../lib/shortcuts'
 
   export let message: MessageSummary
   export let selected: boolean = false
@@ -62,8 +72,16 @@
   export let fromMe: boolean = false
   /** The row has just been revealed by expanding its conversation. */
   export let entering: boolean = false
+  /** The quick buttons to offer over the row, in order; empty offers none. */
+  export let actions: RowActionId[] = []
+  /** The row has the list's keyboard focus, so its quick buttons take Tab. */
+  export let active: boolean = false
 
-  const dispatch = createEventDispatcher<{ swipe: 'left' | 'right'; toggle: void }>()
+  const dispatch = createEventDispatcher<{
+    swipe: 'left' | 'right'
+    rowaction: { id: RowActionId; via: 'button' | 'swipe' }
+    toggle: void
+  }>()
 
   $: newDesign = $prefs.design !== 'classic'
   $: threadCount = thread?.count ?? 0
@@ -127,36 +145,48 @@
   $: snoozed = !!message.snoozeUntil
   $: showOffline = message.offline && $prefs.showOfflineIndicator
 
-  // swipe gesture state. horizontal wheel deltas (trackpad) accumulate into a
-  // translation that reveals the action behind the row, apple-mail style: the
-  // reveal follows the swipe, resists past the row width, and the action only
-  // fires once you have deliberately dragged past the commit line and let go.
-  // "letting go" on a trackpad is inferred from wheel events stopping, so the
-  // idle window is generous enough that a natural mid-swipe pause never counts
-  // as a release. requiring a coherent horizontal burst to engage stops a
-  // vertical scroll from ever being hijacked into a swipe.
+  // trackpad swipes. lib/swipe.ts reads the wheel events: it decides the axis,
+  // follows a horizontal swipe, ignores the momentum tail and says what the
+  // swipe comes to. a trackpad has no release event, so the gesture ends once
+  // the events stop for a moment. the new design has a short and a long swipe
+  // each way; the classic one keeps a single action per direction past a
+  // deliberate commit line.
+  let wrapEl: HTMLDivElement
   let wrapWidth = 320
+  let gesture: SwipeState = idleSwipe
   let offset = 0
   let settling = false
-  let engaged = false
   let committed = false
-  // pre-engage accumulation: we only start a swipe once there is a coherent burst
-  // of horizontal movement, so ordinary vertical scrolling is never hijacked.
-  let preDX = 0
-  let idleTimer: ReturnType<typeof setTimeout> | undefined
+  let rtl = false
+  let releaseTimer: ReturnType<typeof setTimeout> | undefined
 
-  // must engage with ~28px of coherent horizontal movement, and commit only past
-  // 60% of the row so a half-hearted nudge never fires. the reveal resists
-  // (rubber-bands) past the full row width so the swipe feels anchored rather
-  // than flinging off-screen.
-  const engageThreshold = 28
-  $: commitDistance = wrapWidth * 0.6
-  $: maxReveal = wrapWidth
+  $: swipeActions = newDesign
+    ? {
+        leftShort: $prefs.swipeLeftShort,
+        leftLong: $prefs.swipeLeftLong,
+        rightShort: $prefs.swipeRightShort,
+        rightLong: $prefs.swipeRightLong,
+      }
+    : { leftShort: $prefs.swipeLeftAction, leftLong: 'none', rightShort: $prefs.swipeRightAction, rightLong: 'none' }
+  $: tuning = newDesign ? swipeTuning : { ...swipeTuning, shortFraction: 0.6 }
+  $: swipeOn = $prefs.swipeEnabled && anySwipe(swipeActions)
+  $: outcome = swipeOutcome(offset, wrapWidth, swipeActions, rtl, tuning)
+  // the action the uncovered side stands for, named before the first mark is
+  // reached too: the first one further along that does something.
+  $: previewAction = outcome.action !== 'none' ? outcome.action : nextAction(offset)
 
-  $: leftAction = $prefs.swipeLeftAction as SwipeAction
-  $: rightAction = $prefs.swipeRightAction as SwipeAction
+  function nextAction(at: number): string {
+    const sign = at < 0 ? -1 : 1
+    for (const reach of [tuning.shortFraction, tuning.longFraction]) {
+      const ahead = swipeOutcome(sign * wrapWidth * reach, wrapWidth, swipeActions, rtl, tuning)
+      if (ahead.action !== 'none') {
+        return ahead.action
+      }
+    }
+    return 'none'
+  }
 
-  $: actionMeta = {
+  $: classicMeta = {
     none: { label: '', color: 'var(--surface-hover)', icon: IconFlag },
     delete: { label: $t('action.delete'), color: 'var(--danger)', icon: IconTrash },
     read: { label: $t('messageList.swipe.read'), color: 'var(--accent)', icon: IconMailOpened },
@@ -165,103 +195,125 @@
     archive: { label: $t('action.archive'), color: 'var(--text-tertiary)', icon: IconArchive },
     snooze: { label: $t('shortcut.snooze'), color: 'var(--accent)', icon: IconClockPause },
   } as Record<SwipeAction, { label: string; color: string; icon: typeof IconTrash }>
+  $: classicReveal = classicMeta[(offset > 0 ? $prefs.swipeRightAction : $prefs.swipeLeftAction) as SwipeAction] ?? classicMeta.none
 
-  // revealed is the action about to fire given the current drag direction. a
-  // positive offset (row dragged right) reveals the right-swipe action on the
-  // left edge; negative reveals the left-swipe action on the right edge.
-  $: revealAction = offset > 0 ? rightAction : leftAction
-  $: revealMeta = actionMeta[revealAction] ?? actionMeta.none
+  $: rowState = {
+    seen: message.seen,
+    flagged: message.flagged,
+    pinned: !!message.pinned || !!thread?.pinned,
+    muted: !!message.muted,
+    inSpam: newDesign && spamState(message) === 'spam',
+  }
+  $: swipeView = isRowAction(previewAction) ? rowActionView(previewAction, rowState) : null
+
+  // the actions that take the row out of the list slide it the rest of the
+  // way; the others let it settle back once they ran.
+  const leaving = new Set(['archive', 'delete', 'done', 'spam'])
 
   function onWheel(event: WheelEvent): void {
-    if (!$prefs.swipeEnabled || (leftAction === 'none' && rightAction === 'none') || committed) {
+    if (!swipeOn || committed || event.deltaMode !== 0 || event.ctrlKey) {
       return
     }
-    const dx = event.deltaX
-    const dy = event.deltaY
-    if (!engaged) {
-      // a clearly vertical event: let it scroll and reset any partial buffer, so
-      // stray horizontal jitter during scrolling never accumulates into a swipe.
-      if (Math.abs(dy) > Math.abs(dx) * 1.2) {
-        preDX = 0
-        return
-      }
-      // accumulate horizontal intent; engage only after a deliberate burst.
-      preDX += dx
-      if (Math.abs(preDX) < engageThreshold) {
-        return
-      }
-      engaged = true
-      settling = false
-      offset = 0
+    if (gesture.phase === 'idle' || gesture.phase === 'vertical') {
+      rtl = getComputedStyle(wrapEl).direction === 'rtl'
     }
-    // once engaged, a clearly vertical burst means the user switched to
-    // scrolling: end the gesture (snap back) rather than staying stuck open.
-    if (Math.abs(dy) > Math.abs(dx) * 2.5) {
-      scheduleEnd(0)
+    const scale = currentUIScale()
+    const step = swipeWheel(gesture, { dx: event.deltaX / scale, dy: event.deltaY / scale, t: event.timeStamp }, wrapWidth, tuning)
+    gesture = step.state
+    if (!step.consume) {
       return
     }
     event.preventDefault()
     settling = false
-    offset = rubberBand(offset - dx, maxReveal)
-    scheduleEnd(200)
+    offset = gesture.offset
+    clearTimeout(releaseTimer)
+    releaseTimer = setTimeout(release, tuning.gapMs)
   }
 
-  // scheduleEnd (re)arms the release timer. a trackpad wheel has no end event, so
-  // the gesture is considered released once deltas stop arriving for a moment.
-  function scheduleEnd(delay: number): void {
-    if (idleTimer) {
-      clearTimeout(idleTimer)
-    }
-    idleTimer = setTimeout(endSwipe, delay)
-  }
-
-  function endSwipe(): void {
-    if (!engaged || committed) {
+  function release(): void {
+    if (!swiping(gesture) || committed) {
       return
     }
-    const dir = offset > 0 ? 'right' : 'left'
-    const action = dir === 'right' ? rightAction : leftAction
-    const passed = Math.abs(offset) >= commitDistance
-    engaged = false
-    preDX = 0
+    const result = swipeOutcome(offset, wrapWidth, swipeActions, rtl, tuning)
+    gesture = idleSwipe
     settling = true
-    if (passed && action !== 'none') {
-      // slide the rest of the way so the whole row shows the action, then fire.
-      committed = true
-      offset = dir === 'right' ? maxReveal : -maxReveal
-      setTimeout(() => {
-        dispatch('swipe', dir)
+    if (result.action === 'none') {
+      offset = 0
+      return
+    }
+    committed = true
+    const still = dur(motion.base) === 0
+    const out = !newDesign || leaving.has(result.action)
+    offset = out && !still ? Math.sign(offset) * wrapWidth : offset
+    setTimeout(
+      () => {
+        if (newDesign && isRowAction(result.action)) {
+          dispatch('rowaction', { id: result.action, via: 'swipe' })
+        } else {
+          dispatch('swipe', result.dir)
+        }
         offset = 0
         committed = false
-      }, 160)
-    } else {
-      offset = 0
-    }
+      },
+      still ? 0 : motion.fast,
+    )
   }
 
-  // rubberBand keeps the drag 1:1 within the row and heavily resists beyond it,
-  // so the reveal feels anchored instead of sliding the row clean off-screen.
-  function rubberBand(v: number, max: number): number {
-    if (Math.abs(v) <= max) {
-      return v
+  onDestroy(() => clearTimeout(releaseTimer))
+
+  // quick buttons over the row. the list hands over which to show, already
+  // cut to what applies; they are only reachable by Tab on the focused row.
+  $: shownActions = actions.filter((id) => rowActionApplies(id, { threadId: message.threadId, spam: id === 'spam' ? spamState(message) : 'none' }))
+  $: actionViews = shownActions.map((id) => rowActionView(id, rowState))
+  $: rowLabel = `${displayName(message.fromName, message.fromAddress)}, ${message.subject || $t('messageList.noSubject')}`
+
+  function keysFor(action: ShortcutAction, map: Record<string, string>): string | undefined {
+    const combo = map[action]
+    return combo ? shortcutLabel(combo) : undefined
+  }
+
+  function runAction(event: MouseEvent, id: RowActionId): void {
+    event.stopPropagation()
+    dispatch('rowaction', { id, via: 'button' })
+  }
+
+  // Enter and Space press the focused button; the list must not also open or
+  // select the row with them.
+  function onActionKey(event: KeyboardEvent): void {
+    if (event.key === 'Enter' || event.key === ' ') {
+      event.stopPropagation()
     }
-    const over = Math.abs(v) - max
-    return Math.sign(v) * (max + over * 0.25)
   }
 </script>
 
 <!-- keyboard navigation for the list is handled by the listbox container
      (arrow keys + enter), so the row itself only needs the click affordance. -->
-<div class="swipe-wrap" class:swiping={offset !== 0} bind:clientWidth={wrapWidth}>
-  {#if offset !== 0}
+<div class="swipe-wrap" class:swiping={offset !== 0} class:active bind:this={wrapEl} bind:clientWidth={wrapWidth}>
+  {#if offset !== 0 && newDesign}
+    <div
+      class="reveal new"
+      class:right-edge={offset < 0}
+      class:armed={outcome.stage !== 'none'}
+      class:danger={swipeView?.danger}
+      class:long={outcome.stage === 'long'}
+      aria-hidden="true"
+    >
+      {#if swipeView}
+        {#key outcome.stage}
+          <span class="reveal-mark"><Ph svg={swipeView.icon} size={18} /></span>
+        {/key}
+        <span>{$t(swipeView.labelKey)}</span>
+      {/if}
+    </div>
+  {:else if offset !== 0}
     <div
       class="reveal"
       class:right-edge={offset < 0}
-      style={`--reveal-color:${revealMeta.color}`}
+      style={`--reveal-color:${classicReveal.color}`}
       aria-hidden="true"
     >
-      <svelte:component this={revealMeta.icon} size={18} stroke={1.7} />
-      <span>{revealMeta.label}</span>
+      <svelte:component this={classicReveal.icon} size={18} stroke={1.7} />
+      <span>{classicReveal.label}</span>
     </div>
   {/if}
   <!-- svelte-ignore a11y-click-events-have-key-events a11y-no-noninteractive-element-interactions -->
@@ -404,6 +456,34 @@
       {/if}
     </div>
   </div>
+  {#if actionViews.length > 0 && offset === 0}
+    <!-- a sibling of the option rather than inside it, so the listbox keeps
+         plain options and the buttons are their own toolbar. -->
+    <!-- svelte-ignore a11y-no-noninteractive-element-interactions -->
+    <div
+      class="row-actions {template}"
+      role="toolbar"
+      tabindex="-1"
+      aria-label={$t('rowActions.label').replace('{row}', rowLabel)}
+      on:pointerdown|stopPropagation
+      on:dblclick|stopPropagation
+      on:keydown={onActionKey}
+    >
+      {#each actionViews as view (view.id)}
+        <button
+          type="button"
+          class="row-action"
+          class:danger={view.danger}
+          tabindex={active ? 0 : -1}
+          aria-label={$t(view.labelKey)}
+          use:tip={{ text: $t(view.labelKey), shortcut: keysFor(view.shortcut, $bindings), side: 'top' }}
+          on:click={(e) => runAction(e, view.id)}
+        >
+          <Ph svg={view.icon} size={15} />
+        </button>
+      {/each}
+    </div>
+  {/if}
 </div>
 
 <style>
@@ -427,6 +507,140 @@
   }
   .reveal.right-edge {
     justify-content: flex-end;
+  }
+
+  /* the new design's reveal stays quiet until the swipe passes its first
+     mark and fills once it has, so the point where letting go acts is plain
+     to see. a long swipe changes the action and lands the mark again. */
+  .reveal.new {
+    background: var(--surface-sunken);
+    color: var(--text-tertiary);
+    transition:
+      background-color var(--motion-fast) var(--ease-out),
+      color var(--motion-fast) var(--ease-out);
+  }
+
+  .reveal.new.armed {
+    background: var(--accent);
+    color: var(--accent-fg);
+  }
+
+  .reveal.new.armed.danger {
+    background: var(--danger);
+    color: var(--text-inverse);
+  }
+
+  .reveal-mark {
+    display: inline-flex;
+  }
+
+  .reveal.new.armed .reveal-mark {
+    animation: mark-in var(--motion-base) var(--ease-spring);
+  }
+
+  @keyframes mark-in {
+    from {
+      transform: scale(0.6);
+    }
+  }
+
+  :global(:root[data-design='new']) .row.settling {
+    transition: transform var(--motion-slow) var(--ease-spring);
+  }
+
+  /* the quick buttons lie over the end of the top line, the date included,
+     on the row's own colour with a short fade into the text before them, so
+     nothing in the row moves when they appear. the list's hover and
+     selection bands tint them along with the row. */
+  .row-actions {
+    position: absolute;
+    top: calc(var(--row-pad-y) - var(--space-1));
+    inset-inline-end: var(--row-pad-x);
+    display: flex;
+    align-items: center;
+    gap: var(--space-1);
+    padding-inline-start: var(--space-1);
+    background: var(--surface-raised);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity var(--motion-fast) var(--ease-out);
+  }
+
+  .row-actions::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    inset-inline-end: 100%;
+    width: var(--row-action-fade);
+    background: var(--surface-raised);
+    -webkit-mask-image: linear-gradient(to left, currentColor, transparent);
+    mask-image: linear-gradient(to left, currentColor, transparent);
+    pointer-events: none;
+  }
+
+  :global([dir='rtl']) .row-actions::before {
+    -webkit-mask-image: linear-gradient(to right, currentColor, transparent);
+    mask-image: linear-gradient(to right, currentColor, transparent);
+  }
+
+  .row-actions.comfortable,
+  .row-actions.compact {
+    top: calc(var(--space-2) - var(--space-1));
+  }
+
+  .row-actions.single {
+    top: 50%;
+    transform: translateY(-50%);
+  }
+
+  .swipe-wrap:hover .row-actions,
+  .row-actions:focus-within,
+  :global([role='listbox']:focus-visible) .swipe-wrap.active .row-actions {
+    opacity: 1;
+    pointer-events: auto;
+  }
+
+  :global(body.mail-dragging) .row-actions {
+    opacity: 0;
+    pointer-events: none;
+  }
+
+  .row-action {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: var(--row-action-size);
+    height: var(--row-action-size);
+    padding: 0;
+    border: none;
+    border-radius: var(--radius-control);
+    background: transparent;
+    color: var(--text-tertiary);
+    cursor: var(--cursor-action);
+    transition:
+      background-color var(--motion-fast) var(--ease-out),
+      color var(--motion-fast) var(--ease-out),
+      transform var(--motion-fast) var(--ease-press);
+  }
+
+  .row-action:hover {
+    background: var(--surface-hover);
+    color: var(--text-primary);
+  }
+
+  .row-action.danger:hover {
+    background: var(--danger-bg);
+    color: var(--danger);
+  }
+
+  .row-action:active {
+    transform: scale(var(--press-scale));
+  }
+
+  .row-action:focus-visible {
+    outline: calc(var(--hairline) * 2) solid var(--accent);
+    outline-offset: calc(var(--hairline) * -1);
   }
 
   .row {

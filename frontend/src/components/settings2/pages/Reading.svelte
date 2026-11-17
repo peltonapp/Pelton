@@ -20,7 +20,12 @@
     setSenderPanel,
     setMailDates,
     setProjectSuggestions,
+    setHtmlColors,
   } from '../../../stores/prefs'
+  import Segmented from '../ui/Segmented.svelte'
+  import { ensureSenderReading, forgetSenderReading, senderReading } from '../../../stores/senderreading'
+  import { errorMessage, toastError, toastSuccess } from '../../../stores/toast'
+  import type { HtmlColors } from '../../../lib/types'
   import { bodyFonts, bodyFontStack } from '../../../lib/fonts'
   import { listSystemFonts, getSetting, setSetting } from '../../../lib/api'
   import { t } from '../../../lib/i18n'
@@ -97,6 +102,23 @@
     void setSetting(charsetKey, charsetFallback)
   }
 
+  $: htmlColorOptions = [
+    { key: 'auto', label: $t('reader.colors.auto') },
+    { key: 'adapt', label: $t('reader.colors.always') },
+    { key: 'original', label: $t('reader.colors.never') },
+  ]
+
+  onMount(() => void ensureSenderReading())
+
+  async function forgetSenders(): Promise<void> {
+    try {
+      const n = await forgetSenderReading()
+      toastSuccess($t('reader.senders.forgotten').replace('{n}', String(n)))
+    } catch (err) {
+      toastError(errorMessage(err))
+    }
+  }
+
   type ToggleKey = 'showMailboxBadge' | 'showPgp' | 'showAuth'
 
   $: techInfo = [
@@ -132,6 +154,19 @@
   <Row id="sender-fonts" label={$t('settingsPanel.toggle.senderFonts')} hint={$t('settingsPanel.hint.senderFonts')}>
     <SenderFontPreview slot="preview" senderFonts={$prefs.senderFonts} />
     <ToggleSwitch checked={$prefs.senderFonts} label={$t('settingsPanel.toggle.senderFonts')} on:change={(e) => setSenderFonts(e.detail)} />
+  </Row>
+  <Row id="html-colors" label={$t('reader.colors.setting')} hint={$t('reader.colors.settingHint')}>
+    <Segmented
+      label={$t('reader.colors.setting')}
+      value={$prefs.htmlColors}
+      options={htmlColorOptions}
+      on:change={(e) => setHtmlColors(e.detail as HtmlColors)}
+    />
+  </Row>
+  <Row id="sender-reading" label={$t('reader.senders.setting')} hint={$t('reader.senders.settingHint')}>
+    <button type="button" class="s2-btn" disabled={$senderReading.size === 0} on:click={() => void forgetSenders()}>
+      {$t('reader.senders.forget')}
+    </button>
   </Row>
   <Row id="charset-fallback" label={$t('settingsPanel.label.charsetFallback')} hint={$t('settingsPanel.hint.charsetFallback')}>
     <Select

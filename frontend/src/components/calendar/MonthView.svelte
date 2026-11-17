@@ -358,10 +358,6 @@
     background: var(--selection-bg);
   }
 
-  .cell:global(.maildrop-over) {
-    background: var(--selection-bg-strong);
-  }
-
   .num {
     min-width: calc(var(--fz-list) * 1.9);
     height: calc(var(--fz-list) * 1.9);

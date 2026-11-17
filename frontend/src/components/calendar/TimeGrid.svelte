@@ -797,10 +797,6 @@
     border-inline-start: var(--hairline) solid var(--border-subtle);
   }
 
-  .lane-cell:global(.maildrop-over) {
-    background: var(--selection-bg);
-  }
-
   .bar {
     position: relative;
     z-index: 1;
@@ -912,10 +908,6 @@
     position: relative;
     border-inline-start: var(--hairline) solid var(--border-subtle);
     cursor: var(--cursor-action);
-  }
-
-  .col:global(.maildrop-over) {
-    background: color-mix(in srgb, var(--accent) 5%, transparent);
   }
 
   .off {
