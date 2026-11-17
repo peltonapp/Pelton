@@ -72,13 +72,14 @@
 
   // a field that asked for focus gets it, else the first plain text field, else
   // the dialog itself. buttons, pickers and comboboxes are skipped: anything
-  // that reacts to focus (a tooltip, a list) would fire on open.
+  // that reacts to focus (a tooltip, a list) would fire on open. the classic
+  // design skips the text field step.
   function focusFirst(): void {
     const wanted =
       dialog?.querySelector<HTMLElement>('[autofocus]') ??
-      dialog?.querySelector<HTMLElement>(
+      ($prefs.design === 'classic' ? null : dialog?.querySelector<HTMLElement>(
         '.body input:is([type="text"], [type="search"], [type="email"], [type="url"], :not([type])):not([disabled]):not([readonly]):not([role="combobox"]), .body textarea:not([disabled]):not([readonly])',
-      )
+      ))
     if (wanted) {
       wanted.focus()
       return
