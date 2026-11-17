@@ -5,17 +5,7 @@
 
 import { addDays, sameDay } from './caldate'
 import type { CalendarView } from './types'
-import type { TimeFormat } from './format'
-
-function clock(timeFormat: TimeFormat): Intl.DateTimeFormatOptions {
-  if (timeFormat === '12') {
-    return { hour12: true }
-  }
-  if (timeFormat === '24') {
-    return { hourCycle: 'h23' }
-  }
-  return {}
-}
+import { clockOf as clock, type TimeFormat } from './format'
 
 /** A time of day, such as 09:30 or 9:30 AM. */
 export function formatTime(d: Date, timeFormat: TimeFormat, locale?: string): string {

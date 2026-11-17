@@ -11,7 +11,7 @@ export type TimeFormat = 'auto' | '12' | '24'
 // the locale decide. The 24 hour clock is asked for as the h23 cycle rather
 // than hour12:false, which some locales turn into h24 and show midnight as
 // "24:05".
-function clockOf(timeFormat: TimeFormat): Intl.DateTimeFormatOptions {
+export function clockOf(timeFormat: TimeFormat): Intl.DateTimeFormatOptions {
   if (timeFormat === '12') {
     return { hour12: true }
   }
