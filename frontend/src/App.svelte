@@ -27,6 +27,7 @@
   import { orderedSpaces, visibleSpaces } from './lib/spaces'
   import { startChat, stopChat } from './stores/chat'
   import { popupIsOpen } from './lib/popups'
+  import { openMenuFromKeyboard } from './lib/keymenu'
   import { calendarFocus, calendarImport, calendarQuickAdd } from './stores/calendar'
   import { formatTime } from './lib/calformat'
   import type { TimeFormat } from './lib/format'
@@ -2108,6 +2109,9 @@
     // screen, which should only happen from the plain main view.
     if (event.key === 'Escape' && (anyDialogOpen() || overlayOpen || popupIsOpen())) {
       event.preventDefault()
+    }
+    if ($prefs.design !== 'classic' && openMenuFromKeyboard(event)) {
+      return
     }
     if (tryVimNav(event)) {
       event.preventDefault()
