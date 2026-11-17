@@ -430,6 +430,18 @@ export class FieldCondition {
     "param": string;
     "args"?: { [_ in string]?: any };
 
+    /**
+     * Split, when set, separates a field holding several values, e.g. a list
+     * of addresses; a rule matches on the first.
+     */
+    "split"?: string;
+
+    /**
+     * LabelKey and Label name the match, e.g. "Sender".
+     */
+    "labelKey": string;
+    "label"?: string;
+
     /** Creates a new FieldCondition instance. */
     constructor($$source: Partial<FieldCondition> = {}) {
         if (!("field" in $$source)) {
@@ -440,6 +452,9 @@ export class FieldCondition {
         }
         if (!("param" in $$source)) {
             this["param"] = "";
+        }
+        if (!("labelKey" in $$source)) {
+            this["labelKey"] = "";
         }
 
         Object.assign(this, $$source);

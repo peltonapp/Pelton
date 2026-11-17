@@ -59,6 +59,12 @@ type FieldCondition struct {
 	Condition string         `json:"condition"`
 	Param     string         `json:"param"`
 	Args      map[string]any `json:"args,omitempty"`
+	// Split, when set, separates a field holding several values, e.g. a list
+	// of addresses; a rule matches on the first.
+	Split string `json:"split,omitempty"`
+	// LabelKey and Label name the match, e.g. "Sender".
+	LabelKey string `json:"labelKey"`
+	Label    string `json:"label,omitempty"`
 }
 
 // Trigger is something that starts a script.

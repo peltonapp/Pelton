@@ -1,9 +1,10 @@
 <script lang="ts">
-  // the chips above a rule made from a message: one click matches it on the
-  // sender, the subject, the List-Id or a recipient instead.
+  // the chips above a rule made from a message: one click matches it on
+  // another field the message's type offers, e.g. the subject or the List-Id.
   import xIcon from '@phosphor-icons/core/assets/duotone/x-duotone.svg?raw'
   import Ph from '../../common/Ph.svelte'
   import { t } from '../../../lib/i18n'
+  import { entryLabel } from '../../../lib/scripting'
   import { getEditor } from './context'
   import { ruleDraft, type RuleChoice, type RuleDraft } from './rulefrommail'
   import { emptyGroup, findBlock, setCond } from './tree'
@@ -26,7 +27,7 @@
   <span class="label">{$t('scripts.blocks.rule.matchOn')}</span>
   {#each draft.choices as c (c.key)}
     <button type="button" class="chip" class:on={current === JSON.stringify(c.cond)} aria-pressed={current === JSON.stringify(c.cond)} title={c.value} on:click={() => pick(c)}>
-      <span class="key">{$t(`scripts.blocks.rule.${c.key}`)}</span>
+      <span class="key">{entryLabel($t, c)}</span>
       <span class="value">{c.value}</span>
     </button>
   {/each}

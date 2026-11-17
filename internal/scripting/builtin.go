@@ -97,10 +97,10 @@ func registerValueTypes(r *Registry) error {
 		},
 		Lazy: map[string]string{"body": "mail.body"},
 		Conditions: []FieldCondition{
-			{Field: "from", Condition: "mail.from", Param: "value"},
-			{Field: "subject", Condition: "mail.subject", Param: "value"},
-			{Field: "headers.list-id", Condition: "mail.header", Param: "value", Args: map[string]any{"name": "List-Id"}},
-			{Field: "to", Condition: "mail.to", Param: "value"},
+			{Field: "from", Condition: "mail.from", Param: "value", LabelKey: "scripts.blocks.rule.from"},
+			{Field: "subject", Condition: "mail.subject", Param: "value", LabelKey: "scripts.blocks.rule.subject"},
+			{Field: "headers.list-id", Condition: "mail.header", Param: "value", Args: map[string]any{"name": "List-Id"}, LabelKey: "scripts.blocks.rule.list"},
+			{Field: "to", Condition: "mail.to", Param: "value", Split: ",", LabelKey: "scripts.blocks.rule.to"},
 		},
 	}
 	addresses := func(name string) Field {

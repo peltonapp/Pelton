@@ -1,12 +1,13 @@
 // rulefrommail.ts makes a block script from a message: a mail rule started
-// when mail arrives, with an if block that matches the message's sender. The
-// editor then offers chips to match on the subject, the List-Id or a
-// recipient instead. Only conditions the catalog has are offered.
+// when mail arrives, with an if block that matches the message on its first
+// field the registry can test. The editor then offers chips to match on the
+// other fields instead. Which fields and which conditions come from the
+// message value type's condition hints, so nothing here names a condition.
 
 import { get, writable } from 'svelte/store'
-import { getMessage, getMessageSource } from '../../../lib/api'
+import { scriptValue } from '../../../lib/api'
 import { t } from '../../../lib/i18n'
-import { newInput, serializeTree, withTriggerPermission, type BlockCond, type ScriptCatalog } from '../../../lib/scripting'
+import { newInput, serializeTree, withTriggerPermission, type BlockCond, type FieldCondition, type ScriptCatalog } from '../../../lib/scripting'
 import { createScript, loadCatalog } from '../../../stores/scripts'
 import { openSpace } from '../../../stores/space'
 import { errorMessage, toastError } from '../../../stores/toast'
@@ -15,9 +16,16 @@ import { ifWith, treeOf } from './tree'
 /** The trigger a rule from a message starts with. */
 export const ruleTrigger = 'mail.arrived'
 
+/** The value type a rule is made from. */
+const ruleValueType = 'message'
+
 /** One thing a rule can match the message on. */
 export interface RuleChoice {
-  key: 'from' | 'subject' | 'list' | 'to'
+  /** The field's path, e.g. "subject". */
+  key: string
+  /** What the match is called, as a label key with an English fallback. */
+  labelKey: string
+  label: string
   /** The text matched, shown on the chip. */
   value: string
   cond: BlockCond
@@ -33,64 +41,43 @@ export interface RuleDraft {
 /** The rule from a message open now, or null. */
 export const ruleDraft = writable<RuleDraft | null>(null)
 
-/** What a message offers to match on. */
-export interface RuleSource {
-  fromAddress: string
-  subject: string
-  toAddresses: string
-  listId: string
+function fieldAt(fields: Record<string, unknown>, path: string): unknown {
+  return path.split('.').reduce<unknown>((v, seg) => (v && typeof v === 'object' ? (v as Record<string, unknown>)[seg] : undefined), fields)
 }
 
-const sources: { key: RuleChoice['key']; condition: string; field: keyof RuleSource; header?: string }[] = [
-  { key: 'from', condition: 'mail.from', field: 'fromAddress' },
-  { key: 'subject', condition: 'mail.subject', field: 'subject' },
-  { key: 'list', condition: 'mail.header', field: 'listId', header: 'List-Id' },
-  { key: 'to', condition: 'mail.to', field: 'toAddresses' },
-]
-
-/** The first plain address in an address list such as "Ann <ann@x.org>, bob@y.org". */
-export function firstAddress(list: string): string {
-  const first = list.split(',')[0] ?? ''
-  const angle = first.match(/<([^>]+)>/)
-  return (angle ? angle[1] : first).trim()
-}
-
-/** The List-Id of raw message source, without its display name, or ''. */
-export function listIdOf(source: string): string {
-  const head = source.split(/\r?\n\r?\n/)[0] ?? ''
-  const m = head.match(/^list-id:[ \t]*((?:.*)(?:\r?\n[ \t].*)*)/im)
-  if (!m) {
-    return ''
+/** The text a hint matches on: the first part of a split field, without a display name around an address. */
+export function matchText(raw: unknown, hint: Pick<FieldCondition, 'split'>): string {
+  let text = typeof raw === 'string' ? raw.trim() : ''
+  if (hint.split) {
+    text = (text.split(hint.split)[0] ?? '').trim()
   }
-  const value = m[1].replace(/\r?\n[ \t]+/g, ' ').trim()
-  const angle = value.match(/<([^>]+)>/)
-  return (angle ? angle[1] : value).trim()
+  const angle = text.match(/^[^<]*<([^>]+)>$/)
+  return (angle ? angle[1] : text).trim()
 }
 
-/** The matches a message offers, in the order the chips show them. */
-export function ruleChoices(catalog: ScriptCatalog, src: RuleSource): RuleChoice[] {
+/** The matches a value offers, in the order its type lists them, for the conditions the catalog has. */
+export function ruleChoices(catalog: ScriptCatalog, valueType: string, fields: Record<string, unknown>): RuleChoice[] {
   const out: RuleChoice[] = []
-  for (const s of sources) {
-    const value = s.key === 'to' ? firstAddress(src.toAddresses) : src[s.field].trim()
-    if (!value || !catalog.conditions.some((c) => c.id === s.condition)) {
+  for (const hint of catalog.valueTypes.find((v) => v.id === valueType)?.conditions ?? []) {
+    const value = matchText(fieldAt(fields, hint.field), hint)
+    if (!value || !catalog.conditions.some((c) => c.id === hint.condition)) {
       continue
     }
-    const args: BlockCond['args'] = { value: { value } }
-    if (s.header) {
-      args.name = { value: s.header }
+    const args: BlockCond['args'] = { [hint.param]: { value } }
+    for (const [name, v] of Object.entries(hint.args ?? {})) {
+      args[name] = { value: v }
     }
-    out.push({ key: s.key, value, cond: { kind: 'condition', type: s.condition, args } })
+    out.push({ key: hint.field, labelKey: hint.labelKey, label: hint.label ?? hint.field, value, cond: { kind: 'condition', type: hint.condition, args } })
   }
   return out
 }
 
-/** Makes a rule from a message, opens it in the Automations space, and adds the List-Id choice once the source is read. */
+/** Makes a rule from a message and opens it in the Automations space. */
 export async function createRuleFromMail(messageId: number): Promise<void> {
   const say = get(t)
   try {
-    const [catalog, msg] = await Promise.all([loadCatalog(), getMessage(messageId)])
-    const src: RuleSource = { fromAddress: msg.fromAddress, subject: msg.subject, toAddresses: msg.toAddresses ?? '', listId: '' }
-    const choices = ruleChoices(catalog, src)
+    const [catalog, fields] = await Promise.all([loadCatalog(), scriptValue(ruleValueType, String(messageId))])
+    const choices = ruleChoices(catalog, ruleValueType, fields)
     if (choices.length === 0 || !catalog.triggers.some((tr) => tr.id === ruleTrigger)) {
       toastError(say('scripts.blocks.rule.unavailable'))
       return
@@ -103,16 +90,6 @@ export async function createRuleFromMail(messageId: number): Promise<void> {
     const script = await createScript(input)
     ruleDraft.set({ scriptId: script.id, block: block.id, choices })
     openSpace('automations')
-    void getMessageSource(messageId)
-      .then((source) => {
-        const listId = listIdOf(source)
-        const draft = get(ruleDraft)
-        if (!listId || draft?.scriptId !== script.id) {
-          return
-        }
-        ruleDraft.set({ ...draft, choices: ruleChoices(catalog, { ...src, listId }) })
-      })
-      .catch(() => undefined)
   } catch (err) {
     toastError(errorMessage(err))
   }

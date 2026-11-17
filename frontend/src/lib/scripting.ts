@@ -80,6 +80,11 @@ export interface FieldCondition {
   param: string
   /** Fixed arguments, e.g. a header name. */
   args?: Record<string, unknown>
+  /** Separates a field holding several values; a rule matches on the first. */
+  split?: string
+  /** What the match is called, e.g. "Sender". */
+  labelKey: string
+  label?: string
 }
 
 /** What every registry entry carries to be shown and found. */
