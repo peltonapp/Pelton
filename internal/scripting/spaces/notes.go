@@ -233,7 +233,39 @@ func notesEntries(h NotesHost) scripting.Entries {
 	}
 
 	folder := param("folder", scripting.TypeString)
+	loadNote := func(c *scripting.PrepareContext, p string) (scripting.Object, error) {
+		hh, err := host()
+		if err != nil {
+			return scripting.Object{}, err
+		}
+		n, err := hh.Note(c.Ctx, p)
+		if err != nil {
+			return scripting.Object{}, fmt.Errorf("spaces: load note %s: %w", p, err)
+		}
+		return NoteObject(n), nil
+	}
 	return scripting.Entries{
+		Placements: []scripting.Placement{menu("notes.note", "notes", "note", PermNotesRead, loadNote)},
+		ResultActions: []scripting.ResultAction{{
+			Meta: meta("result", "notes.save", "notes"), Icon: "note", Permission: PermNotesWrite,
+			Run: func(ctx context.Context, r scripting.Result) (string, error) {
+				hh, err := host()
+				if err != nil {
+					return "", err
+				}
+				name := clipTitle(strings.Map(func(r rune) rune {
+					if strings.ContainsRune(`/\:*?"<>|`, r) {
+						return '-'
+					}
+					return r
+				}, r.Title), r.ScriptName)
+				n, err := hh.CreateNote(ctx, name+".md", r.Text)
+				if err != nil {
+					return "", err
+				}
+				return n.Path, nil
+			},
+		}},
 		Permissions: []scripting.Permission{
 			{Meta: meta("perm", PermNotesRead, "notes"), Risk: "low"},
 			{Meta: meta("perm", PermNotesWrite, "notes"), Risk: "medium"},
@@ -243,17 +275,7 @@ func notesEntries(h NotesHost) scripting.Entries {
 		Triggers: []scripting.Trigger{{
 			Meta: meta("trigger", TriggerNoteSaved, "notes"), Params: []scripting.Param{folder},
 			Event: []scripting.Field{noteField}, Permission: PermNotesRead,
-			Prepare: prepareObject("note", "note_path", func(c *scripting.PrepareContext, p string) (scripting.Object, error) {
-				hh, err := host()
-				if err != nil {
-					return scripting.Object{}, err
-				}
-				n, err := hh.Note(c.Ctx, p)
-				if err != nil {
-					return scripting.Object{}, fmt.Errorf("spaces: load note %s: %w", p, err)
-				}
-				return NoteObject(n), nil
-			}),
+			Prepare: prepareObject("note", "note_path", loadNote),
 			Match: func(params, event map[string]any) bool {
 				n := objectFields(event, "note")
 				p, _ := n["path"].(string)

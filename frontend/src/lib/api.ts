@@ -185,6 +185,10 @@ import type {
 import { normalizeState } from './sieve'
 import type {
   CompileResult,
+  LiveRun,
+  PlacedItem,
+  PlacedScript,
+  PlacementConfig,
   Script,
   ScriptCatalog,
   ScriptCatchUp,
@@ -3844,6 +3848,62 @@ export function convertScriptToLua(id: number): Promise<Script> {
 /** Runs an enabled script now, on a message when it takes one (0 for none). */
 export function runScript(id: number, messageId: number): Promise<ScriptRun> {
   return App.RunScript(id, messageId).then(asRun)
+}
+
+/** Answers a running script's question; cancelled ends the run. */
+export function answerScriptAsk(id: string, value: unknown, cancelled: boolean): Promise<void> {
+  return App.AnswerScriptAsk(id, value, cancelled)
+}
+
+/** Cancels a run in progress by the id its progress reports carry. */
+export function cancelScriptRun(liveId: number): Promise<void> {
+  return App.CancelScriptRun(liveId)
+}
+
+/** The runs in progress. */
+export function scriptLiveRuns(): Promise<LiveRun[]> {
+  if (isDemoActive()) {
+    return Promise.resolve([])
+  }
+  return App.ScriptLiveRuns().then((list) => (list ?? []) as unknown as LiveRun[])
+}
+
+/** The scripts offered at each placement, by placement id. */
+export function scriptPlacements(): Promise<Record<string, PlacedScript[]>> {
+  if (isDemoActive()) {
+    return Promise.resolve({})
+  }
+  return App.ScriptPlacements().then((m) => (m ?? {}) as unknown as Record<string, PlacedScript[]>)
+}
+
+/** Sets where in the app a script is offered. */
+export function setScriptPlacements(id: number, placements: PlacementConfig[]): Promise<Script> {
+  return App.SetScriptPlacements(id, placements as unknown as Parameters<typeof App.SetScriptPlacements>[1]).then(asScript)
+}
+
+/** Runs a script from a placement on the items it was used on. */
+export function runPlacedScript(id: number, placement: string, items: PlacedItem[]): Promise<ScriptRun> {
+  return App.RunPlacedScript(id, placement, items as unknown as Parameters<typeof App.RunPlacedScript>[2]).then(asRun)
+}
+
+/** Carries out a result action the backend handles; returns what to tell the user. */
+export function runScriptResultAction(resultId: string, action: string): Promise<string> {
+  return App.RunScriptResultAction(resultId, action)
+}
+
+/** An item as scripts see it, e.g. a message by its id. */
+export function scriptValue(valueType: string, id: string): Promise<Record<string, unknown>> {
+  return App.ScriptValue(valueType, id).then((m) => (m ?? {}) as Record<string, unknown>)
+}
+
+/** How long a question of a script nobody started waits, in seconds. */
+export function scriptAskSeconds(): Promise<number> {
+  return App.ScriptAskSeconds()
+}
+
+/** Sets how long such a question waits, 10 seconds to a day. */
+export function setScriptAskSeconds(seconds: number): Promise<void> {
+  return App.SetScriptAskSeconds(seconds)
 }
 
 /** Dry runs a script as written, against a message (0 for the sample). Nothing changes. */

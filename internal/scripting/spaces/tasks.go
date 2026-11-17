@@ -324,10 +324,45 @@ func tasksEntries(h TasksHost) scripting.Entries {
 		},
 		ValueTypes: []scripting.ValueType{{Meta: meta("type", "task", "tasks"), Sample: sampleTask, Fields: fields(
 			"id:number", "list_id:number", "list:string", "uid:string", "title:string", "notes:text",
-			"due:number", "done:bool", "completed:number", "priority:number", "categories:list")}},
+			"due:number", "done:bool", "completed:number", "priority:number", "categories:list:string")}},
 		Triggers:   []scripting.Trigger{trigger(TriggerTaskCreated), trigger(TriggerTaskCompleted), trigger(TriggerTaskOverdue)},
 		Modules:    []scripting.Module{{Meta: meta("module", "tasks", "tasks"), Functions: fns}},
 		Conditions: conds,
 		Actions:    actions,
+		Placements: []scripting.Placement{menu("tasks.task", "tasks", "task", PermTasksRead, intLoad(load))},
+		ResultActions: []scripting.ResultAction{{
+			Meta: meta("result", "tasks.create", "tasks"), Icon: "task", Permission: PermTasksWrite,
+			Run: func(ctx context.Context, r scripting.Result) (string, error) {
+				hh, err := host()
+				if err != nil {
+					return "", err
+				}
+				title := r.Title
+				if title == "" {
+					title, _, _ = strings.Cut(strings.TrimSpace(r.Text), "\n")
+				}
+				t, err := hh.CreateTask(ctx, TaskInput{Title: clipTitle(title, r.ScriptName), Notes: r.Text})
+				if err != nil {
+					return "", err
+				}
+				return t.Title, nil
+			},
+		}},
 	}
+}
+
+// clipTitle is a title of at most 200 bytes, the script's name when empty.
+func clipTitle(title, fallback string) string {
+	title = strings.TrimSpace(title)
+	if title == "" {
+		title = fallback
+	}
+	if len(title) > 200 {
+		cut := 200
+		for cut > 0 && title[cut]&0xc0 == 0x80 {
+			cut--
+		}
+		title = title[:cut]
+	}
+	return title
 }

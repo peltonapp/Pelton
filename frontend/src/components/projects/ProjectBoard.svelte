@@ -278,7 +278,7 @@
       { label: $t('projects.card.openInTasks'), action: () => openTask(task.id) },
       { label: $t('projects.card.remove'), action: () => void removeCard(card), hint: menuHint('delete-message') },
       ...(task.readOnly ? [] : [{ label: $t('tasks.delete'), danger: true, action: () => void removeTask(task) }]),
-    ])
+    ], { place: 'projects.card', items: [{ id: task.uid }] })
   }
 
   async function moveTo(card: ProjectCard, columnId: number, index: number): Promise<void> {

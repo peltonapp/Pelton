@@ -11,7 +11,7 @@
   import { formatRelative } from '../../lib/format'
   import { entryLabel, type ScriptRun } from '../../lib/scripting'
   import { clearScriptRuns, scriptLogDays, setScriptLogDays, undoScriptRun } from '../../lib/api'
-  import { catalog, loadRuns, runLog, selectedScriptId } from '../../stores/scripts'
+  import { catalog, errorPlace, loadRuns, runLog, selectedScriptId } from '../../stores/scripts'
   import { errorMessage, toastError, toastInfo } from '../../stores/toast'
   import '../../theme/controls.css'
 
@@ -88,7 +88,7 @@
             {$t('scripts.log.facts').replace('{n}', String(run.changes)).replace('{ms}', String(run.durationMs))}
             {#if run.depth > 0}{$t('scripts.log.depth').replace('{n}', String(run.depth))}{/if}
           </p>
-          {#if run.error}<p class="error">{run.error}</p>{/if}
+          {#if run.error}<p class="error">{#if errorPlace(run, $t)}<span class="where">{errorPlace(run, $t)}</span>{/if}{run.error}</p>{/if}
           {#if open === run.id}
             <RunSteps steps={run.steps} />
             {#if run.undoable && !undone.has(run.id)}
@@ -205,6 +205,12 @@
     font-size: var(--fz-meta);
     color: var(--danger);
     overflow-wrap: anywhere;
+  }
+
+  .where {
+    margin-inline-end: var(--space-1);
+    font-family: var(--font-mono);
+    font-weight: var(--fw-semibold);
   }
 
   .undo {

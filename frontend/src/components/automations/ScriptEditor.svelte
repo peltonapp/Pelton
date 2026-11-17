@@ -4,7 +4,7 @@
   // nothing, running it now, export and delete. a Lua script is edited as
   // source; a block script shows the block editor (mounted from the store,
   // see blockEditor) above the Lua its blocks compile to, read only.
-  import { onDestroy } from 'svelte'
+  import { onDestroy, tick } from 'svelte'
   import Select from '../common/Select.svelte'
   import ToggleSwitch from '../common/ToggleSwitch.svelte'
   import LuaEditor from './LuaEditor.svelte'
@@ -13,6 +13,9 @@
   import ScriptFolder from './ScriptFolder.svelte'
   import NetHosts from './NetHosts.svelte'
   import RunSteps from './RunSteps.svelte'
+  import SettingsForm from './SettingsForm.svelte'
+  import SettingsSchemaEditor from './SettingsSchemaEditor.svelte'
+  import PlacementEditor from './PlacementEditor.svelte'
   import { t } from '../../lib/i18n'
   import { checkScriptLua } from '../../lib/api'
   import {
@@ -33,8 +36,10 @@
   } from '../../lib/scripting'
   import {
     blockEditor,
+    blockProblems,
     compileBlocks,
     convertToLua,
+    errorPlace,
     exportToFile,
     removeScript,
     runNow,
@@ -84,6 +89,7 @@
   $: missing = (blockPerms ?? compiled?.permissions ?? []).filter((p) => !input.permissions.includes(p))
   $: takesMessage = triggerTakesMessage(catalog, input.trigger.type)
   $: risky = riskyFunctions(catalog, script.permissions)
+  $: problems = blockProblems(input)
   $: catchUpItems = (['live', 'run', 'ask'] as const).map((m) => ({ value: m, label: $t(`scripts.catchUp.${m}`) }))
 
   function groupTriggers(c: ScriptCatalog) {
@@ -100,7 +106,7 @@
     try {
       compiled = await compileBlocks(next, triggerId)
     } catch (err) {
-      compiled = { lua: '', errors: [{ block: '', message: errorMessage(err) }], permissions: [] }
+      compiled = { lua: '', errors: [{ block: '', message: errorMessage(err) }], permissions: [], lines: {} }
     }
   }
 
@@ -132,7 +138,10 @@
     try {
       const wasOn = script.enabled
       const saved = await saveScript(script.id, input)
-      if (wasOn && !saved.enabled) {
+      const left = blockProblems(saved)
+      if (left > 0) {
+        toastInfo($t('scripts.blocks.savedDraft').replace('{n}', String(left)))
+      } else if (wasOn && !saved.enabled) {
         toastInfo($t('scripts.toast.needsApproval'))
       } else {
         toastSuccess($t('scripts.toast.saved'))
@@ -190,6 +199,18 @@
   async function allow(fn: string, on: boolean): Promise<void> {
     await setAllowUnasked(script.id, fn, on).catch((err) => toastError(errorMessage(err)))
   }
+
+  // a block that reaches the web declares "net" without a host; this shows
+  // the host field and puts the caret in it.
+  async function addHost(): Promise<void> {
+    if (!input.permissions.includes('net')) {
+      input = { ...input, permissions: [...input.permissions, 'net'] }
+    }
+    await tick()
+    const field = document.getElementById('net-host')
+    field?.scrollIntoView({ block: 'center' })
+    field?.focus()
+  }
 </script>
 
 <section class="editor" aria-label={$t('scripts.editor')}>
@@ -201,7 +222,8 @@
       {/if}
       <button type="button" class="cal-btn" on:click={() => void exportToFile(script.id).catch((err) => toastError(errorMessage(err)))}>{$t('scripts.export')}</button>
       <button type="button" class="cal-btn danger" on:click={() => void remove()}>{$t('scripts.delete')}</button>
-      <button type="button" class="cal-btn primary" disabled={busy || !dirty} on:click={() => void save()}>{$t('scripts.save')}</button>
+      {#if problems > 0}<span class="draft" title={$t('scripts.blocks.draftHint')}>{$t('scripts.blocks.draft')}</span>{/if}
+      <button type="button" class="cal-btn primary" disabled={busy || !dirty} on:click={() => void save()}>{$t(problems > 0 ? 'scripts.saveDraft' : 'scripts.save')}</button>
     </div>
   </header>
 
@@ -261,6 +283,8 @@
               on:change={(e) => setTree(e.detail)}
               on:permissions={(e) => (blockPerms = e.detail)}
               on:convert={() => void convert()}
+              on:addhost={() => void addHost()}
+              declared={input.permissions}
             />
           {:else}
             <p class="hint">{$t('scripts.blocks.pending')}</p>
@@ -311,6 +335,26 @@
     </fieldset>
 
     <fieldset class="group">
+      <legend>{$t('scripts.settings')}</legend>
+      {#if input.kind === 'blocks'}
+        <p class="hint">{$t('scripts.settings.declareBlocks')}</p>
+        <SettingsSchemaEditor schema={input.settingsSchema} {catalog} on:change={(e) => (input = { ...input, settingsSchema: e.detail })} />
+      {:else}
+        <p class="hint">{$t('scripts.settings.declareLua')}</p>
+      {/if}
+      {#if dirty && JSON.stringify(input.settingsSchema) !== JSON.stringify(script.settingsSchema)}
+        <p class="hint">{$t('scripts.settings.saveFirst')}</p>
+      {:else}
+        <SettingsForm {script} />
+      {/if}
+    </fieldset>
+
+    <fieldset class="group">
+      <legend>{$t('scripts.place')}</legend>
+      <PlacementEditor {script} {catalog} />
+    </fieldset>
+
+    <fieldset class="group">
       <legend>{$t('scripts.test')}</legend>
       <p class="hint">{$t('scripts.test.hint')}</p>
       <div class="test-row">
@@ -331,6 +375,9 @@
         <p class="result {$testRun.status}" role="status">
           {$t(`scripts.status.${$testRun.status}`)}{$testRun.error ? `: ${$testRun.error}` : ''}
         </p>
+        {#if $testRun.error && errorPlace($testRun, $t)}
+          <p class="error-at">{$t('scripts.error.at').replace('{place}', errorPlace($testRun, $t))}</p>
+        {/if}
         <RunSteps steps={$testRun.steps} />
       {/if}
     </fieldset>
@@ -502,5 +549,26 @@
   .result.timeout,
   .result.limit {
     color: var(--danger);
+  }
+
+  .result.cancelled {
+    color: var(--text-secondary);
+  }
+
+  .error-at {
+    margin: 0;
+    font-family: var(--font-mono);
+    font-size: var(--fz-meta);
+    color: var(--danger);
+  }
+
+  .draft {
+    align-self: center;
+    padding: 0 var(--space-1);
+    border: var(--hairline) solid var(--warning);
+    border-radius: var(--radius-control);
+    font-size: var(--fz-meta);
+    line-height: var(--chip-height);
+    color: var(--warning);
   }
 </style>

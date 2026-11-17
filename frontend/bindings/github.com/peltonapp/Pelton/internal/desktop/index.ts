@@ -134,6 +134,7 @@ export {
     PendingMailtoDTO,
     PhishingDTO,
     PhishingSignalDTO,
+    PlacedScriptDTO,
     PrepAttendeeDTO,
     PrepMeetingDTO,
     PrepThreadDTO,

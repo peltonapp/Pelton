@@ -181,8 +181,11 @@
     </span>
   </div>
 
-  {#if mark && mark.lines.length > 0}
+  {#if mark && (mark.lines.length > 0 || mark.taken)}
     <ul class="run-lines">
+      {#each mark.taken ?? [] as b (b)}
+        <li>{b < 0 ? $t(block.else?.length ? 'scripts.blocks.mark.else' : 'scripts.blocks.mark.none') : $t('scripts.blocks.mark.branch').replace('{n}', String(b + 1))}</li>
+      {/each}
       {#each mark.lines as line, i (i)}<li>{line}</li>{/each}
     </ul>
   {/if}

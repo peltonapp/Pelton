@@ -87,6 +87,43 @@ type Config struct {
 	OnCatchUp func(s *Script, count int)
 	// RetentionDays returns how many days of runs to keep.
 	RetentionDays func() int
+	// AskTimeout returns how long a question of a run nobody started waits.
+	AskTimeout func() time.Duration
+	// OnProgress is told about a run that takes a moment: when it shows up,
+	// as it goes and when it is done.
+	OnProgress func(LiveRun)
+}
+
+// LiveRun is a run in progress, for the progress indicator and its cancel
+// button. ID is not the run log id; a test run has one too.
+type LiveRun struct {
+	ID         int64  `json:"id"`
+	ScriptID   int64  `json:"scriptId"`
+	ScriptName string `json:"scriptName"`
+	Dry        bool   `json:"dry"`
+	Attended   bool   `json:"attended"`
+	// Steps counts what the run did so far and Last says what it did last.
+	Steps int    `json:"steps"`
+	Last  string `json:"last"`
+	// Waiting is set while the run waits for the user.
+	Waiting bool `json:"waiting"`
+	Done    bool `json:"done"`
+}
+
+// progressAfter is how long a run goes before it shows up as in progress,
+// so quick runs never flash an indicator, and progressEvery how often it is
+// updated after that.
+const (
+	progressAfter = 300 * time.Millisecond
+	progressEvery = 200 * time.Millisecond
+)
+
+type liveRun struct {
+	mu     sync.Mutex
+	info   LiveRun
+	shown  bool
+	last   time.Time
+	cancel context.CancelCauseFunc
 }
 
 // Service is the scripting system: the registry, the store, the engine and
@@ -109,6 +146,8 @@ type Service struct {
 	wg         sync.WaitGroup
 	running    bool
 	lastPrune  time.Time
+	live       map[int64]*liveRun
+	nextLive   int64
 }
 
 type worker struct {
@@ -154,9 +193,102 @@ func NewService(cfg Config) (*Service, error) {
 		watermarks: map[int64]time.Time{},
 		rate:       map[int64]*rateWindow{},
 		pending:    map[int64]*catchUp{},
+		live:       map[int64]*liveRun{},
 	}
-	s.engine = &Engine{Registry: reg, Hosts: cfg.Hosts, KV: s.store, Limits: cfg.Limits, OnAllow: s.allowAlways}
+	s.engine = &Engine{Registry: reg, Hosts: cfg.Hosts, KV: s.store, Limits: cfg.Limits, OnAllow: s.allowAlways, AskTimeout: cfg.AskTimeout}
 	return s, nil
+}
+
+// Cancel cancels a run in progress by its live id. It reports whether the
+// run was still going.
+func (s *Service) Cancel(liveID int64) bool {
+	s.mu.Lock()
+	lr := s.live[liveID]
+	s.mu.Unlock()
+	if lr == nil {
+		return false
+	}
+	lr.cancel(ErrRunCancelled)
+	return true
+}
+
+// Live lists the runs in progress that have shown up.
+func (s *Service) Live() []LiveRun {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	out := []LiveRun{}
+	for _, lr := range s.live {
+		lr.mu.Lock()
+		if lr.shown {
+			out = append(out, lr.info)
+		}
+		lr.mu.Unlock()
+	}
+	slices.SortFunc(out, func(a, b LiveRun) int { return int(a.ID - b.ID) })
+	return out
+}
+
+// track registers a run in progress, wiring its steps and waits into
+// progress reports, and returns the context that cancels it and the
+// function that ends the tracking.
+func (s *Service) track(ctx context.Context, req *RunRequest) (context.Context, func()) {
+	ctx, cancel := context.WithCancelCause(ctx)
+	s.mu.Lock()
+	s.nextLive++
+	lr := &liveRun{cancel: cancel, info: LiveRun{
+		ID: s.nextLive, ScriptID: req.Script.ID, ScriptName: req.Script.Name, Dry: req.Dry, Attended: req.Attended,
+	}}
+	s.live[lr.info.ID] = lr
+	s.mu.Unlock()
+	report := func(force bool) {
+		lr.mu.Lock()
+		if !lr.shown || (!force && time.Since(lr.last) < progressEvery) {
+			lr.mu.Unlock()
+			return
+		}
+		lr.last = time.Now()
+		info := lr.info
+		lr.mu.Unlock()
+		if s.cfg.OnProgress != nil {
+			s.cfg.OnProgress(info)
+		}
+	}
+	show := time.AfterFunc(progressAfter, func() {
+		lr.mu.Lock()
+		lr.shown = true
+		lr.mu.Unlock()
+		report(true)
+	})
+	req.OnStep = func(st Step) {
+		lr.mu.Lock()
+		lr.info.Steps++
+		if st.Kind != StepCheck {
+			lr.info.Last = st.Summary
+		}
+		lr.mu.Unlock()
+		report(false)
+	}
+	req.OnWait = func(waiting bool) {
+		lr.mu.Lock()
+		lr.info.Waiting = waiting
+		if waiting {
+			lr.shown = true
+		}
+		lr.mu.Unlock()
+		report(true)
+	}
+	return ctx, func() {
+		show.Stop()
+		cancel(nil)
+		s.mu.Lock()
+		delete(s.live, lr.info.ID)
+		s.mu.Unlock()
+		lr.mu.Lock()
+		lr.info.Done = true
+		lr.info.Waiting = false
+		lr.mu.Unlock()
+		report(true)
+	}
 }
 
 // Registry returns the registry, for other packages to register entries in
@@ -461,7 +593,7 @@ func (s *Service) dispatch(ctx context.Context, sc *Script, ev Event) (*Run, err
 	if t.Match != nil && !t.Match(sc.Trigger.Params, event) {
 		return nil, nil
 	}
-	return s.run(ctx, sc, ev.Trigger, event, ev.Depth, false)
+	return s.run(ctx, sc, ev.Trigger, event, ev.Depth, false, false)
 }
 
 func (s *Service) prepare(ctx context.Context, t Trigger, data map[string]any) (map[string]any, error) {
@@ -474,9 +606,10 @@ func (s *Service) prepare(ctx context.Context, t Trigger, data map[string]any) (
 	return t.Prepare(&PrepareContext{Ctx: ctx, Hosts: s.cfg.Hosts}, data)
 }
 
-// run executes one run, logging it unless it is a dry run.
-func (s *Service) run(ctx context.Context, sc *Script, trigger string, event map[string]any, depth int, dry bool) (*Run, error) {
-	req := RunRequest{Script: sc, Trigger: trigger, Event: event, Dry: dry, Depth: depth}
+// run executes one run, logging it unless it is a dry run. attended says the
+// user started it and is there to answer its questions.
+func (s *Service) run(ctx context.Context, sc *Script, trigger string, event map[string]any, depth int, dry, attended bool) (*Run, error) {
+	req := RunRequest{Script: sc, Trigger: trigger, Event: event, Dry: dry, Depth: depth, Attended: attended}
 	if !dry {
 		if t, ok := s.reg.Trigger(trigger); ok && !sc.granted(t.Permission, false) {
 			run := &Run{ScriptID: sc.ID, Trigger: trigger, Depth: depth, Started: s.now(), Status: StatusDenied,
@@ -489,7 +622,9 @@ func (s *Service) run(ctx context.Context, sc *Script, trigger string, event map
 		}
 		req.RunID = id
 	}
-	run := s.engine.Run(ctx, req)
+	runCtx, untrack := s.track(ctx, &req)
+	run := s.engine.Run(runCtx, req)
+	untrack()
 	if dry {
 		if s.cfg.OnRun != nil {
 			s.cfg.OnRun(sc, run)
@@ -584,7 +719,7 @@ func (s *Service) RunNow(ctx context.Context, id int64, data map[string]any) (*R
 	w := s.workerFor(id)
 	w.mu.Lock()
 	defer w.mu.Unlock()
-	return s.run(ctx, sc, sc.Trigger.Type, event, EventDepth(ctx), false)
+	return s.run(ctx, sc, sc.Trigger.Type, event, EventDepth(ctx), false, true)
 }
 
 // TestRun runs a script, saved or not, as a dry run: reads work, changes are
@@ -596,13 +731,13 @@ func (s *Service) TestRun(ctx context.Context, sc *Script, data map[string]any) 
 		return nil, fmt.Errorf("scripting: unknown trigger %q", sc.Trigger.Type)
 	}
 	if data == nil {
-		return s.run(ctx, sc, sc.Trigger.Type, SampleEvent(s.reg, t, s.now()), 0, true)
+		return s.run(ctx, sc, sc.Trigger.Type, SampleEvent(s.reg, t, s.now()), 0, true, true)
 	}
 	event, err := s.prepare(ctx, t, data)
 	if err != nil {
 		return nil, err
 	}
-	return s.run(ctx, sc, sc.Trigger.Type, event, 0, true)
+	return s.run(ctx, sc, sc.Trigger.Type, event, 0, true, true)
 }
 
 // SampleEvent builds an event for a trigger from its declared fields, for a

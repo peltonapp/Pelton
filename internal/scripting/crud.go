@@ -42,6 +42,29 @@ func (s *Service) normalize(sc *Script) {
 	sc.Approved = slices.DeleteFunc(slices.Clone(sc.Approved), func(p string) bool {
 		return !slices.Contains(sc.Permissions, p)
 	})
+	sc.Placements = slices.DeleteFunc(slices.Clone(sc.Placements), func(c PlacementConfig) bool {
+		p, ok := s.reg.Placement(c.ID)
+		return !ok || !p.fits(sc)
+	})
+	for name := range sc.Settings {
+		if !slices.ContainsFunc(sc.SettingsSchema, func(p Param) bool { return p.Name == name }) {
+			delete(sc.Settings, name)
+		}
+	}
+}
+
+// deriveSettings reads a Lua script's settings from its SETTINGS table. A
+// script without one has no settings.
+func deriveSettings(sc *Script) error {
+	if sc.Kind != KindLua {
+		return nil
+	}
+	schema, err := LuaSettings(sc.Source)
+	if err != nil {
+		return err
+	}
+	sc.SettingsSchema = schema
+	return nil
 }
 
 // Create validates and stores a new script, switched off. It returns the
@@ -50,6 +73,9 @@ func (s *Service) Create(ctx context.Context, sc *Script) (*Script, error) {
 	sc.ID = 0
 	sc.Enabled = false
 	sc.Approved = nil
+	if err := deriveSettings(sc); err != nil {
+		return nil, err
+	}
 	s.normalize(sc)
 	if err := sc.Validate(s.reg); err != nil {
 		return nil, err
@@ -96,6 +122,9 @@ func (s *Service) Update(ctx context.Context, next *Script) (*Script, error) {
 	}
 	if next.CatchUpCap > 0 {
 		cur.CatchUpCap = next.CatchUpCap
+	}
+	if err := deriveSettings(cur); err != nil {
+		return nil, err
 	}
 	s.normalize(cur)
 	if err := cur.Validate(s.reg); err != nil {
@@ -208,29 +237,19 @@ func (s *Service) SetAllowUnasked(ctx context.Context, id int64, function string
 	return s.store.Get(ctx, id)
 }
 
-// SetSettings stores the values of a script's settings. Names the script
-// does not declare are refused.
+// SetSettings stores the values of a script's settings, checked against its
+// schema. Names the script does not declare are refused; a nil value goes
+// back to the default.
 func (s *Service) SetSettings(ctx context.Context, id int64, values map[string]any) (*Script, error) {
 	sc, err := s.store.Get(ctx, id)
 	if err != nil {
 		return nil, err
 	}
-	for name, v := range values {
-		i := slices.IndexFunc(sc.SettingsSchema, func(p Param) bool { return p.Name == name })
-		if i < 0 {
-			return nil, fmt.Errorf("scripting: the script has no setting %q", name)
-		}
-		if v == nil {
-			continue
-		}
-		p := sc.SettingsSchema[i]
-		if p.Type != TypeRef {
-			if _, err := literalLua(p, v); err != nil {
-				return nil, fmt.Errorf("scripting: setting %q: %w", name, err)
-			}
-		}
+	clean, err := CheckSettings(sc.SettingsSchema, values)
+	if err != nil {
+		return nil, err
 	}
-	sc.Settings = values
+	sc.Settings = clean
 	if err := s.save(ctx, sc); err != nil {
 		return nil, err
 	}

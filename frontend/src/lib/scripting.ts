@@ -32,6 +32,7 @@ export type ParamType =
   | 'address'
   | 'list'
   | 'ref'
+  | 'icon'
 
 /** One choice of an enum parameter. */
 export interface ParamOption {
@@ -47,6 +48,8 @@ export interface ScriptParam {
   labelKey: string
   label?: string
   descKey?: string
+  /** The English description shown when descKey has no string. */
+  description?: string
   required?: boolean
   default?: unknown
   /** A reference used when no value is given, e.g. "event.message". */
@@ -62,6 +65,24 @@ export interface ScriptParam {
 export interface ScriptField {
   name: string
   type: string
+  labelKey: string
+  label?: string
+  /** The element type of a list field: a param type or a value type id. */
+  of?: string
+}
+
+/** Which condition tests a field of a value type, e.g. "subject" by "mail.subject". */
+export interface FieldCondition {
+  /** The field's path, e.g. "headers.list-id". */
+  field: string
+  condition: string
+  /** The condition parameter the field's value goes into. */
+  param: string
+  /** Fixed arguments, e.g. a header name. */
+  args?: Record<string, unknown>
+  /** Separates a field holding several values; a rule matches on the first. */
+  split?: string
+  /** What the match is called, e.g. "Sender". */
   labelKey: string
   label?: string
 }
@@ -127,11 +148,42 @@ export interface ScriptModuleDef extends RegistryMeta {
 export interface ScriptValueTypeDef extends RegistryMeta {
   fields: ScriptField[]
   lazy?: Record<string, string>
+  /** The conditions that test the type's fields. */
+  conditions?: FieldCondition[]
 }
 
 /** Something a script must declare and the user approve. */
 export interface ScriptPermissionDef extends RegistryMeta {
   risk: 'low' | 'medium' | 'high'
+}
+
+/** A question a running script can ask; the dialog draws it by control. */
+export interface ScriptInputKindDef extends RegistryMeta {
+  control: string
+  /** The type of the answer. */
+  value: string
+  params?: ScriptParam[]
+}
+
+/** A button of the result panel. client names a window handler; without it the backend carries it out. */
+export interface ScriptResultActionDef extends RegistryMeta {
+  icon: string
+  client?: string
+  permission?: string
+}
+
+/** A place in the app a script can be started from by hand. */
+export interface ScriptPlacementDef extends RegistryMeta {
+  /** menu, palette, toolbar, shortcut or row. */
+  surface: string
+  /** The value type handed over, empty for none; optional means only when there is one. */
+  valueType?: string
+  optional?: boolean
+  /** The event field a selection of several arrives in. */
+  list?: string
+  permission?: string
+  /** What a script sets for the place, e.g. an icon and a label. */
+  options?: ScriptParam[]
 }
 
 /** The whole registry as data. */
@@ -143,6 +195,73 @@ export interface ScriptCatalog {
   valueTypes: ScriptValueTypeDef[]
   permissions: ScriptPermissionDef[]
   paramTypes: ParamType[]
+  /** The types a script setting may have. */
+  settingTypes: ParamType[]
+  inputKinds: ScriptInputKindDef[]
+  resultActions: ScriptResultActionDef[]
+  placements: ScriptPlacementDef[]
+}
+
+/** A place a script is offered at, with its options. */
+export interface PlacementConfig {
+  id: string
+  options?: Record<string, unknown>
+}
+
+/** A script offered at a placement. */
+export interface PlacedScript {
+  scriptId: number
+  name: string
+  description: string
+  options: Record<string, unknown>
+}
+
+/** One value a placement hands a script: an id to load, or the value's fields. */
+export interface PlacedItem {
+  id: string
+  fields?: Record<string, unknown>
+}
+
+/** A question a running script puts to the user. */
+export interface ScriptAsk {
+  id: string
+  scriptId: number
+  scriptName: string
+  kind: string
+  control: string
+  prompt: string
+  params: Record<string, unknown>
+  default: unknown
+  dry: boolean
+  attended: boolean
+  /** How long it waits for a script nobody started; 0 for as long as it takes. */
+  timeoutSeconds: number
+}
+
+/** Longer output a script shows in the result panel. */
+export interface ScriptResult {
+  id: string
+  scriptId: number
+  scriptName: string
+  title: string
+  text: string
+  format: 'text' | 'markdown'
+  /** The result actions on offer, by id. */
+  actions: string[]
+  dry: boolean
+}
+
+/** A run in progress; id is not the run log id. */
+export interface LiveRun {
+  id: number
+  scriptId: number
+  scriptName: string
+  dry: boolean
+  attended: boolean
+  steps: number
+  last: string
+  waiting: boolean
+  done: boolean
 }
 
 /** A parameter value: a literal, or a reference ("event.message", "var:x", "step:b3.id", "setting:name"). */
@@ -224,6 +343,8 @@ export interface Script {
   catchUp: CatchUpMode
   catchUpCap: number
   allowUnasked: string[]
+  /** Where in the app the script is offered. */
+  placements: PlacementConfig[]
   createdAt: string
   updatedAt: string
   lastRunAt: string
@@ -244,7 +365,7 @@ export interface ScriptInput {
 }
 
 /** What a step of a run is. */
-export type RunStepKind = 'call' | 'planned' | 'read' | 'check' | 'log' | 'denied' | 'declined'
+export type RunStepKind = 'call' | 'planned' | 'read' | 'check' | 'log' | 'denied' | 'declined' | 'ask'
 
 /** One thing a run did. */
 export interface RunStep {
@@ -255,11 +376,13 @@ export interface RunStep {
   level?: string
   error?: string
   result?: boolean
+  /** The index of the if block's branch a check belongs to. */
+  branch?: number
   atMs: number
 }
 
 /** How a run ended. */
-export type RunStatus = 'running' | 'ok' | 'stopped' | 'error' | 'denied' | 'timeout' | 'limit' | 'skipped'
+export type RunStatus = 'running' | 'ok' | 'stopped' | 'error' | 'denied' | 'timeout' | 'limit' | 'skipped' | 'cancelled'
 
 /** One run, live or from the log. */
 export interface ScriptRun {
@@ -280,6 +403,12 @@ export interface ScriptRun {
   logTruncated: boolean
   undoable: boolean
   messages: number[]
+  /** The Lua line a failed run stopped on, 0 when unknown. */
+  errorLine: number
+  /** The block of a block script that was running when it failed. */
+  errorBlock: string
+  /** The blocks of a block script the run never got to. */
+  notReached: string[]
 }
 
 /** A problem with one block. */
@@ -288,11 +417,19 @@ export interface CompileError {
   message: string
 }
 
+/** The first and last line of a block in compiled Lua, counted from 1. */
+export interface LineRange {
+  from: number
+  to: number
+}
+
 /** Lua compiled from a block tree. */
 export interface CompileResult {
   lua: string
   errors: CompileError[]
   permissions: string[]
+  /** The lines each block became, nested blocks inside their parent's range. */
+  lines: Record<string, LineRange>
 }
 
 /** A risky call waiting for the user's yes. */
@@ -433,6 +570,27 @@ export function riskyFunctions(catalog: ScriptCatalog, declared: string[]): stri
 /** Whether a trigger runs on a message, so a test run can pick one. */
 export function triggerTakesMessage(catalog: ScriptCatalog, triggerId: string): boolean {
   return catalog.triggers.find((t) => t.id === triggerId)?.event.some((f) => f.type === 'message') ?? false
+}
+
+/** The value a manual script takes, 'none' for none. */
+export function scriptScope(s: Pick<Script, 'trigger'>): string {
+  const scope = s.trigger.params.scope
+  return typeof scope === 'string' && scope ? scope : 'none'
+}
+
+/** Whether a script's trigger takes what a placement hands over. */
+export function placementFits(p: ScriptPlacementDef, s: Pick<Script, 'trigger'>): boolean {
+  if (s.trigger.type !== 'manual') {
+    return false
+  }
+  const scope = scriptScope(s)
+  if (!p.valueType) {
+    return scope === 'none'
+  }
+  if (p.optional) {
+    return scope === 'none' || scope === p.valueType
+  }
+  return scope === p.valueType
 }
 
 /** Whether two inputs differ, for the editor's unsaved state. */

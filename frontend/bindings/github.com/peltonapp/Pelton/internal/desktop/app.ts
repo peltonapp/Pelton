@@ -274,6 +274,14 @@ export function AnswerInvite(req: $models.InviteAnswerRequest): $CancellableProm
 }
 
 /**
+ * AnswerScriptAsk answers a question a running script asked. cancelled
+ * ends the run as cancelled.
+ */
+export function AnswerScriptAsk(id: string, value: any, cancelled: boolean): $CancellablePromise<void> {
+    return $Call.ByID(1403071252, id, value, cancelled);
+}
+
+/**
  * AnswerScriptConfirm answers a confirmation a script asked for. always lets
  * the script make that call without asking from now on.
  */
@@ -375,6 +383,14 @@ export function CancelOutboxSend(id: number): $CancellablePromise<$models.Outbox
     return $Call.ByID(838796659, id).then(($result: any) => {
         return $$createType22($result);
     });
+}
+
+/**
+ * CancelScriptRun cancels a run in progress by the id its progress reports
+ * carry.
+ */
+export function CancelScriptRun(liveID: number): $CancellablePromise<void> {
+    return $Call.ByID(1484212152, liveID);
 }
 
 /**
@@ -3453,6 +3469,16 @@ export function RetrySend(id: number): $CancellablePromise<boolean> {
 }
 
 /**
+ * RunPlacedScript runs a script from a placement on the items it was used
+ * on: ids to load, or for a value nothing loads, its fields.
+ */
+export function RunPlacedScript(id: number, placement: string, items: scripting$0.PlacedItem[]): $CancellablePromise<$models.ScriptRunDTO> {
+    return $Call.ByID(1278665749, id, placement, items).then(($result: any) => {
+        return $$createType193($result);
+    });
+}
+
+/**
  * RunScript runs an enabled script now, on the given message when its
  * trigger works on one (0 for none), and returns the run.
  */
@@ -3460,6 +3486,15 @@ export function RunScript(id: number, messageID: number): $CancellablePromise<$m
     return $Call.ByID(2788026208, id, messageID).then(($result: any) => {
         return $$createType193($result);
     });
+}
+
+/**
+ * RunScriptResultAction carries out a result action that runs in the
+ * backend, such as saving a result as a note, and returns what to tell the
+ * user. A result is kept for its buttons while it is among the latest shown.
+ */
+export function RunScriptResultAction(resultID: string, action: string): $CancellablePromise<string> {
+    return $Call.ByID(1433062139, resultID, action);
 }
 
 /**
@@ -3655,11 +3690,29 @@ export function ScanURL(rawURL: string): $CancellablePromise<$models.VerdictDTO>
 }
 
 /**
+ * ScriptAskSeconds returns how long a question of a script nobody started
+ * waits before it takes its default.
+ */
+export function ScriptAskSeconds(): $CancellablePromise<number> {
+    return $Call.ByID(305353439);
+}
+
+/**
  * ScriptFolder returns the folder a script may read and write files in, ""
  * when it has none.
  */
 export function ScriptFolder(id: number): $CancellablePromise<string> {
     return $Call.ByID(1649930389, id);
+}
+
+/**
+ * ScriptLiveRuns lists the runs in progress, for a window opened while they
+ * run.
+ */
+export function ScriptLiveRuns(): $CancellablePromise<scripting$0.LiveRun[]> {
+    return $Call.ByID(2659035721).then(($result: any) => {
+        return $$createType197($result);
+    });
 }
 
 /**
@@ -3670,6 +3723,15 @@ export function ScriptLogDays(): $CancellablePromise<number> {
 }
 
 /**
+ * ScriptPlacements lists, per placement id, the scripts offered there.
+ */
+export function ScriptPlacements(): $CancellablePromise<{ [_ in string]?: $models.PlacedScriptDTO[] }> {
+    return $Call.ByID(299555825).then(($result: any) => {
+        return $$createType200($result);
+    });
+}
+
+/**
  * ScriptRegistry returns everything scripts can use, as data: triggers,
  * conditions, actions, modules with their functions, value types,
  * permissions and parameter types. The editor, the pickers and the API
@@ -3677,7 +3739,7 @@ export function ScriptLogDays(): $CancellablePromise<number> {
  */
 export function ScriptRegistry(): $CancellablePromise<scripting$0.Catalog> {
     return $Call.ByID(2729274182).then(($result: any) => {
-        return $$createType196($result);
+        return $$createType201($result);
     });
 }
 
@@ -3687,7 +3749,17 @@ export function ScriptRegistry(): $CancellablePromise<scripting$0.Catalog> {
  */
 export function ScriptRuns(scriptID: number, limit: number): $CancellablePromise<$models.ScriptRunDTO[]> {
     return $Call.ByID(1586565763, scriptID, limit).then(($result: any) => {
-        return $$createType197($result);
+        return $$createType202($result);
+    });
+}
+
+/**
+ * ScriptValue loads an item as scripts see it, e.g. a message by its id, so
+ * the editor can build a rule from its fields.
+ */
+export function ScriptValue(valueType: string, id: string): $CancellablePromise<{ [_ in string]?: any }> {
+    return $Call.ByID(538001730, valueType, id).then(($result: any) => {
+        return $$createType203($result);
     });
 }
 
@@ -3698,7 +3770,7 @@ export function ScriptRuns(scriptID: number, limit: number): $CancellablePromise
  */
 export function Search(req: $models.SearchRequestDTO): $CancellablePromise<$models.SearchResultDTO> {
     return $Call.ByID(2859382430, req).then(($result: any) => {
-        return $$createType198($result);
+        return $$createType204($result);
     });
 }
 
@@ -3756,7 +3828,7 @@ export function SendOutboxNow(id: number): $CancellablePromise<boolean> {
  */
 export function SenderOverview(address: string): $CancellablePromise<$models.SenderOverviewDTO> {
     return $Call.ByID(3937500380, address).then(($result: any) => {
-        return $$createType199($result);
+        return $$createType205($result);
     });
 }
 
@@ -4090,6 +4162,14 @@ export function SetScriptAllowUnasked(id: number, $function: string, allow: bool
 }
 
 /**
+ * SetScriptAskSeconds sets how long such a question waits, 10 seconds to a
+ * day.
+ */
+export function SetScriptAskSeconds(seconds: number): $CancellablePromise<void> {
+    return $Call.ByID(1083915591, seconds);
+}
+
+/**
  * SetScriptCatchUp sets what a mail script does with mail that arrived
  * while the app was closed: "run", "live" or "ask", and the most messages
  * it runs over.
@@ -4115,6 +4195,15 @@ export function SetScriptEnabled(id: number, enabled: boolean, approve: string[]
  */
 export function SetScriptLogDays(days: number): $CancellablePromise<void> {
     return $Call.ByID(3070623262, days);
+}
+
+/**
+ * SetScriptPlacements sets where in the app a script is offered.
+ */
+export function SetScriptPlacements(id: number, placements: scripting$0.PlacementConfig[]): $CancellablePromise<$models.ScriptDTO> {
+    return $Call.ByID(85186745, id, placements).then(($result: any) => {
+        return $$createType50($result);
+    });
 }
 
 /**
@@ -4309,7 +4398,7 @@ export function SnoozeMessage(id: number, untilRFC3339: string, hideNow: boolean
  */
 export function SplitCounts(req: $models.ListMessagesRequest): $CancellablePromise<$models.SplitTabDTO[]> {
     return $Call.ByID(1877442994, req).then(($result: any) => {
-        return $$createType201($result);
+        return $$createType207($result);
     });
 }
 
@@ -4399,7 +4488,7 @@ export function TakeComposeSession(token: string): $CancellablePromise<string> {
  */
 export function TestAIProvider($in: $models.AIProviderInput): $CancellablePromise<$models.AITestDTO> {
     return $Call.ByID(3801056801, $in).then(($result: any) => {
-        return $$createType202($result);
+        return $$createType208($result);
     });
 }
 
@@ -4420,7 +4509,7 @@ export function TestAccountRoute(req: $models.RouteTestRequest): $CancellablePro
  */
 export function TestConnection(req: $models.TestConnectionRequest): $CancellablePromise<$models.ConnectionTestDTO> {
     return $Call.ByID(1152861202, req).then(($result: any) => {
-        return $$createType203($result);
+        return $$createType209($result);
     });
 }
 
@@ -4486,7 +4575,7 @@ export function ToggleMaximiseWindow(): $CancellablePromise<void> {
  */
 export function TrafficLights(composeToken: string): $CancellablePromise<$models.TrafficLightsDTO> {
     return $Call.ByID(1219898178, composeToken).then(($result: any) => {
-        return $$createType204($result);
+        return $$createType210($result);
     });
 }
 
@@ -4497,7 +4586,7 @@ export function TrafficLights(composeToken: string): $CancellablePromise<$models
  */
 export function TrashProjectNote(rel: string, projectID: number): $CancellablePromise<$models.VaultOpDTO> {
     return $Call.ByID(2025348081, rel, projectID).then(($result: any) => {
-        return $$createType205($result);
+        return $$createType211($result);
     });
 }
 
@@ -4770,7 +4859,7 @@ export function UploadDraft(id: number): $CancellablePromise<string> {
  */
 export function VaultBacklinks(rel: string): $CancellablePromise<$models.VaultMentionDTO[]> {
     return $Call.ByID(4068549330, rel).then(($result: any) => {
-        return $$createType207($result);
+        return $$createType213($result);
     });
 }
 
@@ -4780,7 +4869,7 @@ export function VaultBacklinks(rel: string): $CancellablePromise<$models.VaultMe
  */
 export function VaultChooseFolder(): $CancellablePromise<$models.VaultInfoDTO> {
     return $Call.ByID(1120436343).then(($result: any) => {
-        return $$createType208($result);
+        return $$createType214($result);
     });
 }
 
@@ -4804,7 +4893,7 @@ export function VaultCreateFolder(rel: string): $CancellablePromise<string> {
  */
 export function VaultDelete(rel: string): $CancellablePromise<$models.VaultOpDTO> {
     return $Call.ByID(3444939485, rel).then(($result: any) => {
-        return $$createType205($result);
+        return $$createType211($result);
     });
 }
 
@@ -4839,7 +4928,7 @@ export function VaultLinkMention(source: string, line: number, match: string, ta
  */
 export function VaultMove($from: string, to: string): $CancellablePromise<$models.VaultOpDTO> {
     return $Call.ByID(2983040191, $from, to).then(($result: any) => {
-        return $$createType205($result);
+        return $$createType211($result);
     });
 }
 
@@ -4850,7 +4939,7 @@ export function VaultMove($from: string, to: string): $CancellablePromise<$model
  */
 export function VaultOpen(): $CancellablePromise<$models.VaultInfoDTO> {
     return $Call.ByID(1596692746).then(($result: any) => {
-        return $$createType208($result);
+        return $$createType214($result);
     });
 }
 
@@ -4859,7 +4948,7 @@ export function VaultOpen(): $CancellablePromise<$models.VaultInfoDTO> {
  */
 export function VaultRead(rel: string): $CancellablePromise<$models.VaultFileDTO> {
     return $Call.ByID(344669642, rel).then(($result: any) => {
-        return $$createType209($result);
+        return $$createType215($result);
     });
 }
 
@@ -4879,7 +4968,7 @@ export function VaultRescan(): $CancellablePromise<void> {
  */
 export function VaultSave(rel: string, content: string, baseHash: string, force: boolean): $CancellablePromise<$models.VaultSaveDTO> {
     return $Call.ByID(4197725615, rel, content, baseHash, force).then(($result: any) => {
-        return $$createType210($result);
+        return $$createType216($result);
     });
 }
 
@@ -4897,7 +4986,7 @@ export function VaultSaveAttachment(name: string, data: string): $CancellablePro
  */
 export function VaultSearch(query: string): $CancellablePromise<$models.VaultHitDTO[]> {
     return $Call.ByID(93598346, query).then(($result: any) => {
-        return $$createType212($result);
+        return $$createType218($result);
     });
 }
 
@@ -4907,7 +4996,7 @@ export function VaultSearch(query: string): $CancellablePromise<$models.VaultHit
  */
 export function VaultSnapshot(): $CancellablePromise<$models.VaultSnapshotDTO> {
     return $Call.ByID(3840242766).then(($result: any) => {
-        return $$createType213($result);
+        return $$createType219($result);
     });
 }
 
@@ -4931,7 +5020,7 @@ export function VaultUniquePath(rel: string): $CancellablePromise<string> {
  */
 export function VaultUnlinkedMentions(rel: string): $CancellablePromise<$models.VaultMentionDTO[]> {
     return $Call.ByID(691679119, rel).then(($result: any) => {
-        return $$createType207($result);
+        return $$createType213($result);
     });
 }
 
@@ -4940,7 +5029,7 @@ export function VaultUnlinkedMentions(rel: string): $CancellablePromise<$models.
  */
 export function VaultUseDefaultFolder(): $CancellablePromise<$models.VaultInfoDTO> {
     return $Call.ByID(1213391166).then(($result: any) => {
-        return $$createType208($result);
+        return $$createType214($result);
     });
 }
 
@@ -5159,21 +5248,27 @@ const $$createType192 = $models.SieveStateDTO.createFrom;
 const $$createType193 = $models.ScriptRunDTO.createFrom;
 const $$createType194 = $models.VerdictDTO.createFrom;
 const $$createType195 = $models.MessageScanDTO.createFrom;
-const $$createType196 = scripting$0.Catalog.createFrom;
-const $$createType197 = $Create.Array($$createType193);
-const $$createType198 = $models.SearchResultDTO.createFrom;
-const $$createType199 = $models.SenderOverviewDTO.createFrom;
-const $$createType200 = $models.SplitTabDTO.createFrom;
-const $$createType201 = $Create.Array($$createType200);
-const $$createType202 = $models.AITestDTO.createFrom;
-const $$createType203 = $models.ConnectionTestDTO.createFrom;
-const $$createType204 = $models.TrafficLightsDTO.createFrom;
-const $$createType205 = $models.VaultOpDTO.createFrom;
-const $$createType206 = $models.VaultMentionDTO.createFrom;
+const $$createType196 = scripting$0.LiveRun.createFrom;
+const $$createType197 = $Create.Array($$createType196);
+const $$createType198 = $models.PlacedScriptDTO.createFrom;
+const $$createType199 = $Create.Array($$createType198);
+const $$createType200 = $Create.Map($Create.Any, $$createType199);
+const $$createType201 = scripting$0.Catalog.createFrom;
+const $$createType202 = $Create.Array($$createType193);
+const $$createType203 = $Create.Map($Create.Any, $Create.Any);
+const $$createType204 = $models.SearchResultDTO.createFrom;
+const $$createType205 = $models.SenderOverviewDTO.createFrom;
+const $$createType206 = $models.SplitTabDTO.createFrom;
 const $$createType207 = $Create.Array($$createType206);
-const $$createType208 = $models.VaultInfoDTO.createFrom;
-const $$createType209 = $models.VaultFileDTO.createFrom;
-const $$createType210 = $models.VaultSaveDTO.createFrom;
-const $$createType211 = $models.VaultHitDTO.createFrom;
-const $$createType212 = $Create.Array($$createType211);
-const $$createType213 = $models.VaultSnapshotDTO.createFrom;
+const $$createType208 = $models.AITestDTO.createFrom;
+const $$createType209 = $models.ConnectionTestDTO.createFrom;
+const $$createType210 = $models.TrafficLightsDTO.createFrom;
+const $$createType211 = $models.VaultOpDTO.createFrom;
+const $$createType212 = $models.VaultMentionDTO.createFrom;
+const $$createType213 = $Create.Array($$createType212);
+const $$createType214 = $models.VaultInfoDTO.createFrom;
+const $$createType215 = $models.VaultFileDTO.createFrom;
+const $$createType216 = $models.VaultSaveDTO.createFrom;
+const $$createType217 = $models.VaultHitDTO.createFrom;
+const $$createType218 = $Create.Array($$createType217);
+const $$createType219 = $models.VaultSnapshotDTO.createFrom;

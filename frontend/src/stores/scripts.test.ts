@@ -18,6 +18,9 @@ const api = vi.hoisted(() => ({
   answerScriptConfirm: vi.fn(),
   resolveScriptCatchUp: vi.fn(),
   pendingScriptCatchUps: vi.fn(),
+  runPlacedScript: vi.fn(),
+  scriptLiveRuns: vi.fn(),
+  scriptPlacements: vi.fn(),
 }))
 
 const handlers = vi.hoisted(() => ({}) as Record<string, (payload?: unknown) => void>)
@@ -40,6 +43,10 @@ vi.mock('../lib/events', async (importOriginal) => {
     onScriptConfirm: on('confirm'),
     onScriptCatchUp: on('catchup'),
     onScriptToast: on('toast'),
+    onScriptAsk: on('ask'),
+    onScriptAskDone: on('askdone'),
+    onScriptResult: on('result'),
+    onScriptProgress: on('progress'),
   }
 })
 
@@ -65,6 +72,7 @@ function script(over: Partial<Script> = {}): Script {
     catchUp: 'live',
     catchUpCap: 50,
     allowUnasked: [],
+    placements: [],
     createdAt: '',
     updatedAt: '',
     lastRunAt: '',
@@ -91,6 +99,9 @@ function run(over: Partial<ScriptRun> = {}): ScriptRun {
     logTruncated: false,
     undoable: true,
     messages: [5],
+    errorLine: 0,
+    errorBlock: '',
+    notReached: [],
     ...over,
   }
 }
@@ -99,6 +110,8 @@ beforeEach(() => {
   Object.values(api).forEach((f) => f.mockReset())
   api.scriptRuns.mockResolvedValue([])
   api.pendingScriptCatchUps.mockResolvedValue([])
+  api.scriptLiveRuns.mockResolvedValue([])
+  api.scriptPlacements.mockResolvedValue({})
   store.scripts.set([])
   store.selectedScriptId.set(null)
   store.approvalFor.set(null)
@@ -185,6 +198,36 @@ describe('runs and undo', () => {
     handlers.run(run({ id: 21, scriptId: 2, undoable: false }))
     expect(get(store.runLog).map((r) => r.id)).toEqual([20])
     stop()
+  })
+
+  it('queues questions, withdraws expired ones and tracks runs in progress', () => {
+    const stop = store.startScriptEvents()
+    const ask = (id: string) => ({ id, scriptId: 1, scriptName: 's', kind: 'text', control: 'text', prompt: 'p', params: {}, default: null, dry: false, attended: false, timeoutSeconds: 5 })
+    handlers.ask(ask('a'))
+    handlers.ask(ask('b'))
+    handlers.askdone('a')
+    expect(get(store.pendingAsks).map((a) => a.id)).toEqual(['b'])
+    const live = { id: 4, scriptId: 1, scriptName: 's', dry: false, attended: true, steps: 1, last: '', waiting: false, done: false }
+    handlers.progress(live)
+    handlers.progress({ ...live, steps: 2 })
+    expect(get(store.liveRuns)).toEqual([{ ...live, steps: 2 }])
+    handlers.progress({ ...live, done: true })
+    expect(get(store.liveRuns)).toEqual([])
+    handlers.result({ id: 'r', scriptId: 1, scriptName: 's', title: '', text: 't', format: 'text', actions: [], dry: false })
+    expect(get(store.scriptResults)).toHaveLength(1)
+    store.dismissResult('r')
+    expect(get(store.scriptResults)).toHaveLength(0)
+    stop()
+  })
+
+  it('runs a placed script and names where a failed one stopped', async () => {
+    api.runPlacedScript.mockResolvedValue(run({ status: 'error', error: 'boom', errorLine: 3, undoable: false }))
+    await store.runPlaced(1, 'mail.row', [{ id: '5' }])
+    expect(api.runPlacedScript).toHaveBeenCalledWith(1, 'mail.row', [{ id: '5' }])
+    expect(get(toasts).some((t) => t.kind === 'error' && t.message.includes('line 3: boom'))).toBe(true)
+    api.runPlacedScript.mockResolvedValue(run({ status: 'cancelled', undoable: false }))
+    await store.runPlaced(1, 'mail.row', [])
+    expect(get(toasts).some((t) => t.message.includes('was cancelled'))).toBe(true)
   })
 
   it('reports a failed manual run', async () => {

@@ -90,13 +90,7 @@ function listOf(b: Block, key: Slot['key'], create = false): Block[] | null {
       return b.else ?? null
     }
     const branch = typeof key === 'number' ? b.branches?.[key] : undefined
-    if (!branch) {
-      return null
-    }
-    if (!branch.body && create) {
-      branch.body = []
-    }
-    return branch.body ?? []
+    return branch ? branch.body : null
   }
   if (b.kind === 'foreach' && key === 'body') {
     if (!b.body && create) {

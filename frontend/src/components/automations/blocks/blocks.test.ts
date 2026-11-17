@@ -36,7 +36,6 @@ import {
 } from './tree'
 import { entriesFor, refInScope, refText, scopeAt, everyEntry } from './scope'
 import { neededPermissions, validate } from './validate'
-import { lineMap } from './luamap'
 import { runMarks } from './runmarks'
 import { re2Problem } from './re2'
 import { blockFor, paletteGroups, paletteItems } from './palette'
@@ -200,6 +199,15 @@ describe('scope', () => {
     expect(scopeAt(tree, 'last', ctx).map((e) => e.ref)).not.toContain('var:item')
   })
 
+  it('types a for each variable by the element type of its list', () => {
+    const tree = treeOf([{ id: 'f', kind: 'foreach', as: 'who', list: { ref: 'event.message.recipients' }, body: [act('in')] }])
+    const scope = scopeAt(tree, 'in', ctx)
+    expect(scope.find((e) => e.ref === 'event.message.recipients')?.of).toBe('address')
+    expect(scope.find((e) => e.ref === 'var:who')?.type).toBe('address')
+    const typed = treeOf([{ id: 'f', kind: 'foreach', as: 'm', list: { ref: 'step:x.items' }, body: [act('in')] }])
+    expect(scopeAt(typed, 'in', ctx).find((e) => e.ref === 'var:m')?.type).toBe('')
+  })
+
   it('leaves out steps of other branches of the same if', () => {
     const tree = treeOf([
       {
@@ -270,45 +278,58 @@ describe('re2', () => {
   })
 })
 
-describe('lua line map', () => {
-  it('maps each block to its lines when the count fits', () => {
-    const tree = treeOf([
-      act('a'),
-      { id: 'i', kind: 'if', branches: [{ when: { kind: 'all', items: [] }, body: [act('b')] }], else: [{ id: 's', kind: 'stop' }] },
-      { id: 'l', kind: 'lua', code: 'x = 1\ny = 2\n' },
-    ])
-    const lua = ['local vars, steps = {}, {}', 'move', 'if true then', '  move', 'else', '  stop()', 'end', 'do', '  x = 1', '  y = 2', 'end', ''].join('\n')
-    const map = lineMap(tree, blockCatalog, lua)
-    expect(map.get('a')).toEqual({ from: 2, to: 2 })
-    expect(map.get('i')).toEqual({ from: 3, to: 7 })
-    expect(map.get('b')).toEqual({ from: 4, to: 4 })
-    expect(map.get('s')).toEqual({ from: 6, to: 6 })
-    expect(map.get('l')).toEqual({ from: 8, to: 11 })
-    expect(lineMap(tree, blockCatalog, 'short\n').size).toBe(0)
-  })
-})
-
 describe('run marks', () => {
-  it('marks ran, planned, failed and skipped blocks', () => {
-    const tree = treeOf([
-      { id: 'i', kind: 'if', branches: [{ when: { kind: 'all', items: [] }, body: [act('yes')] }], else: [act('no')] },
-      act('p'),
-      act('e'),
-    ])
+  const tree = treeOf([
+    {
+      id: 'i',
+      kind: 'if',
+      branches: [
+        { when: { kind: 'all', items: [] }, body: [act('first')] },
+        { when: { kind: 'all', items: [] }, body: [act('yes')] },
+      ],
+      else: [act('no')],
+    },
+    act('p'),
+    act('e'),
+  ])
+
+  it('marks ran, planned, failed and not reached blocks, and the branch taken', () => {
     const run = {
       steps: [
-        { kind: 'check', block: 'i', result: true, summary: 'i', atMs: 0 },
+        { kind: 'check', block: 'i', result: false, branch: 0, summary: 'i', atMs: 0 },
+        { kind: 'check', block: 'i', result: true, branch: 1, summary: 'i', atMs: 0 },
         { kind: 'read', block: 'yes', summary: 'read message', atMs: 1 },
         { kind: 'planned', block: 'p', summary: 'mail.move', atMs: 2 },
         { kind: 'denied', block: 'e', summary: 'mail.delete', error: 'not allowed', atMs: 3 },
       ],
+      notReached: ['first', 'no'],
+      errorBlock: '',
+      error: '',
     } as unknown as ScriptRun
     const marks = runMarks(tree, run)
-    expect(marks.get('i')?.status).toBe('ran')
+    expect(marks.get('i')).toEqual({ status: 'ran', lines: [], taken: [1] })
     expect(marks.get('yes')?.status).toBe('ran')
+    expect(marks.get('first')?.status).toBe('skipped')
     expect(marks.get('no')?.status).toBe('skipped')
     expect(marks.get('p')).toEqual({ status: 'planned', lines: ['mail.move'] })
     expect(marks.get('e')).toEqual({ status: 'error', lines: ['mail.delete: not allowed'] })
+  })
+
+  it('takes the else when the last branch fails, and marks the block that failed', () => {
+    const run = {
+      steps: [
+        { kind: 'check', block: 'i', result: false, branch: 0, summary: 'i', atMs: 0 },
+        { kind: 'check', block: 'i', result: false, branch: 1, summary: 'i', atMs: 0 },
+      ],
+      notReached: ['first', 'yes', 'e'],
+      errorBlock: 'p',
+      error: 'boom',
+    } as unknown as ScriptRun
+    const marks = runMarks(tree, run)
+    expect(marks.get('i')?.taken).toEqual([-1])
+    expect(marks.get('no')).toBeUndefined()
+    expect(marks.get('p')).toEqual({ status: 'error', lines: ['boom'] })
+    expect(marks.get('e')?.status).toBe('skipped')
   })
 })
 

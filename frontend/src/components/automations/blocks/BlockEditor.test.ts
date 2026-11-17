@@ -24,7 +24,7 @@ vi.mock('../../../lib/api', async (importOriginal) => ({
 const { default: BlockEditor } = await import('./BlockEditor.svelte')
 const store = await import('../../../stores/scripts')
 const { prefs } = await import('../../../stores/prefs')
-const { ruleDraft, ruleChoices, listIdOf, firstAddress } = await import('./rulefrommail')
+const { ruleDraft, ruleChoices, matchText } = await import('./rulefrommail')
 const { treeOf } = await import('./tree')
 
 function act(id: string, type: string, args: Block['args'] = {}): Block {
@@ -157,8 +157,19 @@ describe('BlockEditor', () => {
     expect(field).toHaveAttribute('aria-invalid', 'true')
   })
 
+  it('asks for the host a web block needs, until one is declared', async () => {
+    const catalog = { ...blockCatalog, permissions: [...blockCatalog.permissions, { id: 'net', labelKey: '', label: 'Web', descKey: '', category: 'web', risk: 'high' as const }], actions: [...blockCatalog.actions, { id: 'web.get', labelKey: '', label: 'Fetch', descKey: '', category: 'web', permission: 'net', params: [], lua: 'web.get()' }] }
+    const addhost = vi.fn()
+    const user = userEvent.setup()
+    const { rerender } = render(BlockEditor, { props: { tree: treeOf([act('w', 'web.get')]), catalog, trigger: 'mail.arrived', declared: ['net'] }, events: { addhost } })
+    await user.click(screen.getByRole('button', { name: 'Add the host' }))
+    expect(addhost).toHaveBeenCalled()
+    await rerender({ declared: ['net', 'net:example.org'] })
+    expect(screen.queryByRole('button', { name: 'Add the host' })).not.toBeInTheDocument()
+  })
+
   it('switches a rule from a message to another match with one click', async () => {
-    const choices = ruleChoices(blockCatalog, { fromAddress: 'news@x.org', subject: 'Weekly', toAddresses: 'Me <me@y.org>', listId: 'list.x.org' })
+    const choices = ruleChoices(blockCatalog, 'message', { from: 'news@x.org', subject: 'Weekly', to: 'Me <me@y.org>', headers: { 'list-id': '<list.x.org>' } })
     const tree = treeOf([{ id: 'b1', kind: 'if', branches: [{ when: { kind: 'all', items: [choices[0].cond] }, body: [] }] }])
     store.selectedScriptId.set(4)
     ruleDraft.set({ scriptId: 4, block: 'b1', choices })
@@ -171,14 +182,17 @@ describe('BlockEditor', () => {
 })
 
 describe('rule from mail', () => {
-  it('reads the List-Id and the first recipient', () => {
-    expect(listIdOf('From: a\r\nList-Id: Weekly news\r\n <weekly.x.org>\r\nSubject: s\r\n\r\nList-Id: no')).toBe('weekly.x.org')
-    expect(listIdOf('From: a\n\nbody')).toBe('')
-    expect(firstAddress('Ann <ann@x.org>, bob@y.org')).toBe('ann@x.org')
+  it('matches on the first of several values and drops a display name', () => {
+    expect(matchText('Ann <ann@x.org>, bob@y.org', { split: ',' })).toBe('ann@x.org')
+    expect(matchText('<weekly.x.org>', {})).toBe('weekly.x.org')
+    expect(matchText('Re: a, b', {})).toBe('Re: a, b')
+    expect(matchText(undefined, {})).toBe('')
   })
 
-  it('offers only conditions the catalog has, sender first', () => {
-    const choices = ruleChoices({ ...blockCatalog, conditions: blockCatalog.conditions.filter((c) => c.id !== 'mail.subject') }, { fromAddress: 'a@x.org', subject: 'S', toAddresses: '', listId: '' })
-    expect(choices.map((c) => c.key)).toEqual(['from'])
+  it('offers only conditions the catalog has, in the order the value type hints them', () => {
+    const choices = ruleChoices({ ...blockCatalog, conditions: blockCatalog.conditions.filter((c) => c.id !== 'mail.subject') }, 'message', { from: 'a@x.org', subject: 'S', to: 'b@y.org, c@z.org' })
+    expect(choices.map((c) => c.key)).toEqual(['from', 'to'])
+    expect(choices[1].cond).toEqual({ kind: 'condition', type: 'mail.to', args: { value: { value: 'b@y.org' } } })
+    expect(ruleChoices(blockCatalog, 'contact', { from: 'a@x.org' })).toEqual([])
   })
 })

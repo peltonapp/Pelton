@@ -2,6 +2,7 @@
   // the middle pane of the contacts space: the contacts under alphabetical (or
   // organization) headers, with a selection band that slides to the open one.
   import { createEventDispatcher, tick } from 'svelte'
+  import { openScriptMenu } from '../../lib/scriptmenu'
   import ContactListEmpty from './ContactListEmpty.svelte'
   import ContactAvatar from './ContactAvatar.svelte'
   import ContactFilterBar from './ContactFilterBar.svelte'
@@ -72,6 +73,7 @@
                     tabindex={contact.id === tabbable ? 0 : -1}
                     aria-current={contact.id === $selectedContactId ? 'true' : undefined}
                     on:click={() => dispatch('select', contact.id)}
+                    on:contextmenu={(e) => openScriptMenu(e, 'contacts.contact', { id: String(contact.id) })}
                   >
                     <ContactAvatar {contact} size={28} />
                     <span class="text">

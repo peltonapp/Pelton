@@ -5,8 +5,10 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"regexp"
 	"runtime/metrics"
 	"slices"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -70,6 +72,9 @@ const (
 	// StatusSkipped means the dispatcher did not start the run, e.g. to break
 	// a loop of scripts triggering each other.
 	StatusSkipped Status = "skipped"
+	// StatusCancelled means the user cancelled the run or one of its
+	// questions.
+	StatusCancelled Status = "cancelled"
 )
 
 // StepKind says what a recorded step is.
@@ -90,6 +95,8 @@ const (
 	// one the user said no to.
 	StepDenied   StepKind = "denied"
 	StepDeclined StepKind = "declined"
+	// StepAsk is a question put to the user and the answer.
+	StepAsk StepKind = "ask"
 )
 
 // Step is one thing a run did, in order.
@@ -101,8 +108,10 @@ type Step struct {
 	Summary  string `json:"summary"`
 	Level    string `json:"level,omitempty"`
 	Error    string `json:"error,omitempty"`
-	// Result is a check's outcome.
+	// Result is a check's outcome, and Branch the index of the if block's
+	// branch whose condition it was.
 	Result bool `json:"result,omitempty"`
+	Branch *int `json:"branch,omitempty"`
 	// AtMs is the time since the run started.
 	AtMs int64 `json:"atMs"`
 }
@@ -128,6 +137,13 @@ type Run struct {
 	// e.g. a send, with CancelReason.
 	Cancelled    bool
 	CancelReason string
+	// ErrorLine is the line of a Lua script the run failed on, 0 when not
+	// known, and ErrorBlock the block of a block script that was running.
+	ErrorLine  int
+	ErrorBlock string
+	// NotReached lists, for a block script, the blocks the run never got
+	// to, in the order they stand.
+	NotReached []string
 }
 
 // Changes counts the steps that changed something, planned ones included.
@@ -150,6 +166,13 @@ type RunRequest struct {
 	Event   map[string]any
 	Dry     bool
 	Depth   int
+	// Attended is set when the user started the run, so its questions wait
+	// for them rather than time out.
+	Attended bool
+	// OnStep, when set, is told about every step as it is recorded, and
+	// OnWait when the run starts or stops waiting for the user.
+	OnStep func(Step)
+	OnWait func(waiting bool)
 }
 
 // RunInfo describes the run a host call belongs to. Hosts read it from the
@@ -195,6 +218,10 @@ type Engine struct {
 	// OnAllow is called when the user answers a confirmation with "allow
 	// without asking", to remember that for the script.
 	OnAllow func(scriptID int64, function string)
+	// AskTimeout returns how long a question of a run nobody started waits;
+	// DefaultAskTimeout when nil or 0. A script may ask for another per
+	// question.
+	AskTimeout func() time.Duration
 }
 
 // sandboxGlobals are the standard globals a run keeps. Everything else the
@@ -232,6 +259,7 @@ type runState struct {
 	fatal    *fatal
 	logBytes int
 	block    string
+	reached  map[string]bool
 	allowed  []string
 	metas    map[string]*lua.LTable
 	regexps  map[string]*regexpEntry
@@ -273,6 +301,7 @@ func (e *Engine) Run(ctx context.Context, req RunRequest) *Run {
 		run:     run,
 		allowed: slices.Clone(req.Script.AllowUnasked),
 		regexps: map[string]*regexpEntry{},
+		reached: map[string]bool{},
 	}
 	st.limits = limits
 	st.remaining = limits.Timeout
@@ -303,14 +332,16 @@ func (e *Engine) Run(ctx context.Context, req RunRequest) *Run {
 		select {
 		case <-done:
 		case <-time.After(2 * time.Second):
-			st.setFatal(StatusTimeout, "the script took too long")
+			st.ctxFatal()
 		}
 	}
 	return st.finish()
 }
 
 // finish settles the status and returns a copy the caller may keep while a
-// stuck run goroutine is still winding down.
+// stuck run goroutine is still winding down. A failed run names the Lua line
+// or the block it failed in; a block script's run lists the blocks it never
+// got to.
 func (st *runState) finish() *Run {
 	st.mu.Lock()
 	defer st.mu.Unlock()
@@ -320,13 +351,56 @@ func (st *runState) finish() *Run {
 	if st.fatal != nil {
 		run.Status = st.fatal.status
 		run.Error = st.fatal.msg
-		if run.Status == StatusStopped {
+		if run.Status == StatusStopped || run.Status == StatusCancelled {
 			run.Error = ""
 		}
 	} else if run.Status == StatusRunning {
 		run.Status = StatusOK
 	}
+	sc := st.req.Script
+	if run.Error != "" {
+		if sc.Kind == KindBlocks {
+			run.ErrorBlock = st.block
+		} else {
+			run.ErrorLine = errorLine(run.Error)
+		}
+	}
+	if sc.Kind == KindBlocks && sc.Blocks != nil {
+		run.NotReached = []string{}
+		walkBlocks(sc.Blocks.Blocks, func(b Block) {
+			if !st.reached[b.ID] {
+				run.NotReached = append(run.NotReached, b.ID)
+			}
+		})
+	}
 	return &run
+}
+
+var errorLineRE = regexp.MustCompile(`^<string>:(\d+):`)
+
+// errorLine reads the line a Lua error message starts with, 0 for none.
+func errorLine(msg string) int {
+	m := errorLineRE.FindStringSubmatch(msg)
+	if m == nil {
+		return 0
+	}
+	n, _ := strconv.Atoi(m[1])
+	return n
+}
+
+// ctxFatal ends the run for its context: cancelled by the user, or out of
+// time.
+func (st *runState) ctxFatal() *fatal {
+	if errors.Is(context.Cause(st.ctx), ErrRunCancelled) {
+		return st.setFatal(StatusCancelled, "cancelled")
+	}
+	return st.setFatal(StatusTimeout, "the script took too long")
+}
+
+func (st *runState) setWaiting(waiting bool) {
+	if st.req.OnWait != nil {
+		st.req.OnWait(waiting)
+	}
 }
 
 func (st *runState) setFatal(status Status, msg string) *fatal {
@@ -350,7 +424,7 @@ func (st *runState) unwinding() bool {
 		return true
 	}
 	if err := st.ctx.Err(); err != nil {
-		st.setFatal(StatusTimeout, "the script took too long")
+		st.ctxFatal()
 		return true
 	}
 	return false
@@ -384,11 +458,11 @@ func (st *runState) watchMemory(done <-chan struct{}, limit uint64) {
 
 func (st *runState) addStep(s Step) {
 	st.mu.Lock()
-	defer st.mu.Unlock()
 	if len(st.run.Steps) >= st.limits.Steps {
 		if st.fatal == nil {
 			st.fatal = &fatal{status: StatusLimit, msg: fmt.Sprintf("the script took more than %d steps", st.limits.Steps)}
 		}
+		st.mu.Unlock()
 		return
 	}
 	if s.Block == "" {
@@ -396,6 +470,10 @@ func (st *runState) addStep(s Step) {
 	}
 	s.AtMs = time.Since(st.start).Milliseconds()
 	st.run.Steps = append(st.run.Steps, s)
+	st.mu.Unlock()
+	if st.req.OnStep != nil {
+		st.req.OnStep(s)
+	}
 }
 
 // log records a line of the script's own output, within the log limit.
@@ -448,7 +526,7 @@ func (st *runState) execute() {
 	}
 	if err != nil {
 		if st.ctx.Err() != nil {
-			st.setFatal(StatusTimeout, "the script took too long")
+			st.ctxFatal()
 			return
 		}
 		st.setFatal(StatusError, cleanLuaError(err))
@@ -664,14 +742,15 @@ func (st *runState) installGlobals(L *lua.LState) {
 		id := L.CheckString(1)
 		st.mu.Lock()
 		st.block = id
+		st.reached[id] = true
 		st.mu.Unlock()
 		return 0
 	}))
 	L.SetGlobal("__check", L.NewFunction(func(L *lua.LState) int {
 		id := L.CheckString(1)
-		v := L.Get(2)
-		result := lua.LVAsBool(v)
-		st.addStep(Step{Kind: StepCheck, Block: id, Summary: id, Result: result})
+		branch := L.CheckInt(2)
+		result := lua.LVAsBool(L.Get(3))
+		st.addStep(Step{Kind: StepCheck, Block: id, Summary: id, Result: result, Branch: &branch})
 		L.Push(lua.LBool(result))
 		return 1
 	}))
@@ -853,6 +932,8 @@ func (st *runState) confirm(full, summary string) error {
 		return st.setFatal(StatusDenied, full+" needs your confirmation, and there was no way to ask")
 	}
 	stopped := st.pauseClock()
+	st.setWaiting(true)
+	defer st.setWaiting(false)
 	ans, err := hosts.Confirm.Confirm(st.ctx, ConfirmRequest{
 		ScriptID:   st.req.Script.ID,
 		ScriptName: st.req.Script.Name,
@@ -865,7 +946,7 @@ func (st *runState) confirm(full, summary string) error {
 	if err != nil || !ans.Allow {
 		st.addStep(Step{Kind: StepDeclined, Function: full, Summary: summary})
 		if st.ctx.Err() != nil {
-			return st.setFatal(StatusTimeout, "the script took too long")
+			return st.ctxFatal()
 		}
 		return st.setFatal(StatusDenied, "you declined "+full)
 	}

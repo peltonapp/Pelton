@@ -17,6 +17,8 @@ export interface ScopeEntry {
   group: ScopeGroup
   /** A param type or value type id; '' when nothing says. */
   type: string
+  /** The element type of a list, so a loop over it knows its items. */
+  of?: string
   /** The path of names shown for it, outermost first. */
   path: { labelKey: string; label: string }[]
   /** The block that sets it, for variables and step outputs. */
@@ -35,13 +37,36 @@ function eventEntries(ctx: ScopeContext): ScopeEntry[] {
   const out: ScopeEntry[] = []
   for (const f of trigger?.event ?? []) {
     const head = { labelKey: f.labelKey, label: f.label || f.name }
-    out.push({ ref: `event.${f.name}`, group: 'event', type: f.type, path: [head] })
+    out.push({ ref: `event.${f.name}`, group: 'event', type: f.type, of: f.of, path: [head] })
     const vt = ctx.catalog.valueTypes.find((v) => v.id === f.type)
     for (const sub of vt?.fields ?? []) {
-      out.push({ ref: `event.${f.name}.${sub.name}`, group: 'event', type: sub.type, path: [head, { labelKey: sub.labelKey, label: sub.label || sub.name }] })
+      out.push({ ref: `event.${f.name}.${sub.name}`, group: 'event', type: sub.type, of: sub.of, path: [head, { labelKey: sub.labelKey, label: sub.label || sub.name }] })
     }
   }
   return out
+}
+
+/**
+ * The variable a for each block sets, typed by the element type of the list
+ * it loops over when that is known, with the fields of an item of a value
+ * type.
+ */
+function loopEntries(b: Block, known: ScopeEntry[], ctx: ScopeContext): ScopeEntry[] {
+  const listRef = b.list?.ref
+  const type = (listRef && known.find((e) => e.ref === listRef)?.of) || ''
+  const head = varEntry(b.as ?? '', b.id, type)
+  const vt = ctx.catalog.valueTypes.find((v) => v.id === type)
+  return [
+    head,
+    ...(vt?.fields ?? []).map((sub) => ({
+      ref: `${head.ref}.${sub.name}`,
+      group: 'var' as const,
+      type: sub.type,
+      of: sub.of,
+      path: [...head.path, { labelKey: sub.labelKey, label: sub.label || sub.name }],
+      block: b.id,
+    })),
+  ]
 }
 
 function settingEntries(ctx: ScopeContext): ScopeEntry[] {
@@ -57,6 +82,7 @@ function stepEntries(b: Block, ctx: ScopeContext): ScopeEntry[] {
     ref: `step:${b.id}.${f.name}`,
     group: 'step' as const,
     type: f.type,
+    of: f.of,
     path: [
       { labelKey: def!.labelKey, label: def!.label || def!.id },
       { labelKey: f.labelKey, label: f.label || f.name },
@@ -65,8 +91,8 @@ function stepEntries(b: Block, ctx: ScopeContext): ScopeEntry[] {
   }))
 }
 
-function varEntry(name: string, block: string): ScopeEntry {
-  return { ref: `var:${name}`, group: 'var', type: '', path: [{ labelKey: '', label: name }], block }
+function varEntry(name: string, block: string, type = ''): ScopeEntry {
+  return { ref: `var:${name}`, group: 'var', type, path: [{ labelKey: '', label: name }], block }
 }
 
 /** Adds what a block that ran in full leaves behind: variables it set and step outputs, its own and those of blocks inside it. */
@@ -97,7 +123,7 @@ export function scopeAt(tree: BlockTree, id: string, ctx: ScopeContext): ScopeEn
       }
       if (subtreeIds(b).has(id)) {
         if (b.kind === 'foreach' && b.as) {
-          out.push(varEntry(b.as, b.id))
+          out.push(...loopEntries(b, out, ctx))
         }
         for (const s of childSlots(b)) {
           const list = slotBlocks({ version: 1, blocks: [b] }, s) ?? []
@@ -126,7 +152,7 @@ export function everyEntry(tree: BlockTree, ctx: ScopeContext): ScopeEntry[] {
   const foreachVars = (blocks: Block[]): void => {
     for (const b of blocks) {
       if (b.kind === 'foreach' && b.as) {
-        out.push(varEntry(b.as, b.id))
+        out.push(...loopEntries(b, out, ctx))
       }
       for (const s of childSlots(b)) {
         foreachVars(slotBlocks({ version: 1, blocks: [b] }, s) ?? [])

@@ -10,6 +10,7 @@
   // scale and the density's hour height never enter the math: a pointer's
   // place is read as its offset into the column over the column's height.
   import { createEventDispatcher, onDestroy, onMount, tick } from 'svelte'
+  import { openScriptMenu } from '../../lib/scriptmenu'
   import warningIcon from '@phosphor-icons/core/assets/duotone/warning-duotone.svg?raw'
   import repeatIcon from '@phosphor-icons/core/assets/duotone/repeat-duotone.svg?raw'
   import Ph from '../common/Ph.svelte'
@@ -529,6 +530,7 @@
               style={`grid-column:${s.col + 1} / span ${s.span};grid-row:${s.lane + 1};--ev:${colorOf(occ)}`}
               on:pointerdown={(e) => onBarDown(e, s.placed)}
               on:click={(e) => e.detail === 0 && dispatch('open', { occ, anchor: e.currentTarget })}
+              on:contextmenu={(e) => !occ.task && openScriptMenu(e, 'calendar.event', { id: String(occ.eventId) })}
             >
               {#if occ.task}
                 <TaskTick
@@ -608,6 +610,7 @@
                 style={`top:${pct(b.top)};height:${pct(b.bottom - b.top)};--col:${b.col};--cols:${b.cols};--ev:${colorOf(occ)}`}
                 on:pointerdown={(e) => onEventDown(e, b.placed)}
                 on:click={(e) => e.detail === 0 && dispatch('open', { occ, anchor: e.currentTarget })}
+                on:contextmenu={(e) => !occ.task && openScriptMenu(e, 'calendar.event', { id: String(occ.eventId) })}
               >
                 <span class="title">
                   {#if occ.task}

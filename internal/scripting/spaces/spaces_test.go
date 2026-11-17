@@ -359,3 +359,50 @@ func mustTrigger(t *testing.T, r *scripting.Registry, id string) scripting.Trigg
 	}
 	return tr
 }
+
+func TestPlacementsAndResultActions(t *testing.T) {
+	r, f := setup(t)
+	want := map[string]string{
+		"contacts.contact": "contact", "calendar.event": "event", "tasks.task": "task", "notes.note": "note",
+		"projects.card": "card", "feeds.item": "feed_item", "chat.message": "chat_message",
+	}
+	for id, vt := range want {
+		p, ok := r.Placement(id)
+		if !ok || p.ValueType != vt || p.Surface != scripting.SurfaceMenu || p.Permission == "" {
+			t.Fatalf("%s: %+v", id, p)
+		}
+	}
+	manual := mustTrigger(t, r, scripting.TriggerManual)
+	for _, p := range manual.Params {
+		if p.Name == "scope" && len(p.Options) < 2+len(want) {
+			t.Fatalf("scope options %+v", p.Options)
+		}
+	}
+	p, _ := r.Placement("contacts.contact")
+	obj, err := p.Load(&scripting.PrepareContext{Ctx: context.Background()}, "1")
+	if err != nil || obj.Type != "contact" {
+		t.Fatalf("%v %+v", err, obj)
+	}
+	if _, err := p.Load(&scripting.PrepareContext{Ctx: context.Background()}, "x"); err == nil {
+		t.Fatal("a bad id was accepted")
+	}
+	for _, id := range []string{"notes.save", "tasks.create"} {
+		a, ok := r.ResultAction(id)
+		if !ok || a.Run == nil {
+			t.Fatalf("%s missing", id)
+		}
+		if _, err := a.Run(context.Background(), scripting.Result{ScriptName: "Digest", Title: "a/b", Text: "line one\nline two"}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	changes := strings.Join(f.Changes(), "|")
+	if !strings.Contains(changes, "note a-b.md") || !strings.Contains(changes, "task a/b") {
+		t.Fatalf("changes %s", changes)
+	}
+	if _, ok := r.InputKind("contact"); !ok {
+		t.Fatal("the contact question is missing")
+	}
+	if _, ok := r.Action("ui.contact"); !ok {
+		t.Fatal("the contact question has no block action")
+	}
+}

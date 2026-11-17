@@ -31,6 +31,10 @@ export const catalogFixture: ScriptCatalog = {
     { id: 'net', labelKey: 'x.net', descKey: '', label: 'Web requests', category: 'outside', risk: 'high' },
   ],
   paramTypes: ['string'],
+  settingTypes: ['string', 'text', 'number', 'bool', 'enum', 'folder', 'account', 'color'],
+  inputKinds: [],
+  resultActions: [],
+  placements: [],
 }
 
 const messageParam = { name: 'message', type: 'ref' as const, labelKey: 'scripts.param.message', valueType: 'message', defaultRef: 'event.message' }
@@ -62,7 +66,7 @@ export const blockCatalog: ScriptCatalog = {
     { id: 'mail.arrived', labelKey: 'scripts.trigger.mail.arrived', descKey: '', category: 'mail', params: [], event: [{ name: 'message', type: 'message', labelKey: '', label: 'Message' }], permission: 'mail.read' },
     { id: 'mail.before_send', labelKey: 'scripts.trigger.mail.before_send', descKey: '', category: 'mail', params: [], event: [] },
   ],
-  conditions: [textCond('mail.from'), textCond('mail.subject'), { ...textCond('mail.header'), params: [messageParam, { name: 'name', type: 'string', labelKey: 'scripts.param.name', required: true }, opParam, { name: 'value', type: 'string', labelKey: 'scripts.param.value', required: true }] }],
+  conditions: [textCond('mail.from'), textCond('mail.subject'), textCond('mail.to'), { ...textCond('mail.header'), params: [messageParam, { name: 'name', type: 'string', labelKey: 'scripts.param.name', required: true }, opParam, { name: 'value', type: 'string', labelKey: 'scripts.param.value', required: true }] }],
   actions: [
     { id: 'mail.move', labelKey: 'scripts.action.mail.move', descKey: '', category: 'mail', permission: 'mail.modify', params: [messageParam, { name: 'folder', type: 'folder', labelKey: 'scripts.param.folder', required: true }], lua: 'mail.move({{message}}, {{folder}})' },
     { id: 'mail.create_draft', labelKey: 'scripts.action.mail.create_draft', descKey: '', category: 'mail', permission: 'mail.compose', params: [{ name: 'subject', type: 'string', labelKey: 'scripts.param.subject' }], outputs: [{ name: 'id', type: 'number', labelKey: 'scripts.field.id', label: 'id' }], lua: 'mail.draft({subject = {{subject}}})' },
@@ -71,7 +75,23 @@ export const blockCatalog: ScriptCatalog = {
     { id: 'outgoing.cancel', labelKey: 'scripts.action.outgoing.cancel', descKey: '', category: 'mail', params: [{ name: 'reason', type: 'string', labelKey: 'scripts.param.reason' }], lua: 'outgoing.cancel({{reason}})', triggers: ['mail.before_send'] },
   ],
   valueTypes: [
-    { id: 'message', labelKey: 'scripts.type.message', descKey: '', category: 'mail', fields: [{ name: 'subject', type: 'string', labelKey: 'scripts.field.subject' }, { name: 'from', type: 'address', labelKey: 'scripts.field.from' }] },
+    {
+      id: 'message',
+      labelKey: 'scripts.type.message',
+      descKey: '',
+      category: 'mail',
+      fields: [
+        { name: 'subject', type: 'string', labelKey: 'scripts.field.subject' },
+        { name: 'from', type: 'address', labelKey: 'scripts.field.from' },
+        { name: 'recipients', type: 'list', of: 'address', labelKey: '', label: 'recipients' },
+      ],
+      conditions: [
+        { field: 'from', condition: 'mail.from', param: 'value', labelKey: 'scripts.blocks.rule.from' },
+        { field: 'subject', condition: 'mail.subject', param: 'value', labelKey: 'scripts.blocks.rule.subject' },
+        { field: 'headers.list-id', condition: 'mail.header', param: 'value', args: { name: 'List-Id' }, labelKey: 'scripts.blocks.rule.list' },
+        { field: 'to', condition: 'mail.to', param: 'value', split: ',', labelKey: 'scripts.blocks.rule.to' },
+      ],
+    },
   ],
   permissions: [
     ...catalogFixture.permissions,
@@ -99,6 +119,7 @@ export function scriptFixture(over: Partial<Script> = {}): Script {
     catchUp: 'live',
     catchUpCap: 50,
     allowUnasked: [],
+    placements: [],
     createdAt: '',
     updatedAt: '',
     lastRunAt: '',

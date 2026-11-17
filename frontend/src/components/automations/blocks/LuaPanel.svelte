@@ -4,16 +4,13 @@
   // what the compiler refused, and offers to turn the script into Lua for good.
   import { afterUpdate, createEventDispatcher, onDestroy } from 'svelte'
   import { t } from '../../../lib/i18n'
-  import type { BlockTree, CompileResult, ScriptCatalog } from '../../../lib/scripting'
+  import type { BlockTree, CompileResult } from '../../../lib/scripting'
   import { compileBlocks } from '../../../stores/scripts'
   import { errorMessage } from '../../../stores/toast'
-  import { lineMap } from './luamap'
   import '../../../theme/controls.css'
 
   /** The tree to compile. */
   export let tree: BlockTree
-  /** The registry. */
-  export let catalog: ScriptCatalog
   /** The script's trigger id. */
   export let trigger: string
   /** The selected block, whose lines are marked. */
@@ -31,8 +28,7 @@
 
   $: schedule(tree, trigger)
   $: lines = result?.lua ? result.lua.replace(/\n$/, '').split('\n') : []
-  $: map = result?.lua ? lineMap(tree, catalog, result.lua) : new Map()
-  $: range = selected ? map.get(selected) : undefined
+  $: range = selected ? result?.lines?.[selected] : undefined
 
   function schedule(next: BlockTree, trig: string): void {
     clearTimeout(timer)

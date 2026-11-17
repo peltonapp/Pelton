@@ -47,11 +47,19 @@ const (
 	// TypeRef only takes a reference to a value: a trigger field, a variable,
 	// an earlier step's output or a script setting.
 	TypeRef ParamType = "ref"
+	// TypeIcon names an icon of the app's script icon set.
+	TypeIcon ParamType = "icon"
 )
 
 var paramTypes = []ParamType{
 	TypeString, TypeText, TypeNumber, TypeBool, TypeEnum, TypeRegex, TypeDuration,
-	TypeTime, TypeFolder, TypeAccount, TypeColor, TypeAddress, TypeList, TypeRef,
+	TypeTime, TypeFolder, TypeAccount, TypeColor, TypeAddress, TypeList, TypeRef, TypeIcon,
+}
+
+// settingTypes are the types a script setting may have. None holds a secret:
+// settings are stored and shown in plain text.
+var settingTypes = []ParamType{
+	TypeString, TypeText, TypeNumber, TypeBool, TypeEnum, TypeFolder, TypeAccount, TypeColor,
 }
 
 // Param describes one parameter of a trigger, condition, action, function or
@@ -62,7 +70,9 @@ type Param struct {
 	LabelKey string    `json:"labelKey"`
 	Label    string    `json:"label,omitempty"`
 	DescKey  string    `json:"descKey,omitempty"`
-	Required bool      `json:"required,omitempty"`
+	// Description is the English text shown when DescKey has no string.
+	Description string `json:"description,omitempty"`
+	Required    bool   `json:"required,omitempty"`
 	// Default is the literal used when no value is given.
 	Default any `json:"default,omitempty"`
 	// DefaultRef is the reference used when no value is given, e.g.
@@ -209,7 +219,7 @@ func literalLua(p Param, v any) (string, error) {
 
 func typedLiteral(t ParamType, p Param, v any) (string, error) {
 	switch t {
-	case TypeString, TypeText, TypeAddress, TypeFolder:
+	case TypeString, TypeText, TypeAddress, TypeFolder, TypeIcon:
 		s, ok := v.(string)
 		if !ok {
 			return "", fmt.Errorf("want text, got %T", v)

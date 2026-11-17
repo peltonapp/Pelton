@@ -104,6 +104,7 @@
     chipActions,
     sendActions,
     spaceNumber,
+    scriptOfAction,
     shortcuts as shortcutRegistry,
     type ShortcutAction,
   } from './lib/shortcuts'
@@ -119,7 +120,8 @@
   import { initFocus, focusMenuOpen, refreshFocus } from './stores/focus'
   import './lib/palette-focus'
   import { cyclePane, focusPane as focusPaneArea } from './lib/panes'
-  import { bindings, recording, initShortcuts } from './stores/shortcuts'
+  import { bindings, activeBindings, recording, initShortcuts } from './stores/shortcuts'
+  import { currentMessageItems, runAt } from './lib/scriptplacements'
   import { initMenuBar } from './stores/menubar'
   import { recordDeleted } from './stores/undodelete'
   import { historyOpen, redoOrSay, undoOrSay } from './stores/undohistory'
@@ -2063,7 +2065,7 @@
     if ((event.key !== 'ArrowDown' && event.key !== 'ArrowUp') || !$prefs.multiSelectEnabled) {
       return false
     }
-    if (matchShortcut(event, $bindings) !== null) {
+    if (matchShortcut(event, $activeBindings) !== null) {
       return false
     }
     vimMove(event.key === 'ArrowDown' ? 1 : -1, true)
@@ -2088,7 +2090,7 @@
       event.preventDefault()
       return
     }
-    const action = matchShortcut(event, $bindings)
+    const action = matchShortcut(event, $activeBindings)
     // undo and redo belong to a text field, a composer or an editor while one
     // has focus, and are the history's everywhere else.
     if ((action === 'undo' || action === 'redo') && isEditableTarget(event.target)) {
@@ -2107,6 +2109,12 @@
     if (action) {
       // a binding that types a character must not hijack typing in a field.
       if (comboTypes($bindings[action]) && isEditableTarget(event.target)) {
+        return
+      }
+      const scriptId = scriptOfAction(action)
+      if (scriptId !== null) {
+        event.preventDefault()
+        runAt('shortcut', scriptId, currentMessageItems())
         return
       }
       if (classic && newDesignOnly.has(action)) {

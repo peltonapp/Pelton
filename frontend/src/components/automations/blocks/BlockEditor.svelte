@@ -64,8 +64,10 @@
   export let trigger: string
   /** The script's settings, which blocks can refer to. */
   export let settings: ScriptParam[] = []
+  /** The permissions the script declares, to tell when a web block still lacks its host. */
+  export let declared: string[] = []
 
-  const dispatch = createEventDispatcher<{ change: BlockTree; permissions: string[]; convert: void }>()
+  const dispatch = createEventDispatcher<{ change: BlockTree; permissions: string[]; convert: void; addhost: void }>()
 
   let current: BlockTree = tree
   let history: History = emptyHistory()
@@ -101,6 +103,7 @@
     dispatch('permissions', perms)
   }
   $: risky = flatten(current).filter((b) => b.kind === 'action' && catalog.actions.find((a) => a.id === b.type)?.risky)
+  $: needsHost = perms.includes('net') && !declared.some((p) => p.startsWith('net:'))
   $: draft = $ruleDraft && $ruleDraft.scriptId === $selectedScriptId && findBlock(current, $ruleDraft.block) ? $ruleDraft : null
   $: showMarks = !!$testRun && $testRun.id !== $hiddenRun && $marks.size > 0
 
@@ -448,6 +451,13 @@
     </button>
   </div>
 
+  {#if needsHost}
+    <p class="host-note" role="note">
+      {$t('scripts.blocks.netHost')}
+      <button type="button" class="link" on:click={() => dispatch('addhost')}>{$t('scripts.blocks.netHostAdd')}</button>
+    </p>
+  {/if}
+
   {#if draft}
     <RuleChips {draft} />
   {/if}
@@ -503,7 +513,7 @@
     </div>
     {#if showLua}
       <div class="lua">
-        <LuaPanel tree={current} {catalog} {trigger} selected={$selected} on:select={(e) => selected.set(e.detail)} on:convert={() => dispatch('convert')} />
+        <LuaPanel tree={current} {trigger} selected={$selected} on:select={(e) => selected.set(e.detail)} on:convert={() => dispatch('convert')} />
       </div>
     {/if}
   </div>
@@ -631,6 +641,19 @@
   .issues ul {
     margin: var(--space-2) 0 0;
     padding-inline-start: var(--space-4);
+  }
+
+  .host-note {
+    margin: 0;
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-2);
+    align-items: center;
+    padding: var(--space-2) var(--space-3);
+    border-inline-start: 2px solid var(--warning);
+    background: var(--warning-bg);
+    border-radius: var(--radius-control);
+    font-size: var(--fz-meta);
   }
 
   .run-note {

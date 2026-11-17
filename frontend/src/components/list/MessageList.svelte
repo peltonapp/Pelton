@@ -107,6 +107,7 @@
   import { motion } from '../../lib/motion'
   import { parseRowActions, rowActionView, type RowActionId } from '../../lib/rowactions'
   import { runRowAction } from '../../lib/rowactionrun'
+  import { messageItems } from '../../lib/scriptplacements'
   import { newestHistoryId, offerUndo } from '../../stores/undohistory'
   import { noteAction } from '../../lib/coach'
   import {
@@ -122,7 +123,7 @@
   import { openMove, openMoveMany } from '../../stores/move'
   import { recordArchived } from '../../stores/undoarchive'
   import { openContextMenu, type MenuEntry } from '../../stores/contextmenu'
-  import { bindings, menuHint, shortcutTitle } from '../../stores/shortcuts'
+  import { activeBindings, bindings, menuHint, shortcutTitle } from '../../stores/shortcuts'
   import { matchShortcut } from '../../lib/shortcuts'
   import { openInTab } from '../../stores/tabs'
   import { errorMessage, toastError } from '../../stores/toast'
@@ -735,7 +736,7 @@
   // on them, which the global handler then runs alone.
   async function onKeydown(event: KeyboardEvent): Promise<void> {
     const vim = $prefs.appVimMode
-    const bound = matchShortcut(event, $bindings)
+    const bound = matchShortcut(event, $activeBindings)
     if (splitOn && (bound === 'next-split' || bound === 'prev-split')) {
       event.preventDefault()
       stepSplit(bound === 'next-split' ? 1 : -1)
@@ -758,7 +759,7 @@
     }
     if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
       const extend = event.shiftKey && $prefs.multiSelectEnabled
-      if (extend && (vim || matchShortcut(event, $bindings) !== null)) {
+      if (extend && (vim || matchShortcut(event, $activeBindings) !== null)) {
         return
       }
       event.preventDefault()
@@ -805,7 +806,7 @@
       event.key === ' ' &&
       $prefs.multiSelectEnabled &&
       activeIndex >= 0 &&
-      matchShortcut(event, $bindings) === null
+      matchShortcut(event, $activeBindings) === null
     ) {
       event.preventDefault()
       toggleSelect(items[activeIndex].id)
@@ -950,7 +951,7 @@
     }
     const hadFocus = listEl?.contains(document.activeElement) ?? false
     const since = newestHistoryId()
-    await runRowAction(id, item)
+    await runRowAction(id, item, via)
     if (via === 'swipe') {
       offerUndo(since)
     }
@@ -1025,7 +1026,7 @@
         'separator',
         { label: $t('messageList.bulk.deleteCount').replace('{n}', n), icon: IconTrash, danger: true, hint: menuHint('delete-message'), action: () => void bulkDelete() },
       ]
-      openContextMenu(event.clientX, event.clientY, entries)
+      openContextMenu(event.clientX, event.clientY, entries, { place: 'mail.row', items: messageItems(selectedItems.map((m) => m.id)) })
       return
     }
     // right clicking outside the selection is a fresh start: the row under the
@@ -1073,7 +1074,7 @@
       'separator',
       { label: $t('action.delete'), icon: IconTrash, danger: true, hint: menuHint('delete-message'), action: () => void remove(item) },
     ]
-    openContextMenu(event.clientX, event.clientY, entries)
+    openContextMenu(event.clientX, event.clientY, entries, { place: 'mail.row', items: messageItems([item.id]) })
   }
 
   // organizeEntries are pin, mute and the private note, in the new design only.

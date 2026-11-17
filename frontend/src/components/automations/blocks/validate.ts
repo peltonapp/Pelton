@@ -111,7 +111,7 @@ function checkBlock(b: Block, tree: BlockTree, ctx: ScopeContext, out: Issue[]):
     case 'if':
       ;(b.branches ?? []).forEach((br, i) => {
         checkCond(br.when, { block: b.id, branch: i, path: [] }, ctx, scope, out)
-        if (!br.body || br.body.length === 0) {
+        if (br.body.length === 0) {
           out.push({ ...at, code: 'emptyBranch' })
         }
       })

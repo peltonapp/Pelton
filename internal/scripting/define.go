@@ -77,8 +77,9 @@ func NewFunction(module, name string, h Handler, params ...Param) Function {
 }
 
 // Register adds every entry of an Entries set in the order permissions,
-// value types, triggers, modules, conditions, actions, which is the order
-// their references to each other need.
+// value types, triggers, modules, conditions, actions, input kinds, result
+// actions, placements, which is the order their references to each other
+// need.
 func (r *Registry) Register(e Entries) error {
 	for _, p := range e.Permissions {
 		if err := r.RegisterPermission(p); err != nil {
@@ -110,15 +111,33 @@ func (r *Registry) Register(e Entries) error {
 			return err
 		}
 	}
+	for _, k := range e.InputKinds {
+		if err := r.RegisterInputKind(k); err != nil {
+			return err
+		}
+	}
+	for _, a := range e.ResultActions {
+		if err := r.RegisterResultAction(a); err != nil {
+			return err
+		}
+	}
+	for _, p := range e.Placements {
+		if err := r.RegisterPlacement(p); err != nil {
+			return err
+		}
+	}
 	return nil
 }
 
 // Entries is a set of registry entries an area registers together.
 type Entries struct {
-	Permissions []Permission
-	ValueTypes  []ValueType
-	Triggers    []Trigger
-	Modules     []Module
-	Conditions  []Condition
-	Actions     []Action
+	Permissions   []Permission
+	ValueTypes    []ValueType
+	Triggers      []Trigger
+	Modules       []Module
+	Conditions    []Condition
+	Actions       []Action
+	InputKinds    []InputKind
+	ResultActions []ResultAction
+	Placements    []Placement
 }

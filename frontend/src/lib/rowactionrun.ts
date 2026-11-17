@@ -3,7 +3,8 @@
 // reader moving on and the toasts behave the way they do for the key.
 
 import type { MessageSummary } from './types'
-import type { RowActionId } from './rowactions'
+import { scriptRowActionId, type BuiltinRowActionId, type RowActionId } from './rowactions'
+import { messageItems, runAt } from './scriptplacements'
 import { archive, markFlagged, markSeen, toggleSpam, trashMessage } from './messageactions'
 import { markDone } from './triage'
 import { togglePin, toggleMute } from './organize'
@@ -23,9 +24,17 @@ function closeIfGone(id: number): void {
   }
 }
 
-/** Runs one row action on one message. Failures are reported as toasts. */
-export async function runRowAction(id: RowActionId, item: MessageSummary): Promise<void> {
-  switch (id) {
+/**
+ * Runs one row action on one message. Failures are reported as toasts. A
+ * script runs at the placement it was offered from, the buttons or the swipes.
+ */
+export async function runRowAction(id: RowActionId, item: MessageSummary, via: 'button' | 'swipe' = 'button'): Promise<void> {
+  const scriptId = scriptRowActionId(id)
+  if (scriptId !== null) {
+    runAt(via === 'swipe' ? 'row.swipe' : 'row.hover', scriptId, messageItems([item.id]))
+    return
+  }
+  switch (id as BuiltinRowActionId) {
     case 'archive':
       await archive(item)
       closeIfGone(item.id)

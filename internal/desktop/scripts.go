@@ -32,10 +32,27 @@ const (
 	EventScriptCatchUp = "scripts:catchup"
 	// EventScriptToast shows a script's notify.toast, with a ScriptToastDTO.
 	EventScriptToast = "scripts:toast"
+	// EventScriptAsk puts a running script's question to the user, with a
+	// ScriptAskDTO; AnswerScriptAsk carries the answer back. EventScriptAskDone
+	// withdraws a question nobody answered in time, with its id.
+	EventScriptAsk     = "scripts:ask"
+	EventScriptAskDone = "scripts:askdone"
+	// EventScriptResult opens the result panel, with a ScriptResultDTO.
+	EventScriptResult = "scripts:result"
+	// EventScriptProgress reports a run that takes a moment, with a
+	// scripting.LiveRun.
+	EventScriptProgress = "scripts:progress"
 )
 
 // settingScriptLogDays is how many days of script runs the log keeps.
 const settingScriptLogDays = "scripts_log_days"
+
+// settingScriptAskSeconds is how long a question of a script nobody started
+// waits before it takes its default.
+const settingScriptAskSeconds = "scripts_ask_seconds"
+
+// scriptResultsKept is how many results stay ready for their buttons.
+const scriptResultsKept = 20
 
 // scriptConfirmWait is how long a risky call waits for the user. The run's
 // own timeout still applies on top, so this only matters for long timeouts.
@@ -51,8 +68,13 @@ type scriptState struct {
 	// in the order made.
 	journal map[int64]*runJournal
 	order   []int64
-	// confirms holds the risky calls waiting for an answer, by request id.
+	// confirms holds the risky calls waiting for an answer, by request id,
+	// and asks the questions.
 	confirms map[string]chan scripting.ConfirmAnswer
+	asks     map[string]chan scripting.AskAnswer
+	// results holds the latest results shown, by id, for their buttons.
+	results     map[string]scripting.Result
+	resultOrder []string
 	// synced holds the accounts that finished a full sync in this session;
 	// mail a first sync brings in may have arrived while the app was closed.
 	synced sync.Map
@@ -72,12 +94,16 @@ func (a *App) startScripts() {
 			Mail:    &scriptMail{app: a},
 			Notify:  &scriptNotify{app: a},
 			Confirm: &scriptConfirm{app: a},
+			Ask:     &scriptAsk{app: a},
+			Result:  &scriptResults{app: a},
 		},
 		Log:           a.log,
 		OnRun:         a.onScriptRun,
 		OnChange:      func() { a.emit(EventScriptsChanged, nil) },
 		OnCatchUp:     a.onScriptCatchUp,
 		RetentionDays: func() int { return a.intSetting(settingScriptLogDays, scripting.DefaultRetentionDays) },
+		AskTimeout:    a.scriptAskTimeout,
+		OnProgress:    func(l scripting.LiveRun) { a.emit(EventScriptProgress, l) },
 	})
 	if err != nil {
 		a.log.Error("scripts: set up", "err", err)
@@ -677,11 +703,10 @@ func (c *scriptConfirm) Confirm(ctx context.Context, req scripting.ConfirmReques
 	if a.wapp == nil {
 		return scripting.ConfirmAnswer{}, fmt.Errorf("pelton: no window to ask in")
 	}
-	buf := make([]byte, 8)
-	if _, err := rand.Read(buf); err != nil {
+	id, err := newScriptRequestID()
+	if err != nil {
 		return scripting.ConfirmAnswer{}, err
 	}
-	id := hex.EncodeToString(buf)
 	answer := make(chan scripting.ConfirmAnswer, 1)
 	st := &a.scriptState
 	st.mu.Lock()
@@ -706,4 +731,96 @@ func (c *scriptConfirm) Confirm(ctx context.Context, req scripting.ConfirmReques
 	case <-timer.C:
 		return scripting.ConfirmAnswer{}, fmt.Errorf("pelton: no answer")
 	}
+}
+
+func newScriptRequestID() (string, error) {
+	buf := make([]byte, 8)
+	if _, err := rand.Read(buf); err != nil {
+		return "", err
+	}
+	return hex.EncodeToString(buf), nil
+}
+
+// scriptAskTimeout is how long a question of a script nobody started waits.
+func (a *App) scriptAskTimeout() time.Duration {
+	return time.Duration(a.intSetting(settingScriptAskSeconds, int(scripting.DefaultAskTimeout/time.Second))) * time.Second
+}
+
+// scriptAsk puts a running script's questions to the user through a dialog
+// in the frontend, which shows one at a time.
+type scriptAsk struct {
+	app *App
+}
+
+func (q *scriptAsk) Ask(ctx context.Context, req scripting.AskRequest) (scripting.AskAnswer, error) {
+	a := q.app
+	if a.wapp == nil {
+		return scripting.AskAnswer{}, fmt.Errorf("pelton: no window to ask in")
+	}
+	id, err := newScriptRequestID()
+	if err != nil {
+		return scripting.AskAnswer{}, err
+	}
+	answer := make(chan scripting.AskAnswer, 1)
+	st := &a.scriptState
+	st.mu.Lock()
+	if st.asks == nil {
+		st.asks = map[string]chan scripting.AskAnswer{}
+	}
+	st.asks[id] = answer
+	st.mu.Unlock()
+	defer func() {
+		st.mu.Lock()
+		_, open := st.asks[id]
+		delete(st.asks, id)
+		st.mu.Unlock()
+		if open {
+			a.emit(EventScriptAskDone, id)
+		}
+	}()
+	params := req.Params
+	if params == nil {
+		params = map[string]any{}
+	}
+	a.emit(EventScriptAsk, ScriptAskDTO{
+		ID: id, ScriptID: req.ScriptID, ScriptName: req.ScriptName, Kind: req.Kind, Control: req.Control,
+		Prompt: req.Prompt, Params: params, Default: req.Default, Dry: req.Dry, Attended: req.Attended,
+		TimeoutSeconds: int(req.Timeout / time.Second),
+	})
+	select {
+	case ans := <-answer:
+		return ans, nil
+	case <-ctx.Done():
+		return scripting.AskAnswer{}, ctx.Err()
+	}
+}
+
+// scriptResults keeps the results scripts show and opens the result panel.
+type scriptResults struct {
+	app *App
+}
+
+func (r *scriptResults) Show(_ context.Context, res scripting.Result) error {
+	a := r.app
+	id, err := newScriptRequestID()
+	if err != nil {
+		return err
+	}
+	st := &a.scriptState
+	st.mu.Lock()
+	if st.results == nil {
+		st.results = map[string]scripting.Result{}
+	}
+	st.results[id] = res
+	st.resultOrder = append(st.resultOrder, id)
+	if len(st.resultOrder) > scriptResultsKept {
+		delete(st.results, st.resultOrder[0])
+		st.resultOrder = st.resultOrder[1:]
+	}
+	st.mu.Unlock()
+	a.emit(EventScriptResult, ScriptResultDTO{
+		ID: id, ScriptID: res.ScriptID, ScriptName: res.ScriptName, Title: res.Title, Text: res.Text,
+		Format: res.Format, Actions: orEmpty(res.Actions), Dry: res.Dry,
+	})
+	return nil
 }
