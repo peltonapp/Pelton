@@ -44,6 +44,21 @@ type Field struct {
 	Type     string `json:"type"`
 	LabelKey string `json:"labelKey"`
 	Label    string `json:"label,omitempty"`
+	// Of is the element type of a list field, a ParamType or a value type
+	// id, so a loop over it knows what each item is.
+	Of string `json:"of,omitempty"`
+}
+
+// FieldCondition says which condition tests a field of a value type, so a
+// rule can be made from a value without knowing condition ids.
+type FieldCondition struct {
+	// Field is the field's path, e.g. "subject" or "headers.list-id".
+	Field string `json:"field"`
+	// Condition is the condition id and Param the parameter the field's value
+	// goes into; Args are fixed arguments, e.g. a header name.
+	Condition string         `json:"condition"`
+	Param     string         `json:"param"`
+	Args      map[string]any `json:"args,omitempty"`
 }
 
 // Trigger is something that starts a script.
@@ -145,6 +160,8 @@ type ValueType struct {
 	// Lazy maps a field that is fetched on first use to the module function
 	// that fetches it, e.g. "body" to "mail.body".
 	Lazy map[string]string `json:"lazy,omitempty"`
+	// Conditions are the conditions that test the type's fields.
+	Conditions []FieldCondition `json:"conditions,omitempty"`
 	// Sample returns the fields of an example value, which a test run with
 	// nothing picked hands a script for a trigger field of this type.
 	Sample func(now time.Time) map[string]any `json:"-"`
@@ -166,18 +183,26 @@ type Catalog struct {
 	ValueTypes  []ValueType  `json:"valueTypes"`
 	Permissions []Permission `json:"permissions"`
 	ParamTypes  []ParamType  `json:"paramTypes"`
+	// SettingTypes are the parameter types a script setting may have.
+	SettingTypes  []ParamType      `json:"settingTypes"`
+	InputKinds    []InputKind      `json:"inputKinds"`
+	ResultActions []ResultAction   `json:"resultActions"`
+	Placements    []Placement      `json:"placements"`
 }
 
 // Registry holds everything scripts can use. It is safe for concurrent use;
 // entries are normally registered at startup and only read afterwards.
 type Registry struct {
-	mu          sync.RWMutex
-	triggers    entries[Trigger]
-	conditions  entries[Condition]
-	actions     entries[Action]
-	modules     entries[Module]
-	valueTypes  entries[ValueType]
-	permissions entries[Permission]
+	mu            sync.RWMutex
+	triggers      entries[Trigger]
+	conditions    entries[Condition]
+	actions       entries[Action]
+	modules       entries[Module]
+	valueTypes    entries[ValueType]
+	permissions   entries[Permission]
+	inputKinds    entries[InputKind]
+	resultActions entries[ResultAction]
+	placements    entries[Placement]
 }
 
 type entries[T any] struct {
@@ -492,8 +517,12 @@ func (r *Registry) Catalog() Catalog {
 		Actions:     r.actions.list(),
 		Modules:     r.modules.list(),
 		ValueTypes:  r.valueTypes.list(),
-		Permissions: r.permissions.list(),
-		ParamTypes:  slices.Clone(paramTypes),
+		Permissions:   r.permissions.list(),
+		ParamTypes:    slices.Clone(paramTypes),
+		SettingTypes:  slices.Clone(settingTypes),
+		InputKinds:    r.inputKinds.list(),
+		ResultActions: r.resultActions.list(),
+		Placements:    r.placements.list(),
 	}
 }
 

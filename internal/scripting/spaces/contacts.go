@@ -86,6 +86,17 @@ func contactsEntries(h ContactsHost) scripting.Entries {
 		return h, nil
 	}
 	contactField := field("contact", "contact")
+	load := func(c *scripting.PrepareContext, id int64) (scripting.Object, error) {
+		hh, err := host()
+		if err != nil {
+			return scripting.Object{}, err
+		}
+		ct, err := hh.Contact(c.Ctx, id)
+		if err != nil {
+			return scripting.Object{}, fmt.Errorf("spaces: load contact %d: %w", id, err)
+		}
+		return ContactObject(ct), nil
+	}
 	add := func(c *scripting.Call, hh ContactsHost, in ContactInput) ([]any, error) {
 		email, name, err := cleanEmail(c, in.Email)
 		if err != nil {
@@ -130,7 +141,7 @@ func contactsEntries(h ContactsHost) scripting.Entries {
 				return nil, err
 			}
 			return []any{list(out, ContactObject)}, nil
-		}, []scripting.Field{field("contacts", "list")}, query, param("limit", scripting.TypeNumber)),
+		}, []scripting.Field{listOf("contacts", "contact")}, query, param("limit", scripting.TypeNumber)),
 		fnDef("contacts", "get", PermContactsRead, "read", func(c *scripting.Call) ([]any, error) {
 			hh, err := host()
 			if err != nil {
@@ -222,24 +233,28 @@ func contactsEntries(h ContactsHost) scripting.Entries {
 		},
 		ValueTypes: []scripting.ValueType{{Meta: meta("type", "contact", "contacts"), Sample: sampleContact, Fields: fields(
 			"id:number", "book_id:number", "book:string", "name:string", "organization:string", "title:string",
-			"note:text", "email:address", "emails:list", "phones:list")}},
+			"note:text", "email:address", "emails:list:address", "phones:list:string")}},
 		Triggers: []scripting.Trigger{{
 			Meta: meta("trigger", TriggerContactAdded, "contacts"), Event: []scripting.Field{field("contact", "contact")},
 			Permission: PermContactsRead,
-			Prepare: prepareObject("contact", "contact_id", func(c *scripting.PrepareContext, id int64) (scripting.Object, error) {
-				hh, err := host()
-				if err != nil {
-					return scripting.Object{}, err
-				}
-				ct, err := hh.Contact(c.Ctx, id)
-				if err != nil {
-					return scripting.Object{}, fmt.Errorf("spaces: load contact %d: %w", id, err)
-				}
-				return ContactObject(ct), nil
-			}),
+			Prepare:    prepareObject("contact", "contact_id", load),
 		}},
 		Modules:    []scripting.Module{{Meta: meta("module", "contacts", "contacts"), Functions: fns}},
 		Conditions: conds,
 		Actions:    actions,
+		InputKinds: []scripting.InputKind{{
+			Meta: meta("input", "contact", "contacts"), Control: "contact", Value: "contact",
+			Check: func(c *scripting.Call, answer any, _ map[string]any) (any, error) {
+				id, ok := answer.(float64)
+				if !ok {
+					return nil, fmt.Errorf("ui: the answer is not a contact")
+				}
+				if err := c.Require(PermContactsRead); err != nil {
+					return nil, err
+				}
+				return load(&scripting.PrepareContext{Ctx: c.Ctx, Hosts: c.Hosts}, int64(id))
+			},
+		}},
+		Placements: []scripting.Placement{menu("contacts.contact", "contacts", "contact", PermContactsRead, intLoad(load))},
 	}
 }

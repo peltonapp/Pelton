@@ -30,6 +30,9 @@ type File struct {
 	Source      string        `json:"source,omitempty"`
 	Settings    []Param       `json:"settings,omitempty"`
 	CatchUp     CatchUpMode   `json:"catchUp,omitempty"`
+	// Placements are where the script is offered in the app; a keyboard
+	// shortcut's key stays behind.
+	Placements []PlacementConfig `json:"placements,omitempty"`
 }
 
 // Export renders a script as the text of a .peltonscript file.
@@ -41,8 +44,9 @@ func Export(r *Registry, sc *Script) ([]byte, error) {
 		Kind:        sc.Kind,
 		Trigger:     TriggerConfig{Type: sc.Trigger.Type, Params: withoutPersonal(triggerParams(r, sc.Trigger.Type), sc.Trigger.Params)},
 		Permissions: nonNil(sc.Permissions),
-		Settings:    sc.SettingsSchema,
+		Settings:    exportSettings(sc.SettingsSchema),
 		CatchUp:     sc.CatchUp,
+		Placements:  sc.Placements,
 	}
 	if sc.Kind == KindBlocks && sc.Blocks != nil {
 		t := scrubTree(r, *sc.Blocks)
@@ -84,6 +88,7 @@ func ParseFile(r *Registry, data []byte) (*Script, error) {
 		Permissions:    f.Permissions,
 		SettingsSchema: f.Settings,
 		CatchUp:        f.CatchUp,
+		Placements:     f.Placements,
 		Origin:         OriginImport,
 	}
 	if sc.CatchUp == "" {
@@ -105,6 +110,19 @@ func (s *Service) Import(ctx context.Context, data []byte) (*Script, error) {
 		return nil, err
 	}
 	return s.Create(ctx, sc)
+}
+
+// exportSettings is the settings schema with the defaults of account
+// settings dropped, since an account id only means something here.
+func exportSettings(schema []Param) []Param {
+	out := make([]Param, 0, len(schema))
+	for _, p := range schema {
+		if p.Type == TypeAccount {
+			p.Default = nil
+		}
+		out = append(out, p)
+	}
+	return out
 }
 
 func triggerParams(r *Registry, id string) []Param {

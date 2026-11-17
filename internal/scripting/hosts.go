@@ -16,6 +16,8 @@ type Hosts struct {
 	Mail    MailHost
 	Notify  NotifyHost
 	Confirm Confirmer
+	Ask     Asker
+	Result  ResultHost
 	// Now is the clock, time.Now when nil.
 	Now func() time.Time
 }

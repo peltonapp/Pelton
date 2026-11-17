@@ -55,7 +55,7 @@ func nonNil[T any](s []T) []T {
 
 const scriptColumns = `id, name, description, kind, source, blocks, trigger, permissions, approved,
 enabled, origin, settings_schema, settings, catch_up, catch_up_cap, allow_unasked,
-created_at, updated_at, enabled_at, alive_at, last_run_at`
+created_at, updated_at, enabled_at, alive_at, last_run_at, placements`
 
 type rowScanner interface {
 	Scan(dest ...any) error
@@ -67,11 +67,12 @@ func scanScript(row rowScanner) (*Script, error) {
 		kind, origin, catchUp, blocks, trigger        string
 		perms, approved, schema, settings, allow      string
 		created, updated, enabledAt, aliveAt, lastRun string
+		placements                                    string
 		enabled                                       int
 	)
 	err := row.Scan(&s.ID, &s.Name, &s.Description, &kind, &s.Source, &blocks, &trigger, &perms, &approved,
 		&enabled, &origin, &schema, &settings, &catchUp, &s.CatchUpCap, &allow,
-		&created, &updated, &enabledAt, &aliveAt, &lastRun)
+		&created, &updated, &enabledAt, &aliveAt, &lastRun, &placements)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, ErrNotFound
 	}
@@ -92,6 +93,7 @@ func scanScript(row rowScanner) (*Script, error) {
 	}{
 		{trigger, &s.Trigger}, {perms, &s.Permissions}, {approved, &s.Approved},
 		{schema, &s.SettingsSchema}, {settings, &s.Settings}, {allow, &s.AllowUnasked},
+		{placements, &s.Placements},
 	} {
 		if err := json.Unmarshal([]byte(part.raw), part.dst); err != nil {
 			return nil, fmt.Errorf("scripting: read script %d: %w", s.ID, err)
@@ -115,16 +117,24 @@ func (st *Store) Create(ctx context.Context, s *Script) (int64, error) {
 	res, err := st.db.ExecContext(ctx, `
 INSERT INTO scripts (name, description, kind, source, blocks, trigger, permissions, approved,
   enabled, origin, settings_schema, settings, catch_up, catch_up_cap, allow_unasked,
-  created_at, updated_at, enabled_at, alive_at, last_run_at)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, '')`,
+  created_at, updated_at, enabled_at, alive_at, last_run_at, placements)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, '', ?)`,
 		s.Name, s.Description, string(s.Kind), s.Source, blocksJSON(s.Blocks), mustJSON(s.Trigger),
 		mustJSON(nonNil(s.Permissions)), mustJSON(nonNil(s.Approved)), boolInt(s.Enabled), string(s.Origin),
 		mustJSON(nonNil(s.SettingsSchema)), mustJSON(nonNilMap(s.Settings)), string(s.CatchUp), s.CatchUpCap,
-		mustJSON(nonNil(s.AllowUnasked)), fmtTime(now), fmtTime(now), fmtTime(s.EnabledAt), fmtTime(s.AliveAt))
+		mustJSON(nonNil(s.AllowUnasked)), fmtTime(now), fmtTime(now), fmtTime(s.EnabledAt), fmtTime(s.AliveAt),
+		mustJSON(nonNil(s.Placements)))
 	if err != nil {
 		return 0, fmt.Errorf("scripting: create script: %w", err)
 	}
 	return res.LastInsertId()
+}
+
+// runDetail is what a run's log row keeps beside its steps.
+type runDetail struct {
+	ErrorLine  int      `json:"errorLine,omitempty"`
+	ErrorBlock string   `json:"errorBlock,omitempty"`
+	NotReached []string `json:"notReached,omitempty"`
 }
 
 func nonNilMap(m map[string]any) map[string]any {
@@ -147,13 +157,13 @@ func (st *Store) Update(ctx context.Context, s *Script) error {
 	res, err := st.db.ExecContext(ctx, `
 UPDATE scripts SET name = ?, description = ?, kind = ?, source = ?, blocks = ?, trigger = ?,
   permissions = ?, approved = ?, enabled = ?, settings_schema = ?, settings = ?, catch_up = ?,
-  catch_up_cap = ?, allow_unasked = ?, updated_at = ?, enabled_at = ?, alive_at = ?
+  catch_up_cap = ?, allow_unasked = ?, updated_at = ?, enabled_at = ?, alive_at = ?, placements = ?
 WHERE id = ?`,
 		s.Name, s.Description, string(s.Kind), s.Source, blocksJSON(s.Blocks), mustJSON(s.Trigger),
 		mustJSON(nonNil(s.Permissions)), mustJSON(nonNil(s.Approved)), boolInt(s.Enabled),
 		mustJSON(nonNil(s.SettingsSchema)), mustJSON(nonNilMap(s.Settings)), string(s.CatchUp),
 		s.CatchUpCap, mustJSON(nonNil(s.AllowUnasked)), fmtTime(time.Now()), fmtTime(s.EnabledAt),
-		fmtTime(s.AliveAt), s.ID)
+		fmtTime(s.AliveAt), mustJSON(nonNil(s.Placements)), s.ID)
 	if err != nil {
 		return fmt.Errorf("scripting: update script %d: %w", s.ID, err)
 	}
@@ -224,9 +234,10 @@ func (st *Store) FinishRun(ctx context.Context, r *Run) error {
 		}
 		r.ID = id
 	}
+	detail := mustJSON(runDetail{ErrorLine: r.ErrorLine, ErrorBlock: r.ErrorBlock, NotReached: r.NotReached})
 	_, err := st.db.ExecContext(ctx, `
-UPDATE script_runs SET duration_ms = ?, status = ?, error = ?, steps = ?, changes = ? WHERE id = ?`,
-		r.Duration.Milliseconds(), string(r.Status), r.Error, steps, r.Changes(), r.ID)
+UPDATE script_runs SET duration_ms = ?, status = ?, error = ?, steps = ?, changes = ?, detail = ? WHERE id = ?`,
+		r.Duration.Milliseconds(), string(r.Status), r.Error, steps, r.Changes(), detail, r.ID)
 	if err != nil {
 		return fmt.Errorf("scripting: log run %d: %w", r.ID, err)
 	}
@@ -244,7 +255,7 @@ func (st *Store) Runs(ctx context.Context, scriptID int64, limit int) ([]*Run, e
 	if limit <= 0 || limit > 1000 {
 		limit = 200
 	}
-	query := `SELECT id, script_id, trigger, started_at, duration_ms, status, error, steps, depth FROM script_runs`
+	query := `SELECT id, script_id, trigger, started_at, duration_ms, status, error, steps, depth, detail FROM script_runs`
 	args := []any{}
 	if scriptID != 0 {
 		query += ` WHERE script_id = ?`
@@ -260,16 +271,20 @@ func (st *Store) Runs(ctx context.Context, scriptID int64, limit int) ([]*Run, e
 	var out []*Run
 	for rows.Next() {
 		var (
-			r                      Run
-			started, status, steps string
-			ms                     int64
+			r                              Run
+			started, status, steps, detail string
+			ms                             int64
+			d                              runDetail
 		)
-		if err := rows.Scan(&r.ID, &r.ScriptID, &r.Trigger, &started, &ms, &status, &r.Error, &steps, &r.Depth); err != nil {
+		if err := rows.Scan(&r.ID, &r.ScriptID, &r.Trigger, &started, &ms, &status, &r.Error, &steps, &r.Depth, &detail); err != nil {
 			return nil, fmt.Errorf("scripting: read run: %w", err)
 		}
 		r.Started, r.Duration, r.Status = parseTime(started), time.Duration(ms)*time.Millisecond, Status(status)
 		if err := json.Unmarshal([]byte(steps), &r.Steps); err != nil {
 			r.Steps = nil
+		}
+		if json.Unmarshal([]byte(detail), &d) == nil {
+			r.ErrorLine, r.ErrorBlock, r.NotReached = d.ErrorLine, d.ErrorBlock, d.NotReached
 		}
 		out = append(out, &r)
 	}

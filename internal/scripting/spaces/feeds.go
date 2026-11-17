@@ -161,7 +161,19 @@ func feedsEntries(h FeedsHost) scripting.Entries {
 		return scripting.Action{Meta: meta("action", id, "feeds"), Params: params, Permission: PermFeedsModify, Lua: lua}
 	}
 	feedName := param("feed", scripting.TypeString)
+	load := func(c *scripting.PrepareContext, id int64) (scripting.Object, error) {
+		hh, err := host()
+		if err != nil {
+			return scripting.Object{}, err
+		}
+		it, err := hh.FeedItem(c.Ctx, id)
+		if err != nil {
+			return scripting.Object{}, fmt.Errorf("spaces: load feed item %d: %w", id, err)
+		}
+		return FeedItemObject(it), nil
+	}
 	return scripting.Entries{
+		Placements: []scripting.Placement{menu("feeds.item", "feeds", "feed_item", PermFeedsRead, intLoad(load))},
 		Permissions: []scripting.Permission{
 			{Meta: meta("perm", PermFeedsRead, "feeds"), Risk: "low"},
 			{Meta: meta("perm", PermFeedsModify, "feeds"), Risk: "low"},
@@ -172,17 +184,7 @@ func feedsEntries(h FeedsHost) scripting.Entries {
 		Triggers: []scripting.Trigger{{
 			Meta: meta("trigger", TriggerFeedItem, "feeds"), Params: []scripting.Param{feedName},
 			Event: []scripting.Field{itemField}, Permission: PermFeedsRead,
-			Prepare: prepareObject("item", "item_id", func(c *scripting.PrepareContext, id int64) (scripting.Object, error) {
-				hh, err := host()
-				if err != nil {
-					return scripting.Object{}, err
-				}
-				it, err := hh.FeedItem(c.Ctx, id)
-				if err != nil {
-					return scripting.Object{}, fmt.Errorf("spaces: load feed item %d: %w", id, err)
-				}
-				return FeedItemObject(it), nil
-			}),
+			Prepare: prepareObject("item", "item_id", load),
 			Match: func(params, event map[string]any) bool {
 				it := objectFields(event, "item")
 				name, _ := it["feed"].(string)

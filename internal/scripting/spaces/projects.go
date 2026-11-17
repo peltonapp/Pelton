@@ -275,7 +275,7 @@ func projectsEntries(h ProjectsHost) scripting.Entries {
 			{Meta: meta("perm", PermProjectsWrite, "projects"), Risk: "medium"},
 		},
 		ValueTypes: []scripting.ValueType{
-			{Meta: meta("type", "project", "projects"), Fields: fields("id:number", "name:string", "status:string", "columns:list")},
+			{Meta: meta("type", "project", "projects"), Fields: fields("id:number", "name:string", "status:string", "columns:list:string")},
 			{Meta: meta("type", "card", "projects"), Sample: sampleCard, Fields: fields(
 				"id:number", "uid:string", "title:string", "notes:text", "project_id:number", "project:string",
 				"column:string", "due:number", "done:bool")},
@@ -295,5 +295,6 @@ func projectsEntries(h ProjectsHost) scripting.Entries {
 		Modules:    []scripting.Module{{Meta: meta("module", "projects", "projects"), Functions: fns}},
 		Conditions: conds,
 		Actions:    actions,
+		Placements: []scripting.Placement{menu("projects.card", "projects", "card", PermProjectsRead, load)},
 	}
 }

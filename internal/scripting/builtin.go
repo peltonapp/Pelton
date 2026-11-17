@@ -55,6 +55,8 @@ func RegisterBuiltins(r *Registry) error {
 		registerUtilModules,
 		registerUtilActions,
 		registerMail,
+		registerInteraction,
+		registerMailPlacements,
 	}
 	for _, step := range steps {
 		if err := step(r); err != nil {
@@ -94,12 +96,23 @@ func registerValueTypes(r *Registry) error {
 			field("headers", "table"), field("body", "text"),
 		},
 		Lazy: map[string]string{"body": "mail.body"},
+		Conditions: []FieldCondition{
+			{Field: "from", Condition: "mail.from", Param: "value"},
+			{Field: "subject", Condition: "mail.subject", Param: "value"},
+			{Field: "headers.list-id", Condition: "mail.header", Param: "value", Args: map[string]any{"name": "List-Id"}},
+			{Field: "to", Condition: "mail.to", Param: "value"},
+		},
+	}
+	addresses := func(name string) Field {
+		f := field(name, "list")
+		f.Of = string(TypeAddress)
+		return f
 	}
 	draft := ValueType{
 		Meta: meta("type", "draft", "mail"),
 		Fields: []Field{
-			field("account_id", "account"), field("to", "list"), field("cc", "list"),
-			field("bcc", "list"), field("subject", "string"), field("body", "text"),
+			field("account_id", "account"), addresses("to"), addresses("cc"),
+			addresses("bcc"), field("subject", "string"), field("body", "text"),
 		},
 	}
 	for _, v := range []ValueType{message, draft} {

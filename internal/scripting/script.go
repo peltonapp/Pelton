@@ -73,7 +73,9 @@ type Script struct {
 	// user's values for them.
 	SettingsSchema []Param
 	Settings       map[string]any
-	CatchUp        CatchUpMode
+	// Placements are the places in the app a manual script is offered at.
+	Placements []PlacementConfig
+	CatchUp    CatchUpMode
 	CatchUpCap     int
 	// AllowUnasked lists the risky functions, by full Lua name, the user
 	// lets this script call without a confirmation.
@@ -124,7 +126,15 @@ func (s *Script) Validate(r *Registry) error {
 	default:
 		return fmt.Errorf("scripting: unknown catch-up mode %q", s.CatchUp)
 	}
-	return r.checkParams("settings", s.SettingsSchema)
+	for _, p := range s.SettingsSchema {
+		if !slices.Contains(settingTypes, p.Type) {
+			return fmt.Errorf("scripting: setting %q cannot be of type %q", p.Name, p.Type)
+		}
+	}
+	if err := r.checkParams("settings", s.SettingsSchema); err != nil {
+		return err
+	}
+	return r.checkPlacements(s)
 }
 
 // granted reports whether perm works in this run: declared always, and

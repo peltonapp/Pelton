@@ -166,7 +166,8 @@ func chatEntries(h ChatHost) scripting.Entries {
 				return true
 			},
 		}},
-		Modules: []scripting.Module{{Meta: meta("module", "chat", "chat"), Functions: []scripting.Function{rooms, send}}},
+		Placements: []scripting.Placement{menu("chat.message", "chat", "chat_message", PermChatRead, nil)},
+		Modules:    []scripting.Module{{Meta: meta("module", "chat", "chat"), Functions: []scripting.Function{rooms, send}}},
 		Conditions: []scripting.Condition{
 			scripting.TextCondition(meta("cond", "chat.body", "chat"), "{{chat}}.body", chatRef),
 			scripting.TextCondition(meta("cond", "chat.sender", "chat"), "{{chat}}.sender", chatRef),

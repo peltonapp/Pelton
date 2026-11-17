@@ -95,7 +95,7 @@ func TestCatalogHasEveryBuiltin(t *testing.T) {
 			t.Errorf("trigger %s missing", id)
 		}
 	}
-	if len(cat.Conditions) < 10 || len(cat.Actions) < 15 || len(cat.Modules) < 8 || len(cat.ParamTypes) != 14 {
+	if len(cat.Conditions) < 10 || len(cat.Actions) < 15 || len(cat.Modules) < 8 || len(cat.ParamTypes) != 15 {
 		t.Fatalf("catalog too small: %d conditions, %d actions, %d modules", len(cat.Conditions), len(cat.Actions), len(cat.Modules))
 	}
 }

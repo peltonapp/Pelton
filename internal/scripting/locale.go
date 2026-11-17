@@ -55,6 +55,17 @@ func (c Catalog) LocaleKeys() []string {
 	for _, p := range c.Permissions {
 		add(p.LabelKey, p.DescKey)
 	}
+	for _, k := range c.InputKinds {
+		add(k.LabelKey, k.DescKey)
+		params(k.Params)
+	}
+	for _, a := range c.ResultActions {
+		add(a.LabelKey, a.DescKey)
+	}
+	for _, p := range c.Placements {
+		add(p.LabelKey, p.DescKey)
+		params(p.Options)
+	}
 	out := make([]string, 0, len(seen))
 	for k := range seen {
 		out = append(out, k)

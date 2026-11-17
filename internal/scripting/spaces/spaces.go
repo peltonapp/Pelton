@@ -11,6 +11,7 @@ package spaces
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 	"time"
 
@@ -55,14 +56,45 @@ var (
 	withDef  = scripting.WithDefault
 )
 
-// fields builds a field list from "name:type" pairs.
+// fields builds a field list from "name:type" pairs, or "name:list:of" for
+// a list of of.
 func fields(specs ...string) []scripting.Field {
 	out := make([]scripting.Field, 0, len(specs))
 	for _, s := range specs {
 		name, typ, _ := strings.Cut(s, ":")
-		out = append(out, field(name, typ))
+		typ, of, _ := strings.Cut(typ, ":")
+		f := field(name, typ)
+		f.Of = of
+		out = append(out, f)
 	}
 	return out
+}
+
+// listOf is a list field of items of type of.
+func listOf(name, of string) scripting.Field {
+	f := field(name, "list")
+	f.Of = of
+	return f
+}
+
+// menu is the context menu placement of a space's items, handing over one
+// value of valueType loaded by load, offered to scripts holding perm.
+func menu(id, category, valueType, perm string, load func(c *scripting.PrepareContext, id string) (scripting.Object, error)) scripting.Placement {
+	return scripting.Placement{
+		Meta: meta("place", id, category), Surface: scripting.SurfaceMenu,
+		ValueType: valueType, Permission: perm, Load: load,
+	}
+}
+
+// intLoad adapts a loader by number id to the string ids a placement sends.
+func intLoad(load func(c *scripting.PrepareContext, id int64) (scripting.Object, error)) func(c *scripting.PrepareContext, id string) (scripting.Object, error) {
+	return func(c *scripting.PrepareContext, id string) (scripting.Object, error) {
+		n, err := strconv.ParseInt(id, 10, 64)
+		if err != nil {
+			return scripting.Object{}, fmt.Errorf("spaces: %q is not an id", id)
+		}
+		return load(c, n)
+	}
 }
 
 // number reads a number of any Go numeric type, 0 otherwise.

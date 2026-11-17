@@ -58,6 +58,33 @@ type Branch struct {
 	Body []Block `json:"body"`
 }
 
+// MarshalJSON writes a branch with no blocks as an empty list, not null.
+func (b Branch) MarshalJSON() ([]byte, error) {
+	type plain Branch
+	b.Body = nonNil(b.Body)
+	return json.Marshal(plain(b))
+}
+
+// MarshalJSON writes a tree with no blocks as an empty list, not null.
+func (t Tree) MarshalJSON() ([]byte, error) {
+	type plain Tree
+	t.Blocks = nonNil(t.Blocks)
+	return json.Marshal(plain(t))
+}
+
+// walkBlocks calls f on every block of a list and the blocks inside them,
+// in the order they stand.
+func walkBlocks(blocks []Block, f func(Block)) {
+	for _, b := range blocks {
+		f(b)
+		for _, br := range b.Branches {
+			walkBlocks(br.Body, f)
+		}
+		walkBlocks(b.Else, f)
+		walkBlocks(b.Body, f)
+	}
+}
+
 // The condition kinds.
 const (
 	CondAll       = "all"
@@ -119,6 +146,15 @@ type CompileResult struct {
 	Errors []CompileError `json:"errors"`
 	// Permissions are those the blocks need, so the editor can declare them.
 	Permissions []string `json:"permissions"`
+	// Lines maps each block's id to the lines of Lua it became, counted
+	// from 1, nested blocks included in their parent's range.
+	Lines map[string]LineRange `json:"lines"`
+}
+
+// LineRange is a first and last line, counted from 1.
+type LineRange struct {
+	From int `json:"from"`
+	To   int `json:"to"`
 }
 
 type compiler struct {
@@ -126,6 +162,8 @@ type compiler struct {
 	trigger string
 	trace   bool
 	b       strings.Builder
+	lineNo  int
+	lines   map[string]LineRange
 	errs    []CompileError
 	ids     map[string]bool
 	outputs map[string][]Field
@@ -143,17 +181,18 @@ const generatedHeader = "-- Generated from blocks. Edit the blocks, or convert t
 // condition came out, for the run log; that is the form a run executes.
 // Without it the Lua is what the editor shows and "Convert to Lua" keeps.
 func Compile(r *Registry, t Tree, trigger string, trace bool) CompileResult {
-	c := &compiler{r: r, trigger: trigger, trace: trace, ids: map[string]bool{}, outputs: map[string][]Field{}}
+	c := &compiler{r: r, trigger: trigger, trace: trace, ids: map[string]bool{}, outputs: map[string][]Field{}, lines: map[string]LineRange{}}
 	c.collect(t.Blocks)
 	if trace {
-		c.b.WriteString(generatedHeader)
+		c.line(0, strings.TrimSuffix(generatedHeader, "\n"))
 	}
-	c.b.WriteString("local vars, steps = {}, {}\n")
+	c.line(0, "local vars, steps = {}, {}")
 	c.blocks(t.Blocks, 0)
-	res := CompileResult{Errors: c.errs, Permissions: c.perms}
+	res := CompileResult{Errors: c.errs, Permissions: c.perms, Lines: map[string]LineRange{}}
 	if res.Errors == nil {
 		res.Errors = []CompileError{}
 		res.Lua = c.b.String()
+		res.Lines = c.lines
 	}
 	if res.Permissions == nil {
 		res.Permissions = []string{}
@@ -192,6 +231,7 @@ func (c *compiler) line(depth int, s string) {
 	c.b.WriteString(strings.Repeat("  ", depth))
 	c.b.WriteString(s)
 	c.b.WriteByte('\n')
+	c.lineNo += strings.Count(s, "\n") + 1
 }
 
 // mark reports the block about to run, in traced code.
@@ -214,6 +254,14 @@ func (c *compiler) blocks(blocks []Block, depth int) {
 }
 
 func (c *compiler) block(b Block, depth int) {
+	from := c.lineNo + 1
+	c.compileBlock(b, depth)
+	if c.lineNo >= from {
+		c.lines[b.ID] = LineRange{From: from, To: c.lineNo}
+	}
+}
+
+func (c *compiler) compileBlock(b Block, depth int) {
 	switch b.Kind {
 	case BlockAction:
 		a, ok := c.r.Action(b.Type)
@@ -245,10 +293,11 @@ func (c *compiler) block(b Block, depth int) {
 			c.fail(b.ID, "an if block needs a condition")
 			return
 		}
+		c.mark(depth, b.ID)
 		for i, br := range b.Branches {
 			check := c.cond(b.ID, br.When)
 			if c.trace {
-				check = "__check(" + LuaString(b.ID) + ", " + check + ")"
+				check = fmt.Sprintf("__check(%s, %d, %s)", LuaString(b.ID), i, check)
 			}
 			if i == 0 {
 				c.line(depth, "if "+check+" then")
@@ -275,6 +324,7 @@ func (c *compiler) block(b Block, depth int) {
 		if !ok {
 			return
 		}
+		c.mark(depth, b.ID)
 		c.line(depth, "for _, item in ipairs("+list+" or {}) do")
 		c.line(depth+1, "vars["+LuaString(b.As)+"] = item")
 		c.blocks(b.Body, depth+1)
@@ -292,8 +342,10 @@ func (c *compiler) block(b Block, depth int) {
 			}
 			value = v
 		}
+		c.mark(depth, b.ID)
 		c.line(depth, "vars["+LuaString(b.As)+"] = "+value)
 	case BlockStop:
+		c.mark(depth, b.ID)
 		c.line(depth, "stop()")
 	case BlockLua:
 		c.mark(depth, b.ID)

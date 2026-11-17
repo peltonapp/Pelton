@@ -439,7 +439,7 @@ func calendarEntries(h CalendarHost) scripting.Entries {
 			{Meta: meta("type", "event", "calendar"), Sample: sampleEvent, Fields: fields(
 				"id:number", "calendar_id:number", "calendar:string", "uid:string", "title:string",
 				"description:text", "location:string", "url:string", "status:string", "start:number",
-				"end:number", "all_day:bool", "recurring:bool", "organizer:address", "attendees:list")},
+				"end:number", "all_day:bool", "recurring:bool", "organizer:address", "attendees:list:address")},
 			{Meta: meta("type", "invitation", "calendar"), Sample: sampleInvitation, Fields: fields(
 				"method:string", "uid:string", "title:string", "location:string", "organizer:address",
 				"start:number", "end:number", "all_day:bool", "event_id:number")},
@@ -448,6 +448,7 @@ func calendarEntries(h CalendarHost) scripting.Entries {
 		Modules:    []scripting.Module{{Meta: meta("module", "calendar", "calendar"), Functions: fns}},
 		Conditions: conds,
 		Actions:    actions,
+		Placements: []scripting.Placement{menu("calendar.event", "calendar", "event", PermCalendarRead, intLoad(load))},
 	}
 }
 
