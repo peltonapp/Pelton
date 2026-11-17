@@ -51,6 +51,7 @@ type ProjectDTO struct {
 	Name        string             `json:"name"`
 	Color       string             `json:"color"`
 	Icon        string             `json:"icon"`
+	IconNodes   string             `json:"iconNodes"`
 	Description string             `json:"description"`
 	Status      string             `json:"status"`
 	StartDate   string             `json:"startDate"`
@@ -85,6 +86,7 @@ type ProjectRequest struct {
 	Name        string                 `json:"name"`
 	Color       string                 `json:"color"`
 	Icon        string                 `json:"icon"`
+	IconNodes   string                 `json:"iconNodes"`
 	Description string                 `json:"description"`
 	StartDate   string                 `json:"startDate"`
 	DueDate     string                 `json:"dueDate"`
@@ -1429,6 +1431,13 @@ func projectFromRequest(req ProjectRequest) (storage.Project, error) {
 	if len(p.Icon) > 40 {
 		p.Icon = ""
 	}
+	nodes, err := checkProjectIconNodes(strings.TrimSpace(req.IconNodes))
+	if err != nil {
+		return p, err
+	}
+	if p.Icon != "" {
+		p.IconNodes = nodes
+	}
 	for _, d := range []string{p.StartDate, p.DueDate} {
 		if d == "" {
 			continue
@@ -1442,7 +1451,7 @@ func projectFromRequest(req ProjectRequest) (storage.Project, error) {
 
 func projectDTO(p storage.Project, s *projectStat) ProjectDTO {
 	dto := ProjectDTO{
-		ID: p.ID, UID: p.UID, Name: p.Name, Color: p.Color, Icon: p.Icon, Description: p.Description, Status: p.Status,
+		ID: p.ID, UID: p.UID, Name: p.Name, Color: p.Color, Icon: p.Icon, IconNodes: p.IconNodes, Description: p.Description, Status: p.Status,
 		StartDate: p.StartDate, DueDate: p.DueDate, Position: p.Position, ListID: p.ListID,
 		CreatedAt: p.CreatedAt, UpdatedAt: p.UpdatedAt, ArchivedAt: p.ArchivedAt,
 		People: []ProjectPersonDTO{},

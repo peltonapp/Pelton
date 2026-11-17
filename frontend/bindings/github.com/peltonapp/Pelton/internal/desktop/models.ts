@@ -7720,6 +7720,7 @@ export class ProjectDTO {
     "name": string;
     "color": string;
     "icon": string;
+    "iconNodes": string;
     "description": string;
     "status": string;
     "startDate": string;
@@ -7754,6 +7755,9 @@ export class ProjectDTO {
         }
         if (!("icon" in $$source)) {
             this["icon"] = "";
+        }
+        if (!("iconNodes" in $$source)) {
+            this["iconNodes"] = "";
         }
         if (!("description" in $$source)) {
             this["description"] = "";
@@ -7814,10 +7818,10 @@ export class ProjectDTO {
      * Creates a new ProjectDTO instance from a string or object.
      */
     static createFrom($$source: any = {}): ProjectDTO {
-        const $$createField21_0 = $$createType94;
+        const $$createField22_0 = $$createType94;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("people" in $$parsedSource) {
-            $$parsedSource["people"] = $$createField21_0($$parsedSource["people"]);
+            $$parsedSource["people"] = $$createField22_0($$parsedSource["people"]);
         }
         return new ProjectDTO($$parsedSource as Partial<ProjectDTO>);
     }
@@ -8098,6 +8102,7 @@ export class ProjectRequest {
     "name": string;
     "color": string;
     "icon": string;
+    "iconNodes": string;
     "description": string;
     "startDate": string;
     "dueDate": string;
@@ -8117,6 +8122,9 @@ export class ProjectRequest {
         }
         if (!("icon" in $$source)) {
             this["icon"] = "";
+        }
+        if (!("iconNodes" in $$source)) {
+            this["iconNodes"] = "";
         }
         if (!("description" in $$source)) {
             this["description"] = "";
@@ -8141,10 +8149,10 @@ export class ProjectRequest {
      * Creates a new ProjectRequest instance from a string or object.
      */
     static createFrom($$source: any = {}): ProjectRequest {
-        const $$createField8_0 = $$createType96;
+        const $$createField9_0 = $$createType96;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("columns" in $$parsedSource) {
-            $$parsedSource["columns"] = $$createField8_0($$parsedSource["columns"]);
+            $$parsedSource["columns"] = $$createField9_0($$parsedSource["columns"]);
         }
         return new ProjectRequest($$parsedSource as Partial<ProjectRequest>);
     }

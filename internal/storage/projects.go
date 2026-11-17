@@ -41,10 +41,13 @@ type Project struct {
 	ID int64
 	// UID names the project outside the database: in a note's front matter
 	// and in pelton://project links.
-	UID         string
-	Name        string
-	Color       string
-	Icon        string
+	UID   string
+	Name  string
+	Color string
+	Icon  string
+	// IconNodes is the geometry of a tabler icon as json, empty when the
+	// icon is a built-in name or the default.
+	IconNodes   string
 	Description string
 	Status      string
 	StartDate   string
@@ -126,7 +129,7 @@ type ProjectThread struct {
 	ProjectID int64
 }
 
-const projectColumns = `id, uid, name, color, icon, description, status, start_date, due_date, position, list_id,
+const projectColumns = `id, uid, name, color, icon, icon_nodes, description, status, start_date, due_date, position, list_id,
        created_at, updated_at, archived_at`
 
 // CreateProject inserts a project at the end of the list and returns it with
@@ -137,9 +140,9 @@ func (d *DB) CreateProject(ctx context.Context, p *Project) error {
 	}
 	now := nowText()
 	res, err := d.sql.ExecContext(ctx, `
-INSERT INTO projects (uid, name, color, icon, description, status, start_date, due_date, position, list_id, created_at, updated_at)
-VALUES (lower(hex(randomblob(16))), ?, ?, ?, ?, ?, ?, ?, (SELECT coalesce(max(position), -1) + 1 FROM projects), ?, ?, ?)`,
-		p.Name, p.Color, p.Icon, p.Description, p.Status, p.StartDate, p.DueDate, p.ListID, now, now)
+INSERT INTO projects (uid, name, color, icon, icon_nodes, description, status, start_date, due_date, position, list_id, created_at, updated_at)
+VALUES (lower(hex(randomblob(16))), ?, ?, ?, ?, ?, ?, ?, ?, (SELECT coalesce(max(position), -1) + 1 FROM projects), ?, ?, ?)`,
+		p.Name, p.Color, p.Icon, nullText(p.IconNodes), p.Description, p.Status, p.StartDate, p.DueDate, p.ListID, now, now)
 	if err != nil {
 		return fmt.Errorf("storage: insert project %q: %w", p.Name, err)
 	}
@@ -188,8 +191,8 @@ func (d *DB) GetProject(ctx context.Context, id int64) (*Project, error) {
 // list. Status and position have their own calls.
 func (d *DB) UpdateProject(ctx context.Context, p Project) error {
 	res, err := d.sql.ExecContext(ctx, `
-UPDATE projects SET name = ?, color = ?, icon = ?, description = ?, start_date = ?, due_date = ?, list_id = ?, updated_at = ?
-WHERE id = ?`, p.Name, p.Color, p.Icon, p.Description, p.StartDate, p.DueDate, p.ListID, nowText(), p.ID)
+UPDATE projects SET name = ?, color = ?, icon = ?, icon_nodes = ?, description = ?, start_date = ?, due_date = ?, list_id = ?, updated_at = ?
+WHERE id = ?`, p.Name, p.Color, p.Icon, nullText(p.IconNodes), p.Description, p.StartDate, p.DueDate, p.ListID, nowText(), p.ID)
 	if err != nil {
 		return fmt.Errorf("storage: update project %d: %w", p.ID, err)
 	}
@@ -1016,9 +1019,19 @@ func (d *DB) ListProjectDismissals(ctx context.Context) ([]int64, error) {
 
 func scanProject(row rowScanner) (*Project, error) {
 	var p Project
-	if err := row.Scan(&p.ID, &p.UID, &p.Name, &p.Color, &p.Icon, &p.Description, &p.Status, &p.StartDate, &p.DueDate,
+	var nodes sql.NullString
+	if err := row.Scan(&p.ID, &p.UID, &p.Name, &p.Color, &p.Icon, &nodes, &p.Description, &p.Status, &p.StartDate, &p.DueDate,
 		&p.Position, &p.ListID, &p.CreatedAt, &p.UpdatedAt, &p.ArchivedAt); err != nil {
 		return nil, err
 	}
+	p.IconNodes = nodes.String
 	return &p, nil
+}
+
+// nullText stores an empty string as null.
+func nullText(s string) any {
+	if s == "" {
+		return nil
+	}
+	return s
 }

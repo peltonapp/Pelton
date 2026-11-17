@@ -2434,6 +2434,9 @@ export interface Project {
   color: string
   // the name of an icon from lib/projecticons, empty for the default.
   icon: string
+  // the geometry of a tabler icon as json, empty when the icon is a name from
+  // lib/projecticons or the default.
+  iconNodes?: string
   description: string
   status: ProjectStatus
   // dates as 2006-01-02, empty for none.
@@ -2468,6 +2471,7 @@ export interface ProjectDraft {
   name: string
   color: string
   icon: string
+  iconNodes: string
   description: string
   startDate: string
   dueDate: string

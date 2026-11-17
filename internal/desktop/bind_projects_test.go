@@ -5,6 +5,7 @@ import (
 	"errors"
 	"net/mail"
 	"slices"
+	"strings"
 	"testing"
 	"time"
 
@@ -62,6 +63,50 @@ func TestProjectRequestChecks(t *testing.T) {
 	}
 	if err := a.SetProjectStatus(p.ID, "paused"); !errors.Is(err, errProjectStatus) {
 		t.Errorf("an unknown status was taken: %v", err)
+	}
+}
+
+func TestProjectIconNodesChecks(t *testing.T) {
+	a := newCalendarTestApp(t)
+	const good = ` [["path",{"d":"M5 4h4l3 3","fill":"none"}],["circle",{"cx":12,"cy":"12","r":2}]] `
+	p, err := a.CreateProject(ProjectRequest{Name: "Icon", Icon: "folder", IconNodes: good})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if p.Icon != "folder" || p.IconNodes != `[["path",{"d":"M5 4h4l3 3","fill":"none"}],["circle",{"cx":12,"cy":"12","r":2}]]` {
+		t.Errorf("created = %q %q", p.Icon, p.IconNodes)
+	}
+	got, err := a.UpdateProject(ProjectRequest{ID: p.ID, Name: "Icon", Icon: "rocket"})
+	if err != nil || got.IconNodes != "" {
+		t.Errorf("a built-in icon kept geometry: %q, %v", got.IconNodes, err)
+	}
+	if got, err := a.UpdateProject(ProjectRequest{ID: p.ID, Name: "Icon", IconNodes: good}); err != nil || got.IconNodes != "" {
+		t.Errorf("geometry without a name was kept: %q, %v", got.IconNodes, err)
+	}
+
+	for name, nodes := range map[string]string{
+		"script tag":      `[["script",{"d":"M0 0"}]]`,
+		"onload":          `[["path",{"d":"M0 0","onload":"alert(1)"}]]`,
+		"onclick":         `[["path",{"d":"M0 0","onclick":"x"}]]`,
+		"href":            `[["path",{"d":"M0 0","href":"javascript:x"}]]`,
+		"style":           `[["path",{"d":"M0 0","style":"x"}]]`,
+		"markup in d":     `[["path",{"d":"M0 0<script>"}]]`,
+		"url fill":        `[["path",{"d":"M0 0","fill":"url(#x)"}]]`,
+		"not an array":    `{"path":"M0 0"}`,
+		"bad node":        `[["path"]]`,
+		"object node":     `[{"tag":"path"}]`,
+		"empty list":      `[]`,
+		"nested value":    `[["path",{"d":["M0 0"]}]]`,
+		"trailing text":   `[["path",{"d":"M0 0"}]] x`,
+		"not json":        `<svg onload=x>`,
+		"too many nodes":  "[" + strings.Repeat(`["path",{"d":"M0 0"}],`, 32) + `["path",{"d":"M0 0"}]]`,
+		"too large":       `[["path",{"d":"` + strings.Repeat("M0 0 ", 1000) + `"}]]`,
+		"foreign object":  `[["foreignObject",{"width":1}]]`,
+		"number as attrs": `[["path",5]]`,
+	} {
+		if _, err := a.CreateProject(ProjectRequest{Name: "Bad", Icon: "x", IconNodes: nodes}); !errors.Is(err, errProjectIconNodes) {
+			t.Errorf("%s: err = %v", name, err)
+		}
 	}
 }
 

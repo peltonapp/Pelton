@@ -13,7 +13,12 @@
   import DateField from '../calendar/DateField.svelte'
   import { paletteHex } from '../../lib/calformat'
   import { dayKey, parseDayKey } from '../../lib/caldate'
-  import { projectIcon, projectIcons } from '../../lib/projecticons'
+  import chevronIcon from '@phosphor-icons/core/assets/regular/caret-down.svg?raw'
+  import AnchoredPopover from '../common/AnchoredPopover.svelte'
+  import IconPicker from '../settings/IconPicker.svelte'
+  import ProjectIcon from './ProjectIcon.svelte'
+  import { parseIconNodes, suggestedProjectIcons } from '../../lib/projecticons'
+  import type { IconNode } from '../../lib/menuactions'
   import { projectColor } from '../../lib/projectlogic'
   import { taskLists } from '../../stores/tasks'
   import { saveProject } from '../../stores/projects'
@@ -31,14 +36,18 @@
   let description = project?.description ?? ''
   let color = project?.color ?? ''
   let icon = project?.icon ?? ''
+  let iconNodes: IconNode[] | undefined = parseIconNodes(project?.iconNodes)
+  let picking = false
+  let iconButton: HTMLButtonElement
   let startDate = project?.startDate ?? ''
   let dueDate = project?.dueDate ?? ''
   let listId = String(project?.listId ?? 0)
   let template: 'columns' | 'empty' = 'columns'
   let saving = false
 
+  $: nodesText = JSON.stringify(iconNodes ?? null)
   $: dirty = project
-    ? name !== project.name || description !== project.description || color !== project.color || icon !== project.icon || startDate !== project.startDate || dueDate !== project.dueDate || Number(listId) !== project.listId
+    ? name !== project.name || description !== project.description || color !== project.color || icon !== project.icon || nodesText !== JSON.stringify(parseIconNodes(project.iconNodes) ?? null) || startDate !== project.startDate || dueDate !== project.dueDate || Number(listId) !== project.listId
     : name.trim() !== '' || description.trim() !== ''
   $: swatch = projectColor({ id: project?.id ?? 0, color })
   $: listItems = [
@@ -50,6 +59,12 @@
     { value: 'empty', label: $t('projects.dialog.templateEmpty') },
   ]
 
+  function chooseIcon(name: string, nodes: IconNode[] | undefined): void {
+    icon = name
+    iconNodes = nodes
+    picking = false
+  }
+
   async function submit(): Promise<void> {
     if (!name.trim() || saving) {
       return
@@ -60,6 +75,7 @@
       name: name.trim(),
       color,
       icon,
+      iconNodes: icon && iconNodes ? JSON.stringify(iconNodes) : '',
       description: description.trim(),
       startDate,
       dueDate,
@@ -86,7 +102,7 @@
   <form class="form" id="project-form" on:submit|preventDefault={submit}>
     <div class="name-row">
       <span class="mark" style={`--project:${swatch}`} aria-hidden="true">
-        <Ph svg={projectIcon(icon)} size={18} />
+        <ProjectIcon {icon} {iconNodes} size={18} />
       </span>
       <!-- svelte-ignore a11y-autofocus -->
       <input
@@ -111,23 +127,59 @@
 
     <div class="field">
       <span class="label" id="project-icon-label">{$t('projects.dialog.icon')}</span>
-      <div class="icons" role="radiogroup" aria-labelledby="project-icon-label">
-        {#each projectIcons as i (i.name)}
+      <div class="icon-row" style={`--project:${swatch}`}>
+        <button
+          type="button"
+          class="icon-choose"
+          bind:this={iconButton}
+          aria-haspopup="dialog"
+          aria-expanded={picking}
+          aria-label={`${$t('projects.dialog.icon')}: ${icon || $t('projects.dialog.iconDefault')}`}
+          on:click={() => (picking = !picking)}
+        >
+          <span class="icon-current"><ProjectIcon {icon} iconNodes={iconNodes} size={16} /></span>
+          <span class="icon-name">{icon || $t('projects.dialog.iconDefault')}</span>
+          <Ph svg={chevronIcon} size={12} />
+        </button>
+        <div class="icons" role="group" aria-labelledby="project-icon-label">
           <button
             type="button"
             class="icon"
-            class:on={(icon || 'kanban') === i.name}
-            role="radio"
-            aria-checked={(icon || 'kanban') === i.name}
-            aria-label={$t(`projects.icon.${i.name}`)}
-            title={$t(`projects.icon.${i.name}`)}
-            style={`--project:${swatch}`}
-            on:click={() => (icon = i.name === 'kanban' ? '' : i.name)}
+            class:on={icon === ''}
+            aria-pressed={icon === ''}
+            aria-label={$t('projects.dialog.iconDefault')}
+            title={$t('projects.dialog.iconDefault')}
+            on:click={() => chooseIcon('', undefined)}
           >
-            <Ph svg={i.svg} size={16} />
+            <ProjectIcon size={16} />
           </button>
-        {/each}
+          {#each suggestedProjectIcons as s (s.name)}
+            <button
+              type="button"
+              class="icon"
+              class:on={icon === s.name}
+              aria-pressed={icon === s.name}
+              aria-label={s.name}
+              title={s.name}
+              on:click={() => chooseIcon(s.name, s.nodes)}
+            >
+              <ProjectIcon icon={s.name} iconNodes={s.nodes} size={16} />
+            </button>
+          {/each}
+        </div>
       </div>
+      {#if picking}
+        <AnchoredPopover anchor={iconButton} align="start" label={$t('projects.dialog.icon')} on:close={() => (picking = false)}>
+          <div class="picker">
+            <IconPicker
+              themeIcons={false}
+              clearLabel={$t('projects.dialog.iconDefault')}
+              on:select={(e) => chooseIcon(e.detail.iconName, e.detail.iconNodes)}
+              on:clear={() => chooseIcon('', undefined)}
+            />
+          </div>
+        </AnchoredPopover>
+      {/if}
     </div>
 
     <div class="dates">
@@ -228,6 +280,52 @@
     font-size: var(--fz-label);
     font-weight: var(--fw-medium);
     color: var(--text-secondary);
+  }
+
+  .icon-row {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+  }
+
+  .icon-choose {
+    display: inline-flex;
+    align-items: center;
+    align-self: flex-start;
+    gap: var(--space-2);
+    height: var(--control-height);
+    padding: 0 var(--space-3) 0 var(--space-2);
+    border: var(--hairline) solid var(--border-default);
+    border-radius: var(--radius-control);
+    background: var(--surface-sunken);
+    color: var(--text-primary);
+    font-size: var(--fz-label);
+    cursor: var(--cursor-action);
+  }
+
+  .icon-choose:hover {
+    background: var(--surface-hover);
+  }
+
+  .icon-choose:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 1px;
+  }
+
+  .icon-current {
+    display: inline-flex;
+    color: var(--project);
+  }
+
+  .icon-name {
+    color: var(--text-secondary);
+  }
+
+  .picker {
+    box-sizing: border-box;
+    width: calc(var(--popover-width) * 1.25);
+    max-width: 100%;
+    padding: var(--space-2);
   }
 
   .icons {
