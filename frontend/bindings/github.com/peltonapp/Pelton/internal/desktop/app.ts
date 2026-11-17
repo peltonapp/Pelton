@@ -844,6 +844,13 @@ export function ClearDevActivity(): $CancellablePromise<void> {
 }
 
 /**
+ * ClearScriptFolder takes back a script's folder.
+ */
+export function ClearScriptFolder(id: number): $CancellablePromise<void> {
+    return $Call.ByID(2405041804, id);
+}
+
+/**
  * ClearScriptRuns empties the log of a script, or every log for 0.
  */
 export function ClearScriptRuns(scriptID: number): $CancellablePromise<void> {
@@ -2911,6 +2918,15 @@ export function PickScriptFile(): $CancellablePromise<string> {
 }
 
 /**
+ * PickScriptFolder asks for the folder a script may read and write files
+ * in and grants it. It returns the folder, "" when the user cancelled, which
+ * keeps the grant as it was.
+ */
+export function PickScriptFolder(id: number): $CancellablePromise<string> {
+    return $Call.ByID(1765602780, id);
+}
+
+/**
  * PrepareMeeting gathers what helps with a meeting from local data: the
  * invited with their address book cards and replies, recent conversations with
  * them (those with several of them or with a subject matching the title
@@ -3580,6 +3596,14 @@ export function ScanURL(rawURL: string): $CancellablePromise<$models.VerdictDTO>
     return $Call.ByID(3387403308, rawURL).then(($result: any) => {
         return $$createType189($result);
     });
+}
+
+/**
+ * ScriptFolder returns the folder a script may read and write files in, ""
+ * when it has none.
+ */
+export function ScriptFolder(id: number): $CancellablePromise<string> {
+    return $Call.ByID(1649930389, id);
 }
 
 /**

@@ -20,7 +20,7 @@
 
   const dispatch = createEventDispatcher<{ change: string[] }>()
 
-  $: rows = editable ? catalog.permissions.map((p) => p.id) : declared
+  $: rows = editable ? [...catalog.permissions.map((p) => p.id), ...declared.filter((p) => p.includes(':'))] : declared
 
   function toggle(id: string, on: boolean): void {
     dispatch('change', on ? [...declared, id] : declared.filter((p) => p !== id))
@@ -46,6 +46,7 @@
         <label class="text" for={editable ? `perm-${id}` : undefined}>
           <span class="name">
             {def ? entryLabel($t, def) : id}
+            {#if id.includes(':')}<code class="target">{id.slice(id.indexOf(':') + 1)}</code>{/if}
             {#if def}<span class="risk {def.risk}">{$t(`scripts.risk.${def.risk}`)}</span>{/if}
             {#if !editable && !approved.includes(id)}<span class="pending">{$t('scripts.perm.pending')}</span>{/if}
           </span>
@@ -96,6 +97,11 @@
   .desc {
     font-size: var(--fz-meta);
     color: var(--text-tertiary);
+  }
+
+  .target {
+    font-size: var(--fz-meta);
+    color: var(--text-secondary);
   }
 
   .risk,

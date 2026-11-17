@@ -3901,6 +3901,24 @@ export function exportScript(id: number): Promise<string> {
   return App.ExportScript(id)
 }
 
+/** The folder a script may read and write files in, '' when it has none. */
+export function scriptFolder(id: number): Promise<string> {
+  if (isDemoActive()) {
+    return Promise.resolve('')
+  }
+  return App.ScriptFolder(id)
+}
+
+/** Asks for a folder and grants it to a script; resolves to it, '' when cancelled. */
+export function pickScriptFolder(id: number): Promise<string> {
+  return App.PickScriptFolder(id)
+}
+
+/** Takes back a script's folder. */
+export function clearScriptFolder(id: number): Promise<void> {
+  return App.ClearScriptFolder(id)
+}
+
 /** Asks for a script file; resolves to its path, '' when cancelled. */
 export function pickScriptFile(): Promise<string> {
   return App.PickScriptFile()
