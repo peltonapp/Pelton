@@ -39,6 +39,7 @@
     setAccountColor,
   } from '../../lib/api'
   import { errorMessage, toastError } from '../../stores/toast'
+  import { prefs, setAutoconfigLookup } from '../../stores/prefs'
   import { presetById, presetForEmail, isEmailAddress, type ProviderPreset } from '../../lib/providers'
   import { classifyConnectionError, type ConnectionProblem } from '../../lib/connectionError'
   import type { AddAccountRequest, Account, Discovered, Folder, TLSMode, UntrustedCert } from '../../lib/types'
@@ -226,8 +227,51 @@
       return
     }
     detection = null
+    // without the user's go-ahead nothing is looked up while typing; Continue
+    // asks first.
+    if (get(prefs).autoconfigLookup !== 'allow') {
+      detecting = false
+      return
+    }
     detecting = true
     detectTimer = setTimeout(() => void lookUp(email), 600)
+  }
+
+  // --- asking before a lookup -------------------------------------------------
+
+  // the question on screen: the domain it is about and how it is answered.
+  let consent: { domain: string; resolve: (allowed: boolean) => void } | null = null
+  let consentBox: HTMLElement | undefined
+
+  // whether the domain of an address may be looked up. asks the first time,
+  // and the answer is kept for every later address.
+  async function lookupAllowed(email: string): Promise<boolean> {
+    const mode = get(prefs).autoconfigLookup
+    if (mode !== 'ask') {
+      return mode === 'allow'
+    }
+    const domain = email.split('@')[1] ?? ''
+    const allowed = await new Promise<boolean>((resolve) => {
+      consent = { domain, resolve }
+      void tick().then(() => consentBox?.querySelector<HTMLButtonElement>('.lookup-actions button:last-child')?.focus())
+    })
+    try {
+      await setAutoconfigLookup(allowed ? 'allow' : 'manual')
+    } catch (err) {
+      toastError(errorMessage(err))
+      return false
+    }
+    return allowed
+  }
+
+  function answer(allowed: boolean): void {
+    const c = consent
+    consent = null
+    c?.resolve(allowed)
+  }
+
+  function notFound(email: string): Detection {
+    return { email, preset: presetById('custom') as ProviderPreset, discovered: null, workspace: false }
   }
 
   function lookUp(email: string): Promise<void> {
@@ -237,17 +281,23 @@
     return pending.done
   }
 
-  async function discover(email: string): Promise<void> {
-    let found: Detection
+  async function detect(email: string): Promise<Detection> {
+    if (get(prefs).autoconfigLookup !== 'allow') {
+      return notFound(email)
+    }
     try {
       const d = await discoverConfig(email)
       const google = d.oauthProvider === 'google' ? presetById('gmail') : null
-      found = google
+      return google
         ? { email, preset: google, discovered: d, workspace: true }
         : { email, preset: presetById('custom') as ProviderPreset, discovered: d.imapHost ? d : null, workspace: false }
     } catch {
-      found = { email, preset: presetById('custom') as ProviderPreset, discovered: null, workspace: false }
+      return notFound(email)
     }
+  }
+
+  async function discover(email: string): Promise<void> {
+    const found = await detect(email)
     if (email === address.trim()) {
       detection = found
       detecting = false
@@ -263,8 +313,12 @@
     const email = address.trim()
     if (detection?.email !== email && !presetForEmail(email)) {
       clearTimeout(detectTimer)
-      detecting = true
-      await lookUp(email)
+      if (await lookupAllowed(email)) {
+        detecting = true
+        await lookUp(email)
+      } else if (email === address.trim()) {
+        detection = notFound(email)
+      }
     }
     scheduleDetect(email)
     const found = detection
@@ -316,6 +370,9 @@
   // full address is present.
   async function maybeDiscover(): Promise<void> {
     if (!preset?.custom || !draft.email.includes('@')) {
+      return
+    }
+    if (!(await lookupAllowed(draft.email))) {
       return
     }
     discoveredOAuth = ''
@@ -602,6 +659,24 @@
       {:else if step !== 'done'}
         <div class="meta">
           <span class="counter">{$t('common.stepCounter').replace('{n}', String(stepNumber)).replace('{total}', '3')}</span>
+        </div>
+      {/if}
+
+      {#if consent}
+        <div class="hint-box" role="group" aria-labelledby="lookup-title" bind:this={consentBox}>
+          <span class="setup-title" id="lookup-title">{$t('wizard.lookup.title').replace('{domain}', consent.domain)}</span>
+          <span>{$t('wizard.lookup.lead')}</span>
+          <ul class="lookup-hosts">
+            <li><code>autoconfig.thunderbird.net</code> {$t('wizard.lookup.ispdb')}</li>
+            <li><code>autoconfig.{consent.domain}</code>, <code>{consent.domain}</code> {$t('wizard.lookup.domain')}</li>
+            <li>{$t('wizard.lookup.dns').replace('{domain}', consent.domain)}</li>
+          </ul>
+          <span class="muted">{$t('wizard.lookup.sent').replace('{domain}', consent.domain)}</span>
+          <div class="lookup-actions">
+            <FlowButton on:click={() => answer(false)}>{$t('wizard.lookup.manual')}</FlowButton>
+            <FlowButton variant="primary" on:click={() => answer(true)}>{$t('wizard.lookup.allow')}</FlowButton>
+          </div>
+          <span class="muted">{$t('wizard.lookup.remembered')}</span>
         </div>
       {/if}
 
@@ -1288,6 +1363,27 @@
 
   .setup-title {
     font-weight: var(--fw-medium);
+  }
+
+  .lookup-hosts {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-1);
+    margin: 0;
+    padding-inline-start: var(--space-5);
+    color: var(--text-secondary);
+  }
+
+  .lookup-hosts code {
+    font-family: var(--font-mono);
+    font-size: var(--fz-meta);
+    color: var(--text-primary);
+  }
+
+  .lookup-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-2);
   }
 
   .setup-steps {

@@ -1,7 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
   checkDavServer,
-  checkFeedAddress,
   emptyState,
   hiddenFor,
   landingSpace,
@@ -71,15 +70,20 @@ describe('step planner', () => {
       'mailbox',
       'dav',
       'notes',
-      'feeds',
       'chat',
       'keys',
       'summary',
     ])
   })
 
+  it('puts the acknowledgement first while it is owed', () => {
+    expect(planSteps(['mail'], true)).toEqual(['legal', 'purpose', 'language', 'look', 'mailbox', 'keys', 'summary'])
+    expect(planSteps(['mail'], false)[0]).toBe('purpose')
+  })
+
   it('follows a custom pick', () => {
-    expect(planSteps(spacesFor('custom', ['feeds']))).toEqual(['purpose', 'language', 'look', 'mailbox', 'feeds', 'keys', 'summary'])
+    expect(planSteps(spacesFor('custom', ['feeds']))).toEqual(['purpose', 'language', 'look', 'mailbox', 'keys', 'summary'])
+    expect(planSteps(spacesFor('custom', ['notes']))).toEqual(['purpose', 'language', 'look', 'mailbox', 'notes', 'keys', 'summary'])
     expect(planSteps(spacesFor('custom', ['tasks']))).toContain('dav')
     expect(planSteps(spacesFor('custom', ['projects']))).not.toContain('dav')
   })
@@ -107,16 +111,31 @@ describe('progress', () => {
     })
   })
 
+  it('resumes on the acknowledgement while it is owed, whatever was stored', () => {
+    const p: SetupProgress = { ...startProgress(false, []), step: 'keys', outcomes: { legal: 'done', purpose: 'done' } }
+    expect(resumeStep(p, planSteps(setupSpaces, true))).toBe('legal')
+    expect(resumeStep(p, planSteps(setupSpaces, false))).toBe('keys')
+  })
+
   it('resumes on the stored step while it still applies', () => {
     const p = startProgress(false, [])
     expect(resumeStep({ ...p, step: 'notes' }, planSteps(setupSpaces))).toBe('notes')
   })
 
   it('resumes on the first step not left when the stored one no longer applies', () => {
-    const p: SetupProgress = { ...startProgress(false, []), step: 'feeds', outcomes: { purpose: 'done', language: 'done' } }
+    const p: SetupProgress = { ...startProgress(false, []), step: 'chat', outcomes: { purpose: 'done', language: 'done' } }
     expect(resumeStep(p, planSteps(['mail']))).toBe('look')
     const all: SetupProgress = { ...p, outcomes: { purpose: 'done', language: 'done', look: 'done', mailbox: 'done', keys: 'done' } }
     expect(resumeStep(all, planSteps(['mail']))).toBe('summary')
+  })
+
+  it('moves a record stopped on the retired feeds step to what followed it', () => {
+    const raw = '{"step":"feeds","purpose":"everything","custom":[],"outcomes":{"purpose":"done","language":"done","look":"done","mailbox":"done","dav":"done","notes":"done","feeds":"skipped"}}'
+    const p = parseProgress(raw) as SetupProgress
+    expect(p.step).toBe('chat')
+    expect(p.outcomes).not.toHaveProperty('feeds')
+    expect(resumeStep(p, planSteps(setupSpaces))).toBe('chat')
+    expect(resumeStep(p, planSteps(spacesFor('custom', ['notes', 'feeds'])))).toBe('keys')
   })
 })
 
@@ -131,25 +150,14 @@ describe('moving on', () => {
   })
 
   it('treats what already exists as set up on a re-run', () => {
-    const state = { ...emptyState, mailboxes: 2, davAccounts: 1, feeds: 4, chatSignedIn: true, vaultChosen: true }
-    for (const step of ['mailbox', 'dav', 'notes', 'feeds', 'chat'] as const) {
+    const state = { ...emptyState, mailboxes: 2, davAccounts: 1, chatSignedIn: true, vaultChosen: true }
+    for (const step of ['mailbox', 'dav', 'notes', 'chat'] as const) {
       expect(primaryAction(step, { ...p, rerun: true }, state)).toBe('continue')
     }
   })
 })
 
 describe('step validation', () => {
-  it('checks a feed address', () => {
-    expect(checkFeedAddress('')).toBe('setup.invalid.empty')
-    expect(checkFeedAddress('  ')).toBe('setup.invalid.empty')
-    expect(checkFeedAddress('two words')).toBe('setup.invalid.spaces')
-    expect(checkFeedAddress('nodot')).toBe('setup.invalid.address')
-    expect(checkFeedAddress('ftp://example.com/feed')).toBe('setup.invalid.address')
-    expect(checkFeedAddress('example.com')).toBeNull()
-    expect(checkFeedAddress('https://example.com/feed.xml')).toBeNull()
-    expect(checkFeedAddress('http://localhost:8080/rss')).toBeNull()
-  })
-
   it('lets the server be empty only with a mailbox to start from', () => {
     expect(checkDavServer('', true)).toBeNull()
     expect(checkDavServer('', false)).toBe('setup.invalid.empty')
@@ -157,6 +165,8 @@ describe('step validation', () => {
     expect(checkDavServer('https://cloud.example.com/remote.php/dav', false)).toBeNull()
     expect(checkDavServer('cloud example', true)).toBe('setup.invalid.spaces')
     expect(checkDavServer('not-a-host', true)).toBe('setup.invalid.address')
+    expect(checkDavServer('ftp://cloud.example.com', false)).toBe('setup.invalid.address')
+    expect(checkDavServer('http://localhost:5232', false)).toBeNull()
   })
 })
 
@@ -164,12 +174,11 @@ describe('summary', () => {
   const steps = planSteps(setupSpaces)
 
   it('lists every piece of the run as set up or skipped', () => {
-    const p: SetupProgress = { ...startProgress(false, []), outcomes: { mailbox: 'done', dav: 'skipped', feeds: 'done' } }
+    const p: SetupProgress = { ...startProgress(false, []), outcomes: { mailbox: 'done', dav: 'skipped', notes: 'done' } }
     expect(summarize(steps, p, emptyState)).toEqual([
       { piece: 'mailbox', status: 'done' },
       { piece: 'dav', status: 'skipped' },
-      { piece: 'notes', status: 'skipped' },
-      { piece: 'feeds', status: 'done' },
+      { piece: 'notes', status: 'done' },
       { piece: 'chat', status: 'skipped' },
     ])
   })

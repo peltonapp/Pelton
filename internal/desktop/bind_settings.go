@@ -632,6 +632,9 @@ type UIPrefsDTO struct {
 	// CleanLinks removes tracking parameters and redirect wrappers from links
 	// opened from a mail.
 	CleanLinks bool `json:"cleanLinks"`
+	// AutoconfigLookup is whether the add-mailbox wizard may look up a typed
+	// address's domain: ask (default), allow or manual.
+	AutoconfigLookup string `json:"autoconfigLookup"`
 	// VerboseSync shows which mailbox is currently syncing in the status line,
 	// with the account and server it is talking to. SyncProgressBar puts a real
 	// progress bar next to it, counting message bodies rather than mailboxes.
@@ -851,6 +854,7 @@ func (a *App) GetUIPrefs() (UIPrefsDTO, error) {
 		NotifyActionMarkRead:       a.boolSetting(settingNotifyActionMarkRead, true),
 		NotifyActionReply:          a.boolSetting(settingNotifyActionReply, true),
 		CleanLinks:                 a.boolSetting(settingCleanLinks, false),
+		AutoconfigLookup:           a.stringSetting(settingAutoconfigLookup, "ask"),
 		VerboseSync:                a.boolSetting(settingVerboseSync, false),
 		SyncProgressBar:            a.boolSetting(settingSyncProgress, true),
 		StatusClock:                a.boolSetting(settingStatusClock, true),

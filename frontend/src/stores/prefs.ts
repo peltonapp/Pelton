@@ -5,7 +5,7 @@
 // source of truth.
 
 import { writable } from 'svelte/store'
-import type { QuickComposeStatus, UIPrefs, ThemePref, DensityPref, EditorMode, ViewsPlacement, CloseAction, LogLevel, SelectAllScope, SearchKind, SearchSortPref, DesignPref, LayoutMode, NavStyle, RailSide, PaneStyle, AvatarPlacement, ContactsView, ComposeOpenIn, ReaderWidth, AfterMove, AfterReplySend, FollowUpInterval, ProjectsView, NoteEditorMode, ChatNotifyMode, HtmlColors } from '../lib/types'
+import type { QuickComposeStatus, UIPrefs, ThemePref, DensityPref, EditorMode, ViewsPlacement, CloseAction, LogLevel, SelectAllScope, SearchKind, SearchSortPref, DesignPref, LayoutMode, NavStyle, RailSide, PaneStyle, AvatarPlacement, ContactsView, ComposeOpenIn, ReaderWidth, AfterMove, AfterReplySend, FollowUpInterval, ProjectsView, NoteEditorMode, ChatNotifyMode, HtmlColors, AutoconfigLookup } from '../lib/types'
 import { getUIPrefs, setSetting, SettingKeys, systemColorScheme, setWindowTheme, getThemeApply, setQuickCompose } from '../lib/api'
 import { applyTheme, applyDensity, applyAccent, applyScale, applyReduceMotion, applyHandCursor, setThemeSchedule, applyUIFont, applyMonoFont, applyCorners, applyDesign, watchSystemTheme, setSystemSchemeOverride, resolveTheme } from '../theme/theme'
 import { applyUserTheme } from '../theme/usertheme'
@@ -139,6 +139,7 @@ const defaults: UIPrefs = {
   notifyActionMarkRead: true,
   notifyActionReply: true,
   cleanLinks: false,
+  autoconfigLookup: 'ask',
   verboseSync: false,
   syncProgressBar: true,
   statusClock: true,
@@ -581,6 +582,15 @@ export function setNotifyAction(action: NotifyAction, value: boolean): void {
 export function setCleanLinks(value: boolean): void {
   prefs.update((p) => ({ ...p, cleanLinks: value }))
   void setSetting(SettingKeys.cleanLinks, String(value))
+}
+
+/**
+ * Sets whether the add-mailbox wizard may look up a typed address's domain.
+ * Resolves once stored, since the backend refuses lookups until it is.
+ */
+export function setAutoconfigLookup(value: AutoconfigLookup): Promise<void> {
+  prefs.update((p) => ({ ...p, autoconfigLookup: value }))
+  return setSetting(SettingKeys.autoconfigLookup, value)
 }
 
 // setShowOfflineIndicator toggles the little downloaded badge on pinned messages.

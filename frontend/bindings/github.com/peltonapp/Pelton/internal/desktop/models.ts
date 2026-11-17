@@ -11874,6 +11874,12 @@ export class UIPrefsDTO {
     "cleanLinks": boolean;
 
     /**
+     * AutoconfigLookup is whether the add-mailbox wizard may look up a typed
+     * address's domain: ask (default), allow or manual.
+     */
+    "autoconfigLookup": string;
+
+    /**
      * VerboseSync shows which mailbox is currently syncing in the status line,
      * with the account and server it is talking to. SyncProgressBar puts a real
      * progress bar next to it, counting message bodies rather than mailboxes.
@@ -12383,6 +12389,9 @@ export class UIPrefsDTO {
         }
         if (!("cleanLinks" in $$source)) {
             this["cleanLinks"] = false;
+        }
+        if (!("autoconfigLookup" in $$source)) {
+            this["autoconfigLookup"] = "";
         }
         if (!("verboseSync" in $$source)) {
             this["verboseSync"] = false;

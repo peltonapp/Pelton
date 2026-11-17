@@ -288,6 +288,8 @@
   // exists as set up.
   let onboardingClassic = false
   let onboardingRerun = false
+  // the setup flow opens on the acknowledgement while it is owed.
+  let setupNeedsLegal = false
   // installs that predate the onboarding liability step have to acknowledge it
   // once before they can carry on.
   let liabilityOpen = false
@@ -726,10 +728,11 @@
         // if the lookup fails, do not block the app with onboarding.
         onboardingOpen = false
       }
-      // the classic onboarding collects the acknowledgement itself, so only ask
-      // separately when it is not going to run. the setup flow leaves it to
-      // the dialog, which then shows above it.
-      liabilityOpen = (!onboardingOpen || !onboardingClassic) && !(await liabilityAccepted())
+      // both onboarding flows collect the acknowledgement as their first step,
+      // so only ask separately when neither is going to run.
+      const accepted = await liabilityAccepted()
+      setupNeedsLegal = !accepted
+      liabilityOpen = !onboardingOpen && !accepted
       if (!resumed) {
         void offerCrashReport()
       }
@@ -1022,6 +1025,7 @@
   // from settings and reopens the flow.
   function finishOnboarding(): void {
     onboardingOpen = false
+    setupNeedsLegal = false
     void setSetting(SettingKeys.onboarded, 'true')
     flushPendingMailto()
   }
@@ -2476,7 +2480,7 @@
 <!-- the liability acknowledgement for installs from before the onboarding step. -->
 {#if liabilityOpen}
   {#await import('./components/common/LiabilityDialog.svelte') then m}
-    <svelte:component this={m.default} on:accepted={() => (liabilityOpen = false)} />
+    <svelte:component this={m.default} on:accepted={() => { liabilityOpen = false; setupNeedsLegal = false }} />
   {/await}
 {/if}
 
@@ -2490,7 +2494,8 @@
     <svelte:component
       this={m.default}
       rerun={onboardingRerun}
-      blocked={nightlyOpen || liabilityOpen}
+      blocked={nightlyOpen}
+      legal={setupNeedsLegal}
       on:finish={finishSetup}
       on:added={onboardingAddedMailbox}
       on:classic={() => (onboardingClassic = true)}

@@ -1425,8 +1425,11 @@ export function DiscoverCalendars(req: $models.CalendarAccountRequest): $Cancell
 
 /**
  * DiscoverConfig resolves likely imap/smtp settings for an email address using
- * autoconfig (ISPDB, the domain's well-known/autoconfig, then a guess). The
- * wizard pre-fills the form with this; the user can still edit before testing.
+ * autoconfig (ISPDB, the domain's well-known/autoconfig, its MX records, then a
+ * guess). Only the domain leaves the machine, and only once the user allowed
+ * lookups; until then it returns errLookupNotAllowed without any network use.
+ * The wizard pre-fills the form with this; the user can still edit before
+ * testing.
  */
 export function DiscoverConfig(email: string): $CancellablePromise<$models.DiscoveredDTO> {
     return $Call.ByID(2312054947, email).then(($result: any) => {

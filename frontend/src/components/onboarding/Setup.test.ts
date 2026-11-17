@@ -7,13 +7,11 @@ const api = vi.hoisted(() => ({
   setSetting: vi.fn(),
   listCalendarAccounts: vi.fn(),
   listAddressBooks: vi.fn(),
-  listFeedSidebar: vi.fn(),
+  discoverCalendars: vi.fn(),
+  discoverAddressBooks: vi.fn(),
   defaultMailClientStatus: vi.fn(),
   listUserLocales: vi.fn(),
   appVersion: vi.fn(),
-  discoverFeeds: vi.fn(),
-  addFeed: vi.fn(),
-  importOpml: vi.fn(),
 }))
 
 vi.mock('../../lib/api', async (importOriginal) => ({
@@ -45,11 +43,11 @@ beforeEach(() => {
   })
   api.listCalendarAccounts.mockResolvedValue([])
   api.listAddressBooks.mockResolvedValue([])
-  api.listFeedSidebar.mockResolvedValue({ folders: [], feeds: [], counts: {} })
+  api.discoverCalendars.mockReset()
+  api.discoverAddressBooks.mockReset()
   api.defaultMailClientStatus.mockResolvedValue({ known: false, isDefault: false })
   api.listUserLocales.mockResolvedValue([])
   api.appVersion.mockResolvedValue('test')
-  api.discoverFeeds.mockReset()
   prefs.update((p) => ({ ...p, design: 'new', hiddenSpaces: '', chatEnabled: false, notesVault: '' }))
   sidebar.set({ status: 'idle', data: null, error: null } as never)
 })
@@ -59,11 +57,35 @@ async function heading(name: string): Promise<HTMLElement> {
 }
 
 describe('setup flow', () => {
+  it('opens on the acknowledgement when it is owed, and lets nothing past it unaccepted', async () => {
+    storeProgress({ step: 'keys', purpose: 'mail', custom: ['mail'] })
+    render(Setup, { props: { legal: true } })
+    await heading('Before you start')
+    expect(screen.queryByRole('button', { name: 'Skip setup' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Back' })).not.toBeInTheDocument()
+    const go = screen.getByRole('button', { name: 'Continue' })
+    expect(go).toBeDisabled()
+    await userEvent.keyboard('{Enter}')
+    expect(screen.getByRole('heading', { level: 2, name: 'Before you start' })).toBeVisible()
+
+    await userEvent.click(screen.getByRole('checkbox'))
+    await userEvent.click(go)
+    await heading('What will you use Pelton for?')
+    expect(api.setSetting).toHaveBeenCalledWith('liability_accepted', expect.stringContaining('"terms"'))
+    expect(screen.getByText('2 of 6')).toBeInTheDocument()
+  })
+
+  it('leaves the acknowledgement out once it was given', async () => {
+    render(Setup, { props: { rerun: true } })
+    await heading('What will you use Pelton for?')
+    expect(screen.queryByRole('heading', { name: 'Before you start' })).not.toBeInTheDocument()
+  })
+
   it('asks what Pelton is for first, with everything picked', async () => {
     render(Setup)
     await heading('What will you use Pelton for?')
     expect(screen.getByRole('radio', { name: /Everything/ })).toHaveAttribute('aria-checked', 'true')
-    expect(screen.getByText('1 of 9')).toBeInTheDocument()
+    expect(screen.getByText('1 of 8')).toBeInTheDocument()
   })
 
   it('counts only the steps that apply and writes the hidden spaces on Continue', async () => {
@@ -107,7 +129,7 @@ describe('setup flow', () => {
   it('announces the step', async () => {
     render(Setup)
     await heading('What will you use Pelton for?')
-    await waitFor(() => expect(screen.getByText('Step 1 of 9: What will you use Pelton for?')).toBeInTheDocument())
+    await waitFor(() => expect(screen.getByText('Step 1 of 8: What will you use Pelton for?')).toBeInTheDocument())
   })
 
   it('stores where it stands after every move', async () => {
@@ -172,25 +194,39 @@ describe('setup flow', () => {
     expect(screen.queryByRole('button', { name: 'Use the Classic design' })).not.toBeInTheDocument()
   })
 
-  it('checks a feed address before looking it up', async () => {
-    storeProgress({ step: 'feeds', purpose: 'custom', custom: ['mail', 'feeds'] })
+  it('has no feeds step, while the Feeds space stays chosen', async () => {
     render(Setup)
-    await heading('Follow a first feed')
-    await userEvent.type(screen.getByLabelText('Website or feed address'), 'nodot')
-    await userEvent.click(screen.getByRole('button', { name: 'Find' }))
-    expect(screen.getByText('This does not look like a web address.')).toBeInTheDocument()
-    expect(api.discoverFeeds).not.toHaveBeenCalled()
-    expect(screen.getByRole('button', { name: 'Skip for now' })).toBeInTheDocument()
+    await heading('What will you use Pelton for?')
+    await userEvent.click(screen.getByRole('radio', { name: /Mail only/ }))
+    await userEvent.click(screen.getByRole('radio', { name: /Let me choose/ }))
+    await userEvent.click(screen.getByRole('checkbox', { name: /Feeds/ }))
+    expect(screen.getByText('1 of 5')).toBeInTheDocument()
+    await userEvent.click(screen.getByRole('button', { name: 'Continue' }))
+    await heading('Choose your language')
+    expect(api.setSetting).toHaveBeenCalledWith('hidden_spaces', 'calendar,tasks,projects,contacts,notes,automations')
   })
 
-  it('keeps going when the feed lookup fails offline', async () => {
-    api.discoverFeeds.mockRejectedValue(new Error('no network'))
-    storeProgress({ step: 'feeds', purpose: 'custom', custom: ['mail', 'feeds'] })
+  it('checks a calendar server before asking it, and contacts nothing on entering the step', async () => {
+    storeProgress({ step: 'dav', purpose: 'mailcal' })
     render(Setup)
-    await heading('Follow a first feed')
-    await userEvent.type(screen.getByLabelText('Website or feed address'), 'example.com')
-    await userEvent.click(screen.getByRole('button', { name: 'Find' }))
-    expect(await screen.findByText('no network')).toBeInTheDocument()
+    await heading('Calendar and contacts')
+    expect(api.discoverCalendars).not.toHaveBeenCalled()
+    expect(api.discoverAddressBooks).not.toHaveBeenCalled()
+    await userEvent.type(screen.getByLabelText('Server'), 'nodot')
+    await userEvent.click(screen.getByRole('button', { name: 'Look for calendars and contacts' }))
+    expect(screen.getByText('This does not look like a web address.')).toBeInTheDocument()
+    expect(api.discoverCalendars).not.toHaveBeenCalled()
+  })
+
+  it('keeps going when the calendar server cannot be reached', async () => {
+    api.discoverCalendars.mockRejectedValue(new Error('no network'))
+    api.discoverAddressBooks.mockRejectedValue(new Error('no network'))
+    storeProgress({ step: 'dav', purpose: 'mailcal' })
+    render(Setup)
+    await heading('Calendar and contacts')
+    await userEvent.type(screen.getByLabelText('Server'), 'cloud.example.com')
+    await userEvent.click(screen.getByRole('button', { name: 'Look for calendars and contacts' }))
+    expect(await screen.findByText(/No calendars found/)).toBeInTheDocument()
     await userEvent.click(screen.getByRole('button', { name: 'Skip for now' }))
     await heading('Keyboard')
   })

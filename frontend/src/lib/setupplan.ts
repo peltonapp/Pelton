@@ -11,10 +11,10 @@ import type { Space } from './types'
 export type Purpose = 'mail' | 'mailcal' | 'everything' | 'custom'
 
 /** One step of the flow. */
-export type SetupStep = 'purpose' | 'language' | 'look' | 'mailbox' | 'dav' | 'notes' | 'feeds' | 'chat' | 'keys' | 'summary'
+export type SetupStep = 'legal' | 'purpose' | 'language' | 'look' | 'mailbox' | 'dav' | 'notes' | 'chat' | 'keys' | 'summary'
 
 /** The steps that set something up, and so can be skipped and set up later. */
-export type SetupPiece = 'mailbox' | 'dav' | 'notes' | 'feeds' | 'chat'
+export type SetupPiece = 'mailbox' | 'dav' | 'notes' | 'chat'
 
 /** How a step was left: confirmed with something set up, or skipped. */
 export type StepOutcome = 'done' | 'skipped'
@@ -25,7 +25,7 @@ export const setupSpaces: readonly Space[] = ['mail', 'calendar', 'tasks', 'proj
 /** The purposes in the order the first step offers them. */
 export const purposes: readonly Purpose[] = ['mail', 'mailcal', 'everything', 'custom']
 
-const pieces: readonly SetupPiece[] = ['mailbox', 'dav', 'notes', 'feeds', 'chat']
+const pieces: readonly SetupPiece[] = ['mailbox', 'dav', 'notes', 'chat']
 
 const presets: Record<Exclude<Purpose, 'custom'>, readonly Space[]> = {
   mail: ['mail'],
@@ -76,18 +76,20 @@ export function hiddenFor(chosen: readonly Space[]): string {
   return serializeHidden(setupSpaces, hidden)
 }
 
-/** The steps that apply to a choice of spaces, in the order they run. */
-export function planSteps(chosen: readonly Space[]): SetupStep[] {
+/**
+ * The steps that apply to a choice of spaces, in the order they run. legal puts
+ * the warranty and liability acknowledgement first, for an install that has
+ * not given it for the current terms.
+ */
+export function planSteps(chosen: readonly Space[], legal = false): SetupStep[] {
   const has = (k: Space): boolean => chosen.includes(k)
-  const steps: SetupStep[] = ['purpose', 'language', 'look', 'mailbox']
+  const steps: SetupStep[] = legal ? ['legal'] : []
+  steps.push('purpose', 'language', 'look', 'mailbox')
   if (has('calendar') || has('contacts') || has('tasks')) {
     steps.push('dav')
   }
   if (has('notes')) {
     steps.push('notes')
-  }
-  if (has('feeds')) {
-    steps.push('feeds')
   }
   if (has('chat')) {
     steps.push('chat')
@@ -121,12 +123,11 @@ export interface SetupState {
   davAccounts: number
   /** The notes folder was picked by the user rather than left at the default. */
   vaultChosen: boolean
-  feeds: number
   chatSignedIn: boolean
 }
 
 /** Nothing set up yet. */
-export const emptyState: SetupState = { mailboxes: 0, davAccounts: 0, vaultChosen: false, feeds: 0, chatSignedIn: false }
+export const emptyState: SetupState = { mailboxes: 0, davAccounts: 0, vaultChosen: false, chatSignedIn: false }
 
 /**
  * The record a run starts from. A first run preselects everything, which is
@@ -139,7 +140,10 @@ export function startProgress(rerun: boolean, shown: readonly Space[]): SetupPro
   return { step: 'purpose', purpose, custom, outcomes: {}, rerun }
 }
 
-const stepNames = new Set<string>(['purpose', 'language', 'look', 'mailbox', 'dav', 'notes', 'feeds', 'chat', 'keys', 'summary'])
+const stepNames = new Set<string>(['legal', 'purpose', 'language', 'look', 'mailbox', 'dav', 'notes', 'chat', 'keys', 'summary'])
+
+// steps an earlier version had, and the step that followed them there.
+const retiredSteps: Record<string, SetupStep> = { feeds: 'chat' }
 
 /** Reads a stored record, or null when there is none or it is not one. */
 export function parseProgress(raw: string): SetupProgress | null {
@@ -148,6 +152,9 @@ export function parseProgress(raw: string): SetupProgress | null {
   }
   try {
     const p = JSON.parse(raw) as Partial<SetupProgress>
+    if (p && typeof p === 'object' && String(p.step) in retiredSteps) {
+      p.step = retiredSteps[String(p.step)]
+    }
     if (!p || typeof p !== 'object' || !stepNames.has(String(p.step)) || !purposes.includes(p.purpose as Purpose)) {
       return null
     }
@@ -170,10 +177,15 @@ export function serializeProgress(p: SetupProgress): string {
 }
 
 /**
- * The step a resumed run opens on: the stored one while it still applies,
- * else the first applicable step not yet left, else the summary.
+ * The step a resumed run opens on: the acknowledgement while it is owed, else
+ * the stored one while it still applies, else the first applicable step not
+ * yet left, else the summary.
  */
 export function resumeStep(p: SetupProgress, steps: readonly SetupStep[]): SetupStep {
+  // nothing is reachable before the acknowledgement, whatever was stored.
+  if (steps.includes('legal')) {
+    return 'legal'
+  }
   if (steps.includes(p.step)) {
     return p.step
   }
@@ -189,8 +201,6 @@ export function alreadySet(piece: SetupPiece, state: SetupState): boolean {
       return state.davAccounts > 0
     case 'notes':
       return state.vaultChosen
-    case 'feeds':
-      return state.feeds > 0
     case 'chat':
       return state.chatSignedIn
   }
@@ -209,18 +219,6 @@ export function primaryAction(step: SetupStep, p: SetupProgress, state: SetupSta
 
 /** Why a step's form cannot be sent yet, as a locale key, or null when it can. */
 export type FieldProblem = 'setup.invalid.empty' | 'setup.invalid.address' | 'setup.invalid.spaces' | null
-
-/** Checks a feed address before it is looked up: a web address or a bare host. */
-export function checkFeedAddress(raw: string): FieldProblem {
-  const value = raw.trim()
-  if (!value) {
-    return 'setup.invalid.empty'
-  }
-  if (/\s/.test(value)) {
-    return 'setup.invalid.spaces'
-  }
-  return looksLikeAddress(value) ? null : 'setup.invalid.address'
-}
 
 /**
  * Checks a CalDAV or CardDAV server before it is asked. Empty is fine when a

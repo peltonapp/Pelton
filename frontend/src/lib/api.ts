@@ -2137,6 +2137,7 @@ export const SettingKeys = {
   notifyActionMarkRead: 'notify_action_mark_read',
   notifyActionReply: 'notify_action_reply',
   cleanLinks: 'clean_links',
+  autoconfigLookup: 'autoconfig_lookup',
   verboseSync: 'verbose_sync',
   syncProgressBar: 'sync_progress_bar',
   statusClock: 'status_clock',
