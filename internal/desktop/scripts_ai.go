@@ -91,8 +91,6 @@ type AITestDTO struct {
 type AIScriptOptionsDTO struct {
 	// LogText puts the text sent to the model and its answers in the run log.
 	LogText bool `json:"logText"`
-	// LiveTest makes a test run really ask the model; changes stay planned.
-	LiveTest bool `json:"liveTest"`
 }
 
 func (a *App) aiNetwork() ai.Network {
@@ -150,7 +148,7 @@ func (a *App) registerScriptAI(r *scripting.Registry) error {
 		},
 		Options: func(scriptID int64) ai.ScriptOptions {
 			o := a.aiScriptOptions()[strconv.FormatInt(scriptID, 10)]
-			return ai.ScriptOptions{LogText: o.LogText, LiveTest: o.LiveTest}
+			return ai.ScriptOptions{LogText: o.LogText}
 		},
 	})
 	if err != nil {
@@ -402,6 +400,13 @@ func (a *App) FetchAIModels(in AIProviderInput) ([]string, error) {
 		}
 	}
 	return models, nil
+}
+
+// TestScriptAskingAI dry runs a script as TestScript does, except that its AI
+// steps really ask the model, so a branch on the answer can be tried. Every
+// change, including those the model asks for, stays a planned step.
+func (a *App) TestScriptAskingAI(in ScriptInput, messageID int64) (ScriptRunDTO, error) {
+	return a.testScript(ai.WithModelInTest(a.ctx), in, messageID)
 }
 
 func (a *App) aiScriptOptions() map[string]AIScriptOptionsDTO {

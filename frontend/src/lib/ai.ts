@@ -54,7 +54,6 @@ export interface AITestResult {
 /** The AI switches of one script. */
 export interface AIScriptOptions {
   logText: boolean
-  liveTest: boolean
 }
 
 /** Base permission for a provider that may leave this device. */

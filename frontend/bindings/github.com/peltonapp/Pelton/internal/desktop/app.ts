@@ -4445,6 +4445,17 @@ export function TestScript($in: $models.ScriptInput, messageID: number): $Cancel
 }
 
 /**
+ * TestScriptAskingAI dry runs a script as TestScript does, except that its AI
+ * steps really ask the model, so a branch on the answer can be tried. Every
+ * change, including those the model asks for, stays a planned step.
+ */
+export function TestScriptAskingAI($in: $models.ScriptInput, messageID: number): $CancellablePromise<$models.ScriptRunDTO> {
+    return $Call.ByID(957971532, $in, messageID).then(($result: any) => {
+        return $$createType193($result);
+    });
+}
+
+/**
  * TitleBarDoubleClick runs the system's title-bar double-click action. On macOS
  * the app draws its own title bar, so the window server never sees the click
  * and cannot act on it; the frontend forwards it here instead. A no-op on every

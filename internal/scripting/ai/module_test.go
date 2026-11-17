@@ -498,8 +498,9 @@ func TestAgentCaps(t *testing.T) {
 func TestLiveTestRunKeepsChangesPlanned(t *testing.T) {
 	f := newFake(t, toolAnswer("probe_touch", map[string]any{"name": "x"}), reply(oaAnswer("done")))
 	e := setup(t, Network{}, local(f))
-	e.opts.LiveTest = true
-	run := e.run(t, `local r = ai.agent("x") print(r.ok, r.text)`, true, "ai_local:local", "probe")
+	sc := scriptingtest.Script(7, `local r = ai.agent("x") print(r.ok, r.text)`, "ai_local:local", "probe")
+	eng := &scripting.Engine{Registry: e.reg, Hosts: &scripting.Hosts{Confirm: scriptingtest.AllowAll{}}, Limits: scripting.DefaultLimits()}
+	run := eng.Run(WithModelInTest(context.Background()), scripting.RunRequest{Script: sc, Trigger: sc.Trigger.Type, Dry: true})
 	if run.Status != scripting.StatusOK {
 		t.Fatalf("%s %s", run.Status, run.Error)
 	}

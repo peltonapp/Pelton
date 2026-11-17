@@ -29,9 +29,20 @@ type ScriptOptions struct {
 	// log. Off, the log has the provider, model, token counts and duration
 	// only.
 	LogText bool `json:"logText,omitempty"`
-	// LiveTest makes a test run really ask the model. Changes the script or
-	// the model asks for stay planned steps either way.
-	LiveTest bool `json:"liveTest,omitempty"`
+}
+
+type askModelKey struct{}
+
+// WithModelInTest marks a test run's context so its AI calls really ask the
+// model, which a branch on the answer needs to be tried. Changes the script
+// or the model asks for stay planned steps either way.
+func WithModelInTest(ctx context.Context) context.Context {
+	return context.WithValue(ctx, askModelKey{}, true)
+}
+
+func modelInTest(ctx context.Context) bool {
+	on, _ := ctx.Value(askModelKey{}).(bool)
+	return on
 }
 
 // Config is how the ai module reaches the providers.
@@ -163,7 +174,7 @@ func (m *module) open(c *scripting.Call, o callOpts) (*session, error) {
 		opts = m.cfg.Options(c.ScriptID())
 	}
 	s := &session{m: m, c: c, p: p, kind: kind, model: model, timeout: o.timeout, logText: opts.LogText}
-	if c.Dry && !opts.LiveTest {
+	if c.Dry && !modelInTest(c.Ctx) {
 		s.placeholder = true
 		return s, m.require(c, p, Local(p.BaseURL))
 	}

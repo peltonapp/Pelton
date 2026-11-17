@@ -1,7 +1,6 @@
 <script lang="ts">
-  // the AI switches of a saved script: whether its run log keeps the text
-  // sent to the model and the answers, and whether a test run really asks the
-  // model. both are off until the user turns them on.
+  // the AI switch of a saved script: whether its run log keeps the text sent
+  // to the model and the answers. it is off until the user turns it on.
   import { onMount } from 'svelte'
   import ToggleSwitch from '../common/ToggleSwitch.svelte'
   import { aiScriptOptions, setAIScriptOptions } from '../../lib/api'
@@ -12,7 +11,7 @@
   /** The script, which must be saved. */
   export let scriptId: number
 
-  let options: AIScriptOptions = { logText: false, liveTest: false }
+  let options: AIScriptOptions = { logText: false }
 
   onMount(async () => {
     try {
@@ -22,8 +21,8 @@
     }
   })
 
-  async function set(change: Partial<AIScriptOptions>): Promise<void> {
-    const next = { ...options, ...change }
+  async function setLogText(on: boolean): Promise<void> {
+    const next = { ...options, logText: on }
     try {
       await setAIScriptOptions(scriptId, next)
       options = next
@@ -33,36 +32,21 @@
   }
 </script>
 
-<div class="options">
-  <div class="option">
-    <div class="text">
-      <span>{$t('ai.options.logText')}</span>
-      <span class="hint">{$t('ai.options.logText.hint')}</span>
-    </div>
-    <ToggleSwitch checked={options.logText} label={$t('ai.options.logText')} on:change={(e) => set({ logText: e.detail })} />
+<div class="option">
+  <div class="text">
+    <span>{$t('ai.options.logText')}</span>
+    <span class="hint">{$t('ai.options.logText.hint')}</span>
   </div>
-  <div class="option">
-    <div class="text">
-      <span>{$t('ai.options.liveTest')}</span>
-      <span class="hint">{$t('ai.options.liveTest.hint')}</span>
-    </div>
-    <ToggleSwitch checked={options.liveTest} label={$t('ai.options.liveTest')} on:change={(e) => set({ liveTest: e.detail })} />
-  </div>
+  <ToggleSwitch checked={options.logText} label={$t('ai.options.logText')} on:change={(e) => setLogText(e.detail)} />
 </div>
 
 <style>
-  .options {
-    display: flex;
-    flex-direction: column;
-    gap: var(--space-3);
-    margin-top: var(--space-2);
-  }
-
   .option {
     display: flex;
     align-items: center;
     justify-content: space-between;
     gap: var(--space-4);
+    margin-top: var(--space-2);
   }
 
   .text {

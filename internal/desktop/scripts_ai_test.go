@@ -108,7 +108,7 @@ func TestAIProviderKeyStaysInTheCredentialStore(t *testing.T) {
 	if err := a.SetAIScriptOptions(sc.ID, AIScriptOptionsDTO{LogText: true}); err != nil {
 		t.Fatal(err)
 	}
-	if opts, _ := a.AIScriptOptions(sc.ID); !opts.LogText || opts.LiveTest {
+	if opts, _ := a.AIScriptOptions(sc.ID); !opts.LogText {
 		t.Fatalf("options %+v", opts)
 	}
 	run, _ = a.RunScript(sc.ID, 0)
@@ -130,6 +130,33 @@ func TestAIProviderKeyStaysInTheCredentialStore(t *testing.T) {
 	}
 	if list, _ := a.AIProviders(); len(list) != 0 {
 		t.Fatalf("providers %v", list)
+	}
+}
+
+func TestScriptTestRunAsksTheModelOnlyWhenTold(t *testing.T) {
+	a, _ := newScriptTestApp(t)
+	srv, auths := fakeAI(t, "Friends")
+	p, err := a.SaveAIProvider(AIProviderInput{Name: "Box", Kind: "openai_compatible", BaseURL: srv.URL + "/v1", Model: "m"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	in := luaInput(`print(ai.classify("hi", {"Bills", "Friends"}).label)`, "ai_local:"+p.ID)
+	run, err := a.TestScript(in, 0)
+	if err != nil || run.Status != "ok" || len(*auths) != 0 {
+		t.Fatalf("%v %s %s, %d requests", err, run.Status, run.Error, len(*auths))
+	}
+	run, err = a.TestScriptAskingAI(in, 0)
+	if err != nil || run.Status != "ok" || len(*auths) != 1 {
+		t.Fatalf("%v %s %s, %d requests", err, run.Status, run.Error, len(*auths))
+	}
+	var printed []string
+	for _, s := range run.Steps {
+		if s.Kind == scripting.StepLog {
+			printed = append(printed, s.Summary)
+		}
+	}
+	if printed[len(printed)-1] != "Friends" {
+		t.Fatalf("printed %v", printed)
 	}
 }
 

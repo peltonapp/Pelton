@@ -1,6 +1,7 @@
 package desktop
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -422,6 +423,10 @@ func (a *App) RunScript(id, messageID int64) (ScriptRunDTO, error) {
 // against a message (0 for the sample message). Reads work; every change is
 // listed as a planned step and nothing is changed.
 func (a *App) TestScript(in ScriptInput, messageID int64) (ScriptRunDTO, error) {
+	return a.testScript(a.ctx, in, messageID)
+}
+
+func (a *App) testScript(ctx context.Context, in ScriptInput, messageID int64) (ScriptRunDTO, error) {
 	svc, err := a.scriptService()
 	if err != nil {
 		return ScriptRunDTO{}, err
@@ -443,7 +448,7 @@ func (a *App) TestScript(in ScriptInput, messageID int64) (ScriptRunDTO, error) 
 			return ScriptRunDTO{}, fmt.Errorf("pelton: this trigger does not run on a message")
 		}
 	}
-	run, err := svc.TestRun(a.ctx, sc, data)
+	run, err := svc.TestRun(ctx, sc, data)
 	if err != nil {
 		return ScriptRunDTO{}, err
 	}

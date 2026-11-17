@@ -190,18 +190,10 @@ export class AIScriptOptionsDTO {
      */
     "logText": boolean;
 
-    /**
-     * LiveTest makes a test run really ask the model; changes stay planned.
-     */
-    "liveTest": boolean;
-
     /** Creates a new AIScriptOptionsDTO instance. */
     constructor($$source: Partial<AIScriptOptionsDTO> = {}) {
         if (!("logText" in $$source)) {
             this["logText"] = false;
-        }
-        if (!("liveTest" in $$source)) {
-            this["liveTest"] = false;
         }
 
         Object.assign(this, $$source);

@@ -3976,9 +3976,14 @@ export function fetchAIModels(input: AIProviderInput): Promise<string[]> {
 /** A script's AI switches. */
 export function aiScriptOptions(scriptId: number): Promise<AIScriptOptions> {
   if (isDemoActive()) {
-    return Promise.resolve({ logText: false, liveTest: false })
+    return Promise.resolve({ logText: false })
   }
   return App.AIScriptOptions(scriptId) as Promise<AIScriptOptions>
+}
+
+/** Test runs a script as testScript does, with its AI steps really asking the model; changes stay planned. */
+export function testScriptAskingAI(input: ScriptInput, messageId: number): Promise<ScriptRun> {
+  return App.TestScriptAskingAI(toDTO(input), messageId).then(asRun)
 }
 
 /** Changes a script's AI switches. */
