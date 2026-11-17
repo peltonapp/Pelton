@@ -19,6 +19,7 @@
   import newsIcon from '@phosphor-icons/core/assets/duotone/newspaper-duotone.svg?raw'
   import '../../theme/controls.css'
   import Ph from '../common/Ph.svelte'
+  import EmptyState from '../common/EmptyState.svelte'
   import AnchoredPopover from '../common/AnchoredPopover.svelte'
   import SpaceSwitcher from '../shell/SpaceSwitcher.svelte'
   import FeedIcon from './FeedIcon.svelte'
@@ -286,7 +287,7 @@
     </h3>
 
     {#if side.feeds.length === 0}
-      <p class="hint">{$t('feeds.sidebarEmpty')}</p>
+      <EmptyState size="compact" title={$t('feeds.sidebarEmpty')} actionLabel={$t('feeds.addFeed')} onAction={() => dispatch('add', 0)} />
     {/if}
 
     <!-- svelte-ignore a11y-no-noninteractive-element-interactions -->
@@ -554,12 +555,6 @@
     color: var(--text-primary);
   }
 
-  .hint {
-    margin: 0;
-    padding: 0 var(--space-2);
-    font-size: var(--fz-label);
-    color: var(--text-tertiary);
-  }
 
   .list {
     display: flex;

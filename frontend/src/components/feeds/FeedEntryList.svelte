@@ -14,6 +14,8 @@
   import Ph from '../common/Ph.svelte'
   import PieProgress from '../common/PieProgress.svelte'
   import EmptyState from '../common/EmptyState.svelte'
+  import ErrorState from '../common/ErrorState.svelte'
+  import searchIcon from '@phosphor-icons/core/assets/duotone/magnifying-glass-duotone.svg?raw'
   import FeedEntryRow from './FeedEntryRow.svelte'
   import { scrolledPast, type FeedRow } from '../../lib/feedlogic'
   import type { FeedsProgressEvent } from '../../lib/events'
@@ -77,6 +79,12 @@
   function onSearchInput(): void {
     clearTimeout(searchTimer)
     searchTimer = setTimeout(() => dispatch('search', typed), 220)
+  }
+
+  function clearSearch(): void {
+    clearTimeout(searchTimer)
+    typed = ''
+    dispatch('search', '')
   }
 
   /** Puts the cursor in the filter field. */
@@ -207,22 +215,43 @@
 
   <!-- svelte-ignore a11y-no-noninteractive-tabindex -->
   <div class="list" role="listbox" aria-label={title} tabindex="0" bind:this={listEl} on:scroll={onScroll}>
-    {#if error}
+    {#if error && rows.length > 0}
       <p class="error" role="alert">{error}</p>
     {/if}
     {#if rows.length === 0 && !loading}
-      {#if noFeeds && !newsletters}
-        <EmptyState title={$t('feeds.welcome.title')} detail={$t('feeds.welcome.detail')}>
-          <Ph svg={rssIcon} size={32} />
-          <div slot="action" class="welcome">
-            <button type="button" class="cal-btn primary" on:click={() => dispatch('add')}>{$t('feeds.addFeed')}</button>
-            <button type="button" class="cal-btn" on:click={() => dispatch('importOpml')}>{$t('feeds.importOpml')}</button>
-          </div>
-        </EmptyState>
+      {#if error}
+        <ErrorState message={error} onRetry={() => dispatch('refresh')} />
+      {:else if noFeeds && !newsletters}
+        <EmptyState
+          kind="setup"
+          icon={rssIcon}
+          title={$t('feeds.welcome.title')}
+          detail={$t('feeds.welcome.detail')}
+          actionLabel={$t('feeds.addFeed')}
+          onAction={() => dispatch('add')}
+          secondaryLabel={$t('feeds.importOpml')}
+          onSecondary={() => dispatch('importOpml')}
+        />
+      {:else if search}
+        <EmptyState
+          kind="filtered"
+          icon={searchIcon}
+          title={$t('feeds.empty.search')}
+          detail={$t('feeds.empty.searchDetail')}
+          actionLabel={$t('common.clearSearch')}
+          onAction={clearSearch}
+        />
+      {:else if unreadOnly}
+        <EmptyState
+          kind="filtered"
+          icon={checksIcon}
+          title={$t('feeds.empty.unread')}
+          detail={$t('feeds.empty.unreadDetail')}
+          actionLabel={$t('feeds.showAll')}
+          onAction={() => dispatch('unreadOnly', false)}
+        />
       {:else}
-        <EmptyState title={search ? $t('feeds.empty.search') : $t('feeds.empty.title')} detail={search ? '' : $t(newsletters ? 'feeds.empty.newsletters' : 'feeds.empty.detail')}>
-          <Ph svg={emptyIcon} size={28} />
-        </EmptyState>
+        <EmptyState icon={emptyIcon} title={$t('feeds.empty.title')} detail={$t(newsletters ? 'feeds.empty.newsletters' : 'feeds.empty.detail')} />
       {/if}
     {:else}
       {#each shown as row (row.key)}
@@ -366,11 +395,6 @@
     margin: var(--space-3) var(--space-4);
     font-size: var(--fz-label);
     color: var(--danger);
-  }
-
-  .welcome {
-    display: flex;
-    gap: var(--space-2);
   }
 
   .loading {
