@@ -16,6 +16,7 @@
   import SettingsForm from './SettingsForm.svelte'
   import SettingsSchemaEditor from './SettingsSchemaEditor.svelte'
   import PlacementEditor from './PlacementEditor.svelte'
+  import AssistantReview from './AssistantReview.svelte'
   import { t } from '../../lib/i18n'
   import { checkScriptLua } from '../../lib/api'
   import {
@@ -228,9 +229,10 @@
   </header>
 
   <div class="scroll">
-    {#if script.origin !== 'user'}
+    {#if script.origin === 'import'}
       <p class="notice">{$t(`scripts.origin.${script.origin}.notice`)}</p>
     {/if}
+    <AssistantReview {script} />
 
     <input class="cal-field" aria-label={$t('scripts.description')} placeholder={$t('scripts.description')} bind:value={input.description} />
 

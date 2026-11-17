@@ -55,6 +55,8 @@ var backupSkipSettings = map[string]bool{
 	// AI providers and their keys are set up per device.
 	settingAIProviders:     true,
 	settingAIScriptOptions: true,
+	// a proposal names a script by this install's id.
+	settingScriptProposals: true,
 }
 
 // whitelistBackup is the trusted-sender allowlist as exported.

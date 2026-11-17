@@ -14,6 +14,7 @@ import type {
   ChatMediaProgress,
 } from './types'
 import type { LiveRun, ScriptAsk, ScriptCatchUp, ScriptConfirmRequest, ScriptResult, ScriptRun, ScriptToast } from './scripting'
+import type { AssistantScriptEvent } from './assistantScripts'
 
 // EventsOn subscribes to a backend event and hands the callback its payload.
 function EventsOn<T>(name: string, cb: (data: T) => void): () => void {
@@ -74,6 +75,7 @@ export const EventNames = {
   scriptAskDone: 'scripts:askdone',
   scriptResult: 'scripts:result',
   scriptProgress: 'scripts:progress',
+  assistantScript: 'scripts:assistant',
   // sent between windows by the frontend, not by go.
   archiveAfterSend: 'compose:archive-after-send',
 } as const
@@ -577,4 +579,9 @@ export function onScriptResult(cb: (result: ScriptResult) => void): Unsubscribe 
 /** onScriptProgress fires while a run that takes a moment goes, and when it is done. */
 export function onScriptProgress(cb: (run: LiveRun) => void): Unsubscribe {
   return EventsOn(EventNames.scriptProgress, (e: LiveRun) => cb(e))
+}
+
+/** onAssistantScript fires when an assistant creates, changes or proposes a change to a script, and when a proposal is settled. */
+export function onAssistantScript(cb: (e: AssistantScriptEvent) => void): Unsubscribe {
+  return EventsOn(EventNames.assistantScript, (e: AssistantScriptEvent) => cb(e))
 }

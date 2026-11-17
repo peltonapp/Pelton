@@ -196,6 +196,7 @@ import type {
   ScriptInput,
   ScriptRun,
 } from './scripting'
+import type { ScriptProposal } from './assistantScripts'
 
 // isDemoMode reports whether the app launched in the cosmetic --potatoes-are-nice
 // screenshot mode; the frontend reads it once to switch the data layer to samples.
@@ -4049,4 +4050,22 @@ export function testScriptAskingAI(input: ScriptInput, messageId: number): Promi
 /** Changes a script's AI switches. */
 export function setAIScriptOptions(scriptId: number, options: AIScriptOptions): Promise<void> {
   return App.SetAIScriptOptions(scriptId, new desktop.AIScriptOptionsDTO(options))
+}
+
+/** The change an assistant proposed to a script, with a diff; exists is false when none waits. */
+export function scriptProposal(scriptId: number): Promise<ScriptProposal> {
+  if (isDemoActive()) {
+    return Promise.resolve({ scriptId, exists: false, when: '', diff: [], addedPermissions: [], removedPermissions: [], resetsApproval: false, problem: '' })
+  }
+  return App.ScriptProposal(scriptId) as Promise<ScriptProposal>
+}
+
+/** Applies a proposed change; one that changes code or permissions switches the script off for approval. */
+export function acceptScriptProposal(scriptId: number): Promise<Script> {
+  return App.AcceptScriptProposal(scriptId).then(asScript)
+}
+
+/** Throws a proposed change away. */
+export function rejectScriptProposal(scriptId: number): Promise<void> {
+  return App.RejectScriptProposal(scriptId)
 }

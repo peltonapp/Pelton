@@ -217,6 +217,16 @@ type App struct {
 	// never races.
 	mcpMu sync.Mutex
 	mcp   *mcpserver.Server
+	// mcpScriptLimits holds what an agent has used of its script caps. It
+	// lives here rather than in the server so a restart does not reset it.
+	mcpScriptLimits *mcpserver.ScriptLimiter
+	// englishStrings is the frontend's English catalog source, which the
+	// scripting reference takes the built-ins' descriptions from.
+	englishStrings string
+	englishOnce    sync.Once
+	english        map[string]string
+	// proposalMu serializes changes to the stored script proposals.
+	proposalMu sync.Mutex
 
 	// mailto holds a mailto: draft the app was launched with (or received from a
 	// second launch) until the frontend consumes it. See mailto.go.
