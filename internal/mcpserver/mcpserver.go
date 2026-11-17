@@ -49,6 +49,11 @@ type Server struct {
 	// all. The permission check is the second line, not the only one.
 	w   Writer
 	log *slog.Logger
+	// scripts is nil on a server without the script tools, and then none of
+	// them is registered. scriptLimits outlives a restart when the caller
+	// keeps it, so stopping and starting the server does not reset its caps.
+	scripts      Scripts
+	scriptLimits *ScriptLimiter
 
 	// perms is read on every call rather than captured when a tool is
 	// registered, so changing a permission does not mean restarting the
@@ -75,6 +80,17 @@ func New(mb Mailbox, log *slog.Logger) *Server {
 func NewWithWriter(mb Mailbox, w Writer, log *slog.Logger) *Server {
 	s := New(mb, log)
 	s.w = w
+	return s
+}
+
+// WithScripts adds the script tools, held to the caps in lim. Call it before
+// Start. A nil lim uses DefaultScriptLimits.
+func (s *Server) WithScripts(sc Scripts, lim *ScriptLimiter) *Server {
+	if lim == nil {
+		lim = NewScriptLimiter(DefaultScriptLimits())
+	}
+	s.scripts = sc
+	s.scriptLimits = lim
 	return s
 }
 
@@ -126,10 +142,11 @@ func (s *Server) Start(cfg Config) error {
 		Name:    serverName,
 		Version: cfg.Version,
 		Title:   "Pelton",
-	}, &mcp.ServerOptions{Instructions: serverInstructions(s.w != nil)})
+	}, &mcp.ServerOptions{Instructions: handshake(s.w != nil, s.scripts != nil)})
 	s.perms.Store(cfg.Permissions)
 	registerTools(mcpSrv, s.mb)
 	registerWriteTools(mcpSrv, s.w, s.permissions)
+	registerScriptTools(mcpSrv, s.scripts, s.scriptLimits, s.permissions)
 
 	// Stateless: every request is self-contained. The read-only tools need no
 	// per-session state, and this makes the server immune to losing a client's
