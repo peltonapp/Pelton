@@ -22,7 +22,7 @@
   import xIcon from '@phosphor-icons/core/assets/regular/x.svg?raw'
   import availabilityIcon from '@phosphor-icons/core/assets/duotone/calendar-dots-duotone.svg?raw'
   import AvailabilityPanel from './v2/AvailabilityPanel.svelte'
-  import { availabilityRequest } from '../../stores/compose'
+  import { availabilityRequest, insertRequest } from '../../stores/compose'
   import Ph from '../common/Ph.svelte'
   import Select from '../common/Select.svelte'
   import AnchoredPopover from '../common/AnchoredPopover.svelte'
@@ -686,6 +686,15 @@
   }
 
   // the palette asks the composer of a session to open the panel.
+  $: if ($insertRequest?.session === session.id) {
+    const text = $insertRequest.text
+    insertRequest.set(null)
+    if (session.minimized) {
+      updateCompose(session.id, { minimized: false })
+    }
+    void tick().then(() => insertAvailability(text))
+  }
+
   $: if ($availabilityRequest === session.id) {
     availabilityRequest.set(null)
     if (session.minimized) {

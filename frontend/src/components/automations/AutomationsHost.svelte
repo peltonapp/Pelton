@@ -1,26 +1,34 @@
 <script lang="ts">
   // what the automations need on screen whichever space or design is showing:
-  // the questions running scripts ask (allow a risky call, catch up on mail
-  // that came while Pelton was closed), the import dialog, and a script file
-  // dropped anywhere on the window. it also keeps the script events and the
-  // script list live for the command palette.
+  // the questions running scripts ask (allow a risky call, their own
+  // questions, catch up on mail that came while Pelton was closed), one at a
+  // time, the import dialog, the result panel, the progress of running
+  // scripts, and a script file dropped anywhere on the window. it also keeps
+  // the script events and the script list live for the command palette.
   import { onDestroy, onMount } from 'svelte'
   import Modal from '../common/Modal.svelte'
   import ScriptImportDialog from './ScriptImportDialog.svelte'
+  import AskDialog from './AskDialog.svelte'
+  import ResultPanel from './ResultPanel.svelte'
+  import RunProgress from './RunProgress.svelte'
   import { t } from '../../lib/i18n'
   import { onFilesDropped } from '../../lib/events'
   import { scriptExtension } from '../../lib/scripting'
   import {
+    answerAsk,
     answerCatchUp,
     answerConfirm,
     catalog,
     confirmImport,
+    dismissResult,
     importPreview,
     loadCatalog,
     loadScripts,
+    pendingAsks,
     pendingCatchUps,
     pendingConfirms,
     previewImport,
+    scriptResults,
     startScriptEvents,
   } from '../../stores/scripts'
   import { errorMessage, toastError } from '../../stores/toast'
@@ -45,9 +53,15 @@
   onDestroy(() => stops.forEach((stop) => stop()))
 
   $: confirm = $pendingConfirms[0] ?? null
+  $: ask = $pendingAsks[0] ?? null
   $: catchUp = $pendingCatchUps[0] ?? null
-  $: if ($importPreview && !$catalog) {
+  $: result = $scriptResults[0] ?? null
+  $: if (($importPreview || result) && !$catalog) {
     void loadCatalog().catch((err) => toastError(errorMessage(err)))
+  }
+
+  function reply(id: string, value: unknown, cancelled: boolean): void {
+    void answerAsk(id, value, cancelled).catch((err) => toastError(errorMessage(err)))
   }
 
   async function answer(allow: boolean): Promise<void> {
@@ -81,6 +95,10 @@
       <button type="button" class="cal-btn primary" on:click={() => void answer(true)}>{$t('scripts.confirm.allow')}</button>
     </svelte:fragment>
   </Modal>
+{:else if ask}
+  {#key ask.id}
+    <AskDialog {ask} on:answer={(e) => reply(ask.id, e.detail, false)} on:cancel={() => reply(ask.id, null, true)} />
+  {/key}
 {:else if catchUp}
   <Modal title={$t('scripts.catchUpAsk.title').replace('{name}', catchUp.name)} size="small" on:close={() => void answerCatchUp(catchUp.scriptId, false)}>
     <p class="text">{$t('scripts.catchUpAsk.body').replace('{n}', String(catchUp.count))}</p>
@@ -91,7 +109,13 @@
   </Modal>
 {:else if $importPreview && $catalog}
   <ScriptImportDialog file={$importPreview} catalog={$catalog} on:close={() => importPreview.set(null)} on:import={() => void doImport()} />
+{:else if result && $catalog}
+  {#key result.id}
+    <ResultPanel {result} catalog={$catalog} on:close={() => dismissResult(result.id)} />
+  {/key}
 {/if}
+
+<RunProgress />
 
 <style>
   .summary {

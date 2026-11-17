@@ -23,7 +23,9 @@ import {
   type Unsubscribe,
 } from '../lib/events'
 import { t } from '../lib/i18n'
+import { validate } from '../components/automations/blocks/validate'
 import {
+  parseTree,
   serializeTree,
   type BlockTree,
   type CompileResult,
@@ -219,11 +221,24 @@ export async function removeScript(id: number): Promise<void> {
  * opens the approval dialog instead; approveAndEnable finishes it.
  */
 export async function setEnabled(s: Script, enabled: boolean): Promise<void> {
+  const problems = enabled ? blockProblems(s) : 0
+  if (problems > 0) {
+    throw new Error(get(t)('scripts.blocks.enableBlocked').replace('{n}', String(problems)))
+  }
   if (enabled && s.permissions.some((p) => !s.approved.includes(p))) {
     approvalFor.set(s)
     return
   }
   replace(await api.setScriptEnabled(s.id, enabled, []))
+}
+
+/** How many problems the block editor finds in a block script, 0 for a Lua script or before the registry loaded. */
+export function blockProblems(s: Pick<Script, 'kind' | 'blocks' | 'trigger' | 'settingsSchema'>): number {
+  const c = get(catalog)
+  if (s.kind !== 'blocks' || !c) {
+    return 0
+  }
+  return validate(parseTree(s.blocks), { catalog: c, trigger: s.trigger.type, settings: s.settingsSchema }).length
 }
 
 /** Approves a script's permissions and switches it on. */
