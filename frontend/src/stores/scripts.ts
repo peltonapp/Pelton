@@ -11,8 +11,12 @@ import type { ComponentType } from 'svelte'
 import { derived, get, writable, type Readable } from 'svelte/store'
 import * as api from '../lib/api'
 import {
+  onScriptAsk,
+  onScriptAskDone,
   onScriptCatchUp,
   onScriptConfirm,
+  onScriptProgress,
+  onScriptResult,
   onScriptRun,
   onScriptsChanged,
   onScriptToast,
@@ -23,16 +27,22 @@ import {
   serializeTree,
   type BlockTree,
   type CompileResult,
+  type LiveRun,
+  type PlacedItem,
+  type PlacedScript,
+  type PlacementConfig,
   type Script,
+  type ScriptAsk,
   type ScriptCatalog,
   type ScriptCatchUp,
   type ScriptConfirmRequest,
   type ScriptFile,
   type ScriptInput,
+  type ScriptResult,
   type ScriptRun,
 } from '../lib/scripting'
 import { messageKeys, offerUndo, newestHistoryId, recordHistory } from './undohistory'
-import { errorMessage, push, toastError, toastSuccess } from './toast'
+import { errorMessage, push, toastError, toastInfo, toastSuccess } from './toast'
 
 /** How many runs the log pane loads. */
 export const runLogLimit = 200
@@ -63,6 +73,18 @@ export const pendingConfirms = writable<ScriptConfirmRequest[]>([])
 
 /** Scripts asking whether to run over mail that arrived while Pelton was closed. */
 export const pendingCatchUps = writable<ScriptCatchUp[]>([])
+
+/** Questions running scripts ask, oldest first; one dialog shows at a time. */
+export const pendingAsks = writable<ScriptAsk[]>([])
+
+/** Results scripts showed, oldest first; the result panel shows the first. */
+export const scriptResults = writable<ScriptResult[]>([])
+
+/** Runs in progress that take a moment, for the progress indicator. */
+export const liveRuns = writable<LiveRun[]>([])
+
+/** The scripts offered at each placement, by placement id. */
+export const placedScripts = writable<Record<string, PlacedScript[]>>({})
 
 /** A script file read for import, waiting for the user to look at it. */
 export const importPreview = writable<ScriptFile | null>(null)
@@ -95,10 +117,57 @@ function replace(s: Script): Script {
   return s
 }
 
-/** Loads the scripts. */
+/** Loads the scripts, and where each is offered. */
 export async function loadScripts(): Promise<void> {
   scripts.set(await api.listScripts())
   scriptsLoaded.set(true)
+  await loadPlaced().catch(() => undefined)
+}
+
+/** Loads which scripts are offered at each placement. */
+export async function loadPlaced(): Promise<void> {
+  placedScripts.set(await api.scriptPlacements())
+}
+
+/** Sets where in the app a script is offered. */
+export async function setPlacements(id: number, list: PlacementConfig[]): Promise<void> {
+  replace(await api.setScriptPlacements(id, list))
+  await loadPlaced()
+}
+
+/** Runs a script from a placement on the items it was used on, and reports how it went. */
+export async function runPlaced(scriptId: number, placement: string, items: PlacedItem[]): Promise<ScriptRun | null> {
+  const since = newestHistoryId()
+  try {
+    const run = await api.runPlacedScript(scriptId, placement, items)
+    reportRun(run)
+    recordRun(run)
+    offerUndo(since)
+    return run
+  } catch (err) {
+    toastError(errorMessage(err))
+    return null
+  }
+}
+
+/** Answers a question; cancelled ends the run that asked. */
+export async function answerAsk(id: string, value: unknown, cancelled: boolean): Promise<void> {
+  pendingAsks.update((list) => list.filter((a) => a.id !== id))
+  await api.answerScriptAsk(id, value, cancelled)
+}
+
+/** Cancels a run in progress. */
+export async function cancelLive(id: number): Promise<void> {
+  try {
+    await api.cancelScriptRun(id)
+  } catch (err) {
+    toastError(errorMessage(err))
+  }
+}
+
+/** Closes the result on screen. */
+export function dismissResult(id: string): void {
+  scriptResults.update((list) => list.filter((r) => r.id !== id))
 }
 
 /** Loads the registry once. */
@@ -210,12 +279,27 @@ export async function runTest(input: ScriptInput, messageId: number): Promise<Sc
   return run
 }
 
+/** Where a failed run stopped, for its error message: the Lua line or the block, or ''. */
+export function errorPlace(run: Pick<ScriptRun, 'errorLine' | 'errorBlock'>, say: (key: string) => string): string {
+  if (run.errorLine > 0) {
+    return say('scripts.error.line').replace('{n}', String(run.errorLine))
+  }
+  if (run.errorBlock) {
+    return say('scripts.error.block').replace('{id}', run.errorBlock)
+  }
+  return ''
+}
+
 function reportRun(run: ScriptRun): void {
   const say = get(t)
   if (run.status === 'ok' || run.status === 'stopped') {
     toastSuccess(say('scripts.toast.ran').replace('{name}', run.scriptName))
+  } else if (run.status === 'cancelled') {
+    toastInfo(say('scripts.toast.cancelled').replace('{name}', run.scriptName))
   } else {
-    toastError(say('scripts.toast.failed').replace('{name}', run.scriptName).replace('{error}', run.error || say(`scripts.status.${run.status}`)))
+    const where = errorPlace(run, say)
+    const error = run.error || say(`scripts.status.${run.status}`)
+    toastError(say('scripts.toast.failed').replace('{name}', run.scriptName).replace('{error}', where ? `${where}: ${error}` : error))
   }
 }
 
@@ -320,10 +404,18 @@ export function startScriptEvents(): Unsubscribe {
     onScriptConfirm((req) => pendingConfirms.update((list) => [...list, req])),
     onScriptCatchUp((c) => pendingCatchUps.update((list) => [...list.filter((x) => x.scriptId !== c.scriptId), c])),
     onScriptToast((e) => push(e.level === 'error' ? 'error' : e.level === 'success' ? 'success' : 'info', `${e.script}: ${e.text}`)),
+    onScriptAsk((a) => pendingAsks.update((list) => [...list, a])),
+    onScriptAskDone((id) => pendingAsks.update((list) => list.filter((a) => a.id !== id))),
+    onScriptResult((r) => scriptResults.update((list) => [...list, r])),
+    onScriptProgress((run) => liveRuns.update((list) => (run.done ? list.filter((r) => r.id !== run.id) : [...list.filter((r) => r.id !== run.id), run]))),
   ]
   void api
     .pendingScriptCatchUps()
     .then((list) => pendingCatchUps.set(list))
+    .catch(() => undefined)
+  void api
+    .scriptLiveRuns()
+    .then((list) => liveRuns.set(list))
     .catch(() => undefined)
   return () => stops.forEach((stop) => stop())
 }

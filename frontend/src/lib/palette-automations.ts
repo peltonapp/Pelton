@@ -1,17 +1,19 @@
 // palette-automations.ts puts the Automations space into the command palette:
-// going there, a new script, importing one, and running each switched on
-// script that is started by hand. A script that runs on a message gets the
+// going there, a new script, importing one, and running each script placed in
+// the palette. A script that runs on messages gets the selected ones, or the
 // message on screen.
 
-import { get } from 'svelte/store'
 import { IconBolt, IconPlayerPlay, IconPlus, IconUpload } from '@tabler/icons-svelte'
 import { registerPaletteSource } from './palettesources'
 import type { PaletteCommand } from './commands'
+import { currentMessageItems, placedNow, runAt } from './scriptplacements'
 import { openSpace, runInSpace } from '../stores/space'
 import { menuHint } from '../stores/shortcuts'
-import { pickImport, runNow, scripts } from '../stores/scripts'
-import { visibleMessageId } from '../stores/tabs'
+import { pickImport } from '../stores/scripts'
 import { errorMessage, toastError } from '../stores/toast'
+
+/** The placement of the command palette. */
+const palettePlacement = 'palette'
 
 registerPaletteSource('automations', (t) => {
   const out: PaletteCommand[] = [
@@ -39,20 +41,14 @@ registerPaletteSource('automations', (t) => {
       run: () => void pickImport().catch((err) => toastError(errorMessage(err))),
     },
   ]
-  for (const s of get(scripts)) {
-    if (!s.enabled || s.trigger.type !== 'manual') {
-      continue
-    }
+  for (const s of placedNow(palettePlacement)) {
     out.push({
-      id: `automations:run:${s.id}`,
+      id: `automations:run:${s.scriptId}`,
       group: 'automations',
       label: t('palette.automations.run').replace('{name}', s.name),
       keywords: s.description,
       icon: IconPlayerPlay,
-      run: () => {
-        const onMessage = s.trigger.params.scope === 'message'
-        void runNow(s, onMessage ? (get(visibleMessageId) ?? 0) : 0)
-      },
+      run: () => runAt(palettePlacement, s.scriptId, currentMessageItems()),
     })
   }
   return out

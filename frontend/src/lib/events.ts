@@ -13,7 +13,7 @@ import type {
   ChatVerification,
   ChatMediaProgress,
 } from './types'
-import type { ScriptCatchUp, ScriptConfirmRequest, ScriptRun, ScriptToast } from './scripting'
+import type { LiveRun, ScriptAsk, ScriptCatchUp, ScriptConfirmRequest, ScriptResult, ScriptRun, ScriptToast } from './scripting'
 
 // EventsOn subscribes to a backend event and hands the callback its payload.
 function EventsOn<T>(name: string, cb: (data: T) => void): () => void {
@@ -70,6 +70,10 @@ export const EventNames = {
   scriptConfirm: 'scripts:confirm',
   scriptCatchUp: 'scripts:catchup',
   scriptToast: 'scripts:toast',
+  scriptAsk: 'scripts:ask',
+  scriptAskDone: 'scripts:askdone',
+  scriptResult: 'scripts:result',
+  scriptProgress: 'scripts:progress',
   // sent between windows by the frontend, not by go.
   archiveAfterSend: 'compose:archive-after-send',
 } as const
@@ -553,4 +557,24 @@ export function onScriptCatchUp(cb: (c: ScriptCatchUp) => void): Unsubscribe {
 /** onScriptToast fires when a script shows a message. */
 export function onScriptToast(cb: (toast: ScriptToast) => void): Unsubscribe {
   return EventsOn(EventNames.scriptToast, (e: ScriptToast) => cb(e))
+}
+
+/** onScriptAsk fires when a running script asks the user something. */
+export function onScriptAsk(cb: (ask: ScriptAsk) => void): Unsubscribe {
+  return EventsOn(EventNames.scriptAsk, (e: ScriptAsk) => cb(e))
+}
+
+/** onScriptAskDone fires with the id of a question that gave up waiting. */
+export function onScriptAskDone(cb: (id: string) => void): Unsubscribe {
+  return EventsOn(EventNames.scriptAskDone, (id: string) => cb(id))
+}
+
+/** onScriptResult fires when a script shows a result in the result panel. */
+export function onScriptResult(cb: (result: ScriptResult) => void): Unsubscribe {
+  return EventsOn(EventNames.scriptResult, (e: ScriptResult) => cb(e))
+}
+
+/** onScriptProgress fires while a run that takes a moment goes, and when it is done. */
+export function onScriptProgress(cb: (run: LiveRun) => void): Unsubscribe {
+  return EventsOn(EventNames.scriptProgress, (e: LiveRun) => cb(e))
 }

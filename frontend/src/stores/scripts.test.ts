@@ -65,6 +65,7 @@ function script(over: Partial<Script> = {}): Script {
     catchUp: 'live',
     catchUpCap: 50,
     allowUnasked: [],
+    placements: [],
     createdAt: '',
     updatedAt: '',
     lastRunAt: '',
@@ -91,6 +92,9 @@ function run(over: Partial<ScriptRun> = {}): ScriptRun {
     logTruncated: false,
     undoable: true,
     messages: [5],
+    errorLine: 0,
+    errorBlock: '',
+    notReached: [],
     ...over,
   }
 }

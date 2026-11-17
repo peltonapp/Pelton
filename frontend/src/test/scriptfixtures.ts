@@ -31,6 +31,10 @@ export const catalogFixture: ScriptCatalog = {
     { id: 'net', labelKey: 'x.net', descKey: '', label: 'Web requests', category: 'outside', risk: 'high' },
   ],
   paramTypes: ['string'],
+  settingTypes: ['string', 'text', 'number', 'bool', 'enum', 'folder', 'account', 'color'],
+  inputKinds: [],
+  resultActions: [],
+  placements: [],
 }
 
 const messageParam = { name: 'message', type: 'ref' as const, labelKey: 'scripts.param.message', valueType: 'message', defaultRef: 'event.message' }
@@ -99,6 +103,7 @@ export function scriptFixture(over: Partial<Script> = {}): Script {
     catchUp: 'live',
     catchUpCap: 50,
     allowUnasked: [],
+    placements: [],
     createdAt: '',
     updatedAt: '',
     lastRunAt: '',

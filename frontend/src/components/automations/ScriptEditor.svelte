@@ -100,7 +100,7 @@
     try {
       compiled = await compileBlocks(next, triggerId)
     } catch (err) {
-      compiled = { lua: '', errors: [{ block: '', message: errorMessage(err) }], permissions: [] }
+      compiled = { lua: '', errors: [{ block: '', message: errorMessage(err) }], permissions: [], lines: {} }
     }
   }
 
