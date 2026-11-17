@@ -54,6 +54,7 @@
     exportToFile,
     libraries,
     removeScript,
+    runLog,
     runNow,
     runTest,
     saveScript,
@@ -108,7 +109,10 @@
     libraries: $libraries.map((l) => l.name),
     t: $t,
   }
-  $: runMark = $testRun && !$testRun.errorLibrary && $testRun.errorLine > 0 && $testRun.error ? [{ line: $testRun.errorLine, message: $testRun.error }] : []
+  // the last run's error, a test run's or, failing that, the newest logged
+  // run since the script was last saved, so its line still fits the source.
+  $: lastRun = $testRun ?? $runLog.find((r) => r.scriptId === script.id && r.started >= script.updatedAt) ?? null
+  $: runMark = lastRun && !lastRun.errorLibrary && lastRun.errorLine > 0 && lastRun.error ? [{ line: lastRun.errorLine, message: lastRun.error }] : []
   $: marks = [...(syntax && syntaxErrorLine(syntax) > 0 ? [{ line: syntaxErrorLine(syntax), message: syntax }] : []), ...runMark] as LineMark[]
   $: takesMessage = triggerTakesMessage(catalog, input.trigger.type)
   $: risky = riskyFunctions(catalog, script.permissions)

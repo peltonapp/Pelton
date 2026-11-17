@@ -8,7 +8,7 @@
   import { t } from '../../lib/i18n'
   import { checkScriptLua } from '../../lib/api'
   import type { ScriptCatalog, ScriptLibrary, ScriptLibraryInput } from '../../lib/scripting'
-  import { exportLibrary, libraries, removeLibrary, saveLibrary, testRun } from '../../stores/scripts'
+  import { exportLibrary, libraries, removeLibrary, runLog, saveLibrary, testRun } from '../../stores/scripts'
   import { askConfirm } from '../../stores/confirm'
   import { errorMessage, toastError, toastSuccess } from '../../stores/toast'
   import { syntaxErrorLine } from './lua/assist'
@@ -47,7 +47,8 @@
     libraries: $libraries.map((l) => l.name).filter((n) => n !== library.name),
     t: $t,
   }
-  $: runMark = $testRun?.errorLibrary === library.name && $testRun.errorLine > 0 ? [{ line: $testRun.errorLine, message: $testRun.error }] : []
+  $: failed = [$testRun, ...$runLog].find((r) => r?.errorLibrary === library.name && r.errorLine > 0 && r.started >= library.updatedAt)
+  $: runMark = failed ? [{ line: failed.errorLine, message: failed.error }] : []
   $: marks = [...(syntax && syntaxErrorLine(syntax) > 0 ? [{ line: syntaxErrorLine(syntax), message: syntax }] : []), ...runMark] as LineMark[]
 
   function scheduleCheck(source: string): void {

@@ -120,6 +120,16 @@ describe('ScriptEditor and AI', () => {
     expect(screen.queryByText('Home model')).not.toBeInTheDocument()
   })
 
+  it('marks the line the last test run failed on', async () => {
+    const s = scriptFixture({ trigger: { type: 'manual', params: {} }, permissions: [], source: 'local a = 1\nerror("boom")\n' })
+    store.testRun.set({ ...run, status: 'error', error: '<string>:2: boom', errorLine: 2 })
+    const { container } = render(ScriptEditor, { props: { script: s, catalog: aiCatalog } })
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    const dot = container.querySelector('.cm-lua-error-dot')
+    expect(dot?.getAttribute('title')).toBe('<string>:2: boom')
+    expect(container.querySelectorAll('.cm-lua-error-line')).toHaveLength(1)
+  })
+
   it('opens the reference beside Lua and inserts an entry', async () => {
     render(ScriptEditor, { props: { script: scriptFixture({ trigger: { type: 'manual', params: {} }, permissions: [] }), catalog: aiCatalog } })
     await userEvent.click(screen.getByRole('button', { name: 'Reference' }))
