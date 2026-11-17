@@ -16,14 +16,13 @@
   import MailboxStep from './MailboxStep.svelte'
   import DavStep from './DavStep.svelte'
   import NotesStep from './NotesStep.svelte'
-  import FeedsStep from './FeedsStep.svelte'
   import ChatStep from './ChatStep.svelte'
   import KeysStep from './KeysStep.svelte'
   import SummaryStep from './SummaryStep.svelte'
   import { prefs, setDesign, setHiddenSpaces, setLanguage } from '../../stores/prefs'
   import { sidebar } from '../../stores/accounts'
   import { chatSignedIn } from '../../stores/chat'
-  import { getSetting, listAddressBooks, listCalendarAccounts, listFeedSidebar, setSetting, SettingKeys } from '../../lib/api'
+  import { getSetting, listAddressBooks, listCalendarAccounts, setSetting, SettingKeys } from '../../lib/api'
   import { spaces } from '../../lib/spaces'
   import {
     alreadySet,
@@ -58,7 +57,6 @@
 
   let progress: SetupProgress | null = null
   let davCount = 0
-  let feedCount = 0
   let visited = new Set<SetupStep>()
   let direction: 1 | -1 = 1
   let hoverScene: Space | null = null
@@ -71,7 +69,6 @@
     mailboxes: accounts.length,
     davAccounts: davCount,
     vaultChosen: $prefs.notesVault !== '',
-    feeds: feedCount,
     chatSignedIn: $chatSignedIn,
   } satisfies SetupState
   $: chosen = progress ? spacesFor(progress.purpose, progress.custom) : []
@@ -91,7 +88,7 @@
     if (s === 'dav') {
       return list.includes('calendar') ? 'calendar' : list.includes('contacts') ? 'contacts' : 'tasks'
     }
-    if (s === 'notes' || s === 'feeds' || s === 'chat') {
+    if (s === 'notes' || s === 'chat') {
       return s
     }
     return 'mail'
@@ -111,9 +108,8 @@
     visited = new Set([progress.step])
     persist()
     void focusStep()
-    const [cals, books, feeds] = await Promise.allSettled([listCalendarAccounts(), listAddressBooks(), listFeedSidebar()])
+    const [cals, books] = await Promise.allSettled([listCalendarAccounts(), listAddressBooks()])
     davCount = (cals.status === 'fulfilled' ? cals.value.length : 0) + (books.status === 'fulfilled' ? books.value.length : 0)
-    feedCount = feeds.status === 'fulfilled' ? feeds.value.feeds.length : 0
   })
 
   function persist(): void {
@@ -237,7 +233,6 @@
     mailbox: $t('onboarding.mailboxTitle'),
     dav: $t('setup.dav.title'),
     notes: $t('setup.notes.title'),
-    feeds: $t('setup.feeds.title'),
     chat: $t('setup.chat.title'),
     keys: $t('setup.keys.title'),
     summary: rerun ? $t('setup.summary.titleAgain') : $t('setup.summary.title'),
@@ -249,7 +244,6 @@
     mailbox: $t('onboarding.mailboxSub'),
     dav: $t('setup.dav.lede'),
     notes: $t('setup.notes.lede'),
-    feeds: $t('setup.feeds.lede'),
     chat: $t('setup.chat.lede'),
     keys: $t('setup.keys.lede'),
     summary: $t('setup.summary.lede'),
@@ -330,8 +324,6 @@
                   <DavStep mailbox={accounts[0] ?? null} existing={davCount} on:added={() => markDone('dav')} />
                 {:else if s === 'notes'}
                   <NotesStep on:done={() => markDone('notes')} />
-                {:else if s === 'feeds'}
-                  <FeedsStep existing={feedCount} on:added={() => markDone('feeds')} />
                 {:else if s === 'chat'}
                   <ChatStep on:enabled={(e) => chatToggled(e.detail)} on:signedin={() => markDone('chat')} />
                 {:else if s === 'keys'}
