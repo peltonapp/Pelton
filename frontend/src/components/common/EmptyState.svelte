@@ -88,6 +88,7 @@
     flex-direction: column;
     align-items: center;
     justify-content: center;
+    justify-content: safe center;
     flex: 1;
     gap: var(--space-3);
     box-sizing: border-box;
