@@ -676,6 +676,8 @@
     if (sidebarData && !resumed) {
       await applyStartupSelection(get(prefs).startupSelection, sidebarData)
     }
+    // the history starts where the window opened, not on the default list.
+    clearNavHistory()
     void loadViews()
     await loadOutbox()
 
@@ -2126,7 +2128,6 @@
     openMessageId.set(null)
     clearAllTabs()
     clearSelection()
-    clearNavHistory()
     await loadProfiles()
     await initPrefs()
     await loadSidebar()
@@ -2134,6 +2135,8 @@
     if (data) {
       await applyStartupSelection(get(prefs).startupSelection, data)
     }
+    // the places of the profile left behind are not this one's.
+    clearNavHistory()
     void loadSignatures()
     void loadVIPSenders()
     void loadViews()
