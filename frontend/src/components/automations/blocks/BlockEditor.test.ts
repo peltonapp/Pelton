@@ -14,6 +14,7 @@ globalThis.ResizeObserver ??= class {
 const api = vi.hoisted(() => ({
   compileScriptBlocks: vi.fn(),
   searchAddresses: vi.fn(),
+  testScriptMatch: vi.fn(),
 }))
 
 vi.mock('../../../lib/api', async (importOriginal) => ({
@@ -166,6 +167,25 @@ describe('BlockEditor', () => {
     expect(addhost).toHaveBeenCalled()
     await rerender({ declared: ['net', 'net:example.org'] })
     expect(screen.queryByRole('button', { name: 'Add the host' })).not.toBeInTheDocument()
+  })
+
+  it('tries a condition group on recent mail from the if block', async () => {
+    api.testScriptMatch.mockResolvedValue({ scanned: 5, matched: 2, timedOut: false, matches: [] })
+    const when = { kind: 'all' as const, items: [{ kind: 'condition' as const, type: 'mail.subject', args: { op: { value: 'contains' }, value: { value: 'Invoice' } } }] }
+    const { user } = setup(treeOf([{ id: 'b1', kind: 'if', branches: [{ when, body: [] }] }]))
+    await user.click(screen.getAllByRole('button', { name: 'Try this on recent mail' })[0])
+    const dialog = await screen.findByRole('dialog')
+    await user.click(within(dialog).getByRole('button', { name: 'Try it' }))
+    expect(api.testScriptMatch).toHaveBeenCalledWith(expect.objectContaining({ when: expect.objectContaining({ kind: 'all' }) }))
+    expect(await within(dialog).findByText('2 of 5 messages match.')).toBeInTheDocument()
+  })
+
+  it('shows every permission a block needs', () => {
+    const catalog = { ...blockCatalog, actions: [...blockCatalog.actions, { id: 'ai.draft_reply', labelKey: '', label: 'Draft with AI', descKey: '', category: 'ai', permission: 'mail.read', permissions: ['mail.read', 'mail.compose'], params: [], lua: 'x()' }] }
+    render(BlockEditor, { props: { tree: treeOf([act('d', 'ai.draft_reply')]), catalog, trigger: 'manual' } })
+    const block = screen.getByRole('group', { name: /Draft with AI/ })
+    expect(within(block).getByText('Read mail')).toBeInTheDocument()
+    expect(within(block).getByText('Write drafts')).toBeInTheDocument()
   })
 
   it('switches a rule from a message to another match with one click', async () => {

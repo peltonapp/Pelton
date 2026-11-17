@@ -1692,6 +1692,7 @@ const en: Record<string, string> = {
   'scripts.library.kind': 'Library',
   'scripts.library.editor': 'Library',
   'scripts.library.name': 'Library name',
+  'scripts.library.description': 'What this library offers',
   'scripts.library.nameRule': 'A library name is lower case letters, digits and _, starting with a letter.',
   'scripts.library.hint': 'Scripts load it with {use}. It runs with the permissions of the script that loads it.',
   'scripts.library.delete.title': 'Delete the library {name}?',

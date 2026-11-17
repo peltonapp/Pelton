@@ -100,7 +100,7 @@
     {#if library.origin !== 'user'}
       <p class="notice">{$t(`scripts.origin.${library.origin}.notice`)}</p>
     {/if}
-    <input class="cal-field" aria-label={$t('scripts.description')} placeholder={$t('scripts.description')} bind:value={input.description} />
+    <input class="cal-field" aria-label={$t('scripts.library.description')} placeholder={$t('scripts.library.description')} bind:value={input.description} />
     <p class="hint">{$t('scripts.library.hint').replace('{use}', `local ${input.name || 'lib'} = require("${input.name}")`)}</p>
     <LuaWorkbench label={$t('scripts.code')} content={input.source} {catalog} {assist} {marks} on:change={(e) => (input = { ...input, source: e.detail })} />
     {#if syntax}<p class="error" role="alert">{syntax}</p>{/if}
