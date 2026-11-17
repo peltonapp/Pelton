@@ -18,7 +18,7 @@
   import { matchShortcut } from '../../lib/shortcuts'
   import { titleBarDoubleClick } from '../../lib/api'
   import { prefs } from '../../stores/prefs'
-  import { bindings } from '../../stores/shortcuts'
+  import { activeBindings, bindings } from '../../stores/shortcuts'
   import { openMessageId } from '../../stores/selection'
   import { menuBarLayout, menuBarEditing, resolveBar, type RenderItem } from '../../stores/menubar'
 
@@ -190,7 +190,7 @@
     }
     // a user binding wins: somebody who deliberately bound alt+f in settings
     // keeps it, and the access key only fires when the combo is free.
-    if (matchShortcut(event, $bindings)) {
+    if (matchShortcut(event, $activeBindings)) {
       return
     }
     const idx = letters.indexOf(event.key.toLowerCase())
