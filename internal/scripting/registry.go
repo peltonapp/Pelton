@@ -145,6 +145,9 @@ type ValueType struct {
 	// Lazy maps a field that is fetched on first use to the module function
 	// that fetches it, e.g. "body" to "mail.body".
 	Lazy map[string]string `json:"lazy,omitempty"`
+	// Sample returns the fields of an example value, which a test run with
+	// nothing picked hands a script for a trigger field of this type.
+	Sample func(now time.Time) map[string]any `json:"-"`
 }
 
 // Permission is something a script must declare and the user approve.

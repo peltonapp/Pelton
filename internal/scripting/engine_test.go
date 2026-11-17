@@ -213,7 +213,7 @@ func TestDrySampleMessage(t *testing.T) {
 	e.Hosts = &Hosts{}
 	trig, _ := e.Registry.Trigger(TriggerMailArrived)
 	sc := luaScript(`assert(text.contains(event.message.body, "invoice")) mail.archive(event.message)`, PermMailRead, PermMailModify)
-	run := e.Run(context.Background(), RunRequest{Script: sc, Trigger: TriggerMailArrived, Dry: true, Event: SampleEvent(trig, time.Now())})
+	run := e.Run(context.Background(), RunRequest{Script: sc, Trigger: TriggerMailArrived, Dry: true, Event: SampleEvent(e.Registry, trig, time.Now())})
 	if run.Status != StatusOK {
 		t.Fatalf("%s %q", run.Status, run.Error)
 	}

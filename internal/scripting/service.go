@@ -596,7 +596,7 @@ func (s *Service) TestRun(ctx context.Context, sc *Script, data map[string]any) 
 		return nil, fmt.Errorf("scripting: unknown trigger %q", sc.Trigger.Type)
 	}
 	if data == nil {
-		return s.run(ctx, sc, sc.Trigger.Type, SampleEvent(t, s.now()), 0, true)
+		return s.run(ctx, sc, sc.Trigger.Type, SampleEvent(s.reg, t, s.now()), 0, true)
 	}
 	event, err := s.prepare(ctx, t, data)
 	if err != nil {
@@ -606,8 +606,9 @@ func (s *Service) TestRun(ctx context.Context, sc *Script, data map[string]any) 
 }
 
 // SampleEvent builds an event for a trigger from its declared fields, for a
-// test run with nothing picked.
-func SampleEvent(t Trigger, now time.Time) map[string]any {
+// test run with nothing picked. A field of a value type with a Sample in r
+// gets that sample.
+func SampleEvent(r *Registry, t Trigger, now time.Time) map[string]any {
 	out := map[string]any{}
 	for _, f := range t.Event {
 		switch f.Type {
@@ -622,8 +623,16 @@ func SampleEvent(t Trigger, now time.Time) map[string]any {
 			out[f.Name] = true
 		case "folder":
 			out[f.Name] = "Archive"
+		case "number":
+			out[f.Name] = 0
 		default:
 			out[f.Name] = ""
+			if r == nil {
+				continue
+			}
+			if vt, ok := r.ValueType(f.Type); ok && vt.Sample != nil {
+				out[f.Name] = Object{Type: vt.ID, Fields: vt.Sample(now)}
+			}
 		}
 	}
 	return out

@@ -57,6 +57,20 @@ func NewOptions(values ...string) []Option {
 	return out
 }
 
+// TextCondition returns a condition testing the text expression subject,
+// which may use {{param}} placeholders, against the "op" and "value"
+// parameters, the way the mail text conditions do. params come first.
+func TextCondition(m Meta, subject string, params ...Param) Condition {
+	op := required(withDefault(param("op", TypeEnum), OpContains))
+	op.Options = textOps()
+	value := required(param("value", TypeString))
+	return Condition{
+		Meta:   m,
+		Params: append(params, op, value),
+		Lua:    "text.test(" + subject + ", {{op}}, {{value}})",
+	}
+}
+
 // NewFunction returns a module function with its description key.
 func NewFunction(module, name string, h Handler, params ...Param) Function {
 	return Function{Name: name, DescKey: "scripts.fn." + module + "." + name, Handler: h, Params: params}
