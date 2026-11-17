@@ -136,6 +136,14 @@ describe('the sheet', () => {
     expect(nav).not.toContain('go-mail')
   })
 
+  it('adds the number key of a space by its place in the navigation', () => {
+    const src: SheetSource = { ...source, bindings: { ...source.bindings, 'go-space-1': 'mod+1', 'go-space-2': 'mod+2' } }
+    const ctx: SheetContext = { ...base, space: 'calendar', spaces: ['mail', 'contacts', 'calendar'], numbered: ['contacts', 'mail'] }
+    const nav = buildSheet(ctx, src).find((g) => g.id === 'navigation')?.items ?? []
+    expect(nav.find((i) => i.id === 'go-contacts')?.keys).toEqual(['mod+shift+a', 'mod+1'])
+    expect(nav.find((i) => i.id === 'go-mail')?.keys).toEqual(['mod+shift+m', 'mod+2'])
+  })
+
   it('puts the composer first while it has the focus', () => {
     expect(ids({ ...base, composer: true, composerFocused: true })[0]).toBe('composer')
     expect(ids({ ...base, composer: true })).toEqual(['navigation', 'list', 'composer', 'space'])

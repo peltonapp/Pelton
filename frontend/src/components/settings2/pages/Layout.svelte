@@ -15,6 +15,8 @@
   import StatusBarPreview from '../skeletons/StatusBarPreview.svelte'
   import SidebarPreview from '../skeletons/SidebarPreview.svelte'
   import ToggleSwitch from '../../common/ToggleSwitch.svelte'
+  import SpaceNavEditor from '../SpaceNavEditor.svelte'
+  import { resetSpaceNav } from '../../../lib/spaces'
   import {
     prefs,
     setLayoutMode,
@@ -42,6 +44,7 @@
   const dispatch = createEventDispatcher<{ close: void }>()
 
   $: classic = $prefs.design === 'classic'
+  $: navDefault = $prefs.spaceOrder === '' && $prefs.hiddenSpaces === ''
 
   // the placement under the pointer in the views control, which the sidebar
   // picture shows in place of the saved one.
@@ -142,6 +145,15 @@
     </ChoiceCards>
   </Card>
 {/if}
+
+<Card id="spaces" title={$t('spaces.settings.title')} description={$t('spaces.settings.description')}>
+  <div class:inert={classic}>
+    <SpaceNavEditor />
+  </div>
+  <Row id="spaces-reset" label={$t('spaces.settings.reset')} hint={$t('spaces.settings.resetHint')} disabled={classic}>
+    <button type="button" class="action" disabled={navDefault} on:click={resetSpaceNav}>{$t('spaces.settings.resetButton')}</button>
+  </Row>
+</Card>
 
 <Card title={$t('layout.window')}>
   <Row id="pane-lock" label={$t('settings.lockPanes')} hint={$t('settingsPanel.hint.lockPanes')}>
@@ -325,8 +337,18 @@
     transition: background-color var(--motion-fast) var(--ease-out);
   }
 
-  .action:hover {
+  .action:hover:not(:disabled) {
     background: var(--surface-hover);
+  }
+
+  .inert {
+    opacity: 0.5;
+    pointer-events: none;
+  }
+
+  .action:disabled {
+    opacity: 0.5;
+    cursor: default;
   }
 
   .note {

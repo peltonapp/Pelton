@@ -11173,6 +11173,18 @@ export class UIPrefsDTO {
     "railPins": string;
 
     /**
+     * SpaceOrder lists the space keys in navigation order, comma separated.
+     * Keys it leaves out follow in their default order.
+     */
+    "spaceOrder": string;
+
+    /**
+     * HiddenSpaces lists the space keys left out of the navigation, comma
+     * separated. Mail is never hidden.
+     */
+    "hiddenSpaces": string;
+
+    /**
      * PaneStyle draws the panes in the new design: hybrid, flat or soft.
      */
     "paneStyle": string;
@@ -11741,6 +11753,12 @@ export class UIPrefsDTO {
         }
         if (!("railPins" in $$source)) {
             this["railPins"] = "";
+        }
+        if (!("spaceOrder" in $$source)) {
+            this["spaceOrder"] = "";
+        }
+        if (!("hiddenSpaces" in $$source)) {
+            this["hiddenSpaces"] = "";
         }
         if (!("paneStyle" in $$source)) {
             this["paneStyle"] = "";

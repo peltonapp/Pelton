@@ -24,7 +24,7 @@
   import { meetingPrepTarget, openMeetingPrep, closeMeetingPrep } from './stores/meetingprep'
   import { mailScreen, openMailScreen, closeMailScreen } from './stores/mailscreen'
   import { IconMailX, IconChartBar } from '@tabler/icons-svelte'
-  import { visibleSpaces } from './lib/spaces'
+  import { orderedSpaces, visibleSpaces } from './lib/spaces'
   import { startChat, stopChat } from './stores/chat'
   import { popupIsOpen } from './lib/popups'
   import { calendarFocus, calendarImport, calendarQuickAdd } from './stores/calendar'
@@ -103,6 +103,7 @@
     isComposeAction,
     chipActions,
     sendActions,
+    spaceNumber,
     shortcuts as shortcutRegistry,
     type ShortcutAction,
   } from './lib/shortcuts'
@@ -204,6 +205,16 @@
   import { startProjects, fileMailRequest } from './stores/projects'
   import { pickProjectFor } from './lib/projectpicker'
   import './lib/palette-feeds'
+  import './lib/palette-navhistory'
+  import './lib/location-mail'
+  import './lib/location-calendar'
+  import './lib/location-tasks'
+  import './lib/location-projects'
+  import './lib/location-contacts'
+  import './lib/location-notes'
+  import './lib/location-feeds'
+  import './lib/location-chat'
+  import { startNavHistory, clearNavHistory, goBack, goForward } from './stores/navhistory'
   import { startFeeds, feedFocus } from './stores/feeds'
   import { startTasks, toggleDone, tasks as taskStore, taskFromMailRequest } from './stores/tasks'
   import { createTasksFromMail, openTask } from './lib/taskmail'
@@ -515,6 +526,34 @@
   }
   onDestroy(() => stopNotes?.())
 
+  // back and forward follow the places visited in the new design.
+  let stopNav: (() => void) | undefined
+  $: if (!classic && !stopNav) {
+    stopNav = startNavHistory()
+  } else if (classic && stopNav) {
+    stopNav()
+    stopNav = undefined
+  }
+  onDestroy(() => stopNav?.())
+
+  // the side buttons of a mouse go back and forward, where the webview
+  // reports them; the press is taken so the webview does not act on it too.
+  function onNavMouseDown(event: MouseEvent): void {
+    if (!classic && (event.button === 3 || event.button === 4)) {
+      event.preventDefault()
+    }
+  }
+
+  function onNavMouseUp(event: MouseEvent): void {
+    if (classic || (event.button !== 3 && event.button !== 4)) {
+      return
+    }
+    event.preventDefault()
+    if (!overlayOpen) {
+      void (event.button === 3 ? goBack() : goForward())
+    }
+  }
+
   // the feeds store feeds the rail's unread dot, so it runs alongside.
   let stopFeeds: (() => void) | undefined
   $: if (!classic && !stopFeeds) {
@@ -637,6 +676,8 @@
     if (sidebarData && !resumed) {
       await applyStartupSelection(get(prefs).startupSelection, sidebarData)
     }
+    // the history starts where the window opened, not on the default list.
+    clearNavHistory()
     void loadViews()
     await loadOutbox()
 
@@ -1170,6 +1211,13 @@
     if (screenInPlace && isMailOnlyAction(action)) {
       return
     }
+    const place = spaceNumber(action)
+    if (place !== null) {
+      if (!classic) {
+        goToSpaceNumber(place)
+      }
+      return
+    }
     switch (action) {
       case 'open-newsletters':
         if (!classic) {
@@ -1341,6 +1389,16 @@
         break
       case 'undo-history':
         historyOpen.update((open) => !open)
+        break
+      case 'nav-back':
+        if (!classic && !overlayOpen) {
+          void goBack()
+        }
+        break
+      case 'nav-forward':
+        if (!classic && !overlayOpen) {
+          void goForward()
+        }
         break
       case 'toggle-low-power':
         setLowPowerMode(!$prefs.lowPowerMode)
@@ -1833,6 +1891,14 @@
     }
   }
 
+  // goToSpaceNumber shows the nth space of the navigation, from 1.
+  function goToSpaceNumber(n: number): void {
+    const entry = get(visibleSpaces)[n - 1]
+    if (entry) {
+      goToSpace(entry.key)
+    }
+  }
+
   // goToSpace shows one of the spaces from its shortcut. classic has no spaces
   // but does have a contacts screen; a space this build lacks is left alone.
   function goToSpace(key: Space): void {
@@ -1842,7 +1908,9 @@
       }
       return
     }
-    if (overlayOpen || !get(visibleSpaces).some((s) => s.key === key)) {
+    // a space left out of the navigation still opens; only one switched off
+    // does not.
+    if (overlayOpen || !get(orderedSpaces).some((s) => s.key === key)) {
       return
     }
     openSpace(key)
@@ -1970,12 +2038,20 @@
     if (action === 'next-split' || action === 'prev-split') {
       return
     }
+    // an editor that already used the keys (indenting on mod+[, say) keeps
+    // them, and alt with an arrow moves through a text field's words.
+    if ((action === 'nav-back' || action === 'nav-forward') && (event.defaultPrevented || (event.altKey && isEditableTarget(event.target)))) {
+      return
+    }
     if (action) {
       // a binding that types a character must not hijack typing in a field.
       if (comboTypes($bindings[action]) && isEditableTarget(event.target)) {
         return
       }
       if (classic && newDesignOnly.has(action)) {
+        if (selectTabByNumber(event)) {
+          event.preventDefault()
+        }
         return
       }
       // a recipient move only means something on a focused recipient chip;
@@ -1998,21 +2074,28 @@
     // cmd/ctrl+1 to 9 jump between the reading-pane chips, the way they jump
     // between tabs in a browser: 1 is the pane, 9 is the last tab. Checked after
     // the bindings, so a key the user assigned themselves still wins, and only
-    // while tabs exist, so the combination is otherwise left alone.
+    // while tabs exist, so the combination is otherwise left alone. The new
+    // design gives those keys to the spaces, so there the chips also answer
+    // with alt added.
     if (selectTabByNumber(event)) {
       event.preventDefault()
     }
   }
 
-  // selectTabByNumber handles cmd/ctrl+1 to 9 and reports whether it acted. The
-  // chips are the untabbed pane followed by the tabs, so 1 is the pane and the
+  // selectTabByNumber handles cmd/ctrl+1 to 9, and cmd/ctrl+alt+1 to 9 in the
+  // new design outside a text field, and reports whether it acted. The chips
+  // are the untabbed pane followed by the tabs, so 1 is the pane and the
   // numbers after it count along the bar. 9 is the last chip however many there
   // are, which is what a browser does.
   function selectTabByNumber(event: KeyboardEvent): boolean {
-    if (!(event.metaKey || event.ctrlKey) || event.shiftKey || event.altKey) {
+    if (!(event.metaKey || event.ctrlKey) || event.shiftKey) {
       return false
     }
-    const slot = Number(event.key)
+    if (event.altKey && (classic || isEditableTarget(event.target))) {
+      return false
+    }
+    // alt turns a digit into a symbol on some layouts, so its key code counts.
+    const slot = event.altKey ? Number(/^Digit([1-9])$/.exec(event.code)?.[1]) : Number(event.key)
     if (!Number.isInteger(slot) || slot < 1 || slot > 9) {
       return false
     }
@@ -2052,6 +2135,8 @@
     if (data) {
       await applyStartupSelection(get(prefs).startupSelection, data)
     }
+    // the places of the profile left behind are not this one's.
+    clearNavHistory()
     void loadSignatures()
     void loadVIPSenders()
     void loadViews()
@@ -2099,7 +2184,7 @@
   }
 </script>
 
-<svelte:window on:keydown={onKeydown} on:contextmenu={onContextMenu} on:resize={refreshFullscreen} bind:innerWidth={windowWidth} />
+<svelte:window on:keydown={onKeydown} on:mousedown={onNavMouseDown} on:mouseup={onNavMouseUp} on:contextmenu={onContextMenu} on:resize={refreshFullscreen} bind:innerWidth={windowWidth} />
 
 <!-- macOS with no in-app menu bar: an empty top row for the traffic lights, and
      a matching strip above every overlay so the window can still be dragged

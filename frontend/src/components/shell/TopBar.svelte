@@ -10,6 +10,7 @@
   import ActivityButton from './ActivityButton.svelte'
   import FocusButton from './FocusButton.svelte'
   import HistoryButton from './HistoryButton.svelte'
+  import NavButtons from './NavButtons.svelte'
   import MyDayButton from './MyDayButton.svelte'
   import { titleBarDoubleClick } from '../../lib/api'
   import { isMac } from '../../lib/i18n'
@@ -32,6 +33,7 @@
 >
   <div class="side start">
     <slot name="menu" />
+    <NavButtons />
     {#if tabs}
       <SpaceSwitcher labels />
     {/if}

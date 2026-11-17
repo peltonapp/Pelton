@@ -149,6 +149,10 @@ const (
 	// the views pinned to the middle of the rail, comma separated: "u:inbox"
 	// for a unified view, "v:12" for a saved one.
 	settingRailPins = "rail_pins"
+	// the order of the spaces in the navigation and the ones left out of it,
+	// both comma separated space keys. empty means the default order, all shown.
+	settingSpaceOrder   = "space_order"
+	settingHiddenSpaces = "hidden_spaces"
 	// how the panes are drawn in the new design: "hybrid", "flat" or "soft".
 	settingPaneStyle = "pane_style"
 	// where the sender picture goes in a list row and the reading header:
@@ -475,6 +479,12 @@ type UIPrefsDTO struct {
 	// RailPins lists the views pinned to the middle of the rail, comma
 	// separated, in display order.
 	RailPins string `json:"railPins"`
+	// SpaceOrder lists the space keys in navigation order, comma separated.
+	// Keys it leaves out follow in their default order.
+	SpaceOrder string `json:"spaceOrder"`
+	// HiddenSpaces lists the space keys left out of the navigation, comma
+	// separated. Mail is never hidden.
+	HiddenSpaces string `json:"hiddenSpaces"`
 	// PaneStyle draws the panes in the new design: hybrid, flat or soft.
 	PaneStyle string `json:"paneStyle"`
 	// AvatarPlacement puts the sender picture in its own column, inline in the
@@ -753,6 +763,8 @@ func (a *App) GetUIPrefs() (UIPrefsDTO, error) {
 		NavStyle:                   a.stringSetting(settingNavStyle, "rail"),
 		RailSide:                   a.stringSetting(settingRailSide, "left"),
 		RailPins:                   a.stringSetting(settingRailPins, ""),
+		SpaceOrder:                 a.stringSetting(settingSpaceOrder, ""),
+		HiddenSpaces:               a.stringSetting(settingHiddenSpaces, ""),
 		PaneStyle:                  a.stringSetting(settingPaneStyle, "hybrid"),
 		AvatarPlacement:            a.stringSetting(settingAvatarPlacement, "inline"),
 		ContactsView:               a.stringSetting(settingContactsView, "panes"),

@@ -52,7 +52,7 @@
   import { openTask } from '../../lib/taskmail'
   import { portal } from '../../lib/portal'
   import { currentUIScale } from '../../theme/theme'
-  import { addCard, addTask, board, cardFocus, loadBoard, moveBoardCard, removeCard } from '../../stores/projects'
+  import { addCard, addTask, board, cardFocus, loadBoard, moveBoardCard, openCardUid, removeCard } from '../../stores/projects'
   import { emptyDraft, localZone, removeTask, saveTask, taskLists, taskSettings, tasks, toggleDone } from '../../stores/tasks'
   import { openContextMenu } from '../../stores/contextmenu'
   import { errorMessage, toastError } from '../../stores/toast'
@@ -105,6 +105,7 @@
   $: manual = sort === 'manual'
   $: narrowing = filterActive(filter)
   $: selected = cards.find((c) => c.task.uid === selectedUid) ?? null
+  $: openCardUid.set(selected?.task.uid ?? null)
   $: overlay = width > 0 && width < narrowPanel
   $: rtl = typeof document !== 'undefined' && document.documentElement.dir === 'rtl'
   $: dropGone(cards)
@@ -578,6 +579,7 @@
     if (settleTimer) {
       clearTimeout(settleTimer)
     }
+    openCardUid.set(null)
   })
 
   $: scale = drag?.started ? currentUIScale() : 1

@@ -128,9 +128,26 @@ export type ShortcutAction =
   | 'notes-switcher'
   | 'notes-toggle-mode'
   | 'notes-graph'
+  // the spaces by their place in the navigation, hidden ones skipped.
+  | SpaceNumberAction
+  // back and forward through the places visited in this window.
+  | 'nav-back'
+  | 'nav-forward'
   // composer actions of the new design. They act on the composer that last
   // had focus, so they carry a modifier and work while typing.
   | ComposeAction
+
+/** Goes to the nth space of the navigation. */
+export type SpaceNumberAction = `go-space-${1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9}`
+
+/** The number actions, first to ninth. */
+export const spaceNumberActions: readonly SpaceNumberAction[] = [1, 2, 3, 4, 5, 6, 7, 8, 9].map((n) => `go-space-${n}` as SpaceNumberAction)
+
+/** The place in the navigation an action goes to, from 1, or null for another action. */
+export function spaceNumber(action: string): number | null {
+  const at = spaceNumberActions.indexOf(action as SpaceNumberAction)
+  return at < 0 ? null : at + 1
+}
 
 /** The shortcut actions that act on a composer rather than on mail. */
 export type ComposeAction =
@@ -264,8 +281,9 @@ export const shortcuts: Shortcut[] = [
   // q is the key other calendars open quick add with, and nothing else here
   // uses it; like every bare letter it never fires from inside a text field.
   { action: 'calendar-quick-add', combo: 'q', labelKey: 'shortcut.calendarQuickAdd' },
-  // letters rather than digits: mod+1 to 9 pick reading-pane tabs, and a digit
-  // with Shift or Alt types a symbol that would not match.
+  // letters rather than digits: mod+1 to 9 go to a space by its place in the
+  // navigation, and a digit with Shift or Alt types a symbol that would not
+  // match.
   { action: 'go-mail', combo: 'mod+shift+m', labelKey: 'shortcut.goMail' },
   { action: 'go-calendar', combo: 'mod+shift+c', labelKey: 'shortcut.goCalendar' },
   { action: 'go-contacts', combo: 'mod+shift+a', labelKey: 'shortcut.goContacts' },
@@ -324,6 +342,13 @@ export const shortcuts: Shortcut[] = [
   // alt with an arrow, since a focused chip has no text to move through.
   { action: 'compose-recipient-down', combo: 'alt+arrowdown', labelKey: 'recipients.moveDown' },
   { action: 'compose-recipient-up', combo: 'alt+arrowup', labelKey: 'recipients.moveUp' },
+  // the keys macOS apps go back and forward with; elsewhere the browser's
+  // alt and an arrow work as well.
+  { action: 'nav-back', combo: 'mod+[', alt: isMac ? undefined : 'alt+arrowleft', labelKey: 'shortcut.navBack', newDesignOnly: true },
+  { action: 'nav-forward', combo: 'mod+]', alt: isMac ? undefined : 'alt+arrowright', labelKey: 'shortcut.navForward', newDesignOnly: true },
+  // the digits a browser picks tabs with. Last in the list, so a key someone
+  // already gave another action keeps doing that.
+  ...spaceNumberActions.map((action, i): Shortcut => ({ action, combo: `mod+${i + 1}`, labelKey: `shortcut.goSpace${i + 1}`, newDesignOnly: true })),
 ]
 
 // ParsedCombo is a combo broken into its modifier flags and final key.
