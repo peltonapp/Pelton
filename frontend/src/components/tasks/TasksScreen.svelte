@@ -26,6 +26,7 @@
     taskSettings,
     taskSeed,
     taskFocus,
+    openTaskId,
     taskForContact,
     taskConflict,
     taskClock,
@@ -96,6 +97,7 @@
   $: visible = filter.trim() ? scoped.filter((x) => matchesTask(x, filter)) : scoped
   $: rows = taskRows(visible, sort, !(scope.kind === 'smart' && scope.key === 'completed'))
   $: selected = $tasks.find((x) => x.id === selectedId) ?? null
+  $: openTaskId.set(selected?.id ?? null)
   $: subtasks = selected ? $tasks.filter((x) => x.listId === selected?.listId && x.parent === selected?.uid) : []
   $: currentList = scope.kind === 'list' ? $taskLists.find((l) => scope.kind === 'list' && l.id === scope.id) : undefined
   $: targetList = currentList && !currentList.readOnly ? currentList.id : defaultListId($taskLists, $taskSettings)
@@ -152,6 +154,7 @@
     unregister?.()
     stopSearch?.()
     stopTasks?.()
+    openTaskId.set(null)
   })
 
   // a shortcut acts only while no dialog of the screen holds the keyboard.

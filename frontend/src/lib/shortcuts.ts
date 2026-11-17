@@ -130,6 +130,9 @@ export type ShortcutAction =
   | 'notes-graph'
   // the spaces by their place in the navigation, hidden ones skipped.
   | SpaceNumberAction
+  // back and forward through the places visited in this window.
+  | 'nav-back'
+  | 'nav-forward'
   // composer actions of the new design. They act on the composer that last
   // had focus, so they carry a modifier and work while typing.
   | ComposeAction
@@ -339,6 +342,10 @@ export const shortcuts: Shortcut[] = [
   // alt with an arrow, since a focused chip has no text to move through.
   { action: 'compose-recipient-down', combo: 'alt+arrowdown', labelKey: 'recipients.moveDown' },
   { action: 'compose-recipient-up', combo: 'alt+arrowup', labelKey: 'recipients.moveUp' },
+  // the keys macOS apps go back and forward with; elsewhere the browser's
+  // alt and an arrow work as well.
+  { action: 'nav-back', combo: 'mod+[', alt: isMac ? undefined : 'alt+arrowleft', labelKey: 'shortcut.navBack', newDesignOnly: true },
+  { action: 'nav-forward', combo: 'mod+]', alt: isMac ? undefined : 'alt+arrowright', labelKey: 'shortcut.navForward', newDesignOnly: true },
   // the digits a browser picks tabs with. Last in the list, so a key someone
   // already gave another action keeps doing that.
   ...spaceNumberActions.map((action, i): Shortcut => ({ action, combo: `mod+${i + 1}`, labelKey: `shortcut.goSpace${i + 1}`, newDesignOnly: true })),

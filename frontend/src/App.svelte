@@ -205,6 +205,16 @@
   import { startProjects, fileMailRequest } from './stores/projects'
   import { pickProjectFor } from './lib/projectpicker'
   import './lib/palette-feeds'
+  import './lib/palette-navhistory'
+  import './lib/location-mail'
+  import './lib/location-calendar'
+  import './lib/location-tasks'
+  import './lib/location-projects'
+  import './lib/location-contacts'
+  import './lib/location-notes'
+  import './lib/location-feeds'
+  import './lib/location-chat'
+  import { startNavHistory, clearNavHistory, goBack, goForward } from './stores/navhistory'
   import { startFeeds, feedFocus } from './stores/feeds'
   import { startTasks, toggleDone, tasks as taskStore, taskFromMailRequest } from './stores/tasks'
   import { createTasksFromMail, openTask } from './lib/taskmail'
@@ -515,6 +525,34 @@
     stopNotes = undefined
   }
   onDestroy(() => stopNotes?.())
+
+  // back and forward follow the places visited in the new design.
+  let stopNav: (() => void) | undefined
+  $: if (!classic && !stopNav) {
+    stopNav = startNavHistory()
+  } else if (classic && stopNav) {
+    stopNav()
+    stopNav = undefined
+  }
+  onDestroy(() => stopNav?.())
+
+  // the side buttons of a mouse go back and forward, where the webview
+  // reports them; the press is taken so the webview does not act on it too.
+  function onNavMouseDown(event: MouseEvent): void {
+    if (!classic && (event.button === 3 || event.button === 4)) {
+      event.preventDefault()
+    }
+  }
+
+  function onNavMouseUp(event: MouseEvent): void {
+    if (classic || (event.button !== 3 && event.button !== 4)) {
+      return
+    }
+    event.preventDefault()
+    if (!overlayOpen) {
+      void (event.button === 3 ? goBack() : goForward())
+    }
+  }
 
   // the feeds store feeds the rail's unread dot, so it runs alongside.
   let stopFeeds: (() => void) | undefined
@@ -1350,6 +1388,16 @@
       case 'undo-history':
         historyOpen.update((open) => !open)
         break
+      case 'nav-back':
+        if (!classic && !overlayOpen) {
+          void goBack()
+        }
+        break
+      case 'nav-forward':
+        if (!classic && !overlayOpen) {
+          void goForward()
+        }
+        break
       case 'toggle-low-power':
         setLowPowerMode(!$prefs.lowPowerMode)
         break
@@ -1988,6 +2036,11 @@
     if (action === 'next-split' || action === 'prev-split') {
       return
     }
+    // an editor that already used the keys (indenting on mod+[, say) keeps
+    // them, and alt with an arrow moves through a text field's words.
+    if ((action === 'nav-back' || action === 'nav-forward') && (event.defaultPrevented || (event.altKey && isEditableTarget(event.target)))) {
+      return
+    }
     if (action) {
       // a binding that types a character must not hijack typing in a field.
       if (comboTypes($bindings[action]) && isEditableTarget(event.target)) {
@@ -2073,6 +2126,7 @@
     openMessageId.set(null)
     clearAllTabs()
     clearSelection()
+    clearNavHistory()
     await loadProfiles()
     await initPrefs()
     await loadSidebar()
@@ -2127,7 +2181,7 @@
   }
 </script>
 
-<svelte:window on:keydown={onKeydown} on:contextmenu={onContextMenu} on:resize={refreshFullscreen} bind:innerWidth={windowWidth} />
+<svelte:window on:keydown={onKeydown} on:mousedown={onNavMouseDown} on:mouseup={onNavMouseUp} on:contextmenu={onContextMenu} on:resize={refreshFullscreen} bind:innerWidth={windowWidth} />
 
 <!-- macOS with no in-app menu bar: an empty top row for the traffic lights, and
      a matching strip above every overlay so the window can still be dragged

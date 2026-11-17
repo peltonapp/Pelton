@@ -66,6 +66,9 @@ export const board = writable<ProjectBoard | null>(null)
 /** A card to open once its board shows, by task UID. */
 export const cardFocus = writable<string | null>(null)
 
+/** The uid of the card open on the board on screen, for back and forward. */
+export const openCardUid = writable<string | null>(null)
+
 /** Asks the Projects space to open the new-project dialog when it shows. */
 export const newProjectRequest = writable<boolean>(false)
 

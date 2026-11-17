@@ -256,6 +256,8 @@ export function buildSheet(ctx: SheetContext, src: SheetSource): SheetGroup[] {
     items: items([
       item('command-palette'),
       item('search'),
+      item('nav-back'),
+      item('nav-forward'),
       ...ctx.spaces.filter((s) => s !== ctx.space).map(spaceItem),
       ...(ctx.space !== 'calendar' ? [item('calendar-quick-add')] : []),
       ...(mail ? [item('next-pane'), item('prev-pane'), item('focus-sidebar'), item('focus-list'), item('focus-reader')] : []),

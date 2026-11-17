@@ -64,6 +64,9 @@ export const taskFromMailRequest = writable<boolean>(false)
 /** A task to show when the Tasks screen opens, set from elsewhere in the app. */
 export const taskFocus = writable<number | null>(null)
 
+/** The task selected on the Tasks screen while it is up, for back and forward. */
+export const openTaskId = writable<number | null>(null)
+
 /** A person to start a new task for, set from the contacts screen. */
 export const taskForContact = writable<{ name: string; email: string } | null>(null)
 
