@@ -19,10 +19,18 @@ import moveIcon from '@phosphor-icons/core/assets/duotone/folder-open-duotone.sv
 import spamIcon from '@phosphor-icons/core/assets/duotone/warning-octagon-duotone.svg?raw'
 import projectIcon from '@phosphor-icons/core/assets/duotone/kanban-duotone.svg?raw'
 import taskIcon from '@phosphor-icons/core/assets/duotone/check-square-duotone.svg?raw'
-import type { ShortcutAction } from './shortcuts'
+import { scriptAction, type ShortcutAction } from './shortcuts'
+import { scriptIcon } from './scripticons'
+import type { PlacedScript } from './scripting'
+
+/** A script placed on the row buttons or the swipes: "script:" and its id. */
+export type ScriptRowActionId = `script:${number}`
 
 /** An action a row offers as a quick button or a swipe. */
-export type RowActionId =
+export type RowActionId = BuiltinRowActionId | ScriptRowActionId
+
+/** The row actions the app itself provides. */
+export type BuiltinRowActionId =
   | 'archive'
   | 'delete'
   | 'done'
@@ -37,7 +45,7 @@ export type RowActionId =
   | 'task'
 
 /** Every row action, in the order the settings list them. */
-export const rowActionIds: readonly RowActionId[] = [
+export const rowActionIds: readonly BuiltinRowActionId[] = [
   'archive',
   'delete',
   'done',
@@ -74,6 +82,8 @@ export interface RowActionView {
   id: RowActionId
   /** Localization key of what pressing it does now. */
   labelKey: string
+  /** A name shown instead of the label key, for a script. */
+  label?: string
   /** Raw Phosphor svg. */
   icon: string
   /** The shortcut it mirrors, for the tooltip. */
@@ -84,9 +94,11 @@ export interface RowActionView {
 
 /**
  * Describes an action for a row in a given state: a toggle names the way it
- * would go, so a read row offers "Mark unread".
+ * would go, so a read row offers "Mark unread". A script is described from
+ * the scripts placed where it is used; one that is not among them has no
+ * name and the default icon.
  */
-export function rowActionView(id: RowActionId, s: RowActionState): RowActionView {
+export function rowActionView(id: RowActionId, s: RowActionState, scripts: readonly PlacedScript[] = []): RowActionView {
   const view = (labelKey: string, icon: string, shortcut: ShortcutAction, danger = false): RowActionView => ({
     id,
     labelKey,
@@ -94,7 +106,12 @@ export function rowActionView(id: RowActionId, s: RowActionState): RowActionView
     shortcut,
     danger,
   })
-  switch (id) {
+  const scriptId = scriptRowActionId(id)
+  if (scriptId !== null) {
+    const script = scripts.find((p) => p.scriptId === scriptId)
+    return { ...view('', scriptIcon(script?.options.icon), scriptAction(scriptId)), label: script?.name ?? '' }
+  }
+  switch (id as BuiltinRowActionId) {
     case 'archive':
       return view('action.archive', archiveIcon, 'archive')
     case 'delete':
@@ -125,13 +142,38 @@ export function rowActionView(id: RowActionId, s: RowActionState): RowActionView
 }
 
 /** The name an action carries in settings, where no row state applies. */
-export function rowActionSettingKey(id: RowActionId): string {
+export function rowActionSettingKey(id: BuiltinRowActionId): string {
   return `rowActions.action.${id}`
+}
+
+/** The row action id of a script. */
+export function scriptRowAction(scriptId: number): ScriptRowActionId {
+  return `script:${scriptId}`
+}
+
+/** The script a row action runs, or null for an action of the app's own. */
+export function scriptRowActionId(id: string): number | null {
+  const m = /^script:(\d+)$/.exec(id)
+  return m ? Number(m[1]) : null
 }
 
 /** Whether a string names a row action. */
 export function isRowAction(value: string): value is RowActionId {
-  return (rowActionIds as readonly string[]).includes(value)
+  return (rowActionIds as readonly string[]).includes(value) || scriptRowActionId(value) !== null
+}
+
+/** A swipe action, or 'none' when it is a script that is not among the placed ones. */
+export function placedSwipeAction(action: string, scripts: readonly PlacedScript[]): string {
+  const scriptId = scriptRowActionId(action)
+  return scriptId !== null && !scripts.some((p) => p.scriptId === scriptId) ? 'none' : action
+}
+
+/** The actions with the scripts that are not among the placed ones left out. */
+export function placedRowActions(ids: readonly RowActionId[], scripts: readonly PlacedScript[]): RowActionId[] {
+  return ids.filter((id) => {
+    const scriptId = scriptRowActionId(id)
+    return scriptId === null || scripts.some((p) => p.scriptId === scriptId)
+  })
 }
 
 /**
