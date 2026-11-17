@@ -115,6 +115,17 @@ func (s *Server) Running() bool {
 	return s.httpSrv != nil
 }
 
+// Addr returns the address the server listens on, "" when it is not running.
+// It tells a caller that started it on port 0 which port it got.
+func (s *Server) Addr() string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.ln == nil {
+		return ""
+	}
+	return s.ln.Addr().String()
+}
+
 // Start begins listening on cfg.Addr. It fails if the token is empty (an
 // unauthenticated local mail endpoint is never acceptable), if the address is
 // not loopback, or if the port is already in use. Calling Start while already

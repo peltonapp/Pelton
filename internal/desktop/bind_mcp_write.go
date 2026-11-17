@@ -2,6 +2,7 @@ package desktop
 
 import (
 	"fmt"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -24,10 +25,21 @@ func mcpPermissionKey(tool string) string {
 // added in a later version arrives switched off rather than inheriting a yes.
 func (a *App) mcpPermissions() mcpserver.Permissions {
 	perms := mcpserver.Permissions{}
-	for _, tool := range mcpserver.WriteTools {
+	for _, tool := range mcpPermissionTools() {
 		perms[tool] = a.boolSetting(mcpPermissionKey(tool), false)
 	}
 	return perms
+}
+
+// mcpPermissionTools is every tool behind a switch, in the order the settings
+// ui lists them. The template tools join once the scripts adapter offers
+// templates.
+func mcpPermissionTools() []string {
+	tools := slices.Concat(mcpserver.WriteTools, mcpserver.ScriptTools)
+	if _, ok := any(&mcpScripts{}).(mcpserver.ScriptTemplates); ok {
+		tools = append(tools, mcpserver.ScriptTemplateTools...)
+	}
+	return tools
 }
 
 // MCPPermissionDTO is one write tool as the settings ui shows it.
@@ -40,8 +52,9 @@ type MCPPermissionDTO struct {
 // MCPPermissions returns every write tool and whether it is permitted.
 func (a *App) MCPPermissions() []MCPPermissionDTO {
 	perms := a.mcpPermissions()
-	out := make([]MCPPermissionDTO, 0, len(mcpserver.WriteTools))
-	for _, tool := range mcpserver.WriteTools {
+	tools := mcpPermissionTools()
+	out := make([]MCPPermissionDTO, 0, len(tools))
+	for _, tool := range tools {
 		out = append(out, MCPPermissionDTO{
 			Tool:    tool,
 			Group:   mcpserver.ToolGroup[tool],
@@ -58,8 +71,8 @@ func (a *App) MCPPermissions() []MCPPermissionDTO {
 // copy of Pelton most often, it fails and leaves the server down, so flipping a
 // switch would take the whole feature with it.
 func (a *App) SetMCPPermission(tool string, allowed bool) error {
-	if _, known := mcpserver.ToolGroup[tool]; !known {
-		return fmt.Errorf("desktop: %q is not a write tool", tool)
+	if !slices.Contains(mcpPermissionTools(), tool) {
+		return fmt.Errorf("desktop: %q is not a tool with a switch", tool)
 	}
 	if err := a.store.Set(a.ctx, mcpPermissionKey(tool), strconv.FormatBool(allowed)); err != nil {
 		return err

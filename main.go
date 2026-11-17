@@ -27,6 +27,12 @@ var licenseManifest string
 //go:embed LICENSE
 var programLicense string
 
+// englishStrings is the frontend's English catalog, which the scripting
+// reference an MCP agent reads takes its descriptions from.
+//
+//go:embed frontend/src/lib/locales/en.ts
+var englishStrings string
+
 // trayIcon is the tray icon for Windows and Linux (see the desktop package's
 // tray_windows.go and tray_linux.go). Embedded on every platform - it is a
 // few KB - but unused on macOS. nightlyTrayIcon is the nightly build's own
@@ -64,6 +70,7 @@ func main() {
 		Channel:         channel,
 		LicenseManifest: licenseManifest,
 		ProgramLicense:  programLicense,
+		EnglishStrings:  englishStrings,
 		TrayIcon:        tray,
 		DemoMode:        demoMode,
 	}); err != nil {
