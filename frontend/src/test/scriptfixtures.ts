@@ -33,6 +33,53 @@ export const catalogFixture: ScriptCatalog = {
   paramTypes: ['string'],
 }
 
+const messageParam = { name: 'message', type: 'ref' as const, labelKey: 'scripts.param.message', valueType: 'message', defaultRef: 'event.message' }
+const opParam = {
+  name: 'op',
+  type: 'enum' as const,
+  labelKey: 'scripts.param.op',
+  required: true,
+  default: 'contains',
+  options: [
+    { value: 'contains', labelKey: 'scripts.option.contains' },
+    { value: 'equals', labelKey: 'scripts.option.equals' },
+  ],
+}
+const textCond = (id: string) => ({
+  id,
+  labelKey: `scripts.cond.${id}`,
+  descKey: '',
+  category: 'mail',
+  params: [messageParam, opParam, { name: 'value', type: 'string' as const, labelKey: 'scripts.param.value', required: true }],
+  lua: `text.test({{message}}.x, {{op}}, {{value}})`,
+})
+
+/** A registry with block conditions, actions and a value type, for the block editor tests. */
+export const blockCatalog: ScriptCatalog = {
+  ...catalogFixture,
+  triggers: [
+    { id: 'manual', labelKey: 'scripts.trigger.manual', descKey: '', category: 'manual', params: [], event: [] },
+    { id: 'mail.arrived', labelKey: 'scripts.trigger.mail.arrived', descKey: '', category: 'mail', params: [], event: [{ name: 'message', type: 'message', labelKey: '', label: 'Message' }], permission: 'mail.read' },
+    { id: 'mail.before_send', labelKey: 'scripts.trigger.mail.before_send', descKey: '', category: 'mail', params: [], event: [] },
+  ],
+  conditions: [textCond('mail.from'), textCond('mail.subject'), { ...textCond('mail.header'), params: [messageParam, { name: 'name', type: 'string', labelKey: 'scripts.param.name', required: true }, opParam, { name: 'value', type: 'string', labelKey: 'scripts.param.value', required: true }] }],
+  actions: [
+    { id: 'mail.move', labelKey: 'scripts.action.mail.move', descKey: '', category: 'mail', permission: 'mail.modify', params: [messageParam, { name: 'folder', type: 'folder', labelKey: 'scripts.param.folder', required: true }], lua: 'mail.move({{message}}, {{folder}})' },
+    { id: 'mail.create_draft', labelKey: 'scripts.action.mail.create_draft', descKey: '', category: 'mail', permission: 'mail.compose', params: [{ name: 'subject', type: 'string', labelKey: 'scripts.param.subject' }], outputs: [{ name: 'id', type: 'number', labelKey: 'scripts.field.id', label: 'id' }], lua: 'mail.draft({subject = {{subject}}})' },
+    { id: 'notify.toast', labelKey: 'scripts.action.notify.toast', descKey: '', category: 'app', params: [{ name: 'text', type: 'string', labelKey: 'scripts.param.text', required: true }], lua: 'notify.toast({{text}})' },
+    { id: 'text.check', labelKey: '', label: 'Check text', descKey: '', category: 'utility', params: [{ name: 'pattern', type: 'regex', labelKey: 'scripts.param.pattern', required: true }], lua: 'text.matches("", {{pattern}})' },
+    { id: 'outgoing.cancel', labelKey: 'scripts.action.outgoing.cancel', descKey: '', category: 'mail', params: [{ name: 'reason', type: 'string', labelKey: 'scripts.param.reason' }], lua: 'outgoing.cancel({{reason}})', triggers: ['mail.before_send'] },
+  ],
+  valueTypes: [
+    { id: 'message', labelKey: 'scripts.type.message', descKey: '', category: 'mail', fields: [{ name: 'subject', type: 'string', labelKey: 'scripts.field.subject' }, { name: 'from', type: 'address', labelKey: 'scripts.field.from' }] },
+  ],
+  permissions: [
+    ...catalogFixture.permissions,
+    { id: 'mail.modify', labelKey: 'scripts.perm.mail.modify', descKey: '', category: 'mail', risk: 'medium' },
+    { id: 'mail.compose', labelKey: 'scripts.perm.mail.compose', descKey: '', category: 'mail', risk: 'low' },
+  ],
+}
+
 /** A switched off Lua mail rule, with the given fields replaced. */
 export function scriptFixture(over: Partial<Script> = {}): Script {
   return {
