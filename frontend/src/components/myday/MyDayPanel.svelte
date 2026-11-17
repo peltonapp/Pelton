@@ -456,10 +456,6 @@
     transition: background-color var(--motion-fast) var(--ease-out);
   }
 
-  .tasks:global(.maildrop-over) {
-    background: var(--selection-bg);
-  }
-
   h3 {
     margin: 0 0 var(--space-1);
     color: var(--text-secondary);

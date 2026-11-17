@@ -1,6 +1,7 @@
 // undohistory.ts is the one list of recent reversible actions: archive, move,
-// delete, read and flag changes, done, mute, pin, snooze, spam and a send still
-// inside its undo window. It lives for the session only and keeps the last
+// delete, read and flag changes, done, mute, pin, snooze, spam, a send still
+// inside its undo window, mail filed under a project, and tasks and events
+// made from mail. It lives for the session only and keeps the last
 // fifty. Permanent actions (empty trash, permanent delete, a send past its
 // window) are never recorded.
 //
@@ -30,6 +31,9 @@ export type HistoryKind =
   | 'mute'
   | 'snooze'
   | 'send'
+  | 'project'
+  | 'task'
+  | 'event'
 
 /** The most entries kept; the oldest fall off first. */
 export const historyCap = 50
@@ -187,7 +191,7 @@ export function newestHistoryId(): number {
 }
 
 // actions that already put up their own undo toast.
-const ownToast = new Set<HistoryKind>(['pin', 'mute', 'send'])
+const ownToast = new Set<HistoryKind>(['pin', 'mute', 'send', 'project', 'task', 'event'])
 
 /** How long an offered undo stays up. */
 export const undoToastTTL = 6000

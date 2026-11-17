@@ -65,13 +65,14 @@ async function moveAll(moves: ArchivedMessage[], forward: boolean): Promise<void
   }
 }
 
-// recordArchivedBatch remembers a whole bulk archive or move as one undo step.
-export function recordArchivedBatch(entries: ArchivedMessage[], record: MoveRecord = {}): void {
+// recordArchivedBatch remembers a whole bulk archive or move as one undo step,
+// and returns the history entry's id, or null when there was nothing to record.
+export function recordArchivedBatch(entries: ArchivedMessage[], record: MoveRecord = {}): number | null {
   if (entries.length === 0) {
-    return
+    return null
   }
   const kind = record.kind ?? 'archive'
-  recordHistory({
+  return recordHistory({
     kind,
     label: record.label ?? get(t)(kind === 'done' ? 'history.kind.done' : 'history.kind.archive'),
     detail: subjectDetail(entries.map((e) => e.summary.subject)),

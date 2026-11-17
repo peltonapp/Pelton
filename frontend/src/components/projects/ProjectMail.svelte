@@ -165,10 +165,6 @@
     min-width: 0;
   }
 
-  .mail:global(.maildrop-over) {
-    box-shadow: inset 0 0 0 1px var(--accent);
-  }
-
   .tools {
     display: flex;
     align-items: center;

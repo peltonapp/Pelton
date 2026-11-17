@@ -13,6 +13,7 @@ import type { Slot } from './daypeek'
 import { calendarFocus, calendarSeed, calendarSettings, calendarView, calendars, defaultCalendarId, loadCalendars, removeEvent, saveEvent } from '../stores/calendar'
 import { openSpace } from '../stores/space'
 import { errorMessage, pushActions, toastError } from '../stores/toast'
+import { recordHistory, subjectDetail, undoEntry } from '../stores/undohistory'
 import { newDraft } from '../components/calendar/occurrence'
 
 /** Shows a day in the calendar's day view. */
@@ -61,6 +62,7 @@ export async function eventFromMailAt(messageIds: number[], slot: Slot): Promise
   }
   const reminder = get(calendarSettings).defaultReminderMinutes
   const made: number[] = []
+  const summaries: string[] = []
   for (const id of messageIds) {
     try {
       const mail = await mailEventSource(id)
@@ -68,6 +70,7 @@ export async function eventFromMailAt(messageIds: number[], slot: Slot): Promise
       const result = await saveEvent(draft)
       if (result) {
         made.push(result.event.id)
+        summaries.push(mail.subject)
       }
     } catch (err) {
       toastError(errorMessage(err))
@@ -77,19 +80,23 @@ export async function eventFromMailAt(messageIds: number[], slot: Slot): Promise
     return made
   }
   const message = made.length > 1 ? tr('quickAdd.createdMany').replace('{n}', String(made.length)) : tr('quickAdd.created')
+  const entry = recordHistory({
+    kind: 'event',
+    label: tr('history.kind.event'),
+    detail: subjectDetail(made.length === 1 ? [summaries[0] ?? ''] : made.map(() => '')),
+    count: made.length,
+    touches: made.map((id) => `event:${id}`),
+    undo: async () => {
+      for (const id of made) {
+        await removeEvent(id)
+      }
+    },
+  })
   pushActions(
     'success',
     message,
     [
-      {
-        label: tr('quickAdd.undo'),
-        run: () =>
-          void (async () => {
-            for (const id of made) {
-              await removeEvent(id)
-            }
-          })(),
-      },
+      { label: tr('quickAdd.undo'), run: () => void undoEntry(entry) },
       { label: tr('quickAdd.open'), run: () => openDayInCalendar(slot.start) },
     ],
     8000,

@@ -25,7 +25,7 @@
     IconRefreshOff,
   } from '@tabler/icons-svelte'
   import SidebarRow from './SidebarRow.svelte'
-  import { maildrop } from '../../stores/maildrag'
+  import { maildrop, maildragSpring } from '../../stores/maildrag'
   import { moveToFolder } from '../../lib/messageactions'
   import type { MessageSummary } from '../../lib/types'
   import Self from './FolderNode.svelte'
@@ -180,11 +180,19 @@
     accepts: (items: MessageSummary[]) =>
       items.every((m) => m.accountId === folder.accountId) && items.some((m) => m.folderId !== folder.id),
     onDrop: (items: MessageSummary[]) => void moveToFolder(items, folder),
+    hint: () => $t('folders.drop.move').replace('{folder}', folder.name),
+  }
+
+  // mail held over a closed folder opens it, so a subfolder can take the drop.
+  function springOpen(): void {
+    if (children.length > 0) {
+      expanded = true
+    }
   }
 </script>
 
 <div class="node" data-reorder-id={folder.id}>
-  <div use:maildrop={mailDrop}>
+  <div use:maildrop={mailDrop} use:maildragSpring={springOpen}>
   <SidebarRow
     label={folder.name}
     title={unsynced ? $t('folders.notSyncing') : ''}

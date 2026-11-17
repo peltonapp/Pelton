@@ -86,6 +86,9 @@ export function spaceDrop(key: Space): MailDropOptions {
         const tr = get(t)
         return get(space) === 'notes' && get(activeNote) ? tr('notes.drop.insert') : tr('notes.drop.new')
       }
+      if (key === 'contacts') {
+        return get(t)('contacts.drop.new')
+      }
       return ''
     },
   }

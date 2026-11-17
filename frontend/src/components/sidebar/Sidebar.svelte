@@ -26,6 +26,7 @@
   import { tip } from '../../lib/tip'
   import { selection } from '../../stores/selection'
   import { reorder, type ReorderDetail } from '../../lib/reorder'
+  import { maildragScroll } from '../../stores/maildrag'
   import { reorderAccounts } from '../../lib/api'
   import { toastError, errorMessage } from '../../stores/toast'
   import type { View } from '../../lib/types'
@@ -112,7 +113,7 @@
     {/if}
   </div>
 
-  <div class="scroll">
+  <div class="scroll" use:maildragScroll>
     {#if $sidebar.status === 'loading' && !$sidebar.data}
       <Spinner label={$t('sidebar.loading.mailboxes')} />
     {:else if $sidebar.status === 'error'}
