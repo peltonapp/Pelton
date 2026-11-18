@@ -7,6 +7,12 @@ export const loadComposer = () => import('../components/compose/Composer2.svelte
 /** loadClassicCompose loads the Classic design's compose window. */
 export const loadClassicCompose = () => import('../components/compose/Compose.svelte')
 
+/** loadAttachmentsBrowser loads the New design's attachments browser. */
+export const loadAttachmentsBrowser = () => import('../components/attachments/AttachmentsBrowser.svelte')
+
+/** loadMenuBarEditor loads the in-place editor of the in-app menu bar. */
+export const loadMenuBarEditor = () => import('../components/common/MenuBarEditor.svelte')
+
 /** warmUp runs each loader once the window is idle, ignoring failures. */
 export function warmUp(loaders: (() => Promise<unknown>)[]): void {
   const load = () => {

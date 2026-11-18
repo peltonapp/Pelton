@@ -50,7 +50,7 @@
   import { initProgress } from './stores/progress'
   import { composeSessions, openCompose, openComposeWith, initComposePrefs, openReply, openForward, requestComposeClose, setForcedComposeMode, updateCompose } from './stores/compose'
   import { routeComposeSessions } from './stores/composeroute'
-  import { loadClassicCompose, loadComposer, warmUp } from './lib/lazyload'
+  import { loadAttachmentsBrowser, loadClassicCompose, loadComposer, loadMenuBarEditor, warmUp } from './lib/lazyload'
   import ComposeTabLayer from './components/compose/ComposeTabLayer.svelte'
   import { openSnooze, openSnoozeMany } from './stores/snooze'
   import { patchInList } from './stores/messages'
@@ -194,7 +194,6 @@
   import './lib/palette-contacts'
   import './lib/palette-attachments'
   import './lib/palette-sieve'
-  import AttachmentsBrowser from './components/attachments/AttachmentsBrowser.svelte'
   import { attachmentsOpen, toggleAttachments } from './stores/attachments'
   import { setSenderPanel } from './stores/prefs'
   import { toggleReadingView } from './stores/readingview'
@@ -668,7 +667,11 @@
     await initPrefs()
     await initSidebarState()
     await initComposePrefs()
-    warmUp([get(prefs).design === 'classic' ? loadClassicCompose : loadComposer])
+    warmUp([
+      get(prefs).design === 'classic' ? loadClassicCompose : loadComposer,
+      ...(get(prefs).design === 'classic' ? [] : [loadAttachmentsBrowser]),
+      ...(showMenuBar ? [loadMenuBarEditor] : []),
+    ])
     void initShortcuts()
     void initCoach().then((stop) => unsubscribers.push(stop))
     void initFirstTips()
@@ -2352,7 +2355,9 @@
               : `grid-template-columns: ${listW}px 0 minmax(0, 1fr)`}
         >
           {#if $attachmentsOpen}
-            <AttachmentsBrowser />
+            {#await loadAttachmentsBrowser() then m}
+              <svelte:component this={m.default} />
+            {/await}
           {:else}
             <MessageList />
             {#if stacked}

@@ -11,7 +11,7 @@
   import { createEventDispatcher, tick } from 'svelte'
   import ThemedIcon from './ThemedIcon.svelte'
   import MenuGlyph from './MenuGlyph.svelte'
-  import MenuBarEditor from './MenuBarEditor.svelte'
+  import { loadMenuBarEditor } from '../../lib/lazyload'
   import { IconChevronRight } from '@tabler/icons-svelte'
   import { t, shortcutLabel, isMac } from '../../lib/i18n'
   import { assignAccessKeys, splitAccessKey } from '../../lib/accesskeys'
@@ -307,7 +307,9 @@
 <svelte:window on:keydown={onWindowKeydown} on:keyup={onWindowKeyup} on:blur={onWindowBlur} />
 
 {#if $menuBarEditing}
-  <MenuBarEditor />
+  {#await loadMenuBarEditor() then m}
+    <svelte:component this={m.default} />
+  {/await}
 {:else}
   {#if openKey !== null}
     <!-- svelte-ignore a11y-click-events-have-key-events a11y-no-static-element-interactions -->
