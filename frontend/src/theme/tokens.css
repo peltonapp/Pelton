@@ -133,6 +133,8 @@
   --compose-send-width: 92px;
   --popover-width: 340px;
   --popover-max-height: 440px;
+  /* the smallest press target a control gets, drawn or not (wcag 2.5.8). */
+  --target-min: 24px;
   /* a pressed button sinks by this much. */
   --press-scale: 0.96;
 
