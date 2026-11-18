@@ -8,7 +8,16 @@ import (
 	"testing"
 
 	"github.com/peltonapp/Pelton/internal/scripting"
+	"github.com/peltonapp/Pelton/internal/scripting/scriptingtest"
 )
+
+// TestAppRegistryIsLocalized checks the registry as the app builds it, every
+// package's entries included: each key is in en.ts and each entry has its
+// English text.
+func TestAppRegistryIsLocalized(t *testing.T) {
+	a, _ := newScriptTestApp(t)
+	scriptingtest.Localized(t, a.scripts.Registry())
+}
 
 func TestScriptsListAFolderAndTestMatches(t *testing.T) {
 	a, id := newScriptTestApp(t)
