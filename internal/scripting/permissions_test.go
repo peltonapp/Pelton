@@ -128,27 +128,3 @@ func TestEnglishMatchesFrontend(t *testing.T) {
 		}
 	}
 }
-
-func TestReference(t *testing.T) {
-	c := testRegistry(t).Catalog()
-	md := Reference(c, ReferenceMarkdown)
-	for _, want := range []string{
-		"# Pelton scripting reference", "## Modules", "### mail",
-		"`mail.move(message: message?, folder: folder?)`", "needs mail.modify",
-		"`mail.send(draft: draft?) -> {id: number}`", "asks the user first",
-		"### mail.arrived", "`event.message` message", "## Value types", "`subject` string",
-		"`body` text, read on first use through mail.body", "## Permissions", "`mail.delete` ", "high risk",
-		"`mail.move` Move", "Needs mail.modify.", `require("name")`,
-	} {
-		if !strings.Contains(md, want) {
-			t.Errorf("markdown reference lacks %q", want)
-		}
-	}
-	text := Reference(c, ReferenceText)
-	if strings.Contains(text, "## ") || strings.Contains(text, "`") {
-		t.Error("the text reference has markdown in it")
-	}
-	if !strings.Contains(text, "Modules\n-------") || !strings.Contains(text, "mail.move(message: message?, folder: folder?)") {
-		t.Errorf("text reference:\n%s", text[:min(len(text), 2000)])
-	}
-}

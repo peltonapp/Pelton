@@ -115,6 +115,7 @@ table.insert(event.draft.bcc, "archive@example.test")`, scripting.PermMailSend)
 	if _, err := a.SetScriptEnabled(sc.ID, true, sc.Permissions); err != nil {
 		t.Fatal(err)
 	}
+	a.recipientConfirmer = &answerConfirm{allow: true}
 	req := ComposeRequest{AccountID: 1, Subject: "Hello", Text: "hi", To: []AddressDTO{{Name: "Bo", Email: "bo@example.test"}}}
 	out, err := a.beforeSendScripts(a.ctx, req)
 	if err != nil {
@@ -261,11 +262,5 @@ func TestQuestionWithoutWindowTakesTheDefault(t *testing.T) {
 	a.AnswerScriptAsk("nobody", "x", false)
 	if err := a.CancelScriptRun(12345); err == nil {
 		t.Fatal("cancelled a run that is not going")
-	}
-	if err := a.SetScriptAskSeconds(5); err == nil {
-		t.Fatal("accepted a five second wait")
-	}
-	if err := a.SetScriptAskSeconds(300); err != nil || a.ScriptAskSeconds() != 300 {
-		t.Fatalf("%v %d", err, a.ScriptAskSeconds())
 	}
 }

@@ -33,7 +33,7 @@
 
   async function copyMarkdown(): Promise<void> {
     try {
-      await navigator.clipboard.writeText(await scriptReference(true))
+      await navigator.clipboard.writeText(await scriptReference())
       toastSuccess($t('scripts.ref.copied'))
     } catch (err) {
       toastError(errorMessage(err))

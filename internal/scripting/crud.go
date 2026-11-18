@@ -105,14 +105,40 @@ func (s *Service) save(ctx context.Context, sc *Script) error {
 	return err
 }
 
+// ResetsApproval reports whether changing cur into next changes what the
+// user approved: the kind, the code, the trigger or the declared
+// permissions. The libraries a script requires are approved with it too; a
+// change to one of them resets the scripts that load it.
+func ResetsApproval(cur, next *Script) bool {
+	if cur.Kind != next.Kind || cur.Source != next.Source || cur.Trigger.Type != next.Trigger.Type {
+		return true
+	}
+	if blocksJSON(cur.Blocks) != blocksJSON(next.Blocks) {
+		return true
+	}
+	a, b := slices.Clone(cur.Permissions), slices.Clone(next.Permissions)
+	slices.Sort(a)
+	slices.Sort(b)
+	return !slices.Equal(slices.Compact(a), slices.Compact(b))
+}
+
+// revoke switches a script off and takes back its approvals and allowances.
+func revoke(sc *Script) {
+	sc.Enabled, sc.Approved, sc.AllowUnasked = false, nil, nil
+}
+
 // Update replaces a script's content: name, description, kind, code,
-// trigger, declared permissions and settings schema. Its origin, switch,
-// approvals and allowances stay; a permission the user has not approved
-// switches it off until they do.
+// trigger, declared permissions and settings schema. Its origin stays. A
+// change to the code, the trigger or the permissions switches it off and
+// takes back its approvals and allowances, so the user approves the new
+// version; other changes keep them.
 func (s *Service) Update(ctx context.Context, next *Script) (*Script, error) {
 	cur, err := s.store.Get(ctx, next.ID)
 	if err != nil {
 		return nil, err
+	}
+	if ResetsApproval(cur, next) {
+		revoke(cur)
 	}
 	cur.Name, cur.Description, cur.Kind = next.Name, next.Description, next.Kind
 	cur.Source, cur.Blocks, cur.Trigger = next.Source, next.Blocks, next.Trigger

@@ -90,12 +90,22 @@ type Script struct {
 	LastRunAt time.Time
 }
 
+// The longest name and description a script may have; both show in menus,
+// toolbars and dialogs.
+const (
+	maxNameBytes        = 200
+	maxDescriptionBytes = 4000
+)
+
 // Validate checks a script against the registry: a name, a known trigger, a
 // kind with its code, declared permissions that exist, and a settings schema
 // that is well formed.
 func (s *Script) Validate(r *Registry) error {
 	if strings.TrimSpace(s.Name) == "" {
 		return fmt.Errorf("scripting: a script needs a name")
+	}
+	if len(s.Name) > maxNameBytes || len(s.Description) > maxDescriptionBytes {
+		return fmt.Errorf("scripting: a name is at most %d bytes and a description %d", maxNameBytes, maxDescriptionBytes)
 	}
 	t, ok := r.Trigger(s.Trigger.Type)
 	if !ok {

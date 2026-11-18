@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"html"
 	"slices"
@@ -47,10 +48,6 @@ const (
 // settingScriptLogDays is how many days of script runs the log keeps.
 const settingScriptLogDays = "scripts_log_days"
 
-// settingScriptAskSeconds is how long a question of a script nobody started
-// waits before it takes its default.
-const settingScriptAskSeconds = "scripts_ask_seconds"
-
 // scriptResultsKept is how many results stay ready for their buttons.
 const scriptResultsKept = 20
 
@@ -78,6 +75,9 @@ type scriptState struct {
 	// synced holds the accounts that finished a full sync in this session;
 	// mail a first sync brings in may have arrived while the app was closed.
 	synced sync.Map
+	// sentBy holds, by outbox id, the run that sent a message, so the
+	// after-send event it causes carries that run's chain depth and source.
+	sentBy sync.Map
 }
 
 type runJournal struct {
@@ -102,7 +102,6 @@ func (a *App) startScripts() {
 		OnChange:      func() { a.emit(EventScriptsChanged, nil) },
 		OnCatchUp:     a.onScriptCatchUp,
 		RetentionDays: func() int { return a.intSetting(settingScriptLogDays, scripting.DefaultRetentionDays) },
-		AskTimeout:    a.scriptAskTimeout,
 		OnProgress:    func(l scripting.LiveRun) { a.emit(EventScriptProgress, l) },
 	})
 	if err != nil {
@@ -197,7 +196,12 @@ func (a *App) scriptAfterSend(outboxID int64) {
 		return
 	}
 	req := v.(ComposeRequest)
-	a.scripts.Emit(scripting.Event{Trigger: scripting.TriggerAfterSend, Data: map[string]any{"draft": draftEvent(req)}})
+	ev := scripting.Event{Trigger: scripting.TriggerAfterSend, Data: map[string]any{"draft": draftEvent(req)}}
+	if by, ok := a.scriptState.sentBy.LoadAndDelete(outboxID); ok {
+		info := by.(scripting.RunInfo)
+		ev.Depth, ev.Source = info.Depth+1, info.ScriptID
+	}
+	a.scripts.Emit(ev)
 }
 
 // draftEvent is a message being written as the scripts see it.
@@ -282,12 +286,83 @@ func (a *App) beforeSendScripts(ctx context.Context, req ComposeRequest) (Compos
 		}
 		return req, fmt.Errorf("pelton: %s stopped this message", name)
 	}
-	for i := len(runs) - 1; i >= 0; i-- {
-		if runs[i].Event != nil {
-			return applyDraftEvent(req, runs[i].Event), nil
+	out := req
+	var changers []string
+	prev := draftEvent(req)
+	for _, r := range runs {
+		if r.Event == nil {
+			continue
+		}
+		next := applyDraftEvent(req, r.Event)
+		if recipientsText(next) != recipientsText(applyDraftEvent(req, map[string]any{"draft": prev})) {
+			name := fmt.Sprintf("script %d", r.ScriptID)
+			if sc, err := a.scripts.Script(ctx, r.ScriptID); err == nil {
+				name = sc.Name
+			}
+			changers = append(changers, name)
+		}
+		if d, ok := r.Event["draft"].(map[string]any); ok {
+			prev = d
+		}
+		out = next
+	}
+	if recipientsText(out) == recipientsText(req) {
+		return out, nil
+	}
+	if err := a.confirmRecipients(ctx, changers, req, out); err != nil {
+		return req, err
+	}
+	return out, nil
+}
+
+// recipientsText renders who a message goes to, one line per field, for
+// comparing and for the confirmation.
+func recipientsText(req ComposeRequest) string {
+	line := func(label string, list []AddressDTO) string {
+		addrs := make([]string, 0, len(list))
+		for _, ad := range list {
+			addrs = append(addrs, strings.ToLower(strings.TrimSpace(ad.Email)))
+		}
+		if len(addrs) == 0 {
+			addrs = []string{"(nobody)"}
+		}
+		return label + ": " + strings.Join(addrs, ", ")
+	}
+	return line("To", req.To) + "\n" + line("Cc", req.Cc) + "\n" + line("Bcc", req.Bcc)
+}
+
+// errRecipientsHeld is returned when before-send scripts changed the
+// recipients and the user did not confirm the change.
+var errRecipientsHeld = errors.New("pelton: a before-send script changed who this message goes to and it was not confirmed, so the message was not sent")
+
+// confirmRecipients asks the user about recipients the before-send scripts
+// changed, every time: no script setting, allowance or origin skips it. A
+// no, or no answer within the question timeout, holds the message: it is not
+// sent, and a message a script was sending is kept in Drafts as written.
+func (a *App) confirmRecipients(ctx context.Context, scripts []string, before, after ComposeRequest) error {
+	name := strings.Join(scripts, ", ")
+	summary := fmt.Sprintf("Before-send scripts changed who %q goes to.\n\nWritten to:\n%s\n\nWould now go to:\n%s",
+		before.Subject, recipientsText(before), recipientsText(after))
+	confirmer := a.recipientConfirmer
+	if confirmer == nil {
+		confirmer = &scriptConfirm{app: a}
+	}
+	askCtx, cancel := context.WithTimeout(ctx, scripting.DefaultAskTimeout)
+	defer cancel()
+	ans, err := confirmer.Confirm(askCtx, scripting.ConfirmRequest{
+		ScriptName: name, Function: "outgoing.recipients", Summary: summary, EveryTime: true,
+	})
+	if err == nil && ans.Allow {
+		return nil
+	}
+	held := errRecipientsHeld
+	if _, fromScript := scripting.RunInfoFrom(ctx); fromScript {
+		if id, derr := a.SaveDraft(0, before); derr == nil {
+			held = fmt.Errorf("%w; it is in Drafts (draft %d)", errRecipientsHeld, id)
 		}
 	}
-	return req, nil
+	a.emit(EventScriptToast, ScriptToastDTO{Script: name, Text: held.Error(), Level: "warning"})
+	return held
 }
 
 func (a *App) onScriptRun(sc *scripting.Script, r *scripting.Run) {
@@ -720,7 +795,7 @@ func (c *scriptConfirm) Confirm(ctx context.Context, req scripting.ConfirmReques
 		delete(st.confirms, id)
 		st.mu.Unlock()
 	}()
-	a.emit(EventScriptConfirm, ScriptConfirmDTO{ID: id, ScriptID: req.ScriptID, ScriptName: req.ScriptName, Function: req.Function, Summary: req.Summary})
+	a.emit(EventScriptConfirm, ScriptConfirmDTO{ID: id, ScriptID: req.ScriptID, ScriptName: req.ScriptName, Function: req.Function, Summary: req.Summary, EveryTime: req.EveryTime})
 	timer := time.NewTimer(scriptConfirmWait)
 	defer timer.Stop()
 	select {
@@ -739,11 +814,6 @@ func newScriptRequestID() (string, error) {
 		return "", err
 	}
 	return hex.EncodeToString(buf), nil
-}
-
-// scriptAskTimeout is how long a question of a script nobody started waits.
-func (a *App) scriptAskTimeout() time.Duration {
-	return time.Duration(a.intSetting(settingScriptAskSeconds, int(scripting.DefaultAskTimeout/time.Second))) * time.Second
 }
 
 // scriptAsk puts a running script's questions to the user through a dialog

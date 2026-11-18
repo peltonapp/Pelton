@@ -157,7 +157,7 @@ func (m *module) callTool(c *scripting.Call, t tool, args map[string]any) (strin
 	for i, p := range t.fn.Params {
 		pos[i] = args[p.Name]
 	}
-	res, err := c.Invoke(t.full, pos)
+	res, err := c.InvokeForModel(t.full, pos)
 	if err != nil {
 		if c.Ending() {
 			return "", true, err

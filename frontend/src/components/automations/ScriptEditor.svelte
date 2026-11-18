@@ -191,7 +191,7 @@
   async function test(): Promise<void> {
     busy = true
     try {
-      await runTest(input, testOn === 'open' ? ($visibleMessageId ?? 0) : 0, ai && askModel)
+      await runTest(input, testOn === 'open' ? ($visibleMessageId ?? 0) : 0, ai && askModel, script.id)
     } catch (err) {
       toastError(errorMessage(err))
     } finally {

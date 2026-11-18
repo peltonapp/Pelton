@@ -112,6 +112,7 @@ describe('ScriptEditor and AI', () => {
     await userEvent.click(screen.getByRole('checkbox', { name: /Ask the model/ }))
     await userEvent.click(screen.getByRole('button', { name: 'Run a test' }))
     expect(api.testScriptAskingAI).toHaveBeenCalledTimes(1)
+    expect(api.testScriptAskingAI.mock.calls[0][0]).toBe(aiScript.id)
   })
 
   it('shows no AI controls for a script without AI', () => {

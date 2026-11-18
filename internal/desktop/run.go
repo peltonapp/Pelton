@@ -29,8 +29,6 @@ type Config struct {
 	Version         string
 	LicenseManifest string
 	ProgramLicense  string
-	// EnglishStrings is the source of the frontend's English locale file.
-	EnglishStrings string
 	// TrayIcon is the .ico shown in the Windows notification area and the
 	// Linux tray; unused on macOS.
 	TrayIcon []byte
@@ -52,7 +50,6 @@ func Run(cfg Config) error {
 	app.debug = debugForced(os.Args[1:])
 	app.licenseManifest = cfg.LicenseManifest
 	app.programLicense = cfg.ProgramLicense
-	app.englishStrings = cfg.EnglishStrings
 	app.trayIcon = cfg.TrayIcon
 	app.demoMode = cfg.DemoMode
 	// --quick-compose opens the quick compose window alone (quickcompose.go).
