@@ -28,6 +28,7 @@
   import { space } from '../../stores/space'
   import { highlightRuns } from '../../lib/fuzzy'
   import { t, isMac, shortcutLabel } from '../../lib/i18n'
+  import { prefs } from '../../stores/prefs'
 
   /** Every command currently available, rebuilt by the parent as state changes. */
   export let commands: PaletteCommand[] = []
@@ -60,6 +61,40 @@
   $: if ($paletteOpen) {
     void focusInput()
   }
+
+  // the new design hands focus back to where it was when the palette closes.
+  let restoreTo: HTMLElement | null = null
+  let wasOpen = false
+  $: onOpenChange($paletteOpen)
+
+  function onOpenChange(open: boolean): void {
+    if (open === wasOpen) {
+      return
+    }
+    wasOpen = open
+    if ($prefs.design === 'classic') {
+      return
+    }
+    if (open) {
+      restoreTo = document.activeElement as HTMLElement | null
+      return
+    }
+    const target = restoreTo
+    restoreTo = null
+    void tick().then(() => {
+      const now = document.activeElement
+      if (target?.isConnected && (!now || now === document.body)) {
+        target.focus()
+      }
+    })
+  }
+
+  $: resultsStatus =
+    results.length > 0
+      ? $t('a11y.results').replace('{count}', String(results.length))
+      : parsed.text !== '' && !(prefix === 'mail' && $paletteMailBusy)
+        ? $t('palette.noResults')
+        : ''
 
   // group headers only earn their space when more than one group is showing.
   $: groups = groupRuns(results)
@@ -226,6 +261,12 @@
 
   function onKeydown(event: KeyboardEvent): void {
     switch (event.key) {
+      case 'Tab':
+        // the input is the palette's only stop; the page behind is inert.
+        if ($prefs.design !== 'classic') {
+          event.preventDefault()
+        }
+        break
       case 'Escape':
         event.preventDefault()
         back()
@@ -370,6 +411,7 @@
     {/if}
   </div>
 {/if}
+<div class="sr-only" role="status">{$paletteOpen ? resultsStatus : ''}</div>
 
 <style>
   .backdrop {

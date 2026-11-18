@@ -1630,6 +1630,7 @@ const en: Record<string, string> = {
   'a11y.colorLabel': '{color} label',
   'a11y.attachments': 'Has attachments',
   'a11y.snoozed': 'Snoozed',
+  'a11y.results': '{count} results',
   'mcp.group.scripts': 'Scripts',
   'mcp.group.scripts.hint': 'An agent can help write your automations. Whatever it creates or changes arrives switched off, and you read the code and permissions before you switch it on. It can never switch a script on, approve permissions or run one for real, and its test runs use made-up sample mail, never yours.',
   'mcp.tool.get_script_reference': 'Read the scripting reference',
