@@ -99,6 +99,30 @@ func TestLibraryChangeRevokesItsScripts(t *testing.T) {
 	assertRevoked(t, s, other.ID, false)
 }
 
+// TestTargetedPermissionsMatchExactly checks that a targeted permission
+// covers its own target only, and that a wildcard cannot be declared.
+func TestTargetedPermissionsMatchExactly(t *testing.T) {
+	r := testRegistry(t)
+	if err := r.RegisterPermission(Permission{Meta: Meta{ID: "net", Label: "net"}, Risk: "high"}); err != nil {
+		t.Fatal(err)
+	}
+	for _, p := range []string{"net:*", "net:*.example.org", "net:a:b", "net:"} {
+		if r.ValidPermission(p) {
+			t.Errorf("%q can be declared", p)
+		}
+	}
+	sc := &Script{Permissions: []string{"net:example.com"}, Approved: []string{"net:example.com"}}
+	for perm, want := range map[string]bool{
+		"net:example.com": true, "net:EXAMPLE.com": true, "net": true,
+		"net:example.com.evil.org": false, "net:evil-example.com": false, "net:example.com.": false,
+		"net:sub.example.com": false, "net:example.co": false,
+	} {
+		if got := sc.granted(perm, false); got != want {
+			t.Errorf("granted(%q) = %v, want %v", perm, got, want)
+		}
+	}
+}
+
 // TestRequireOnlyLoadsNamedLibraries checks that a script cannot load a
 // library whose name it builds at run time, which its approval never named.
 func TestRequireOnlyLoadsNamedLibraries(t *testing.T) {

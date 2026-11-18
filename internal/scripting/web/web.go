@@ -65,17 +65,50 @@ func (c Config) lookup(ctx context.Context, host string) ([]netip.Addr, error) {
 	return net.DefaultResolver.LookupNetIP(ctx, "ip", host)
 }
 
-// cgnat is the shared address space carrier grade NAT uses, which is as
-// local as a private range.
-var cgnat = netip.MustParsePrefix("100.64.0.0/10")
+// special are ranges that are not ordinary public hosts: carrier grade NAT,
+// IETF protocol assignments, benchmarking, reserved and broadcast, and the
+// old IPv6 site-local range.
+var special = []netip.Prefix{
+	netip.MustParsePrefix("100.64.0.0/10"),
+	netip.MustParsePrefix("192.0.0.0/24"),
+	netip.MustParsePrefix("198.18.0.0/15"),
+	netip.MustParsePrefix("240.0.0.0/4"),
+	netip.MustParsePrefix("fec0::/10"),
+}
+
+// embedded4 returns the IPv4 address a NAT64 (64:ff9b::/96) or 6to4
+// (2002::/16) address carries.
+func embedded4(ip netip.Addr) (netip.Addr, bool) {
+	if !ip.Is6() {
+		return netip.Addr{}, false
+	}
+	b := ip.As16()
+	switch {
+	case netip.MustParsePrefix("64:ff9b::/96").Contains(ip):
+		return netip.AddrFrom4([4]byte{b[12], b[13], b[14], b[15]}), true
+	case netip.MustParsePrefix("2002::/16").Contains(ip):
+		return netip.AddrFrom4([4]byte{b[2], b[3], b[4], b[5]}), true
+	}
+	return netip.Addr{}, false
+}
 
 // local reports whether an address is one a script may only reach when it
 // declared it literally.
 func local(ip netip.Addr) bool {
 	ip = ip.Unmap()
-	return ip.IsLoopback() || ip.IsPrivate() || ip.IsLinkLocalUnicast() || ip.IsLinkLocalMulticast() ||
-		ip.IsInterfaceLocalMulticast() || ip.IsMulticast() || ip.IsUnspecified() || cgnat.Contains(ip) ||
-		(ip.Is4() && ip.As4()[0] == 0)
+	if v4, ok := embedded4(ip); ok {
+		return local(v4)
+	}
+	if ip.IsLoopback() || ip.IsPrivate() || ip.IsLinkLocalUnicast() || ip.IsLinkLocalMulticast() ||
+		ip.IsInterfaceLocalMulticast() || ip.IsMulticast() || ip.IsUnspecified() || (ip.Is4() && ip.As4()[0] == 0) {
+		return true
+	}
+	for _, p := range special {
+		if p.Contains(ip) {
+			return true
+		}
+	}
+	return false
 }
 
 // hostOf returns the lower case host of a URL without brackets.
