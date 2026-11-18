@@ -12,6 +12,7 @@
   import { prefs } from '../../stores/prefs'
   import { popupIsOpen } from '../../lib/popups'
   import { t } from '../../lib/i18n'
+  import { calm } from '../../lib/motion'
 
   /** Heading, also the dialog's accessible name. */
   export let title: string
@@ -39,7 +40,7 @@
   let confirming = false
   let restoreTo: HTMLElement | null = null
 
-  $: motion = $prefs.reduceMotion ? 0 : 1
+  $: motion = $prefs.reduceMotion || calm(1) === 0 ? 0 : 1
   // 300 is where the app's overlay band starts. Four apart leaves room for the
   // backdrop and dialog of each level without running into the popups at 320.
   $: layer = 300 + depth * 4

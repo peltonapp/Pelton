@@ -14,6 +14,7 @@
   import { tip } from '../../lib/tip'
   import { t } from '../../lib/i18n'
   import type { OutboxLogEntry } from '../../lib/types'
+  import { dur } from '../../lib/motion'
 
   /** The log lines, oldest first. */
   export let entries: OutboxLogEntry[]
@@ -54,7 +55,7 @@
 
   function toEnd(smooth: boolean): void {
     if (smooth && typeof scroller.scrollTo === 'function') {
-      scroller.scrollTo({ top: scroller.scrollHeight, behavior: 'smooth' })
+      scroller.scrollTo({ top: scroller.scrollHeight, behavior: dur(1) ? 'smooth' : 'auto' })
     } else {
       scroller.scrollTop = scroller.scrollHeight
     }
