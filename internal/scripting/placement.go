@@ -73,6 +73,9 @@ type PlacedScript struct {
 // maxPlacedItems caps the values one placed run gets.
 const maxPlacedItems = 500
 
+// maxOptionBytes caps a placement's text option, such as a button's label.
+const maxOptionBytes = 60
+
 // RegisterPlacement adds a place scripts can be started from. A placement
 // that hands over a value adds that value type to the manual trigger's
 // scopes and its event, so scripts can declare they take it.
@@ -204,6 +207,9 @@ func (r *Registry) checkPlacements(sc *Script) error {
 			}
 			if v == nil {
 				continue
+			}
+			if s, ok := v.(string); ok && len(s) > maxOptionBytes {
+				return fmt.Errorf("scripting: placement %q option %q is longer than %d bytes", c.ID, name, maxOptionBytes)
 			}
 			if _, err := literalLua(p.Options[i], v); err != nil {
 				return fmt.Errorf("scripting: placement %q option %q: %w", c.ID, name, err)

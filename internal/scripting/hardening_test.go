@@ -149,6 +149,29 @@ func TestBlockValuesCannotBreakOutOfTheirLiteral(t *testing.T) {
 	}
 }
 
+// TestScriptTextIsBounded checks the caps on the text a script file puts in
+// menus, toolbars and dialogs.
+func TestScriptTextIsBounded(t *testing.T) {
+	r := testRegistry(t)
+	base := func() *Script {
+		return &Script{Name: "n", Kind: KindLua, Trigger: TriggerConfig{Type: TriggerManual, Params: map[string]any{"scope": "message"}}, CatchUp: CatchUpLive}
+	}
+	sc := base()
+	sc.Name = strings.Repeat("x", 201)
+	if err := sc.Validate(r); err == nil {
+		t.Error("a 201 byte name passed")
+	}
+	sc = base()
+	sc.Placements = []PlacementConfig{{ID: "toolbar.message", Options: map[string]any{"icon": "archive", "label": strings.Repeat("Archive ", 10)}}}
+	if err := sc.Validate(r); err == nil || !strings.Contains(err.Error(), "longer than") {
+		t.Errorf("a long button label passed: %v", err)
+	}
+	sc.Placements[0].Options["label"] = "Archive"
+	if err := sc.Validate(r); err != nil {
+		t.Errorf("a short label: %v", err)
+	}
+}
+
 // TestTargetedPermissionsMatchExactly checks that a targeted permission
 // covers its own target only, and that a wildcard cannot be declared.
 func TestTargetedPermissionsMatchExactly(t *testing.T) {
@@ -197,7 +220,7 @@ func TestStringBuildingIsBounded(t *testing.T) {
 		"format with many widths": `local t = {} for i = 1, 300 do t[i] = 1 end
 			string.format(string.rep("%9999d", 300), unpack(t))`,
 		"replace of every position": `text.replace(string.rep("a", 100000), "", string.rep("b", 1000))`,
-		"replace with a group":      `text.replace(string.rep("a", 600000), "(a)", "$1$1")`,
+		"replace with a group":      `text.replace(string.rep("abcdefghij", 60000), "(abcdefghij)", "$1$1")`,
 	} {
 		t.Run(name, func(t *testing.T) {
 			run := runLua(t, e, src)
