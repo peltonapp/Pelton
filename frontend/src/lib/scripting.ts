@@ -519,6 +519,8 @@ export interface ScriptConfirmRequest {
   scriptName: string
   function: string
   summary: string
+  /** Asked every time, e.g. a call an AI model chose or changed recipients; offers no "allow without asking". */
+  everyTime?: boolean
 }
 
 /** A script asking whether to run over mail that arrived while Pelton was closed. */

@@ -115,6 +115,7 @@ table.insert(event.draft.bcc, "archive@example.test")`, scripting.PermMailSend)
 	if _, err := a.SetScriptEnabled(sc.ID, true, sc.Permissions); err != nil {
 		t.Fatal(err)
 	}
+	a.recipientConfirmer = &answerConfirm{allow: true}
 	req := ComposeRequest{AccountID: 1, Subject: "Hello", Text: "hi", To: []AddressDTO{{Name: "Bo", Email: "bo@example.test"}}}
 	out, err := a.beforeSendScripts(a.ctx, req)
 	if err != nil {

@@ -141,6 +141,9 @@ type ScriptConfirmDTO struct {
 	ScriptName string `json:"scriptName"`
 	Function   string `json:"function"`
 	Summary    string `json:"summary"`
+	// EveryTime is set for a question asked every time, which offers no
+	// "allow without asking".
+	EveryTime bool `json:"everyTime"`
 }
 
 // ScriptCatchUpDTO asks whether a script runs over mail that arrived while
@@ -481,10 +484,12 @@ func (a *App) RunScript(id, messageID int64) (ScriptRunDTO, error) {
 // against a message (0 for the sample message). Reads work; every change is
 // listed as a planned step and nothing is changed.
 func (a *App) TestScript(in ScriptInput, messageID int64) (ScriptRunDTO, error) {
-	return a.testScript(a.ctx, in, messageID)
+	return a.testScript(a.ctx, in, messageID, 0)
 }
 
-func (a *App) testScript(ctx context.Context, in ScriptInput, messageID int64) (ScriptRunDTO, error) {
+// testScript dry runs in. With approvedFrom set, the run holds the approvals
+// of that saved script when in does not change what was approved.
+func (a *App) testScript(ctx context.Context, in ScriptInput, messageID, approvedFrom int64) (ScriptRunDTO, error) {
 	svc, err := a.scriptService()
 	if err != nil {
 		return ScriptRunDTO{}, err
@@ -498,6 +503,11 @@ func (a *App) testScript(ctx context.Context, in ScriptInput, messageID int64) (
 	}
 	if err := sc.Validate(svc.Registry()); err != nil {
 		return ScriptRunDTO{}, err
+	}
+	if approvedFrom != 0 {
+		if saved, err := svc.Script(ctx, approvedFrom); err == nil && !scripting.ResetsApproval(saved, sc) {
+			sc.Approved = saved.Approved
+		}
 	}
 	var data map[string]any
 	if messageID != 0 {

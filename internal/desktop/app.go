@@ -220,11 +220,6 @@ type App struct {
 	// mcpScriptLimits holds what an agent has used of its script caps. It
 	// lives here rather than in the server so a restart does not reset it.
 	mcpScriptLimits *mcpserver.ScriptLimiter
-	// englishStrings is the frontend's English catalog source, which the
-	// scripting reference takes the built-ins' descriptions from.
-	englishStrings string
-	englishOnce    sync.Once
-	english        map[string]string
 	// proposalMu serializes changes to the stored script proposals.
 	proposalMu sync.Mutex
 
@@ -284,6 +279,9 @@ type App struct {
 	// memory. See scripts.go and bind_scripts.go.
 	scripts     *scripting.Service
 	scriptState scriptState
+	// recipientConfirmer asks about recipients before-send scripts changed;
+	// nil asks through the window. Tests put an answer here.
+	recipientConfirmer scripting.Confirmer
 }
 
 // locked reports whether the app lock is engaged. An App built without one,

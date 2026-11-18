@@ -121,6 +121,10 @@ type ConfirmRequest struct {
 	Function string `json:"function"`
 	// Summary says what the call would do, with its arguments.
 	Summary string `json:"summary"`
+	// EveryTime is set for a question that is asked every time, such as a
+	// call an AI model chose, so "allow without asking" is not offered and
+	// an Always answer counts as a plain yes.
+	EveryTime bool `json:"everyTime"`
 }
 
 // ConfirmAnswer is the user's answer. Always means "allow without asking"

@@ -124,6 +124,10 @@ func optNumber(c *scripting.Call, t map[string]any, key string, def, lo, hi floa
 // maxOutputTokens is the most output one request may ask for.
 const maxOutputTokens = 32768
 
+// MaxRequestsPerRun caps the requests to a model one run makes, its tool
+// use steps included, since the run's own clock stops while they wait.
+const MaxRequestsPerRun = 64
+
 // session is one step's provider and model, ready to send.
 type session struct {
 	m       *module
@@ -178,6 +182,9 @@ func (m *module) open(c *scripting.Call, o callOpts) (*session, error) {
 		s.placeholder = true
 		return s, m.require(c, p, Local(p.BaseURL))
 	}
+	if c.Dry && !c.Approved(PermCloud+":"+p.ID) && !c.Approved(PermLocal+":"+p.ID) {
+		return nil, fmt.Errorf("%s: a test run asks %q only once you have approved the script's permission for it; switch the script on first, or test without asking the model", c.Function, p.Name)
+	}
 	if !c.Granted(PermCloud+":"+p.ID) && !c.Granted(PermLocal+":"+p.ID) {
 		return nil, m.require(c, p, Local(p.BaseURL))
 	}
@@ -224,6 +231,9 @@ func redactKey(s, key string) string {
 // chat sends one request with the run's clock stopped, since the request has
 // its own time limit, and logs what it cost.
 func (s *session) chat(req Request, timeout time.Duration) (Response, error) {
+	if s.c.Count("ai.requests") > MaxRequestsPerRun {
+		return Response{}, fmt.Errorf("a run may make at most %d requests to a model", MaxRequestsPerRun)
+	}
 	req.Model = s.model
 	if timeout <= 0 {
 		timeout = s.timeout

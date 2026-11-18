@@ -277,6 +277,7 @@ type runState struct {
 	// script's code and in the libraries it loaded, which are the ones the
 	// user approved with it.
 	requirable map[string]bool
+	counts     map[string]int
 }
 
 // Run executes one run and returns its record. It never panics and never
@@ -556,11 +557,80 @@ func (st *runState) execute() {
 	}
 	if t, ok := st.e.Registry.Trigger(st.req.Trigger); ok && t.Mutable {
 		if ev, ok := fromLua(L.GetGlobal("event")).(map[string]any); ok {
+			kind := StepCall
+			if st.req.Dry {
+				kind = StepPlanned
+			}
+			for _, c := range eventChanges(st.req.Event, ev) {
+				st.addStep(Step{Kind: kind, Function: "event." + c.path, Summary: c.summary()})
+			}
 			st.mu.Lock()
 			st.run.Event = ev
 			st.mu.Unlock()
 		}
 	}
+}
+
+// eventChange is one field a script changed in the event it was handed.
+type eventChange struct {
+	path          string
+	before, after any
+}
+
+func (c eventChange) summary() string {
+	return fmt.Sprintf("changed %s from %s to %s", c.path, short(c.before), short(c.after))
+}
+
+// eventChanges lists the fields of a mutable event a run changed, one level
+// into each table, e.g. "draft.to", in name order.
+func eventChanges(before, after map[string]any) []eventChange {
+	same := func(a, b any) bool {
+		if emptyValue(a) && emptyValue(b) {
+			return true
+		}
+		x, _ := json.Marshal(plainValue(a))
+		y, _ := json.Marshal(plainValue(b))
+		return string(x) == string(y)
+	}
+	var out []eventChange
+	for _, k := range sortedKeys(after) {
+		was, _ := plainValue(before[k]).(map[string]any)
+		now, ok := after[k].(map[string]any)
+		if !ok || was == nil {
+			if !same(before[k], after[k]) {
+				out = append(out, eventChange{k, before[k], after[k]})
+			}
+			continue
+		}
+		keys := sortedKeys(now)
+		for _, f := range sortedKeys(was) {
+			if _, ok := now[f]; !ok {
+				keys = append(keys, f)
+			}
+		}
+		for _, f := range keys {
+			if !same(was[f], now[f]) {
+				out = append(out, eventChange{k + "." + f, was[f], now[f]})
+			}
+		}
+	}
+	return out
+}
+
+// emptyValue reports nil and empty lists and tables, which Lua does not tell
+// apart.
+func emptyValue(v any) bool {
+	switch x := v.(type) {
+	case nil:
+		return true
+	case []any:
+		return len(x) == 0
+	case []string:
+		return len(x) == 0
+	case map[string]any:
+		return len(x) == 0
+	}
+	return false
 }
 
 // cleanLuaError keeps the message of a Lua error and drops the Go stack
@@ -836,7 +906,7 @@ func (st *runState) metatable(L *lua.LState) func(string) *lua.LTable {
 				L.Push(lua.LNil)
 				return 1
 			}
-			res, err := st.invoke(L, full, f, []any{fromLua(t)})
+			res, err := st.invoke(false, full, f, []any{fromLua(t)})
 			if err != nil {
 				L.RaiseError("%s", err.Error())
 			}
@@ -869,7 +939,7 @@ func (st *runState) hostFunc(full string, f Function) lua.LGFunction {
 		for i := range args {
 			args[i] = fromLua(L.Get(i + 1))
 		}
-		res, err := st.invoke(L, full, f, args)
+		res, err := st.invoke(false, full, f, args)
 		if err != nil {
 			L.RaiseError("%s", err.Error())
 		}
@@ -882,8 +952,10 @@ func (st *runState) hostFunc(full string, f Function) lua.LGFunction {
 }
 
 // invoke runs one host call through the permission check, the dry run
-// switch and the confirmation, and records it as a step.
-func (st *runState) invoke(L *lua.LState, full string, f Function, args []any) ([]any, error) {
+// switch and the confirmation, and records it as a step. A call a model
+// chose asks the user every time it is risky, whatever the script is
+// allowed.
+func (st *runState) invoke(model bool, full string, f Function, args []any) ([]any, error) {
 	if st.unwinding() {
 		return nil, st.failed()
 	}
@@ -910,8 +982,8 @@ func (st *runState) invoke(L *lua.LState, full string, f Function, args []any) (
 		}
 		return res, st.failedErr()
 	}
-	if f.Risky && !st.isAllowed(full) {
-		if err := st.confirm(full, summary); err != nil {
+	if f.Risky && (model || !st.isAllowed(full)) {
+		if err := st.confirm(full, summary, model); err != nil {
 			return nil, err
 		}
 	}
@@ -969,7 +1041,7 @@ func (st *runState) resumeClock() {
 	st.deadline.Reset(max(st.remaining, time.Millisecond))
 }
 
-func (st *runState) confirm(full, summary string) error {
+func (st *runState) confirm(full, summary string, model bool) error {
 	hosts := st.e.Hosts
 	if hosts == nil || hosts.Confirm == nil {
 		st.addStep(Step{Kind: StepDeclined, Function: full, Summary: summary, Error: "nobody to ask"})
@@ -983,6 +1055,7 @@ func (st *runState) confirm(full, summary string) error {
 		ScriptName: st.req.Script.Name,
 		Function:   full,
 		Summary:    summary,
+		EveryTime:  model,
 	})
 	if stopped {
 		st.resumeClock()
@@ -994,7 +1067,7 @@ func (st *runState) confirm(full, summary string) error {
 		}
 		return st.setFatal(StatusDenied, "you declined "+full)
 	}
-	if ans.Always {
+	if ans.Always && !model {
 		st.mu.Lock()
 		st.allowed = append(st.allowed, full)
 		st.mu.Unlock()

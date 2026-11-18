@@ -54,9 +54,9 @@ export function AIScriptOptions(scriptID: number): $CancellablePromise<$models.A
 
 /**
  * AcceptScriptProposal applies a proposed change. When it changes the code,
- * the trigger or the declared permissions of a script that was on or
- * approved, the script is switched off and its approvals and allowances are
- * cleared, so the user approves the new version afresh.
+ * the trigger or the declared permissions, the update switches the script
+ * off and clears its approvals and allowances, so the user approves the new
+ * version afresh.
  */
 export function AcceptScriptProposal(id: number): $CancellablePromise<$models.ScriptDTO> {
     return $Call.ByID(3375767223, id).then(($result: any) => {
@@ -3805,11 +3805,11 @@ export function ScriptProposal(id: number): $CancellablePromise<$models.ScriptPr
 }
 
 /**
- * ScriptReference returns the scripting API as a document in English,
- * markdown when markdown is set and plain text otherwise.
+ * ScriptReference returns the scripting reference as one markdown document
+ * in English, the same one an assistant reads over MCP.
  */
-export function ScriptReference(markdown: boolean): $CancellablePromise<string> {
-    return $Call.ByID(1749449554, markdown);
+export function ScriptReference(): $CancellablePromise<string> {
+    return $Call.ByID(1749449554);
 }
 
 /**
@@ -4617,10 +4617,12 @@ export function TestScript($in: $models.ScriptInput, messageID: number): $Cancel
 /**
  * TestScriptAskingAI dry runs a script as TestScript does, except that its AI
  * steps really ask the model, so a branch on the answer can be tried. Every
- * change, including those the model asks for, stays a planned step.
+ * change, including those the model asks for, stays a planned step. Only a
+ * provider the user approved for the saved script scriptID is asked, and
+ * only while the code in the editor is the code they approved.
  */
-export function TestScriptAskingAI($in: $models.ScriptInput, messageID: number): $CancellablePromise<$models.ScriptRunDTO> {
-    return $Call.ByID(957971532, $in, messageID).then(($result: any) => {
+export function TestScriptAskingAI(scriptID: number, $in: $models.ScriptInput, messageID: number): $CancellablePromise<$models.ScriptRunDTO> {
+    return $Call.ByID(957971532, scriptID, $in, messageID).then(($result: any) => {
         return $$createType195($result);
     });
 }

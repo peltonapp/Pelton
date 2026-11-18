@@ -293,9 +293,12 @@ export async function runNow(s: Script, messageId: number): Promise<ScriptRun | 
   }
 }
 
-/** Dry runs a script as written; the result shows in the editor. With askModel its AI steps really ask the model. */
-export async function runTest(input: ScriptInput, messageId: number, askModel = false): Promise<ScriptRun> {
-  const run = askModel ? await api.testScriptAskingAI(input, messageId) : await api.testScript(input, messageId)
+/**
+ * Dry runs a script as written; the result shows in the editor. With askModel its AI steps really ask a
+ * model the user approved for the saved script scriptId.
+ */
+export async function runTest(input: ScriptInput, messageId: number, askModel = false, scriptId = 0): Promise<ScriptRun> {
+  const run = askModel ? await api.testScriptAskingAI(scriptId, input, messageId) : await api.testScript(input, messageId)
   testRun.set(run)
   return run
 }
