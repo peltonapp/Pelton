@@ -2327,6 +2327,8 @@
       <div
         class="mail"
         class:with-myday={showMyDay}
+        role="main"
+        aria-label={$t('space.mail')}
         style={`grid-template-columns: ${sidebarW}px 0 minmax(0, 1fr)${showMyDay ? ' var(--myday-width)' : ''}`}
         bind:clientWidth={mailWidth}
       >
@@ -2379,7 +2381,7 @@
         {/if}
       </div>
     {:else if $space === 'contacts'}
-      <div class="space-host">
+      <div class="space-host" role="main" aria-label={$t(`space.${$space}`)}>
         {#await import('./components/contacts/ContactsSpace.svelte') then m}
           <svelte:component
             this={m.default}
@@ -2388,19 +2390,19 @@
         {/await}
       </div>
     {:else if $space === 'calendar'}
-      <div class="space-host">
+      <div class="space-host" role="main" aria-label={$t(`space.${$space}`)}>
         {#await import('./components/calendar/CalendarScreen.svelte') then m}
           <svelte:component this={m.default} />
         {/await}
       </div>
     {:else if $space === 'tasks'}
-      <div class="space-host">
+      <div class="space-host" role="main" aria-label={$t(`space.${$space}`)}>
         {#await import('./components/tasks/TasksScreen.svelte') then m}
           <svelte:component this={m.default} />
         {/await}
       </div>
     {:else if $space === 'projects'}
-      <div class="space-host">
+      <div class="space-host" role="main" aria-label={$t(`space.${$space}`)}>
         {#await import('./components/projects/ProjectsScreen.svelte') then m}
           <svelte:component
             this={m.default}
@@ -2409,25 +2411,25 @@
         {/await}
       </div>
     {:else if $space === 'notes'}
-      <div class="space-host">
+      <div class="space-host" role="main" aria-label={$t(`space.${$space}`)}>
         {#await import('./components/notes/NotesScreen.svelte') then m}
           <svelte:component this={m.default} />
         {/await}
       </div>
     {:else if $space === 'feeds'}
-      <div class="space-host">
+      <div class="space-host" role="main" aria-label={$t(`space.${$space}`)}>
         {#await import('./components/feeds/FeedsScreen.svelte') then m}
           <svelte:component this={m.default} on:compose={(e) => shareFromFeeds(e.detail)} />
         {/await}
       </div>
     {:else if $space === 'chat' && chatWanted}
-      <div class="space-host">
+      <div class="space-host" role="main" aria-label={$t(`space.${$space}`)}>
         {#await import('./components/chat/ChatSpace.svelte') then m}
           <svelte:component this={m.default} />
         {/await}
       </div>
     {:else if $space === 'automations'}
-      <div class="space-host">
+      <div class="space-host" role="main" aria-label={$t(`space.${$space}`)}>
         {#await import('./components/automations/AutomationsSpace.svelte') then m}
           <svelte:component this={m.default} />
         {/await}

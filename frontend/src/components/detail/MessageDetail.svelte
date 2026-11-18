@@ -357,7 +357,7 @@ ${bodyHtml}
   }
 </script>
 
-<section class="detail">
+<section class="detail" aria-label={$t('a11y.region.reader')}>
   {#if $hasTabs}
     <TabBar />
   {/if}

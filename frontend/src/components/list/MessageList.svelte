@@ -1155,7 +1155,7 @@
 
 <svelte:window on:resize={onResize} />
 
-<section class="list-col" class:new={!classic}>
+<section class="list-col" class:new={!classic} aria-label={$t('a11y.region.messages')}>
   {#if classic}
     <div class="header">
       <SearchBar value={$searchQuery} on:search={onSearch} on:filter={onFilter} on:sort={onSort} />
