@@ -3,8 +3,6 @@ package desktop
 import (
 	"context"
 	"net/http"
-	"os"
-	"path/filepath"
 	"strconv"
 	"strings"
 	"testing"
@@ -30,9 +28,6 @@ func (b bearer) RoundTrip(r *http.Request) (*http.Response, error) {
 func mcpScriptSession(t *testing.T) (*App, int64, *mcp.ClientSession) {
 	t.Helper()
 	a, msgID := newScriptTestApp(t)
-	if data, err := os.ReadFile(filepath.Join("..", "..", "frontend", "src", "lib", "locales", "en.ts")); err == nil {
-		a.englishStrings = string(data)
-	}
 	for _, tool := range mcpPermissionTools() {
 		if err := a.store.Set(a.ctx, mcpPermissionKey(tool), "true"); err != nil {
 			t.Fatal(err)

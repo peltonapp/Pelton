@@ -63,18 +63,12 @@ func (a *App) scriptLimiter() *mcpserver.ScriptLimiter {
 	return a.mcpScriptLimits
 }
 
-// englishText resolves a localization key from the embedded English catalog.
-func (a *App) englishText(key string) string {
-	a.englishOnce.Do(func() { a.english = scriptref.EnglishStrings(a.englishStrings) })
-	return a.english[key]
-}
-
 func (m *mcpScripts) Reference(context.Context) (*scriptref.Reference, error) {
 	svc, err := m.app.scriptService()
 	if err != nil {
 		return nil, err
 	}
-	return scriptref.Build(svc.Registry(), m.app.englishText), nil
+	return scriptref.Build(svc.Registry()), nil
 }
 
 func (m *mcpScripts) ListScripts(ctx context.Context) ([]mcpserver.ScriptSummary, error) {

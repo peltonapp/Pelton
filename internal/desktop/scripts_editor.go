@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	"github.com/peltonapp/Pelton/internal/scripting"
+	"github.com/peltonapp/Pelton/internal/scriptref"
 )
 
 // Recent lists the newest stored messages of a folder, by path or role, in
@@ -224,18 +225,14 @@ func (a *App) TestScriptMatch(req scripting.MatchRequest) (*scripting.MatchRepor
 	return svc.TestMatch(a.ctx, req)
 }
 
-// ScriptReference returns the scripting API as a document in English,
-// markdown when markdown is set and plain text otherwise.
-func (a *App) ScriptReference(markdown bool) (string, error) {
+// ScriptReference returns the scripting reference as one markdown document
+// in English, the same one an assistant reads over MCP.
+func (a *App) ScriptReference() (string, error) {
 	svc, err := a.scriptService()
 	if err != nil {
 		return "", err
 	}
-	format := scripting.ReferenceText
-	if markdown {
-		format = scripting.ReferenceMarkdown
-	}
-	return scripting.Reference(svc.Registry().Catalog(), format), nil
+	return scriptref.Build(svc.Registry()).Text(), nil
 }
 
 // dropAIScriptOptions forgets a deleted script's AI switches.

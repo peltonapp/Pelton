@@ -126,8 +126,8 @@ func TestDeletingAScriptDropsItsAIOptions(t *testing.T) {
 
 func TestScriptReference(t *testing.T) {
 	a, _ := newScriptTestApp(t)
-	md, err := a.ScriptReference(true)
-	if err != nil || !strings.Contains(md, "## Modules") || !strings.Contains(md, "### calendar") || !strings.Contains(md, "ai.draft_reply") {
+	md, err := a.ScriptReference()
+	if err != nil || !strings.Contains(md, "## Lua modules and functions") || !strings.Contains(md, "### module calendar") || !strings.Contains(md, "ai.draft_reply") {
 		t.Fatalf("markdown reference: %v\n%.400s", err, md)
 	}
 }
