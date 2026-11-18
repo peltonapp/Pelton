@@ -105,6 +105,8 @@ function expose(node: Element, options: TipOptions, state: { id: string; named: 
   let extra = text
   if (name && text.startsWith(name)) {
     extra = text.slice(name.length).trim()
+  } else if (name.includes(text)) {
+    extra = ''
   }
   const description = [extra, options.shortcut ?? ''].filter(Boolean).join(' ')
   let el = document.getElementById(state.id)

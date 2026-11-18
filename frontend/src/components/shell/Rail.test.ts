@@ -47,6 +47,11 @@ describe('Rail', () => {
     expect(labels).toEqual(['Move up', 'Move down', 'Hide from navigation', 'separator', 'Customize navigation…'])
   })
 
+  it('says the unread count its badge only shows as a dot', () => {
+    render(Rail, { props: { unread: 3 } })
+    expect(screen.getByRole('button', { name: 'Mail, 3 unread' })).toBeInTheDocument()
+  })
+
   it('moves the focused entry with alt and an arrow', async () => {
     render(Rail)
     await fireEvent.keyDown(screen.getByRole('button', { name: 'Calendar' }), { key: 'ArrowUp', altKey: true })

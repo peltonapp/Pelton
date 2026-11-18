@@ -1637,6 +1637,8 @@ const en: Record<string, string> = {
   'a11y.expandNamed': 'Expand {name}',
   'a11y.collapseNamed': 'Collapse {name}',
   'a11y.movedTo': 'Moved to position {n} of {total}',
+  'a11y.unreadCount': '{count} unread',
+  'a11y.badgeCount': '{count} waiting',
   'a11y.event.tentative': 'tentative',
   'a11y.event.cancelled': 'cancelled',
   'a11y.event.free': 'shown as free',
