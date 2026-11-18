@@ -263,10 +263,4 @@ func TestQuestionWithoutWindowTakesTheDefault(t *testing.T) {
 	if err := a.CancelScriptRun(12345); err == nil {
 		t.Fatal("cancelled a run that is not going")
 	}
-	if err := a.SetScriptAskSeconds(5); err == nil {
-		t.Fatal("accepted a five second wait")
-	}
-	if err := a.SetScriptAskSeconds(300); err != nil || a.ScriptAskSeconds() != 300 {
-		t.Fatalf("%v %d", err, a.ScriptAskSeconds())
-	}
 }

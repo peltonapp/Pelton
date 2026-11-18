@@ -3901,16 +3901,6 @@ export function scriptValue(valueType: string, id: string): Promise<Record<strin
   return App.ScriptValue(valueType, id).then((m) => (m ?? {}) as Record<string, unknown>)
 }
 
-/** How long a question of a script nobody started waits, in seconds. */
-export function scriptAskSeconds(): Promise<number> {
-  return App.ScriptAskSeconds()
-}
-
-/** Sets how long such a question waits, 10 seconds to a day. */
-export function setScriptAskSeconds(seconds: number): Promise<void> {
-  return App.SetScriptAskSeconds(seconds)
-}
-
 /** Dry runs a script as written, against a message (0 for the sample). Nothing changes. */
 export function testScript(input: ScriptInput, messageId: number): Promise<ScriptRun> {
   return App.TestScript(toDTO(input), messageId).then(asRun)

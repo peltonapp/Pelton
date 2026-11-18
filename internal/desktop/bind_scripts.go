@@ -298,19 +298,6 @@ func (a *App) ListScripts() ([]ScriptDTO, error) {
 	return out, nil
 }
 
-// GetScript returns one script.
-func (a *App) GetScript(id int64) (ScriptDTO, error) {
-	svc, err := a.scriptService()
-	if err != nil {
-		return ScriptDTO{}, err
-	}
-	sc, err := svc.Script(a.ctx, id)
-	if err != nil {
-		return ScriptDTO{}, err
-	}
-	return toScriptDTO(sc), nil
-}
-
 // CreateScript stores a new script, switched off.
 func (a *App) CreateScript(in ScriptInput) (ScriptDTO, error) {
 	svc, err := a.scriptService()
@@ -360,6 +347,7 @@ func (a *App) DeleteScript(id int64) error {
 	if err := a.dropAIScriptOptions(id); err != nil {
 		return err
 	}
+	a.dropScriptProposal(id)
 	return a.setScriptFolder(id, "")
 }
 
@@ -732,24 +720,6 @@ func (a *App) ScriptValue(valueType, id string) (map[string]any, error) {
 		return nil, err
 	}
 	return svc.Value(a.ctx, valueType, id)
-}
-
-// ScriptAskSeconds returns how long a question of a script nobody started
-// waits before it takes its default.
-func (a *App) ScriptAskSeconds() int {
-	return int(a.scriptAskTimeout() / time.Second)
-}
-
-// SetScriptAskSeconds sets how long such a question waits, 10 seconds to a
-// day.
-func (a *App) SetScriptAskSeconds(seconds int) error {
-	if err := a.ready(); err != nil {
-		return err
-	}
-	if seconds < 10 || seconds > 86400 {
-		return fmt.Errorf("pelton: a question waits 10 seconds to a day")
-	}
-	return a.store.Set(a.ctx, settingScriptAskSeconds, strconv.Itoa(seconds))
 }
 
 // ResolveScriptCatchUp answers a catch-up question: run over the mail that

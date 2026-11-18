@@ -2009,15 +2009,6 @@ export function GetQuickComposeStatus(): $CancellablePromise<$models.QuickCompos
 }
 
 /**
- * GetScript returns one script.
- */
-export function GetScript(id: number): $CancellablePromise<$models.ScriptDTO> {
-    return $Call.ByID(236853393, id).then(($result: any) => {
-        return $$createType5($result);
-    });
-}
-
-/**
  * GetSetting returns a single setting's raw value. found is false when the key
  * has never been written, so the frontend can fall back to its own default.
  */
@@ -3753,14 +3744,6 @@ export function ScanURL(rawURL: string): $CancellablePromise<$models.VerdictDTO>
 }
 
 /**
- * ScriptAskSeconds returns how long a question of a script nobody started
- * waits before it takes its default.
- */
-export function ScriptAskSeconds(): $CancellablePromise<number> {
-    return $Call.ByID(305353439);
-}
-
-/**
  * ScriptFolder returns the folder a script may read and write files in, ""
  * when it has none.
  */
@@ -4240,14 +4223,6 @@ export function SetScriptAllowUnasked(id: number, $function: string, allow: bool
     return $Call.ByID(461960167, id, $function, allow).then(($result: any) => {
         return $$createType5($result);
     });
-}
-
-/**
- * SetScriptAskSeconds sets how long such a question waits, 10 seconds to a
- * day.
- */
-export function SetScriptAskSeconds(seconds: number): $CancellablePromise<void> {
-    return $Call.ByID(1083915591, seconds);
 }
 
 /**

@@ -48,10 +48,6 @@ const (
 // settingScriptLogDays is how many days of script runs the log keeps.
 const settingScriptLogDays = "scripts_log_days"
 
-// settingScriptAskSeconds is how long a question of a script nobody started
-// waits before it takes its default.
-const settingScriptAskSeconds = "scripts_ask_seconds"
-
 // scriptResultsKept is how many results stay ready for their buttons.
 const scriptResultsKept = 20
 
@@ -103,7 +99,6 @@ func (a *App) startScripts() {
 		OnChange:      func() { a.emit(EventScriptsChanged, nil) },
 		OnCatchUp:     a.onScriptCatchUp,
 		RetentionDays: func() int { return a.intSetting(settingScriptLogDays, scripting.DefaultRetentionDays) },
-		AskTimeout:    a.scriptAskTimeout,
 		OnProgress:    func(l scripting.LiveRun) { a.emit(EventScriptProgress, l) },
 	})
 	if err != nil {
@@ -811,11 +806,6 @@ func newScriptRequestID() (string, error) {
 		return "", err
 	}
 	return hex.EncodeToString(buf), nil
-}
-
-// scriptAskTimeout is how long a question of a script nobody started waits.
-func (a *App) scriptAskTimeout() time.Duration {
-	return time.Duration(a.intSetting(settingScriptAskSeconds, int(scripting.DefaultAskTimeout/time.Second))) * time.Second
 }
 
 // scriptAsk puts a running script's questions to the user through a dialog
