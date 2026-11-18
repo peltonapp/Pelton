@@ -71,6 +71,50 @@ func (m *mcpScripts) Reference(context.Context) (*scriptref.Reference, error) {
 	return scriptref.Build(svc.Registry()), nil
 }
 
+func templateSummary(t scripting.Template) mcpserver.ScriptTemplate {
+	return mcpserver.ScriptTemplate{ID: t.ID, Name: t.Label, Description: t.Description, Kind: string(t.Kind), Trigger: t.Trigger.Type}
+}
+
+// ListScriptTemplates lists the gallery's templates that compile with what
+// this app offers now.
+func (m *mcpScripts) ListScriptTemplates(context.Context) ([]mcpserver.ScriptTemplate, error) {
+	svc, err := m.app.scriptService()
+	if err != nil {
+		return nil, err
+	}
+	out := []mcpserver.ScriptTemplate{}
+	for _, t := range svc.Registry().Templates() {
+		if t.Missing == "" {
+			out = append(out, templateSummary(t))
+		}
+	}
+	return out, nil
+}
+
+// GetScriptTemplate hands out one template as a draft for create_script.
+func (m *mcpScripts) GetScriptTemplate(_ context.Context, id string) (*mcpserver.ScriptTemplateDetail, error) {
+	svc, err := m.app.scriptService()
+	if err != nil {
+		return nil, err
+	}
+	t, ok := svc.Registry().Template(id)
+	if !ok {
+		return nil, fmt.Errorf("there is no template %q; list_script_templates lists them", id)
+	}
+	d := mcpserver.ScriptDraft{
+		Name: t.Label, Description: t.Description, Kind: string(t.Kind), Source: t.Source,
+		Trigger:     mcpserver.ScriptTrigger{Type: t.Trigger.Type, Params: t.Trigger.Params},
+		Permissions: orEmpty(t.Permissions),
+	}
+	if t.Blocks != nil {
+		d.Blocks = t.Blocks
+	}
+	if len(t.Settings) > 0 {
+		d.Settings = anyList(t.Settings)
+	}
+	return &mcpserver.ScriptTemplateDetail{ScriptTemplate: templateSummary(t), Script: d}, nil
+}
+
 func (m *mcpScripts) ListScripts(ctx context.Context) ([]mcpserver.ScriptSummary, error) {
 	svc, err := m.app.scriptService()
 	if err != nil {

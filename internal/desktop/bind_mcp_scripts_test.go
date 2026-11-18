@@ -100,6 +100,15 @@ func everyScriptOff(t *testing.T, a *App, except ...int64) {
 	}
 }
 
+// storedScript reads one script as the bindings hand it out.
+func (a *App) storedScript(id int64) (ScriptDTO, error) {
+	sc, err := a.scripts.Script(a.ctx, id)
+	if err != nil {
+		return ScriptDTO{}, err
+	}
+	return toScriptDTO(sc), nil
+}
+
 func containsID(list []int64, id int64) bool {
 	for _, x := range list {
 		if x == id {
@@ -185,7 +194,7 @@ func TestAssistantCannotEnableOrApprove(t *testing.T) {
 		}
 	}
 	everyScriptOff(t, a)
-	sc, _ := a.GetScript(id)
+	sc, _ := a.storedScript(id)
 	if sc.Origin != string(scripting.OriginAssistant) {
 		t.Errorf("origin became %s", sc.Origin)
 	}
@@ -304,7 +313,7 @@ func TestUpdateOfUsersScriptIsAProposal(t *testing.T) {
 	if !strings.Contains(out, `"status": "proposed"`) {
 		t.Fatalf("update %s", out)
 	}
-	cur, _ := a.GetScript(user.ID)
+	cur, _ := a.storedScript(user.ID)
 	if cur.Source != "print('one')\nprint('two')" || !cur.Enabled {
 		t.Fatalf("the user's script was changed: %+v", cur)
 	}
@@ -343,7 +352,7 @@ func TestUpdateOfUsersScriptIsAProposal(t *testing.T) {
 	if err := a.RejectScriptProposal(user.ID); err != nil {
 		t.Fatal(err)
 	}
-	if cur, _ := a.GetScript(user.ID); cur.Source != "print('one')\nprint('three')" {
+	if cur, _ := a.storedScript(user.ID); cur.Source != "print('one')\nprint('three')" {
 		t.Errorf("rejecting changed the script: %q", cur.Source)
 	}
 	if p, _ := a.ScriptProposal(user.ID); p.Exists {
@@ -363,7 +372,7 @@ func TestUpdateOfAssistantsScript(t *testing.T) {
 	if !strings.Contains(out, `"status": "updated"`) {
 		t.Fatalf("update %s", out)
 	}
-	if sc, _ := a.GetScript(id); sc.Source != "print(2)" || sc.Enabled {
+	if sc, _ := a.storedScript(id); sc.Source != "print(2)" || sc.Enabled {
 		t.Fatalf("after update %+v", sc)
 	}
 
@@ -377,7 +386,7 @@ func TestUpdateOfAssistantsScript(t *testing.T) {
 	if !strings.Contains(out, `"status": "proposed"`) {
 		t.Fatalf("an approved script was changed directly: %s", out)
 	}
-	if sc, _ := a.GetScript(id); sc.Source != "print(2)" {
+	if sc, _ := a.storedScript(id); sc.Source != "print(2)" {
 		t.Fatal("changed despite the approval")
 	}
 	got, err := a.AcceptScriptProposal(id)
@@ -429,8 +438,8 @@ func TestScriptPermissionsListedOff(t *testing.T) {
 			}
 		}
 	}
-	if scripts != len(mcpserver.ScriptTools) {
-		t.Errorf("listed %d script tools, want %d", scripts, len(mcpserver.ScriptTools))
+	if want := len(mcpserver.ScriptTools) + len(mcpserver.ScriptTemplateTools); scripts != want {
+		t.Errorf("listed %d script tools, want %d", scripts, want)
 	}
 	if err := a.SetMCPPermission(mcpserver.ToolCreateScript, true); err != nil {
 		t.Fatal(err)
