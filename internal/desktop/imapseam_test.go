@@ -20,7 +20,9 @@ import (
 // writes the machine's real credential store.
 func TestMain(m *testing.M) {
 	keyring.MockInit()
-	os.Exit(m.Run())
+	code := m.Run()
+	removeBenchData()
+	os.Exit(code)
 }
 
 // fakeIMAP records the commands a binding sends and answers them from canned
