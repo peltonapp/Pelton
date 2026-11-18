@@ -71,9 +71,79 @@ function show(node: Element, options: TipOptions): void {
   el.classList.add('shown')
 }
 
+// the hidden texts tooltips are described by, so assistive tech hears what the
+// bubble says without it having to be on screen.
+let described = 0
+let host: HTMLDivElement | null = null
+
+function descriptionHost(): HTMLDivElement {
+  if (!host || !host.isConnected) {
+    host = document.createElement('div')
+    host.hidden = true
+    document.body.appendChild(host)
+  }
+  return host
+}
+
+function ownName(node: Element, added: boolean): string {
+  return ((added ? '' : node.getAttribute('aria-label')) || node.textContent || '').replace(/\s+/g, ' ').trim()
+}
+
+// names an element that has no name of its own and describes it by whatever
+// the bubble adds to the name: the rest of the label and the shortcut. text
+// that only repeats the name is left out, so it is not read twice.
+function expose(node: Element, options: TipOptions, state: { id: string; named: boolean }): void {
+  const text = options.text.replace(/\s+/g, ' ').trim()
+  if (!state.named && !node.getAttribute('aria-label') && !node.getAttribute('aria-labelledby') && !ownName(node, false) && text) {
+    node.setAttribute('aria-label', text)
+    state.named = true
+  }
+  if (state.named) {
+    node.setAttribute('aria-label', text)
+  }
+  const name = state.named ? text : ownName(node, false)
+  let extra = text
+  if (name && text.startsWith(name)) {
+    extra = text.slice(name.length).trim()
+  }
+  const description = [extra, options.shortcut ?? ''].filter(Boolean).join(' ')
+  let el = document.getElementById(state.id)
+  if (!description) {
+    el?.remove()
+    const rest = (node.getAttribute('aria-describedby') ?? '').split(' ').filter((x) => x && x !== state.id)
+    if (rest.length) {
+      node.setAttribute('aria-describedby', rest.join(' '))
+    } else {
+      node.removeAttribute('aria-describedby')
+    }
+    return
+  }
+  if (!el) {
+    el = document.createElement('span')
+    el.id = state.id
+    descriptionHost().appendChild(el)
+  }
+  el.textContent = description
+  const ids = (node.getAttribute('aria-describedby') ?? '').split(' ').filter(Boolean)
+  if (!ids.includes(state.id)) {
+    node.setAttribute('aria-describedby', [...ids, state.id].join(' '))
+  }
+}
+
+function onEscape(event: KeyboardEvent): void {
+  if (event.key === 'Escape' && bubble) {
+    hide()
+  }
+}
+
 /** Shows a tooltip beside the element on hover and keyboard focus; svg shapes take one too. */
 export function tip(node: HTMLElement | SVGElement, options: TipOptions): { update(next: TipOptions): void; destroy(): void } {
   let current = options
+  const state = { id: `tip-desc-${++described}`, named: false }
+  expose(node, current, state)
+  if (described === 1) {
+    window.addEventListener('keydown', onEscape, true)
+  }
 
   function onEnter(): void {
     clearTimeout(timer)
@@ -95,9 +165,11 @@ export function tip(node: HTMLElement | SVGElement, options: TipOptions): { upda
   return {
     update(next: TipOptions): void {
       current = next
+      expose(node, current, state)
     },
     destroy(): void {
       hide()
+      document.getElementById(state.id)?.remove()
       node.removeEventListener('pointerenter', onEnter)
       node.removeEventListener('pointerleave', hide)
       node.removeEventListener('pointerdown', hide)
