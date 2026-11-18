@@ -9,6 +9,8 @@
   import { EditorState, Compartment } from '@codemirror/state'
   import { defaultKeymap, history, historyKeymap } from '@codemirror/commands'
   import { vim } from '@replit/codemirror-vim'
+  import { get } from 'svelte/store'
+  import { t } from '../../lib/i18n'
 
   export let content = ''
   export let placeholder = ''
@@ -70,6 +72,7 @@
         history(),
         keymap.of([...defaultKeymap, ...historyKeymap]),
         EditorView.lineWrapping,
+        EditorView.contentAttributes.of({ 'aria-label': get(t)('a11y.messageBody'), 'aria-multiline': 'true' }),
         cmPlaceholder(placeholder),
         theme,
         EditorView.updateListener.of((u) => {

@@ -888,7 +888,7 @@
                 {$t('wizard.field.fromName')}
                 <InfoTip text={$t('mailboxes.fromNameHint')} />
               </span>
-              <input type="text" bind:value={draft.displayName} placeholder={$t('wizard.field.displayNamePlaceholder')} />
+              <input type="text" bind:value={draft.displayName} placeholder={$t('wizard.field.displayNamePlaceholder')} aria-label={$t('wizard.field.fromName')} />
             </label>
             <div class="toggle">
               <span>{$t('mailboxes.localLabel.toggle')}</span>
@@ -904,7 +904,7 @@
                   {$t('wizard.field.localLabel')}
                   <InfoTip text={$t('mailboxes.localLabelHint')} />
                 </span>
-                <input type="text" bind:value={draft.localLabel} placeholder={draft.displayName || draft.email} />
+                <input type="text" bind:value={draft.localLabel} placeholder={draft.displayName || draft.email} aria-label={$t('wizard.field.localLabel')} />
               </label>
             {/if}
             <div class="field">
@@ -954,7 +954,7 @@
                 {$t('wizard.field.fromName')}
                 <InfoTip text={$t('mailboxes.fromNameHint')} />
               </span>
-              <input type="text" bind:value={draft.displayName} placeholder={$t('wizard.field.displayNamePlaceholder')} />
+              <input type="text" bind:value={draft.displayName} placeholder={$t('wizard.field.displayNamePlaceholder')} aria-label={$t('wizard.field.fromName')} />
             </label>
             <div class="toggle">
               <span>{$t('mailboxes.localLabel.toggle')}</span>
@@ -970,7 +970,7 @@
                   {$t('wizard.field.localLabel')}
                   <InfoTip text={$t('mailboxes.localLabelHint')} />
                 </span>
-                <input type="text" bind:value={draft.localLabel} placeholder={draft.displayName || draft.email} />
+                <input type="text" bind:value={draft.localLabel} placeholder={draft.displayName || draft.email} aria-label={$t('wizard.field.localLabel')} />
               </label>
             {/if}
             <label class="field">
