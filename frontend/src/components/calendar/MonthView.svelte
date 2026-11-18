@@ -208,6 +208,7 @@
               type="button"
               class="num"
               aria-label={formatLongDay(day)}
+              aria-current={sameDay(day, today) ? 'date' : undefined}
               on:click|stopPropagation={() => dispatch('day', day)}
             >
               {day.getDate() === 1 ? day.toLocaleDateString(undefined, { day: 'numeric', month: 'short' }) : day.getDate()}

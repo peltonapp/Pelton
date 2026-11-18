@@ -30,9 +30,10 @@
     startOfDay,
     type Placed,
   } from '../../lib/caldate'
-  import { formatHour, formatTime, formatTimeRange } from '../../lib/calformat'
+  import { formatHour, formatLongDay, formatTime, formatTimeRange } from '../../lib/calformat'
   import { occurrenceKey } from './occurrence'
-  import type { CellMenuAt, MailDropAt } from '../../stores/calendar'
+  import { eventLabel } from './labels'
+  import { calendars, type CellMenuAt, type MailDropAt } from '../../stores/calendar'
   import { t } from '../../lib/i18n'
   import type { TimeFormat } from '../../lib/format'
   import type { Occurrence, TimeZoneDisplay } from '../../lib/types'
@@ -107,6 +108,12 @@
 
   function colorOf(occ: Occurrence): string {
     return colors.get(occ.calendarId) ?? occ.calendarColor ?? 'var(--cal-1)'
+  }
+
+  // the calendar an event is in, said in words where the grid only shows its color.
+  function calendarNameOf(id: number): string {
+    const cal = $calendars.find((c) => c.id === id)
+    return cal ? cal.name || $t('calendar.defaultName') : ''
   }
 
   // --- pointer geometry ----------------------------------------------------
@@ -500,6 +507,8 @@
             class="dh"
             class:today={sameDay(day, today)}
             class:weekend={day.getDay() === 0 || day.getDay() === 6}
+            aria-current={sameDay(day, today) ? 'date' : undefined}
+            aria-label={formatLongDay(day)}
             style={`grid-column:${i + 2}`}
             on:click={() => dispatch('day', day)}
           >
@@ -608,6 +617,15 @@
                 class:task={occ.task}
                 class:done={occ.task?.done}
                 style={`top:${pct(b.top)};height:${pct(b.bottom - b.top)};--col:${b.col};--cols:${b.cols};--ev:${colorOf(occ)}`}
+                aria-label={occ.task ? undefined : eventLabel({
+                  title: occ.summary || $t('calendar.untitled'),
+                  when: `${formatLongDay(b.placed.start)}, ${formatTimeRange(b.placed.start, b.placed.end, timeFormat)}`,
+                  calendar: calendarNameOf(occ.calendarId),
+                  status: occ.status,
+                  free: occ.transparency === 'TRANSPARENT',
+                  conflict: occ.conflict,
+                  recurring: occ.recurring,
+                }, $t)}
                 on:pointerdown={(e) => onEventDown(e, b.placed)}
                 on:click={(e) => e.detail === 0 && dispatch('open', { occ, anchor: e.currentTarget })}
                 on:contextmenu={(e) => !occ.task && openScriptMenu(e, 'calendar.event', { id: String(occ.eventId) })}

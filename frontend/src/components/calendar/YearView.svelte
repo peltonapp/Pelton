@@ -192,6 +192,8 @@
                   class:today={sameDay(day, today)}
                   class:selected={key === selectedKey}
                   class:weekend={day.getDay() === 0 || day.getDay() === 6}
+                  aria-current={sameDay(day, today) ? 'date' : undefined}
+                  aria-pressed={key === selectedKey}
                   data-day={key}
                   tabindex={key === cursorKey ? 0 : -1}
                   aria-label={dayLabel(day)}
