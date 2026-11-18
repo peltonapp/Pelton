@@ -1639,6 +1639,8 @@ const en: Record<string, string> = {
   'a11y.movedTo': 'Moved to position {n} of {total}',
   'a11y.unreadCount': '{count} unread',
   'a11y.messageBody': 'Message body',
+  'a11y.done': 'done',
+  'a11y.overdue': 'overdue',
   'a11y.badgeCount': '{count} waiting',
   'a11y.event.tentative': 'tentative',
   'a11y.event.cancelled': 'cancelled',
