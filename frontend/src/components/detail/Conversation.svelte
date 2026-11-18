@@ -315,7 +315,9 @@
   class="scroll selectable"
   class:reading
   class:quiet
-  tabindex="-1"
+  tabindex="0"
+  role="region"
+  aria-label={subject}
   bind:this={scrollEl}
   on:pointermove={reading ? wake : undefined}
   on:keydown={reading ? wake : undefined}
