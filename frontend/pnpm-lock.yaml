@@ -11,6 +11,9 @@ importers:
       '@codemirror/commands':
         specifier: ^6.11.1
         version: 6.11.1
+      '@codemirror/language':
+        specifier: 6.12.4
+        version: 6.12.4
       '@codemirror/legacy-modes':
         specifier: 6.5.4
         version: 6.5.4
