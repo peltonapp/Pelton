@@ -55,8 +55,20 @@ describe('HistoryButton', () => {
 
     expect(screen.getByRole('button', { name: 'Undo: Flagged' })).toBeDisabled()
     expect(screen.getByRole('button', { name: 'Undo: Unflagged' })).toBeEnabled()
-    expect(screen.getByText(/A later action changed the same messages/)).toBeInTheDocument()
+    expect(within(screen.getByRole('dialog', { name: 'Recent actions' })).getByText(/A later action changed the same messages/)).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Undo: Flagged' })).toHaveAccessibleDescription(/A later action changed the same messages/)
     expect(get(history)[1].reason).toBe('later')
+  })
+
+  it('moves focus into the panel and hands it back on Escape', async () => {
+    recordHistory(input({ label: 'Flagged' }))
+    render(HistoryButton)
+    const trigger = screen.getByRole('button', { name: 'Show recent actions' })
+    await userEvent.click(trigger)
+    const panel = screen.getByRole('dialog', { name: 'Recent actions' })
+    expect(panel.contains(document.activeElement)).toBe(true)
+    await userEvent.keyboard('{Escape}')
+    expect(document.activeElement).toBe(trigger)
   })
 
   it('closes from its close button', async () => {
