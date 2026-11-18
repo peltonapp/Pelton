@@ -12,7 +12,6 @@
   import MenuBar from './components/common/MenuBar.svelte'
   import MessageList from './components/list/MessageList.svelte'
   import MessageDetail from './components/detail/MessageDetail.svelte'
-  import Compose from './components/compose/Compose.svelte'
   import Toasts from './components/common/Toasts.svelte'
   import StatusBar from './components/common/StatusBar.svelte'
   import ContextMenu from './components/common/ContextMenu.svelte'
@@ -60,7 +59,7 @@
   import { initProgress } from './stores/progress'
   import { composeSessions, openCompose, openComposeWith, initComposePrefs, openReply, openForward, requestComposeClose, setForcedComposeMode, updateCompose } from './stores/compose'
   import { routeComposeSessions } from './stores/composeroute'
-  import Composer2 from './components/compose/Composer2.svelte'
+  import { loadClassicCompose, loadComposer, warmUp } from './lib/lazyload'
   import ComposeTabLayer from './components/compose/ComposeTabLayer.svelte'
   import { openSnooze, openSnoozeMany } from './stores/snooze'
   import { patchInList } from './stores/messages'
@@ -680,6 +679,7 @@
     await initPrefs()
     await initSidebarState()
     await initComposePrefs()
+    warmUp([get(prefs).design === 'classic' ? loadClassicCompose : loadComposer])
     void initShortcuts()
     void initCoach().then((stop) => unsubscribers.push(stop))
     void initFirstTips()
@@ -2466,16 +2466,21 @@
   <div class="compose-layer">
     {#each $composeSessions as session (session.id)}
       {#if classic}
-        <Compose {session} />
+        {#await loadClassicCompose() then m}
+          <svelte:component this={m.default} {session} />
+        {/await}
       {:else if session.placement === 'docked'}
-        <Composer2 {session} layout="docked" mainWindow />
+        {#await loadComposer() then m}
+          <svelte:component this={m.default} {session} layout="docked" mainWindow />
+        {/await}
       {/if}
     {/each}
   </div>
 {/if}
 
 <!-- settings and the wizard are code-split: their js/css load only when opened,
-     so they cost nothing at startup. compose stays eager (used constantly). -->
+     so they cost nothing at startup. compose is split too, and loaded once the
+     window has settled so it is ready before it is first opened. -->
 {#if automationsOpen && classic}
   {#await import('./components/automations/AutomationsOverlay.svelte') then m}
     <svelte:component this={m.default} on:close={() => (automationsOpen = false)} />
