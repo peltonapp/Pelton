@@ -17,6 +17,7 @@ import (
 	"net/url"
 	"regexp"
 	"strings"
+	"unicode"
 	"unicode/utf8"
 
 	"github.com/emersion/go-message"
@@ -326,12 +327,13 @@ func ReferencedCIDs(html string) map[string]bool {
 // honest indicator. Proper verification belongs to the crypto layer in a later
 // step.
 func DetectPGP(plain, html string) PGPStatus {
-	hay := plain + "\n" + html
+	has := func(marker string) bool {
+		return strings.Contains(plain, marker) || strings.Contains(html, marker)
+	}
 	switch {
-	case strings.Contains(hay, "-----BEGIN PGP MESSAGE-----"):
+	case has("-----BEGIN PGP MESSAGE-----"):
 		return PGPEncrypted
-	case strings.Contains(hay, "-----BEGIN PGP SIGNED MESSAGE-----"),
-		strings.Contains(hay, "-----BEGIN PGP SIGNATURE-----"):
+	case has("-----BEGIN PGP SIGNED MESSAGE-----"), has("-----BEGIN PGP SIGNATURE-----"):
 		return PGPSigned
 	default:
 		return PGPNone
@@ -441,11 +443,12 @@ func PlainText(markup string) string {
 // Snippet returns a short plain text preview for the message list. It prefers
 // the plain body and falls back to the text of the html body.
 func Snippet(plain, html string) string {
-	text := strings.TrimSpace(plain)
-	if text == "" && html != "" {
-		text = PlainText(html)
+	var w snippetWriter
+	w.write(plain)
+	if len(w.b) == 0 && html != "" {
+		w.writeHTML(html)
 	}
-	text = strings.Join(strings.Fields(text), " ")
+	text := string(w.b)
 	if len(text) > snippetLen {
 		cut := snippetLen
 		for cut > 0 && !utf8.RuneStart(text[cut]) {
@@ -454,4 +457,63 @@ func Snippet(plain, html string) string {
 		return strings.TrimSpace(text[:cut]) + "…"
 	}
 	return text
+}
+
+// snippetWriter collects text with every whitespace run collapsed to one space
+// and none at either end, and stops once it holds more than a snippet, so a long
+// body is read only as far as its preview reaches.
+type snippetWriter struct {
+	b     []byte
+	space bool
+}
+
+// write adds s and reports whether the writer is full.
+func (w *snippetWriter) write(s string) bool {
+	for i := 0; i < len(s); {
+		r, size := utf8.DecodeRuneInString(s[i:])
+		if unicode.IsSpace(r) {
+			w.space = len(w.b) > 0
+		} else {
+			if w.space {
+				w.b = append(w.b, ' ')
+				w.space = false
+			}
+			w.b = append(w.b, s[i:i+size]...)
+			if len(w.b) > snippetLen {
+				return true
+			}
+		}
+		i += size
+	}
+	return false
+}
+
+// writeHTML adds the text of markup the way PlainText reads it.
+func (w *snippetWriter) writeHTML(markup string) {
+	z := htmltok.NewTokenizer(strings.NewReader(markup))
+	skip := 0
+	for {
+		switch z.Next() {
+		case htmltok.ErrorToken:
+			return
+		case htmltok.TextToken:
+			if skip == 0 && w.write(string(z.Text())) {
+				return
+			}
+		case htmltok.StartTagToken:
+			name, _ := z.TagName()
+			if skipTextIn[string(name)] {
+				skip++
+			}
+			w.write(" ")
+		case htmltok.EndTagToken:
+			name, _ := z.TagName()
+			if skipTextIn[string(name)] && skip > 0 {
+				skip--
+			}
+			w.write(" ")
+		case htmltok.SelfClosingTagToken:
+			w.write(" ")
+		}
+	}
 }
