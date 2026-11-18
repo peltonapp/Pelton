@@ -314,6 +314,13 @@
   // the new design searches from the top bar; classic keeps its own bar here.
   $: classic = $prefs.design === 'classic'
   $: inSearch = !classic && $activeSearch !== null
+  // a finished search says how much it found; browsing a folder stays quiet.
+  $: searchStatus =
+    inSearch && $messageList.status !== 'loading'
+      ? items.length === 0
+        ? $t('messageList.empty.noMatch')
+        : $t('a11y.results').replace('{count}', String(items.length))
+      : ''
 
   let searchFilter: SearchFilter = emptyFilter
   let lastKey = ''
@@ -1320,6 +1327,9 @@
     <FollowUpBand items={inboxFollowUps} />
   {/if}
 
+  {#if inSearch}
+    <div class="sr-only" role="status">{searchStatus}</div>
+  {/if}
   <div
     class="rows"
     role="listbox"
