@@ -3,6 +3,7 @@ import { render, screen, within } from '@testing-library/svelte'
 import userEvent from '@testing-library/user-event'
 import { get } from 'svelte/store'
 import HistoryButton from './HistoryButton.svelte'
+import { expectAccessible } from '../../test/a11y'
 import { clearHistory, history, historyOpen, recordHistory, stateKey, type HistoryInput } from '../../stores/undohistory'
 
 function input(patch: Partial<HistoryInput> = {}): HistoryInput {
@@ -67,6 +68,7 @@ describe('HistoryButton', () => {
     await userEvent.click(trigger)
     const panel = screen.getByRole('dialog', { name: 'Recent actions' })
     expect(panel.contains(document.activeElement)).toBe(true)
+    expectAccessible()
     await userEvent.keyboard('{Escape}')
     expect(document.activeElement).toBe(trigger)
   })

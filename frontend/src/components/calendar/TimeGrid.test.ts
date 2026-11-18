@@ -4,6 +4,7 @@ import TimeGrid from './TimeGrid.svelte'
 import { placeOccurrence, toRFC3339, weekDays } from '../../lib/caldate'
 import type { Calendar, Occurrence } from '../../lib/types'
 import { calendars } from '../../stores/calendar'
+import { expectAccessible } from '../../test/a11y'
 
 function occ(id: number, summary: string, start: Date, end: Date): Occurrence {
   return {
@@ -86,6 +87,7 @@ describe('TimeGrid', () => {
     expect(name).toContain('Work')
     expect(name).toContain('tentative')
     expect(name).toContain('repeats')
+    expectAccessible()
     calendars.set([])
   })
 

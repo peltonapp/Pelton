@@ -6,6 +6,7 @@ import ContextMenu from './ContextMenu.svelte'
 import { closeContextMenu, openContextMenu } from '../../stores/contextmenu'
 import { prefs } from '../../stores/prefs'
 import { openMenuFromKeyboard } from '../../lib/keymenu'
+import { expectAccessible } from '../../test/a11y'
 
 function invoker(): HTMLButtonElement {
   const button = document.createElement('button')
@@ -37,6 +38,7 @@ describe('ContextMenu keyboard', () => {
     const event = new KeyboardEvent('keydown', { key: 'F10', shiftKey: true, cancelable: true })
     expect(openMenuFromKeyboard(event)).toBe(true)
     await waitFor(() => expect(document.activeElement).toBe(screen.getByRole('menuitem', { name: 'Archive' })))
+    expectAccessible()
 
     await user.keyboard('{ArrowDown}')
     expect(document.activeElement).toBe(screen.getByRole('menuitem', { name: 'Delete' }))
