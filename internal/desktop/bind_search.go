@@ -397,20 +397,23 @@ func (a *App) Search(req SearchRequestDTO) (SearchResultDTO, error) {
 	// one filter that goes stale the moment it is used, since opening a result
 	// marks it read, so reading it from the store rather than the index is what
 	// keeps it honest.
-	vips := a.vipSet()
-	out := make([]MessageSummaryDTO, 0, len(res.Hits))
+	ids := make([]int64, 0, len(res.Hits))
 	for _, h := range res.Hits {
-		m, err := a.store.GetMessage(a.ctx, h.ID)
-		if err != nil {
-			continue
+		ids = append(ids, h.ID)
+	}
+	byID, err := a.store.MessagesByID(a.ctx, ids)
+	if err != nil {
+		return empty, err
+	}
+	kept := make([]storage.Message, 0, len(ids))
+	for _, id := range ids {
+		if m, ok := byID[id]; ok && req.keeps(&m) {
+			kept = append(kept, m)
 		}
-		if !req.keeps(m) {
-			continue
-		}
-		email, folderName := a.lookupContext(a.ctx, m.AccountID, m.FolderID)
-		dto := toSummaryDTO(*m, email, folderName)
-		dto.SenderVIP = vips[bareAddress(m.FromAddress)]
-		out = append(out, dto)
+	}
+	out, err := a.buildSummaries(a.ctx, kept)
+	if err != nil {
+		return empty, err
 	}
 	return SearchResultDTO{Messages: out, Total: int(res.Total)}, nil
 }
