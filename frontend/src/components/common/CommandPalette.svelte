@@ -29,6 +29,7 @@
   import { highlightRuns } from '../../lib/fuzzy'
   import { t, isMac, shortcutLabel } from '../../lib/i18n'
   import { prefs } from '../../stores/prefs'
+  import { calm } from '../../lib/motion'
 
   /** Every command currently available, rebuilt by the parent as state changes. */
   export let commands: PaletteCommand[] = []
@@ -328,13 +329,13 @@
 
 {#if $paletteOpen}
   <!-- svelte-ignore a11y-click-events-have-key-events a11y-no-static-element-interactions -->
-  <div class="backdrop" transition:fade={{ duration: 100 }} on:click={closePalette}></div>
+  <div class="backdrop" transition:fade={{ duration: calm(100) }} on:click={closePalette}></div>
   <div
     class="palette"
     role="dialog"
     aria-modal="true"
     aria-label={$t('palette.title')}
-    transition:fly={{ y: -8, duration: 140 }}
+    transition:fly={{ y: -8, duration: calm(140) }}
   >
     <div class="field">
       {#if $paletteStep}

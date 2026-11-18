@@ -310,7 +310,7 @@
   }
 </script>
 
-<!-- svelte-ignore a11y-no-noninteractive-tabindex a11y-no-static-element-interactions -->
+<!-- svelte-ignore a11y-no-noninteractive-tabindex a11y-no-noninteractive-element-interactions -->
 <div
   class="scroll selectable"
   class:reading

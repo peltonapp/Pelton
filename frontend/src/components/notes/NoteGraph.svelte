@@ -393,7 +393,6 @@
 <div class="graph" bind:this={wrap}>
   <canvas
     bind:this={canvas}
-    role="img"
     aria-label={label || $t('notes.graph')}
     on:pointerdown={onPointerDown}
     on:pointermove={onPointerMove}

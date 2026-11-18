@@ -9,6 +9,7 @@
   import PieProgress from './PieProgress.svelte'
   import { prefs } from '../../stores/prefs'
   import { t } from '../../lib/i18n'
+  import { calm } from '../../lib/motion'
   import type { ToastKind } from '../../stores/toast'
   import type { ToastPosition } from '../../lib/types'
 
@@ -62,8 +63,8 @@
     <!-- svelte-ignore a11y-no-static-element-interactions -->
     <div
       class={`toast ${toast.kind}`}
-      in:fly={{ y: flyY, duration: 200 }}
-      out:fade={{ duration: 150 }}
+      in:fly={{ y: flyY, duration: calm(200) }}
+      out:fade={{ duration: calm(150) }}
       on:mouseenter={() => holds && pauseToast(toast.id)}
       on:mouseleave={() => holds && resumeToast(toast.id)}
       on:focusin={() => holds && pauseToast(toast.id)}
