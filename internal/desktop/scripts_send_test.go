@@ -6,6 +6,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/peltonapp/Pelton/internal/scripting"
 )
@@ -133,6 +134,36 @@ func TestSubjectChangesAreLoggedNotAsked(t *testing.T) {
 	if err != nil || !hasStep(test.Steps, scripting.StepPlanned, "event.draft.cc", "x@example.test") {
 		t.Fatalf("%v %+v", err, test.Steps)
 	}
+}
+
+// TestAfterSendCarriesTheChain checks that mail a script sent sets off the
+// after-send scripts one level deeper, so scripts that send on every send
+// stop instead of mailing for ever.
+func TestAfterSendCarriesTheChain(t *testing.T) {
+	a, _ := newScriptTestApp(t)
+	in := luaInput(`print("sent")`, scripting.PermMailRead)
+	in.Trigger.Type = scripting.TriggerAfterSend
+	sc, err := a.CreateScript(in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := a.SetScriptEnabled(sc.ID, true, sc.Permissions); err != nil {
+		t.Fatal(err)
+	}
+	a.sentRequests.Store(int64(500), ComposeRequest{AccountID: 1, Subject: "s"})
+	a.scriptState.sentBy.Store(int64(500), scripting.RunInfo{ScriptID: sc.ID + 1, Depth: scripting.MaxDepth})
+	a.scriptAfterSend(500)
+	deadline := time.Now().Add(5 * time.Second)
+	for time.Now().Before(deadline) {
+		if runs, _ := a.ScriptRuns(sc.ID, 5); len(runs) > 0 {
+			if runs[0].Status != string(scripting.StatusSkipped) || runs[0].Depth != scripting.MaxDepth+1 {
+				t.Fatalf("run %+v", runs[0])
+			}
+			return
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+	t.Fatal("the deep after-send event was not held back")
 }
 
 func hasStep(steps []scripting.Step, kind scripting.StepKind, function, text string) bool {

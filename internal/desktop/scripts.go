@@ -75,6 +75,9 @@ type scriptState struct {
 	// synced holds the accounts that finished a full sync in this session;
 	// mail a first sync brings in may have arrived while the app was closed.
 	synced sync.Map
+	// sentBy holds, by outbox id, the run that sent a message, so the
+	// after-send event it causes carries that run's chain depth and source.
+	sentBy sync.Map
 }
 
 type runJournal struct {
@@ -193,7 +196,12 @@ func (a *App) scriptAfterSend(outboxID int64) {
 		return
 	}
 	req := v.(ComposeRequest)
-	a.scripts.Emit(scripting.Event{Trigger: scripting.TriggerAfterSend, Data: map[string]any{"draft": draftEvent(req)}})
+	ev := scripting.Event{Trigger: scripting.TriggerAfterSend, Data: map[string]any{"draft": draftEvent(req)}}
+	if by, ok := a.scriptState.sentBy.LoadAndDelete(outboxID); ok {
+		info := by.(scripting.RunInfo)
+		ev.Depth, ev.Source = info.Depth+1, info.ScriptID
+	}
+	a.scripts.Emit(ev)
 }
 
 // draftEvent is a message being written as the scripts see it.

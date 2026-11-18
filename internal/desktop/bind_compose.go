@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/peltonapp/Pelton/internal/outbox"
+	"github.com/peltonapp/Pelton/internal/scripting"
 	"github.com/peltonapp/Pelton/internal/smtp"
 	"github.com/peltonapp/Pelton/internal/storage"
 )
@@ -140,6 +141,9 @@ func (a *App) sendMessage(ctx context.Context, req ComposeRequest) (int64, error
 		return 0, err
 	}
 	a.sentRequests.Store(id, req)
+	if info, ok := scripting.RunInfoFrom(ctx); ok {
+		a.scriptState.sentBy.Store(id, info)
+	}
 	a.activity.Add(outbox.Entry{MessageID: id, Step: outbox.StepQueued, Recipients: msg.Recipients()})
 	a.emit(EventOutboxChanged, nil)
 	a.recordFollowUp(req, id, msg.MessageID, followUp, notBefore)
