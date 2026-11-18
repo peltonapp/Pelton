@@ -99,6 +99,56 @@ func TestLibraryChangeRevokesItsScripts(t *testing.T) {
 	assertRevoked(t, s, other.ID, false)
 }
 
+// TestBlockValuesCannotBreakOutOfTheirLiteral checks that values, variable
+// names and reference paths a block file carries compile to Lua that keeps
+// them data: quotes, newlines, long brackets and keywords included.
+func TestBlockValuesCannotBreakOutOfTheirLiteral(t *testing.T) {
+	r := testRegistry(t)
+	hostile := "a\"]] ) os.exit() --[[\n\x00\\\" ]==] end"
+	tree := Tree{Version: 1, Blocks: []Block{
+		{ID: "a", Kind: BlockSet, As: "end", Value: &Arg{Value: hostile}},
+		{ID: "b", Kind: BlockAction, Type: "log.write", Args: map[string]Arg{"text": {Value: hostile}}},
+		{ID: "c", Kind: BlockSet, As: "x", Value: &Arg{Ref: "event.message.end"}},
+		{ID: "d", Kind: BlockAction, Type: "log.write", Args: map[string]Arg{"text": {Ref: "var:end"}}},
+	}}
+	res := Compile(r, tree, TriggerManual, true)
+	if len(res.Errors) > 0 {
+		t.Fatalf("compile: %v", res.Errors)
+	}
+	if err := CheckLua(res.Lua); err != nil {
+		t.Fatalf("the compiled Lua does not parse: %v\n%s", err, res.Lua)
+	}
+	for _, bad := range []string{
+		`vars["x"] = event.message.end`, "x = )",
+	} {
+		if strings.Contains(res.Lua, bad) {
+			t.Fatalf("compiled %q:\n%s", bad, res.Lua)
+		}
+	}
+	for _, ref := range []string{`event.a"b`, "var:a b", "step:a].x", "setting:x)", "event.message.subject;os"} {
+		if _, err := refLua(ref); err == nil {
+			t.Errorf("%q compiled", ref)
+		}
+	}
+	e := testEngine(t, newFakeMail())
+	run := e.Run(context.Background(), RunRequest{
+		Script:  &Script{ID: 1, Name: "t", Kind: KindBlocks, Blocks: &tree, Trigger: TriggerConfig{Type: TriggerManual}},
+		Trigger: TriggerManual, Event: map[string]any{"message": map[string]any{"end": "kept"}},
+	})
+	if run.Status != StatusOK {
+		t.Fatalf("%s %s", run.Status, run.Error)
+	}
+	var logged []string
+	for _, s := range run.Steps {
+		if s.Kind == StepLog {
+			logged = append(logged, s.Summary)
+		}
+	}
+	if len(logged) != 2 || logged[0] != hostile || logged[1] != hostile {
+		t.Fatalf("logged %q", logged)
+	}
+}
+
 // TestTargetedPermissionsMatchExactly checks that a targeted permission
 // covers its own target only, and that a wildcard cannot be declared.
 func TestTargetedPermissionsMatchExactly(t *testing.T) {
