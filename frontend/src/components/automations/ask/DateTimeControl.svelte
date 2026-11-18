@@ -2,6 +2,7 @@
   // a date and a time of day, with the app's date picker; the answer is unix
   // seconds.
   import DateTimePicker from '../../common/DateTimePicker.svelte'
+  import { t } from '../../../lib/i18n'
   import type { ScriptAsk } from '../../../lib/scripting'
 
   /** The question. */
@@ -23,7 +24,7 @@
   }
 </script>
 
-<div class="when" aria-label={ask.prompt}>
+<div class="when" role="group" aria-label={ask.prompt || $t('scripts.ask.answer')}>
   <DateTimePicker mode="datetime" bind:value={text} />
 </div>
 
