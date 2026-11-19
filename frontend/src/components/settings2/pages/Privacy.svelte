@@ -6,6 +6,7 @@
   import { createEventDispatcher } from 'svelte'
   import Card from '../ui/Card.svelte'
   import AppLockCard from '../AppLockCard.svelte'
+  import VaultCard from '../VaultCard.svelte'
   import Row from '../ui/Row.svelte'
   import ToggleSwitch from '../../common/ToggleSwitch.svelte'
   import NetworkSection from '../../settings/NetworkSection.svelte'
@@ -88,6 +89,7 @@
   </Row>
 </Card>
 <AppLockCard />
+<VaultCard />
 
 <Card bare>
   <div class="s2-section" data-setting="proxy">

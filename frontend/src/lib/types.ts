@@ -133,6 +133,12 @@ export interface Folder {
   // syncExcluded means the user unchecked this folder, so sync skips it. What
   // was already fetched stays readable; it just stops being updated (#173).
   syncExcluded: boolean
+  // vaultId is the mail vault the folder is in, 0 or absent for none;
+  // vaultLocked is set while it is locked, vaultHidden when it is also to stay
+  // out of the sidebar then.
+  vaultId?: number
+  vaultLocked?: boolean
+  vaultHidden?: boolean
 }
 
 export interface UnifiedView {
@@ -3241,4 +3247,50 @@ export interface KeyLookupLogEntry {
   source: string
   email: string
   outcome: 'found' | 'none' | 'unusable' | 'failed'
+}
+
+/** A folder in a mail vault, or a whole account when folderId is 0. */
+export interface MailVaultMember {
+  accountId: number
+  folderId: number
+}
+
+/**
+ * A mail vault: folders and accounts whose cached mail is encrypted with a
+ * passphrase of its own. pending counts messages still to seal, or to unseal
+ * while the vault is being removed.
+ */
+export interface MailVault {
+  id: number
+  name: string
+  locked: boolean
+  state: 'sealing' | 'ready' | 'unsealing'
+  pending: number
+  sealed: number
+  members: MailVaultMember[]
+  folderIds: number[]
+  autoLockMinutes: number
+  notify: 'none' | 'generic'
+  hideLocked: boolean
+  allowScripts: boolean
+  allowMcp: boolean
+  retryAfterMs: number
+}
+
+/** The outcome of a vault passphrase or recovery code. */
+export interface MailVaultAuth {
+  ok: boolean
+  reason?: 'wrong' | 'wait' | 'damaged' | 'weak'
+  retryAfterMs?: number
+}
+
+/** The settings of a vault that need no passphrase to change. */
+export interface MailVaultSettings {
+  id: number
+  name: string
+  autoLockMinutes: number
+  notify: 'none' | 'generic'
+  hideLocked: boolean
+  allowScripts: boolean
+  allowMcp: boolean
 }

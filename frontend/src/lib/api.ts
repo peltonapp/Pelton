@@ -166,6 +166,10 @@ import type {
   ThreadSummary,
   LockState,
   LockAuthResult,
+  MailVault,
+  MailVaultAuth,
+  MailVaultMember,
+  MailVaultSettings,
   QuickComposeStatus,
   VaultInfo,
   VaultSnapshot,
@@ -1431,7 +1435,7 @@ export function exportMessagePrintView(id: number): Promise<void> {
   if (isDemoActive()) {
     return Promise.resolve()
   }
-  return App.ExportMessagePrintView(id)
+  return withVaultTempConsent(() => App.ExportMessagePrintView(id))
 }
 
 // exportMessageEml asks where to save one message and writes it as an .eml
@@ -1716,7 +1720,7 @@ export function openAttachmentFile(messageId: number, attachmentId: number): Pro
   if (isDemoActive()) {
     return Promise.resolve()
   }
-  return App.OpenAttachmentFile(messageId, attachmentId)
+  return withVaultTempConsent(() => App.OpenAttachmentFile(messageId, attachmentId))
 }
 
 /**
@@ -1982,6 +1986,87 @@ export function disableAppLock(passphrase: string, reason: string): Promise<Lock
 /** Replaces the lock passphrase once the current one has been checked. */
 export function changeLockPassphrase(current: string, next: string): Promise<LockAuthResult> {
   return App.ChangeLockPassphrase(current, next) as unknown as Promise<LockAuthResult>
+}
+
+// --- mail vaults ---
+
+/** Every mail vault with its state and sealing progress. */
+export function listMailVaults(): Promise<MailVault[]> {
+  if (isDemoActive()) {
+    return Promise.resolve([])
+  }
+  return App.ListMailVaults() as unknown as Promise<MailVault[]>
+}
+
+/** Makes a vault and starts sealing; the recovery code is the only copy there will be. */
+export function createMailVault(req: {
+  name: string
+  passphrase: string
+  members: MailVaultMember[]
+  autoLockMinutes: number
+  notify: 'none' | 'generic'
+  hideLocked: boolean
+}): Promise<{ id: number; recoveryCode: string }> {
+  return App.CreateMailVault(req)
+}
+
+/** Puts a folder, or a whole account when folderId is 0, into an unlocked vault. */
+export function addToMailVault(vaultId: number, member: MailVaultMember): Promise<void> {
+  return App.AddToMailVault(vaultId, member.accountId, member.folderId)
+}
+
+/** Opens a vault with its passphrase. */
+export function unlockMailVault(id: number, passphrase: string): Promise<MailVaultAuth> {
+  return App.UnlockMailVault(id, passphrase) as unknown as Promise<MailVaultAuth>
+}
+
+/** Opens a vault with its recovery code and sets a new passphrase. */
+export function recoverMailVault(id: number, code: string, passphrase: string): Promise<MailVaultAuth> {
+  return App.RecoverMailVault(id, code, passphrase) as unknown as Promise<MailVaultAuth>
+}
+
+/** Rewraps a vault's key under a new passphrase. */
+export function changeMailVaultPassphrase(id: number, current: string, next: string): Promise<MailVaultAuth> {
+  return App.ChangeMailVaultPassphrase(id, current, next) as unknown as Promise<MailVaultAuth>
+}
+
+/** Locks every vault now. */
+export function lockAllMailVaults(): Promise<void> {
+  return App.LockAllMailVaults()
+}
+
+/** Stores a vault's settings. */
+export function updateMailVaultSettings(s: MailVaultSettings): Promise<void> {
+  return App.UpdateMailVaultSettings(s)
+}
+
+/** Unseals an unlocked vault's mail and removes the vault. */
+export function removeMailVault(id: number): Promise<void> {
+  return App.RemoveMailVault(id)
+}
+
+let askVaultTempConsent: (() => Promise<boolean>) | null = null
+
+/** Sets what asks the user, once, before a vault file is written to a temporary folder. */
+export function setVaultTempConsent(ask: () => Promise<boolean>): void {
+  askVaultTempConsent = ask
+}
+
+// withVaultTempConsent runs an action that may write a vault file for
+// opening. The first time, the backend refuses until the user has been told;
+// after a yes it is recorded and the action runs again.
+async function withVaultTempConsent(run: () => Promise<void>): Promise<void> {
+  try {
+    await run()
+  } catch (err) {
+    if (!String(err).includes('vault-temp-consent') || !askVaultTempConsent) {
+      throw err
+    }
+    if (await askVaultTempConsent()) {
+      await App.ConsentMailVaultTempFiles()
+      await run()
+    }
+  }
 }
 
 // --- quick compose ---

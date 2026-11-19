@@ -111,6 +111,12 @@ const lazyModules = [
   'components/attachments/AttachmentsBrowser.svelte',
   'components/common/MenuBarEditor.svelte',
   'components/common/CommandPalette.svelte',
+  'components/vault/VaultDialogs.svelte',
+  'components/vault/VaultUnlockDialog.svelte',
+  'components/vault/VaultCreateDialog.svelte',
+  'components/vault/VaultConsentDialog.svelte',
+  'components/settings2/VaultCard.svelte',
+  'stores/mailvault.ts',
 ]
 
 const lazyPackages = ['@codemirror/', 'codemirror', '@replit/codemirror-vim', '@tiptap/', 'pdfjs-dist', 'tabler-nodes-outline', '@tabler/icons/']
