@@ -89,6 +89,11 @@ jobs:
       - name: Build
         run: pnpm --dir frontend run build
 
+      # code split away from startup comes back with a single static import,
+      # and nothing else fails when it does.
+      - name: Startup bundle budget
+        run: pnpm --dir frontend run check:bundle
+
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: frontend-dist
