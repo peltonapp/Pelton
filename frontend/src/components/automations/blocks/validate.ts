@@ -3,7 +3,7 @@
 // the block now stands, an empty branch or group, a block or condition the
 // catalog does not know. Every check reads the catalog, never a block id.
 
-import type { Block, BlockArg, BlockCond, BlockTree, ScriptCatalog, ScriptParam } from '../../../lib/scripting'
+import { needs, type Block, type BlockArg, type BlockCond, type BlockTree, type ScriptCatalog, type ScriptParam } from '../../../lib/scripting'
 import { re2Problem } from './re2'
 import { refInScope, scopeAt, type ScopeContext } from './scope'
 import { walk, type CondPath } from './tree'
@@ -161,21 +161,23 @@ export function validate(tree: BlockTree, ctx: ScopeContext): Issue[] {
 /** The permissions the blocks need, from the catalog entries they use, with the trigger's first. */
 export function neededPermissions(tree: BlockTree, catalog: ScriptCatalog, trigger: string): string[] {
   const out: string[] = []
-  const add = (p: string | undefined) => {
-    if (p && !out.includes(p)) {
-      out.push(p)
+  const add = (...perms: string[]) => {
+    for (const p of perms) {
+      if (p && !out.includes(p)) {
+        out.push(p)
+      }
     }
   }
-  add(catalog.triggers.find((t) => t.id === trigger)?.permission)
+  add(catalog.triggers.find((t) => t.id === trigger)?.permission ?? '')
   const conds = (c: BlockCond) => {
     if (c.kind === 'condition') {
-      add(catalog.conditions.find((d) => d.id === c.type)?.permission)
+      add(...needs(catalog.conditions.find((d) => d.id === c.type)))
     }
     c.items?.forEach(conds)
   }
   walk(tree.blocks, (b) => {
     if (b.kind === 'action') {
-      add(catalog.actions.find((a) => a.id === b.type)?.permission)
+      add(...needs(catalog.actions.find((a) => a.id === b.type)))
     }
     b.branches?.forEach((br) => conds(br.when))
     return true

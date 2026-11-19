@@ -5,8 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"os"
-	"path/filepath"
 	"regexp"
 	"slices"
 	"strconv"
@@ -90,6 +88,8 @@ type ScriptRunDTO struct {
 	// ErrorBlock the block of a block script that was running.
 	ErrorLine  int    `json:"errorLine"`
 	ErrorBlock string `json:"errorBlock"`
+	// ErrorLibrary names the library ErrorLine is in, "" for the script.
+	ErrorLibrary string `json:"errorLibrary"`
 	// NotReached lists the blocks of a block script the run never got to.
 	NotReached []string `json:"notReached"`
 }
@@ -159,10 +159,15 @@ type ScriptToastDTO struct {
 }
 
 // ScriptFileDTO is a script file read for import, shown before anything is
-// stored: the script as it would arrive and the file's text.
+// stored: the script as it would arrive, or the library for a file of kind
+// "library", the file's text, and the libraries it requires that do not
+// exist here.
 type ScriptFileDTO struct {
-	Script ScriptDTO `json:"script"`
-	Text   string    `json:"text"`
+	Script           ScriptDTO         `json:"script"`
+	Library          *ScriptLibraryDTO `json:"library"`
+	Kind             string            `json:"kind"`
+	Text             string            `json:"text"`
+	MissingLibraries []string          `json:"missingLibraries"`
 }
 
 func fmtStamp(t time.Time) string {
@@ -247,7 +252,7 @@ func (a *App) runDTO(name string, r *scripting.Run) ScriptRunDTO {
 		Error: r.Error, Steps: orEmpty(r.Steps), Changes: r.Changes(), Cancelled: r.Cancelled,
 		CancelReason: r.CancelReason, LogTruncated: r.LogTruncated,
 		Undoable: undoable && !r.Dry, Messages: messages,
-		ErrorLine: r.ErrorLine, ErrorBlock: r.ErrorBlock, NotReached: orEmpty(r.NotReached),
+		ErrorLine: r.ErrorLine, ErrorBlock: r.ErrorBlock, ErrorLibrary: r.ErrorLibrary, NotReached: orEmpty(r.NotReached),
 	}
 }
 
@@ -347,6 +352,9 @@ func (a *App) DeleteScript(id int64) error {
 		return err
 	}
 	if err := svc.Delete(a.ctx, id); err != nil {
+		return err
+	}
+	if err := a.dropAIScriptOptions(id); err != nil {
 		return err
 	}
 	return a.setScriptFolder(id, "")
@@ -778,25 +786,7 @@ func (a *App) ExportScript(id int64) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	name := strings.TrimSpace(unsafeFileChars.ReplaceAllString(sc.Name, ""))
-	if name == "" {
-		name = "script"
-	}
-	path, err := a.saveFileDialog(saveDialogOptions{
-		Title:           "Export script",
-		DefaultFilename: name + scripting.FileExtension,
-		Filters:         []fileFilter{{DisplayName: "Pelton script", Pattern: "*" + scripting.FileExtension}},
-	})
-	if err != nil || path == "" {
-		return "", err
-	}
-	if filepath.Ext(path) == "" {
-		path += scripting.FileExtension
-	}
-	if err := os.WriteFile(path, data, 0o600); err != nil {
-		return "", err
-	}
-	return path, nil
+	return a.writeScriptFile(sc.Name, "Export script", data)
 }
 
 // PickScriptFile asks for a .peltonscript file and returns its path, ""
@@ -815,25 +805,11 @@ func (a *App) ReadScriptFile(path string) (ScriptFileDTO, error) {
 	if err != nil {
 		return ScriptFileDTO{}, err
 	}
-	if !strings.EqualFold(filepath.Ext(path), scripting.FileExtension) {
-		return ScriptFileDTO{}, fmt.Errorf("pelton: not a %s file", scripting.FileExtension)
-	}
-	info, err := os.Stat(path)
+	data, err := readScriptFileData(path)
 	if err != nil {
 		return ScriptFileDTO{}, err
 	}
-	if info.Size() > 1<<20 {
-		return ScriptFileDTO{}, fmt.Errorf("pelton: the file is too large for a script")
-	}
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return ScriptFileDTO{}, err
-	}
-	sc, err := scripting.ParseFile(svc.Registry(), data)
-	if err != nil {
-		return ScriptFileDTO{}, err
-	}
-	return ScriptFileDTO{Script: toScriptDTO(sc), Text: string(data)}, nil
+	return a.scriptFileInfo(svc, data)
 }
 
 // ImportScript stores the script in a file's text, switched off and marked

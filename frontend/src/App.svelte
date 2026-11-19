@@ -33,13 +33,16 @@
   import { frameIntegrated } from './stores/windowframe'
   import { setDraft, submitSearch, searchOpenedId } from './stores/search'
   import SnoozeDialog from './components/detail/SnoozeDialog.svelte'
+  import ClassicSnoozeDialog from './components/detail/classic/SnoozeDialog.svelte'
   import DragStack from './components/list/DragStack.svelte'
   import ConfirmDialog from './components/common/ConfirmDialog.svelte'
   import SyncFailureDialog from './components/common/SyncFailureDialog.svelte'
   import { loadSyncStates, watchSyncStates } from './stores/syncfailures'
   import FolderDialog from './components/sidebar/FolderDialog.svelte'
+  import ClassicFolderDialog from './components/sidebar/classic/FolderDialog.svelte'
   import AttachmentPreview from './components/detail/AttachmentPreview.svelte'
   import MoveDialog from './components/detail/MoveDialog.svelte'
+  import ClassicMoveDialog from './components/detail/classic/MoveDialog.svelte'
   import CommandPalette from './components/common/CommandPalette.svelte'
 
   import { initPrefs, prefs, setPaneWidths, setListHeight, setLowPowerMode } from './stores/prefs'
@@ -93,7 +96,9 @@
   import { liabilityAccepted } from './lib/liability'
   import { setDemoActive } from './lib/demo'
   import { recordArchived } from './stores/undoarchive'
-  import { onMailNew, onMailRepaired, onSyncState, onSyncProgress, onOutboxChanged, onMenu, onViewsChanged, onFoldersChanged, onProfileChanged, onMailtoCompose, onAgentProposals, onOpenMessage, onReplyMessage, onArchiveAfterSend, onFeedsOpen, onCalendarReminder, onTaskReminder, onICSOpen, type Unsubscribe, type MailtoDraft, type CalendarReminderEvent, type TaskReminderEvent } from './lib/events'
+  import { onMailNew, onMailRepaired, onSyncState, onSyncProgress, onOutboxChanged, onMenu, onViewsChanged, onFoldersChanged, onProfileChanged, onMailtoCompose, onAgentProposals, onOpenMessage, onReplyMessage, onArchiveAfterSend, onFeedsOpen, onCalendarReminder, onTaskReminder, onICSOpen, onAssistantScript, type Unsubscribe, type MailtoDraft, type CalendarReminderEvent, type TaskReminderEvent } from './lib/events'
+  import { assistantToastKey } from './lib/assistantScripts'
+  import { selectScript } from './stores/scripts'
   import { loadViews, editingView, closeViewEditor, openViewEditor, views as savedViews } from './stores/views'
   import { selectSavedView } from './stores/selection'
   import { isMac } from './lib/i18n'
@@ -809,6 +814,14 @@
     unsubscribers.push(onFoldersChanged(() => void refreshSidebar()))
     unsubscribers.push(onProfileChanged(() => void reloadForProfile()))
     unsubscribers.push(onAgentProposals(() => void loadProposals()))
+    unsubscribers.push(
+      onAssistantScript((e) => {
+        const key = assistantToastKey(e)
+        if (key) {
+          pushAction('info', $t(key).replace('{name}', e.name), { label: $t('scripts.assistant.review'), run: () => reviewScript(e.scriptId) }, 12000)
+        }
+      }),
+    )
     // the system notification already went out; in the new design the reminder
     // also shows here with a way to the event.
     unsubscribers.push(
@@ -1962,6 +1975,16 @@
     }
   }
 
+  // reviewScript opens a script an assistant created or proposed a change to.
+  function reviewScript(id: number): void {
+    selectScript(id)
+    if (classic) {
+      automationsOpen = !settingsOpen && !onboardingOpen && !wizardOpen
+    } else {
+      goToSpace('automations')
+    }
+  }
+
   // goToSpace shows one of the spaces from its shortcut. classic has no spaces
   // but does have a contacts screen; a space this build lacks is left alone.
   function goToSpace(key: Space): void {
@@ -2550,10 +2573,19 @@
 <ContextMenu />
 <ConfirmDialog />
 <DragStack />
-<SnoozeDialog />
-<FolderDialog />
+{#if classic}
+  <ClassicSnoozeDialog />
+  <ClassicFolderDialog />
+{:else}
+  <SnoozeDialog />
+  <FolderDialog />
+{/if}
 <AttachmentPreview />
-<MoveDialog />
+{#if classic}
+  <ClassicMoveDialog />
+{:else}
+  <MoveDialog />
+{/if}
 
 <CommandPalette commands={paletteCommands} mail={paletteMailCommands} />
 

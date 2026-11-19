@@ -41,6 +41,13 @@ export class Action {
      * script's declared permissions. The host function enforces it.
      */
     "permission"?: string;
+
+    /**
+     * Permissions lists every permission the action needs, for an action
+     * that calls more than one function. Registration puts Permission first
+     * in it.
+     */
+    "permissions"?: string[];
     "risky"?: boolean;
 
     /**
@@ -90,7 +97,8 @@ export class Action {
     static createFrom($$source: any = {}): Action {
         const $$createField6_0 = $$createType1;
         const $$createField7_0 = $$createType3;
-        const $$createField11_0 = $$createType4;
+        const $$createField9_0 = $$createType4;
+        const $$createField12_0 = $$createType4;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("params" in $$parsedSource) {
             $$parsedSource["params"] = $$createField6_0($$parsedSource["params"]);
@@ -98,10 +106,36 @@ export class Action {
         if ("outputs" in $$parsedSource) {
             $$parsedSource["outputs"] = $$createField7_0($$parsedSource["outputs"]);
         }
+        if ("permissions" in $$parsedSource) {
+            $$parsedSource["permissions"] = $$createField9_0($$parsedSource["permissions"]);
+        }
         if ("triggers" in $$parsedSource) {
-            $$parsedSource["triggers"] = $$createField11_0($$parsedSource["triggers"]);
+            $$parsedSource["triggers"] = $$createField12_0($$parsedSource["triggers"]);
         }
         return new Action($$parsedSource as Partial<Action>);
+    }
+}
+
+/**
+ * Arg is a parameter value: a literal Value, or a Ref to another value
+ * ("event.message", "var:item", "step:b3.id" or "setting:folder").
+ */
+export class Arg {
+    "value"?: any;
+    "ref"?: string;
+
+    /** Creates a new Arg instance. */
+    constructor($$source: Partial<Arg> = {}) {
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new Arg instance from a string or object.
+     */
+    static createFrom($$source: any = {}): Arg {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new Arg($$parsedSource as Partial<Arg>);
     }
 }
 
@@ -124,6 +158,7 @@ export class Catalog {
     "inputKinds": InputKind[];
     "resultActions": ResultAction[];
     "placements": Placement[];
+    "templates": Template[];
 
     /** Creates a new Catalog instance. */
     constructor($$source: Partial<Catalog> = {}) {
@@ -160,6 +195,9 @@ export class Catalog {
         if (!("placements" in $$source)) {
             this["placements"] = [];
         }
+        if (!("templates" in $$source)) {
+            this["templates"] = [];
+        }
 
         Object.assign(this, $$source);
     }
@@ -179,6 +217,7 @@ export class Catalog {
         const $$createField8_0 = $$createType19;
         const $$createField9_0 = $$createType21;
         const $$createField10_0 = $$createType23;
+        const $$createField11_0 = $$createType25;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("triggers" in $$parsedSource) {
             $$parsedSource["triggers"] = $$createField0_0($$parsedSource["triggers"]);
@@ -212,6 +251,9 @@ export class Catalog {
         }
         if ("placements" in $$parsedSource) {
             $$parsedSource["placements"] = $$createField10_0($$parsedSource["placements"]);
+        }
+        if ("templates" in $$parsedSource) {
+            $$parsedSource["templates"] = $$createField11_0($$parsedSource["templates"]);
         }
         return new Catalog($$parsedSource as Partial<Catalog>);
     }
@@ -286,9 +328,9 @@ export class CompileResult {
      * Creates a new CompileResult instance from a string or object.
      */
     static createFrom($$source: any = {}): CompileResult {
-        const $$createField1_0 = $$createType25;
+        const $$createField1_0 = $$createType27;
         const $$createField2_0 = $$createType4;
-        const $$createField3_0 = $$createType27;
+        const $$createField3_0 = $$createType29;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("errors" in $$parsedSource) {
             $$parsedSource["errors"] = $$createField1_0($$parsedSource["errors"]);
@@ -300,6 +342,42 @@ export class CompileResult {
             $$parsedSource["lines"] = $$createField3_0($$parsedSource["lines"]);
         }
         return new CompileResult($$parsedSource as Partial<CompileResult>);
+    }
+}
+
+/**
+ * Cond is a condition: a registered condition Type with Args, or a group of
+ * conditions that must all, any or not hold. A "not" has one item.
+ */
+export class Cond {
+    "kind": string;
+    "type"?: string;
+    "args"?: { [_ in string]?: Arg };
+    "items"?: Cond[];
+
+    /** Creates a new Cond instance. */
+    constructor($$source: Partial<Cond> = {}) {
+        if (!("kind" in $$source)) {
+            this["kind"] = "";
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new Cond instance from a string or object.
+     */
+    static createFrom($$source: any = {}): Cond {
+        const $$createField2_0 = $$createType31;
+        const $$createField3_0 = $$createType33;
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        if ("args" in $$parsedSource) {
+            $$parsedSource["args"] = $$createField2_0($$parsedSource["args"]);
+        }
+        if ("items" in $$parsedSource) {
+            $$parsedSource["items"] = $$createField3_0($$parsedSource["items"]);
+        }
+        return new Cond($$parsedSource as Partial<Cond>);
     }
 }
 
@@ -330,10 +408,23 @@ export class Condition {
     "permission"?: string;
 
     /**
+     * Permissions lists every permission the condition needs. Registration
+     * puts Permission first in it, so either field may be used to declare.
+     */
+    "permissions"?: string[];
+
+    /**
      * Lua is the expression the condition compiles to, with {{param}}
      * placeholders, e.g. `text.test({{message}}.subject, {{op}}, {{value}})`.
      */
     "lua": string;
+
+    /**
+     * Field names the message field a text condition tests, e.g. "subject",
+     * "body" or "headers" (with the header in a "name" argument), so the
+     * match tester can show where its pattern matched. Empty for others.
+     */
+    "field"?: string;
 
     /** Creates a new Condition instance. */
     constructor($$source: Partial<Condition> = {}) {
@@ -364,9 +455,13 @@ export class Condition {
      */
     static createFrom($$source: any = {}): Condition {
         const $$createField6_0 = $$createType1;
+        const $$createField8_0 = $$createType4;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("params" in $$parsedSource) {
             $$parsedSource["params"] = $$createField6_0($$parsedSource["params"]);
+        }
+        if ("permissions" in $$parsedSource) {
+            $$parsedSource["permissions"] = $$createField8_0($$parsedSource["permissions"]);
         }
         return new Condition($$parsedSource as Partial<Condition>);
     }
@@ -464,7 +559,7 @@ export class FieldCondition {
      * Creates a new FieldCondition instance from a string or object.
      */
     static createFrom($$source: any = {}): FieldCondition {
-        const $$createField3_0 = $$createType28;
+        const $$createField3_0 = $$createType34;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("args" in $$parsedSource) {
             $$parsedSource["args"] = $$createField3_0($$parsedSource["args"]);
@@ -490,6 +585,12 @@ export class Function {
      * Permission must be declared and approved for the call to run.
      */
     "permission"?: string;
+
+    /**
+     * Permissions lists every permission the call needs; all must be held.
+     * Registration puts Permission first in it.
+     */
+    "permissions"?: string[];
 
     /**
      * Risky calls ask the user first unless the script is allowed to make
@@ -524,12 +625,16 @@ export class Function {
     static createFrom($$source: any = {}): Function {
         const $$createField3_0 = $$createType1;
         const $$createField4_0 = $$createType3;
+        const $$createField6_0 = $$createType4;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("params" in $$parsedSource) {
             $$parsedSource["params"] = $$createField3_0($$parsedSource["params"]);
         }
         if ("returns" in $$parsedSource) {
             $$parsedSource["returns"] = $$createField4_0($$parsedSource["returns"]);
+        }
+        if ("permissions" in $$parsedSource) {
+            $$parsedSource["permissions"] = $$createField6_0($$parsedSource["permissions"]);
         }
         return new Function($$parsedSource as Partial<Function>);
     }
@@ -614,6 +719,28 @@ export class InputKind {
         return new InputKind($$parsedSource as Partial<InputKind>);
     }
 }
+
+/**
+ * Kind says how a script is written.
+ */
+export enum Kind {
+    /**
+     * The Go zero value for the underlying type of the enum.
+     */
+    $zero = "",
+
+    /**
+     * KindLibrary is the kind a library has in a .peltonscript file.
+     */
+    KindLibrary = "library",
+
+    /**
+     * The script kinds. A block script compiles to Lua; a Lua script cannot turn
+     * back into blocks.
+     */
+    KindLua = "lua",
+    KindBlocks = "blocks",
+};
 
 /**
  * LineRange is a first and last line, counted from 1.
@@ -709,6 +836,159 @@ export class LiveRun {
 }
 
 /**
+ * Match is one message a test matched.
+ */
+export class Match {
+    "messageId": number;
+    "subject": string;
+    "from": string;
+    "date": number;
+
+    /**
+     * Text is the tested field around the first place the pattern matched,
+     * and Spans the matched ranges in it as UTF-16 offsets, start and end.
+     */
+    "text"?: string;
+    "spans"?: number[][];
+
+    /** Creates a new Match instance. */
+    constructor($$source: Partial<Match> = {}) {
+        if (!("messageId" in $$source)) {
+            this["messageId"] = 0;
+        }
+        if (!("subject" in $$source)) {
+            this["subject"] = "";
+        }
+        if (!("from" in $$source)) {
+            this["from"] = "";
+        }
+        if (!("date" in $$source)) {
+            this["date"] = 0;
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new Match instance from a string or object.
+     */
+    static createFrom($$source: any = {}): Match {
+        const $$createField5_0 = $$createType35;
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        if ("spans" in $$parsedSource) {
+            $$parsedSource["spans"] = $$createField5_0($$parsedSource["spans"]);
+        }
+        return new Match($$parsedSource as Partial<Match>);
+    }
+}
+
+/**
+ * MatchReport is what a match test found.
+ */
+export class MatchReport {
+    "scanned": number;
+    "matched": number;
+    "matches": Match[];
+
+    /**
+     * TimedOut is set when the test ran out of time before the last message.
+     */
+    "timedOut": boolean;
+
+    /** Creates a new MatchReport instance. */
+    constructor($$source: Partial<MatchReport> = {}) {
+        if (!("scanned" in $$source)) {
+            this["scanned"] = 0;
+        }
+        if (!("matched" in $$source)) {
+            this["matched"] = 0;
+        }
+        if (!("matches" in $$source)) {
+            this["matches"] = [];
+        }
+        if (!("timedOut" in $$source)) {
+            this["timedOut"] = false;
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new MatchReport instance from a string or object.
+     */
+    static createFrom($$source: any = {}): MatchReport {
+        const $$createField2_0 = $$createType37;
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        if ("matches" in $$parsedSource) {
+            $$parsedSource["matches"] = $$createField2_0($$parsedSource["matches"]);
+        }
+        return new MatchReport($$parsedSource as Partial<MatchReport>);
+    }
+}
+
+/**
+ * MatchRequest asks which of the recent messages of a folder a regular
+ * expression or a condition matches.
+ */
+export class MatchRequest {
+    /**
+     * Folder is a path or a role; AccountID narrows it to one account, 0
+     * looks in every account. Limit is how many of the newest messages are
+     * looked at.
+     */
+    "folder": string;
+    "accountId": number;
+    "limit": number;
+
+    /**
+     * Pattern is an RE2 expression tried on Field: "subject", "from", "to",
+     * "body" or "headers.<name>".
+     */
+    "pattern": string;
+    "field": string;
+
+    /**
+     * When is a condition or a group of them, as an if block holds it. With
+     * it, a message matches when the condition holds in a dry run of the same
+     * compiled code a script runs; Pattern then only marks where it matched.
+     */
+    "when"?: Cond | null;
+
+    /** Creates a new MatchRequest instance. */
+    constructor($$source: Partial<MatchRequest> = {}) {
+        if (!("folder" in $$source)) {
+            this["folder"] = "";
+        }
+        if (!("accountId" in $$source)) {
+            this["accountId"] = 0;
+        }
+        if (!("limit" in $$source)) {
+            this["limit"] = 0;
+        }
+        if (!("pattern" in $$source)) {
+            this["pattern"] = "";
+        }
+        if (!("field" in $$source)) {
+            this["field"] = "";
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new MatchRequest instance from a string or object.
+     */
+    static createFrom($$source: any = {}): MatchRequest {
+        const $$createField5_0 = $$createType38;
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        if ("when" in $$parsedSource) {
+            $$parsedSource["when"] = $$createField5_0($$parsedSource["when"]);
+        }
+        return new MatchRequest($$parsedSource as Partial<MatchRequest>);
+    }
+}
+
+/**
  * Module is a table of Go functions exposed to Lua under Meta.ID, e.g. mail.
  */
 export class Module {
@@ -758,7 +1038,7 @@ export class Module {
      * Creates a new Module instance from a string or object.
      */
     static createFrom($$source: any = {}): Module {
-        const $$createField6_0 = $$createType30;
+        const $$createField6_0 = $$createType40;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("functions" in $$parsedSource) {
             $$parsedSource["functions"] = $$createField6_0($$parsedSource["functions"]);
@@ -865,7 +1145,7 @@ export class Param {
      * Creates a new Param instance from a string or object.
      */
     static createFrom($$source: any = {}): Param {
-        const $$createField9_0 = $$createType32;
+        const $$createField9_0 = $$createType42;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("options" in $$parsedSource) {
             $$parsedSource["options"] = $$createField9_0($$parsedSource["options"]);
@@ -1035,7 +1315,7 @@ export class PlacedItem {
      * Creates a new PlacedItem instance from a string or object.
      */
     static createFrom($$source: any = {}): PlacedItem {
-        const $$createField1_0 = $$createType28;
+        const $$createField1_0 = $$createType34;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("fields" in $$parsedSource) {
             $$parsedSource["fields"] = $$createField1_0($$parsedSource["fields"]);
@@ -1157,7 +1437,7 @@ export class PlacementConfig {
      * Creates a new PlacementConfig instance from a string or object.
      */
     static createFrom($$source: any = {}): PlacementConfig {
-        const $$createField1_0 = $$createType28;
+        const $$createField1_0 = $$createType34;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("options" in $$parsedSource) {
             $$parsedSource["options"] = $$createField1_0($$parsedSource["options"]);
@@ -1335,6 +1615,117 @@ export enum StepKind {
 };
 
 /**
+ * Template is a ready made script the user copies from the gallery. It is
+ * held as the text of a .peltonscript file; its name and description come
+ * from the file unless the frontend has strings under its keys
+ * ("scripts.template.<id>" and ".desc").
+ */
+export class Template {
+    /**
+     * ID is unique within its kind, e.g. "mail.move".
+     */
+    "id": string;
+
+    /**
+     * LabelKey and DescKey are localization keys. Label and Description are
+     * the English text shown when the frontend has no string under the key,
+     * which is how a package without its own catalog entries names things.
+     */
+    "labelKey": string;
+    "descKey": string;
+    "label"?: string;
+    "description"?: string;
+
+    /**
+     * Category groups entries in pickers, e.g. "mail" or "schedule".
+     */
+    "category": string;
+    "kind": Kind;
+    "trigger": TriggerConfig;
+    "blocks"?: Tree | null;
+    "source"?: string;
+    "settings"?: Param[];
+
+    /**
+     * Permissions are what the template declares together with what its
+     * blocks need, and AI says whether one of them sends data to an AI
+     * provider.
+     */
+    "permissions": string[];
+    "ai": boolean;
+
+    /**
+     * Requires names the libraries the template loads.
+     */
+    "requires"?: string[];
+
+    /**
+     * Missing says why the template would not compile with what this app
+     * offers now, e.g. an AI step without a provider; empty when it does.
+     */
+    "missing"?: string;
+
+    /** Creates a new Template instance. */
+    constructor($$source: Partial<Template> = {}) {
+        if (!("id" in $$source)) {
+            this["id"] = "";
+        }
+        if (!("labelKey" in $$source)) {
+            this["labelKey"] = "";
+        }
+        if (!("descKey" in $$source)) {
+            this["descKey"] = "";
+        }
+        if (!("category" in $$source)) {
+            this["category"] = "";
+        }
+        if (!("kind" in $$source)) {
+            this["kind"] = Kind.$zero;
+        }
+        if (!("trigger" in $$source)) {
+            this["trigger"] = (new TriggerConfig());
+        }
+        if (!("permissions" in $$source)) {
+            this["permissions"] = [];
+        }
+        if (!("ai" in $$source)) {
+            this["ai"] = false;
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new Template instance from a string or object.
+     */
+    static createFrom($$source: any = {}): Template {
+        const $$createField7_0 = $$createType43;
+        const $$createField10_0 = $$createType1;
+        const $$createField11_0 = $$createType4;
+        const $$createField13_0 = $$createType4;
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        if ("trigger" in $$parsedSource) {
+            $$parsedSource["trigger"] = $$createField7_0($$parsedSource["trigger"]);
+        }
+        if ("settings" in $$parsedSource) {
+            $$parsedSource["settings"] = $$createField10_0($$parsedSource["settings"]);
+        }
+        if ("permissions" in $$parsedSource) {
+            $$parsedSource["permissions"] = $$createField11_0($$parsedSource["permissions"]);
+        }
+        if ("requires" in $$parsedSource) {
+            $$parsedSource["requires"] = $$createField13_0($$parsedSource["requires"]);
+        }
+        return new Template($$parsedSource as Partial<Template>);
+    }
+}
+
+/**
+ * Tree is a block script: a list of blocks run in order.
+ */
+export type Tree = any;
+
+/**
  * Trigger is something that starts a script.
  */
 export class Trigger {
@@ -1428,6 +1819,35 @@ export class Trigger {
 }
 
 /**
+ * TriggerConfig is the trigger a script is started by, with its parameters.
+ */
+export class TriggerConfig {
+    "type": string;
+    "params"?: { [_ in string]?: any };
+
+    /** Creates a new TriggerConfig instance. */
+    constructor($$source: Partial<TriggerConfig> = {}) {
+        if (!("type" in $$source)) {
+            this["type"] = "";
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new TriggerConfig instance from a string or object.
+     */
+    static createFrom($$source: any = {}): TriggerConfig {
+        const $$createField1_0 = $$createType34;
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        if ("params" in $$parsedSource) {
+            $$parsedSource["params"] = $$createField1_0($$parsedSource["params"]);
+        }
+        return new TriggerConfig($$parsedSource as Partial<TriggerConfig>);
+    }
+}
+
+/**
  * ValueType describes a structured value a script handles, e.g. a message.
  */
 export class ValueType {
@@ -1489,8 +1909,8 @@ export class ValueType {
      */
     static createFrom($$source: any = {}): ValueType {
         const $$createField6_0 = $$createType3;
-        const $$createField7_0 = $$createType33;
-        const $$createField8_0 = $$createType35;
+        const $$createField7_0 = $$createType44;
+        const $$createField8_0 = $$createType46;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("fields" in $$parsedSource) {
             $$parsedSource["fields"] = $$createField6_0($$parsedSource["fields"]);
@@ -1530,15 +1950,26 @@ const $$createType20 = ResultAction.createFrom;
 const $$createType21 = $Create.Array($$createType20);
 const $$createType22 = Placement.createFrom;
 const $$createType23 = $Create.Array($$createType22);
-const $$createType24 = CompileError.createFrom;
+const $$createType24 = Template.createFrom;
 const $$createType25 = $Create.Array($$createType24);
-const $$createType26 = LineRange.createFrom;
-const $$createType27 = $Create.Map($Create.Any, $$createType26);
-const $$createType28 = $Create.Map($Create.Any, $Create.Any);
-const $$createType29 = Function.createFrom;
-const $$createType30 = $Create.Array($$createType29);
-const $$createType31 = Option.createFrom;
-const $$createType32 = $Create.Array($$createType31);
-const $$createType33 = $Create.Map($Create.Any, $Create.Any);
-const $$createType34 = FieldCondition.createFrom;
-const $$createType35 = $Create.Array($$createType34);
+const $$createType26 = CompileError.createFrom;
+const $$createType27 = $Create.Array($$createType26);
+const $$createType28 = LineRange.createFrom;
+const $$createType29 = $Create.Map($Create.Any, $$createType28);
+const $$createType30 = Arg.createFrom;
+const $$createType31 = $Create.Map($Create.Any, $$createType30);
+const $$createType32 = Cond.createFrom;
+const $$createType33 = $Create.Array($$createType32);
+const $$createType34 = $Create.Map($Create.Any, $Create.Any);
+const $$createType35 = $Create.Array($Create.Any);
+const $$createType36 = Match.createFrom;
+const $$createType37 = $Create.Array($$createType36);
+const $$createType38 = $Create.Nullable($$createType32);
+const $$createType39 = Function.createFrom;
+const $$createType40 = $Create.Array($$createType39);
+const $$createType41 = Option.createFrom;
+const $$createType42 = $Create.Array($$createType41);
+const $$createType43 = TriggerConfig.createFrom;
+const $$createType44 = $Create.Map($Create.Any, $Create.Any);
+const $$createType45 = FieldCondition.createFrom;
+const $$createType46 = $Create.Array($$createType45);

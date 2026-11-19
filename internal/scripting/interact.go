@@ -1,6 +1,7 @@
 package scripting
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"fmt"
@@ -113,6 +114,8 @@ func (r *Registry) RegisterInputKind(k InputKind) error {
 	if k.Control == "" || k.Value == "" {
 		return fmt.Errorf("scripting: input kind %q needs a control and a value type", k.ID)
 	}
+	englishMeta(&k.Meta)
+	k.Params = englishParams(k.Params)
 	reserved := []string{"prompt", "default", "timeout"}
 	for _, p := range k.Params {
 		if slices.Contains(reserved, p.Name) {
@@ -152,8 +155,8 @@ func askAction(k InputKind) Action {
 			ID:          "ui." + k.ID,
 			LabelKey:    "scripts.action.ui." + k.ID,
 			DescKey:     "scripts.action.ui." + k.ID + ".desc",
-			Label:       k.Label,
-			Description: k.Description,
+			Label:       cmp.Or(englishFor("scripts.action.ui."+k.ID), k.Label),
+			Description: cmp.Or(englishFor("scripts.action.ui."+k.ID+".desc"), k.Description),
 			Category:    "ui",
 		},
 		Params:  params,
@@ -170,6 +173,7 @@ func (r *Registry) RegisterResultAction(a ResultAction) error {
 	if (a.Client == "") == (a.Run == nil) {
 		return fmt.Errorf("scripting: result action %q needs either a client handler or Run", a.ID)
 	}
+	englishMeta(&a.Meta)
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	if err := r.checkPermission(a.Permission, a.ID); err != nil {

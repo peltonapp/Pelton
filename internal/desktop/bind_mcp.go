@@ -159,7 +159,8 @@ func (a *App) applyMCPState() error {
 		return nil
 	}
 
-	srv := mcpserver.NewWithWriter(&mcpMailbox{app: a}, &mcpWriter{app: a}, a.log)
+	srv := mcpserver.NewWithWriter(&mcpMailbox{app: a}, &mcpWriter{app: a}, a.log).
+		WithScripts(&mcpScripts{app: a}, a.scriptLimiter())
 	cfg := mcpserver.Config{
 		Addr:        fmt.Sprintf("127.0.0.1:%d", a.mcpPort()),
 		Token:       a.mcpToken(),

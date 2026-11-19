@@ -333,6 +333,10 @@
     transition: stroke-dashoffset var(--motion-base) var(--ease-out);
   }
 
+  :global(:root[data-design='classic']) .swatch path {
+    stroke: var(--text-inverse);
+  }
+
   .swatch.on path {
     stroke-dashoffset: 0;
   }

@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"path/filepath"
+	"slices"
 	"sync"
 	"testing"
 	"time"
@@ -55,6 +56,19 @@ func (f *fakeMail) Message(_ context.Context, id int64) (Message, error) {
 		return Message{}, fmt.Errorf("no message %d", id)
 	}
 	return m, nil
+}
+
+func (f *fakeMail) Recent(_ context.Context, folder string, account int64, limit int) ([]Message, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	var out []Message
+	for _, m := range f.messages {
+		if folderMatches(MessageObject(m).Fields, folder) && (account == 0 || m.AccountID == account) {
+			out = append(out, m)
+		}
+	}
+	slices.SortFunc(out, func(a, b Message) int { return b.Date.Compare(a.Date) })
+	return out[:min(limit, len(out))], nil
 }
 
 func (f *fakeMail) Body(_ context.Context, id int64) (string, error) {

@@ -186,6 +186,8 @@ import { normalizeState } from './sieve'
 import type {
   CompileResult,
   LiveRun,
+  MatchReport,
+  MatchRequest,
   PlacedItem,
   PlacedScript,
   PlacementConfig,
@@ -194,8 +196,11 @@ import type {
   ScriptCatchUp,
   ScriptFile,
   ScriptInput,
+  ScriptLibrary,
+  ScriptLibraryInput,
   ScriptRun,
 } from './scripting'
+import type { ScriptProposal } from './assistantScripts'
 
 // isDemoMode reports whether the app launched in the cosmetic --potatoes-are-nice
 // screenshot mode; the frontend reads it once to switch the data layer to samples.
@@ -3985,14 +3990,71 @@ export function pickScriptFile(): Promise<string> {
   return App.PickScriptFile()
 }
 
-/** Reads a script file for the import dialog, storing and running nothing. */
+/** Reads a script or library file for the import dialog, storing and running nothing. */
 export function readScriptFile(path: string): Promise<ScriptFile> {
-  return App.ReadScriptFile(path).then((f) => ({ script: asScript(f.script), text: f.text }))
+  return App.ReadScriptFile(path).then((f) => ({
+    script: asScript(f.script),
+    library: (f.library ?? null) as ScriptLibrary | null,
+    kind: f.kind,
+    text: f.text,
+    missingLibraries: f.missingLibraries ?? [],
+  }))
 }
 
 /** Stores the script in a file's text, switched off and marked as imported. */
 export function importScript(text: string): Promise<Script> {
   return App.ImportScript(text).then(asScript)
+}
+
+/** Every shared library, by name. */
+export function listScriptLibraries(): Promise<ScriptLibrary[]> {
+  if (isDemoActive()) {
+    return Promise.resolve([])
+  }
+  return App.ListScriptLibraries().then((list) => (list ?? []) as ScriptLibrary[])
+}
+
+/** Stores a new shared library; its name must be free. */
+export function createScriptLibrary(input: ScriptLibraryInput): Promise<ScriptLibrary> {
+  return App.CreateScriptLibrary(input) as Promise<ScriptLibrary>
+}
+
+/** Saves a shared library. */
+export function updateScriptLibrary(id: number, input: ScriptLibraryInput): Promise<ScriptLibrary> {
+  return App.UpdateScriptLibrary(id, input) as Promise<ScriptLibrary>
+}
+
+/** Removes a shared library. */
+export function deleteScriptLibrary(id: number): Promise<void> {
+  return App.DeleteScriptLibrary(id)
+}
+
+/** Writes a library to a file the user picks; resolves to the path, '' when cancelled. */
+export function exportScriptLibrary(id: number): Promise<string> {
+  return App.ExportScriptLibrary(id)
+}
+
+/** Stores the library in a file's text; one of the same name is not replaced. */
+export function importScriptLibrary(text: string): Promise<ScriptLibrary> {
+  return App.ImportScriptLibrary(text) as Promise<ScriptLibrary>
+}
+
+/** Stores a copy of a gallery template as a new script, switched off. */
+export function useScriptTemplate(id: string): Promise<Script> {
+  return App.UseScriptTemplate(id).then(asScript)
+}
+
+/** Tries a pattern or a condition on the newest messages of a folder. Changes nothing. */
+export function testScriptMatch(req: MatchRequest): Promise<MatchReport> {
+  return App.TestScriptMatch(req as unknown as Parameters<typeof App.TestScriptMatch>[0]).then((r) => {
+    const report = (r ?? { scanned: 0, matched: 0, matches: [], timedOut: false }) as unknown as MatchReport
+    return { ...report, matches: (report.matches ?? []).map((m) => ({ ...m, spans: m.spans ?? [] })) }
+  })
+}
+
+/** The scripting API as an English document, markdown or plain text. */
+export function scriptReference(markdown: boolean): Promise<string> {
+  return App.ScriptReference(markdown)
 }
 
 /** The kinds of AI provider that can be added. */
@@ -4049,4 +4111,22 @@ export function testScriptAskingAI(input: ScriptInput, messageId: number): Promi
 /** Changes a script's AI switches. */
 export function setAIScriptOptions(scriptId: number, options: AIScriptOptions): Promise<void> {
   return App.SetAIScriptOptions(scriptId, new desktop.AIScriptOptionsDTO(options))
+}
+
+/** The change an assistant proposed to a script, with a diff; exists is false when none waits. */
+export function scriptProposal(scriptId: number): Promise<ScriptProposal> {
+  if (isDemoActive()) {
+    return Promise.resolve({ scriptId, exists: false, when: '', diff: [], addedPermissions: [], removedPermissions: [], resetsApproval: false, problem: '' })
+  }
+  return App.ScriptProposal(scriptId) as Promise<ScriptProposal>
+}
+
+/** Applies a proposed change; one that changes code or permissions switches the script off for approval. */
+export function acceptScriptProposal(scriptId: number): Promise<Script> {
+  return App.AcceptScriptProposal(scriptId).then(asScript)
+}
+
+/** Throws a proposed change away. */
+export function rejectScriptProposal(scriptId: number): Promise<void> {
+  return App.RejectScriptProposal(scriptId)
 }

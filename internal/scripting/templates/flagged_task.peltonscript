@@ -1,0 +1,14 @@
+{
+  "format": 1,
+  "name": "Make a task of flagged mail",
+  "description": "When you flag a message, adds a task linked to it, due tomorrow.",
+  "kind": "blocks",
+  "trigger": { "type": "mail.flagged", "params": { "state": "on" } },
+  "permissions": ["mail.read", "tasks.write"],
+  "blocks": {
+    "version": 1,
+    "blocks": [
+      { "id": "task", "kind": "action", "type": "tasks.from_mail", "args": { "due": { "value": "1d" } } }
+    ]
+  }
+}

@@ -1,0 +1,15 @@
+{
+  "format": 1,
+  "name": "Draft a reply with AI",
+  "description": "From the menu of an open message: asks a language model to write a reply and saves it as a draft for you to look over. Nothing is sent.",
+  "kind": "blocks",
+  "trigger": { "type": "manual", "params": { "scope": "message" } },
+  "permissions": ["mail.read"],
+  "placements": [{ "id": "mail.message" }],
+  "blocks": {
+    "version": 1,
+    "blocks": [
+      { "id": "draft", "kind": "action", "type": "ai.draft_reply", "args": { "instructions": { "value": "Keep it short and friendly." } } }
+    ]
+  }
+}

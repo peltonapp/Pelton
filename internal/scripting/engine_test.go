@@ -9,7 +9,7 @@ import (
 
 func TestSandboxRemovesDangerousGlobals(t *testing.T) {
 	e := testEngine(t, newFakeMail())
-	for _, name := range []string{"os", "io", "debug", "package", "require", "dofile", "loadfile", "load", "loadstring", "module", "collectgarbage", "getfenv", "setfenv", "newproxy", "coroutine", "channel"} {
+	for _, name := range []string{"os", "io", "debug", "package", "dofile", "loadfile", "load", "loadstring", "module", "collectgarbage", "getfenv", "setfenv", "newproxy", "coroutine", "channel"} {
 		run := runLua(t, e, `if `+name+` ~= nil then error("present") end`)
 		if run.Status != StatusOK {
 			t.Errorf("%s: status %s, error %q", name, run.Status, run.Error)

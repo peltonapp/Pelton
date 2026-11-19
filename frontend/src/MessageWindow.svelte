@@ -13,6 +13,8 @@
   import AttachmentPreview from './components/detail/AttachmentPreview.svelte'
   import MoveDialog from './components/detail/MoveDialog.svelte'
   import SnoozeDialog from './components/detail/SnoozeDialog.svelte'
+  import ClassicMoveDialog from './components/detail/classic/MoveDialog.svelte'
+  import ClassicSnoozeDialog from './components/detail/classic/SnoozeDialog.svelte'
   import Composer2 from './components/compose/Composer2.svelte'
   import { initPrefs, prefs } from './stores/prefs'
   import { initComposePrefs, composeSessions, setForcedComposeMode } from './stores/compose'
@@ -100,9 +102,17 @@
 <Toasts />
 <ContextMenu />
 <ConfirmDialog />
-<SnoozeDialog />
+{#if classic}
+  <ClassicSnoozeDialog />
+{:else}
+  <SnoozeDialog />
+{/if}
 <AttachmentPreview />
-<MoveDialog />
+{#if classic}
+  <ClassicMoveDialog />
+{:else}
+  <MoveDialog />
+{/if}
 
 <style>
   .message-window {

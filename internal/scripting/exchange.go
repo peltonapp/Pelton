@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"slices"
+	"strings"
 )
 
 // FileExtension is the extension of an exported script.
@@ -33,6 +34,71 @@ type File struct {
 	// Placements are where the script is offered in the app; a keyboard
 	// shortcut's key stays behind.
 	Placements []PlacementConfig `json:"placements,omitempty"`
+	// Requires names the libraries the code loads with require, which an
+	// import checks for.
+	Requires []string `json:"requires,omitempty"`
+}
+
+// scriptRequires lists the libraries a script's own code requires: a Lua
+// script's source, or the Lua blocks of a block script.
+func scriptRequires(sc *Script) []string {
+	if sc.Kind != KindBlocks {
+		return RequiredLibraries(sc.Source)
+	}
+	if sc.Blocks == nil {
+		return nil
+	}
+	var code strings.Builder
+	walkBlocks(sc.Blocks.Blocks, func(b Block) {
+		if b.Kind == BlockLua {
+			code.WriteString(b.Code + "\n")
+		}
+	})
+	return RequiredLibraries(code.String())
+}
+
+// fileRequires is what a file says it requires, with what its code requires
+// in case the list was left out.
+func fileRequires(f File) []string {
+	out := slices.Clone(f.Requires)
+	found := RequiredLibraries(f.Source)
+	if f.Blocks != nil {
+		found = append(found, scriptRequires(&Script{Kind: KindBlocks, Blocks: f.Blocks})...)
+	}
+	for _, n := range found {
+		if !slices.Contains(out, n) {
+			out = append(out, n)
+		}
+	}
+	return out
+}
+
+func readFile(data []byte) (File, error) {
+	if len(data) > maxFileBytes {
+		return File{}, fmt.Errorf("scripting: the file is larger than %d bytes", maxFileBytes)
+	}
+	var f File
+	if err := json.Unmarshal(data, &f); err != nil {
+		return File{}, fmt.Errorf("scripting: not a script file: %w", err)
+	}
+	if f.Format == 0 {
+		return File{}, fmt.Errorf("scripting: not a script file: no format version")
+	}
+	if f.Format > FileFormat {
+		return File{}, fmt.Errorf("scripting: the file is format %d, newer than this app reads", f.Format)
+	}
+	return f, nil
+}
+
+// ReadFileInfo reads what a .peltonscript file holds without checking it
+// against a registry: its kind (a script's, or KindLibrary) and the
+// libraries it requires.
+func ReadFileInfo(data []byte) (Kind, []string, error) {
+	f, err := readFile(data)
+	if err != nil {
+		return "", nil, err
+	}
+	return f.Kind, fileRequires(f), nil
 }
 
 // Export renders a script as the text of a .peltonscript file.
@@ -47,6 +113,7 @@ func Export(r *Registry, sc *Script) ([]byte, error) {
 		Settings:    exportSettings(sc.SettingsSchema),
 		CatchUp:     sc.CatchUp,
 		Placements:  sc.Placements,
+		Requires:    scriptRequires(sc),
 	}
 	if sc.Kind == KindBlocks && sc.Blocks != nil {
 		t := scrubTree(r, *sc.Blocks)
@@ -65,18 +132,12 @@ func Export(r *Registry, sc *Script) ([]byte, error) {
 // switched off, nothing approved, marked as imported. It checks the script
 // against the registry but runs nothing.
 func ParseFile(r *Registry, data []byte) (*Script, error) {
-	if len(data) > maxFileBytes {
-		return nil, fmt.Errorf("scripting: the file is larger than %d bytes", maxFileBytes)
+	f, err := readFile(data)
+	if err != nil {
+		return nil, err
 	}
-	var f File
-	if err := json.Unmarshal(data, &f); err != nil {
-		return nil, fmt.Errorf("scripting: not a script file: %w", err)
-	}
-	if f.Format == 0 {
-		return nil, fmt.Errorf("scripting: not a script file: no format version")
-	}
-	if f.Format > FileFormat {
-		return nil, fmt.Errorf("scripting: the file is format %d, newer than this app reads", f.Format)
+	if f.Kind == KindLibrary {
+		return nil, fmt.Errorf("scripting: the file holds a library, not a script")
 	}
 	sc := &Script{
 		Name:           f.Name,

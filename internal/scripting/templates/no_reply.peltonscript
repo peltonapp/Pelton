@@ -1,0 +1,9 @@
+{
+  "format": 1,
+  "name": "Remind me when nobody replies",
+  "description": "Once a day, finds the mail you sent a few days ago that has no reply in your inbox yet, and adds a task to follow it up.",
+  "kind": "lua",
+  "trigger": { "type": "schedule.daily", "params": { "at": "09:00" } },
+  "permissions": ["mail.read", "tasks.write"],
+  "source": "-- Once a day: mail you sent DAYS days ago without a reply in your inbox\n-- gets a follow-up task.\nSETTINGS = {\n  { name = \"days\", type = \"number\", label = \"Days to wait for a reply\", default = 3 },\n}\n\nlocal days = settings.get(\"days\")\nlocal now = time.now()\nlocal from, to = now - (days + 1) * 86400, now - days * 86400\n\nlocal function key(id)\n  return text.replace(id or \"\", \"[<>\\\\s]\", \"\")\nend\n\nlocal answered = {}\nfor _, m in ipairs(mail.list(\"inbox\", { limit = 500 })) do\n  for _, id in ipairs(text.split(m.headers[\"in-reply-to\"] or \"\", \" \")) do\n    answered[key(id)] = true\n  end\nend\n\nfor _, m in ipairs(mail.list(\"sent\", { limit = 200 })) do\n  local id = key(m.headers[\"message-id\"])\n  if m.date >= from and m.date < to and id ~= \"\" and not answered[id] then\n    tasks.create({ title = \"Follow up: \" .. m.subject, notes = \"Sent to \" .. (m.to or \"\"), due = \"1d\" })\n  end\nend\n"
+}

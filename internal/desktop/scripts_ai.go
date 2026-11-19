@@ -441,6 +441,10 @@ func (a *App) SetAIScriptOptions(scriptID int64, opts AIScriptOptionsDTO) error 
 	} else {
 		all[key] = opts
 	}
+	return a.saveAIScriptOptions(all)
+}
+
+func (a *App) saveAIScriptOptions(all map[string]AIScriptOptionsDTO) error {
 	b, err := json.Marshal(all)
 	if err != nil {
 		return err
