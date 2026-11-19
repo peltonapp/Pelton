@@ -9,6 +9,7 @@ package desktop
 import (
 	"context"
 	"log/slog"
+	"net/netip"
 	"os"
 	"path/filepath"
 	"sync"
@@ -282,6 +283,9 @@ type App struct {
 	// recipientConfirmer asks about recipients before-send scripts changed;
 	// nil asks through the window. Tests put an answer here.
 	recipientConfirmer scripting.Confirmer
+	// aiLookup resolves an AI provider's host; nil uses the system resolver.
+	// Tests put a fake here.
+	aiLookup func(ctx context.Context, host string) ([]netip.Addr, error)
 }
 
 // locked reports whether the app lock is engaged. An App built without one,

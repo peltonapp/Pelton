@@ -10,14 +10,19 @@
   import { t } from '../../lib/i18n'
   import { formatRelative } from '../../lib/format'
   import { entryLabel, type ScriptRun } from '../../lib/scripting'
-  import { clearScriptRuns, scriptLogDays, setScriptLogDays, undoScriptRun } from '../../lib/api'
+  import { clearScriptRuns, scriptAskSeconds, scriptLogDays, setScriptAskSeconds, setScriptLogDays, undoScriptRun } from '../../lib/api'
   import { catalog, errorPlace, loadRuns, runLog, selectedScriptId } from '../../stores/scripts'
   import { errorMessage, toastError, toastInfo } from '../../stores/toast'
   import '../../theme/controls.css'
 
+  const askChoices = [30, 60, 120, 300, 600, 1800, 3600]
+
   let open: number | null = null
   let days = 30
+  let askSeconds = 120
   const undone = new Set<number>()
+
+  $: askOptions = askChoices.includes(askSeconds) ? askChoices : [...askChoices, askSeconds].sort((x, y) => x - y)
 
   onMount(async () => {
     try {
@@ -25,7 +30,35 @@
     } catch {
       days = 30
     }
+    try {
+      askSeconds = await scriptAskSeconds()
+    } catch {
+      askSeconds = 120
+    }
   })
+
+  function waitLabel(seconds: number): string {
+    if (seconds < 60) {
+      return $t('scripts.log.askSeconds').replace('{n}', String(seconds))
+    }
+    if (seconds === 3600) {
+      return $t('scripts.log.askHour')
+    }
+    if (seconds === 60) {
+      return $t('scripts.log.askMinute')
+    }
+    return $t('scripts.log.askMinutes').replace('{n}', String(Math.round(seconds / 6) / 10))
+  }
+
+  async function saveAsk(value: string): Promise<void> {
+    const n = Number(value)
+    try {
+      await setScriptAskSeconds(n)
+      askSeconds = n
+    } catch (err) {
+      toastError(errorMessage(err))
+    }
+  }
 
   function triggerName(id: string): string {
     const def = $catalog?.triggers.find((tr) => tr.id === id)
@@ -103,6 +136,15 @@
     <label for="script-log-days">{$t('scripts.log.keep')}</label>
     <input id="script-log-days" class="cal-field days" type="number" min="1" max="365" value={days} on:change={(e) => void saveDays(e.currentTarget.value)} />
   </footer>
+  <div class="foot ask">
+    <label for="script-ask-wait">{$t('scripts.log.askWait')}</label>
+    <select id="script-ask-wait" class="cal-field" aria-describedby="script-ask-wait-hint" value={askSeconds} on:change={(e) => void saveAsk(e.currentTarget.value)}>
+      {#each askOptions as s (s)}
+        <option value={s}>{waitLabel(s)}</option>
+      {/each}
+    </select>
+    <p id="script-ask-wait-hint" class="hint">{$t('scripts.log.askWaitHint')}</p>
+  </div>
 </section>
 
 <style>
@@ -229,5 +271,17 @@
 
   .days {
     width: calc(var(--control-height) * 2.5);
+  }
+
+  .ask {
+    flex-wrap: wrap;
+    border-top: none;
+    padding-top: 0;
+  }
+
+  .ask .hint {
+    flex-basis: 100%;
+    margin: 0;
+    color: var(--text-tertiary);
   }
 </style>

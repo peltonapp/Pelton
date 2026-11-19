@@ -33,8 +33,21 @@ type fakeProvider struct {
 }
 
 func newFake(t *testing.T, answers ...func(r recorded) (int, any)) *fakeProvider {
+	f := unstartedFake(t, answers...)
+	f.srv.Start()
+	return f
+}
+
+// newFakeTLS is newFake served over https with httptest's certificate.
+func newFakeTLS(t *testing.T, answers ...func(r recorded) (int, any)) *fakeProvider {
+	f := unstartedFake(t, answers...)
+	f.srv.StartTLS()
+	return f
+}
+
+func unstartedFake(t *testing.T, answers ...func(r recorded) (int, any)) *fakeProvider {
 	f := &fakeProvider{t: t, answers: answers}
-	f.srv = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	f.srv = httptest.NewUnstartedServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		data, _ := io.ReadAll(r.Body)
 		rec := recorded{Method: r.Method, Path: r.URL.RequestURI(), Header: r.Header.Clone()}
 		if len(data) > 0 {

@@ -45,8 +45,10 @@
   import { projectColor } from '../../lib/projectlogic'
   import { highlightTerms } from '../../stores/search'
   import { idleSwipe, swipeWheel, swipeOutcome, swiping, anySwipe, swipeTuning, type SwipeState } from '../../lib/swipe'
-  import { isRowAction, placedRowActions, placedSwipeAction, rowActionApplies, rowActionView, type RowActionId } from '../../lib/rowactions'
+  import { isRowAction, placedRowActions, placedSwipeAction, rowActionApplies, rowActionView, type RowActionId, type RowActionView } from '../../lib/rowactions'
   import { placed } from '../../lib/scriptplacements'
+  import { scriptEntryName } from '../../lib/scriptmark'
+  import ScriptMark from '../common/ScriptMark.svelte'
   import { spamState } from '../../lib/messageactions'
   import { currentUIScale } from '../../theme/theme'
   import { dur, motion } from '../../lib/motion'
@@ -278,6 +280,10 @@
   $: actionViews = shownActions.map((id) => rowActionView(id, rowState, $hoverScripts))
   $: rowLabel = `${displayName(message.fromName, message.fromAddress)}, ${message.subject || $t('messageList.noSubject')}`
 
+  function actionName(view: RowActionView): string {
+    return view.script !== undefined ? scriptEntryName(view.label ?? '', view.script, $t) : (view.label ?? $t(view.labelKey))
+  }
+
   function keysFor(action: ShortcutAction, map: Record<string, string>): string | undefined {
     const combo = map[action]
     return combo ? shortcutLabel(combo) : undefined
@@ -313,7 +319,12 @@
         {#key outcome.stage}
           <span class="reveal-mark"><Ph svg={swipeView.icon} size={18} /></span>
         {/key}
-        <span>{swipeView.label ?? $t(swipeView.labelKey)}</span>
+        {#if swipeView.script !== undefined}
+          <ScriptMark />
+          <span>{scriptEntryName(swipeView.label ?? '', swipeView.script, $t)}</span>
+        {:else}
+          <span>{swipeView.label ?? $t(swipeView.labelKey)}</span>
+        {/if}
       {/if}
     </div>
   {:else if offset !== 0}
@@ -498,12 +509,14 @@
           type="button"
           class="row-action"
           class:danger={view.danger}
+          class:script={view.script !== undefined}
           tabindex={active ? 0 : -1}
-          aria-label={view.label ?? $t(view.labelKey)}
-          use:tip={{ text: view.label ?? $t(view.labelKey), shortcut: keysFor(view.shortcut, $bindings), side: 'top' }}
+          aria-label={actionName(view)}
+          use:tip={{ text: actionName(view), shortcut: keysFor(view.shortcut, $bindings), side: 'top' }}
           on:click={(e) => runAction(e, view.id)}
         >
           <Ph svg={view.icon} size={15} />
+          {#if view.script !== undefined}<ScriptMark badge />{/if}
         </button>
       {/each}
     </div>
@@ -646,6 +659,10 @@
       background-color var(--motion-fast) var(--ease-out),
       color var(--motion-fast) var(--ease-out),
       transform var(--motion-fast) var(--ease-press);
+  }
+
+  .row-action.script {
+    position: relative;
   }
 
   .row-action:hover {

@@ -14,6 +14,7 @@
   import TemplateGallery from './TemplateGallery.svelte'
   import RunLog from './RunLog.svelte'
   import ApproveDialog from './ApproveDialog.svelte'
+  import LibraryReviewDialog from './LibraryReviewDialog.svelte'
   import BlockEditor from './blocks/BlockEditor.svelte'
   import { t } from '../../lib/i18n'
   import { newInput, type ScriptKind } from '../../lib/scripting'
@@ -27,6 +28,7 @@
     createScript,
     galleryOpen,
     libraries,
+    libraryReview,
     loadCatalog,
     loadLibraries,
     loadRuns,
@@ -113,6 +115,8 @@
     </div>
     {#if $approvalFor}
       <ApproveDialog script={$approvalFor} catalog={$catalog} on:close={() => approvalFor.set(null)} on:approve={() => void approve()} />
+    {:else if $libraryReview}
+      <LibraryReviewDialog review={$libraryReview} catalog={$catalog} on:close={() => libraryReview.set(null)} />
     {/if}
   {/if}
 </section>

@@ -74,6 +74,7 @@ import { activeNote, openNotes, vaultIndex, vaultInfo } from '../../stores/notes
 import { projects } from '../../stores/projects'
 import { runSpaceAction } from '../../stores/space'
 import { spaceSearchProviders } from '../../lib/spacesearch'
+import { expectAxeClean } from '../../test/axe'
 
 function note(path: string, over: Partial<VaultNote> = {}): VaultNote {
   return { path, title: path.replace(/^.*\//, '').replace(/\.md$/, ''), mtime: Date.now(), size: 1, tags: [], aliases: [], headings: [], snippet: '', links: [], props: [], ...over }
@@ -124,6 +125,7 @@ describe('NotesScreen', () => {
     expect(screen.getByRole('list', { name: 'Folders' })).toHaveTextContent('Projects')
     expect(screen.getByRole('button', { name: /^work/ })).toBeInTheDocument()
     expect(screen.getByText('My Vault')).toBeInTheDocument()
+    await expectAxeClean()
   })
 
   it('opens a note in the editor with its backlinks', async () => {

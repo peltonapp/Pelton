@@ -26,6 +26,8 @@ import { idle } from '../../lib/async'
 import { sidebar } from '../../stores/accounts'
 import { clearHistory, history } from '../../stores/undohistory'
 import { toasts } from '../../stores/toast'
+import { placedScripts } from '../../stores/scripts'
+import { expectAxeClean } from '../../test/axe'
 
 vi.stubGlobal(
   'ResizeObserver',
@@ -116,6 +118,7 @@ describe('row quick actions', () => {
       .getAllByRole('button')
       .map((b) => b.getAttribute('aria-label'))
     expect(names).toEqual(['Archive', 'Mark as unread', 'Pin'])
+    await expectAxeClean(document.body, { except: ['aria-required-children'] })
   })
 
   it('acts on its row without opening or selecting it', async () => {
@@ -213,5 +216,38 @@ describe('row swipes', () => {
     await vi.advanceTimersByTimeAsync(600)
     expect(api.archiveMessage).not.toHaveBeenCalled()
     expect(api.setSeen).not.toHaveBeenCalled()
+  })
+
+  it('labels a script swipe with the script mark', async () => {
+    placedScripts.set({ 'row.swipe': [{ scriptId: 5, name: 'Summarize', description: '', options: { icon: 'star' } }] })
+    prefs.update((p) => ({ ...p, swipeLeftShort: 'script:5', swipeRightShort: 'script:5' }))
+    await showList([summary(1, 'First')])
+    const row = screen.getByText('First').closest('[role="option"]')!
+    let t = 1000
+    for (let i = 0; i < 12; i++) {
+      await fireEvent.wheel(row, { deltaX: 12, deltaY: 0, deltaMode: 0, timeStamp: (t += 16) })
+    }
+    const reveal = await waitFor(() => {
+      const el = document.querySelector('.reveal.new')
+      expect(el).not.toBeNull()
+      return el!
+    })
+    expect(reveal.querySelector('[data-script-mark]')).not.toBeNull()
+    expect(reveal.textContent).toContain('Script: Summarize')
+    placedScripts.set({})
+  })
+})
+
+describe('row script buttons', () => {
+  afterEach(() => placedScripts.set({}))
+
+  it('carry the script mark and say they run a script', async () => {
+    placedScripts.set({ 'row.hover': [{ scriptId: 5, name: 'Summarize', description: '', options: { icon: 'star' } }] })
+    prefs.update((p) => ({ ...p, rowActionList: 'archive,script:5' }))
+    await showList([summary(1, 'First')])
+    const bar = screen.getByRole('toolbar', { name: /First/ })
+    const button = within(bar).getByRole('button', { name: 'Script: Summarize' })
+    expect(button.querySelector('[data-script-mark]')).not.toBeNull()
+    expect(within(bar).getByRole('button', { name: 'Archive' }).querySelector('[data-script-mark]')).toBeNull()
   })
 })

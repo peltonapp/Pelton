@@ -108,7 +108,7 @@
         <span class="mark" title={$t('tasks.repeats')}><Ph svg={repeatIcon} size={12} /></span>
       {/if}
       {#if level !== 'none'}
-        <span class="prio {level}" title={$t(`projects.priority.${level}`)} aria-label={$t(`projects.priority.${level}`)}><Ph svg={flagIcon} size={12} /></span>
+        <span class="prio {level}" role="img" title={$t(`projects.priority.${level}`)} aria-label={$t(`projects.priority.${level}`)}><Ph svg={flagIcon} size={12} /></span>
       {/if}
       {#if card.mail}
         <span class="mark" title={$t('projects.card.mail').replace('{n}', String(card.mail))}><Ph svg={mailIcon} size={12} />{card.mail}</span>

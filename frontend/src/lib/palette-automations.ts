@@ -7,6 +7,7 @@ import { IconBolt, IconPlayerPlay, IconPlus, IconUpload } from '@tabler/icons-sv
 import { registerPaletteSource } from './palettesources'
 import type { PaletteCommand } from './commands'
 import { currentMessageItems, placedNow, runAt } from './scriptplacements'
+import { scriptText } from './scriptmark'
 import { openSpace, runInSpace } from '../stores/space'
 import { menuHint } from '../stores/shortcuts'
 import { pickImport } from '../stores/scripts'
@@ -45,9 +46,10 @@ registerPaletteSource('automations', (t) => {
     out.push({
       id: `automations:run:${s.scriptId}`,
       group: 'automations',
-      label: t('palette.automations.run').replace('{name}', s.name),
+      label: t('palette.automations.run').replace('{name}', scriptText(s.name)),
       keywords: s.description,
       icon: IconPlayerPlay,
+      script: s.name,
       run: () => runAt(palettePlacement, s.scriptId, currentMessageItems()),
     })
   }

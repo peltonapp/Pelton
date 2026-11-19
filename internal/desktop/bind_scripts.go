@@ -348,6 +348,7 @@ func (a *App) DeleteScript(id int64) error {
 		return err
 	}
 	a.dropScriptProposal(id)
+	a.dropLibraryNote(id)
 	return a.setScriptFolder(id, "")
 }
 
@@ -361,6 +362,9 @@ func (a *App) SetScriptEnabled(id int64, enabled bool, approve []string) (Script
 	out, err := svc.SetEnabled(a.ctx, id, enabled, approve)
 	if err != nil {
 		return ScriptDTO{}, err
+	}
+	if out.Enabled {
+		a.dropLibraryNote(id)
 	}
 	return toScriptDTO(out), nil
 }
@@ -558,6 +562,25 @@ func (a *App) SetScriptLogDays(days int) error {
 		return fmt.Errorf("pelton: keep runs for 1 to 365 days")
 	}
 	return a.store.Set(a.ctx, settingScriptLogDays, strconv.Itoa(days))
+}
+
+// ScriptAskSeconds returns how long a question of a script nobody started,
+// and the before-send recipient confirmation, wait for an answer.
+func (a *App) ScriptAskSeconds() int {
+	return int(a.scriptAskTimeout() / time.Second)
+}
+
+// SetScriptAskSeconds sets how long such a question waits, within
+// scripting.MinAskTimeout and scripting.MaxAskTimeout.
+func (a *App) SetScriptAskSeconds(seconds int) error {
+	if err := a.ready(); err != nil {
+		return err
+	}
+	d := time.Duration(seconds) * time.Second
+	if d < scripting.MinAskTimeout || d > scripting.MaxAskTimeout {
+		return fmt.Errorf("pelton: a question waits %d seconds to %d minutes", int(scripting.MinAskTimeout/time.Second), int(scripting.MaxAskTimeout/time.Minute))
+	}
+	return a.store.Set(a.ctx, settingScriptAskSeconds, strconv.Itoa(seconds))
 }
 
 // UndoScriptRun reverses the mail changes a run made, newest first. Sends

@@ -249,6 +249,31 @@ export interface ScriptLibraryInput {
   source: string
 }
 
+/** A script a library change reaches. */
+export interface ScriptRef {
+  id: number
+  name: string
+  enabled: boolean
+}
+
+/** A stored library with the scripts storing it switched off. */
+export interface ScriptLibrarySaved {
+  library: ScriptLibrary
+  switchedOff: ScriptRef[]
+}
+
+/** Why a script was switched off by a change to a library it loads, with that change since its approval. */
+export interface ScriptLibraryNote {
+  scriptId: number
+  /** False when there is no such note. */
+  exists: boolean
+  library: string
+  when: string
+  /** Set when the library was deleted. */
+  deleted: boolean
+  diff: { op: ' ' | '-' | '+'; text: string }[]
+}
+
 /** Asks which recent messages of a folder a pattern or a condition matches. */
 export interface MatchRequest {
   folder: string
