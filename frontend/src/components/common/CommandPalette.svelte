@@ -28,7 +28,7 @@
   import { space } from '../../stores/space'
   import { highlightRuns } from '../../lib/fuzzy'
   import { t, isMac, shortcutLabel } from '../../lib/i18n'
-  import { scriptEntryName } from '../../lib/scriptmark'
+  import { scriptEntryName, scriptText } from '../../lib/scriptmark'
   import ScriptMark from './ScriptMark.svelte'
   import { prefs } from '../../stores/prefs'
   import { calm } from '../../lib/motion'
@@ -380,7 +380,6 @@
               id="palette-row-{i}"
               role="option"
               aria-selected={i === active}
-              aria-label={entry.command.script !== undefined ? scriptEntryName(entry.command.label, entry.command.script, $t) : undefined}
               title={entry.command.script !== undefined ? scriptEntryName(entry.command.label, entry.command.script, $t) : undefined}
               data-active={i === active}
               tabindex="-1"
@@ -399,7 +398,7 @@
               <span class="label">
                 {#each highlightRuns(entry.command.label, entry.positions) as part}
                   {#if part.hit}<mark>{part.text}</mark>{:else}{part.text}{/if}
-                {/each}
+                {/each}{#if entry.command.script !== undefined}<span class="sr-only">, {$t('scripts.mark.name').replace('{name}', scriptText(entry.command.script))}</span>{/if}
               </span>
               {#if entry.command.hint}
                 <span class="hint">{entry.command.hint}</span>

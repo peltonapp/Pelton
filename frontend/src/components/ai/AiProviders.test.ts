@@ -20,6 +20,7 @@ vi.mock('../../lib/api', async (importOriginal) => ({
 vi.mock('../../stores/confirm', () => ({ askConfirm: vi.fn().mockResolvedValue(true) }))
 
 import { expectAccessible } from '../../test/a11y'
+import { expectAxeClean } from '../../test/axe'
 import AiProviders from './AiProviders.svelte'
 import AiAccess from './AiAccess.svelte'
 import type { AIKind, AIProvider } from '../../lib/ai'
@@ -74,6 +75,7 @@ describe('the AI providers list', () => {
     expect(screen.getByText('On your device or network')).toBeInTheDocument()
     expect(screen.getByText('Default')).toBeInTheDocument()
     expectAccessible()
+    await expectAxeClean()
     expect(api.testAIProvider).not.toHaveBeenCalled()
     expect(api.fetchAIModels).not.toHaveBeenCalled()
   })

@@ -4,6 +4,7 @@ import userEvent from '@testing-library/user-event'
 import type { Block, BlockTree, ScriptRun } from '../../../lib/scripting'
 import { blockCatalog } from '../../../test/scriptfixtures'
 import { expectAccessible } from '../../../test/a11y'
+import { expectAxeClean } from '../../../test/axe'
 
 // jsdom has no ResizeObserver, which bind:clientWidth uses.
 globalThis.ResizeObserver ??= class {
@@ -82,6 +83,7 @@ describe('BlockEditor', () => {
     expect(off).toHaveAttribute('aria-disabled', 'true')
     expect(off).toHaveAccessibleDescription(/\S/)
     expectAccessible()
+    await expectAxeClean()
     await user.type(within(palette).getByRole('searchbox'), 'move')
     await user.click(within(palette).getByRole('button', { name: 'Move' }))
     expect(last().blocks.map((b) => b.type)).toEqual(['notify.toast', 'mail.move'])

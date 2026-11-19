@@ -4,6 +4,7 @@ import userEvent from '@testing-library/user-event'
 import { get } from 'svelte/store'
 import { catalogFixture, scriptFixture } from '../../test/scriptfixtures'
 import type { ScriptLibrary, ScriptLibraryNote } from '../../lib/scripting'
+import { expectAxeClean } from '../../test/axe'
 
 const api = vi.hoisted(() => ({
   checkScriptLua: vi.fn(),
@@ -110,6 +111,7 @@ describe('LibraryReviewDialog', () => {
     expect(screen.getByRole('dialog', { name: 'Review Uses util (1 of 1)' })).toBeInTheDocument()
     expect(await screen.findByText(/return \{ a = 2 \}/)).toBeInTheDocument()
     expect(api.scriptLibraryNote).toHaveBeenCalledWith(3)
+    await expectAxeClean()
     await userEvent.click(screen.getByRole('button', { name: 'Approve and switch on' }))
     expect(api.setScriptEnabled).toHaveBeenCalledWith(3, true, ['mail.read'])
     expect(onClose).toHaveBeenCalled()

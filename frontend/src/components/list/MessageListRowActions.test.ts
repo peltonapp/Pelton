@@ -27,6 +27,7 @@ import { sidebar } from '../../stores/accounts'
 import { clearHistory, history } from '../../stores/undohistory'
 import { toasts } from '../../stores/toast'
 import { placedScripts } from '../../stores/scripts'
+import { expectAxeClean } from '../../test/axe'
 
 vi.stubGlobal(
   'ResizeObserver',
@@ -117,6 +118,7 @@ describe('row quick actions', () => {
       .getAllByRole('button')
       .map((b) => b.getAttribute('aria-label'))
     expect(names).toEqual(['Archive', 'Mark as unread', 'Pin'])
+    await expectAxeClean(document.body, { except: ['aria-required-children'] })
   })
 
   it('acts on its row without opening or selecting it', async () => {

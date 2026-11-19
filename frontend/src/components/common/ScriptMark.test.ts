@@ -13,6 +13,7 @@ import { scriptEntryName, scriptText } from '../../lib/scriptmark'
 import '../../lib/scriptplacements'
 import '../../lib/palette-automations'
 import type { PaletteCommand } from '../../lib/commands'
+import { expectAxeClean } from '../../test/axe'
 
 // the palette fades in, and jsdom has no web animations. A finished stub lets svelte run it to its end.
 Element.prototype.animate ??= function () {
@@ -72,9 +73,11 @@ describe('command palette scripts', () => {
     paletteOpen.set(true)
     paletteQuery.set('e')
     await tick()
-    const option = screen.getByRole('option', { name: 'Run Weekly digest, Script: Weekly digest' })
+    const option = screen.getByRole('option', { name: /^Run Weekly digest, Script: Weekly digest/ })
+    expect(option).toHaveAttribute('title', 'Run Weekly digest, Script: Weekly digest')
     expect(option.querySelector('[data-script-mark]')).not.toBeNull()
     expect(screen.getByRole('option', { name: /^Archive/ }).querySelector('[data-script-mark]')).toBeNull()
+    await expectAxeClean()
     paletteQuery.set('')
   })
 })

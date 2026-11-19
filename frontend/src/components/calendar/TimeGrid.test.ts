@@ -5,6 +5,7 @@ import { placeOccurrence, toRFC3339, weekDays } from '../../lib/caldate'
 import type { Calendar, Occurrence } from '../../lib/types'
 import { calendars } from '../../stores/calendar'
 import { expectAccessible } from '../../test/a11y'
+import { expectAxeClean } from '../../test/axe'
 
 function occ(id: number, summary: string, start: Date, end: Date): Occurrence {
   return {
@@ -78,7 +79,7 @@ describe('TimeGrid', () => {
     expect(parseFloat(review.style.height)).toBeCloseTo((90 / 1440) * 100, 3)
   })
 
-  it('names an event with its time, calendar and the states its color and style show', () => {
+  it('names an event with its time, calendar and the states its color and style show', async () => {
     calendars.set([{ id: 1, name: 'Work' } as Calendar])
     const event = { ...occ(1, 'Review', new Date(2026, 10, 11, 10), new Date(2026, 10, 11, 11, 30)), status: 'TENTATIVE', recurring: true }
     mount([event])
@@ -88,6 +89,7 @@ describe('TimeGrid', () => {
     expect(name).toContain('tentative')
     expect(name).toContain('repeats')
     expectAccessible()
+    await expectAxeClean()
     calendars.set([])
   })
 
