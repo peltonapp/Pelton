@@ -436,6 +436,7 @@ func (a *App) syncFolders(client mailClient, accountID int64) error {
 			goSafe("announcing new mail", func() { a.notifyNewMail(f, res.NewIDs) })
 			a.scriptMailArrived(res.NewIDs, firstSync)
 			a.promisesAfterSync(f, res.NewIDs)
+			a.privacyAfterSync(f, res.NewIDs)
 		}
 		if !firstSync {
 			a.scriptServerFlags(res.FlagChanges)

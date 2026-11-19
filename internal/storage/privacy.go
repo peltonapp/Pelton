@@ -48,7 +48,7 @@ func (d *DB) RecordPrivacyScan(ctx context.Context, s PrivacyScan) error {
 (msg_key, sender, sender_name, list_id, date, remote_images, pixels, links, receipt, other, companies)
 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		s.Key, normalizeAddress(s.Sender), s.SenderName, s.ListID, formatTime(s.Date), s.RemoteImages,
-		s.Pixels, s.Links, receipt, s.Other, strings.Join(s.Companies, " "))
+		s.Pixels, s.Links, receipt, s.Other, strings.Join(s.Companies, "|"))
 	if err != nil {
 		return fmt.Errorf("storage: record privacy scan: %w", err)
 	}
@@ -96,7 +96,7 @@ type PrivacySender struct {
 // zero time means all of it.
 func (d *DB) PrivacySenders(ctx context.Context, since time.Time) ([]PrivacySender, error) {
 	rows, err := d.sql.QueryContext(ctx, `SELECT sender, MAX(sender_name), COUNT(*), SUM(remote_images), SUM(pixels),
-    SUM(links), SUM(receipt), SUM(other), MIN(date), MAX(date), GROUP_CONCAT(companies, ' ')
+    SUM(links), SUM(receipt), SUM(other), MIN(date), MAX(date), GROUP_CONCAT(companies, '|')
 FROM privacy_scans WHERE date >= ? GROUP BY sender`, formatTime(since))
 	if err != nil {
 		return nil, fmt.Errorf("storage: privacy senders: %w", err)
@@ -117,14 +117,24 @@ FROM privacy_scans WHERE date >= ? GROUP BY sender`, formatTime(since))
 		if s.Last, err = parseTime(last); err != nil {
 			return nil, err
 		}
-		for _, c := range strings.Fields(companies.String) {
-			if !slices.Contains(s.Companies, c) {
+		for _, c := range strings.Split(companies.String, "|") {
+			if c != "" && !slices.Contains(s.Companies, c) {
 				s.Companies = append(s.Companies, c)
 			}
 		}
 		out = append(out, s)
 	}
 	return out, rows.Err()
+}
+
+// MessageListID returns a message's List-Id, which a message read leaves out.
+func (d *DB) MessageListID(ctx context.Context, id int64) (string, error) {
+	var listID string
+	err := d.sql.QueryRowContext(ctx, `SELECT list_id FROM messages WHERE id = ?`, id).Scan(&listID)
+	if err != nil {
+		return "", fmt.Errorf("storage: message list id %d: %w", id, err)
+	}
+	return listID, nil
 }
 
 // ClearPrivacyScans forgets every counter.

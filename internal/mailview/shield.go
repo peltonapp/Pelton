@@ -86,6 +86,17 @@ func ScanLinks(html string) []TrackedLink {
 	return out
 }
 
+// ScanPlainLinks is ScanLinks for a plain-text body, over its bare urls.
+func ScanPlainLinks(text string) []TrackedLink {
+	var out []TrackedLink
+	for _, href := range Links("", text) {
+		if link, ok := classifyLink(href); ok {
+			out = append(out, link)
+		}
+	}
+	return out
+}
+
 // classifyLink decides whether one href is tracked.
 func classifyLink(href string) (TrackedLink, bool) {
 	u, err := url.Parse(href)

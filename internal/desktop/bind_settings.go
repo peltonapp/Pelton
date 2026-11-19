@@ -237,6 +237,12 @@ const (
 	// links opened from a mail have tracking parameters and redirect wrappers
 	// taken off. Off by default.
 	settingCleanLinks = "clean_links"
+	// the privacy report keeps counters of what mail tried to track. On by
+	// default; they never leave this device.
+	settingPrivacyCounters = "privacy_counters"
+	// days after an unsubscribe before more mail from the list counts as
+	// still sending.
+	settingUnsubscribeGrace = "unsubscribe_grace_days"
 	// verbose sync surfaces the mailbox currently being synced in the status
 	// line instead of a plain "Syncing" (#128). Off by default.
 	settingVerboseSync = "verbose_sync"
@@ -632,6 +638,11 @@ type UIPrefsDTO struct {
 	// CleanLinks removes tracking parameters and redirect wrappers from links
 	// opened from a mail.
 	CleanLinks bool `json:"cleanLinks"`
+	// PrivacyCounters keeps the privacy report's counters.
+	PrivacyCounters bool `json:"privacyCounters"`
+	// UnsubscribeGraceDays is how long after an unsubscribe mail from the
+	// list may still arrive before Pelton says they are still sending.
+	UnsubscribeGraceDays int `json:"unsubscribeGraceDays"`
 	// AutoconfigLookup is whether the add-mailbox wizard may look up a typed
 	// address's domain: ask (default), allow or manual.
 	AutoconfigLookup string `json:"autoconfigLookup"`
@@ -854,6 +865,8 @@ func (a *App) GetUIPrefs() (UIPrefsDTO, error) {
 		NotifyActionMarkRead:       a.boolSetting(settingNotifyActionMarkRead, true),
 		NotifyActionReply:          a.boolSetting(settingNotifyActionReply, true),
 		CleanLinks:                 a.boolSetting(settingCleanLinks, false),
+		PrivacyCounters:            a.privacyCounting(),
+		UnsubscribeGraceDays:       a.unsubscribeGraceDays(),
 		AutoconfigLookup:           a.stringSetting(settingAutoconfigLookup, "ask"),
 		VerboseSync:                a.boolSetting(settingVerboseSync, false),
 		SyncProgressBar:            a.boolSetting(settingSyncProgress, true),

@@ -14,7 +14,7 @@ CREATE TABLE IF NOT EXISTS privacy_scans (
     links INTEGER NOT NULL DEFAULT 0,
     receipt INTEGER NOT NULL DEFAULT 0,
     other INTEGER NOT NULL DEFAULT 0,
-    -- the tracking companies recognised in the message, space separated
+    -- the tracking companies recognised in the message, separated by '|'
     companies TEXT NOT NULL DEFAULT ''
 );
 CREATE INDEX IF NOT EXISTS idx_privacy_scans_date ON privacy_scans(date);
