@@ -100,6 +100,13 @@ type Message struct {
 	// its conversation carries a private note.
 	Muted   bool
 	HasNote bool
+	// VaultID is the mail vault the row is sealed to, 0 for mail in clear.
+	// A sealed row read through a context its vault admits arrives opened.
+	VaultID int64
+	// PGPSource, when set on insert, is stored as the message's pgp source:
+	// sealed with the rest of it in a vaulted folder. It is never read back
+	// into this struct.
+	PGPSource []byte
 }
 
 // MessageAuth is the stored Authentication-Results verdict for one message.
@@ -152,7 +159,21 @@ func (d *DB) InsertMessage(ctx context.Context, m *Message) (int64, error) {
 		return 0, fmt.Errorf("storage: begin message insert: %w", err)
 	}
 	defer tx.Rollback()
-	id, err := insertMessage(ctx, tx, m)
+	target, err := vaultTargetFor(ctx, tx, m.FolderID)
+	if err != nil {
+		return 0, err
+	}
+	var id int64
+	if target != nil {
+		hasAtts := m.HasAttachments
+		id, _, err = d.insertSealed(ctx, tx, m, nil, target)
+		if err == nil && hasAtts {
+			_, err = tx.ExecContext(ctx, `UPDATE messages SET has_attachments = 1 WHERE id = ?`, id)
+		}
+		m.HasAttachments = hasAtts
+	} else {
+		id, err = insertMessage(ctx, tx, m)
+	}
 	if err != nil {
 		return 0, err
 	}
@@ -167,6 +188,7 @@ func (d *DB) InsertMessage(ctx context.Context, m *Message) (int64, error) {
 // flag are committed together, and the attachment files are written to disk as
 // part of the same unit: if anything fails the transaction rolls back and the
 // already written files are removed, so the cache never ends up half written.
+// A message for a folder in a mail vault is sealed before anything is written.
 func (d *DB) InsertMessageWithAttachments(ctx context.Context, m *Message, atts []IncomingAttachment) (int64, error) {
 	tx, err := d.sql.BeginTx(ctx, nil)
 	if err != nil {
@@ -174,10 +196,33 @@ func (d *DB) InsertMessageWithAttachments(ctx context.Context, m *Message, atts 
 	}
 	defer tx.Rollback()
 
+	target, err := vaultTargetFor(ctx, tx, m.FolderID)
+	if err != nil {
+		return 0, err
+	}
+	if target != nil {
+		id, written, err := d.insertSealed(ctx, tx, m, atts, target)
+		if err != nil {
+			d.removeAttachmentFiles(written)
+			return 0, err
+		}
+		if err := tx.Commit(); err != nil {
+			d.removeAttachmentFiles(written)
+			return 0, fmt.Errorf("storage: commit message insert: %w", err)
+		}
+		return id, nil
+	}
+
 	m.HasAttachments = len(atts) > 0
 	id, err := insertMessage(ctx, tx, m)
 	if err != nil {
 		return 0, err
+	}
+	if len(m.PGPSource) > 0 {
+		if _, err := tx.ExecContext(ctx, `INSERT INTO message_pgp (message_id, raw) VALUES (?, ?)
+ON CONFLICT(message_id) DO UPDATE SET raw = excluded.raw`, id, m.PGPSource); err != nil {
+			return 0, fmt.Errorf("storage: store pgp source for message %d: %w", id, err)
+		}
 	}
 
 	var writtenPaths []string
@@ -241,8 +286,8 @@ INSERT INTO messages (
     smime_certs, smime_fingerprint,
     reply_to, auth_spf, auth_dkim, auth_dmarc, auth_spf_domain, auth_dkim_domain,
     charset_guess, in_reply_to, [references], thread_id, thread_subject, thread_loose,
-    mail_kind, pinned, list_id
-) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+    mail_kind, pinned, list_id, vault_id
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
 	res, err := ex.ExecContext(ctx, query,
 		m.AccountID, m.FolderID, m.UID, m.MessageID, m.Subject, m.FromAddress,
 		m.FromName, m.ToAddresses, m.CcAddresses, formatTime(m.Date), uint8(m.Flags),
@@ -253,7 +298,7 @@ INSERT INTO messages (
 		m.ReplyTo, m.Auth.SPF, m.Auth.DKIM, m.Auth.DMARC, m.Auth.SPFDomain, m.Auth.DKIMDomain,
 		m.CharsetGuess, encodeThreadingIDs(m.InReplyTo), encodeThreadingIDs(m.References),
 		assigned.threadID, assigned.subject, boolToInt(assigned.loose),
-		int(m.MailKind), boolToInt(m.Pinned), m.ListID)
+		int(m.MailKind), boolToInt(m.Pinned), m.ListID, m.VaultID)
 	if err != nil {
 		return 0, fmt.Errorf("storage: insert message uid %d: %w", m.UID, err)
 	}
@@ -265,7 +310,8 @@ INSERT INTO messages (
 	return id, nil
 }
 
-// GetMessage returns one message by id, or ErrMessageNotFound.
+// GetMessage returns one message by id, or ErrMessageNotFound. A message in
+// a mail vault is found only through a context its unlocked vault admits.
 func (d *DB) GetMessage(ctx context.Context, id int64) (*Message, error) {
 	m, err := scanMessage(d.sql.QueryRowContext(ctx, selectMessageByID, id))
 	if errors.Is(err, sql.ErrNoRows) {
@@ -274,12 +320,19 @@ func (d *DB) GetMessage(ctx context.Context, id int64) (*Message, error) {
 	if err != nil {
 		return nil, fmt.Errorf("storage: get message %d: %w", id, err)
 	}
+	if err := d.visibleMessage(ctx, m); err != nil {
+		return nil, err
+	}
 	return m, nil
 }
 
 // ListMessages returns messages in a folder, newest first, capped at limit
-// (limit <= 0 means no cap).
+// (limit <= 0 means no cap). A vaulted folder the context may not see is
+// empty.
 func (d *DB) ListMessages(ctx context.Context, folderID int64, limit int) ([]Message, error) {
+	if visible, err := d.FolderVisible(ctx, folderID); err != nil || !visible {
+		return nil, err
+	}
 	const query = selectMessageColumns + `
 FROM messages WHERE folder_id = ? ORDER BY date DESC, uid DESC LIMIT ?`
 	rows, err := d.sql.QueryContext(ctx, query, folderID, normalizeLimit(limit))
@@ -299,15 +352,16 @@ FROM messages WHERE folder_id = ? ORDER BY date DESC, uid DESC LIMIT ?`
 	if err := rows.Err(); err != nil {
 		return nil, fmt.Errorf("storage: iterate messages: %w", err)
 	}
-	return messages, nil
+	return d.visibleMessages(ctx, messages)
 }
 
 // ListMessagesForIndex returns messages with id greater than afterID, ordered by
 // id ascending, up to limit. The search layer uses it to backfill and to index
-// newly synced mail incrementally by walking the id watermark forward.
+// newly synced mail incrementally by walking the id watermark forward. Mail in
+// a vault is never indexed.
 func (d *DB) ListMessagesForIndex(ctx context.Context, afterID int64, limit int) ([]Message, error) {
 	const query = selectMessageColumns + `
-FROM messages WHERE id > ? ORDER BY id ASC LIMIT ?`
+FROM messages WHERE id > ? AND vault_id = 0 AND ` + notVaulted + ` ORDER BY id ASC LIMIT ?`
 	rows, err := d.sql.QueryContext(ctx, query, afterID, normalizeLimit(limit))
 	if err != nil {
 		return nil, fmt.Errorf("storage: list messages for index after %d: %w", afterID, err)
@@ -356,7 +410,7 @@ SELECT id, account_id, folder_id, uid, message_id, subject, from_address,
        smime_status, smime_signer, smime_email, smime_issuer, smime_detail,
        smime_fingerprint, reply_to, auth_spf, auth_dkim, auth_dmarc, auth_spf_domain,
        auth_dkim_domain, charset_guess, in_reply_to, [references], thread_id,
-       mail_kind, pinned,
+       mail_kind, pinned, vault_id,
        EXISTS (SELECT 1 FROM threads t WHERE t.id = messages.thread_id AND t.muted = 1) AS muted,
        (EXISTS (SELECT 1 FROM notes n WHERE n.account_id = messages.account_id AND n.message_key != ''
                 AND n.message_key = ` + noteKeyExpr + `)
@@ -390,7 +444,7 @@ func scanMessage(row rowScanner) (*Message, error) {
 		&m.SMIME.Status, &m.SMIME.Signer, &m.SMIME.Email, &m.SMIME.Issuer,
 		&m.SMIME.Detail, &m.SMIME.Fingerprint, &m.ReplyTo, &m.Auth.SPF, &m.Auth.DKIM, &m.Auth.DMARC,
 		&m.Auth.SPFDomain, &m.Auth.DKIMDomain, &m.CharsetGuess, &inReplyTo, &references,
-		&m.ThreadID, &mailKind, &pinned, &muted, &hasNote); err != nil {
+		&m.ThreadID, &mailKind, &pinned, &m.VaultID, &muted, &hasNote); err != nil {
 		return nil, err
 	}
 	m.MailKind = MailKind(mailKind)

@@ -46,7 +46,7 @@ func (d *DB) MessageAccount(ctx context.Context, messageID string, prefer int64)
 	}
 	var id int64
 	err := d.sql.QueryRowContext(ctx, `
-SELECT account_id FROM messages WHERE message_id IN (?, ?)
+SELECT account_id FROM messages WHERE message_id IN (?, ?) AND `+notVaulted+`
 ORDER BY account_id = ? DESC, id LIMIT 1`, key, "<"+key+">", prefer).Scan(&id)
 	if errors.Is(err, sql.ErrNoRows) {
 		return 0, false, nil
@@ -137,7 +137,7 @@ WHERE id = ?`, uint8(flag), uint8(flag), c.ID); err != nil {
 func copiesWithout(ctx context.Context, ex execer, accountID int64, messageID string, flag Flag) ([]ReplyStateChange, error) {
 	rows, err := ex.QueryContext(ctx, `
 SELECT id, account_id, folder_id FROM messages
-WHERE account_id = ? AND message_id IN (?, ?) AND pending_delete = 0 AND flags & ? = 0`,
+WHERE account_id = ? AND message_id IN (?, ?) AND pending_delete = 0 AND flags & ? = 0 AND `+notVaulted,
 		accountID, messageID, "<"+messageID+">", uint8(flag))
 	if err != nil {
 		return nil, fmt.Errorf("storage: copies of %q: %w", messageID, err)
@@ -167,7 +167,7 @@ func (d *DB) SentReplies(ctx context.Context, accountID int64, originalID string
 	rows, err := d.sql.QueryContext(ctx, `
 SELECT r.kind, MIN(m.id) FROM message_replies r
 JOIN messages m ON m.message_id IN (r.reply_message_id, '<' || r.reply_message_id || '>')
-  AND m.pending_delete = 0
+  AND m.pending_delete = 0 AND `+notVaultedM+`
 WHERE r.account_id = ? AND r.original_message_id = ? AND r.sent = 1
 GROUP BY r.kind, r.reply_message_id
 ORDER BY MIN(m.date), MIN(m.id)`, accountID, originalID)

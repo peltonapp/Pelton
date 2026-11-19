@@ -152,19 +152,24 @@ func (e *Engine) storeMessage(ctx context.Context, folder storage.Folder, msg *p
 		})
 	}
 
+	// pgp mail keeps its source, since decrypting and verifying need the exact
+	// bytes and nothing else caches them. What is kept is the sender's
+	// ciphertext, so this stores nothing the message did not already carry.
+	if crypto.IsProtected(msg.Raw) {
+		stored.PGPSource = msg.Raw
+	}
+
 	id, err := e.store.InsertMessageWithAttachments(ctx, stored, atts)
 	if err != nil {
 		return 0, fmt.Errorf("sync: store message uid %d: %w", uid, err)
 	}
 
-	// pgp mail keeps its source, since decrypting and verifying need the exact
-	// bytes and nothing else caches them. What is kept is the sender's
-	// ciphertext, so this stores nothing the message did not already carry. A
-	// failure here costs the ability to open that one message, not the sync.
-	if crypto.IsProtected(msg.Raw) {
-		if err := e.store.SetMessagePGPSource(ctx, id, msg.Raw); err != nil {
-			e.log.Error("store pgp source", "uid", uid, "err", err)
-		}
+	vaulted, err := e.store.FolderVault(ctx, folder.ID)
+	if err != nil {
+		return id, fmt.Errorf("sync: vault of %q: %w", folder.IMAPPath, err)
+	}
+	if vaulted != 0 {
+		return id, nil
 	}
 	if e.ObserveRaw != nil && len(msg.Raw) > 0 {
 		e.ObserveRaw(folder, msg.Raw)

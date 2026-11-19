@@ -60,6 +60,9 @@ type DB struct {
 	// scope is the profile the store reads and writes profile-owned rows for.
 	// See profilescope.go.
 	scope scope
+	// vault is which folders are in a mail vault and who may see them. See
+	// mailvault.go.
+	vault *vaultState
 }
 
 // ChannelNightly is the build channel of the automated dev-branch builds. It
@@ -130,6 +133,7 @@ func Open(path string) (*DB, error) {
 		sql:            sqlDB,
 		path:           path,
 		attachmentsDir: filepath.Join(baseDir, attachmentsDirName),
+		vault:          &vaultState{},
 	}, nil
 }
 

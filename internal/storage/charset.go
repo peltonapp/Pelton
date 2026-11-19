@@ -27,7 +27,7 @@ const markBatch = 500
 // background, rather than on every start.
 func (d *DB) MarkMangledMessages(ctx context.Context) (int, error) {
 	rows, err := d.sql.QueryContext(ctx,
-		`SELECT id, subject, body_plain, body_html FROM messages WHERE needs_refetch = 0`)
+		`SELECT id, subject, body_plain, body_html FROM messages WHERE needs_refetch = 0 AND `+notVaulted)
 	if err != nil {
 		return 0, fmt.Errorf("storage: scan messages for broken text: %w", err)
 	}
@@ -112,7 +112,7 @@ func (d *DB) RepairMessageText(ctx context.Context, id int64, subject, plain, ht
 	res, err := d.sql.ExecContext(ctx, `
 UPDATE messages
    SET subject = ?, body_plain = ?, body_html = ?, charset_guess = ?, needs_refetch = 0
- WHERE id = ?`, subject, plain, htmlBody, charsetGuess, id)
+ WHERE id = ? AND vault_id = 0`, subject, plain, htmlBody, charsetGuess, id)
 	if err != nil {
 		return fmt.Errorf("storage: repair text of message %d: %w", id, err)
 	}

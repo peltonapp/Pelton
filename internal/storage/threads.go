@@ -194,7 +194,7 @@ func subjectRows(ctx context.Context, ex execer, in threadInput, subject string,
 	query := `
 SELECT thread_id, from_address, to_addresses, cc_addresses FROM messages
 WHERE account_id = ? AND thread_subject = ? AND thread_id != 0 AND id != ?
-  AND date >= ? AND date <= ?`
+  AND date >= ? AND date <= ? AND ` + notVaulted
 	if looseOnly {
 		// a headerless reply that already found its parent stays where it is.
 		query += ` AND thread_loose = 1 AND NOT EXISTS (

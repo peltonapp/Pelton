@@ -50,7 +50,7 @@ JOIN messages m ON m.id = (
       AND pending_delete = 0 AND folder_id IN (` + folders + `)
     ORDER BY date DESC LIMIT 1
 )
-WHERE agg.email != ''`, args
+WHERE agg.email != '' AND ` + notVaultedM, args
 }
 
 // NewsletterSenders aggregates every sender whose mail carries List-Unsubscribe
