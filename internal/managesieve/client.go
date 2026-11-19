@@ -338,20 +338,6 @@ func (c *Client) Authenticate() error {
 	}
 }
 
-// Capability asks the server for its capabilities again.
-func (c *Client) Capability() (Capabilities, error) {
-	_ = c.conn.SetDeadline(time.Now().Add(c.timeout))
-	if err := c.send("CAPABILITY"); err != nil {
-		return Capabilities{}, err
-	}
-	caps, err := c.readCapabilities("CAPABILITY")
-	if err != nil {
-		return Capabilities{}, err
-	}
-	c.caps = caps
-	return caps, nil
-}
-
 // ListScripts lists the scripts on the server; at most one is active.
 func (c *Client) ListScripts() ([]Script, error) {
 	lines, err := c.command("LISTSCRIPTS", "LISTSCRIPTS")

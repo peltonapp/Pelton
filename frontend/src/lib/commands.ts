@@ -28,7 +28,7 @@ import { accountLabel } from './format'
 import type { Account, Folder, UnifiedView, View, MessageSummary, ThemeInfo, Profile } from './types'
 
 /** Which section of the palette an entry belongs to. */
-export type CommandGroup = 'action' | 'navigate' | 'setting' | 'mail' | 'calendar' | 'contacts' | 'tasks' | 'projects'
+export type CommandGroup = 'action' | 'navigate' | 'setting' | 'mail' | 'calendar' | 'contacts' | 'tasks' | 'projects' | 'notes' | 'feeds' | 'chat'
 
 /**
  * A second stage of the palette: picking a folder for "Rename mailbox", a

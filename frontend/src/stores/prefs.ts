@@ -5,7 +5,7 @@
 // source of truth.
 
 import { writable } from 'svelte/store'
-import type { QuickComposeStatus, UIPrefs, ThemePref, DensityPref, EditorMode, ViewsPlacement, CloseAction, LogLevel, SelectAllScope, SearchKind, SearchSortPref, DesignPref, LayoutMode, NavStyle, RailSide, PaneStyle, AvatarPlacement, ContactsView, ComposeOpenIn, ReaderWidth, AfterMove, AfterReplySend, FollowUpInterval, ProjectsView } from '../lib/types'
+import type { QuickComposeStatus, UIPrefs, ThemePref, DensityPref, EditorMode, ViewsPlacement, CloseAction, LogLevel, SelectAllScope, SearchKind, SearchSortPref, DesignPref, LayoutMode, NavStyle, RailSide, PaneStyle, AvatarPlacement, ContactsView, ComposeOpenIn, ReaderWidth, AfterMove, AfterReplySend, FollowUpInterval, ProjectsView, NoteEditorMode, ChatNotifyMode } from '../lib/types'
 import { getUIPrefs, setSetting, SettingKeys, systemColorScheme, setWindowTheme, getThemeApply, setQuickCompose } from '../lib/api'
 import { applyTheme, applyDensity, applyAccent, applyScale, applyReduceMotion, applyHandCursor, setThemeSchedule, applyUIFont, applyMonoFont, applyCorners, applyDesign, watchSystemTheme, setSystemSchemeOverride, resolveTheme } from '../theme/theme'
 import { applyUserTheme } from '../theme/usertheme'
@@ -104,6 +104,11 @@ const defaults: UIPrefs = {
   myDayPanel: false,
   projectsView: 'grid',
   projectSuggestions: true,
+  feedsRefreshMinutes: 30,
+  feedsKeepDays: 90,
+  feedsKeepCount: 500,
+  feedsLoadImages: false,
+  feedsMarkReadOnScroll: false,
   themeId: '',
   menuBarInApp: false,
   menuBarNativeMinimal: false,
@@ -128,6 +133,11 @@ const defaults: UIPrefs = {
   syncProgressBar: true,
   statusClock: true,
   statusUnread: true,
+  chatEnabled: false,
+  chatSendReceipts: true,
+  chatSendTyping: true,
+  chatNotify: 'mentions',
+  chatMarkdown: true,
   markReadOnOpen: true,
   openOnArrow: false,
   signatureAboveQuote: false,
@@ -146,6 +156,15 @@ const defaults: UIPrefs = {
   logLevel: 'info',
   logMessageMetadata: false,
   crashLogs: false,
+  notesVault: '',
+  notesDailyFolder: 'Daily',
+  notesDailyFormat: 'YYYY-MM-DD',
+  notesDailyTemplate: '',
+  notesTemplatesFolder: 'Templates',
+  notesAttachmentsFolder: 'Attachments',
+  notesProjectsFolder: 'Projects',
+  notesEditorMode: 'live',
+  notesLineWidth: 'medium',
 }
 
 export const prefs = writable<UIPrefs>(defaults)
@@ -295,7 +314,6 @@ export function setNavStyle(navStyle: NavStyle): void {
   void setSetting(SettingKeys.navStyle, navStyle)
 }
 
-/** Moves the rail to the left or right window edge. */
 /** The ids of the views pinned to the rail, in display order. */
 export function railPinIds(railPins: string): string[] {
   return railPins === '' ? [] : railPins.split(',')
@@ -312,6 +330,7 @@ export function toggleRailPin(id: string): void {
   })
 }
 
+/** Moves the rail to the left or right window edge. */
 export function setRailSide(railSide: RailSide): void {
   prefs.update((p) => ({ ...p, railSide }))
   void setSetting(SettingKeys.railSide, railSide)
@@ -452,6 +471,15 @@ export function setProjectsView(projectsView: ProjectsView): void {
 export function setProjectSuggestions(projectSuggestions: boolean): void {
   prefs.update((p) => ({ ...p, projectSuggestions }))
   void setSetting(SettingKeys.projectSuggestions, String(projectSuggestions))
+}
+
+/** The Feeds preferences a setter takes, by name. */
+export type FeedPrefs = Pick<UIPrefs, 'feedsRefreshMinutes' | 'feedsKeepDays' | 'feedsKeepCount' | 'feedsLoadImages' | 'feedsMarkReadOnScroll'>
+
+/** Saves one Feeds preference: refresh interval, retention, images or mark on scroll. */
+export function setFeedPref<K extends keyof FeedPrefs>(key: K, value: FeedPrefs[K]): void {
+  prefs.update((p) => ({ ...p, [key]: value }))
+  void setSetting(SettingKeys[key], String(value))
 }
 
 /** Turns the gliding caret of the compose editor on or off. */
@@ -818,6 +846,37 @@ export function setStatusUnread(value: boolean): void {
   void setSetting(SettingKeys.statusUnread, String(value))
 }
 
+// setChatEnabled turns the chat space on or off. The backend starts or stops
+// the chat account to match.
+export function setChatEnabled(value: boolean): void {
+  prefs.update((p) => ({ ...p, chatEnabled: value }))
+  void setSetting(SettingKeys.chatEnabled, String(value))
+}
+
+// setChatSendReceipts picks public (on) or private (off) chat read receipts.
+export function setChatSendReceipts(value: boolean): void {
+  prefs.update((p) => ({ ...p, chatSendReceipts: value }))
+  void setSetting(SettingKeys.chatSendReceipts, String(value))
+}
+
+// setChatSendTyping picks whether chat rooms see the user typing.
+export function setChatSendTyping(value: boolean): void {
+  prefs.update((p) => ({ ...p, chatSendTyping: value }))
+  void setSetting(SettingKeys.chatSendTyping, String(value))
+}
+
+// setChatNotify picks which chat messages raise a notification.
+export function setChatNotify(value: ChatNotifyMode): void {
+  prefs.update((p) => ({ ...p, chatNotify: value }))
+  void setSetting(SettingKeys.chatNotify, value)
+}
+
+// setChatMarkdown picks whether chat messages are sent as Markdown.
+export function setChatMarkdown(value: boolean): void {
+  prefs.update((p) => ({ ...p, chatMarkdown: value }))
+  void setSetting(SettingKeys.chatMarkdown, String(value))
+}
+
 // setMarkReadOnOpen picks whether opening a message marks it read.
 export function setMarkReadOnOpen(value: boolean): void {
   prefs.update((p) => ({ ...p, markReadOnOpen: value }))
@@ -1052,6 +1111,38 @@ export function setLogMessageMetadata(value: boolean): void {
 export function setCrashLogs(value: boolean): void {
   prefs.update((p) => ({ ...p, crashLogs: value }))
   void setSetting(SettingKeys.crashLogs, String(value))
+}
+
+/** The notes preferences that are plain strings, settable through setNotesPref. */
+export type NotesPrefKey =
+  | 'notesDailyFolder'
+  | 'notesDailyFormat'
+  | 'notesDailyTemplate'
+  | 'notesTemplatesFolder'
+  | 'notesAttachmentsFolder'
+  | 'notesProjectsFolder'
+
+/** setNotesPref stores one of the notes space's folder and naming settings. */
+export function setNotesPref(key: NotesPrefKey, value: string): void {
+  prefs.update((p) => ({ ...p, [key]: value }))
+  void setSetting(SettingKeys[key], value)
+}
+
+/** setNotesEditorMode sets the mode a note opens in. */
+export function setNotesEditorMode(value: NoteEditorMode): void {
+  prefs.update((p) => ({ ...p, notesEditorMode: value }))
+  void setSetting(SettingKeys.notesEditorMode, value)
+}
+
+/** setNotesLineWidth caps how wide a note's text runs. */
+export function setNotesLineWidth(value: ReaderWidth): void {
+  prefs.update((p) => ({ ...p, notesLineWidth: value }))
+  void setSetting(SettingKeys.notesLineWidth, value)
+}
+
+/** setNotesVaultPref mirrors the notes folder after the backend changed it. */
+export function setNotesVaultPref(value: string): void {
+  prefs.update((p) => ({ ...p, notesVault: value }))
 }
 
 // setSidebarIndentGuides toggles the nested-folder guide lines.

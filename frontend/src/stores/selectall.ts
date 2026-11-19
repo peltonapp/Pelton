@@ -9,7 +9,7 @@
 
 import { get, writable } from 'svelte/store'
 import { allMatchingIds, messageList } from './messages'
-import { selectAll, clearSelection, selectedIds, expandOffer } from './listselect'
+import { selectAll, clearSelection, expandOffer } from './listselect'
 import { askConfirm } from './confirm'
 import { errorMessage, toastError, toastInfo } from './toast'
 import { prefs } from './prefs'
@@ -95,9 +95,4 @@ export async function expandSelection(): Promise<boolean> {
 export function clearAll(): void {
   clearSelection()
   clearExpandOffer()
-}
-
-/** How many rows are selected right now. */
-export function selectionSize(): number {
-  return get(selectedIds).size
 }

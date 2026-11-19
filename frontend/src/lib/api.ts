@@ -102,6 +102,15 @@ import type {
   RemovedTask,
   TaskMailMark,
   TaskSettings,
+  Feed,
+  FeedCandidate,
+  FeedEntry,
+  FeedEntryDetail,
+  FeedFolder,
+  FeedImportResult,
+  FeedScope,
+  FeedSettings,
+  FeedSidebar,
   AttachmentContent,
   AttachmentEntry,
   AttachmentPage,
@@ -147,11 +156,30 @@ import type {
   ProjectLink,
   ProjectEvent,
   ProjectNoteRecord,
+  ProjectVaultNote,
+  ProjectVaultNotes,
   ProjectMailMark,
   ThreadSummary,
   LockState,
   LockAuthResult,
   QuickComposeStatus,
+  VaultInfo,
+  VaultSnapshot,
+  VaultFile,
+  VaultSave,
+  VaultOp,
+  VaultMention,
+  VaultHit,
+  ChatStatus,
+  ChatServer,
+  ChatRoom,
+  ChatTimelinePage,
+  ChatSendRequest,
+  ChatMember,
+  ChatCreateRoomRequest,
+  ChatProfile,
+  ChatVerification,
+  ChatDevice,
 } from './types'
 import { normalizeState } from './sieve'
 
@@ -971,13 +999,6 @@ export function saveDraft(id: number, req: ComposeRequest): Promise<number> {
     return Promise.resolve(0)
   }
   return App.SaveDraft(id, new desktop.ComposeRequest(req))
-}
-
-export function listDrafts(): Promise<Draft[]> {
-  if (isDemoActive()) {
-    return Promise.resolve([])
-  }
-  return App.ListDrafts()
 }
 
 export function deleteDraft(id: number): Promise<void> {
@@ -1839,12 +1860,6 @@ export function changeLockPassphrase(current: string, next: string): Promise<Loc
   return App.ChangeLockPassphrase(current, next) as unknown as Promise<LockAuthResult>
 }
 
-/** Whether a bound call was refused because the app is locked. */
-export function isLockedError(err: unknown): boolean {
-  const cause = (err as { cause?: { code?: unknown } } | null)?.cause
-  return typeof cause === 'object' && cause !== null && cause.code === 'locked'
-}
-
 // --- quick compose ---
 
 /** The quick compose setting and whether its shortcut is registered. */
@@ -1944,7 +1959,6 @@ export const SettingKeys = {
   // lets search see inside encrypted mail, at the cost of writing the decrypted
   // text into the on-disk index. off by default; toggling rebuilds the index.
   indexDecrypted: 'search_index_decrypted',
-  editorMode: 'editor_mode',
   toastPosition: 'toast_position',
   paneLocked: 'pane_locked',
   sidebarWidth: 'sidebar_width',
@@ -2030,6 +2044,11 @@ export const SettingKeys = {
   myDayPanel: 'my_day_panel',
   projectsView: 'projects_view',
   projectSuggestions: 'project_suggestions',
+  feedsRefreshMinutes: 'feeds_refresh_minutes',
+  feedsKeepDays: 'feeds_keep_days',
+  feedsKeepCount: 'feeds_keep_count',
+  feedsLoadImages: 'feeds_load_images',
+  feedsMarkReadOnScroll: 'feeds_mark_read_on_scroll',
   themeId: 'theme_id',
   menuBarInApp: 'menu_bar_in_app',
   menuBarNativeMinimal: 'menu_bar_native_minimal',
@@ -2058,14 +2077,16 @@ export const SettingKeys = {
   syncProgressBar: 'sync_progress_bar',
   statusClock: 'status_clock',
   statusUnread: 'status_unread',
+  chatEnabled: 'chat_enabled',
+  chatSendReceipts: 'chat_send_receipts',
+  chatSendTyping: 'chat_send_typing',
+  chatNotify: 'chat_notify',
+  chatMarkdown: 'chat_markdown',
   markReadOnOpen: 'mark_read_on_open',
   openOnArrow: 'open_on_arrow',
   signatureAboveQuote: 'signature_above_quote',
   closeAction: 'close_button_action',
   startHidden: 'start_hidden',
-  quickCompose: 'quick_compose',
-  quickComposeShortcut: 'quick_compose_shortcut',
-  appLock: 'app_lock',
   appLockIdleMinutes: 'app_lock_idle_minutes',
   appLockOnLaunch: 'app_lock_on_launch',
   appLockHideNotifications: 'app_lock_hide_notifications',
@@ -2079,6 +2100,18 @@ export const SettingKeys = {
   logMessageMetadata: 'log_message_metadata',
   crashLogs: 'crash_logs',
   blockTrackingPixels: 'block_tracking_pixels',
+  notesVault: 'notes_vault',
+  notesDailyFolder: 'notes_daily_folder',
+  notesDailyFormat: 'notes_daily_format',
+  notesDailyTemplate: 'notes_daily_template',
+  notesTemplatesFolder: 'notes_templates_folder',
+  notesAttachmentsFolder: 'notes_attachments_folder',
+  notesProjectsFolder: 'notes_projects_folder',
+  notesEditorMode: 'notes_editor_mode',
+  notesLineWidth: 'notes_line_width',
+  notesStarred: 'notes_starred',
+  notesRecent: 'notes_recent',
+  notesSort: 'notes_sort',
 } as const
 
 // listSystemFonts returns the installed font family names for the body font
@@ -3023,6 +3056,40 @@ export function deleteProjectNote(id: number): Promise<void> {
   return App.DeleteProjectNote(id)
 }
 
+/**
+ * listProjectVaultNotes returns a project's notes in the notes folder and the
+ * notes linking to it; the first call with a folder open moves the notes kept
+ * in the database there.
+ */
+export function listProjectVaultNotes(projectId: number): Promise<ProjectVaultNotes> {
+  return App.ListProjectVaultNotes(projectId) as unknown as Promise<ProjectVaultNotes>
+}
+
+/** createProjectVaultNote writes a new note of a project into its folder; body gets the project in its front matter. */
+export function createProjectVaultNote(projectId: number, title: string, body: string): Promise<ProjectVaultNote> {
+  return App.CreateProjectVaultNote(projectId, title, body) as unknown as Promise<ProjectVaultNote>
+}
+
+/** addNoteToProject puts a note of the notes folder in a project through its front matter. */
+export function addNoteToProject(path: string, projectId: number): Promise<void> {
+  return App.AddNoteToProject(path, projectId)
+}
+
+/** removeNoteFromProject takes a note out of a project and its cards; the file stays. */
+export function removeNoteFromProject(path: string, projectId: number): Promise<void> {
+  return App.RemoveNoteFromProject(path, projectId)
+}
+
+/** attachVaultNote attaches a note of the notes folder to a card. */
+export function attachVaultNote(path: string, taskUid: string): Promise<void> {
+  return App.AttachVaultNote(path, taskUid)
+}
+
+/** trashProjectNote moves a project's note to the trash folder of the notes folder; vaultUndo brings it back. */
+export function trashProjectNote(path: string, projectId: number): Promise<VaultOp> {
+  return App.TrashProjectNote(path, projectId) as unknown as Promise<VaultOp>
+}
+
 /** createEventDraftFromMessage prefills an event from a mail dropped on the calendar. */
 export function createEventDraftFromMessage(messageId: number): Promise<EventDraft> {
   return App.CreateEventDraftFromMessage(messageId) as unknown as Promise<EventDraft>
@@ -3108,4 +3175,524 @@ export function saveSieveScript(accountId: number, text: string): Promise<SieveS
 // restoreSievePrevious undoes the last sieve save.
 export function restoreSievePrevious(accountId: number): Promise<SieveState> {
   return sieveCall(App.RestoreSievePrevious(accountId))
+}
+
+// --- the notes space -----------------------------------------------------------
+// the folder of Markdown notes. These are not the private notes on a message
+// above (getNote and friends), which live in the database.
+
+/** vaultOpen opens the notes folder in the settings, creating the default one on first use. */
+export function vaultOpen(): Promise<VaultInfo> {
+  return App.VaultOpen() as unknown as Promise<VaultInfo>
+}
+
+/** vaultChooseFolder asks for a notes folder and opens it; an empty folder means cancelled. */
+export function vaultChooseFolder(): Promise<VaultInfo> {
+  return App.VaultChooseFolder() as unknown as Promise<VaultInfo>
+}
+
+/** vaultUseDefaultFolder goes back to the Notes folder in the data directory. */
+export function vaultUseDefaultFolder(): Promise<VaultInfo> {
+  return App.VaultUseDefaultFolder() as unknown as Promise<VaultInfo>
+}
+
+/** vaultRescan checks the notes folder for changes made by other apps now. */
+export function vaultRescan(): Promise<void> {
+  return App.VaultRescan()
+}
+
+/** vaultSnapshot returns every note, folder and other file of the notes folder. */
+export function vaultSnapshot(): Promise<VaultSnapshot> {
+  return App.VaultSnapshot() as unknown as Promise<VaultSnapshot>
+}
+
+/** vaultRead returns a note's text and the hash a save passes back. */
+export function vaultRead(path: string): Promise<VaultFile> {
+  return App.VaultRead(path) as unknown as Promise<VaultFile>
+}
+
+/** vaultSave writes a note edited from the version with baseHash; force overwrites a newer one. */
+export function vaultSave(path: string, content: string, baseHash: string, force = false): Promise<VaultSave> {
+  return App.VaultSave(path, content, baseHash, force) as unknown as Promise<VaultSave>
+}
+
+/** vaultCreate writes a new note and fails when the name is taken. */
+export function vaultCreate(path: string, content: string): Promise<string> {
+  return App.VaultCreate(path, content)
+}
+
+/** vaultUniquePath returns path, or path with a number added when it is taken. */
+export function vaultUniquePath(path: string): Promise<string> {
+  return App.VaultUniquePath(path)
+}
+
+/** vaultCreateFolder makes a folder. */
+export function vaultCreateFolder(path: string): Promise<string> {
+  return App.VaultCreateFolder(path)
+}
+
+/** vaultMove renames or moves a note or folder and updates the links to it. */
+export function vaultMove(from: string, to: string): Promise<VaultOp> {
+  return App.VaultMove(from, to) as unknown as Promise<VaultOp>
+}
+
+/** vaultDelete moves a note or folder to the trash folder of the vault. */
+export function vaultDelete(path: string): Promise<VaultOp> {
+  return App.VaultDelete(path) as unknown as Promise<VaultOp>
+}
+
+/** vaultUndo takes back a rename, move or delete. */
+export function vaultUndo(id: string): Promise<void> {
+  return App.VaultUndo(id)
+}
+
+/** vaultBacklinks lists the lines in other notes that link to a note. */
+export function vaultBacklinks(path: string): Promise<VaultMention[]> {
+  return App.VaultBacklinks(path).then((m) => (m ?? []) as VaultMention[])
+}
+
+/** vaultUnlinkedMentions lists the lines that name a note without linking to it. */
+export function vaultUnlinkedMentions(path: string): Promise<VaultMention[]> {
+  return App.VaultUnlinkedMentions(path).then((m) => (m ?? []) as VaultMention[])
+}
+
+/** vaultLinkMention turns an unlinked mention into a link to target. */
+export function vaultLinkMention(source: string, line: number, match: string, target: string): Promise<void> {
+  return App.VaultLinkMention(source, line, match, target)
+}
+
+/** vaultSearch finds notes by text, name, aliases, headings and tags. */
+export function vaultSearch(query: string): Promise<VaultHit[]> {
+  return App.VaultSearch(query).then((h) => (h ?? []) as VaultHit[])
+}
+
+/** vaultSaveAttachment stores a pasted file (base64) in the attachments folder and returns its path. */
+export function vaultSaveAttachment(name: string, base64: string): Promise<string> {
+  return App.VaultSaveAttachment(name, base64)
+}
+
+/** vaultImportFile copies a file dropped from the system into the attachments folder and returns its path. */
+export function vaultImportFile(path: string): Promise<string> {
+  return App.VaultImportFile(path)
+}
+
+/** vaultFileData returns a file of the notes folder as a data: URL. */
+export function vaultFileData(path: string): Promise<string> {
+  return App.VaultFileData(path)
+}
+
+// --- feeds ------------------------------------------------------------------------
+
+const emptyFeedSidebar: FeedSidebar = { folders: [], feeds: [], counts: { unread: 0, today: 0, starred: 0, readLater: 0 } }
+
+/** feedScopeDTO turns a list scope into what the backend reads. */
+function feedScopeDTO(scope: FeedScope, unreadOnly: boolean, search: string): desktop.FeedScopeDTO {
+  const id = scope.kind === 'feed' || scope.kind === 'folder' ? scope.id : 0
+  return new desktop.FeedScopeDTO({ kind: scope.kind, id, unreadOnly, search })
+}
+
+/** listFeedSidebar returns the folders, the feeds and the smart view counts. */
+export function listFeedSidebar(): Promise<FeedSidebar> {
+  if (isDemoActive()) {
+    return Promise.resolve(emptyFeedSidebar)
+  }
+  return App.ListFeedSidebar().then((s) => ({
+    folders: (s.folders ?? []) as FeedFolder[],
+    feeds: (s.feeds ?? []) as Feed[],
+    counts: s.counts,
+  }))
+}
+
+/** listFeedEntries returns a page of the entries a scope selects, newest first. */
+export function listFeedEntries(scope: FeedScope, unreadOnly: boolean, search: string, limit: number, offset: number): Promise<FeedEntry[]> {
+  if (isDemoActive() || scope.kind === 'newsletters') {
+    return Promise.resolve([])
+  }
+  return App.ListFeedEntries(feedScopeDTO(scope, unreadOnly, search), limit, offset).then((list) => (list ?? []) as unknown as FeedEntry[])
+}
+
+/** searchFeedEntries returns the newest entries of every feed matching text, read or not. */
+export function searchFeedEntries(text: string, limit: number): Promise<FeedEntry[]> {
+  if (isDemoActive() || !text.trim()) {
+    return Promise.resolve([])
+  }
+  return App.ListFeedEntries(new desktop.FeedScopeDTO({ kind: 'all', id: 0, unreadOnly: false, search: text }), limit, 0).then((list) => (list ?? []) as unknown as FeedEntry[])
+}
+
+/** getFeedEntry returns an entry for the reader, its html sanitized. */
+export function getFeedEntry(id: number): Promise<FeedEntryDetail> {
+  return App.GetFeedEntry(id) as unknown as Promise<FeedEntryDetail>
+}
+
+/** getFeedEntryHtml renders an entry again with remote images allowed or not. */
+export function getFeedEntryHtml(id: number, allowRemote: boolean, includeTrackers: boolean): Promise<string> {
+  return App.GetFeedEntryHTML(id, allowRemote, includeTrackers)
+}
+
+/** setFeedEntriesRead marks entries read or unread; it returns the ids that changed. */
+export function setFeedEntriesRead(ids: number[], read: boolean): Promise<number[]> {
+  return App.SetFeedEntriesRead(ids, read).then((list) => list ?? [])
+}
+
+/** markFeedScopeRead marks every unread entry of a scope read and returns their ids. */
+export function markFeedScopeRead(scope: FeedScope, search: string): Promise<number[]> {
+  return App.MarkFeedScopeRead(feedScopeDTO(scope, true, search)).then((list) => list ?? [])
+}
+
+/** setFeedEntryStarred stars or unstars an entry. */
+export function setFeedEntryStarred(id: number, starred: boolean): Promise<void> {
+  return App.SetFeedEntryStarred(id, starred)
+}
+
+/** setFeedEntryReadLater puts an entry on the read-later list or takes it off. */
+export function setFeedEntryReadLater(id: number, later: boolean): Promise<void> {
+  return App.SetFeedEntryReadLater(id, later)
+}
+
+/** discoverFeeds finds the working feeds at an address, with a preview of each. */
+export function discoverFeeds(address: string): Promise<FeedCandidate[]> {
+  return App.DiscoverFeeds(address).then((list) => (list ?? []) as unknown as FeedCandidate[])
+}
+
+/** addFeed subscribes to a feed, fetches it and returns it. */
+export function addFeed(address: string, folderId: number, title: string): Promise<Feed> {
+  return App.AddFeed(address, folderId, title) as unknown as Promise<Feed>
+}
+
+/** updateFeed saves what the user set on a feed. */
+export function updateFeed(settings: FeedSettings): Promise<void> {
+  return App.UpdateFeed(new desktop.FeedSettingsDTO(settings))
+}
+
+/** deleteFeed unsubscribes from a feed and drops its entries. */
+export function deleteFeed(id: number): Promise<void> {
+  return App.DeleteFeed(id)
+}
+
+/** moveFeeds puts feeds into a folder (0 for none) in the given order. */
+export function moveFeeds(folderId: number, ids: number[]): Promise<void> {
+  return App.MoveFeeds(folderId, ids)
+}
+
+/** createFeedFolder adds a folder at the end. */
+export function createFeedFolder(name: string): Promise<FeedFolder> {
+  return App.CreateFeedFolder(name) as unknown as Promise<FeedFolder>
+}
+
+/** renameFeedFolder renames a folder. */
+export function renameFeedFolder(id: number, name: string): Promise<void> {
+  return App.RenameFeedFolder(id, name)
+}
+
+/** deleteFeedFolder removes a folder; its feeds move out of it. */
+export function deleteFeedFolder(id: number): Promise<void> {
+  return App.DeleteFeedFolder(id)
+}
+
+/** reorderFeedFolders puts the folders in the given order. */
+export function reorderFeedFolders(ids: number[]): Promise<void> {
+  return App.ReorderFeedFolders(ids)
+}
+
+/** refreshFeeds fetches every feed in the background; progress arrives as events. */
+export function refreshFeeds(): Promise<void> {
+  return App.RefreshFeeds()
+}
+
+/** refreshFeed fetches one feed in the background. */
+export function refreshFeed(id: number): Promise<void> {
+  return App.RefreshFeed(id)
+}
+
+/** importOpml asks for an OPML file and subscribes to its feeds. */
+export function importOpml(): Promise<FeedImportResult> {
+  return App.ImportOPML() as unknown as Promise<FeedImportResult>
+}
+
+/** exportOpml writes the subscriptions to a file the user picks; '' when cancelled. */
+export function exportOpml(): Promise<string> {
+  return App.ExportOPML()
+}
+
+/** listNewsletterMail returns the newest newsletter mail for the Feeds space. */
+export function listNewsletterMail(limit: number, offset: number, unreadOnly: boolean): Promise<MessageSummary[]> {
+  if (isDemoActive()) {
+    return Promise.resolve([])
+  }
+  return App.ListNewsletterMail(limit, offset, unreadOnly).then((list) => (list ?? []) as unknown as MessageSummary[])
+}
+
+/** countNewsletterMail counts the unread newsletter mail. */
+export function countNewsletterMail(): Promise<number> {
+  if (isDemoActive()) {
+    return Promise.resolve(0)
+  }
+  return App.CountNewsletterMail()
+}
+
+// chat. Every call reaches the user's own homeserver through the backend; in
+// demo mode chat stays signed out and none of them leave the frontend.
+
+const signedOutChat: ChatStatus = {
+  state: 'signedOut',
+  userId: '',
+  deviceId: '',
+  homeserver: '',
+  displayName: '',
+  avatar: '',
+  error: '',
+  encryption: {
+    ready: false,
+    deviceVerified: false,
+    crossSigning: false,
+    secretStorage: false,
+    secretStoragePassphrase: false,
+    backupVersion: '',
+    backupKeys: 0,
+    backupActive: false,
+    fingerprint: '',
+  },
+}
+
+/** The chat account's state; signed out while chat is off. */
+export function chatStatus(): Promise<ChatStatus> {
+  if (isDemoActive()) {
+    return Promise.resolve(signedOutChat)
+  }
+  return App.ChatStatus() as unknown as Promise<ChatStatus>
+}
+
+/** Finds the homeserver for a server name, Matrix ID or URL, and its sign-in methods. */
+export function chatDiscover(input: string): Promise<ChatServer> {
+  return App.ChatDiscover(input) as unknown as Promise<ChatServer>
+}
+
+/** Signs in with a user name and password. */
+export function chatLoginPassword(homeserver: string, user: string, password: string): Promise<void> {
+  return App.ChatLoginPassword(homeserver, user, password)
+}
+
+/** Signs in through the server's single sign-on page in the system browser. */
+export function chatLoginSSO(homeserver: string, providerId: string): Promise<void> {
+  return App.ChatLoginSSO(homeserver, providerId)
+}
+
+/** Abandons a browser sign-in that is waiting. */
+export function chatCancelSSO(): Promise<void> {
+  return App.ChatCancelSSO()
+}
+
+/** Signs in with a login token. */
+export function chatLoginToken(homeserver: string, token: string): Promise<void> {
+  return App.ChatLoginToken(homeserver, token)
+}
+
+/** Signs this device out and removes its chat data and keys. */
+export function chatSignOut(): Promise<void> {
+  return App.ChatSignOut()
+}
+
+/** Every room, direct chat, space and invite, most recent first. */
+export function chatRooms(): Promise<ChatRoom[]> {
+  if (isDemoActive()) {
+    return Promise.resolve([])
+  }
+  return App.ChatRooms().then((list) => (list ?? []) as unknown as ChatRoom[])
+}
+
+/** Up to limit messages older than before, or the newest when before is empty. */
+export function chatTimeline(roomId: string, before: string, limit: number): Promise<ChatTimelinePage> {
+  return App.ChatTimeline(roomId, before, limit) as unknown as Promise<ChatTimelinePage>
+}
+
+/** Sends a message, reply or edit and returns its event id. */
+export function chatSend(req: ChatSendRequest): Promise<string> {
+  return App.ChatSend(req)
+}
+
+/** Reacts to a message. */
+export function chatReact(roomId: string, eventId: string, key: string): Promise<string> {
+  return App.ChatReact(roomId, eventId, key)
+}
+
+/** Removes a message or takes back a reaction. */
+export function chatRedact(roomId: string, eventId: string): Promise<void> {
+  return App.ChatRedact(roomId, eventId)
+}
+
+/** Tells a room the user is typing; the backend drops it when typing notices are off. */
+export function chatTyping(roomId: string, typing: boolean): Promise<void> {
+  return App.ChatTyping(roomId, typing)
+}
+
+/** Moves the read marker of a room. */
+export function chatMarkRead(roomId: string, eventId: string): Promise<void> {
+  return App.ChatMarkRead(roomId, eventId)
+}
+
+/** Who is typing in a room. */
+export function chatTypists(roomId: string): Promise<ChatMember[]> {
+  return App.ChatTypists(roomId).then((list) => (list ?? []) as unknown as ChatMember[])
+}
+
+/** A room's members, by power level and name. */
+export function chatMembers(roomId: string): Promise<ChatMember[]> {
+  return App.ChatMembers(roomId).then((list) => (list ?? []) as unknown as ChatMember[])
+}
+
+/** Creates a room and returns its id. */
+export function chatCreateRoom(req: ChatCreateRoomRequest): Promise<string> {
+  return App.ChatCreateRoom(req)
+}
+
+/** The direct chat with a person, started when there is none. */
+export function chatOpenDirect(userId: string): Promise<string> {
+  return App.ChatOpenDirect(userId)
+}
+
+/** Joins a room by address or link, or accepts an invite. */
+export function chatJoin(target: string): Promise<string> {
+  return App.ChatJoin(target)
+}
+
+/** Leaves a room or declines an invite. */
+export function chatLeave(roomId: string): Promise<void> {
+  return App.ChatLeave(roomId)
+}
+
+/** Invites a person to a room. */
+export function chatInvite(roomId: string, userId: string): Promise<void> {
+  return App.ChatInvite(roomId, userId)
+}
+
+/** Adds a room to or removes it from the favourites. */
+export function chatSetFavourite(roomId: string, favourite: boolean): Promise<void> {
+  return App.ChatSetFavourite(roomId, favourite)
+}
+
+/** A person's public profile, to show who a Matrix ID is. */
+export function chatLookupProfile(userId: string): Promise<ChatProfile> {
+  return App.ChatLookupProfile(userId) as unknown as Promise<ChatProfile>
+}
+
+/** A message's file or thumbnail, in the shape the attachment previewer reads. */
+export async function chatMedia(roomId: string, eventId: string, thumbnail: boolean): Promise<AttachmentContent> {
+  const m = await App.ChatMedia(roomId, eventId, thumbnail)
+  return { filename: m.name, contentType: m.mime, sizeBytes: m.size, data: m.data, tooLarge: m.tooLarge }
+}
+
+/** A small mxc picture as a data url. */
+export function chatAvatar(mxc: string): Promise<string> {
+  return App.ChatAvatar(mxc)
+}
+
+/** An mxc image from message html as a data url. */
+export function chatInlineImage(mxc: string): Promise<string> {
+  return App.ChatInlineImage(mxc)
+}
+
+/** Asks where to save a message's file and saves it; empty when cancelled. */
+export function chatSaveMedia(roomId: string, eventId: string): Promise<string> {
+  return App.ChatSaveMedia(roomId, eventId)
+}
+
+/** The largest file the homeserver accepts, or 0 when it does not say. */
+export function chatUploadLimit(): Promise<number> {
+  return App.ChatUploadLimit()
+}
+
+/** Sends a file the frontend holds, such as a pasted image. */
+export function chatSendFileData(roomId: string, name: string, mime: string, base64: string, uploadId: string, replyTo: string): Promise<string> {
+  return App.ChatSendFileData({ roomId, name, mime, replyTo }, base64, uploadId)
+}
+
+/** Sends files from disk, such as dropped ones. */
+export function chatSendFilePaths(roomId: string, paths: string[], uploadIds: string[], replyTo: string): Promise<void> {
+  return App.ChatSendFilePaths(roomId, paths, uploadIds, replyTo)
+}
+
+/** Asks for files to send. */
+export function chatPickFiles(): Promise<string[]> {
+  return App.ChatPickFiles().then((list) => list ?? [])
+}
+
+/** Asks again for the keys of undecryptable messages. */
+export function chatRetryDecryption(roomId: string, eventIds: string[]): Promise<void> {
+  return App.ChatRetryDecryption(roomId, eventIds)
+}
+
+/** The device verifications in flight. */
+export function chatVerifications(): Promise<ChatVerification[]> {
+  if (isDemoActive()) {
+    return Promise.resolve([])
+  }
+  return App.ChatVerifications().then((list) => (list ?? []) as unknown as ChatVerification[])
+}
+
+/** Asks another device to verify; one of the user's own when userId is empty. */
+export function chatStartVerification(userId: string): Promise<string> {
+  return App.ChatStartVerification(userId)
+}
+
+/** Accepts a verification request. */
+export function chatAcceptVerification(id: string): Promise<void> {
+  return App.ChatAcceptVerification(id)
+}
+
+/** Starts comparing emoji in a ready verification. */
+export function chatStartSAS(id: string): Promise<void> {
+  return App.ChatStartSAS(id)
+}
+
+/** Says the emoji match. */
+export function chatConfirmSAS(id: string): Promise<void> {
+  return App.ChatConfirmSAS(id)
+}
+
+/** Stops a verification; mismatch says the emoji did not match. */
+export function chatCancelVerification(id: string, mismatch: boolean): Promise<void> {
+  return App.ChatCancelVerification(id, mismatch)
+}
+
+/** Forgets a finished verification. */
+export function chatDismissVerification(id: string): Promise<void> {
+  return App.ChatDismissVerification(id)
+}
+
+/** Reads the encryption state again. */
+export function chatRefreshEncryption(): Promise<void> {
+  return App.ChatRefreshEncryption()
+}
+
+/** Opens secure storage with the recovery key, or its passphrase. */
+export function chatUnlock(secret: string, passphrase: boolean): Promise<void> {
+  return App.ChatUnlock(secret, passphrase)
+}
+
+/** Sets up cross-signing, secure storage and key backup; returns the recovery key. */
+export function chatSetupEncryption(passphrase: string, password: string): Promise<string> {
+  return App.ChatSetupEncryption(passphrase, password).then((r) => r.recoveryKey)
+}
+
+/** The user's sessions, this one first. */
+export function chatDevices(): Promise<ChatDevice[]> {
+  return App.ChatDevices().then((list) => (list ?? []) as unknown as ChatDevice[])
+}
+
+/** Signs out another of the user's sessions. */
+export function chatSignOutDevice(deviceId: string, password: string): Promise<void> {
+  return App.ChatSignOutDevice(deviceId, password)
+}
+
+/** Whether the user verified a person. */
+export function chatUserTrust(userId: string): Promise<boolean> {
+  return App.ChatUserTrust(userId)
+}
+
+/** Tells the backend which room is on screen, so it stays quiet while focused. */
+export function chatSetViewing(roomId: string): Promise<void> {
+  if (isDemoActive()) {
+    return Promise.resolve()
+  }
+  return App.ChatSetViewing(roomId)
 }

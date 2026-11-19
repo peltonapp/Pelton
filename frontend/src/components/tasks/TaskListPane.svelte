@@ -16,9 +16,9 @@
   import '../calendar/controls.css'
   import Ph from '../common/Ph.svelte'
   import TaskCheck from './TaskCheck.svelte'
-  import { calendarColor, formatTime } from '../../lib/calformat'
-  import { daysBetween } from '../../lib/caldate'
-  import { dueDate, dueHasTime, isOverdue, type TaskRow } from '../../lib/tasklogic'
+  import { calendarColor } from '../../lib/calformat'
+  import { isOverdue, type TaskRow } from '../../lib/tasklogic'
+  import { dueLabel } from '../../lib/projectlogic'
   import { dur, motion } from '../../lib/motion'
   import { t } from '../../lib/i18n'
   import type { TimeFormat } from '../../lib/format'
@@ -73,27 +73,6 @@
   }
 
   $: listById = new Map(lists.map((l) => [l.id, l]))
-
-  function dueText(task: Task): string {
-    const d = dueDate(task)
-    if (!d) {
-      return ''
-    }
-    const days = daysBetween(now, d)
-    let day: string
-    if (days === 0) {
-      day = $t('tasks.due.today')
-    } else if (days === 1) {
-      day = $t('tasks.due.tomorrow')
-    } else if (days === -1) {
-      day = $t('tasks.due.yesterday')
-    } else if (days > 1 && days < 7) {
-      day = d.toLocaleDateString(undefined, { weekday: 'long' })
-    } else {
-      day = d.toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: d.getFullYear() === now.getFullYear() ? undefined : 'numeric' })
-    }
-    return dueHasTime(task.due) ? `${day} ${formatTime(d, timeFormat)}` : day
-  }
 
   function listName(task: Task): string {
     const list = listById.get(task.listId)
@@ -271,7 +250,7 @@
             <span class="title">{task.title || $t('tasks.untitled')}</span>
             <span class="meta">
               {#if task.due}
-                <span class="due" class:overdue>{dueText(task)}</span>
+                <span class="due" class:overdue>{dueLabel(task.due, now, $t, timeFormat)}</span>
               {/if}
               {#if task.rrule}
                 <span class="mark" title={$t('tasks.repeats')}><Ph svg={repeatIcon} size={12} /></span>

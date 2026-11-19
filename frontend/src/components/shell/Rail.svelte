@@ -1,19 +1,23 @@
 <script lang="ts">
-  // the rail: a slim strip on one window edge that switches between mail,
-  // contacts and the calendar, with search, the profile and settings at its
+  // the rail: a slim strip on one window edge that switches between the
+  // spaces, with search, the profile and settings at its
   // foot. a marker glides to the active entry.
   import { createEventDispatcher } from 'svelte'
   import searchIcon from '@phosphor-icons/core/assets/duotone/magnifying-glass-duotone.svg?raw'
   import settingsIcon from '@phosphor-icons/core/assets/duotone/gear-six-duotone.svg?raw'
   import userIcon from '@phosphor-icons/core/assets/duotone/user-circle-duotone.svg?raw'
   import Ph from '../common/Ph.svelte'
-  import { spaces, spaceDrop } from '../../lib/spaces'
+  import { visibleSpaces as spaces, spaceDrop } from '../../lib/spaces'
+  import { chatUnreadRooms, chatHasHighlight } from '../../stores/chat'
   import { maildrop } from '../../stores/maildrag'
   import { space, openSpace } from '../../stores/space'
   import { taskBadge } from '../../stores/tasks'
+  import { feedsUnread } from '../../stores/feeds'
   import { currentProfile, profiles, switchRelative } from '../../stores/profiles'
   import { tip } from '../../lib/tip'
-  import { t } from '../../lib/i18n'
+  import { t, shortcutLabel } from '../../lib/i18n'
+  import { bindings } from '../../stores/shortcuts'
+  import type { ShortcutAction } from '../../lib/shortcuts'
   import type { ComponentType } from 'svelte'
   import { IconPinnedOff } from '@tabler/icons-svelte'
   import type { RailSide, ViewKey } from '../../lib/types'
@@ -34,7 +38,13 @@
   const dispatch = createEventDispatcher<{ search: void; settings: void }>()
 
   $: tipSide = side === 'left' ? ('right' as const) : ('left' as const)
-  $: activeIndex = Math.max(0, spaces.findIndex((s) => s.key === $space))
+
+  // the keys bound to an action, as the tooltip shows them; nothing when unbound.
+  $: keysFor = (action: string): string | undefined => {
+    const combo = $bindings[action as ShortcutAction]
+    return combo ? shortcutLabel(combo) : undefined
+  }
+  $: activeIndex = Math.max(0, $spaces.findIndex((s) => s.key === $space))
 
   /** A view pinned to the middle of the rail. */
   interface Pin {
@@ -99,14 +109,14 @@
 <nav class="rail" class:right={side === 'right'} aria-label={$t('space.switcher')} style="--wails-draggable:drag">
   <div class="group" style={`--active:${activeIndex}`}>
     <span class="marker" aria-hidden="true"></span>
-    {#each spaces as entry (entry.key)}
+    {#each $spaces as entry (entry.key)}
       <button
         type="button"
         class="entry"
         class:active={$space === entry.key}
         aria-label={$t(entry.labelKey)}
         aria-current={$space === entry.key ? 'page' : undefined}
-        use:tip={{ text: $t(entry.labelKey), side: tipSide }}
+        use:tip={{ text: $t(entry.labelKey), shortcut: keysFor(`go-${entry.key}`), side: tipSide }}
         use:maildrop={spaceDrop(entry.key)}
         on:click={() => openSpace(entry.key)}
       >
@@ -114,8 +124,18 @@
         {#if entry.key === 'mail' && unread > 0 && !$focus.active}
           <span class="badge" aria-hidden="true"></span>
         {/if}
+        {#if entry.key === 'feeds' && $feedsUnread > 0 && !$focus.active}
+          <span class="badge" aria-hidden="true"></span>
+        {/if}
         {#if entry.key === 'tasks' && $taskBadge > 0}
           <span class="count" aria-hidden="true">{$taskBadge > 99 ? '99+' : $taskBadge}</span>
+        {/if}
+        {#if entry.key === 'chat' && $chatUnreadRooms > 0 && !$focus.active}
+          {#if $chatHasHighlight}
+            <span class="count" aria-hidden="true">{$chatUnreadRooms > 99 ? '99+' : $chatUnreadRooms}</span>
+          {:else}
+            <span class="badge" aria-hidden="true"></span>
+          {/if}
         {/if}
       </button>
     {/each}
@@ -149,7 +169,7 @@
       type="button"
       class="entry"
       aria-label={$t('shortcut.search')}
-      use:tip={{ text: $t('shortcut.search'), side: tipSide }}
+      use:tip={{ text: $t('shortcut.search'), shortcut: keysFor('search'), side: tipSide }}
       on:click={() => dispatch('search')}
     >
       <Ph svg={searchIcon} size={19} />
@@ -159,7 +179,7 @@
         type="button"
         class="entry profile"
         aria-label={$t('profiles.current').replace('{name}', $currentProfile?.name ?? '')}
-        use:tip={{ text: $t('profiles.current').replace('{name}', $currentProfile?.name ?? ''), side: tipSide }}
+        use:tip={{ text: $t('profiles.current').replace('{name}', $currentProfile?.name ?? ''), shortcut: keysFor('next-profile'), side: tipSide }}
         on:click={() => void switchRelative(1)}
       >
         {#if $currentProfile?.icon}
@@ -173,7 +193,7 @@
       type="button"
       class="entry"
       aria-label={$t('settings.title')}
-      use:tip={{ text: $t('settings.title'), side: tipSide }}
+      use:tip={{ text: $t('settings.title'), shortcut: keysFor('preferences'), side: tipSide }}
       on:click={() => dispatch('settings')}
     >
       <Ph svg={settingsIcon} size={19} />

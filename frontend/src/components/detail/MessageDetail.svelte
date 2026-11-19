@@ -54,7 +54,10 @@
     IconTrash,
     IconChecklist,
     IconLayoutKanban,
+    IconMessageShare,
   } from '@tabler/icons-svelte'
+  import { chatAvailable } from '../../lib/chatavailable'
+  import { openShareToChat } from '../../stores/chatshare'
   import Conversation from './Conversation.svelte'
   import { openContextMenu, type MenuEntry } from '../../stores/contextmenu'
   import { menuHint } from '../../stores/shortcuts'
@@ -138,6 +141,7 @@
       { label: $t('messageList.menu.openInWindow'), icon: IconAppWindow, action: () => void openMessageWindow(message.id, message.subject) },
       { label: $t('detail.toolbar.print'), icon: IconPrinter, action: () => printMessage(message) },
       { label: $t('menu.exportEml'), icon: IconFileExport, action: () => void exportEml([message.id]) },
+      ...($chatAvailable ? [{ label: $t('chat.share.action'), icon: IconMessageShare, action: () => openShareToChat(message) }] : []),
       ...(canScan
         ? [{ label: $t('virustotal.scanMessage'), icon: IconShieldSearch, action: () => void runScan(message.id, true, true) }]
         : []),

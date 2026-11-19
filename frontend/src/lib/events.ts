@@ -3,7 +3,16 @@
 // single unsubscribe function, and keeps the event-name strings in one place.
 
 import { Events } from '@wailsio/runtime'
-import type { AccountSyncState, OutboxLogEntry, FocusInfo, FocusSummary } from './types'
+import type {
+  AccountSyncState,
+  OutboxLogEntry,
+  FocusInfo,
+  FocusSummary,
+  ChatStatus,
+  ChatMember,
+  ChatVerification,
+  ChatMediaProgress,
+} from './types'
 
 // EventsOn subscribes to a backend event and hands the callback its payload.
 function EventsOn<T>(name: string, cb: (data: T) => void): () => void {
@@ -43,6 +52,18 @@ export const EventNames = {
   focusChanged: 'focus:changed',
   focusEnded: 'focus:ended',
   projectsChanged: 'projects:changed',
+  vaultChanged: 'notes:changed',
+  feedsProgress: 'feeds:progress',
+  feedsChanged: 'feeds:changed',
+  feedsOpen: 'feeds:open',
+  chatStatus: 'chat:status',
+  chatRooms: 'chat:rooms',
+  chatTimeline: 'chat:timeline',
+  chatTyping: 'chat:typing',
+  chatReceipts: 'chat:receipts',
+  chatVerification: 'chat:verification',
+  chatMediaProgress: 'chat:media-progress',
+  chatOpen: 'chat:open',
   // sent between windows by the frontend, not by go.
   archiveAfterSend: 'compose:archive-after-send',
 } as const
@@ -59,6 +80,23 @@ export interface TaskReminderEvent {
 /** onTaskReminder fires when a task's reminder is due. */
 export function onTaskReminder(cb: (e: TaskReminderEvent) => void): Unsubscribe {
   return EventsOn(EventNames.taskReminder, (e: TaskReminderEvent) => cb(e))
+}
+
+/**
+ * VaultChangeEvent says which notes changed in the notes folder, through
+ * Pelton or another app. reset means the folder was (re)loaded; tree that
+ * files or folders came or went.
+ */
+export interface VaultChangeEvent {
+  changed: string[] | null
+  removed: string[] | null
+  reset: boolean
+  tree: boolean
+}
+
+/** onVaultChanged fires when notes in the notes folder changed. */
+export function onVaultChanged(cb: (e: VaultChangeEvent) => void): Unsubscribe {
+  return EventsOn(EventNames.vaultChanged, (e: VaultChangeEvent) => cb(e))
 }
 
 /** onICSOpen fires when the system asks the running app to open .ics files; collect them with consumePendingICS. */
@@ -362,6 +400,46 @@ export function onFocusChanged(cb: (e: FocusInfo) => void): Unsubscribe {
   return EventsOn(EventNames.focusChanged, (e: FocusInfo) => cb(e))
 }
 
+/** Fires when the chat account's state changes. */
+export function onChatStatus(cb: (e: ChatStatus) => void): Unsubscribe {
+  return EventsOn(EventNames.chatStatus, (e: ChatStatus) => cb(e))
+}
+
+/** Fires when chat rooms changed; the list names them. */
+export function onChatRooms(cb: (roomIds: string[]) => void): Unsubscribe {
+  return EventsOn(EventNames.chatRooms, (e: { roomIds: string[] | null } | null) => cb(e?.roomIds ?? []))
+}
+
+/** Fires when a room's timeline changed; an empty id means any room. */
+export function onChatTimeline(cb: (roomId: string) => void): Unsubscribe {
+  return EventsOn(EventNames.chatTimeline, (e: { roomId: string } | null) => cb(e?.roomId ?? ''))
+}
+
+/** Fires when someone's read marker in a room moved. */
+export function onChatReceipts(cb: (roomId: string) => void): Unsubscribe {
+  return EventsOn(EventNames.chatReceipts, (e: { roomId: string } | null) => cb(e?.roomId ?? ''))
+}
+
+/** Fires with who is typing in a room. */
+export function onChatTyping(cb: (roomId: string, users: ChatMember[]) => void): Unsubscribe {
+  return EventsOn(EventNames.chatTyping, (e: { roomId: string; users: ChatMember[] | null }) => cb(e.roomId, e.users ?? []))
+}
+
+/** Fires when a device verification moves on. */
+export function onChatVerification(cb: (e: ChatVerification) => void): Unsubscribe {
+  return EventsOn(EventNames.chatVerification, (e: ChatVerification) => cb(e))
+}
+
+/** Fires while a chat file is saved or sent. */
+export function onChatMediaProgress(cb: (e: ChatMediaProgress) => void): Unsubscribe {
+  return EventsOn(EventNames.chatMediaProgress, (e: ChatMediaProgress) => cb(e))
+}
+
+/** Fires when a clicked notification asks for a chat room. */
+export function onChatOpen(cb: (roomId: string) => void): Unsubscribe {
+  return EventsOn(EventNames.chatOpen, (e: { roomId: string }) => cb(e.roomId))
+}
+
 /** Fires once when focus mode ends, with what arrived meanwhile. */
 export function onFocusEnded(cb: (e: FocusSummary) => void): Unsubscribe {
   return EventsOn(EventNames.focusEnded, (e: FocusSummary) => cb(e))
@@ -413,4 +491,35 @@ export function onProjectsChanged(cb: (e: ProjectsChangedEvent) => void): Unsubs
 /** onCalendarReminder fires when an event's reminder is due. */
 export function onCalendarReminder(cb: (e: CalendarReminderEvent) => void): Unsubscribe {
   return EventsOn(EventNames.calendarReminder, (e: CalendarReminderEvent) => cb(e))
+}
+
+/** FeedsProgressEvent reports a feed refresh in progress, and its end. */
+export interface FeedsProgressEvent {
+  running: boolean
+  done: number
+  total: number
+  /** The feed just fetched. */
+  feed: string
+  failed: number
+}
+
+/** FeedsChangedEvent says feeds or entries changed; no ids means any. */
+export interface FeedsChangedEvent {
+  feedIds: number[]
+  added: number
+}
+
+/** onFeedsProgress fires as feeds are fetched, and once more when the run ends. */
+export function onFeedsProgress(cb: (e: FeedsProgressEvent) => void): Unsubscribe {
+  return EventsOn(EventNames.feedsProgress, (e: FeedsProgressEvent) => cb(e))
+}
+
+/** onFeedsChanged fires when feeds or their entries changed. */
+export function onFeedsChanged(cb: (e: FeedsChangedEvent) => void): Unsubscribe {
+  return EventsOn(EventNames.feedsChanged, (e: FeedsChangedEvent | null) => cb({ feedIds: e?.feedIds ?? [], added: e?.added ?? 0 }))
+}
+
+/** onFeedsOpen fires when a clicked notification asks for a feed entry. */
+export function onFeedsOpen(cb: (entryId: number) => void): Unsubscribe {
+  return EventsOn(EventNames.feedsOpen, (e: { entryId: number }) => cb(e.entryId))
 }

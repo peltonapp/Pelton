@@ -32,7 +32,7 @@
     const list: Field[] = [
       { label: $t('detail.infoModal.subject'), value: d.subject || $t('detail.noSubject') },
       { label: $t('detail.infoModal.from'), value: d.fromName ? `${d.fromName} <${d.fromAddress}>` : d.fromAddress },
-      { label: $t('detail.infoModal.to'), value: d.toAddresses || '—' },
+      { label: $t('detail.infoModal.to'), value: d.toAddresses || '-' },
     ]
     if (d.ccAddresses) {
       list.push({ label: $t('detail.infoModal.cc'), value: d.ccAddresses })

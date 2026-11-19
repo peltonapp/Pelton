@@ -36,6 +36,9 @@ type MessageQuery struct {
 	// Split narrows the query to one tab of the split inbox. Nil lists every
 	// tab.
 	Split *SplitFilter
+	// ListMail narrows the query to mailing list mail, the messages offering
+	// List-Unsubscribe that the newsletter manager lists.
+	ListMail bool
 	// byThread is set by the conversation queries.
 	byThread bool
 }
@@ -264,6 +267,9 @@ func folderWhere(q MessageQuery, folderIDs []int64) (string, []any) {
 		where += " AND thread_id NOT IN (SELECT id FROM threads WHERE muted = 1)"
 	}
 	where += pinClause(q.Pin, q.byThread)
+	if q.ListMail {
+		where += " AND list_unsubscribe != ''"
+	}
 	if q.Split != nil {
 		clause, splitArgs := splitWhere(*q.Split, time.Now())
 		where += " AND " + clause

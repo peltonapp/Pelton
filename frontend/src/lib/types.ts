@@ -304,11 +304,6 @@ export interface SMIMERevocation {
   checked: string
 }
 
-// good means still in force, revoked means the authority has withdrawn it, and
-// unknown means the question could not be answered. unknown is not evidence
-// either way and must not read as one.
-export type SMIMERevocationStatus = '' | 'good' | 'revoked' | 'unknown'
-
 
 // PhishingSignal is one finding. kind is a stable identifier the ui turns into
 // a sentence; detail is the domain, address or url it is about, and target the
@@ -377,6 +372,27 @@ export interface MessageDetail extends MessageSummary {
   // message appears once its Sent folder has synced.
   replyIds: number[]
   forwardIds: number[]
+}
+
+/**
+ * BodyDetail is what the mail body renderer reads of a message. A feed entry
+ * is shown through the same renderer by filling these fields in.
+ */
+export type BodyDetail = Pick<
+  MessageDetail,
+  'id' | 'date' | 'fromName' | 'fromAddress' | 'isHtml' | 'bodyHtmlSafe' | 'bodyPlain' | 'hasRemoteContent' | 'remoteAllowed' | 'remoteHosts' | 'trackingPixels'
+> &
+  Partial<Pick<MessageDetail, 'phishing'>>
+
+/**
+ * RemoteSource loads the remote content of a body that is not a stored
+ * message. load renders it again with remote content and hands the result to
+ * whoever owns the body; always, when set, is the "always load" choice offered
+ * beside "load once".
+ */
+export interface RemoteSource {
+  load: (includeTrackers: boolean) => Promise<void>
+  always?: { label: string; title: string; run: () => Promise<void> }
 }
 
 export type PGPState = '' | 'open' | 'locked' | 'nokey' | 'failed'
@@ -894,6 +910,17 @@ export interface UIPrefs {
   // projectSuggestions offers, in the reader, to file mail from a project's
   // people under that project.
   projectSuggestions: boolean
+  // feedsRefreshMinutes is how often feeds are fetched, 0 for only by hand.
+  // feedsKeepDays and feedsKeepCount are the retention rules, 0 turning one
+  // off; starred and read-later entries are always kept.
+  feedsRefreshMinutes: number
+  feedsKeepDays: number
+  feedsKeepCount: number
+  // feedsLoadImages shows every feed's remote images without asking.
+  feedsLoadImages: boolean
+  // feedsMarkReadOnScroll marks entries read as they scroll past the top of
+  // the list.
+  feedsMarkReadOnScroll: boolean
   // themeId selects an installed custom theme; empty means the built-in
   // default themes driven by the theme (light/dark/system) setting.
   themeId: string
@@ -951,6 +978,17 @@ export interface UIPrefs {
   // unread count of the unified inbox (#488).
   statusClock: boolean
   statusUnread: boolean
+  // chatEnabled turns the Matrix chat space on. Off by default; nothing chat
+  // related runs or connects until it is on.
+  chatEnabled: boolean
+  // chatSendReceipts sends public read receipts; off keeps them private.
+  chatSendReceipts: boolean
+  // chatSendTyping tells rooms while the user types.
+  chatSendTyping: boolean
+  // chatNotify picks which chat messages notify.
+  chatNotify: ChatNotifyMode
+  // chatMarkdown formats chat messages as Markdown when sent.
+  chatMarkdown: boolean
   // markReadOnOpen marks a message read when it is opened (#517).
   markReadOnOpen: boolean
   // openOnArrow opens the row the arrow keys move to, instead of waiting for Enter.
@@ -994,7 +1032,24 @@ export interface UIPrefs {
   logLevel: LogLevel
   logMessageMetadata: boolean
   crashLogs: boolean
+  // the notes space: the chosen notes folder ('' for the Notes folder in the
+  // data directory), where daily notes go and how they are named
+  // (YYYY-MM-DD style), the template a daily note starts from ('' for the
+  // built-in one), the folders of templates, pasted images and project
+  // notes, how a note opens and how wide its text runs.
+  notesVault: string
+  notesDailyFolder: string
+  notesDailyFormat: string
+  notesDailyTemplate: string
+  notesTemplatesFolder: string
+  notesAttachmentsFolder: string
+  notesProjectsFolder: string
+  notesEditorMode: NoteEditorMode
+  notesLineWidth: ReaderWidth
 }
+
+/** How a note opens: rendered as it is typed, as plain source, or read-only. */
+export type NoteEditorMode = 'live' | 'source' | 'reading'
 
 // how much detail the log records.
 export type LogLevel = 'debug' | 'info' | 'warn' | 'error'
@@ -1228,10 +1283,6 @@ export interface SenderOverview {
   automated: boolean
 }
 
-// the eight flag colors. index 0 means "no color"; 1..8 map to the palette in
-// theme/flagcolors.ts and to imap $Label1..$Label8 when syncing is on.
-export type FlagColor = 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8
-
 // swipe gesture actions for message rows.
 export type SwipeAction = 'none' | 'delete' | 'read' | 'unread' | 'flag' | 'archive' | 'snooze'
 
@@ -1246,11 +1297,6 @@ export type ToastPosition =
   | 'bottom-left'
   | 'bottom-center'
   | 'bottom-right'
-
-export interface SettingResult {
-  value: string
-  found: boolean
-}
 
 // a reusable header/footer block. kind places it (top/bottom of a new message);
 // format picks how the content is inserted into the compose body.
@@ -1476,25 +1522,11 @@ export interface PasswordCheck {
   error: string
 }
 
-// folder roles mirror the backend's folderRole classification.
-export type FolderRole =
-  | 'inbox'
-  | 'sent'
-  | 'drafts'
-  | 'trash'
-  | 'junk'
-  | 'archive'
-  | 'normal'
-
 // unified view keys mirror the backend view constants.
 export type ViewKey = 'inbox' | 'unread' | 'flagged' | 'sent' | 'drafts' | 'archive' | 'junk' | 'trash'
 
 // pgp status mirrors mailview.PGPStatus.
 export type PGPStatus = 'none' | 'signed' | 'encrypted'
-
-// auth status placeholder. only "unavailable" exists until the backend parses
-// Authentication-Results headers (documented follow-up).
-export type AuthStatus = 'unavailable'
 
 // editor modes for the compose pane.
 export type EditorMode = 'plaintext' | 'markdown' | 'wysiwyg'
@@ -1530,9 +1562,11 @@ export type AfterReplySend = 'nothing' | 'archive'
 /** When a follow-up reminder set from a preset comes: each lands at nine. */
 export type FollowUpInterval = 'tomorrow' | 'threeDays' | 'week'
 /** One of the top-level areas of the app. */
-export type Space = 'mail' | 'contacts' | 'calendar' | 'tasks' | 'projects'
+export type Space = 'mail' | 'contacts' | 'calendar' | 'tasks' | 'projects' | 'notes' | 'feeds' | 'chat'
 /** How the Projects space lists projects. */
 export type ProjectsView = 'grid' | 'list'
+/** Which chat messages notify: all, direct messages and mentions, or none. */
+export type ChatNotifyMode = 'all' | 'mentions' | 'off'
 export type SelectAllScope = 'offer' | 'all' | 'loaded'
 
 // SearchSort is an order search results can actually come back in. The backend
@@ -1705,6 +1739,8 @@ export interface Contact {
   note: string
   emails: ContactValue[]
   phones: ContactValue[]
+  // matrixId is the person's Matrix user id, or empty.
+  matrixId: string
   readOnly: boolean
   updated: string
   // vCard properties Pelton has no field for. They are kept on every save;
@@ -1776,6 +1812,8 @@ export interface ContactDraft {
   note: string
   emails: ContactValue[]
   phones: ContactValue[]
+  // matrixId is the person's Matrix user id; empty removes it.
+  matrixId: string
   // set only by "keep mine" on the conflict dialog: write over whatever the
   // server now holds.
   force: boolean
@@ -2389,11 +2427,16 @@ export interface ProjectPerson {
  */
 export interface Project {
   id: number
+  // names the project in notes' front matter and pelton://project links.
+  uid: string
   name: string
   // #rrggbb, empty for the palette color picked by id.
   color: string
   // the name of an icon from lib/projecticons, empty for the default.
   icon: string
+  // the geometry of a tabler icon as json, empty when the icon is a name from
+  // lib/projecticons or the default.
+  iconNodes?: string
   description: string
   status: ProjectStatus
   // dates as 2006-01-02, empty for none.
@@ -2428,6 +2471,7 @@ export interface ProjectDraft {
   name: string
   color: string
   icon: string
+  iconNodes: string
   description: string
   startDate: string
   dueDate: string
@@ -2535,8 +2579,457 @@ export interface ProjectNoteRecord {
   updatedAt: string
 }
 
+/** ProjectVaultNote is a note of the notes folder as the Projects space lists it; mtime is unix ms. */
+export interface ProjectVaultNote {
+  path: string
+  title: string
+  snippet: string
+  mtime: number
+}
+
+/**
+ * ProjectVaultNotes is what the notes folder holds for a project: its notes
+ * and the other notes linking to it or its cards, mail and events. available
+ * is false when no notes folder is open.
+ */
+export interface ProjectVaultNotes {
+  available: boolean
+  notes: ProjectVaultNote[]
+  linked: ProjectVaultNote[]
+}
+
 /** ProjectMailMark says a conversation belongs to a project. */
 export interface ProjectMailMark {
   threadId: number
   projectId: number
+}
+
+/** VaultInfo describes the open notes folder; folder is '' when none is open. */
+export interface VaultInfo {
+  folder: string
+  ready: boolean
+  /** The folder is the Notes folder in the data directory. */
+  default: boolean
+  error: string
+}
+
+/** VaultHeading is one heading of a note; line counts from 0. */
+export interface VaultHeading {
+  level: number
+  text: string
+  line: number
+}
+
+/** VaultLinkKind says what a link points at. */
+export type VaultLinkKind = 'wiki' | 'markdown' | 'external' | 'pelton'
+
+/** VaultLink is one link a note makes; resolved is the vault path, or ''. */
+export interface VaultLink {
+  kind: VaultLinkKind
+  embed: boolean
+  target: string
+  subpath: string
+  display: string
+  line: number
+  resolved: string
+}
+
+/** VaultNote is what the notes space knows of a note without opening it; mtime is unix ms. */
+export interface VaultNote {
+  path: string
+  title: string
+  mtime: number
+  size: number
+  tags: string[]
+  aliases: string[]
+  headings: VaultHeading[]
+  snippet: string
+  links: VaultLink[]
+  props: VaultProp[]
+}
+
+/** VaultProp is one front matter property of a note: its value, or its items for a list. */
+export interface VaultProp {
+  key: string
+  value: string
+  list: string[]
+}
+
+/** VaultSnapshot is the whole index of the notes folder. */
+export interface VaultSnapshot {
+  folder: string
+  ready: boolean
+  notes: VaultNote[]
+  folders: string[]
+  /** Every file that is not a note, such as images. */
+  files: string[]
+}
+
+/** VaultFile is a note's text as it is on disk. */
+export interface VaultFile {
+  path: string
+  content: string
+  hash: string
+  mtime: number
+  /** Not valid UTF-8: shown, never written. */
+  readOnly: boolean
+}
+
+/** VaultSave is what a save did; on a conflict disk is the text on disk now. */
+export interface VaultSave {
+  hash: string
+  mtime: number
+  conflict: boolean
+  disk: string
+  diskHash: string
+}
+
+/** VaultOp is what a rename, move or delete did, with the id undo takes. */
+export interface VaultOp {
+  undoId: string
+  moves: Record<string, string>
+  rewritten: string[]
+}
+
+/** VaultMention is a line of a note naming another one; match is set for an unlinked one. */
+export interface VaultMention {
+  source: string
+  line: number
+  text: string
+  match: string
+}
+
+/** VaultHit is one search result with the line that matched. */
+export interface VaultHit {
+  path: string
+  title: string
+  context: string
+}
+
+/** FeedFolder groups feeds in the Feeds sidebar. */
+export interface FeedFolder {
+  id: number
+  name: string
+  position: number
+}
+
+/**
+ * Feed is one subscription. title is the name to show; feedTitle what the
+ * feed calls itself and customTitle what the user renamed it to. error is why
+ * the last fetch failed, '' when it worked. Dates are rfc3339, '' for never.
+ */
+export interface Feed {
+  id: number
+  folderId: number
+  url: string
+  siteUrl: string
+  title: string
+  feedTitle: string
+  customTitle: string
+  description: string
+  /** A data: url of the site's icon, or ''. */
+  icon: string
+  error: string
+  errorCount: number
+  lastFetched: string
+  lastSuccess: string
+  nextFetch: string
+  /** 0 follows the Feeds setting. */
+  intervalMinutes: number
+  loadImages: boolean
+  notify: boolean
+  position: number
+  unread: number
+}
+
+/** FeedCounts are the numbers beside the smart views. */
+export interface FeedCounts {
+  unread: number
+  today: number
+  starred: number
+  readLater: number
+}
+
+/** FeedSidebar is everything the Feeds sidebar shows. */
+export interface FeedSidebar {
+  folders: FeedFolder[]
+  feeds: Feed[]
+  counts: FeedCounts
+}
+
+/** FeedEnclosure is a file attached to an entry, such as a podcast episode. */
+export interface FeedEnclosure {
+  url: string
+  type: string
+  length: number
+  title: string
+}
+
+/** FeedEntry is one row of the entry list. published is rfc3339. */
+export interface FeedEntry {
+  id: number
+  feedId: number
+  title: string
+  url: string
+  author: string
+  published: string
+  snippet: string
+  image: string
+  read: boolean
+  starred: boolean
+  readLater: boolean
+  media: FeedEnclosure[]
+}
+
+/** FeedEntryDetail is an entry opened in the reader, its html sanitized. */
+export interface FeedEntryDetail extends FeedEntry {
+  bodyHtmlSafe: string
+  hasRemoteContent: boolean
+  remoteAllowed: boolean
+  remoteHosts: string[]
+  trackingPixels: TrackingPixel[]
+}
+
+/** The smart views of the Feeds sidebar. */
+export type FeedSmartView = 'unread' | 'today' | 'starred' | 'later' | 'newsletters'
+
+/**
+ * FeedScope is what the entry list shows: a smart view, one feed, or one
+ * folder (id 0 holds the feeds in no folder).
+ */
+export type FeedScope = { kind: FeedSmartView } | { kind: 'feed'; id: number } | { kind: 'folder'; id: number }
+
+/** FeedSettings is what the user edits on a feed. */
+export interface FeedSettings {
+  id: number
+  customTitle: string
+  folderId: number
+  intervalMinutes: number
+  loadImages: boolean
+  notify: boolean
+}
+
+/** FeedCandidate is a feed found at an address, with a preview. */
+export interface FeedCandidate {
+  url: string
+  title: string
+  siteUrl: string
+  kind: string
+  entryCount: number
+  latest: string[]
+  lastPost: string
+  subscribed: boolean
+}
+
+/** FeedImportResult reports an OPML import. */
+export interface FeedImportResult {
+  added: number
+  skipped: number
+}
+
+/** The chat account's session state. */
+export type ChatState = 'signedOut' | 'starting' | 'syncing' | 'online' | 'offline' | 'error' | 'stopped'
+
+/** ChatEncryption is this device's end to end encryption state. */
+export interface ChatEncryption {
+  ready: boolean
+  deviceVerified: boolean
+  crossSigning: boolean
+  secretStorage: boolean
+  secretStoragePassphrase: boolean
+  backupVersion: string
+  backupKeys: number
+  backupActive: boolean
+  fingerprint: string
+}
+
+/** ChatStatus is the chat account as settings and the banner show it. */
+export interface ChatStatus {
+  state: ChatState
+  userId: string
+  deviceId: string
+  homeserver: string
+  displayName: string
+  avatar: string
+  error: string
+  encryption: ChatEncryption
+}
+
+/** ChatServer is a homeserver found from what the user typed, with its sign-in methods. */
+export interface ChatServer {
+  homeserver: string
+  serverName: string
+  user: string
+  password: boolean
+  sso: boolean
+  token: boolean
+  providers: { id: string; name: string }[]
+}
+
+/** The kind of a chat room in the list. */
+export type ChatRoomKind = 'direct' | 'room' | 'space'
+
+/** ChatRoom is one room, direct chat, space or invite. */
+export interface ChatRoom {
+  id: string
+  name: string
+  topic: string
+  avatar: string
+  alias: string
+  kind: ChatRoomKind
+  directUser: string
+  encrypted: boolean
+  membership: 'join' | 'invite'
+  inviterId: string
+  inviterName: string
+  favourite: boolean
+  lowPriority: boolean
+  unread: number
+  highlight: number
+  lastTs: number
+  preview: string
+  previewSender: string
+  previewKind: string
+  spaces: string[]
+  memberCount: number
+  fullyRead: string
+}
+
+/** ChatMember is a person in a room. */
+export interface ChatMember {
+  userId: string
+  name: string
+  avatar: string
+  membership: string
+  powerLevel: number
+}
+
+/** The kind of a timeline row. */
+export type ChatMessageKind =
+  | 'text'
+  | 'notice'
+  | 'emote'
+  | 'image'
+  | 'video'
+  | 'audio'
+  | 'file'
+  | 'sticker'
+  | 'location'
+  | 'state'
+  | 'redacted'
+  | 'encrypted'
+  | 'unknown'
+
+/** ChatMessage is one timeline row with edits, reactions and redactions applied. */
+export interface ChatMessage {
+  id: string
+  sender: string
+  senderName: string
+  senderAvatar: string
+  ts: number
+  kind: ChatMessageKind
+  body: string
+  // sanitised to the Matrix subset by the backend.
+  html: string
+  edited: boolean
+  own: boolean
+  replyTo: { id: string; sender: string; senderName: string; body: string; missing: boolean } | null
+  reactions: ChatReaction[]
+  media: ChatMedia | null
+  state: { kind: string; target: string; targetName: string; value: string } | null
+  encrypted: boolean
+  decryptError: string
+  missingKeys: boolean
+  mentioned: boolean
+  readBy: ChatMember[]
+}
+
+/** ChatReaction is one reaction key on a message. */
+export interface ChatReaction {
+  key: string
+  count: number
+  // the user's own reaction event with this key, or empty.
+  mine: string
+  senders: string[]
+}
+
+/** ChatMedia describes the file of a media message; the bytes load separately. */
+export interface ChatMedia {
+  name: string
+  mime: string
+  size: number
+  width: number
+  height: number
+  duration: number
+  thumbnail: boolean
+  encrypted: boolean
+}
+
+/** ChatTimelinePage is a slice of a timeline, oldest first. */
+export interface ChatTimelinePage {
+  messages: ChatMessage[]
+  hasMore: boolean
+  fullyRead: string
+}
+
+/** ChatSendRequest is a text message, reply or edit to send. */
+export interface ChatSendRequest {
+  roomId: string
+  text: string
+  markdown: boolean
+  emote: boolean
+  replyTo: string
+  edit: string
+  mentions: { userId: string; name: string }[]
+}
+
+/** ChatCreateRoomRequest describes a new room. */
+export interface ChatCreateRoomRequest {
+  name: string
+  topic: string
+  invite: string[]
+  encrypted: boolean
+  public: boolean
+}
+
+/** ChatVerificationState is the step an interactive verification is at. */
+export type ChatVerificationState = 'requested' | 'ready' | 'sas' | 'confirmed' | 'done' | 'cancelled'
+
+/** ChatVerification is a device verification in flight. */
+export interface ChatVerification {
+  id: string
+  userId: string
+  userName: string
+  deviceId: string
+  self: boolean
+  incoming: boolean
+  state: ChatVerificationState
+  emojis: { emoji: string; description: string }[]
+  decimals: number[]
+  reason: string
+}
+
+/** ChatDevice is one of the user's sessions. */
+export interface ChatDevice {
+  id: string
+  name: string
+  lastSeen: number
+  current: boolean
+  verified: boolean
+}
+
+/** ChatProfile is a person's public name and picture. */
+export interface ChatProfile {
+  userId: string
+  name: string
+  avatar: string
+}
+
+/** ChatMediaProgress reports a file being saved or sent. */
+export interface ChatMediaProgress {
+  key: string
+  running: boolean
+  bytesDone: number
+  bytesTotal: number
+  error: string
 }

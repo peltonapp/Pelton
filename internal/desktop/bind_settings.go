@@ -7,7 +7,7 @@ import (
 	"github.com/peltonapp/Pelton/internal/storage"
 )
 
-// ui setting keys. theme and editor mode already exist in storage; the rest are
+// ui setting keys. theme already exists in storage; the rest are
 // ui-only and defined here. raw strings keep the contract in one place next to
 // the defaults.
 const (
@@ -247,10 +247,24 @@ const (
 	// order.
 	settingUnifiedViewOrder = "sidebar_unified_view_order"
 	// what Pelton opens on launch: "view:<key>", "folder:<id>", or "last" to
-	// restore whatever was open when the app last closed. settingLastSelection
-	// holds that remembered selection in the same "view:"/"folder:" form.
+	// restore whatever was open when the app last closed. the frontend keeps
+	// that remembered selection under "last_selection" in the same form.
 	settingStartupSelection = "startup_selection"
-	settingLastSelection    = "last_selection"
+	// the notes space: the folder of Markdown files (empty means the Notes
+	// folder in the data directory), where daily notes go and how they are
+	// named, the note a daily note starts from, the folders of templates, of
+	// pasted images and of project notes, the mode a note opens in (live,
+	// source or reading)
+	// and how wide its text runs (narrow, medium or full).
+	settingNotesVault         = "notes_vault"
+	settingNotesDailyFolder   = "notes_daily_folder"
+	settingNotesDailyFormat   = "notes_daily_format"
+	settingNotesDailyTemplate = "notes_daily_template"
+	settingNotesTemplates     = "notes_templates_folder"
+	settingNotesAttachments   = "notes_attachments_folder"
+	settingNotesProjects      = "notes_projects_folder"
+	settingNotesEditorMode    = "notes_editor_mode"
+	settingNotesLineWidth     = "notes_line_width"
 )
 
 // defaultStartupSelection is the unified inbox, which is where every version
@@ -518,6 +532,17 @@ type UIPrefsDTO struct {
 	// ProjectSuggestions offers, in the reader, to file mail from a project's
 	// people under that project.
 	ProjectSuggestions bool `json:"projectSuggestions"`
+	// FeedsRefreshMinutes is how often feeds are fetched, 0 for only by hand.
+	// FeedsKeepDays and FeedsKeepCount are the retention rules (0 turns one
+	// off); starred and read-later entries are always kept.
+	FeedsRefreshMinutes int `json:"feedsRefreshMinutes"`
+	FeedsKeepDays       int `json:"feedsKeepDays"`
+	FeedsKeepCount      int `json:"feedsKeepCount"`
+	// FeedsLoadImages shows the remote images of every feed without asking.
+	FeedsLoadImages bool `json:"feedsLoadImages"`
+	// FeedsMarkReadOnScroll marks entries read as they scroll out of the top
+	// of the list.
+	FeedsMarkReadOnScroll bool `json:"feedsMarkReadOnScroll"`
 	// ThemeID selects an installed custom theme (see bind_themes.go). Empty
 	// means the built-in default themes driven by the Theme setting.
 	ThemeID string `json:"themeId"`
@@ -575,6 +600,19 @@ type UIPrefsDTO struct {
 	// unread count of the unified inbox.
 	StatusClock  bool `json:"statusClock"`
 	StatusUnread bool `json:"statusUnread"`
+	// ChatEnabled turns the Matrix chat space on. Off by default: nothing
+	// chat related runs or connects until it is on.
+	ChatEnabled bool `json:"chatEnabled"`
+	// ChatSendReceipts sends public read receipts in chat; off keeps them
+	// private.
+	ChatSendReceipts bool `json:"chatSendReceipts"`
+	// ChatSendTyping tells chat rooms while the user types.
+	ChatSendTyping bool `json:"chatSendTyping"`
+	// ChatNotify picks which chat messages notify: all, mentions (direct
+	// messages and mentions, the default) or off.
+	ChatNotify string `json:"chatNotify"`
+	// ChatMarkdown formats chat messages as Markdown when sent.
+	ChatMarkdown bool `json:"chatMarkdown"`
 	// MarkReadOnOpen marks a message read when it is opened in the list.
 	MarkReadOnOpen bool `json:"markReadOnOpen"`
 	// OpenOnArrow opens the message the arrow keys move to in the list, instead
@@ -622,6 +660,23 @@ type UIPrefsDTO struct {
 	LogLevel           string `json:"logLevel"`
 	LogMessageMetadata bool   `json:"logMessageMetadata"`
 	CrashLogs          bool   `json:"crashLogs"`
+	// NotesVault is the notes folder the user chose, empty for the Notes
+	// folder in the data directory. NotesDailyFolder and NotesDailyFormat
+	// place and name the daily notes (YYYY-MM-DD style tokens);
+	// NotesDailyTemplate is the template note a daily note starts from, empty
+	// for the built-in one. NotesTemplatesFolder holds the templates and
+	// NotesAttachmentsFolder pasted images. NotesProjectsFolder holds a
+	// folder of notes per project. NotesEditorMode is how a note opens: live,
+	// source or reading. NotesLineWidth caps the text: narrow, medium or full.
+	NotesVault             string `json:"notesVault"`
+	NotesDailyFolder       string `json:"notesDailyFolder"`
+	NotesDailyFormat       string `json:"notesDailyFormat"`
+	NotesDailyTemplate     string `json:"notesDailyTemplate"`
+	NotesTemplatesFolder   string `json:"notesTemplatesFolder"`
+	NotesAttachmentsFolder string `json:"notesAttachmentsFolder"`
+	NotesProjectsFolder    string `json:"notesProjectsFolder"`
+	NotesEditorMode        string `json:"notesEditorMode"`
+	NotesLineWidth         string `json:"notesLineWidth"`
 }
 
 // GetUIPrefs returns all ui preferences with defaults filled in, so startup is a
@@ -720,6 +775,11 @@ func (a *App) GetUIPrefs() (UIPrefsDTO, error) {
 		MyDayPanel:                 a.boolSetting(settingMyDayPanel, false),
 		ProjectsView:               a.stringSetting(settingProjectsView, "grid"),
 		ProjectSuggestions:         a.boolSetting(settingProjectSuggestions, true),
+		FeedsRefreshMinutes:        a.intSetting(settingFeedsRefresh, defaultFeedsRefresh),
+		FeedsKeepDays:              a.intSetting(settingFeedsKeepDays, defaultFeedsKeepDays),
+		FeedsKeepCount:             a.intSetting(settingFeedsKeepCount, defaultFeedsKeepCount),
+		FeedsLoadImages:            a.boolSetting(settingFeedsLoadImages, false),
+		FeedsMarkReadOnScroll:      a.boolSetting(settingFeedsMarkScroll, false),
 		ThemeID:                    a.stringSetting(settingThemeID, ""),
 		MenuBarInApp:               a.boolSetting(settingMenuBarInApp, false),
 		MenuBarNativeMinimal:       a.boolSetting(settingMenuBarNativeMinimal, false),
@@ -744,6 +804,11 @@ func (a *App) GetUIPrefs() (UIPrefsDTO, error) {
 		SyncProgressBar:            a.boolSetting(settingSyncProgress, true),
 		StatusClock:                a.boolSetting(settingStatusClock, true),
 		StatusUnread:               a.boolSetting(settingStatusUnread, true),
+		ChatEnabled:                a.boolSetting(settingChatEnabled, false),
+		ChatSendReceipts:           a.boolSetting(settingChatSendReceipts, true),
+		ChatSendTyping:             a.boolSetting(settingChatSendTyping, true),
+		ChatNotify:                 a.stringSetting(settingChatNotify, "mentions"),
+		ChatMarkdown:               a.boolSetting(settingChatMarkdown, true),
 		MarkReadOnOpen:             a.boolSetting(settingMarkReadOnOpen, true),
 		OpenOnArrow:                a.boolSetting(settingOpenOnArrow, false),
 		SignatureAboveQuote:        a.boolSetting(settingSignatureAboveQuote, false),
@@ -762,6 +827,15 @@ func (a *App) GetUIPrefs() (UIPrefsDTO, error) {
 		LogLevel:                   logging.LevelName(a.logLevel()),
 		LogMessageMetadata:         a.boolSetting(settingLogMessageMetadata, false),
 		CrashLogs:                  a.crashLogsOn(),
+		NotesVault:                 a.stringSetting(settingNotesVault, ""),
+		NotesDailyFolder:           a.stringSetting(settingNotesDailyFolder, "Daily"),
+		NotesDailyFormat:           a.stringSetting(settingNotesDailyFormat, "YYYY-MM-DD"),
+		NotesDailyTemplate:         a.stringSetting(settingNotesDailyTemplate, ""),
+		NotesTemplatesFolder:       a.stringSetting(settingNotesTemplates, "Templates"),
+		NotesAttachmentsFolder:     a.stringSetting(settingNotesAttachments, defaultAttachmentsDir),
+		NotesProjectsFolder:        a.stringSetting(settingNotesProjects, defaultProjectsDir),
+		NotesEditorMode:            a.stringSetting(settingNotesEditorMode, "live"),
+		NotesLineWidth:             a.stringSetting(settingNotesLineWidth, "medium"),
 	}, nil
 }
 
@@ -781,8 +855,7 @@ func (a *App) GetSetting(key string) (SettingResult, error) {
 	return SettingResult{Value: value, Found: true}, nil
 }
 
-// SetSetting writes a single setting. The frontend uses the known keys above
-// (theme/accent/density/show_*) plus editor_mode.
+// SetSetting writes a single setting.
 func (a *App) SetSetting(key, value string) error {
 	if err := a.ready(); err != nil {
 		return err
@@ -821,6 +894,9 @@ func (a *App) SetSetting(key, value string) error {
 	}
 	if key == settingUnreadBadge || key == settingLanguage {
 		a.applyUnreadBadge()
+	}
+	if key == settingChatEnabled {
+		a.chatSettingChanged(value)
 	}
 	if key == settingIndexDecrypted {
 		// rebuilt from scratch rather than re-indexed in place: switching this

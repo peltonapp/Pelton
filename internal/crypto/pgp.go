@@ -23,8 +23,7 @@ const (
 	pgpMicalg = "pgp-sha256"
 
 	// armor block types.
-	pgpSignatureBlock = "PGP SIGNATURE"
-	pgpMessageBlock   = "PGP MESSAGE"
+	pgpMessageBlock = "PGP MESSAGE"
 
 	// the version body required in the application/pgp-encrypted control part.
 	pgpVersionBody = "Version: 1"

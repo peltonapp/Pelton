@@ -109,6 +109,18 @@ const (
 	// EventProjectsChanged fires when a project, its board, its links or its
 	// notes changed, with a ProjectsChangedEvent naming which.
 	EventProjectsChanged = "projects:changed"
+	// EventVaultChanged fires when notes in the notes folder changed, through
+	// Pelton or another app, with a VaultChangeEvent as payload.
+	EventVaultChanged = "notes:changed"
+	// EventFeedsProgress fires as feeds are fetched, and once more with
+	// Running false when the run ends, with a FeedsProgressEvent.
+	EventFeedsProgress = "feeds:progress"
+	// EventFeedsChanged fires when feeds or their entries changed, from a
+	// refresh, an icon arriving or an edit, with a FeedsChangedEvent.
+	EventFeedsChanged = "feeds:changed"
+	// EventFeedsOpen fires when a clicked notification asks for a feed entry
+	// to be shown, with a FeedsOpenEvent.
+	EventFeedsOpen = "feeds:open"
 )
 
 // CalendarSyncEvent is the payload for EventCalendarSync. Done and Total

@@ -6,6 +6,7 @@
   import { onMount, onDestroy, type ComponentType } from 'svelte'
   import { get } from 'svelte/store'
   import { t } from './lib/i18n'
+  import { isEditableTarget } from './lib/editable'
 
   import Sidebar from './components/sidebar/Sidebar.svelte'
   import MenuBar from './components/common/MenuBar.svelte'
@@ -23,7 +24,8 @@
   import { meetingPrepTarget, openMeetingPrep, closeMeetingPrep } from './stores/meetingprep'
   import { mailScreen, openMailScreen, closeMailScreen } from './stores/mailscreen'
   import { IconMailX, IconChartBar } from '@tabler/icons-svelte'
-  import { spaces } from './lib/spaces'
+  import { visibleSpaces } from './lib/spaces'
+  import { startChat, stopChat } from './stores/chat'
   import { popupIsOpen } from './lib/popups'
   import { calendarFocus, calendarImport, calendarQuickAdd } from './stores/calendar'
   import { formatTime } from './lib/calformat'
@@ -57,7 +59,7 @@
   import Composer2 from './components/compose/Composer2.svelte'
   import ComposeTabLayer from './components/compose/ComposeTabLayer.svelte'
   import { openSnooze, openSnoozeMany } from './stores/snooze'
-  import { patchInList, removeFromList } from './stores/messages'
+  import { patchInList } from './stores/messages'
   import {
     triggerSync,
     getSetting,
@@ -91,7 +93,7 @@
   import { liabilityAccepted } from './lib/liability'
   import { setDemoActive } from './lib/demo'
   import { recordArchived } from './stores/undoarchive'
-  import { onMailNew, onMailRepaired, onSyncState, onSyncProgress, onOutboxChanged, onMenu, onViewsChanged, onFoldersChanged, onProfileChanged, onMailtoCompose, onAgentProposals, onOpenMessage, onReplyMessage, onArchiveAfterSend, onCalendarReminder, onTaskReminder, onICSOpen, type Unsubscribe, type MailtoDraft, type CalendarReminderEvent, type TaskReminderEvent } from './lib/events'
+  import { onMailNew, onMailRepaired, onSyncState, onSyncProgress, onOutboxChanged, onMenu, onViewsChanged, onFoldersChanged, onProfileChanged, onMailtoCompose, onAgentProposals, onOpenMessage, onReplyMessage, onArchiveAfterSend, onFeedsOpen, onCalendarReminder, onTaskReminder, onICSOpen, type Unsubscribe, type MailtoDraft, type CalendarReminderEvent, type TaskReminderEvent } from './lib/events'
   import { loadViews, editingView, closeViewEditor, openViewEditor, views as savedViews } from './stores/views'
   import { selectSavedView } from './stores/selection'
   import { isMac } from './lib/i18n'
@@ -130,7 +132,7 @@
     restoreTabs,
   } from './stores/tabs'
   import { messageDetail } from './stores/message'
-  import { profiles, currentProfile, loadProfiles, switchTo, switchRelative } from './stores/profiles'
+  import { profiles, loadProfiles, switchTo, switchRelative } from './stores/profiles'
   import { loadProposals } from './stores/agent'
   import { settingsRequest, clearSettingsRequest, openSettingsAt } from './stores/settingsnav'
   import { errorMessage, toastError, toastInfo, pushAction, pushActions, withBusyToast } from './stores/toast'
@@ -192,10 +194,17 @@
   import { attachmentsOpen, toggleAttachments } from './stores/attachments'
   import { setSenderPanel } from './stores/prefs'
   import './lib/palette-tasks'
+  import './lib/palette-notes'
+  import { reloadVault, requestNotes, startNotes } from './stores/notes'
+  import './lib/palette-chat'
+  import './lib/palette-chatshare'
+  import ShareToChatDialog from './components/chat/ShareToChatDialog.svelte'
   import './lib/palette-availability'
   import './lib/palette-projects'
   import { startProjects, fileMailRequest } from './stores/projects'
   import { pickProjectFor } from './lib/projectpicker'
+  import './lib/palette-feeds'
+  import { startFeeds, feedFocus } from './stores/feeds'
   import { startTasks, toggleDone, tasks as taskStore, taskFromMailRequest } from './stores/tasks'
   import { createTasksFromMail, openTask } from './lib/taskmail'
   import { getTask } from './lib/api'
@@ -219,7 +228,7 @@
     promptForMissingPasswords,
     refreshMissingPasswords,
   } from './stores/passwordprompt'
-  import type { EditorMode, MessageSummary, ThemePref, ThemeInfo, Folder, Account, Space } from './lib/types'
+  import type { EditorMode, MessageSummary, ThemePref, ThemeInfo, Folder, Space } from './lib/types'
 
   let settingsOpen = false
   // the settings screen is code-split and loaded on first open. A load that
@@ -493,6 +502,59 @@
   }
   onDestroy(() => stopProjects?.())
 
+  // the notes index feeds the palette and the notes listed beside mail,
+  // events, contacts and tasks. It loads the folder the backend opened at
+  // startup, if any, without creating one.
+  let stopNotes: (() => void) | undefined
+  $: if (!classic && !stopNotes) {
+    stopNotes = startNotes()
+    void reloadVault()
+  } else if (classic && stopNotes) {
+    stopNotes()
+    stopNotes = undefined
+  }
+  onDestroy(() => stopNotes?.())
+
+  // the feeds store feeds the rail's unread dot, so it runs alongside.
+  let stopFeeds: (() => void) | undefined
+  $: if (!classic && !stopFeeds) {
+    stopFeeds = startFeeds()
+  } else if (classic && stopFeeds) {
+    stopFeeds()
+    stopFeeds = undefined
+  }
+  onDestroy(() => stopFeeds?.())
+
+  // shareFromFeeds opens a new message carrying a feed entry's title and link.
+  function shareFromFeeds(mail: { subject: string; body: string }): void {
+    const accountId = composeAccountId()
+    if (accountId === null) {
+      toastError(get(t)('app.toast.addMailboxFirst'))
+      return
+    }
+    openComposeWith(accountId, editorMode, { to: '', cc: '', bcc: '', subject: mail.subject, body: mail.body })
+  }
+
+  // chat runs only while the user has it turned on, in the new design. Off
+  // again, the space closes and its state is dropped.
+  let chatRunning = false
+  $: chatWanted = !classic && $prefs.chatEnabled
+  $: if (chatWanted && !chatRunning) {
+    chatRunning = true
+    void startChat()
+  } else if (!chatWanted && chatRunning) {
+    chatRunning = false
+    stopChat()
+  }
+  $: if (!chatWanted && $space === 'chat') {
+    openSpace('mail')
+  }
+  onDestroy(() => {
+    if (chatRunning) {
+      stopChat()
+    }
+  })
+
   // the newsletter manager and the insights page in the palette, with their
   // live shortcut as the hint.
   registerPaletteSource('mailtools', (tr) => {
@@ -712,6 +774,15 @@
           openReply(await getMessage(e.messageId), editorMode, false)
         } catch (err) {
           toastError(errorMessage(err))
+        }
+      }),
+    )
+    // a clicked notification about a new feed entry.
+    unsubscribers.push(
+      onFeedsOpen((id) => {
+        if (!classic) {
+          feedFocus.set(id)
+          openSpace('feeds')
         }
       }),
     )
@@ -1207,6 +1278,35 @@
           openSpace('tasks')
         }
         break
+      case 'go-notes':
+        goToSpace('notes')
+        break
+      case 'notes-new':
+        if (!classic && !overlayOpen) {
+          requestNotes({ kind: 'new' })
+        }
+        break
+      case 'notes-today':
+        if (!classic && !overlayOpen) {
+          requestNotes({ kind: 'today' })
+        }
+        break
+      case 'notes-switcher':
+        if (!classic && !overlayOpen) {
+          requestNotes({ kind: 'switcher' })
+        }
+        break
+      case 'notes-graph':
+        if (!classic && !overlayOpen) {
+          requestNotes({ kind: 'graph' })
+        }
+        break
+      case 'notes-toggle-mode':
+        // the editor's mode only means something with a note on screen.
+        break
+      case 'go-feeds':
+        goToSpace('feeds')
+        break
       case 'create-task':
         if (!classic) {
           createTaskFromMail()
@@ -1265,6 +1365,9 @@
         break
       case 'go-contacts':
         goToSpace('contacts')
+        break
+      case 'go-chat':
+        goToSpace('chat')
         break
       case 'open-attachments':
         if (!classic && !overlayOpen) {
@@ -1739,7 +1842,7 @@
       }
       return
     }
-    if (overlayOpen || !spaces.some((s) => s.key === key)) {
+    if (overlayOpen || !get(visibleSpaces).some((s) => s.key === key)) {
       return
     }
     openSpace(key)
@@ -1964,16 +2067,6 @@
     clearSettingsRequest()
   }
 
-  // isEditableTarget reports whether the event originated in a text field, so
-  // plain-key shortcuts do not fire while the user is typing.
-  function isEditableTarget(target: EventTarget | null): boolean {
-    const el = target as HTMLElement | null
-    if (!el) {
-      return false
-    }
-    const tag = el.tagName
-    return tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || el.isContentEditable
-  }
 
   // pane resize. clamps keep each column usable; widths persist on release.
   function clamp(value: number, min: number, max: number): number {
@@ -2134,6 +2227,24 @@
           />
         {/await}
       </div>
+    {:else if $space === 'notes'}
+      <div class="space-host">
+        {#await import('./components/notes/NotesScreen.svelte') then m}
+          <svelte:component this={m.default} />
+        {/await}
+      </div>
+    {:else if $space === 'feeds'}
+      <div class="space-host">
+        {#await import('./components/feeds/FeedsScreen.svelte') then m}
+          <svelte:component this={m.default} on:compose={(e) => shareFromFeeds(e.detail)} />
+        {/await}
+      </div>
+    {:else if $space === 'chat' && chatWanted}
+      <div class="space-host">
+        {#await import('./components/chat/ChatSpace.svelte') then m}
+          <svelte:component this={m.default} />
+        {/await}
+      </div>
     {/if}
   </div>
 
@@ -2262,6 +2373,13 @@
 
 {#if !classic}
   <CoachLayer suspended={overlayOpen} />
+{/if}
+
+{#if chatWanted}
+  <ShareToChatDialog />
+  {#await import('./components/chat/VerificationDialog.svelte') then m}
+    <svelte:component this={m.default} />
+  {/await}
 {/if}
 
 <AccountPasswordDialog account={$passwordPrompt} onDone={answerPasswordPrompt} />

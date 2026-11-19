@@ -396,14 +396,6 @@ export function eventsOnDay<T extends { allDay: boolean }>(events: Placed<T>[], 
     .sort((a, b) => Number(b.occ.allDay) - Number(a.occ.allDay) || a.start.getTime() - b.start.getTime())
 }
 
-/**
- * Moves an event by whole days and minutes, keeping its length: what dragging
- * a box to another slot does.
- */
-export function shiftEvent(start: Date, end: Date, newStart: Date): { start: Date; end: Date } {
-  return { start: newStart, end: new Date(newStart.getTime() + (end.getTime() - start.getTime())) }
-}
-
 /** The minutes of the day a pointer is at, from its offset into a day column. */
 export function minutesAt(offset: number, height: number, step = 15): number {
   const ratio = Math.min(1, Math.max(0, offset / Math.max(1, height)))

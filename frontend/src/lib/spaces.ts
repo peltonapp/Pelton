@@ -7,7 +7,11 @@ import contactsIcon from '@phosphor-icons/core/assets/duotone/address-book-duoto
 import calendarIcon from '@phosphor-icons/core/assets/duotone/calendar-blank-duotone.svg?raw'
 import tasksIcon from '@phosphor-icons/core/assets/duotone/list-checks-duotone.svg?raw'
 import projectsIcon from '@phosphor-icons/core/assets/duotone/kanban-duotone.svg?raw'
-import { get } from 'svelte/store'
+import notesIcon from '@phosphor-icons/core/assets/duotone/notebook-duotone.svg?raw'
+import feedsIcon from '@phosphor-icons/core/assets/duotone/rss-duotone.svg?raw'
+import chatIcon from '@phosphor-icons/core/assets/duotone/chats-circle-duotone.svg?raw'
+import { derived, get } from 'svelte/store'
+import { prefs } from '../stores/prefs'
 import type { Space } from './types'
 import type { MailDropOptions } from '../stores/maildrag'
 import { contactSeed } from '../stores/contacts'
@@ -17,6 +21,8 @@ import { openSpace, space } from '../stores/space'
 import { mailDropHint } from '../components/calendar/maildrop'
 import { createTasksFromMail } from './taskmail'
 import { pickProjectFor } from './projectpicker'
+import { dropMailOnNotes } from './notemail'
+import { activeNote } from '../stores/notes'
 import { t } from './i18n'
 
 /** One entry of the space switcher. */
@@ -32,13 +38,17 @@ export interface SpaceEntry {
  * What a space does with mail dropped on its entry in the switcher: contacts
  * starts a new contact from the sender, the calendar a new event from the
  * message, tasks a task from each message, projects asks which project the
- * conversations go to, mail takes nothing.
+ * conversations go to, notes links in the open note or a note about the first
+ * message, mail takes nothing.
  */
 export function spaceDrop(key: Space): MailDropOptions {
   return {
-    accepts: () => key === 'contacts' || key === 'calendar' || key === 'tasks' || key === 'projects',
+    accepts: () => key === 'contacts' || key === 'calendar' || key === 'tasks' || key === 'projects' || key === 'notes',
     onDrop: (items, info) => {
       const first = items[0]
+      if (key === 'notes' && first) {
+        void dropMailOnNotes(items.map((m) => m.id))
+      }
       if (key === 'contacts' && first) {
         contactSeed.set({ name: first.fromName, email: first.fromAddress })
         openSpace('contacts')
@@ -72,6 +82,10 @@ export function spaceDrop(key: Space): MailDropOptions {
       if (key === 'projects') {
         return get(t)('projects.drop.pick')
       }
+      if (key === 'notes') {
+        const tr = get(t)
+        return get(space) === 'notes' && get(activeNote) ? tr('notes.drop.insert') : tr('notes.drop.new')
+      }
       return ''
     },
   }
@@ -84,4 +98,15 @@ export const spaces: SpaceEntry[] = [
   { key: 'tasks', labelKey: 'space.tasks', icon: tasksIcon },
   { key: 'projects', labelKey: 'space.projects', icon: projectsIcon },
   { key: 'contacts', labelKey: 'space.contacts', icon: contactsIcon },
+  { key: 'notes', labelKey: 'space.notes', icon: notesIcon },
+  { key: 'feeds', labelKey: 'space.feeds', icon: feedsIcon },
+  { key: 'chat', labelKey: 'space.chat', icon: chatIcon },
 ]
+
+/** Whether a space is switched on: chat only shows once the user turned it on. */
+export function spaceEnabled(key: Space, p: { chatEnabled: boolean }): boolean {
+  return key !== 'chat' || p.chatEnabled
+}
+
+/** The spaces to show, in display order. */
+export const visibleSpaces = derived(prefs, ($p) => spaces.filter((s) => spaceEnabled(s.key, $p)))

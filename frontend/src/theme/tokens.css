@@ -211,6 +211,25 @@
      list. */
   --inbox-zero-mark: 40px;
   --snippet-list-height: 280px;
+  /* feeds: the entry list beside the reader, a feed's icon in the sidebar
+     and the list, the thumbnail a list row carries, and the add dialog. */
+  --feed-list-width: 380px;
+  --feed-icon: 16px;
+  --feed-thumb: 56px;
+  --feed-dialog-width: 520px;
+  /* chat: the room list and the room info panel beside the timeline, the
+     avatar beside a message group and in the room list, the widest window
+     the space still shows list and room side by side in, the largest inline
+     image, and the tallest the composer grows before it scrolls. */
+  --chat-list-width: 280px;
+  --chat-info-width: 300px;
+  --chat-avatar: 32px;
+  --chat-room-avatar: 28px;
+  --chat-narrow: 720px;
+  --chat-media-width: 360px;
+  --chat-media-height: 280px;
+  --chat-composer-max: 200px;
+  --chat-signin-width: 420px;
 
   /* default density (medium) row + pane spacing. overridden per density below. */
   --row-pad-y: 8px;

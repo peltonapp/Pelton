@@ -194,12 +194,6 @@ function formatDay(ms: number): string {
   return new Date(ms).toISOString().slice(0, 10)
 }
 
-/** The local calendar day of a date, YYYY-MM-DD. */
-export function localDay(date: Date): string {
-  const pad = (n: number): string => String(n).padStart(2, '0')
-  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`
-}
-
 /**
  * Bins daily volume into bars and fills the days without mail: one bar a day
  * for 30 and 90 days, a week (from Monday) for a year, a month for all mail,

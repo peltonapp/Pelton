@@ -122,35 +122,6 @@ type FolderSyncResult struct {
 // replyStateFlags are the bits that say a message was answered or forwarded.
 const replyStateFlags = storage.FlagAnswered | storage.FlagForwarded
 
-// SyncAccount syncs every cached folder for an account. A failure on one folder
-// is logged and does not stop the others, so one broken mailbox cannot block a
-// whole account.
-func (e *Engine) SyncAccount(ctx context.Context, accountID int64) error {
-	folders, err := e.store.ListFolders(ctx, accountID)
-	if err != nil {
-		return fmt.Errorf("sync: list folders for account %d: %w", accountID, err)
-	}
-	for _, folder := range folders {
-		if err := ctx.Err(); err != nil {
-			return err
-		}
-		// a folder the user unchecked is never opened at all (#173).
-		if folder.SyncExcluded {
-			continue
-		}
-		res, err := e.SyncFolder(ctx, folder)
-		if err != nil {
-			e.log.Error("folder sync failed", "folder", folder.IMAPPath, "err", err)
-			continue
-		}
-		e.log.Info("folder synced",
-			"folder", folder.IMAPPath, "server", e.client.Addr(),
-			"new", res.New, "deleted", res.Deleted, "flag_updated", res.FlagUpdated,
-			"conflicts", res.Conflicts, "pushed", res.Pushed, "uidvalidity_reset", res.UIDValidityReset)
-	}
-	return nil
-}
-
 // SyncFolder runs a full bidirectional sync of one folder and returns a summary.
 func (e *Engine) SyncFolder(ctx context.Context, folder storage.Folder) (FolderSyncResult, error) {
 	return e.syncFolder(ctx, folder, 0)

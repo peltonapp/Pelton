@@ -19,7 +19,7 @@
   import Avatar from '../common/Avatar.svelte'
   import EmptyState from '../common/EmptyState.svelte'
   import DragGrip from '../sidebar/DragGrip.svelte'
-  import { projectIcon } from '../../lib/projecticons'
+  import ProjectIcon from './ProjectIcon.svelte'
   import { dueLabel, duePassed, progressOf, projectColor, visibleProjects } from '../../lib/projectlogic'
   import { reorder as reorderAction, type ReorderDetail } from '../../lib/reorder'
   import { maildrop } from '../../stores/maildrag'
@@ -167,7 +167,7 @@
             <article class="tile" class:archived={p.status === 'archived'} style={`--project:${projectColor(p)}`} use:maildrop={dropFor(p)}>
               <button type="button" class="open" aria-label={$t('projects.openNamed').replace('{name}', p.name)} on:click={() => openProject(p.id)} on:contextmenu|preventDefault={(e) => menu(p, e.clientX, e.clientY)}></button>
               <div class="head">
-                <span class="mark" aria-hidden="true"><Ph svg={projectIcon(p.icon)} size={16} /></span>
+                <span class="mark" aria-hidden="true"><ProjectIcon icon={p.icon} iconNodes={p.iconNodes} size={16} /></span>
                 <h3 class="name">{p.name}</h3>
                 <button type="button" class="cal-icon more" aria-label={$t('projects.menu').replace('{name}', p.name)} aria-haspopup="menu" on:click|stopPropagation={(e) => openMenu(e, p)}>
                   <Ph svg={moreIcon} size={15} />
@@ -213,7 +213,7 @@
               <DragGrip />
             {/if}
             <button type="button" class="row-open" on:click={() => openProject(p.id)} on:contextmenu|preventDefault={(e) => menu(p, e.clientX, e.clientY)}>
-              <span class="mark" aria-hidden="true"><Ph svg={projectIcon(p.icon)} size={15} /></span>
+              <span class="mark" aria-hidden="true"><ProjectIcon icon={p.icon} iconNodes={p.iconNodes} size={15} /></span>
               <span class="row-name">{p.name}</span>
               {#if p.description}
                 <span class="row-desc">{p.description}</span>
