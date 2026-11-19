@@ -6,6 +6,8 @@
   import Row from '../ui/Row.svelte'
   import ToggleSwitch from '../../common/ToggleSwitch.svelte'
   import ToastPositionPicker from '../../settings/ToastPositionPicker.svelte'
+  import ToastPreview from '../skeletons/ToastPreview.svelte'
+  import DesktopPreview from '../skeletons/DesktopPreview.svelte'
   import { prefs, setToastPosition, setNotifyNewMail, setUnreadBadgeEnabled } from '../../../stores/prefs'
   import { isMac, t } from '../../../lib/i18n'
 
@@ -15,13 +17,23 @@
   const badgeHintKey = isMac ? 'settingsPanel.hint.dockBadge' : 'settingsPanel.hint.trayBadge'
 
   let vipOpen = false
+
+  // the cell under the pointer in the position picker, which the picture shows
+  // in place of the saved position.
+  let trialPosition: string | null = null
 </script>
 
 <Card title={$t('settingsPanel.category.notifications')}>
   <Row id="toast-position" label={$t('settings.toastPosition')}>
-    <ToastPositionPicker value={$prefs.toastPosition} on:change={(e) => setToastPosition(e.detail)} />
+    <ToastPreview slot="preview" position={trialPosition ?? $prefs.toastPosition} />
+    <ToastPositionPicker
+      value={$prefs.toastPosition}
+      on:change={(e) => setToastPosition(e.detail)}
+      on:hover={(e) => (trialPosition = e.detail)}
+    />
   </Row>
   <Row id="notify-new-mail" label={$t('vip.notifyNewMail')} hint={$t('vip.notifyNewMailHint')}>
+    <DesktopPreview slot="preview" banner={$prefs.notifyNewMail} />
     <ToggleSwitch checked={$prefs.notifyNewMail} label={$t('vip.notifyNewMail')} on:change={(e) => setNotifyNewMail(e.detail)} />
   </Row>
   <Row id="unread-badge" label={$t(badgeToggleKey)} hint={$t(badgeHintKey)}>

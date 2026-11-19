@@ -81,6 +81,10 @@ import type {
   MailEventSource,
   MessageRef,
   AttachmentContent,
+  AttachmentEntry,
+  AttachmentPage,
+  AttachmentQuery,
+  SenderOverview,
   ThemeInfo,
   ThemeApply,
   ThemeImportPreview,
@@ -1252,6 +1256,56 @@ export function saveAllAttachments(messageId: number): Promise<string> {
   return App.SaveAllAttachments(messageId)
 }
 
+/** queryAttachments reads one page of the attachments browser, newest first. */
+export async function queryAttachments(q: AttachmentQuery): Promise<AttachmentPage> {
+  if (isDemoActive()) {
+    return { entries: [], total: q.withTotal ? 0 : -1 }
+  }
+  const page = await App.QueryAttachments(q)
+  return { entries: (page.entries ?? []) as AttachmentEntry[], total: page.total }
+}
+
+/**
+ * fetchAttachment makes sure an attachment's bytes are stored here, fetching
+ * its message from the server when they are not, and returns the entry as it
+ * now stands.
+ */
+export async function fetchAttachment(attachmentId: number): Promise<AttachmentEntry> {
+  return (await App.FetchAttachment(attachmentId)) as AttachmentEntry
+}
+
+/** openAttachmentFile opens an attachment in the application the system has for it. */
+export function openAttachmentFile(messageId: number, attachmentId: number): Promise<void> {
+  if (isDemoActive()) {
+    return Promise.resolve()
+  }
+  return App.OpenAttachmentFile(messageId, attachmentId)
+}
+
+/**
+ * saveAttachmentsTo asks for a folder and saves the given attachments there,
+ * returning the folder, or '' when the dialog was cancelled.
+ */
+export function saveAttachmentsTo(refs: { messageId: number; attachmentId: number }[]): Promise<string> {
+  if (isDemoActive()) {
+    return Promise.resolve('')
+  }
+  return App.SaveAttachmentsTo(refs)
+}
+
+/** senderOverview returns what the local mail says about one address. */
+export async function senderOverview(address: string): Promise<SenderOverview> {
+  if (isDemoActive()) {
+    return { address, count: 0, first: '', last: '', recent: [], files: [], filesTotal: 0, automated: false }
+  }
+  const o = await App.SenderOverview(address)
+  return {
+    ...o,
+    recent: (o.recent ?? []) as MessageSummary[],
+    files: (o.files ?? []) as AttachmentEntry[],
+  }
+}
+
 // --- offline range download ---
 
 // downloadRange downloads all mail since the start date that is not cached yet.
@@ -1412,6 +1466,31 @@ export function titleBarDoubleClick(): void {
   void App.TitleBarDoubleClick()
 }
 
+// trafficLights is where the macOS window buttons sit, in points: `center` is
+// their centre line below the window's top edge, `end` where the last one ends
+// from the leading edge. Both are 0 when unknown or not on macOS. Without a
+// token it measures the main window, with one that compose window.
+export function trafficLights(composeToken = ''): Promise<{ center: number; end: number }> {
+  return App.TrafficLights(composeToken)
+}
+
+// applyTrafficLights lines the page's title bar tokens up with where the
+// window buttons really are. `fill` also makes the title bar strip as tall as
+// twice their centre line, for a bar the buttons sit in the middle of.
+export async function applyTrafficLights(composeToken = '', fill = false): Promise<void> {
+  const at = await trafficLights(composeToken).catch(() => ({ center: 0, end: 0 }))
+  if (at.center <= 0) {
+    return
+  }
+  const root = document.documentElement.style
+  const scaled = (points: number): string => `calc(${points}px / var(--ui-scale, 1))`
+  root.setProperty('--titlebar-lights-center', scaled(at.center))
+  if (fill) {
+    root.setProperty('--titlebar-lights', scaled(at.center * 2))
+    root.setProperty('--titlebar-inset', scaled(at.end + 14))
+  }
+}
+
 // quitApp exits the app, as the Quit menu item does.
 export function quitApp(): void {
   void App.QuitApp()
@@ -1564,6 +1643,7 @@ export const SettingKeys = {
   layoutMode: 'layout_mode',
   navStyle: 'nav_style',
   railSide: 'rail_side',
+  railPins: 'rail_pins',
   paneStyle: 'pane_style',
   avatarPlacement: 'avatar_placement',
   contactsView: 'contacts_view',
@@ -1574,6 +1654,7 @@ export const SettingKeys = {
   composeOpenIn: 'compose_open_in',
   threadedList: 'threaded_list',
   readerWidth: 'reader_width',
+  senderPanel: 'sender_panel',
   themeId: 'theme_id',
   menuBarInApp: 'menu_bar_in_app',
   menuBarNativeMinimal: 'menu_bar_native_minimal',

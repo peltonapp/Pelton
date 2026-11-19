@@ -9,6 +9,7 @@ const entries: SettingsIndexEntry[] = [
   { page: 'reading', id: 'pgp-status', labelKey: 'settingsPanel.pgpStatus', keywords: 'technical info pgp gpg signature badge encrypted' },
   { page: 'reading', id: 'auth-status', labelKey: 'settingsPanel.authStatus', keywords: 'technical info spf dkim dmarc authentication badge' },
   { page: 'reading', id: 'mark-read', labelKey: 'settingsPanel.toggle.markReadOnOpen', keywords: 'mark read seen unread open automatically' },
+  { page: 'reading', id: 'sender-panel', labelKey: 'senderPanel.setting', keywords: 'sender panel contact person side info vip files conversations' },
   { page: 'reading', id: 'open-on-arrow', labelKey: 'settingsPanel.toggle.openOnArrow', keywords: 'arrow keys keyboard open select navigate enter' },
 ]
 

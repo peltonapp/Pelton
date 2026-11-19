@@ -20,6 +20,8 @@
   import Rail from './components/shell/Rail.svelte'
   import SpaceSwitcher from './components/shell/SpaceSwitcher.svelte'
   import { space, openSpace, runSpaceAction } from './stores/space'
+  import { spaces } from './lib/spaces'
+  import { popupIsOpen } from './lib/popups'
   import { calendarFocus, calendarImport, calendarQuickAdd } from './stores/calendar'
   import { formatTime } from './lib/calformat'
   import type { TimeFormat } from './lib/format'
@@ -76,6 +78,7 @@
     getLogStatus,
     openCrashReport,
     titleBarDoubleClick,
+    applyTrafficLights,
     setUnreadBadge,
     quitApp,
     hideApp,
@@ -114,7 +117,7 @@
   import { profiles, currentProfile, loadProfiles, switchTo, switchRelative } from './stores/profiles'
   import { loadProposals } from './stores/agent'
   import { settingsRequest, clearSettingsRequest } from './stores/settingsnav'
-  import { errorMessage, toastError, toastInfo, pushAction } from './stores/toast'
+  import { errorMessage, toastError, toastInfo, pushAction, withBusyToast } from './stores/toast'
   import { friendlyError } from './lib/errors'
   import { setOnline } from './stores/network'
   import { moveTargets } from './stores/move'
@@ -160,6 +163,10 @@
   import { extraPaletteCommands } from './lib/palettesources'
   import './lib/palette-calendar'
   import './lib/palette-contacts'
+  import './lib/palette-attachments'
+  import AttachmentsBrowser from './components/attachments/AttachmentsBrowser.svelte'
+  import { attachmentsOpen, toggleAttachments } from './stores/attachments'
+  import { setSenderPanel } from './stores/prefs'
   import { catalogByAction } from './lib/menuactions'
   import { shortcutLabel } from './lib/i18n'
   import {
@@ -180,7 +187,7 @@
     promptForMissingPasswords,
     refreshMissingPasswords,
   } from './stores/passwordprompt'
-  import type { EditorMode, MessageSummary, ThemePref, ThemeInfo, Folder, Account } from './lib/types'
+  import type { EditorMode, MessageSummary, ThemePref, ThemeInfo, Folder, Account, Space } from './lib/types'
 
   let settingsOpen = false
   // the settings screen is code-split and loaded on first open. A load that
@@ -284,6 +291,9 @@
       return
     }
     fullscreen = await isFullscreen().catch(() => false)
+    // where the traffic lights sit differs between macOS releases, so what is
+    // drawn beside them is lined up with where they really are.
+    await applyTrafficLights()
   }
 
   // the native Mail menu's message actions are only usable while a message is
@@ -687,7 +697,7 @@
       toastInfo(get(t)('app.toast.exportOpenFirst'))
       return
     }
-    exportMessagePrintView(id).catch((err) => toastError(errorMessage(err)))
+    withBusyToast(get(t)('export.working'), () => exportMessagePrintView(id)).catch((err) => toastError(errorMessage(err)))
   }
 
   // export the currently open message as an .eml file, or tell the user to open
@@ -975,6 +985,26 @@
         break
       case 'toggle-fullscreen':
         void toggleFullscreen()
+        break
+      case 'go-mail':
+        goToSpace('mail')
+        break
+      case 'go-calendar':
+        goToSpace('calendar')
+        break
+      case 'go-contacts':
+        goToSpace('contacts')
+        break
+      case 'open-attachments':
+        if (!classic && !overlayOpen) {
+          openSpace('mail')
+          toggleAttachments()
+        }
+        break
+      case 'toggle-sender-panel':
+        if (!classic) {
+          setSenderPanel(!$prefs.senderPanel)
+        }
         break
       case 'hide-window':
         // the app, not just the window: on macOS ordering the window out
@@ -1387,6 +1417,21 @@
     }
   }
 
+  // goToSpace shows one of the spaces from its shortcut. classic has no spaces
+  // but does have a contacts screen; a space this build lacks is left alone.
+  function goToSpace(key: Space): void {
+    if (classic) {
+      if (key === 'contacts') {
+        openContacts()
+      }
+      return
+    }
+    if (overlayOpen || !spaces.some((s) => s.key === key)) {
+      return
+    }
+    openSpace(key)
+  }
+
   function anyDialogOpen(): boolean {
     return (
       settingsOpen ||
@@ -1485,6 +1530,12 @@
     // while the settings panel is capturing a new binding, let it have the keys.
     if ($recording) {
       return
+    }
+    // Escape that has something of ours to close is ours alone. left to the
+    // system as well, it would also take a full screen window out of full
+    // screen, which should only happen from the plain main view.
+    if (event.key === 'Escape' && (anyDialogOpen() || overlayOpen || popupIsOpen())) {
+      event.preventDefault()
     }
     if (tryVimNav(event)) {
       event.preventDefault()
@@ -1695,18 +1746,25 @@
         <Resizer disabled={locked} label={$t('app.pane.resizeSidebar')} on:resize={resizeSidebar} on:end={commitPanes} />
         <div
           class="surface"
-          class:stacked
-          style={stacked
-            ? `grid-template-rows: ${listH}px 0 minmax(0, 1fr)`
-            : `grid-template-columns: ${listW}px 0 minmax(0, 1fr)`}
+          class:stacked={stacked && !$attachmentsOpen}
+          class:browsing={$attachmentsOpen}
+          style={$attachmentsOpen
+            ? ''
+            : stacked
+              ? `grid-template-rows: ${listH}px 0 minmax(0, 1fr)`
+              : `grid-template-columns: ${listW}px 0 minmax(0, 1fr)`}
         >
-          <MessageList />
-          {#if stacked}
-            <Resizer orientation="horizontal" disabled={locked} label={$t('app.pane.resizeMessageList')} on:resize={resizeListHeight} on:end={commitListHeight} />
+          {#if $attachmentsOpen}
+            <AttachmentsBrowser />
           {:else}
-            <Resizer disabled={locked} label={$t('app.pane.resizeMessageList')} on:resize={resizeList} on:end={commitPanes} />
+            <MessageList />
+            {#if stacked}
+              <Resizer orientation="horizontal" disabled={locked} label={$t('app.pane.resizeMessageList')} on:resize={resizeListHeight} on:end={commitListHeight} />
+            {:else}
+              <Resizer disabled={locked} label={$t('app.pane.resizeMessageList')} on:resize={resizeList} on:end={commitPanes} />
+            {/if}
+            <MessageDetail />
           {/if}
-          <MessageDetail />
           <ComposeTabLayer />
         </div>
       </div>
@@ -1933,8 +1991,15 @@
     border-radius: var(--pane-radius);
   }
 
-  .surface.stacked {
+  .surface.stacked,
+  .surface.browsing {
     grid-template-columns: minmax(0, 1fr);
+  }
+
+  :global(:root[data-panes='soft']) .surface.browsing > :global(.browser) {
+    border: var(--hairline) solid var(--border-default);
+    border-radius: var(--pane-radius);
+    overflow: hidden;
   }
 
   .surface.stacked > :global(.list-col) {
@@ -2029,10 +2094,10 @@
   .titlebar-logo {
     position: absolute;
     left: var(--titlebar-inset);
-    top: 50%;
+    top: var(--titlebar-lights-center);
     height: calc(16px / var(--ui-scale, 1));
     width: auto;
-    transform: translateY(calc(-50% - var(--titlebar-nudge)));
+    transform: translateY(-50%);
     opacity: 0.85;
     pointer-events: none;
     user-select: none;

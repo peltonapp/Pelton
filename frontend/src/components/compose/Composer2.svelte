@@ -593,9 +593,12 @@
     user-select: none;
   }
 
+  /* in a window the bar is exactly as tall as the title bar the window buttons
+     are centred in, so its own buttons share their centre line. */
   .composer.window .toolbar {
+    padding-block: 0;
     padding-inline-start: max(var(--pane-pad), var(--titlebar-inset));
-    min-height: max(calc(var(--control-height) + 2 * var(--space-3)), var(--titlebar-lights));
+    min-height: max(calc(var(--control-height) + 2 * var(--space-2)), var(--titlebar-lights));
   }
 
   .gap {

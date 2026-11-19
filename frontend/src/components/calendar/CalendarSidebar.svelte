@@ -16,7 +16,7 @@
   import { calendars, calendarAccounts, toggleCalendar, recolorCalendar, loadCalendars, loadOccurrences } from '../../stores/calendar'
   import importIcon from '@phosphor-icons/core/assets/duotone/file-arrow-down-duotone.svg?raw'
   import { createLocalCalendar, renameCalendar, deleteLocalCalendar, exportCalendar } from '../../lib/api'
-  import { errorMessage, toastError, toastSuccess } from '../../stores/toast'
+  import { errorMessage, toastError, toastSuccess, withBusyToast } from '../../stores/toast'
   import { openSettingsAt } from '../../stores/settingsnav'
   import { calendarColor, paletteHex, paletteSize } from '../../lib/calformat'
   import { t } from '../../lib/i18n'
@@ -124,7 +124,7 @@
 
   const runExport = (format: 'ics' | 'jscal'): Promise<void> =>
     withCalendar(async (cal) => {
-      if (await exportCalendar(cal.id, format)) {
+      if (await withBusyToast($t('export.working'), () => exportCalendar(cal.id, format))) {
         toastSuccess($t('calendar.exported'))
       }
     })

@@ -54,6 +54,7 @@ const mailOnlyActions = new Set<string>([
   'new-folder',
   'rename-folder',
   'delete-folder',
+  'toggle-sender-panel',
 ])
 
 /**

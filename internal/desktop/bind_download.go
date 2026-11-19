@@ -55,6 +55,10 @@ func (a *App) ReadAttachment(messageID, attachmentID int64) (AttachmentContentDT
 		dto.TooLarge = true
 		return dto, nil
 	}
+	target, err = a.localAttachment(*target)
+	if err != nil {
+		return AttachmentContentDTO{}, err
+	}
 	rc, err := a.store.OpenAttachment(target.DiskPath)
 	if err != nil {
 		return AttachmentContentDTO{}, err
@@ -104,8 +108,11 @@ func (a *App) SaveAllAttachments(messageID int64) (string, error) {
 	total := len(atts)
 	defer a.emit(EventAttachmentProgress, AttachmentProgressEvent{Running: false, FilesDone: total, FilesTotal: total})
 	for i, att := range atts {
-		dest := uniqueDestPath(dir, att.Filename)
-		if err := a.copyAttachmentProgress(att, dest, i, total); err != nil {
+		local, err := a.localAttachment(att)
+		if err == nil {
+			err = a.copyAttachmentProgress(*local, uniqueDestPath(dir, att.Filename), i, total)
+		}
+		if err != nil {
 			a.emit(EventAttachmentProgress, AttachmentProgressEvent{Running: false, Error: err.Error(), FilesDone: i, FilesTotal: total})
 			return "", err
 		}
@@ -128,6 +135,7 @@ func (a *App) copyAttachmentProgress(att storage.Attachment, dest string, fileIn
 	defer out.Close()
 
 	pw := &progressWriter{
+		id:       att.ID,
 		total:    att.SizeBytes,
 		filename: att.Filename,
 		fileIdx:  fileIndex,
@@ -144,6 +152,7 @@ func (a *App) copyAttachmentProgress(att storage.Attachment, dest string, fileIn
 // throttles to at most one event per ~64 KiB so a stream of tiny writes does not
 // flood the event bus.
 type progressWriter struct {
+	id       int64
 	total    int64
 	written  int64
 	lastEmit int64
@@ -159,12 +168,13 @@ func (w *progressWriter) Write(p []byte) (int, error) {
 	if w.written-w.lastEmit >= 64<<10 || w.written == w.total {
 		w.lastEmit = w.written
 		w.emit(EventAttachmentProgress, AttachmentProgressEvent{
-			Running:    true,
-			Filename:   w.filename,
-			BytesDone:  w.written,
-			BytesTotal: w.total,
-			FilesDone:  w.fileIdx,
-			FilesTotal: w.files,
+			Running:      true,
+			AttachmentID: w.id,
+			Filename:     w.filename,
+			BytesDone:    w.written,
+			BytesTotal:   w.total,
+			FilesDone:    w.fileIdx,
+			FilesTotal:   w.files,
 		})
 	}
 	return n, nil
@@ -504,16 +514,20 @@ func (a *App) fetchAndPin(client mailClient, task dlTask, includeAttachments boo
 		SizeBytes:   msg.Size,
 		Offline:     true,
 	}
+	// without attachments the parts are still recorded, bytes left out, so
+	// they can be listed and fetched when they are wanted.
 	var atts []storage.IncomingAttachment
-	if includeAttachments {
-		for _, at := range msg.Attachments {
-			atts = append(atts, storage.IncomingAttachment{
-				Filename:    at.Filename,
-				ContentType: at.ContentType,
-				ContentID:   at.ContentID,
-				Content:     bytes.NewReader(at.Content),
-			})
+	for _, at := range msg.Attachments {
+		in := storage.IncomingAttachment{
+			Filename:    at.Filename,
+			ContentType: at.ContentType,
+			ContentID:   at.ContentID,
+			Size:        int64(len(at.Content)),
 		}
+		if includeAttachments {
+			in.Content = bytes.NewReader(at.Content)
+		}
+		atts = append(atts, in)
 	}
 	id, err := a.store.InsertMessageWithAttachments(a.ctx, stored, atts)
 	if err != nil {

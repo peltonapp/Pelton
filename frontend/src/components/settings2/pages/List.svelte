@@ -9,6 +9,8 @@
   import RowSkeleton from '../skeletons/RowSkeleton.svelte'
   import FlagSkeleton from '../skeletons/FlagSkeleton.svelte'
   import SwipeSkeleton from '../skeletons/SwipeSkeleton.svelte'
+  import SelectionPreview from '../skeletons/SelectionPreview.svelte'
+  import ThreadPreview from '../skeletons/ThreadPreview.svelte'
   import ToggleSwitch from '../../common/ToggleSwitch.svelte'
   import Select from '../../common/Select.svelte'
   import {
@@ -46,6 +48,12 @@
   } from '../../../lib/types'
 
   $: snippetCapable = $prefs.rowTemplate === 'relaxed' || $prefs.rowTemplate === 'comfortable'
+
+  // the option under the pointer in each card group, which the preview shows
+  // in place of the saved choice.
+  let trialAvatar: string | null = null
+  let trialTemplate: string | null = null
+  let trialFlag: string | null = null
   $: multi = $prefs.multiSelectEnabled
 
   $: placements = [
@@ -129,9 +137,10 @@
 
 <Card title={$t('list.card.layout')}>
   <Row id="avatar-placement" label={$t('list.avatarPlacement.label')} hint={$t('list.avatarPlacement.hint')} stacked>
-    <ListPreview slot="preview" />
+    <ListPreview slot="preview" trial={{ avatar: trialAvatar ?? undefined }} />
     <div class="fill">
       <ChoiceCards
+        on:hover={(e) => (trialAvatar = e.detail)}
         label={$t('list.avatarPlacement.label')}
         value={$prefs.avatarPlacement}
         options={placements}
@@ -146,9 +155,10 @@
     {/if}
   </Row>
   <Row id="row-template" label={$t('settingsPanel.label.rowLayout')} stacked>
-    <ListPreview slot="preview" />
+    <ListPreview slot="preview" trial={{ template: trialTemplate ?? undefined }} />
     <div class="fill">
       <ChoiceCards
+        on:hover={(e) => (trialTemplate = e.detail)}
         label={$t('settingsPanel.label.rowLayout')}
         value={$prefs.rowTemplate}
         options={templates}
@@ -179,8 +189,9 @@
     />
   </Row>
   <Row id="flag-highlight" label={$t('settingsPanel.label.flaggedHighlight')} hint={$t('settingsPanel.hint.barIconFlag')} stacked>
-    <ListPreview slot="preview" />
+    <ListPreview slot="preview" trial={{ flag: trialFlag ?? undefined }} />
     <ChoiceCards
+      on:hover={(e) => (trialFlag = e.detail)}
       label={$t('settingsPanel.label.flaggedHighlight')}
       value={$prefs.flagHighlight}
       options={flagOptions}
@@ -195,7 +206,7 @@
 
 <Card title={$t('list.card.conversations')}>
   <Row id="threaded-list" label={$t('list.threaded.label')} hint={$t('list.threaded.hint')}>
-    <ListPreview slot="preview" />
+    <ThreadPreview slot="preview" threaded={$prefs.threadedList} />
     <ToggleSwitch
       checked={$prefs.threadedList}
       label={$t('list.threaded.label')}
@@ -217,6 +228,7 @@
 
 <Card title={$t('list.card.selection')}>
   <Row id="multi-select" label={$t('settingsPanel.toggle.multiSelect')} hint={$t('settingsPanel.hint.multiSelect')}>
+    <SelectionPreview slot="preview" enabled={$prefs.multiSelectEnabled} showCount={$prefs.showSelectedCount} />
     <ToggleSwitch
       checked={$prefs.multiSelectEnabled}
       label={$t('settingsPanel.toggle.multiSelect')}
@@ -224,6 +236,7 @@
     />
   </Row>
   <Row id="selected-count" label={$t('settingsPanel.toggle.showSelectedCount')} disabled={!multi}>
+    <SelectionPreview slot="preview" showCount={$prefs.showSelectedCount} />
     <ToggleSwitch
       checked={$prefs.showSelectedCount}
       disabled={!multi}
@@ -232,6 +245,7 @@
     />
   </Row>
   <Row id="select-all-scope" label={$t('settingsPanel.label.selectAllScope')} hint={$t('settingsPanel.hint.selectAllScope')} disabled={!multi}>
+    <SelectionPreview slot="preview" showCount scope={$prefs.selectAllScope as 'offer' | 'all' | 'loaded'} />
     <Select
       value={$prefs.selectAllScope}
       disabled={!multi}

@@ -34,6 +34,7 @@
   import { askConfirm } from '../../stores/confirm'
   import { openSettingsAt } from '../../stores/settingsnav'
   import { openSpace, registerSpaceActions } from '../../stores/space'
+  import { focusSpaceSearch, matchesQuery, registerSpaceSearch } from '../../lib/spacesearch'
 
   let root: HTMLElement | undefined
   import { revealMessage } from '../../stores/selection'
@@ -87,9 +88,35 @@
     void loadContacts().then(() => (ready = true))
     // while contacts is on screen the app's "new" key makes a contact and its
     // search key goes to the contact search.
-    return registerSpaceActions('contacts', {
+    const stopSearch = registerSpaceSearch('contacts', {
+      placeholderKey: 'contacts.searchPlaceholder',
+      emptyKey: 'contacts.noMatches',
+      search: (query) =>
+        $contacts
+          .filter((c) =>
+            matchesQuery(query, [
+              c.fullName,
+              c.organization,
+              c.title,
+              ...c.emails.map((e) => e.value),
+              ...c.phones.map((p) => p.value),
+            ]),
+          )
+          .slice(0, 20)
+          .map((c) => ({
+            id: String(c.id),
+            title: c.fullName || c.emails[0]?.value || c.organization,
+            detail: c.emails[0]?.value ?? c.phones[0]?.value ?? '',
+            aside: c.organization,
+          })),
+      open: (result) => void select(Number(result.id)),
+    })
+    const stopActions = registerSpaceActions('contacts', {
       compose: () => void startCreate(),
       search: () => {
+        if (focusSpaceSearch()) {
+          return
+        }
         const input = root?.querySelector<HTMLInputElement>('input[type="search"]')
         if (!input) {
           return false
@@ -98,6 +125,10 @@
         input.select()
       },
     })
+    return () => {
+      stopSearch()
+      stopActions()
+    }
   })
 
   // a person handed over from elsewhere opens the editor already filled in.

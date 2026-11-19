@@ -79,6 +79,7 @@ const defaults: UIPrefs = {
   layoutMode: 'columns',
   navStyle: 'rail',
   railSide: 'left',
+  railPins: '',
   paneStyle: 'hybrid',
   avatarPlacement: 'inline',
   contactsView: 'panes',
@@ -88,6 +89,7 @@ const defaults: UIPrefs = {
   composeOpenIn: 'window',
   threadedList: true,
   readerWidth: 'full',
+  senderPanel: false,
   themeId: '',
   menuBarInApp: false,
   menuBarNativeMinimal: false,
@@ -99,7 +101,7 @@ const defaults: UIPrefs = {
   unreadBadge: true,
   themeDarkStart: '19:00',
   themeDarkEnd: '07:00',
-  bodyFont: 'default',
+  bodyFont: 'system',
   senderFonts: true,
   uiFont: 'default',
   monoFont: 'default',
@@ -270,6 +272,22 @@ export function setNavStyle(navStyle: NavStyle): void {
 }
 
 /** Moves the rail to the left or right window edge. */
+/** The ids of the views pinned to the rail, in display order. */
+export function railPinIds(railPins: string): string[] {
+  return railPins === '' ? [] : railPins.split(',')
+}
+
+/** Pins a view to the rail, or takes it off again. */
+export function toggleRailPin(id: string): void {
+  prefs.update((p) => {
+    const ids = railPinIds(p.railPins)
+    const next = ids.includes(id) ? ids.filter((x) => x !== id) : [...ids, id]
+    const railPins = next.join(',')
+    void setSetting(SettingKeys.railPins, railPins)
+    return { ...p, railPins }
+  })
+}
+
 export function setRailSide(railSide: RailSide): void {
   prefs.update((p) => ({ ...p, railSide }))
   void setSetting(SettingKeys.railSide, railSide)
@@ -332,6 +350,12 @@ export function setThreadedList(threadedList: boolean): void {
 export function setReaderWidth(readerWidth: ReaderWidth): void {
   prefs.update((p) => ({ ...p, readerWidth }))
   void setSetting(SettingKeys.readerWidth, readerWidth)
+}
+
+/** Shows or hides the sender panel beside the reader in the new design. */
+export function setSenderPanel(senderPanel: boolean): void {
+  prefs.update((p) => ({ ...p, senderPanel }))
+  void setSetting(SettingKeys.senderPanel, String(senderPanel))
 }
 
 /** Turns the gliding caret of the compose editor on or off. */

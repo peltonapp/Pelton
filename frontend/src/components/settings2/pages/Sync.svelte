@@ -8,6 +8,7 @@
   import ToggleSwitch from '../../common/ToggleSwitch.svelte'
   import DateTimePicker from '../../common/DateTimePicker.svelte'
   import StepSlider from '../../settings/StepSlider.svelte'
+  import StatusBarPreview from '../skeletons/StatusBarPreview.svelte'
   import {
     prefs,
     setLowPowerMode,
@@ -180,6 +181,7 @@
     />
   </Row>
   <Row id="verbose-sync" label={$t('settingsPanel.toggle.verboseSync')} hint={$t('settingsPanel.hint.verboseSyncDetail')}>
+    <StatusBarPreview slot="preview" syncing verbose={$prefs.verboseSync} unread={false} clock={false} />
     <ToggleSwitch checked={$prefs.verboseSync} label={$t('settingsPanel.toggle.verboseSync')} on:change={(e) => setVerboseSync(e.detail)} />
   </Row>
 </Card>
@@ -220,6 +222,7 @@
 
 <Card title={$t('settings2.sync.power')}>
   <Row id="low-power-mode" label={$t('settingsPanel.toggle.lowPowerMode')} hint={$t('settingsPanel.hint.lowPowerDetail')}>
+    <StatusBarPreview slot="preview" lowPower={$prefs.lowPowerMode} unread={false} clock={false} />
     <ToggleSwitch checked={$prefs.lowPowerMode} label={$t('settingsPanel.toggle.lowPowerMode')} on:change={(e) => setLowPowerMode(e.detail)} />
   </Row>
 </Card>

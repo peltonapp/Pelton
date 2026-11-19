@@ -75,6 +75,13 @@ export type ShortcutAction =
   | 'focus-reader'
   // opens the calendar's quick add, from the calendar or any other space.
   | 'calendar-quick-add'
+  // switching between the spaces of the new design.
+  | 'go-mail'
+  | 'go-calendar'
+  | 'go-contacts'
+  // the attachments browser and the reader's sender panel, new design only.
+  | 'open-attachments'
+  | 'toggle-sender-panel'
 
 // Shortcut pairs an action with its default combo and the label key for display.
 export interface Shortcut {
@@ -165,6 +172,15 @@ export const shortcuts: Shortcut[] = [
   // q is the key other calendars open quick add with, and nothing else here
   // uses it; like every bare letter it never fires from inside a text field.
   { action: 'calendar-quick-add', combo: 'q', labelKey: 'shortcut.calendarQuickAdd' },
+  // letters rather than digits: mod+1 to 9 pick reading-pane tabs, and a digit
+  // with Shift or Alt types a symbol that would not match.
+  { action: 'go-mail', combo: 'mod+shift+m', labelKey: 'shortcut.goMail' },
+  { action: 'go-calendar', combo: 'mod+shift+c', labelKey: 'shortcut.goCalendar' },
+  { action: 'go-contacts', combo: 'mod+shift+a', labelKey: 'shortcut.goContacts' },
+  // F for files. The panel takes a plain letter like the other reader keys:
+  // mod+shift+i opens the web inspector in development builds.
+  { action: 'open-attachments', combo: 'mod+shift+f', labelKey: 'shortcut.openAttachments' },
+  { action: 'toggle-sender-panel', combo: 'i', labelKey: 'shortcut.toggleSenderPanel' },
 ]
 
 // ParsedCombo is a combo broken into its modifier flags and final key.

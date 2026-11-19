@@ -15,6 +15,9 @@
   import eyeIcon from '@phosphor-icons/core/assets/duotone/eye-duotone.svg?raw'
   import saveIcon from '@phosphor-icons/core/assets/duotone/download-simple-duotone.svg?raw'
   import clipIcon from '@phosphor-icons/core/assets/duotone/paperclip-duotone.svg?raw'
+  import checkIcon from '@phosphor-icons/core/assets/regular/check.svg?raw'
+  import { onDestroy } from 'svelte'
+  import { onAttachmentProgress } from '../../lib/events'
   import Ph from '../common/Ph.svelte'
   import PieProgress from '../common/PieProgress.svelte'
   import VerdictBadge from '../common/VerdictBadge.svelte'
@@ -48,9 +51,35 @@
   $: visible = attachments.filter((a) => !a.inline)
   $: totalBytes = visible.reduce((sum, a) => sum + a.sizeBytes, 0)
 
+  const doneShownMs = 1200
+  const fillMs = 260
+
   // the attachments being saved, by id.
   let saving = new Set<number>()
   let savingAll = false
+  // how far each save has got, 0 to 1. absent until the first bytes are written,
+  // which is while the save dialog is still open.
+  let progress = new Map<number, number>()
+  // the attachments whose save just finished, shown with a check for a moment.
+  let done = new Set<number>()
+
+  const stopProgress = onAttachmentProgress((e) => {
+    if (!e.running || !saving.has(e.attachmentId)) {
+      return
+    }
+    const share = e.bytesTotal > 0 ? e.bytesDone / e.bytesTotal : 1
+    progress = new Map(progress).set(e.attachmentId, share)
+  })
+  onDestroy(stopProgress)
+
+  function showDone(id: number): void {
+    done = new Set(done).add(id)
+    setTimeout(() => {
+      const next = new Set(done)
+      next.delete(id)
+      done = next
+    }, doneShownMs)
+  }
 
   function preview(att: Attachment): void {
     openPreview(messageId, att)
@@ -64,6 +93,11 @@
     try {
       const path = await saveAttachment(messageId, att.id)
       if (path) {
+        // the file is written from the local store, often faster than the eye:
+        // let the pie run to full before it turns into the check.
+        progress = new Map(progress).set(att.id, 1)
+        await new Promise((resolve) => setTimeout(resolve, fillMs))
+        showDone(att.id)
         toastSuccess($t('detail.attachments.saved').replace('{name}', att.filename))
       }
     } catch (err) {
@@ -72,6 +106,9 @@
       const next = new Set(saving)
       next.delete(att.id)
       saving = next
+      const rest = new Map(progress)
+      rest.delete(att.id)
+      progress = rest
     }
   }
 
@@ -113,11 +150,7 @@
       {#each visible as att (att.id)}
         <li class="chip">
           <span class="glyph">
-            {#if saving.has(att.id)}
-              <PieProgress size={14} label={att.filename} />
-            {:else}
-              <Ph svg={icons[fileKind(att.contentType, att.filename)]} size={16} />
-            {/if}
+            <Ph svg={icons[fileKind(att.contentType, att.filename)]} size={16} />
           </span>
           <span class="name" title={att.filename}>{att.filename}</span>
           <span class="size">{formatBytes(att.sizeBytes)}</span>
@@ -140,10 +173,18 @@
             class="act"
             aria-label={$t('detail.attachments.download').replace('{name}', att.filename)}
             title={$t('detail.attachments.download').replace('{name}', att.filename)}
+            class:busy={saving.has(att.id)}
+            class:done={done.has(att.id)}
             disabled={saving.has(att.id)}
             on:click={() => save(att)}
           >
-            <Ph svg={saveIcon} size={14} />
+            {#if saving.has(att.id)}
+              <PieProgress size={14} value={progress.get(att.id) ?? null} label={att.filename} />
+            {:else if done.has(att.id)}
+              <span class="pop"><Ph svg={checkIcon} size={14} /></span>
+            {:else}
+              <Ph svg={saveIcon} size={14} />
+            {/if}
           </button>
         </li>
       {/each}
@@ -262,5 +303,28 @@
 
   .act:disabled {
     cursor: default;
+  }
+
+  .act.busy,
+  .act.done {
+    color: var(--accent);
+  }
+
+  .pop {
+    display: inline-flex;
+    animation: pop var(--motion-base) var(--ease-out);
+  }
+
+  @keyframes pop {
+    from {
+      opacity: 0;
+      transform: scale(0.6);
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .pop {
+      animation: none;
+    }
   }
 </style>

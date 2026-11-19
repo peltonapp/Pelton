@@ -146,6 +146,9 @@ const (
 	// "footer", "tabs" or "hidden"; and which edge the rail is on.
 	settingNavStyle = "nav_style"
 	settingRailSide = "rail_side"
+	// the views pinned to the middle of the rail, comma separated: "u:inbox"
+	// for a unified view, "v:12" for a saved one.
+	settingRailPins = "rail_pins"
 	// how the panes are drawn in the new design: "hybrid", "flat" or "soft".
 	settingPaneStyle = "pane_style"
 	// where the sender picture goes in a list row and the reading header:
@@ -168,6 +171,8 @@ const (
 	// how wide the reading column runs in the new design: "narrow", "medium"
 	// or "full".
 	settingReaderWidth = "reader_width"
+	// show the sender panel beside the reader in the new design.
+	settingSenderPanel = "sender_panel"
 	// general new-mail OS notifications (#126). VIP senders are stored
 	// separately in bind_vip.go and notify even when this is off.
 	settingNotifyNewMail = "notify_new_mail"
@@ -404,6 +409,9 @@ type UIPrefsDTO struct {
 	NavStyle string `json:"navStyle"`
 	// RailSide is the window edge the rail sits on: left or right.
 	RailSide string `json:"railSide"`
+	// RailPins lists the views pinned to the middle of the rail, comma
+	// separated, in display order.
+	RailPins string `json:"railPins"`
 	// PaneStyle draws the panes in the new design: hybrid, flat or soft.
 	PaneStyle string `json:"paneStyle"`
 	// AvatarPlacement puts the sender picture in its own column, inline in the
@@ -427,6 +435,9 @@ type UIPrefsDTO struct {
 	// ReaderWidth caps the reading column in the new design: narrow, medium
 	// or full.
 	ReaderWidth string `json:"readerWidth"`
+	// SenderPanel shows the panel about the open message's sender beside the
+	// reader in the new design.
+	SenderPanel bool `json:"senderPanel"`
 	// ThemeID selects an installed custom theme (see bind_themes.go). Empty
 	// means the built-in default themes driven by the Theme setting.
 	ThemeID string `json:"themeId"`
@@ -582,6 +593,7 @@ func (a *App) GetUIPrefs() (UIPrefsDTO, error) {
 		LayoutMode:                 a.stringSetting(settingLayoutMode, "columns"),
 		NavStyle:                   a.stringSetting(settingNavStyle, "rail"),
 		RailSide:                   a.stringSetting(settingRailSide, "left"),
+		RailPins:                   a.stringSetting(settingRailPins, ""),
 		PaneStyle:                  a.stringSetting(settingPaneStyle, "hybrid"),
 		AvatarPlacement:            a.stringSetting(settingAvatarPlacement, "inline"),
 		ContactsView:               a.stringSetting(settingContactsView, "panes"),
@@ -591,6 +603,7 @@ func (a *App) GetUIPrefs() (UIPrefsDTO, error) {
 		ComposeOpenIn:              a.stringSetting(settingComposeOpenIn, "window"),
 		ThreadedList:               a.boolSetting(settingThreadedList, true),
 		ReaderWidth:                a.stringSetting(settingReaderWidth, "full"),
+		SenderPanel:                a.boolSetting(settingSenderPanel, false),
 		ThemeID:                    a.stringSetting(settingThemeID, ""),
 		MenuBarInApp:               a.boolSetting(settingMenuBarInApp, false),
 		MenuBarNativeMinimal:       a.boolSetting(settingMenuBarNativeMinimal, false),
@@ -602,7 +615,7 @@ func (a *App) GetUIPrefs() (UIPrefsDTO, error) {
 		UnreadBadge:                a.boolSetting(settingUnreadBadge, true),
 		ThemeDarkStart:             a.stringSetting(settingThemeDarkStart, "19:00"),
 		ThemeDarkEnd:               a.stringSetting(settingThemeDarkEnd, "07:00"),
-		BodyFont:                   a.stringSetting(settingBodyFont, "default"),
+		BodyFont:                   a.stringSetting(settingBodyFont, "system"),
 		UIFont:                     a.stringSetting(settingUIFont, "default"),
 		MonoFont:                   a.stringSetting(settingMonoFont, "default"),
 		SenderFonts:                a.senderFonts(),

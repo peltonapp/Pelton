@@ -3,6 +3,7 @@
   // action toolbar, sanitized body and attachments, and performs the toolbar
   // actions. empty, loading and error states are explicit.
   import peltonLogo from '../../assets/images/icons/pelton-logo.png'
+  import { seasonalImage } from '../../lib/seasonalmarkimages'
   import DetailHeader from './DetailHeader.svelte'
   import ActionToolbar from './ActionToolbar.svelte'
   import MailBody from './MailBody.svelte'
@@ -34,7 +35,8 @@
   import { recordArchived } from '../../stores/undoarchive'
   import { openReply, openForward } from '../../stores/compose'
   import { errorMessage, toastError } from '../../stores/toast'
-  import { prefs } from '../../stores/prefs'
+  import { prefs, setSenderPanel } from '../../stores/prefs'
+  import SenderPanel from './SenderPanel.svelte'
   import { t } from '../../lib/i18n'
   import { get } from 'svelte/store'
   import { tick } from 'svelte'
@@ -63,10 +65,17 @@
 
   // the message whose info or source is shown, null while closed. In the
   // conversation reader it can be any card's.
+  const season = seasonalImage()
   let infoFor: MessageDetail | null = null
   let sourceFor: number | null = null
 
   $: newDesign = $prefs.design !== 'classic'
+
+  // the sender panel only shows while the reader keeps room for a readable
+  // column beside it, in css pixels; a narrow window leaves it out entirely.
+  const panelMinReader = 720
+  let rowWidth = 0
+  $: panelFits = rowWidth === 0 || rowWidth >= panelMinReader
 
   // onReaderAction runs what a conversation card or the action bar asked for,
   // on the message it was asked for.
@@ -349,7 +358,11 @@ ${bodyHtml}
       ></div>
     {:else}
       <div class="placeholder">
-        <img class="placeholder-logo" src={$prefs.emptyStateImage || peltonLogo} alt="Pelton" draggable="false" />
+        {#if !$prefs.emptyStateImage && season}
+          <img class="placeholder-logo seasonal" class:tile={season.tile} src={season.src} alt="Pelton" draggable="false" />
+        {:else}
+          <img class="placeholder-logo" src={$prefs.emptyStateImage || peltonLogo} alt="Pelton" draggable="false" />
+        {/if}
       </div>
     {/if}
   {:else if activeTabStale}
@@ -364,11 +377,18 @@ ${bodyHtml}
   {:else if $messageDetail.status === 'error'}
     <ErrorState message={$messageDetail.error} onRetry={() => $visibleMessageId && loadMessage($visibleMessageId)} />
   {:else if $messageDetail.data && newDesign}
-    <Conversation
-      detail={$messageDetail.data}
-      on:action={(e) => onReaderAction(e.detail.kind, e.detail.message)}
-      on:more={(e) => openReaderMenu(e.detail.message, e.detail.x, e.detail.y)}
-    />
+    <div class="reader-row" bind:clientWidth={rowWidth}>
+      <Conversation
+        detail={$messageDetail.data}
+        senderPanel={$prefs.senderPanel}
+        on:action={(e) => onReaderAction(e.detail.kind, e.detail.message)}
+        on:more={(e) => openReaderMenu(e.detail.message, e.detail.x, e.detail.y)}
+        on:toggleSender={() => setSenderPanel(!$prefs.senderPanel)}
+      />
+      {#if $prefs.senderPanel && panelFits}
+        <SenderPanel detail={$messageDetail.data} on:close={() => setSenderPanel(false)} />
+      {/if}
+    </div>
   {:else if $messageDetail.data}
     {@const detail = $messageDetail.data}
     <div class="toolbar-bar">
@@ -478,11 +498,30 @@ ${bodyHtml}
     -webkit-user-select: none;
   }
 
+  .placeholder-logo.seasonal {
+    width: auto;
+    height: 148px;
+    opacity: 0.9;
+    filter: none;
+  }
+
+  .placeholder-logo.seasonal.tile {
+    border-radius: var(--radius-card);
+    background: #000;
+  }
+
   /* full-bleed variant: the chosen image covers the whole empty pane. */
   .placeholder-full {
     background-size: cover;
     background-position: center;
     background-repeat: no-repeat;
+  }
+
+  .reader-row {
+    flex: 1;
+    display: flex;
+    min-height: 0;
+    min-width: 0;
   }
 
   .toolbar-bar {
