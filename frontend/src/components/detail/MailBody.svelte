@@ -32,7 +32,7 @@
   import dotsIcon from '@phosphor-icons/core/assets/duotone/dots-three-duotone.svg?raw'
   import calendarIcon from '@phosphor-icons/core/assets/duotone/calendar-blank-duotone.svg?raw'
   import { splitHtmlQuote, splitPlainQuote } from '../../lib/quotes'
-  import DatePeek from './DatePeek.svelte'
+  import { loadDatePeek } from '../../lib/lazyload'
   import { scanDates } from '../../lib/datescan'
   import { collectText, dateAttr, markRanges, unmarkDates, dateClass } from '../../lib/datemarks'
   import { formatWhen } from '../../lib/calformat'
@@ -1271,15 +1271,18 @@
 {/if}
 
 {#if peek && peekMention}
-  <DatePeek
-    slot={{ start: peekMention.start, end: peekMention.end, allDay: peekMention.allDay }}
-    anchor={peek.anchor}
-    pinned={peek.pinned}
-    messageId={detail.id}
-    on:hold={holdPeek}
-    on:release={releasePeek}
-    on:close={(e) => closePeek(e.detail)}
-  />
+  {#await loadDatePeek() then m}
+    <svelte:component
+      this={m.default}
+      slot={{ start: peekMention.start, end: peekMention.end, allDay: peekMention.allDay }}
+      anchor={peek.anchor}
+      pinned={peek.pinned}
+      messageId={detail.id}
+      on:hold={holdPeek}
+      on:release={releasePeek}
+      on:close={(e) => closePeek(e.detail)}
+    />
+  {/await}
 {/if}
 
 {#if hoverUrl}

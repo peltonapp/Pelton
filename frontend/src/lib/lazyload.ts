@@ -22,6 +22,9 @@ export const loadEncryptionIndicator = () => import('../components/detail/Encryp
 /** loadInviteCard loads the reader's card for a calendar invitation. */
 export const loadInviteCard = () => import('../components/detail/InviteCard.svelte')
 
+/** loadDatePeek loads the preview a date in a mail opens. */
+export const loadDatePeek = () => import('../components/detail/DatePeek.svelte')
+
 /** warmUp runs each loader once the window is idle, ignoring failures. */
 export function warmUp(loaders: (() => Promise<unknown>)[]): void {
   const load = () => {

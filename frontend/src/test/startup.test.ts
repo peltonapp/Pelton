@@ -114,6 +114,7 @@ const lazyModules = [
   'components/detail/PromiseStrip.svelte',
   'components/detail/EncryptionIndicator.svelte',
   'components/detail/InviteCard.svelte',
+  'components/detail/DatePeek.svelte',
 ]
 
 const lazyPackages = ['@codemirror/', 'codemirror', '@replit/codemirror-vim', '@tiptap/', 'pdfjs-dist', 'tabler-nodes-outline', '@tabler/icons/']

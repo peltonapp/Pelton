@@ -50,7 +50,7 @@
   import { initProgress } from './stores/progress'
   import { composeSessions, openCompose, openComposeWith, initComposePrefs, openReply, openForward, requestComposeClose, setForcedComposeMode, updateCompose } from './stores/compose'
   import { routeComposeSessions } from './stores/composeroute'
-  import { loadAttachmentsBrowser, loadClassicCompose, loadComposer, loadMenuBarEditor, loadEncryptionIndicator, loadInviteCard, loadPromiseStrip, warmUp } from './lib/lazyload'
+  import { loadAttachmentsBrowser, loadClassicCompose, loadComposer, loadMenuBarEditor, loadDatePeek, loadEncryptionIndicator, loadInviteCard, loadPromiseStrip, warmUp } from './lib/lazyload'
   import ComposeTabLayer from './components/compose/ComposeTabLayer.svelte'
   import { openSnooze, openSnoozeMany } from './stores/snooze'
   import { patchInList } from './stores/messages'
@@ -684,6 +684,7 @@
       ...(get(prefs).design === 'classic' ? [] : [loadAttachmentsBrowser]),
       ...(showMenuBar ? [loadMenuBarEditor] : []),
       loadEncryptionIndicator,
+      loadDatePeek,
       ...(get(prefs).design === 'classic' ? [] : [loadInviteCard]),
       ...(get(prefs).design === 'classic' ? [] : [loadPromiseStrip]),
     ])
