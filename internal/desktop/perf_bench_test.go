@@ -590,7 +590,7 @@ func BenchmarkListingIndexMigration(b *testing.B) {
 	b.ResetTimer()
 	for b.Loop() {
 		b.StopTimer()
-		for _, name := range []string{"idx_messages_listing", "idx_messages_copies", "idx_feed_entries_unread_list"} {
+		for _, name := range []string{"idx_messages_listing", "idx_messages_copies"} {
 			if _, err := h.ExecContext(app.ctx, `DROP INDEX IF EXISTS `+name); err != nil {
 				b.Fatal(err)
 			}
