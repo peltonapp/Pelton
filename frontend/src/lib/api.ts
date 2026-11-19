@@ -3929,6 +3929,16 @@ export function setScriptLogDays(days: number): Promise<void> {
   return App.SetScriptLogDays(days)
 }
 
+/** How long a question of a script nobody started, and a before-send recipient confirmation, wait, in seconds. */
+export function scriptAskSeconds(): Promise<number> {
+  return App.ScriptAskSeconds()
+}
+
+/** Sets how long such a question waits, 10 seconds to an hour. */
+export function setScriptAskSeconds(seconds: number): Promise<void> {
+  return App.SetScriptAskSeconds(seconds)
+}
+
 /** Reverses the mail changes of a run. */
 export function undoScriptRun(runId: number): Promise<void> {
   return App.UndoScriptRun(runId)

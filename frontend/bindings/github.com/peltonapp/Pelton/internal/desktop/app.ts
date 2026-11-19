@@ -3744,6 +3744,14 @@ export function ScanURL(rawURL: string): $CancellablePromise<$models.VerdictDTO>
 }
 
 /**
+ * ScriptAskSeconds returns how long a question of a script nobody started,
+ * and the before-send recipient confirmation, wait for an answer.
+ */
+export function ScriptAskSeconds(): $CancellablePromise<number> {
+    return $Call.ByID(305353439);
+}
+
+/**
  * ScriptFolder returns the folder a script may read and write files in, ""
  * when it has none.
  */
@@ -4223,6 +4231,14 @@ export function SetScriptAllowUnasked(id: number, $function: string, allow: bool
     return $Call.ByID(461960167, id, $function, allow).then(($result: any) => {
         return $$createType5($result);
     });
+}
+
+/**
+ * SetScriptAskSeconds sets how long such a question waits, within
+ * scripting.MinAskTimeout and scripting.MaxAskTimeout.
+ */
+export function SetScriptAskSeconds(seconds: number): $CancellablePromise<void> {
+    return $Call.ByID(1083915591, seconds);
 }
 
 /**

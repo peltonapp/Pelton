@@ -95,14 +95,47 @@ func TestAskCancelEndsTheRunCleanly(t *testing.T) {
 }
 
 func TestUnattendedAskTimesOut(t *testing.T) {
-	e := askEngine(t, &fakeAsker{wait: time.Hour})
-	run := runAttended(e, `local v = ui.ask("text", "Name?", { default = "anon", timeout = 0.05 }) log.info(v)`, false)
+	e := askEngine(t, &fakeAsker{err: context.DeadlineExceeded})
+	run := runAttended(e, `local v = ui.ask("text", "Name?", { default = "anon" }) log.info(v)`, false)
 	if run.Status != StatusOK || run.Steps[len(run.Steps)-1].Summary != "anon" {
 		t.Fatalf("%s %q %+v", run.Status, run.Error, run.Steps)
 	}
-	run = runAttended(e, `ui.ask("text", "Name?", { timeout = 0.05 }) log.info("never")`, false)
+	run = runAttended(e, `ui.ask("text", "Name?") log.info("never")`, false)
 	if run.Status != StatusStopped {
 		t.Fatalf("no default: %s %q", run.Status, run.Error)
+	}
+}
+
+func TestAskTimeoutComesFromTheSettingWithinBounds(t *testing.T) {
+	asker := &fakeAsker{answer: AskAnswer{Value: "x"}}
+	e := askEngine(t, asker)
+	setting := 5 * time.Minute
+	e.AskTimeout = func() time.Duration { return setting }
+	cases := []struct {
+		src  string
+		want time.Duration
+	}{
+		{`ui.text("Name?")`, 5 * time.Minute},
+		{`ui.text("Name?", { timeout = 30 })`, 30 * time.Second},
+		{`ui.text("Name?", { timeout = 1 })`, MinAskTimeout},
+		{`ui.text("Name?", { timeout = 1e12 })`, MaxAskTimeout},
+	}
+	for _, tc := range cases {
+		asker.asked = nil
+		if run := runAttended(e, tc.src, false); run.Status != StatusOK || len(asker.asked) != 1 || asker.asked[0].Timeout != tc.want {
+			t.Fatalf("%s: %s %q %+v", tc.src, run.Status, run.Error, asker.asked)
+		}
+	}
+	for setting, want := range map[time.Duration]time.Duration{time.Second: MinAskTimeout, 48 * time.Hour: MaxAskTimeout} {
+		e.AskTimeout = func() time.Duration { return setting }
+		asker.asked = nil
+		if run := runAttended(e, `ui.text("Name?")`, false); run.Status != StatusOK || asker.asked[0].Timeout != want {
+			t.Fatalf("setting %s: %s %+v", setting, run.Status, asker.asked)
+		}
+	}
+	asker.asked = nil
+	if runAttended(e, `ui.text("Name?", { timeout = 30 })`, true); asker.asked[0].Timeout != 0 {
+		t.Fatalf("a question of a run the user started timed out: %+v", asker.asked)
 	}
 }
 

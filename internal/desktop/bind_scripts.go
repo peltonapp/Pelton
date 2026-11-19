@@ -560,6 +560,25 @@ func (a *App) SetScriptLogDays(days int) error {
 	return a.store.Set(a.ctx, settingScriptLogDays, strconv.Itoa(days))
 }
 
+// ScriptAskSeconds returns how long a question of a script nobody started,
+// and the before-send recipient confirmation, wait for an answer.
+func (a *App) ScriptAskSeconds() int {
+	return int(a.scriptAskTimeout() / time.Second)
+}
+
+// SetScriptAskSeconds sets how long such a question waits, within
+// scripting.MinAskTimeout and scripting.MaxAskTimeout.
+func (a *App) SetScriptAskSeconds(seconds int) error {
+	if err := a.ready(); err != nil {
+		return err
+	}
+	d := time.Duration(seconds) * time.Second
+	if d < scripting.MinAskTimeout || d > scripting.MaxAskTimeout {
+		return fmt.Errorf("pelton: a question waits %d seconds to %d minutes", int(scripting.MinAskTimeout/time.Second), int(scripting.MaxAskTimeout/time.Minute))
+	}
+	return a.store.Set(a.ctx, settingScriptAskSeconds, strconv.Itoa(seconds))
+}
+
 // UndoScriptRun reverses the mail changes a run made, newest first. Sends
 // are never undone. A run can be undone once.
 func (a *App) UndoScriptRun(runID int64) error {
