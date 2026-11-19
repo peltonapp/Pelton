@@ -42,6 +42,7 @@
     calendarImport,
     calendarSync,
     calendarSyncError,
+    defaultCalendarId,
     eventConflict,
     loadCalendars,
     loadCalendarSettings,
@@ -81,6 +82,11 @@
   import { popupIsOpen } from '../../lib/popups'
   import { tip } from '../../lib/tip'
   import { registerSpaceActions } from '../../stores/space'
+  import { tasks, taskLists, taskSettings, moveTaskDue, toggleDone } from '../../stores/tasks'
+  import { taskOccurrences } from './taskocc'
+  import { moveDue } from '../../lib/tasklogic'
+  import { openTask } from '../../lib/taskmail'
+  import { convertEventToTask } from '../../lib/taskevent'
   import { openContextMenu } from '../../stores/contextmenu'
   import { bindings, menuHint } from '../../stores/shortcuts'
   import { prefs } from '../../stores/prefs'
@@ -115,10 +121,11 @@
   $: range = viewRange(view, focus, weekStart)
   $: rangeKey = `${toRFC3339(range.from)}|${toRFC3339(range.to)}`
   $: loadRange(rangeKey)
-  $: placed = $occurrences.map(placeOccurrence)
+  $: taskEntries = $taskSettings.showInCalendar ? taskOccurrences($tasks, $taskLists, range.from, range.to) : []
+  $: placed = [...$occurrences, ...taskEntries].map(placeOccurrence)
   $: colors = new Map($calendars.map((c) => [c.id, calendarColor(c)]))
   $: writable = $calendars.filter((c) => !c.readOnly)
-  $: defaultCalendar = (writable.find((c) => c.id === $calendarSettings.defaultCalendarId) ?? writable.find((c) => c.default) ?? writable[0])?.id ?? 0
+  $: defaultCalendar = defaultCalendarId($calendars, $calendarSettings)
   $: busyDays = daysWithEvents(placed)
   $: title = formatViewTitle(view, range.from, range.to, focus)
   $: rtl = typeof document !== 'undefined' && document.documentElement.dir === 'rtl'
@@ -330,7 +337,31 @@
   function openOccurrence(occ: Occurrence, anchor: HTMLElement): void {
     quick = null
     quickPending = null
+    if (occ.task) {
+      openTask(occ.task.id)
+      return
+    }
     selected = { occ, anchor }
+  }
+
+  // a task's checkbox in a view.
+  function toggleTask(occ: Occurrence): void {
+    if (occ.task && !occ.task.readOnly) {
+      void toggleDone(occ.task)
+    }
+  }
+
+  // a task dragged to another day of the month keeps its time of day.
+  function moveTaskToDay(occ: Occurrence, day: Date): void {
+    if (occ.task && !occ.task.readOnly && dayKey(day) !== dayKey(placeOccurrence(occ).start)) {
+      void moveTaskDue(occ.task, moveDue(occ.task.due, day))
+    }
+  }
+
+  // an event in the popover turned into a task.
+  async function eventToTask(occ: Occurrence): Promise<void> {
+    selected = null
+    await convertEventToTask(occ.eventId)
   }
 
   function canCreate(): boolean {
@@ -614,6 +645,12 @@
   // a drag in the time grid: the occurrence moves at once, then the change is
   // saved, asking first which occurrences it is for when the event repeats.
   function onChange(occ: Occurrence, start: Date, end: Date): void {
+    if (occ.task) {
+      if (!occ.task.readOnly) {
+        void moveTaskDue(occ.task, occ.allDay ? dayKey(start) : start.toISOString())
+      }
+      return
+    }
     const apply = async (scope: EventScope | ''): Promise<void> => {
       const key = occurrenceKey(occ)
       const before = $occurrences
@@ -671,7 +708,8 @@
       return { start: startOfDay(seed.at), end: addDays(startOfDay(seed.at), 1), allDay: true }
     }
     const start = seed.at && seed.mode === 'time' ? seed.at : defaultSlot(seed.at ?? focus, new Date())
-    return { start, end: new Date(start.getTime() + 3600000), allDay: false }
+    const end = seed.mode === 'time' && seed.end && seed.end > start ? seed.end : new Date(start.getTime() + 3600000)
+    return { start, end, allDay: false }
   }
 
   async function foundIn(mail: MailEventSource): Promise<FoundDate[]> {
@@ -899,6 +937,8 @@
               on:create={(e) => startMonthCreate(e.detail.day, e.detail.anchor)}
               on:mailDrop={(e) => onMailDrop(e.detail)}
               on:menu={(e) => onCellMenu(e.detail)}
+              on:toggleTask={(e) => toggleTask(e.detail)}
+              on:moveTask={(e) => moveTaskToDay(e.detail.occ, e.detail.day)}
             />
           {:else if view === 'agenda'}
             <AgendaView
@@ -912,6 +952,7 @@
               on:open={(e) => openOccurrence(e.detail.occ, e.detail.anchor)}
               on:day={(e) => openDay(e.detail)}
               on:menu={(e) => onCellMenu(e.detail)}
+              on:toggleTask={(e) => toggleTask(e.detail)}
             />
           {:else}
             <TimeGrid
@@ -933,6 +974,7 @@
               on:day={(e) => openDay(e.detail)}
               on:mailDrop={(e) => onMailDrop(e.detail)}
               on:menu={(e) => onCellMenu(e.detail)}
+              on:toggleTask={(e) => toggleTask(e.detail)}
             />
           {/if}
         </div>
@@ -954,6 +996,7 @@
       on:close={() => (selected = null)}
       on:edit={(e) => editEvent(e.detail)}
       on:remove={(e) => removeFromPopover(e.detail.occ, e.detail.scope)}
+      on:toTask={(e) => void eventToTask(e.detail)}
     />
   {/key}
 {/if}

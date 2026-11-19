@@ -64,6 +64,167 @@ func (a *App) MoveMessage(id, destFolderID int64) (ArchiveUndoDTO, error) {
 	return a.moveMessageTo(m, *dest, nil)
 }
 
+// BulkArchiveDTO reports ArchiveMessages: the undo record of every message
+// that moved, and how many did not and why the first of those failed.
+type BulkArchiveDTO struct {
+	Undo       []ArchiveUndoDTO `json:"undo"`
+	Done       []int64          `json:"done"`
+	Failed     int              `json:"failed"`
+	FirstError string           `json:"firstError"`
+}
+
+func (r *BulkArchiveDTO) fail(n int, err error) {
+	if n == 0 {
+		return
+	}
+	if r.Failed == 0 {
+		r.FirstError = err.Error()
+	}
+	r.Failed += n
+}
+
+// ArchiveMessages archives many messages the way ArchiveMessage archives one,
+// including the export-on-archive copy, but with one server session per
+// account and one MOVE per source folder rather than a login per message. A
+// message that is already in its archive, or whose account has none, fails on
+// its own without stopping the rest.
+func (a *App) ArchiveMessages(ids []int64) (BulkArchiveDTO, error) {
+	res := BulkArchiveDTO{Undo: []ArchiveUndoDTO{}, Done: []int64{}}
+	if err := a.ready(); err != nil {
+		return res, err
+	}
+	byAccount := map[int64]map[int64][]*storage.Message{}
+	var accounts []int64
+	for _, id := range ids {
+		m, err := a.store.GetMessage(a.ctx, id)
+		if err != nil {
+			res.fail(1, err)
+			continue
+		}
+		if byAccount[m.AccountID] == nil {
+			byAccount[m.AccountID] = map[int64][]*storage.Message{}
+			accounts = append(accounts, m.AccountID)
+		}
+		byAccount[m.AccountID][m.FolderID] = append(byAccount[m.AccountID][m.FolderID], m)
+	}
+	for _, accountID := range accounts {
+		a.archiveBatch(accountID, byAccount[accountID], &res)
+	}
+	return res, nil
+}
+
+// archiveBatch moves one account's messages, grouped by source folder, to its
+// archive over a single session.
+func (a *App) archiveBatch(accountID int64, bySource map[int64][]*storage.Message, res *BulkArchiveDTO) {
+	total := 0
+	for _, msgs := range bySource {
+		total += len(msgs)
+	}
+	dest, err := a.findArchiveFolder(accountID)
+	if err != nil {
+		res.fail(total, err)
+		return
+	}
+	account, err := a.store.GetAccount(a.ctx, accountID)
+	if err != nil {
+		res.fail(total, err)
+		return
+	}
+	cfg, err := a.resolveIMAP(*account)
+	if err != nil {
+		res.fail(total, err)
+		return
+	}
+
+	syncMu.Lock()
+	defer syncMu.Unlock()
+
+	client, err := a.connectIMAP(cfg)
+	if err != nil {
+		res.fail(total, err)
+		return
+	}
+	defer client.Close()
+	if err := client.Login(); err != nil {
+		res.fail(total, err)
+		return
+	}
+	defer client.Logout()
+
+	moved := 0
+	for sourceID, msgs := range bySource {
+		moved += a.archiveFromFolder(client, *account, sourceID, dest, msgs, res)
+	}
+	if moved > 0 {
+		a.emit(EventMailNew, MailNewEvent{AccountID: accountID, FolderID: dest.ID, Count: moved})
+	}
+}
+
+// archiveFromFolder moves msgs, which all sit in sourceID, to dest in one
+// command and drops their rows. It returns how many moved.
+func (a *App) archiveFromFolder(client mailClient, account storage.Account, sourceID int64, dest storage.Folder, msgs []*storage.Message, res *BulkArchiveDTO) int {
+	source, err := a.store.GetFolder(a.ctx, sourceID)
+	if err != nil {
+		res.fail(len(msgs), err)
+		return 0
+	}
+	if source.ID == dest.ID {
+		res.fail(len(msgs), fmt.Errorf("pelton: this message is already in %s", dest.Name))
+		return 0
+	}
+	if _, err := client.Select(source.IMAPPath); err != nil {
+		res.fail(len(msgs), fmt.Errorf("move: select %q: %w", source.IMAPPath, err))
+		return 0
+	}
+
+	export := exportWanted(account, dest)
+	raws := make([][]byte, len(msgs))
+	exportErrs := make([]string, len(msgs))
+	uids := make([]imap.UID, len(msgs))
+	for i, m := range msgs {
+		uids[i] = imap.UID(m.UID)
+		if !export {
+			continue
+		}
+		if raws[i], err = client.FetchRawMessage(imap.UID(m.UID)); err != nil {
+			raws[i] = nil
+			exportErrs[i] = err.Error()
+			a.log.Error("archive export: fetch source", "id", m.ID, "err", err)
+		}
+	}
+
+	if err := client.MoveMessages(uids, dest.IMAPPath); err != nil {
+		res.fail(len(msgs), err)
+		return 0
+	}
+
+	for i, m := range msgs {
+		if err := a.store.DeleteMessage(a.ctx, m.ID); err != nil {
+			res.fail(1, err)
+			continue
+		}
+		if err := a.store.DeleteAttachmentFilesForMessage(m.AccountID, m.ID); err != nil {
+			a.log.Error("move: remove attachment files", "id", m.ID, "err", err)
+		}
+		var path string
+		if len(raws[i]) > 0 {
+			if path, err = exportOptions(account).Write(exportMeta(m), raws[i]); err != nil {
+				exportErrs[i] = err.Error()
+				a.log.Error("archive export: write file", "id", m.ID, "err", err)
+			}
+		}
+		res.Done = append(res.Done, m.ID)
+		res.Undo = append(res.Undo, ArchiveUndoDTO{
+			MessageID:        m.MessageID,
+			OriginalFolderID: source.ID,
+			DestFolderID:     dest.ID,
+			ExportPath:       path,
+			ExportError:      exportErrs[i],
+		})
+	}
+	return len(msgs)
+}
+
 // keywordChange is a keyword pair set on a message just before it moves, so the
 // server's filter sees the user's verdict (RFC 5788 $Junk / $NotJunk).
 type keywordChange struct {

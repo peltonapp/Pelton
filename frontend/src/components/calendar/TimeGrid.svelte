@@ -13,6 +13,7 @@
   import warningIcon from '@phosphor-icons/core/assets/duotone/warning-duotone.svg?raw'
   import repeatIcon from '@phosphor-icons/core/assets/duotone/repeat-duotone.svg?raw'
   import Ph from '../common/Ph.svelte'
+  import TaskTick from '../tasks/TaskTick.svelte'
   import { maildrop, mailDrag, type MailDropOptions } from '../../stores/maildrag'
   import { mailDropHint } from './maildrop'
   import {
@@ -63,6 +64,7 @@
     day: Date
     mailDrop: MailDropAt
     menu: CellMenuAt
+    toggleTask: Occurrence
   }>()
 
   const step = 15
@@ -522,11 +524,21 @@
               class:selected={selectedKey === occurrenceKey(occ)}
               class:dragging={draggingKey === occurrenceKey(occ)}
               class:cancelled={occ.status === 'CANCELLED'}
+              class:task={occ.task}
+              class:done={occ.task?.done}
               style={`grid-column:${s.col + 1} / span ${s.span};grid-row:${s.lane + 1};--ev:${colorOf(occ)}`}
               on:pointerdown={(e) => onBarDown(e, s.placed)}
               on:click={(e) => e.detail === 0 && dispatch('open', { occ, anchor: e.currentTarget })}
             >
-              <span class="title">{occ.summary || $t('calendar.untitled')}</span>
+              {#if occ.task}
+                <TaskTick
+                  checked={occ.task.done}
+                  label={$t(occ.task.done ? 'tasks.inCalendarOpen' : 'tasks.inCalendarDone').replace('{title}', occ.summary || $t('tasks.untitled'))}
+                  disabled={occ.task.readOnly}
+                  on:toggle={() => dispatch('toggleTask', occ)}
+                />
+              {/if}
+              <span class="title">{occ.summary || $t(occ.task ? 'tasks.untitled' : 'calendar.untitled')}</span>
             </button>
           {/each}
           {#if laneGhost}
@@ -591,11 +603,21 @@
                 class:cancelled={occ.status === 'CANCELLED'}
                 class:free={occ.transparency === 'TRANSPARENT'}
                 class:readonly={occ.readOnly}
+                class:task={occ.task}
+                class:done={occ.task?.done}
                 style={`top:${pct(b.top)};height:${pct(b.bottom - b.top)};--col:${b.col};--cols:${b.cols};--ev:${colorOf(occ)}`}
                 on:pointerdown={(e) => onEventDown(e, b.placed)}
                 on:click={(e) => e.detail === 0 && dispatch('open', { occ, anchor: e.currentTarget })}
               >
                 <span class="title">
+                  {#if occ.task}
+                    <TaskTick
+                      checked={occ.task.done}
+                      label={$t(occ.task.done ? 'tasks.inCalendarOpen' : 'tasks.inCalendarDone').replace('{title}', occ.summary || $t('tasks.untitled'))}
+                      disabled={occ.task.readOnly}
+                      on:toggle={() => dispatch('toggleTask', occ)}
+                    />
+                  {/if}
                   {#if occ.conflict}<Ph svg={warningIcon} size={11} />{/if}
                   {occ.summary || $t('calendar.untitled')}
                 </span>
@@ -610,7 +632,7 @@
                     <span class="where">{occ.location}</span>
                   {/if}
                 {/if}
-                {#if !occ.readOnly}
+                {#if !occ.readOnly && !occ.task}
                   <!-- svelte-ignore a11y-no-static-element-interactions -->
                   <span class="grip" on:pointerdown={(e) => onResizeDown(e, b.placed)}></span>
                 {/if}
@@ -966,6 +988,34 @@
   .ev.free {
     background: var(--surface-raised);
     box-shadow: inset 0 0 0 var(--hairline) color-mix(in srgb, var(--ev) 60%, transparent);
+  }
+
+  /* a task: an outline instead of a fill and its checkbox in front, quieter
+     than the events around it. */
+  .bar.task,
+  .ev.task {
+    gap: var(--space-2);
+    border-inline-start: none;
+    background: var(--surface-raised);
+    box-shadow: inset 0 0 0 var(--hairline) var(--border-default);
+    color: var(--text-secondary);
+  }
+
+  .bar.task:hover,
+  .ev.task:hover {
+    background: var(--surface-hover);
+  }
+
+  .bar.task .title,
+  .ev.task .title {
+    gap: var(--space-2);
+    font-weight: var(--fw-regular);
+  }
+
+  .bar.task.done .title,
+  .ev.task.done .title {
+    color: var(--text-tertiary);
+    text-decoration: line-through;
   }
 
   .ev.cancelled .title,

@@ -10,6 +10,9 @@ const entries: SettingsIndexEntry[] = [
     labelKey: isMac ? 'settingsPanel.toggle.dockBadge' : 'settingsPanel.toggle.trayBadge',
     keywords: isMac ? 'dock badge unread count icon' : 'tray badge dot unread count icon',
   },
+  { page: 'notifications', id: 'focus-schedule', labelKey: 'focus.schedule.label', keywords: 'focus quiet do not disturb schedule hold notifications' },
+  { page: 'notifications', id: 'focus-days', labelKey: 'focus.schedule.days', keywords: 'focus schedule weekdays' },
+  { page: 'notifications', id: 'focus-hours', labelKey: 'focus.schedule.hours', keywords: 'focus schedule hours time' },
   { page: 'notifications', id: 'vip-senders', labelKey: 'vip.manageLabel', keywords: 'vip senders important star notify always' },
 ]
 

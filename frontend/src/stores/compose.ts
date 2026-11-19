@@ -6,6 +6,7 @@
 import { writable, get } from 'svelte/store'
 import type { Address, ComposeRequest, Draft, EditorMode, MessageDetail, ComposeAttachment } from '../lib/types'
 import { getSetting, setSetting } from '../lib/api'
+import { noteAction } from '../lib/coach'
 import { formatAddress, formatAddressList, parseAddressList, renderBody } from '../lib/mailcompose'
 import { formatFullDate } from '../lib/format'
 import { escapeHtml, textToHtml } from '../lib/richtext'
@@ -86,6 +87,9 @@ export interface ComposeSession {
   // placement is where the new design shows this session in the main window,
   // unset until it has been placed.
   placement?: ComposePlacement
+  // followUpAt is when to be reminded if nobody has replied, as an ISO time,
+  // unset for no reminder.
+  followUpAt?: string
 }
 
 /** The three reply types a reply can be switched between. */
@@ -173,6 +177,7 @@ function blankSession(accountId: number, mode: EditorMode): ComposeSession {
 
 // openCompose starts a new empty compose session and returns its id.
 export function openCompose(accountId: number, mode: EditorMode): number {
+  noteAction('compose')
   const session = blankSession(accountId, mode)
   composeSessions.update((list) => [...list, session])
   return session.id
@@ -279,6 +284,7 @@ export function replySession(detail: MessageDetail, mode: EditorMode, kind: Repl
  * typed (plain text) already written above the original, and returns its id.
  */
 export function openReplyWith(detail: MessageDetail, mode: EditorMode, kind: ReplyKind, typed: string): number {
+  noteAction(kind === 'replyAll' ? 'reply-all' : kind === 'forward' ? 'forward' : 'reply')
   const session = replySession(detail, mode, kind, typed)
   composeSessions.update((list) => [...list, session])
   return session.id
@@ -430,6 +436,7 @@ function requestSession(accountId: number, req: ComposeRequest): ComposeSession 
     protection: req.protection,
     draftMessageId: req.draftMessageId ?? '',
     signaturesApplied: true,
+    followUpAt: req.followUpAt || undefined,
   })
   return session
 }
@@ -490,6 +497,10 @@ export const closeRequest = writable<number | null>(null)
 export function requestComposeClose(id: number): void {
   closeRequest.set(id)
 }
+
+// availabilityRequest names a session whose composer should open its share
+// availability panel, set from the command palette.
+export const availabilityRequest = writable<number | null>(null)
 
 // getSession reads the current state of one session.
 export function getSession(id: number): ComposeSession | undefined {

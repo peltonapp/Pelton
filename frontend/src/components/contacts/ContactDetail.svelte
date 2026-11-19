@@ -19,6 +19,7 @@
   import { recentMailWith } from '../../lib/contactmail'
   import { formatListDate, formatRelative, type TimeFormat } from '../../lib/format'
   import { dur, motion } from '../../lib/motion'
+  import ContactTasks from '../tasks/ContactTasks.svelte'
   import { t } from '../../lib/i18n'
   import type { Contact, MessageSummary } from '../../lib/types'
 
@@ -151,6 +152,10 @@
           <h3><Ph svg={noteIcon} size={14} />{$t('contacts.field.note')}</h3>
           <p class="note">{contact.note}</p>
         </section>
+      {/if}
+
+      {#if contact.emails.length > 0}
+        <ContactTasks name={contact.fullName} emails={contact.emails.map((e) => e.value)} />
       {/if}
 
       {#if firstEmail}

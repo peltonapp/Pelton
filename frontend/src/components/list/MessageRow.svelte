@@ -34,6 +34,11 @@
   import repliedIcon from '@phosphor-icons/core/assets/duotone/arrow-bend-up-left-duotone.svg?raw'
   import forwardedIcon from '@phosphor-icons/core/assets/duotone/arrow-bend-up-right-duotone.svg?raw'
   import sentIcon from '@phosphor-icons/core/assets/duotone/paper-plane-tilt-duotone.svg?raw'
+  import taskIcon from '@phosphor-icons/core/assets/duotone/check-square-duotone.svg?raw'
+  import noteIcon from '@phosphor-icons/core/assets/duotone/note-duotone.svg?raw'
+  import mutedIcon from '@phosphor-icons/core/assets/duotone/bell-slash-duotone.svg?raw'
+  import pinIcon from '@phosphor-icons/core/assets/duotone/push-pin-duotone.svg?raw'
+  import { taskMailMarks } from '../../stores/tasks'
   import { highlightTerms } from '../../stores/search'
 
   export let message: MessageSummary
@@ -65,6 +70,10 @@
   $: threadUnread = (thread?.unreadCount ?? 0) > 0 && message.seen
   $: answered = newDesign && (thread ? thread.answered : message.answered)
   $: forwarded = newDesign && (thread ? thread.forwarded : message.forwarded)
+  // whether a task links to this mail: undefined for none, true once every
+  // such task is done.
+  $: taskMark = newDesign ? $taskMailMarks.get(message.id) : undefined
+  $: pinned = newDesign && !child && (!!message.pinned || !!thread?.pinned)
 
   // a reply under its conversation repeats the subject above it, so it shows
   // what it says instead.
@@ -333,6 +342,20 @@
           {/if}
           {#if forwarded}
             <span class="marker" title={$t('thread.forwarded')} aria-label={$t('thread.forwarded')}><Ph svg={forwardedIcon} size={12} /></span>
+          {/if}
+          {#if taskMark !== undefined}
+            <span class="marker task" class:done={taskMark} title={$t(taskMark ? 'tasks.mailMarkDone' : 'tasks.mailMark')} aria-label={$t(taskMark ? 'tasks.mailMarkDone' : 'tasks.mailMark')}>
+              <Ph svg={taskIcon} size={12} />
+            </span>
+          {/if}
+          {#if newDesign && message.hasNote}
+            <span class="marker" title={$t('note.mark')} aria-label={$t('note.mark')}><Ph svg={noteIcon} size={12} /></span>
+          {/if}
+          {#if newDesign && message.muted}
+            <span class="marker" title={$t('mute.mark')} aria-label={$t('mute.mark')}><Ph svg={mutedIcon} size={12} /></span>
+          {/if}
+          {#if pinned}
+            <span class="marker" title={$t('pin.mark')} aria-label={$t('pin.mark')}><Ph svg={pinIcon} size={12} /></span>
           {/if}
           {#if message.flagColor > 0}
             <span class="color-dot" style={`background:${colorHex}`} aria-hidden="true"></span>
@@ -677,6 +700,14 @@
 
   .marker {
     display: inline-flex;
+    color: var(--text-tertiary);
+  }
+
+  .marker.task {
+    color: var(--accent);
+  }
+
+  .marker.task.done {
     color: var(--text-tertiary);
   }
 

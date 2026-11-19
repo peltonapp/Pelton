@@ -15,6 +15,7 @@
   import warningIcon from '@phosphor-icons/core/assets/duotone/warning-duotone.svg?raw'
   import pencilIcon from '@phosphor-icons/core/assets/duotone/pencil-simple-duotone.svg?raw'
   import trashIcon from '@phosphor-icons/core/assets/duotone/trash-duotone.svg?raw'
+  import taskIcon from '@phosphor-icons/core/assets/duotone/check-square-duotone.svg?raw'
   import closeIcon from '@phosphor-icons/core/assets/regular/x.svg?raw'
   import envelopeIcon from '@phosphor-icons/core/assets/duotone/envelope-simple-duotone.svg?raw'
   import { mailLinks, openMailLink } from '../../lib/maillink'
@@ -46,6 +47,7 @@
     close: void
     edit: CalendarEvent
     remove: { occ: Occurrence; scope: EventScope | '' }
+    toTask: Occurrence
   }>()
 
   let event: CalendarEvent | null = null
@@ -88,6 +90,11 @@
           <button type="button" class="cal-icon" aria-label={$t('calendar.edit')} disabled={!event} on:click={() => event && dispatch('edit', event)}>
             <Ph svg={pencilIcon} size={15} />
           </button>
+          {#if !occ.recurring}
+            <button type="button" class="cal-icon" aria-label={$t('tasks.toTask')} title={$t('tasks.toTask')} on:click={() => dispatch('toTask', occ)}>
+              <Ph svg={taskIcon} size={15} />
+            </button>
+          {/if}
           <button type="button" class="cal-icon" aria-label={$t('calendar.delete')} on:click={askDelete}>
             <Ph svg={trashIcon} size={15} />
           </button>

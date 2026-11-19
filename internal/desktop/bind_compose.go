@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/peltonapp/Pelton/internal/outbox"
 	"github.com/peltonapp/Pelton/internal/smtp"
 	"github.com/peltonapp/Pelton/internal/storage"
 )
@@ -67,6 +68,9 @@ type ComposeRequest struct {
 	// ForwardOf is the local id of the message this one forwards, 0 when it
 	// forwards nothing. Once sent, that message is marked forwarded.
 	ForwardOf int64 `json:"forwardOf"`
+	// FollowUpAt is an optional RFC3339 time to be reminded at if nobody has
+	// replied by then. Empty sets no reminder. It must come after the send.
+	FollowUpAt string `json:"followUpAt"`
 }
 
 // SendMessage builds the mime message and enqueues it in the durable outbox. The
@@ -90,7 +94,12 @@ func (a *App) SendMessage(req ComposeRequest) (int64, error) {
 		return 0, err
 	}
 
-	notBefore, err := resolveNotBefore(req.SendAt, a.intSetting(settingSendDelay, 0), time.Now().UTC())
+	now := time.Now().UTC()
+	notBefore, err := resolveNotBefore(req.SendAt, a.intSetting(settingSendDelay, 0), now)
+	if err != nil {
+		return 0, err
+	}
+	followUp, err := resolveFollowUp(req.FollowUpAt, notBefore, now)
 	if err != nil {
 		return 0, err
 	}
@@ -116,7 +125,9 @@ func (a *App) SendMessage(req ComposeRequest) (int64, error) {
 		return 0, err
 	}
 	a.sentRequests.Store(id, req)
+	a.activity.Add(outbox.Entry{MessageID: id, Step: outbox.StepQueued, Recipients: msg.Recipients()})
 	a.emit(EventOutboxChanged, nil)
+	a.recordFollowUp(req, id, msg.MessageID, followUp, notBefore)
 
 	// harvest every recipient into the address book so autocomplete learns from
 	// who the user writes to. best effort: a failure here must not fail the send.
@@ -153,6 +164,7 @@ func (a *App) CancelSend(id int64) (bool, error) {
 		return false, err
 	}
 	if cancelled {
+		a.dropFollowUpsForOutbox(id)
 		a.emit(EventOutboxChanged, nil)
 	}
 	return cancelled, nil
@@ -187,6 +199,7 @@ func (a *App) DiscardFailedSend(id int64) (bool, error) {
 		return false, err
 	}
 	if discarded {
+		a.dropFollowUpsForOutbox(id)
 		a.emit(EventOutboxChanged, nil)
 	}
 	return discarded, nil
@@ -743,6 +756,8 @@ type OutboxRowDTO struct {
 	// Editable is set when the message was sent in this run, so its compose
 	// request is still known and EditOutboxMessage can take it back.
 	Editable bool `json:"editable"`
+	// Priority orders the queue: a higher one goes before older messages.
+	Priority int `json:"priority"`
 }
 
 // ListOutbox returns the current outbox, so the ui can show queued, sending and
@@ -769,6 +784,7 @@ func (a *App) ListOutbox() ([]OutboxRowDTO, error) {
 			LastError:     r.LastError,
 			NextAttemptAt: formatDate(r.NextAttemptAt),
 			CreatedAt:     formatDate(r.CreatedAt),
+			Priority:      r.Priority,
 		})
 	}
 	return out, nil

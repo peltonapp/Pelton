@@ -156,6 +156,26 @@
   --cal-6: #c9394a;
   --cal-7: #b9428a;
   --cal-8: #7552c4;
+  /* tasks: the checkbox, how far a subtask is indented per level, and the
+     detail pane beside the list. the sidebar shares the calendar's width. */
+  --task-check: 16px;
+  --task-indent: 22px;
+  --task-detail-width: 340px;
+  /* the shortcut coach: the sheet's width, columns and filter field, and how
+     far the hint sits off the bottom edge. the focus menu's width. */
+  --coach-sheet-width: 720px;
+  --coach-sheet-columns: 2;
+  --coach-filter-width: 200px;
+  --coach-hint-offset: 20px;
+  --focus-menu-width: 248px;
+  /* calendar in mail: the preview a date in a mail opens and the hour height
+     of its slice of the day, the My Day panel beside the mail, and the
+     availability panel of the composer with the height of its week's hours. */
+  --date-peek-width: 320px;
+  --date-peek-hour: 22px;
+  --myday-width: 300px;
+  --avail-width: 460px;
+  --avail-hour: 14px;
   /* conversations: the column the expand control sits in, which replies are
      indented by, and the widths the reading column can be capped at. */
   --thread-twisty: 16px;
@@ -168,6 +188,10 @@
   --attachments-preview-width: 380px;
   --attachments-tile: 132px;
   --sender-avatar: 48px;
+  /* triage and writing: the empty inbox's mark and the snippet picker's
+     list. */
+  --inbox-zero-mark: 40px;
+  --snippet-list-height: 280px;
 
   /* default density (medium) row + pane spacing. overridden per density below. */
   --row-pad-y: 8px;

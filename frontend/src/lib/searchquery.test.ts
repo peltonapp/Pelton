@@ -110,8 +110,12 @@ describe('buildFilter', () => {
       { field: 'account', value: 'Work', id: 3 },
       { field: 'after', value: '2026-01-01' },
       { field: 'before', value: '2026-01-02' },
+      { field: 'has', value: 'note' },
+      { field: 'note', value: 'venue' },
     ])
     expect(f).toEqual({
+      note: 'venue',
+      hasNote: true,
       from: 'ada',
       to: 'bob',
       subject: 'notes',

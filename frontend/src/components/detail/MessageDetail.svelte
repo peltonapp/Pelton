@@ -17,10 +17,10 @@
   import ErrorState from '../common/ErrorState.svelte'
   import TabBar from './TabBar.svelte'
   import { visibleMessageId, hasTabs, activeTabId, tabs, markTabStale, labelTab, closeTab } from '../../stores/tabs'
-  import { openMessageId } from '../../stores/selection'
   import { messageDetail, loadMessage, clearMessage } from '../../stores/message'
   import { setFlagged, deleteMessage, archiveMessage, scanMessage, openMessageWindow } from '../../lib/api'
-  import { reportArchiveExport, dropDeleted, exportEml, markSeen } from '../../lib/messageactions'
+  import { reportArchiveExport, dropDeleted, leaveList, exportEml, markSeen } from '../../lib/messageactions'
+  import { editNote, toggleMute, togglePin } from '../../lib/organize'
   import {
     virusTotal,
     scanning,
@@ -30,7 +30,7 @@
     putAttachmentVerdict,
     currentVerdictMessage,
   } from '../../stores/virustotal'
-  import { removeFromList, patchInList } from '../../stores/messages'
+  import { patchInList } from '../../stores/messages'
   import { recordDeleted } from '../../stores/undodelete'
   import { recordArchived } from '../../stores/undoarchive'
   import { openReply, openForward } from '../../stores/compose'
@@ -53,11 +53,14 @@
     IconInfoCircle,
     IconCode,
     IconTrash,
+    IconChecklist,
   } from '@tabler/icons-svelte'
   import Conversation from './Conversation.svelte'
   import { openContextMenu, type MenuEntry } from '../../stores/contextmenu'
   import { menuHint } from '../../stores/shortcuts'
+  import { createTasksFromMail } from '../../lib/taskmail'
   import { forgetCard } from '../../stores/threads'
+  import { readerMinWidth } from '../../lib/myday'
   import type { MessageDetail, EditorMode } from '../../lib/types'
 
   // default editor mode for replies and forwards, from settings.
@@ -72,10 +75,12 @@
   $: newDesign = $prefs.design !== 'classic'
 
   // the sender panel only shows while the reader keeps room for a readable
-  // column beside it, in css pixels; a narrow window leaves it out entirely.
-  const panelMinReader = 720
+  // column beside it; a narrow window leaves it out entirely. The row is
+  // measured after My Day has taken its width, so the two panels share one
+  // budget and the reader never drops below readerMinWidth.
+  const senderPanelWidth = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--sender-panel-width')) || 280
   let rowWidth = 0
-  $: panelFits = rowWidth === 0 || rowWidth >= panelMinReader
+  $: panelFits = rowWidth === 0 || rowWidth - senderPanelWidth >= readerMinWidth
 
   // onReaderAction runs what a conversation card or the action bar asked for,
   // on the message it was asked for.
@@ -95,6 +100,15 @@
         break
       case 'delete':
         void remove(message)
+        break
+      case 'pin':
+        void togglePin(message)
+        break
+      case 'mute':
+        void toggleMute(message)
+        break
+      case 'note':
+        editNote(message)
         break
       case 'reload':
         if (message.id === $messageDetail.data?.id) {
@@ -117,6 +131,7 @@
         ? { label: $t('messageList.unflag'), icon: IconFlag, hint: menuHint('flag'), action: () => void toggleFlag(message) }
         : { label: $t('messageList.flag'), icon: IconFlagFilled, hint: menuHint('flag'), action: () => void toggleFlag(message) },
       { label: $t('shortcut.markUnread'), icon: IconMailFilled, hint: menuHint('mark-unread'), action: () => void markSeen(message, false) },
+      { label: $t('shortcut.createTask'), icon: IconChecklist, hint: menuHint('create-task'), action: () => void createTasksFromMail([message.id]) },
       'separator',
       { label: $t('messageList.menu.openInWindow'), icon: IconAppWindow, action: () => void openMessageWindow(message.id, message.subject) },
       { label: $t('detail.toolbar.print'), icon: IconPrinter, action: () => printMessage(message) },
@@ -251,25 +266,16 @@
     }
   }
 
-  // dismiss clears a message out of the pane after acting on it. A tab holding
-  // it closes, since acting on a message is done with it; the untabbed pane
-  // only empties if it was showing that message and not something else.
-  function dismiss(id: number): void {
-    closeTab(id)
-    if (get(openMessageId) === id) {
-      openMessageId.set(null)
-    }
-  }
-
   // archive moves the message to the account's Archive folder via the imap move
-  // binding, then closes the pane and drops it from the list.
+  // binding, closes a tab holding it and drops it from the list, moving the
+  // pane on the way a delete does.
   async function archive(detail: MessageDetail): Promise<void> {
     try {
       const undo = await archiveMessage(detail.id)
       reportArchiveExport(undo)
       recordArchived(detail, undo)
-      removeFromList(detail.id)
-      dismiss(detail.id)
+      closeTab(detail.id)
+      leaveList([detail.id])
     } catch (err) {
       toastError(errorMessage(err))
     }

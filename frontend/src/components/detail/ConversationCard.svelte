@@ -17,6 +17,7 @@
   import PhishingNotice from './PhishingNotice.svelte'
   import ProtectedNotice from './ProtectedNotice.svelte'
   import AttachmentStrip from './AttachmentStrip.svelte'
+  import FollowUpNotice from './FollowUpNotice.svelte'
   import { prefs } from '../../stores/prefs'
   import { formatListDate, displayName, type TimeFormat } from '../../lib/format'
   import { dur, motion } from '../../lib/motion'
@@ -116,6 +117,9 @@
     </div>
     <div class="body" transition:slide={{ duration: dur(motion.base) }}>
       {#if detail}
+        {#if detail.messageId}
+          <FollowUpNotice messageId={detail.messageId} />
+        {/if}
         {#if detail.phishing.level !== 'none'}
           <PhishingNotice report={detail.phishing} messageId={detail.id} />
         {/if}

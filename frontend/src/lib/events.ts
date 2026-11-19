@@ -3,7 +3,7 @@
 // single unsubscribe function, and keeps the event-name strings in one place.
 
 import { Events } from '@wailsio/runtime'
-import type { AccountSyncState } from './types'
+import type { AccountSyncState, OutboxLogEntry, FocusInfo, FocusSummary } from './types'
 
 // EventsOn subscribes to a backend event and hands the callback its payload.
 function EventsOn<T>(name: string, cb: (data: T) => void): () => void {
@@ -18,6 +18,7 @@ export const EventNames = {
   syncState: 'sync:state',
   accountSyncState: 'sync:accounts',
   outboxChanged: 'outbox:changed',
+  outboxLog: 'outbox:log',
   menu: 'menu:action',
   downloadProgress: 'download:progress',
   attachmentProgress: 'attachment:progress',
@@ -35,7 +36,25 @@ export const EventNames = {
   calendarChanged: 'calendar:changed',
   calendarReminder: 'calendar:reminder',
   icsOpen: 'calendar:open-files',
+  taskReminder: 'tasks:reminder',
+  followUpsChanged: 'followups:changed',
+  focusChanged: 'focus:changed',
+  focusEnded: 'focus:ended',
 } as const
+
+/** TaskReminderEvent is a task reminder that came due, alongside its notification. */
+export interface TaskReminderEvent {
+  taskId: number
+  listId: number
+  summary: string
+  /** A date, rfc3339, or empty for a task with no due date. */
+  due: string
+}
+
+/** onTaskReminder fires when a task's reminder is due. */
+export function onTaskReminder(cb: (e: TaskReminderEvent) => void): Unsubscribe {
+  return EventsOn(EventNames.taskReminder, (e: TaskReminderEvent) => cb(e))
+}
 
 /** onICSOpen fires when the system asks the running app to open .ics files; collect them with consumePendingICS. */
 export function onICSOpen(cb: () => void): () => void {
@@ -230,6 +249,17 @@ export function onOutboxChanged(cb: () => void): Unsubscribe {
   return EventsOn(EventNames.outboxChanged, () => cb())
 }
 
+// onOutboxLog fires with each new line of the send activity log.
+export function onOutboxLog(cb: (e: OutboxLogEntry) => void): Unsubscribe {
+  return EventsOn(EventNames.outboxLog, (e: OutboxLogEntry) => cb(e))
+}
+
+// onFollowUpsChanged fires when a follow-up reminder is set, comes due, is
+// answered or is cancelled. It carries no payload; subscribers refetch.
+export function onFollowUpsChanged(cb: () => void): Unsubscribe {
+  return EventsOn(EventNames.followUpsChanged, () => cb())
+}
+
 // onMenu fires when a native menubar item is chosen. the payload is a short
 // action string (preferences, compose, sync, add-mailbox, about).
 export function onMenu(cb: (action: string) => void): Unsubscribe {
@@ -305,6 +335,16 @@ export function onAgentProposals(cb: () => void): Unsubscribe {
 // shown. Today that is a clicked new-mail notification on Windows.
 export function onOpenMessage(cb: (e: OpenMessageEvent) => void): Unsubscribe {
   return EventsOn(EventNames.openMessage, (e: OpenMessageEvent) => cb(e))
+}
+
+/** Fires when focus mode starts, ends or changes its end time. */
+export function onFocusChanged(cb: (e: FocusInfo) => void): Unsubscribe {
+  return EventsOn(EventNames.focusChanged, (e: FocusInfo) => cb(e))
+}
+
+/** Fires once when focus mode ends, with what arrived meanwhile. */
+export function onFocusEnded(cb: (e: FocusSummary) => void): Unsubscribe {
+  return EventsOn(EventNames.focusEnded, (e: FocusSummary) => cb(e))
 }
 
 // onComposeCloseRequest fires in a compose window whose close button was

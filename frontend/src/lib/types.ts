@@ -176,6 +176,26 @@ export interface MessageSummary {
   // or from a reply or forward sent through Pelton.
   answered: boolean
   forwarded: boolean
+  // pinned keeps the row in the Pinned group at the top of the list, muted
+  // means its conversation is muted, and hasNote that the message or its
+  // conversation carries a private note.
+  pinned?: boolean
+  muted?: boolean
+  hasNote?: boolean
+}
+
+/** A private note on a message or a conversation. body is '' when there is none. */
+export interface Note {
+  body: string
+  updatedAt: string
+}
+
+/** One split inbox tab with its counts. key is important, newsletters,
+ * notifications, view:<id> or other. */
+export interface SplitTab {
+  key: string
+  total: number
+  unread: number
 }
 
 /** ThreadSummary is one conversation row in the threaded list. head is the
@@ -197,14 +217,18 @@ export interface ThreadSummary {
   answered: boolean
   forwarded: boolean
   messageIds: number[]
+  // pinned is true when any of its messages is pinned.
+  pinned?: boolean
 }
 
 /** ThreadList is a page of conversations; total and paging count
- * conversations, not messages. */
+ * conversations, not messages. pinned is the Pinned group, on the first page
+ * only, which the pages leave out. */
 export interface ThreadList {
   threads: ThreadSummary[]
   total: number
   hasOlder: boolean
+  pinned?: ThreadSummary[]
 }
 
 /** ThreadMessage is one message of an open conversation. folderRole is the
@@ -380,6 +404,9 @@ export interface MessageList {
   // hasOlder means the server still holds mail older than anything cached for
   // this selection, so reaching total is not the end of the mailbox.
   hasOlder: boolean
+  // pinned is the Pinned group, on the first page only, which messages and
+  // total leave out.
+  pinned?: MessageSummary[]
 }
 
 // FetchOlderResult reports what one 'load older mail' round trip fetched, and
@@ -434,6 +461,44 @@ export interface ComposeRequest {
   // forwardOf is the id of the message this one forwards; once sent, that
   // message is marked forwarded. Leave it out (or 0) for anything else.
   forwardOf?: number
+  // followUpAt is an optional RFC3339 time to be reminded at when nobody has
+  // replied by then. Empty or left out sets no reminder.
+  followUpAt?: string
+}
+
+/**
+ * Snippet is a reusable text block for the composer. body is plain text with
+ * {placeholders}; subject, to and cc fill only empty fields; trigger is the
+ * word typed after ";" to insert it, '' for none.
+ */
+export interface Snippet {
+  id: number
+  name: string
+  body: string
+  subject: string
+  to: string
+  cc: string
+  trigger: string
+  position: number
+}
+
+/**
+ * FollowUp is a "remind me if nobody replies" reminder on a sent message.
+ * Times are RFC3339; firedAt is empty while it waits. localId, folderId and
+ * threadId point at the cached copy of the sent message, 0 until one synced.
+ */
+export interface FollowUp {
+  id: number
+  accountId: number
+  messageId: string
+  subject: string
+  recipients: string
+  sentAt: string
+  dueAt: string
+  firedAt: string
+  localId: number
+  folderId: number
+  threadId: number
 }
 
 // ProtectionStatus is what the compose window needs to offer the pgp controls
@@ -473,12 +538,158 @@ export interface OutboxRow {
   createdAt: string
   // editable is set when the message can be taken back into a composer.
   editable: boolean
+  // priority orders the queue: a higher one goes before older messages.
+  priority: number
 }
 
 /** A message taken back out of the outbox, or taken false when it could not be. */
 export interface OutboxEdit {
   taken: boolean
   request: ComposeRequest
+}
+
+/**
+ * How cancelling a send ended: back in Drafts, back as a request to open in a
+ * composer, kept as a failed send, too late, or no longer in the outbox.
+ */
+export interface OutboxCancel {
+  outcome: 'draft' | 'compose' | 'held' | 'tooLate' | 'gone'
+  request: ComposeRequest
+}
+
+/** One line of the send activity log. */
+export interface OutboxLogEntry {
+  seq: number
+  at: string
+  messageId: number
+  step: string
+  recipients: string[]
+  detail: string
+  retryAt: string
+}
+
+/** Focus mode as it stands: on or off, when it ends, what arrived so far. */
+export interface FocusInfo {
+  active: boolean
+  /** When focus ends, RFC 3339; empty runs until it is turned off. */
+  until: string
+  /** The schedule started this focus. */
+  scheduled: boolean
+  /** New messages that arrived during this focus. */
+  held: number
+}
+
+/**
+ * When focus starts on its own: on these weekdays (0 is Sunday) from start to
+ * end, both "HH:MM". An end at or before the start runs past midnight.
+ */
+export interface FocusSchedule {
+  enabled: boolean
+  days: number[]
+  start: string
+  end: string
+}
+
+/** What arrived during a focus that just ended. */
+export interface FocusSummary {
+  total: number
+  vip: number
+}
+
+/** An out of office reply kept in Pelton's sieve script on the server. */
+export interface SieveVacation {
+  enabled: boolean
+  /** First and last day, YYYY-MM-DD, both inclusive; '' is unbounded. */
+  start: string
+  end: string
+  /** How often one sender gets a reply; 0 leaves it to the server. */
+  days: number
+  subject: string
+  from: string
+  /** The account's addresses the reply answers for. */
+  addresses: string[]
+  body: string
+}
+
+/** One test of a server filter rule. */
+export interface SieveCondition {
+  /** 'from', 'to', 'subject', 'header', 'size', 'envfrom' or 'envto'. */
+  field: string
+  /** The header a 'header' condition looks at. */
+  header: string
+  /** 'contains', 'is', 'matches', 'exists' (header), 'over' or 'under' (size). */
+  op: string
+  negate: boolean
+  /** Text to compare with, or for size a number with an optional K, M or G. */
+  value: string
+}
+
+/** One thing a server filter rule does. */
+export interface SieveAction {
+  /** 'fileinto', 'redirect', 'keep', 'discard', 'stop' or 'addflag'. */
+  kind: string
+  /** Folder, address or flag. */
+  arg: string
+}
+
+/** One server filter rule. */
+export interface SieveRule {
+  name: string
+  enabled: boolean
+  /** One condition is enough when true; all must hold when false. */
+  matchAny: boolean
+  conditions: SieveCondition[]
+  actions: SieveAction[]
+}
+
+/** Pelton's own sieve script, as a model. */
+export interface SieveScript {
+  vacation: SieveVacation | null
+  rules: SieveRule[]
+  /** Other scripts that keep running after Pelton's rules. */
+  includes: string[]
+}
+
+/** Which of Pelton's controls the server can back. */
+export interface SieveCaps {
+  implementation: string
+  extensions: string[]
+  vacation: boolean
+  dates: boolean
+  fileInto: boolean
+  flags: boolean
+  envelope: boolean
+  include: boolean
+}
+
+/** An account's sieve service and Pelton's script on it. */
+export interface SieveState {
+  accountId: number
+  /** 'ok', 'unsupported', 'unreachable', 'auth', 'credentials', 'tls' or 'error'. */
+  status: string
+  detail: string
+  host: string
+  port: number
+  /** '' for STARTTLS, 'ssl' for implicit TLS. */
+  tls: string
+  manual: boolean
+  remembered: boolean
+  caps: SieveCaps
+  exists: boolean
+  active: boolean
+  editable: boolean
+  raw: string
+  script: SieveScript
+  otherActive: string
+  hasPrevious: boolean
+  addresses: string[]
+}
+
+/** The outcome of a save; with problem set the server refused it and nothing was written. */
+export interface SieveSave {
+  state: SieveState
+  problem: string
+  line: number
 }
 
 export interface UIPrefs {
@@ -501,6 +712,12 @@ export interface UIPrefs {
   // showShortcutHints toggles the keyboard shortcut shown beside a context-menu
   // entry that has one. On by default.
   showShortcutHints: boolean
+  // coachHints shows a short hint naming the key after an action done by
+  // mouse, in the new design. On by default.
+  coachHints: boolean
+  // coachHold shows the shortcuts that apply on screen while the platform
+  // modifier is held, in the new design. On by default.
+  coachHold: boolean
   // harvestAddresses keeps learning addresses from mail for compose
   // autocomplete. off leaves only the contacts from a synced address book.
   harvestAddresses: boolean
@@ -638,11 +855,32 @@ export interface UIPrefs {
   // threadedList groups the message list into conversations in the new
   // design.
   threadedList: boolean
+  // afterMove is what the reader opens once the open message is archived,
+  // deleted or moved in the new design.
+  afterMove: AfterMove
+  // warnMissingAttachment asks before sending a message whose text speaks of
+  // an attachment it does not carry.
+  warnMissingAttachment: boolean
+  // warnEmptySubject asks before sending a message without a subject.
+  warnEmptySubject: boolean
+  // splitInbox splits the inbox into tabs in the new design. splitTabs is the
+  // comma separated tab order (important, newsletters, notifications,
+  // view:<id>), the catch-all Other tab always last and not listed;
+  // splitActive is the tab last shown.
+  splitInbox: boolean
+  splitTabs: string
+  splitActive: string
   // readerWidth caps the reading column in the new design.
   readerWidth: ReaderWidth
   // senderPanel shows the panel about the open message's sender beside the
   // reader in the new design.
   senderPanel: boolean
+  // mailDates marks the dates a mail names in the reader, with a calendar
+  // preview on hover.
+  mailDates: boolean
+  // myDayPanel shows today's agenda and tasks beside the mail surface in the
+  // new design.
+  myDayPanel: boolean
   // themeId selects an installed custom theme; empty means the built-in
   // default themes driven by the theme (light/dark/system) setting.
   themeId: string
@@ -1206,8 +1444,13 @@ export type ContactsView = 'panes' | 'grid'
 export type ComposeOpenIn = 'window' | 'docked' | 'tab'
 /** How wide the reading column runs in the new design. */
 export type ReaderWidth = 'narrow' | 'medium' | 'full'
+/**
+ * What the reader opens once the open message leaves the list by archive,
+ * delete or move: the older neighbour, the newer one, or nothing.
+ */
+export type AfterMove = 'older' | 'newer' | 'list'
 /** One of the top-level areas of the app. */
-export type Space = 'mail' | 'contacts' | 'calendar'
+export type Space = 'mail' | 'contacts' | 'calendar' | 'tasks'
 export type SelectAllScope = 'offer' | 'all' | 'loaded'
 
 // SearchSort is an order search results can actually come back in. The backend
@@ -1555,6 +1798,8 @@ export interface Occurrence {
   // a change made here has not reached the server yet.
   pending: boolean
   conflict: boolean
+  // set on an entry the calendar draws for a task due that day.
+  task?: Task
 }
 
 /**
@@ -1714,6 +1959,8 @@ export interface ICSImportResult {
   imported: number
   updated: number
   skipped: number
+  /** Tasks the file carried, which went to a task list. */
+  tasks: number
 }
 
 /** ICSFile is a calendar file read for import, iCalendar or JSCalendar. */
@@ -1723,6 +1970,8 @@ export interface ICSFile {
   /** How many events an import would take, and the titles of the first few. */
   events: number
   summaries: string[]
+  /** How many tasks it holds. */
+  tasks: number
   /** Set instead of the rest when the file could not be read. */
   error: string
 }
@@ -1751,4 +2000,138 @@ export interface MessageRef {
   id: number
   accountId: number
   folderId: number
+}
+
+/** TaskList is a local task list or a CalDAV collection that takes tasks. */
+export interface TaskList {
+  id: number
+  // 0 for a local list.
+  accountId: number
+  accountName: string
+  // empty for the local list the app starts with; the ui labels it.
+  name: string
+  color: string
+  local: boolean
+  readOnly: boolean
+  // the collection holds events too.
+  events: boolean
+  lastError: string
+  default: boolean
+}
+
+/** TaskContact is a person a task is for or about. */
+export interface TaskContact {
+  name: string
+  email: string
+}
+
+/**
+ * Task is one task. due and start are a date (2006-01-02), rfc3339 for a task
+ * with a time of day, or empty.
+ */
+export interface Task {
+  id: number
+  listId: number
+  listName: string
+  listColor: string
+  uid: string
+  title: string
+  notes: string
+  url: string
+  due: string
+  start: string
+  timeZone: string
+  done: boolean
+  // rfc3339, empty while open.
+  completed: string
+  // NEEDS-ACTION, IN-PROCESS, COMPLETED or CANCELLED, or empty.
+  status: string
+  percent: number
+  // 0 for none, 1 highest through 9 lowest.
+  priority: number
+  rrule: string
+  reminders: Reminder[]
+  // the uid of the parent task, empty for a top-level one.
+  parent: string
+  categories: string[]
+  // mid: links to mails.
+  mailLinks: string[]
+  contacts: TaskContact[]
+  eventUids: string[]
+  sortOrder: number
+  created: string
+  readOnly: boolean
+  pending: boolean
+  conflict: boolean
+  syncError: string
+}
+
+/** TaskDraft is the editor's task; id 0 creates one, uid then restores one. */
+export interface TaskDraft {
+  id: number
+  listId: number
+  uid: string
+  title: string
+  notes: string
+  url: string
+  due: string
+  start: string
+  timeZone: string
+  status: string
+  percent: number
+  priority: number
+  rrule: string
+  reminders: Reminder[]
+  parent: string
+  categories: string[]
+  mailLinks: string[]
+  contacts: TaskContact[]
+  eventUids: string[]
+  sortOrder: number
+  force: boolean
+}
+
+/** TaskSaveResult is the outcome of a task save. */
+export interface TaskSaveResult {
+  task: Task
+  queued: boolean
+  conflict: boolean
+  server: Task
+  // completing a repeating task moved it on to its next occurrence.
+  advanced: boolean
+}
+
+/** RemovedTask is a deleted task as it was, which restoreTasks takes back. */
+export interface RemovedTask {
+  listId: number
+  data: string
+}
+
+/** TaskDeleteResult is what a deletion removed, subtasks included. */
+export interface TaskDeleteResult {
+  removed: RemovedTask[]
+  queued: boolean
+}
+
+/** TaskMailMark says a stored message has a task; done when every such task is. */
+export interface TaskMailMark {
+  messageId: number
+  done: boolean
+}
+
+/** What the rail badge on Tasks counts. */
+export type TaskBadge = 'overdue' | 'today' | 'off'
+/** How a task list is ordered. */
+export type TaskSort = 'manual' | 'due' | 'priority' | 'title' | 'created'
+
+/** TaskSettings are the task preferences. */
+export interface TaskSettings {
+  defaultListId: number
+  // the time of day a due date picked without one gets, -1 to keep a date.
+  defaultDueMinutes: number
+  badge: TaskBadge
+  showInCalendar: boolean
+  // how long a completed task stays listed, -1 for good.
+  completedDays: number
+  sort: TaskSort
 }

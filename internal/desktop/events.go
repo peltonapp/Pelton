@@ -31,6 +31,9 @@ const (
 	EventAccountSyncState = "sync:accounts"
 	// EventOutboxChanged fires when the outbox contents or a message state change.
 	EventOutboxChanged = "outbox:changed"
+	// EventOutboxLog fires for each new line of the send activity log, with
+	// the OutboxLogEntryDTO as payload.
+	EventOutboxLog = "outbox:log"
 	// EventAgentProposals fires when an agent proposes a message, or one is
 	// approved or discarded, so the queue in the ui matches what is stored.
 	EventAgentProposals = "agent:proposals"
@@ -84,9 +87,21 @@ const (
 	// EventCalendarReminder fires when an event's reminder is due, alongside
 	// the desktop notification, so the ui can show it too.
 	EventCalendarReminder = "calendar:reminder"
+	// EventTaskReminder fires when a task's reminder is due, alongside the
+	// desktop notification, so the ui can offer to complete or open it.
+	EventTaskReminder = "tasks:reminder"
 	// EventICSOpen fires when the system asks the running app to open .ics
 	// files, such as one double-clicked in the file manager.
 	EventICSOpen = "calendar:open-files"
+	// EventFollowUpsChanged fires when a follow-up reminder is set, comes due,
+	// is answered or is cancelled, so the reminder lists reload.
+	EventFollowUpsChanged = "followups:changed"
+	// EventFocusChanged fires when focus mode starts, ends or changes its end
+	// time, with the FocusDTO as payload.
+	EventFocusChanged = "focus:changed"
+	// EventFocusEnded fires once when focus mode ends, with a FocusSummaryDTO
+	// saying what arrived meanwhile.
+	EventFocusEnded = "focus:ended"
 )
 
 // CalendarSyncEvent is the payload for EventCalendarSync. Done and Total
@@ -116,6 +131,15 @@ type CalendarReminderEvent struct {
 	Start        string `json:"start"`
 	End          string `json:"end"`
 	AllDay       bool   `json:"allDay"`
+}
+
+// TaskReminderEvent is the payload for EventTaskReminder. Due is a date
+// (2006-01-02), rfc3339 in the user's zone, or empty for a task with none.
+type TaskReminderEvent struct {
+	TaskID  int64  `json:"taskId"`
+	ListID  int64  `json:"listId"`
+	Summary string `json:"summary"`
+	Due     string `json:"due"`
 }
 
 // OpenMessageEvent is the payload for EventOpenMessage.

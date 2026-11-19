@@ -36,12 +36,15 @@ func TestCalendarsFollowsPrincipalAndHome(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(cals) != 1 {
-		t.Fatalf("got %d calendars, want only the event one: %+v", len(cals), cals)
+	if len(cals) != 2 {
+		t.Fatalf("got %d calendars, want the event calendar and the task list: %+v", len(cals), cals)
 	}
 	c := cals[0]
 	if c.Path != workPath || c.Name != "Work" || c.Color != "#ff8800" || c.ReadOnly || c.SyncToken == "" {
 		t.Errorf("calendar = %+v", c)
+	}
+	if c.Components() != "VEVENT" || cals[1].Components() != "VTODO" || cals[1].Name != "Tasks" {
+		t.Errorf("components = %q, %+v", c.Components(), cals[1])
 	}
 }
 
@@ -104,7 +107,7 @@ func TestListAndMultiget(t *testing.T) {
 	f, client := setup(t)
 	ctx := context.Background()
 	f.Put(workPath+"a.ics", event("a", "A"))
-	etags, err := client.List(ctx, workPath)
+	etags, err := client.List(ctx, workPath, "VEVENT")
 	if err != nil {
 		t.Fatal(err)
 	}

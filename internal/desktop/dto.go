@@ -138,6 +138,12 @@ type MessageSummaryDTO struct {
 	ThreadID  int64 `json:"threadId"`
 	Answered  bool  `json:"answered"`
 	Forwarded bool  `json:"forwarded"`
+	// Pinned keeps the row in the Pinned group at the top of the list. Muted
+	// means its conversation is muted. HasNote means the message or its
+	// conversation carries a private note.
+	Pinned  bool `json:"pinned"`
+	Muted   bool `json:"muted"`
+	HasNote bool `json:"hasNote"`
 }
 
 // smimeDTO flattens a verified signature for the ui. It carries both PGP and
@@ -172,6 +178,9 @@ type MessageListDTO struct {
 	// for this selection, so reaching Total is not the end of the mailbox and
 	// the list can offer to fetch more (see bind_backfill.go).
 	HasOlder bool `json:"hasOlder"`
+	// Pinned is the Pinned group listed above the page. Only the first page
+	// carries it, and Messages and Total then leave the pinned mail out.
+	Pinned []MessageSummaryDTO `json:"pinned"`
 }
 
 // AttachmentDTO describes a stored attachment. Inline parts (referenced by the
@@ -411,6 +420,9 @@ func toSummaryDTO(m storage.Message, accountEmail, folderName string) MessageSum
 		ThreadID:       m.ThreadID,
 		Answered:       m.Flags.Has(storage.FlagAnswered),
 		Forwarded:      m.Flags.Has(storage.FlagForwarded),
+		Pinned:         m.Pinned,
+		Muted:          m.Muted,
+		HasNote:        m.HasNote,
 		SMIME: SMIMEDTO{
 			Status: m.SMIME.Status,
 			Signer: m.SMIME.Signer,

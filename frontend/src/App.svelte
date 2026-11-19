@@ -19,7 +19,9 @@
   import TopBar from './components/shell/TopBar.svelte'
   import Rail from './components/shell/Rail.svelte'
   import SpaceSwitcher from './components/shell/SpaceSwitcher.svelte'
-  import { space, openSpace, runSpaceAction } from './stores/space'
+  import { space, openSpace, runSpaceAction, isMailOnlyAction } from './stores/space'
+  import { mailScreen, openMailScreen, closeMailScreen } from './stores/mailscreen'
+  import { IconMailX, IconChartBar } from '@tabler/icons-svelte'
   import { spaces } from './lib/spaces'
   import { popupIsOpen } from './lib/popups'
   import { calendarFocus, calendarImport, calendarQuickAdd } from './stores/calendar'
@@ -89,11 +91,24 @@
   import { liabilityAccepted } from './lib/liability'
   import { setDemoActive } from './lib/demo'
   import { recordArchived } from './stores/undoarchive'
-  import { onMailNew, onMailRepaired, onSyncState, onSyncProgress, onOutboxChanged, onMenu, onViewsChanged, onFoldersChanged, onProfileChanged, onMailtoCompose, onAgentProposals, onOpenMessage, onCalendarReminder, onICSOpen, type Unsubscribe, type MailtoDraft, type CalendarReminderEvent } from './lib/events'
+  import { onMailNew, onMailRepaired, onSyncState, onSyncProgress, onOutboxChanged, onMenu, onViewsChanged, onFoldersChanged, onProfileChanged, onMailtoCompose, onAgentProposals, onOpenMessage, onCalendarReminder, onTaskReminder, onICSOpen, type Unsubscribe, type MailtoDraft, type CalendarReminderEvent, type TaskReminderEvent } from './lib/events'
   import { loadViews, editingView, closeViewEditor, openViewEditor, views as savedViews } from './stores/views'
   import { selectSavedView } from './stores/selection'
   import { isMac } from './lib/i18n'
-  import { matchShortcut, comboHasModifier, isFunctionKeyCombo, type ShortcutAction } from './lib/shortcuts'
+  import {
+    matchShortcut,
+    comboTypes,
+    isComposeAction,
+    chipActions,
+    shortcuts as shortcutRegistry,
+    type ShortcutAction,
+  } from './lib/shortcuts'
+  import { runComposeCommand } from './stores/composecommands'
+  import CoachLayer from './components/shell/CoachLayer.svelte'
+  import { initCoach, toggleSheet } from './stores/coach'
+  import { noteAction, noteShortcut } from './lib/coach'
+  import { initFocus, focusMenuOpen, refreshFocus } from './stores/focus'
+  import './lib/palette-focus'
   import { cyclePane, focusPane as focusPaneArea } from './lib/panes'
   import { bindings, recording, initShortcuts } from './stores/shortcuts'
   import { initMenuBar } from './stores/menubar'
@@ -116,8 +131,8 @@
   import { messageDetail } from './stores/message'
   import { profiles, currentProfile, loadProfiles, switchTo, switchRelative } from './stores/profiles'
   import { loadProposals } from './stores/agent'
-  import { settingsRequest, clearSettingsRequest } from './stores/settingsnav'
-  import { errorMessage, toastError, toastInfo, pushAction, withBusyToast } from './stores/toast'
+  import { settingsRequest, clearSettingsRequest, openSettingsAt } from './stores/settingsnav'
+  import { errorMessage, toastError, toastInfo, pushAction, pushActions, withBusyToast } from './stores/toast'
   import { friendlyError } from './lib/errors'
   import { setOnline } from './stores/network'
   import { moveTargets } from './stores/move'
@@ -136,7 +151,9 @@
     inVisual,
   } from './stores/listselect'
   import { selectFolder, selectView, revealMessage } from './stores/selection'
-  import { setTheme, setThemeId } from './stores/prefs'
+  import { setTheme, setThemeId, setMyDayPanel } from './stores/prefs'
+  import MyDayPanel from './components/myday/MyDayPanel.svelte'
+  import { myDayFits } from './lib/myday'
   import { openCreateFolder, openRenameFolder, openDeleteFolder, openEmptyTrash } from './stores/folderdialog'
   import { setFolderPinned, listThemes } from './lib/api'
   import { editViewInEditor } from './stores/views'
@@ -157,16 +174,27 @@
     exportEml,
     reportArchiveExport,
     dropDeleted,
+    leaveList,
     toggleSpam,
   } from './lib/messageactions'
+  import { markDone } from './lib/triage'
+  import { watchFollowUps } from './stores/followups'
+  import { loadSnippets } from './stores/snippets'
+  import { editNote, toggleMute, togglePin } from './lib/organize'
   import { buildCommands, mailCommands, type CommandContext, type MessageOp, type FolderOp } from './lib/commands'
-  import { extraPaletteCommands } from './lib/palettesources'
+  import { extraPaletteCommands, registerPaletteSource } from './lib/palettesources'
   import './lib/palette-calendar'
   import './lib/palette-contacts'
   import './lib/palette-attachments'
+  import './lib/palette-sieve'
   import AttachmentsBrowser from './components/attachments/AttachmentsBrowser.svelte'
   import { attachmentsOpen, toggleAttachments } from './stores/attachments'
   import { setSenderPanel } from './stores/prefs'
+  import './lib/palette-tasks'
+  import './lib/palette-availability'
+  import { startTasks, toggleDone, tasks as taskStore, taskFromMailRequest } from './stores/tasks'
+  import { createTasksFromMail, openTask } from './lib/taskmail'
+  import { getTask } from './lib/api'
   import { catalogByAction } from './lib/menuactions'
   import { shortcutLabel } from './lib/i18n'
   import {
@@ -253,6 +281,15 @@
   let windowWidth = window.innerWidth
   $: railFolded = $prefs.navStyle === 'rail' && windowWidth < railFoldWidth
   $: showRail = $prefs.navStyle === 'rail' && !railFolded
+
+  // the My Day panel sits beside the mail surface only while the reader keeps
+  // a readable column next to it; narrower, it folds away.
+  let mailWidth = 0
+  let myDayWidth = 0
+  $: if ($prefs.myDayPanel && myDayWidth === 0) {
+    myDayWidth = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--myday-width')) || 0
+  }
+  $: showMyDay = $prefs.myDayPanel && myDayFits(mailWidth, sidebarW, listW, stacked, myDayWidth)
   $: inboxUnread = $sidebar.data?.views?.find((v) => v.key === 'inbox')?.unreadCount ?? 0
   // classic shows contacts as an overlay; the new design shows it as a space.
   function openContacts(): void {
@@ -374,6 +411,91 @@
     openSpace('calendar')
   }
 
+  // the toast line of a task reminder: the title and when it is due.
+  function taskReminderText(e: TaskReminderEvent): string {
+    const title = e.summary || $t('tasks.untitled')
+    if (e.due.length > 10) {
+      return `${title}, ${formatTime(new Date(e.due), $prefs.timeFormat as TimeFormat)}`
+    }
+    return title
+  }
+
+  async function completeFromReminder(e: TaskReminderEvent): Promise<void> {
+    try {
+      const task = get(taskStore).find((x) => x.id === e.taskId) ?? (await getTask(e.taskId))
+      await toggleDone(task, true)
+    } catch (err) {
+      toastError(errorMessage(err))
+    }
+  }
+
+  // tasks: create-task acts on the selection or the open message.
+  function createTaskFromMail(): void {
+    const ids = selectedMessages.length > 1 ? selectedMessages.map((m) => m.id) : [currentMessage()?.id].filter((id): id is number => id !== undefined)
+    if (ids.length === 0) {
+      toastInfo(get(t)('app.toast.openMessageFirst'))
+      return
+    }
+    void createTasksFromMail(ids)
+  }
+
+  $: if ($taskFromMailRequest) {
+    taskFromMailRequest.set(false)
+    if (!classic) {
+      createTaskFromMail()
+    }
+  }
+
+  // the tasks store feeds the rail badge, the mail markers and the calendar,
+  // so it runs for as long as the new design is on.
+  let stopTasks: (() => void) | undefined
+  $: if (!classic && !stopTasks) {
+    stopTasks = startTasks()
+  } else if (classic && stopTasks) {
+    stopTasks()
+    stopTasks = undefined
+  }
+  onDestroy(() => stopTasks?.())
+
+  // the newsletter manager and the insights page in the palette, with their
+  // live shortcut as the hint.
+  registerPaletteSource('mailtools', (tr) => {
+    const hint = (action: 'open-newsletters' | 'open-insights'): string => {
+      const combo = get(bindings)[action]
+      return combo ? shortcutLabel(combo) : ''
+    }
+    return [
+      {
+        id: 'open-newsletters',
+        group: 'navigate',
+        label: tr('newsletters.title'),
+        keywords: tr('newsletters.keywords'),
+        hint: hint('open-newsletters'),
+        icon: IconMailX,
+        run: () => openMailScreen('newsletters'),
+      },
+      {
+        id: 'open-insights',
+        group: 'navigate',
+        label: tr('settings2.page.insights'),
+        keywords: tr('insights.keywords'),
+        hint: hint('open-insights'),
+        icon: IconChartBar,
+        run: () => openSettingsAt('insights'),
+      },
+    ]
+  })
+
+  // the newsletter manager or the attachments browser fills the mail surface
+  // in place of the list and the reader.
+  $: screenInPlace = !classic && ($mailScreen !== null || $attachmentsOpen)
+
+  // picking a folder, view or search in the sidebar puts the list back.
+  $: closeScreenOn($selection)
+  function closeScreenOn(_sel: unknown): void {
+    closeMailScreen()
+  }
+
   onMount(async () => {
     // cosmetic demo mode (--potatoes-are-nice). main.ts has normally answered
     // this before the first component mounted; this is the backstop for a
@@ -391,9 +513,12 @@
     await initSidebarState()
     await initComposePrefs()
     void initShortcuts()
+    void initCoach().then((stop) => unsubscribers.push(stop))
+    void initFocus().then((stop) => unsubscribers.push(stop))
     void initMenuBar()
     void initPalette()
     void loadSignatures()
+    void loadSnippets()
     void loadVIPSenders()
     void loadVirusTotalConfig()
     // the sidebar marks mailboxes with no stored password, so the markers have
@@ -509,7 +634,23 @@
         }
       }),
     )
+    unsubscribers.push(
+      onTaskReminder((e) => {
+        if (!classic) {
+          pushActions(
+            'info',
+            taskReminderText(e),
+            [
+              { label: $t('tasks.reminder.done'), run: () => void completeFromReminder(e) },
+              { label: $t('tasks.open'), run: () => openTask(e.taskId) },
+            ],
+            10000,
+          )
+        }
+      }),
+    )
     void loadProposals()
+    unsubscribers.push(watchFollowUps())
     unsubscribers.push(onMenu(handleMenu))
     // a mailto: link opened while the app is already running.
     unsubscribers.push(onMailtoCompose((draft) => openMailtoDraft(draft)))
@@ -756,6 +897,9 @@
       case 'archive':
         void bulkArchive(items)
         return true
+      case 'done':
+        void markDone(items)
+        return true
       case 'download-offline':
         void bulkSetOffline(items, true)
         return true
@@ -838,17 +982,17 @@
           const undo = await archiveMessage(msg.id)
           reportArchiveExport(undo)
           recordArchived(msg, undo)
-          removeFromList(msg.id)
           closeTab(msg.id)
-          if (get(openMessageId) === msg.id) {
-            openMessageId.set(null)
-          }
+          leaveList([msg.id])
           break
         }
         case 'toggle-spam':
           if (await toggleSpam(msg)) {
             closeTab(msg.id)
           }
+          break
+        case 'done':
+          await markDone([msg])
           break
       }
     } catch (err) {
@@ -867,14 +1011,44 @@
     | 'hide-window'
     | 'export-eml'
 
+  // a mail action with no mail panes on screen, under a screen that fills the
+  // mail surface or in another space, does nothing the coach should hear of.
+  function swallowedMailAction(action: string): boolean {
+    return !classic && isMailOnlyAction(action) && (screenInPlace || $space !== 'mail')
+  }
+
   // dispatch maps an action (from a shortcut or a menu item) to its handler.
   function dispatchAction(action: MenuAction): void {
+    // the coach tells a click from a key press here, for every action a menu,
+    // the palette or a shortcut runs.
+    if (!swallowedMailAction(action)) {
+      noteAction(action as ShortcutAction)
+    }
     // the space on screen gets the first say, so the same key makes a new
     // event in the calendar and a new message in mail.
     if (!classic && !overlayOpen && runSpaceAction($space, action)) {
       return
     }
+    if (isComposeAction(action)) {
+      runComposeCommand(action)
+      return
+    }
+    // a screen in place of the list and the reader leaves no message on show
+    // for a message shortcut to act on.
+    if (screenInPlace && isMailOnlyAction(action)) {
+      return
+    }
     switch (action) {
+      case 'open-newsletters':
+        if (!classic) {
+          openMailScreen('newsletters')
+        }
+        break
+      case 'open-insights':
+        if (!classic) {
+          openSettingsAt('insights')
+        }
+        break
       case 'compose':
         startCompose()
         break
@@ -922,6 +1096,7 @@
       case 'download-offline':
       case 'delete-message':
       case 'archive':
+      case 'done':
       case 'toggle-spam':
       case 'unsubscribe':
         void messageAction(action)
@@ -966,6 +1141,27 @@
           openSpace('calendar')
         }
         break
+      case 'go-tasks':
+        if (!classic) {
+          openSpace('tasks')
+        }
+        break
+      case 'create-task':
+        if (!classic) {
+          createTaskFromMail()
+        }
+        break
+      case 'toggle-my-day':
+        // from another space it brings mail back with the panel open.
+        if (!classic) {
+          if ($space !== 'mail') {
+            openSpace('mail')
+            setMyDayPanel(true)
+          } else {
+            setMyDayPanel(!$prefs.myDayPanel)
+          }
+        }
+        break
       case 'undo':
         if (!triggerUndo() && !triggerUndoDelete() && !triggerUndoArchive()) {
           toastInfo(get(t)('app.toast.nothingToUndo'))
@@ -1006,6 +1202,16 @@
           setSenderPanel(!$prefs.senderPanel)
         }
         break
+      case 'shortcut-sheet':
+        if (!classic && !overlayOpen) {
+          toggleSheet()
+        }
+        break
+      case 'focus-mode':
+        if (!classic && !overlayOpen) {
+          focusMenuOpen.update((open) => !open)
+        }
+        break
       case 'hide-window':
         // the app, not just the window: on macOS ordering the window out
         // strands it, and an app hidden whole comes back from the dock icon.
@@ -1029,6 +1235,24 @@
         }
         break
       }
+      case 'toggle-pin':
+      case 'toggle-mute':
+      case 'edit-note': {
+        const msg = currentMessage()
+        if (!msg) {
+          toastInfo(get(t)('app.toast.openMessageFirst'))
+        } else if (action === 'toggle-pin') {
+          void togglePin(msg)
+        } else if (action === 'toggle-mute') {
+          void toggleMute(msg)
+        } else {
+          editNote(msg)
+        }
+        break
+      }
+      case 'next-split':
+      case 'prev-split':
+        break
       case 'move-to': {
         if (selectedMessages.length > 1) {
           const items = selectedMessages
@@ -1125,6 +1349,9 @@
       case 'archive':
         void archiveOne(item)
         break
+      case 'done':
+        void markDone([item])
+        break
       case 'download-offline':
         void setOffline(item, true)
         break
@@ -1156,6 +1383,9 @@
         break
       case 'archive':
         void bulkArchive(items)
+        break
+      case 'done':
+        void markDone(items)
         break
       case 'download-offline':
         void bulkSetOffline(items, true)
@@ -1457,7 +1687,7 @@
     if (!$prefs.appVimMode || event.metaKey || event.ctrlKey || event.altKey) {
       return false
     }
-    if (isEditableTarget(event.target) || inSidebar(event.target) || anyDialogOpen()) {
+    if (isEditableTarget(event.target) || inSidebar(event.target) || anyDialogOpen() || screenInPlace) {
       return false
     }
     // shift is part of G itself; with anything else it can only be extending
@@ -1526,6 +1756,8 @@
     return true
   }
 
+  const newDesignOnly = new Set<ShortcutAction>(shortcutRegistry.filter((s) => s.newDesignOnly).map((s) => s.action))
+
   function onKeydown(event: KeyboardEvent): void {
     // while the settings panel is capturing a new binding, let it have the keys.
     if ($recording) {
@@ -1564,12 +1796,28 @@
       }
     }
     const action = matchShortcut(event, $bindings)
+    // the split keys belong to the message list, which takes them itself while
+    // it has focus; anywhere else Tab keeps moving focus.
+    if (action === 'next-split' || action === 'prev-split') {
+      return
+    }
     if (action) {
-      // a modifier-less custom binding must not hijack typing in a field.
-      if (!comboHasModifier($bindings[action]) && !isFunctionKeyCombo($bindings[action]) && isEditableTarget(event.target)) {
+      // a binding that types a character must not hijack typing in a field.
+      if (comboTypes($bindings[action]) && isEditableTarget(event.target)) {
+        return
+      }
+      if (classic && newDesignOnly.has(action)) {
+        return
+      }
+      // a recipient move only means something on a focused recipient chip;
+      // anywhere else its keys keep their own meaning.
+      if ((chipActions as readonly string[]).includes(action) &&!(event.target as HTMLElement | null)?.closest?.('[data-chip]')) {
         return
       }
       event.preventDefault()
+      if (!swallowedMailAction(action)) {
+        noteShortcut(action)
+      }
       dispatchAction(action)
       return
     }
@@ -1633,6 +1881,7 @@
     void loadSignatures()
     void loadVIPSenders()
     void loadViews()
+    void refreshFocus()
     await loadList(get(selection))
   }
 
@@ -1730,7 +1979,12 @@
     {/if}
 
     {#if $space === 'mail'}
-      <div class="mail" style={`grid-template-columns: ${sidebarW}px 0 minmax(0, 1fr)`}>
+      <div
+        class="mail"
+        class:with-myday={showMyDay}
+        style={`grid-template-columns: ${sidebarW}px 0 minmax(0, 1fr)${showMyDay ? ' var(--myday-width)' : ''}`}
+        bind:clientWidth={mailWidth}
+      >
         <div class="side-col">
           <Sidebar
             on:compose={startCompose}
@@ -1744,6 +1998,13 @@
           {/if}
         </div>
         <Resizer disabled={locked} label={$t('app.pane.resizeSidebar')} on:resize={resizeSidebar} on:end={commitPanes} />
+        {#if $mailScreen === 'newsletters'}
+          <div class="screen">
+            {#await import('./components/newsletters/NewsletterManager.svelte') then m}
+              <svelte:component this={m.default} on:close={closeMailScreen} />
+            {/await}
+          </div>
+        {:else}
         <div
           class="surface"
           class:stacked={stacked && !$attachmentsOpen}
@@ -1767,6 +2028,10 @@
           {/if}
           <ComposeTabLayer />
         </div>
+        {/if}
+        {#if showMyDay}
+          <MyDayPanel on:close={() => setMyDayPanel(false)} />
+        {/if}
       </div>
     {:else if $space === 'contacts'}
       <div class="space-host">
@@ -1780,6 +2045,12 @@
     {:else if $space === 'calendar'}
       <div class="space-host">
         {#await import('./components/calendar/CalendarScreen.svelte') then m}
+          <svelte:component this={m.default} />
+        {/await}
+      </div>
+    {:else if $space === 'tasks'}
+      <div class="space-host">
+        {#await import('./components/tasks/TasksScreen.svelte') then m}
           <svelte:component this={m.default} />
         {/await}
       </div>
@@ -1898,6 +2169,10 @@
 
 <CommandPalette commands={paletteCommands} mail={paletteMailCommands} />
 
+{#if !classic}
+  <CoachLayer suspended={overlayOpen} />
+{/if}
+
 <AccountPasswordDialog account={$passwordPrompt} onDone={answerPasswordPrompt} />
 
 <SyncFailureDialog />
@@ -2000,6 +2275,20 @@
     border: var(--hairline) solid var(--border-default);
     border-radius: var(--pane-radius);
     overflow: hidden;
+  }
+
+  /* a mail-level screen in place of the list and the reader. */
+  .screen {
+    min-width: 0;
+    min-height: 0;
+    overflow: hidden;
+    border: var(--hairline) solid var(--border-default);
+    border-radius: var(--pane-radius);
+    background: var(--surface-base);
+  }
+
+  :global(:root[data-panes='flat']) .screen {
+    border-width: var(--hairline) 0 var(--hairline) var(--hairline);
   }
 
   .surface.stacked > :global(.list-col) {

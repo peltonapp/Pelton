@@ -28,7 +28,16 @@
   import Highlight from '../common/Highlight.svelte'
   import Ph from '../common/Ph.svelte'
   import dotsIcon from '@phosphor-icons/core/assets/duotone/dots-three-duotone.svg?raw'
+  import calendarIcon from '@phosphor-icons/core/assets/duotone/calendar-blank-duotone.svg?raw'
   import { splitHtmlQuote, splitPlainQuote } from '../../lib/quotes'
+  import DatePeek from './DatePeek.svelte'
+  import { scanDates } from '../../lib/datescan'
+  import { collectText, dateAttr, markRanges, unmarkDates, dateClass } from '../../lib/datemarks'
+  import { formatWhen } from '../../lib/calformat'
+  import { currentUIScale } from '../../theme/theme'
+  import { locale } from '../../lib/i18n'
+  import type { DateMention } from '../../lib/eventphrase'
+  import type { TimeFormat } from '../../lib/format'
 
   export let detail: MessageDetail
   /** Folds the quoted original at the end of a reply behind a toggle. */
@@ -112,12 +121,13 @@
   // click handler that runs natively inside the iframe's own document, using
   // postMessage to hand the url back to the parent, has no such dependency on
   // cross-frame event delivery.
-  function buildSrcdoc(html: string, allowRemote: boolean, fontSize: number, bodyFont: string, nonce: string, offerScan: boolean): string {
+  function buildSrcdoc(html: string, allowRemote: boolean, fontSize: number, bodyFont: string, nonce: string, offerScan: boolean, still: boolean): string {
     // the reader font preference sets the base font-family, so it applies to
     // mail that declares none. Mail that declares its own overrides it, unless
     // the sender-fonts setting is off, in which case the sanitizer has already
     // taken those declarations out and this is what everything renders in.
     const font = bodyFontStack(bodyFont) ?? readVar('--font-ui')
+    const accent = readVar('--accent') || '#465af2'
     // the .pelton-vt colors are the light-theme semantic token values written
     // out literally, for the same reason the page colors above are: this
     // document always renders on a fixed white background, so a badge that
@@ -137,7 +147,11 @@
   .pelton-vt-unknown{color:#6b7280;}
   .pelton-vt-error{color:#9a6700;}
   .pelton-phish{display:inline-block;margin-inline-start:3px;font-weight:700;font-size:0.85em;color:#c0392b;cursor:default;}
-  .${markClass}{background:color-mix(in srgb, ${readVar('--accent') || '#465af2'} 32%, #ffffff);color:inherit;border-radius:2px;}`
+  .${markClass}{background:color-mix(in srgb, ${accent} 32%, #ffffff);color:inherit;border-radius:2px;}
+  .${dateClass}{position:relative;border-radius:3px;cursor:pointer;outline:none;${still ? '' : 'transition:background-color 120ms ease-out,box-shadow 120ms ease-out;'}}
+  .${dateClass}.pelton-date-on{background:color-mix(in srgb, ${accent} 14%, #ffffff);box-shadow:0 0 0 2px color-mix(in srgb, ${accent} 14%, #ffffff);}
+  .${dateClass}:focus-visible{box-shadow:0 0 0 2px ${accent};}
+  .${dateClass}.pelton-date-on[tabindex]::before{content:"";position:absolute;inset-inline-start:-0.3em;top:-0.95em;width:0.95em;height:0.95em;border-radius:3px;background:#ffffff url("${calendarGlyph(accent)}") center/78% no-repeat;box-shadow:0 0 0 1px color-mix(in srgb, ${accent} 40%, #ffffff),0 1px 3px rgba(0,0,0,0.16);pointer-events:none;}`
     const imgSrc = allowRemote ? 'data: https: http:' : 'data:'
     // media rides on the same choice as images: a message that embeds a video
     // can only reach out once the reader has allowed remote content for it.
@@ -163,6 +177,19 @@
       'var lastHov="";function hov(h){if(h===lastHov)return;lastHov=h;window.parent.postMessage({peltonHoverLink:h},"*")}' +
       'document.addEventListener("mouseover",function(e){var a=e.target&&e.target.closest&&e.target.closest("a");hov(a?(a.getAttribute("href")||"").trim():"")});' +
       'document.documentElement.addEventListener("mouseleave",function(){hov("")});'
+    // dates marked in the body (see markDates): hovering or focusing one lights
+    // up all of its pieces and tells the parent which it is, a click or Enter
+    // asks for its preview to open and stay. Only the mark's number crosses.
+    const dateHandler =
+      `function pdEl(e){var n=e.target;return n&&n.closest?n.closest("[${dateAttr}]"):null}` +
+      `function pdLit(id,on){var l=document.querySelectorAll('[${dateAttr}="'+id+'"]');for(var i=0;i<l.length;i++){l[i].classList.toggle("pelton-date-on",on)}}` +
+      'var pdCur="";function pdHov(el,how){var id=el?el.getAttribute("' + dateAttr + '"):"";if(id===pdCur)return;if(pdCur)pdLit(pdCur,false);pdCur=id;if(id)pdLit(id,true);window.parent.postMessage({peltonDate:id,how:how},"*")}' +
+      'document.addEventListener("mouseover",function(e){pdHov(pdEl(e),"hover")});' +
+      'document.documentElement.addEventListener("mouseleave",function(){pdHov(null,"hover")});' +
+      'document.addEventListener("focusin",function(e){var d=pdEl(e);if(d)pdHov(d,"focus")});' +
+      'document.addEventListener("focusout",function(e){if(pdEl(e))pdHov(null,"focus")});' +
+      'document.addEventListener("click",function(e){var d=pdEl(e);if(!d)return;e.preventDefault();window.parent.postMessage({peltonDateOpen:d.getAttribute("' + dateAttr + '")},"*")});' +
+      'document.addEventListener("keydown",function(e){var d=pdEl(e);if(!d)return;if(e.key==="Enter"||e.key===" "){e.preventDefault();e.stopImmediatePropagation();window.parent.postMessage({peltonDateOpen:d.getAttribute("' + dateAttr + '")},"*")}else if(e.key==="Escape"&&pdCur){e.stopImmediatePropagation();pdHov(null,"focus")}});'
     const script =
       '<scr' +
       'ipt nonce="' +
@@ -170,6 +197,7 @@
       '">document.addEventListener("click",function(e){var a=e.target&&e.target.closest("a");if(!a)return;var href=(a.getAttribute("href")||"").trim();if(!href)return;e.preventDefault();if(/^(https?:|mailto:)/i.test(href)){window.parent.postMessage({peltonOpenUrl:href},"*")}});' +
       contextHandler +
       hoverHandler +
+      dateHandler +
       frameKeyRelay +
       '</scr' +
       'ipt>'
@@ -190,6 +218,11 @@
     return `<!doctype html><html dir="auto"><head><meta charset="utf-8">${cspMeta}${open}${css}${close}</head><body dir="auto" data-pelton-ready="1">${html}${script}</body></html>`
   }
 
+  // the calendar glyph a hovered date shows, as an svg data url in a color.
+  function calendarGlyph(accent: string): string {
+    return `data:image/svg+xml,${encodeURIComponent(calendarIcon.replace('fill="currentColor"', `fill="${accent}"`))}`
+  }
+
   // nonce is regenerated per message so a stale nonce from a previous render
   // can never be replayed against a new one.
   function makeNonce(): string {
@@ -206,7 +239,7 @@
     nonce = makeNonce()
   }
 
-  $: srcdoc = buildSrcdoc(shownHtml, remoteLoaded, $prefs.messageFontSize, $prefs.bodyFont, nonce, canScan)
+  $: srcdoc = buildSrcdoc(shownHtml, remoteLoaded, $prefs.messageFontSize, $prefs.bodyFont, nonce, canScan, $prefs.reduceMotion)
 
   // plain-text bodies render in a <pre>, not the sandboxed iframe, so bare
   // urls need their own linkification: nothing upstream turns them into real
@@ -277,6 +310,262 @@
     // render are gone and have to be put back.
     decorateLinks(get(linkVerdicts), suspectLinks)
     markMatches(markTerms)
+    void markDates()
+  }
+
+  // --- dates named in the mail ------------------------------------------------
+
+  $: datesOn = $prefs.mailDates && $prefs.design !== 'classic'
+  $: timeFormat = $prefs.timeFormat as TimeFormat
+
+  // the dates found in the shown body, by mark number, and the run they were
+  // found in, so a reply that arrives after the body changed is dropped.
+  let mentions: DateMention[] = []
+  let dateRun = 0
+
+  function sentAt(): Date {
+    const d = detail.date ? new Date(detail.date) : new Date()
+    return Number.isNaN(d.getTime()) ? new Date() : d
+  }
+
+  function describe(m: DateMention): string {
+    return formatWhen(m.start, m.end, m.allDay, timeFormat, $locale)
+  }
+
+  // markDates finds the dates in the frame's text, off the main thread, then
+  // wraps them in marks over the same text nodes. Taking the marks out first
+  // makes it safe to run again for the same document.
+  let datesBody: HTMLElement | null = null
+
+  async function markDates(again = false): Promise<void> {
+    const doc = frame?.contentDocument
+    const body = readyBody()
+    if (!doc || !body || (body === datesBody && !again)) {
+      return
+    }
+    datesBody = body
+    const run = ++dateRun
+    unmarkDates(doc)
+    mentions = []
+    closePeek(false)
+    if (!datesOn) {
+      return
+    }
+    const before = collectText(body)
+    let found: DateMention[]
+    try {
+      found = await scanDates(before.text, sentAt(), $locale)
+    } catch {
+      return
+    }
+    if (run !== dateRun || readyBody() !== body || found.length === 0) {
+      return
+    }
+    const now = collectText(body)
+    if (now.text !== before.text) {
+      return
+    }
+    mentions = found
+    markRanges(
+      now,
+      found.map((m, id) => ({ id, index: m.index, length: m.length })),
+      (id) => $t('dateHint.mark').replace('{when}', describe(found[id])),
+    )
+  }
+
+  let datesWere: boolean | null = null
+  $: if (frame && detail.isHtml && datesOn !== datesWere) {
+    if (datesWere !== null) {
+      void markDates(true)
+    }
+    datesWere = datesOn
+  }
+
+  // the plain-text body: the same dates, cut into its segments by offset.
+  let plainMentions: DateMention[] = []
+  let plainFor = ''
+  $: if (!detail.isHtml) {
+    void scanPlain(shownPlain, datesOn)
+  }
+
+  async function scanPlain(text: string, on: boolean): Promise<void> {
+    const key = `${detail.id}|${on}|${text.length}`
+    if (key === plainFor) {
+      return
+    }
+    plainFor = key
+    plainMentions = []
+    mentions = []
+    closePeek(false)
+    if (!on) {
+      return
+    }
+    const run = ++dateRun
+    try {
+      const found = await scanDates(text, sentAt(), $locale)
+      if (run === dateRun && plainFor === key) {
+        plainMentions = found
+        mentions = found
+      }
+    } catch {
+      plainMentions = []
+    }
+  }
+
+  /** A piece of a plain segment, with the mark number of the date it is part of. */
+  interface PlainPart {
+    text: string
+    date: number
+    first: boolean
+  }
+
+  // splits each segment of the plain body at the dates found in it. Links keep
+  // their text whole and are not marked.
+  function plainParts(segments: typeof plainSegments, found: DateMention[]): PlainPart[][] {
+    let offset = 0
+    return segments.map((segment) => {
+      const from = offset
+      offset += segment.text.length
+      if (segment.href || found.length === 0) {
+        return [{ text: segment.text, date: -1, first: false }]
+      }
+      const parts: PlainPart[] = []
+      let at = 0
+      found.forEach((m, id) => {
+        const start = Math.max(m.index - from, at)
+        const end = Math.min(m.index + m.length - from, segment.text.length)
+        if (end <= start) {
+          return
+        }
+        if (start > at) {
+          parts.push({ text: segment.text.slice(at, start), date: -1, first: false })
+        }
+        parts.push({ text: segment.text.slice(start, end), date: id, first: m.index >= from })
+        at = end
+      })
+      if (at < segment.text.length) {
+        parts.push({ text: segment.text.slice(at), date: -1, first: false })
+      }
+      return parts
+    })
+  }
+
+  $: plainSplit = detail.isHtml ? [] : plainParts(plainSegments, plainMentions)
+
+  // --- the preview a date opens ---------------------------------------------
+
+  const showDelay = 450
+  const hideDelay = 220
+
+  let peek: { id: number; anchor: { left: number; top: number; right: number; bottom: number }; pinned: boolean } | null = null
+  let showTimer: ReturnType<typeof setTimeout> | undefined
+  let hideTimer: ReturnType<typeof setTimeout> | undefined
+  let plainBox: HTMLPreElement | undefined
+
+  $: peekMention = peek ? mentions[peek.id] ?? null : null
+
+  // dateEls returns the marks of one date: in the frame's document, or in the
+  // plain body.
+  function dateEls(id: number): HTMLElement[] {
+    const root: ParentNode | null | undefined = detail.isHtml ? frame?.contentDocument : plainBox
+    return root ? Array.from(root.querySelectorAll<HTMLElement>(`[${dateAttr}="${id}"]`)) : []
+  }
+
+  // anchorOf is the box around a date's marks in the layout space a fixed
+  // element uses: a frame's own pixels are scaled by how it is drawn, and the
+  // interface zoom is divided out.
+  function anchorOf(id: number): { left: number; top: number; right: number; bottom: number } | null {
+    const els = dateEls(id)
+    if (els.length === 0) {
+      return null
+    }
+    const rects = els.map((el) => el.getBoundingClientRect())
+    let left = Math.min(...rects.map((r) => r.left))
+    let right = Math.max(...rects.map((r) => r.right))
+    let top = Math.min(...rects.map((r) => r.top))
+    let bottom = Math.max(...rects.map((r) => r.bottom))
+    if (detail.isHtml && frame) {
+      const box = frame.getBoundingClientRect()
+      const inner = frame.contentDocument?.documentElement.clientWidth ?? 0
+      const ratio = inner > 0 ? box.width / inner : 1
+      left = box.left + left * ratio
+      right = box.left + right * ratio
+      top = box.top + top * ratio
+      bottom = box.top + bottom * ratio
+    }
+    const scale = currentUIScale()
+    return { left: left / scale, right: right / scale, top: top / scale, bottom: bottom / scale }
+  }
+
+  function openPeek(id: number, pinned: boolean): void {
+    clearTimeout(showTimer)
+    clearTimeout(hideTimer)
+    const anchor = mentions[id] ? anchorOf(id) : null
+    peek = anchor ? { id, anchor, pinned: pinned || (peek?.id === id && peek.pinned) } : null
+  }
+
+  // the date the focus is being handed back to, which must not open again.
+  let returning: number | null = null
+
+  function closePeek(refocus: boolean): void {
+    clearTimeout(showTimer)
+    clearTimeout(hideTimer)
+    const was = peek
+    peek = null
+    if (refocus && was?.pinned) {
+      returning = was.id
+      dateEls(was.id)[0]?.focus()
+    }
+  }
+
+  // hoverDate is the pointer or the focus reaching a date (id) or leaving it
+  // (null). A preview opens after a short rest, or at once for the keyboard,
+  // and closes a moment after the pointer leaves unless it went into the
+  // preview itself. A pinned preview stays.
+  function hoverDate(id: number | null, how: 'hover' | 'focus'): void {
+    if (how === 'focus' && id !== null && id === returning) {
+      returning = null
+      return
+    }
+    returning = null
+    if (peek?.pinned) {
+      return
+    }
+    clearTimeout(showTimer)
+    if (id === null) {
+      if (peek) {
+        clearTimeout(hideTimer)
+        hideTimer = setTimeout(() => closePeek(false), hideDelay)
+      }
+      return
+    }
+    clearTimeout(hideTimer)
+    if (peek?.id === id) {
+      return
+    }
+    if (how === 'focus') {
+      openPeek(id, false)
+    } else {
+      showTimer = setTimeout(() => openPeek(id, false), peek ? 0 : showDelay)
+    }
+  }
+
+  function holdPeek(): void {
+    clearTimeout(hideTimer)
+  }
+
+  function releasePeek(): void {
+    if (peek && !peek.pinned) {
+      clearTimeout(hideTimer)
+      hideTimer = setTimeout(() => closePeek(false), hideDelay)
+    }
+  }
+
+  function onPlainDateKey(event: KeyboardEvent, id: number): void {
+    if (event.key === 'Enter' || event.key === ' ') {
+      event.preventDefault()
+      openPeek(id, true)
+    }
   }
 
   // the words of the search this message was opened from, marked in the body.
@@ -368,7 +657,30 @@
       replayKey(frame, key)
       return
     }
-    const data = event.data as { peltonOpenUrl?: unknown; peltonContextLink?: unknown; peltonHoverLink?: unknown; x?: unknown; y?: unknown } | null
+    const data = event.data as {
+      peltonOpenUrl?: unknown
+      peltonContextLink?: unknown
+      peltonHoverLink?: unknown
+      peltonDate?: unknown
+      peltonDateOpen?: unknown
+      how?: unknown
+      x?: unknown
+      y?: unknown
+    } | null
+    if (typeof data?.peltonDate === 'string') {
+      const id = data.peltonDate === '' ? null : Number(data.peltonDate)
+      if (id === null || (Number.isInteger(id) && id >= 0)) {
+        hoverDate(id, data.how === 'focus' ? 'focus' : 'hover')
+      }
+      return
+    }
+    if (typeof data?.peltonDateOpen === 'string') {
+      const id = Number(data.peltonDateOpen)
+      if (Number.isInteger(id) && id >= 0) {
+        openPeek(id, true)
+      }
+      return
+    }
     if (typeof data?.peltonHoverLink === 'string') {
       showHover(data.peltonHoverLink)
       return
@@ -490,6 +802,9 @@
   window.addEventListener('message', onWindowMessage)
 
   onDestroy(() => {
+    clearTimeout(showTimer)
+    clearTimeout(hideTimer)
+    dateRun += 1
     resizeObserver?.disconnect()
     cancelAnimationFrame(readyPollHandle)
     window.removeEventListener('message', onWindowMessage)
@@ -696,14 +1011,37 @@
   <!-- dir="auto" for the same reason as the html document above: a plain-text
        message written right to left reads that way, whatever the interface is
        set to. -->
-  <pre dir="auto" class="body-plain mono selectable" style={`font-size:${$prefs.messageFontSize}px`}>{#each plainSegments as segment}{#if segment.href}<a
+  <!-- the date marks are spans around the text they hold, so what the body
+       says is the same with or without them. -->
+  <!-- svelte-ignore a11y-no-static-element-interactions a11y-mouse-events-have-key-events -->
+  <pre dir="auto" class="body-plain mono selectable" style={`font-size:${$prefs.messageFontSize}px;--date-glyph:url("${calendarGlyph('currentColor')}")`} bind:this={plainBox}>{#each plainSegments as segment, si}{#if segment.href}<a
         class="plain-link"
         href={segment.href}
         on:click|preventDefault={() => openURL(segment.href ?? '')}
         on:contextmenu={(e) => onPlainContext(e, segment.href ?? '')}
         on:mouseenter={() => showHover(segment.href ?? '')}
         on:mouseleave={() => showHover('')}
-      >{segment.text}</a>{#if $linkVerdicts.has(segment.href ?? '')}<VerdictBadge verdict={$linkVerdicts.get(segment.href ?? '')!} size={12} />{/if}{:else}<Highlight text={segment.text} terms={markTerms} />{/if}{/each}</pre>
+      >{segment.text}</a>{#if $linkVerdicts.has(segment.href ?? '')}<VerdictBadge verdict={$linkVerdicts.get(segment.href ?? '')!} size={12} />{/if}{:else}{#each plainSplit[si] ?? [{ text: segment.text, date: -1, first: false }] as part}{#if part.date >= 0}{#if part.first}<span
+              class="date-mark"
+              class:on={peek?.id === part.date}
+              data-pelton-date={part.date}
+              role="button"
+              tabindex="0"
+              aria-haspopup="dialog"
+              aria-label={mentions[part.date] ? $t('dateHint.mark').replace('{when}', describe(mentions[part.date])) : undefined}
+              on:mouseenter={() => hoverDate(part.date, 'hover')}
+              on:mouseleave={() => hoverDate(null, 'hover')}
+              on:focus={() => hoverDate(part.date, 'focus')}
+              on:blur={() => hoverDate(null, 'focus')}
+              on:click={() => openPeek(part.date, true)}
+              on:keydown={(e) => onPlainDateKey(e, part.date)}
+            ><Highlight text={part.text} terms={markTerms} /></span>{:else}<span
+              class="date-mark"
+              class:on={peek?.id === part.date}
+              data-pelton-date={part.date}
+              on:mouseenter={() => hoverDate(part.date, 'hover')}
+              on:mouseleave={() => hoverDate(null, 'hover')}
+            ><Highlight text={part.text} terms={markTerms} /></span>{/if}{:else}<Highlight text={part.text} terms={markTerms} />{/if}{/each}{/if}{/each}</pre>
 {/if}
 
 {#if quoteSplit?.hasQuote}
@@ -717,6 +1055,18 @@
   >
     <Ph svg={dotsIcon} size={16} />
   </button>
+{/if}
+
+{#if peek && peekMention}
+  <DatePeek
+    slot={{ start: peekMention.start, end: peekMention.end, allDay: peekMention.allDay }}
+    anchor={peek.anchor}
+    pinned={peek.pinned}
+    messageId={detail.id}
+    on:hold={holdPeek}
+    on:release={releasePeek}
+    on:close={(e) => closePeek(e.detail)}
+  />
 {/if}
 
 {#if hoverUrl}
@@ -1029,5 +1379,59 @@
     color: var(--accent);
     text-decoration: underline;
     cursor: var(--cursor-action);
+  }
+
+  /* a date the mail names: quiet until the pointer or the focus reaches it. */
+  .date-mark {
+    position: relative;
+    border-radius: var(--radius-control);
+    outline: none;
+    cursor: var(--cursor-action);
+    transition:
+      background-color var(--motion-fast) var(--ease-out),
+      box-shadow var(--motion-fast) var(--ease-out);
+  }
+
+  .date-mark:hover,
+  .date-mark.on,
+  .date-mark:focus-visible {
+    background: color-mix(in srgb, var(--accent) 14%, transparent);
+    box-shadow: 0 0 0 var(--space-1) color-mix(in srgb, var(--accent) 14%, transparent);
+  }
+
+  .date-mark:focus-visible {
+    box-shadow: 0 0 0 calc(var(--hairline) * 2) var(--accent);
+  }
+
+  .date-mark[tabindex]:is(:hover, .on, :focus-visible)::before {
+    content: '';
+    position: absolute;
+    inset-inline-start: -0.3em;
+    top: -0.95em;
+    width: 0.95em;
+    height: 0.95em;
+    border-radius: var(--radius-control);
+    background: var(--surface-overlay);
+    box-shadow:
+      0 0 0 var(--hairline) var(--border-default),
+      var(--shadow-overlay);
+    pointer-events: none;
+  }
+
+  .date-mark[tabindex]:is(:hover, .on, :focus-visible)::after {
+    content: '';
+    position: absolute;
+    inset-inline-start: -0.2em;
+    top: -0.85em;
+    width: 0.75em;
+    height: 0.75em;
+    background: var(--accent);
+    -webkit-mask: var(--date-glyph) center / contain no-repeat;
+    mask: var(--date-glyph) center / contain no-repeat;
+    pointer-events: none;
+  }
+
+  :global(:root[data-reduce-motion]) .date-mark {
+    transition: none;
   }
 </style>

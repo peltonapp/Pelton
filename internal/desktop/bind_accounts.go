@@ -38,7 +38,7 @@ func (a *App) ListFolders(accountID int64) ([]FolderDTO, error) {
 	out := make([]FolderDTO, 0, len(folders))
 	for _, f := range folders {
 		dto := toFolderDTO(f)
-		total, unread, err := a.store.FolderCounts(a.ctx, f.ID)
+		total, unread, err := a.folderCounts(f)
 		if err != nil {
 			return nil, err
 		}
@@ -47,6 +47,15 @@ func (a *App) ListFolders(accountID int64) ([]FolderDTO, error) {
 		out = append(out, dto)
 	}
 	return out, nil
+}
+
+// folderCounts is a folder's badge counts. An inbox leaves muted
+// conversations out, as its list does.
+func (a *App) folderCounts(f storage.Folder) (total, unread int, err error) {
+	if folderRole(f) == roleInbox {
+		return a.store.FolderCountsHidingMuted(a.ctx, f.ID)
+	}
+	return a.store.FolderCounts(a.ctx, f.ID)
 }
 
 // unifiedView is one entry in the built-in cross-account group. The label is a
@@ -87,11 +96,17 @@ func (a *App) ListUnifiedViews() ([]UnifiedViewDTO, error) {
 		if err != nil {
 			return nil, err
 		}
+		q.HideMuted = v.key == viewInbox
 		total, err := a.store.CountMessages(a.ctx, q)
 		if err != nil {
 			return nil, err
 		}
-		unread, err := a.store.UnreadCount(a.ctx, q.FolderIDs)
+		var unread int
+		if q.HideMuted {
+			unread, err = a.store.UnreadCountFor(a.ctx, q)
+		} else {
+			unread, err = a.store.UnreadCount(a.ctx, q.FolderIDs)
+		}
 		if err != nil {
 			return nil, err
 		}

@@ -11,6 +11,7 @@
 
 import * as App from '../../bindings/github.com/peltonapp/Pelton/internal/desktop/app'
 import * as desktop from '../../bindings/github.com/peltonapp/Pelton/internal/desktop/models'
+import type { NewsletterSender, InsightsStorage, InsightsVolume, InsightsPeople } from './mailstats'
 import {
   isDemoActive,
   demoAccounts,
@@ -25,6 +26,7 @@ import {
   demoThreads,
   demoThread,
 } from './demo'
+import { noteAction } from './coach'
 import type {
   Account,
   AccountProxy,
@@ -41,8 +43,14 @@ import type {
   Thread,
   ComposeRequest,
   Draft,
+  FollowUp,
+  Snippet,
   OutboxRow,
   OutboxEdit,
+  OutboxCancel,
+  OutboxLogEntry,
+  FocusInfo,
+  FocusSchedule,
   UIPrefs,
   SearchSort,
   ViewKey,
@@ -80,6 +88,14 @@ import type {
   EventBundle,
   MailEventSource,
   MessageRef,
+  TaskList,
+  Task,
+  TaskDraft,
+  TaskSaveResult,
+  TaskDeleteResult,
+  RemovedTask,
+  TaskMailMark,
+  TaskSettings,
   AttachmentContent,
   AttachmentEntry,
   AttachmentPage,
@@ -109,7 +125,14 @@ import type {
   ProfileDraft,
   PasswordCheck,
   AccountSyncState,
+  Note,
+  SplitTab,
+  SieveState,
+  SieveSave,
+  SieveVacation,
+  SieveRule,
 } from './types'
+import { normalizeState } from './sieve'
 
 // isDemoMode reports whether the app launched in the cosmetic --potatoes-are-nice
 // screenshot mode; the frontend reads it once to switch the data layer to samples.
@@ -324,31 +347,34 @@ export function listUnifiedViews(): Promise<UnifiedView[]> {
   return App.ListUnifiedViews()
 }
 
-// listFolderMessages reads a page of a single folder.
+// listFolderMessages reads a page of a single folder. split narrows an inbox
+// to one split inbox tab; '' reads all of it.
 export function listFolderMessages(
   folderId: number,
   limit: number,
   offset: number,
+  split = '',
 ): Promise<MessageList> {
   if (isDemoActive()) {
     return Promise.resolve(demoList())
   }
   return App.ListMessages(
-    new desktop.ListMessagesRequest({ kind: 'folder', folderId, view: '', limit, offset }),
+    new desktop.ListMessagesRequest({ kind: 'folder', folderId, view: '', limit, offset, split }),
   )
 }
 
-// listViewMessages reads a page of a unified view.
+// listViewMessages reads a page of a unified view, split as for a folder.
 export function listViewMessages(
   view: ViewKey,
   limit: number,
   offset: number,
+  split = '',
 ): Promise<MessageList> {
   if (isDemoActive()) {
     return Promise.resolve(demoList())
   }
   return App.ListMessages(
-    new desktop.ListMessagesRequest({ kind: 'view', folderId: 0, view, limit, offset }),
+    new desktop.ListMessagesRequest({ kind: 'view', folderId: 0, view, limit, offset, split }),
   )
 }
 
@@ -369,22 +395,22 @@ export function listSavedViewMessages(
 // listFolderThreads reads a page of one folder as conversations. Paging counts
 // conversations, and a conversation is listed when any of its messages is in
 // the folder.
-export function listFolderThreads(folderId: number, limit: number, offset: number): Promise<ThreadList> {
+export function listFolderThreads(folderId: number, limit: number, offset: number, split = ''): Promise<ThreadList> {
   if (isDemoActive()) {
     return Promise.resolve(demoThreads())
   }
   return App.ListThreads(
-    new desktop.ListMessagesRequest({ kind: 'folder', folderId, view: '', limit, offset }),
+    new desktop.ListMessagesRequest({ kind: 'folder', folderId, view: '', limit, offset, split }),
   )
 }
 
 // listViewThreads reads a page of a unified view as conversations.
-export function listViewThreads(view: ViewKey, limit: number, offset: number): Promise<ThreadList> {
+export function listViewThreads(view: ViewKey, limit: number, offset: number, split = ''): Promise<ThreadList> {
   if (isDemoActive()) {
     return Promise.resolve(demoThreads())
   }
   return App.ListThreads(
-    new desktop.ListMessagesRequest({ kind: 'view', folderId: 0, view, limit, offset }),
+    new desktop.ListMessagesRequest({ kind: 'view', folderId: 0, view, limit, offset, split }),
   )
 }
 
@@ -559,6 +585,7 @@ export function setSeen(id: number, seen: boolean): Promise<void> {
 }
 
 export function setFlagged(id: number, flagged: boolean): Promise<void> {
+  noteAction('flag')
   if (isDemoActive()) {
     return Promise.resolve()
   }
@@ -567,6 +594,7 @@ export function setFlagged(id: number, flagged: boolean): Promise<void> {
 
 // deleteMessage marks a message for server-side deletion on the next sync.
 export function deleteMessage(id: number): Promise<void> {
+  noteAction('delete-message')
   if (isDemoActive()) {
     return Promise.resolve()
   }
@@ -680,6 +708,7 @@ const noUndo: ArchiveUndo = { messageId: '', originalFolderId: 0, destFolderId: 
 // archiveMessage moves a message to its account's Archive folder on the server,
 // returning the info needed to undo it.
 export function archiveMessage(id: number): Promise<ArchiveUndo> {
+  noteAction('archive')
   if (isDemoActive()) {
     return Promise.resolve(noUndo)
   }
@@ -721,6 +750,96 @@ export function markNotSpam(id: number): Promise<ArchiveUndo> {
   return App.MarkNotSpam(id)
 }
 
+/** What a bulk action did: the ids it acted on, and the first failure. */
+export interface BulkResult {
+  done: number[]
+  failed: number
+  firstError: string
+}
+
+/** A bulk archive: BulkResult plus the undo record of every moved message. */
+export interface BulkArchive extends BulkResult {
+  undo: ArchiveUndo[]
+}
+
+const noBulk = (): BulkResult => ({ done: [], failed: 0, firstError: '' })
+
+/** Deletes many messages at once; undoDeletes brings them back until the next sync. */
+export function deleteMessages(ids: number[]): Promise<BulkResult> {
+  if (isDemoActive()) {
+    return Promise.resolve({ ...noBulk(), done: ids })
+  }
+  return App.DeleteMessages(ids) as unknown as Promise<BulkResult>
+}
+
+/** Reverses deleteMessages for the messages still cached. */
+export function undoDeletes(ids: number[]): Promise<BulkResult> {
+  if (isDemoActive()) {
+    return Promise.resolve({ ...noBulk(), done: ids })
+  }
+  return App.UndoDeletes(ids) as unknown as Promise<BulkResult>
+}
+
+/** Archives many messages with one server session per account. */
+export function archiveMessages(ids: number[]): Promise<BulkArchive> {
+  if (isDemoActive()) {
+    return Promise.resolve({ ...noBulk(), undo: [] })
+  }
+  return App.ArchiveMessages(ids) as unknown as Promise<BulkArchive>
+}
+
+/** Picks the newsletter mail of some senders for a bulk action. */
+export interface NewsletterSelection {
+  emails: string[]
+  /** Above 0 keeps only mail older than that many days. */
+  olderThanDays: number
+  /** Leaves each sender's newest message out. */
+  keepLatest: boolean
+  /** Leaves out mail already in an archive folder. */
+  forArchive: boolean
+}
+
+/** Every sender whose mail offers List-Unsubscribe, aggregated in the store. */
+export function listNewsletters(): Promise<NewsletterSender[]> {
+  if (isDemoActive()) {
+    return Promise.resolve([])
+  }
+  return App.ListNewsletters() as unknown as Promise<NewsletterSender[]>
+}
+
+/** The ids of the newsletter mail a selection picks. */
+export function newsletterMessageIds(sel: NewsletterSelection): Promise<number[]> {
+  if (isDemoActive()) {
+    return Promise.resolve([])
+  }
+  return App.NewsletterMessageIDs(new desktop.NewsletterSelectionDTO(sel))
+}
+
+/** The storage section of the insights page, computed from the local store. */
+export function insightsStorage(): Promise<InsightsStorage> {
+  if (isDemoActive()) {
+    return Promise.resolve({ accounts: [], senders: [], attachments: [] })
+  }
+  return App.InsightsStorage() as unknown as Promise<InsightsStorage>
+}
+
+/** The volume section over the last `days` days, 0 for all mail. */
+export function insightsVolume(days: number): Promise<InsightsVolume> {
+  if (isDemoActive()) {
+    return Promise.resolve({ since: '', days: [], hours: [], hasSent: false })
+  }
+  return App.InsightsVolume(days) as unknown as Promise<InsightsVolume>
+}
+
+/** The people section over the last `days` days, 0 for all mail. */
+export function insightsPeople(days: number): Promise<InsightsPeople> {
+  if (isDemoActive()) {
+    const none = { available: false, count: 0, medianSeconds: 0 }
+    return Promise.resolve({ writesTo: [], writesYou: [], myReplies: none, theirReplies: none })
+  }
+  return App.InsightsPeople(days) as unknown as Promise<InsightsPeople>
+}
+
 // SearchRequest is a ranked search over cached mail: free text plus an optional
 // date window. afterUnix/beforeUnix are unix seconds; 0 leaves that side open.
 export interface SearchRequest {
@@ -745,6 +864,10 @@ export interface SearchRequest {
   // the order results come back in, already resolved from the "automatic"
   // setting: the backend is told an order, never asked to guess one.
   sort: SearchSort
+  // note keeps messages whose private note contains this text, hasNote every
+  // message that has one.
+  note?: string
+  hasNote?: boolean
 }
 
 // SearchResult is one page of ranked results. total counts index matches and is
@@ -775,13 +898,13 @@ export interface MessageIDs {
 // messageIds returns every message id in a list, ignoring paging, for select
 // all. The list in the ui only holds the pages that were scrolled to, so
 // selecting a whole mailbox has to come from the query.
-export function messageIds(sel: Selection): Promise<MessageIDs> {
+export function messageIds(sel: Selection, split = ''): Promise<MessageIDs> {
   if (isDemoActive()) {
     return Promise.resolve({ ids: [], capped: false, matching: 0 })
   }
   if (sel.kind === 'view') {
     return App.MessageIDs(
-      new desktop.ListMessagesRequest({ kind: 'view', folderId: 0, view: sel.view, limit: 0, offset: 0 }),
+      new desktop.ListMessagesRequest({ kind: 'view', folderId: 0, view: sel.view, limit: 0, offset: 0, split }),
     )
   }
   if (sel.kind === 'savedView') {
@@ -790,7 +913,7 @@ export function messageIds(sel: Selection): Promise<MessageIDs> {
     )
   }
   return App.MessageIDs(
-    new desktop.ListMessagesRequest({ kind: 'folder', folderId: sel.folderId, view: '', limit: 0, offset: 0 }),
+    new desktop.ListMessagesRequest({ kind: 'folder', folderId: sel.folderId, view: '', limit: 0, offset: 0, split }),
   )
 }
 
@@ -933,6 +1056,43 @@ export function cancelSend(id: number): Promise<boolean> {
   return App.CancelSend(id)
 }
 
+// listFollowUps returns every follow-up reminder, waiting and fired, the
+// soonest due first.
+export function listFollowUps(): Promise<FollowUp[]> {
+  if (isDemoActive()) {
+    return Promise.resolve([])
+  }
+  return App.ListFollowUps().then((list) => list ?? [])
+}
+
+// listSnippets returns every snippet in the user's order.
+export function listSnippets(): Promise<Snippet[]> {
+  if (isDemoActive()) {
+    return Promise.resolve([])
+  }
+  return App.ListSnippets().then((list) => list ?? [])
+}
+
+// saveSnippet creates a snippet (id 0) or updates one, returning it as stored.
+export function saveSnippet(snippet: Snippet): Promise<Snippet> {
+  return App.SaveSnippet(snippet) as Promise<Snippet>
+}
+
+// deleteSnippet removes a snippet.
+export function deleteSnippet(id: number): Promise<void> {
+  return App.DeleteSnippet(id)
+}
+
+// reorderSnippets stores the order the snippets are listed in.
+export function reorderSnippets(ids: number[]): Promise<void> {
+  return App.ReorderSnippets(ids)
+}
+
+// cancelFollowUp drops a reminder, waiting or fired.
+export function cancelFollowUp(id: number): Promise<void> {
+  return App.CancelFollowUp(id)
+}
+
 // clearSentOutbox prunes rows already marked sent after the ui has shown the
 // brief sent confirmation.
 export function clearSentOutbox(): Promise<void> {
@@ -962,6 +1122,58 @@ export function sendOutboxNow(id: number): Promise<boolean> {
 // be taken back.
 export function editOutboxMessage(id: number): Promise<OutboxEdit> {
   return App.EditOutboxMessage(id) as unknown as Promise<OutboxEdit>
+}
+
+// cancelOutboxSend stops a message that is waiting or being transmitted and
+// says where it went: back to Drafts, back as a request for a composer, kept
+// as a failed send, or nowhere because it was too late.
+export function cancelOutboxSend(id: number): Promise<OutboxCancel> {
+  return App.CancelOutboxSend(id) as unknown as Promise<OutboxCancel>
+}
+
+// prioritiseOutboxSend moves a waiting message to the front of the queue.
+// Resolves false when it was no longer waiting.
+export function prioritiseOutboxSend(id: number): Promise<boolean> {
+  return App.PrioritiseOutboxSend(id)
+}
+
+// readOutboxLog returns the send activity of this run, oldest first.
+export function readOutboxLog(): Promise<OutboxLogEntry[]> {
+  if (isDemoActive()) {
+    return Promise.resolve([])
+  }
+  return App.ReadOutboxLog().then((list) => (list ?? []) as OutboxLogEntry[])
+}
+
+// openOutboxWindow shows the send activity in a window of its own, or brings
+// the one already open forward.
+export function openOutboxWindow(): Promise<void> {
+  return App.OpenOutboxWindow()
+}
+
+/** Focus mode as it stands now; the backend ends an elapsed one first. */
+export function getFocus(): Promise<FocusInfo> {
+  return App.GetFocus()
+}
+
+/** Turns focus on until the given time, or until it is turned off with null. */
+export function startFocus(until: Date | null): Promise<FocusInfo> {
+  return App.StartFocus(until ? until.toISOString().replace(/\.\d{3}Z$/, 'Z') : '')
+}
+
+/** Turns focus off now; the summary arrives as a focus:ended event. */
+export function endFocus(): Promise<void> {
+  return App.EndFocus()
+}
+
+/** The days and hours focus starts on its own. */
+export function getFocusSchedule(): Promise<FocusSchedule> {
+  return App.GetFocusSchedule().then((s) => ({ ...s, days: s.days ?? [] }))
+}
+
+/** Stores the focus schedule; a window already open starts focus at once. */
+export function setFocusSchedule(schedule: FocusSchedule): Promise<void> {
+  return App.SetFocusSchedule(schedule)
 }
 
 // trustSenderImages permanently allows remote content from a message's sender.
@@ -1204,6 +1416,65 @@ export function setFlagColor(id: number, color: number): Promise<void> {
     return Promise.resolve()
   }
   return App.SetFlagColor(id, color)
+}
+
+/** Mutes or unmutes the conversation a message belongs to. */
+export function setConversationMuted(id: number, muted: boolean): Promise<void> {
+  if (isDemoActive()) {
+    return Promise.resolve()
+  }
+  return App.SetConversationMuted(id, muted)
+}
+
+/**
+ * Pins or unpins a message. With conversation set, unpinning clears every
+ * message of its conversation.
+ */
+export function setPinned(id: number, pinned: boolean, conversation: boolean): Promise<void> {
+  if (isDemoActive()) {
+    return Promise.resolve()
+  }
+  return App.SetPinned(id, pinned, conversation)
+}
+
+/** Reads the private note on a message, or on its conversation. */
+export function getNote(id: number, conversation: boolean): Promise<Note> {
+  if (isDemoActive()) {
+    return Promise.resolve({ body: '', updatedAt: '' })
+  }
+  return App.GetNote(id, conversation)
+}
+
+/** Writes the private note on a message, or on its conversation; a blank body deletes it. */
+export function saveNote(id: number, conversation: boolean, body: string): Promise<Note> {
+  if (isDemoActive()) {
+    return Promise.resolve({ body, updatedAt: '' })
+  }
+  return App.SaveNote(id, conversation, body)
+}
+
+/** Deletes the private note on a message, or on its conversation. */
+export function deleteNote(id: number, conversation: boolean): Promise<void> {
+  if (isDemoActive()) {
+    return Promise.resolve()
+  }
+  return App.DeleteNote(id, conversation)
+}
+
+/** Counts each split inbox tab of an inbox selection; empty for anything else. */
+export function splitCounts(sel: Selection): Promise<SplitTab[]> {
+  if (isDemoActive() || sel.kind === 'savedView') {
+    return Promise.resolve([])
+  }
+  return App.SplitCounts(
+    new desktop.ListMessagesRequest({
+      kind: sel.kind,
+      folderId: sel.kind === 'folder' ? sel.folderId : 0,
+      view: sel.kind === 'view' ? sel.view : '',
+      limit: 0,
+      offset: 0,
+    }),
+  )
 }
 
 // downloadMessageOffline / removeOffline pin or unpin a single message.
@@ -1593,6 +1864,10 @@ export const SettingKeys = {
   sendDelay: 'send_delay_seconds',
   flagHighlight: 'flag_highlight',
   shortcutHints: 'show_shortcut_hints',
+  coachHints: 'coach_hints',
+  coachHold: 'coach_hold',
+  // the shortcut coach's counters: hints shown and keys used, per action.
+  coachCounters: 'shortcut_coach',
   harvestAddresses: 'harvest_addresses',
   accountEmail: 'show_account_email',
   onboarded: 'onboarding_complete',
@@ -1653,8 +1928,16 @@ export const SettingKeys = {
   recentSearches: 'recent_searches',
   composeOpenIn: 'compose_open_in',
   threadedList: 'threaded_list',
+  afterMove: 'after_move',
+  warnMissingAttachment: 'warn_missing_attachment',
+  warnEmptySubject: 'warn_empty_subject',
+  splitInbox: 'split_inbox',
+  splitTabs: 'split_inbox_tabs',
+  splitActive: 'split_inbox_active',
   readerWidth: 'reader_width',
   senderPanel: 'sender_panel',
+  mailDates: 'mail_dates',
+  myDayPanel: 'my_day_panel',
   themeId: 'theme_id',
   menuBarInApp: 'menu_bar_in_app',
   menuBarNativeMinimal: 'menu_bar_native_minimal',
@@ -2296,7 +2579,183 @@ export function setDefaultCalendarFileHandler(): Promise<void> {
   return App.SetDefaultCalendarFileHandler()
 }
 
+/** listTaskLists returns every list that takes tasks, local ones first. */
+export function listTaskLists(): Promise<TaskList[]> {
+  if (isDemoActive()) {
+    return Promise.resolve([])
+  }
+  return App.ListTaskLists().then((list) => (list ?? []) as unknown as TaskList[])
+}
+
+/** createTaskList adds a task list that lives only on this device. */
+export function createTaskList(name: string, color: string): Promise<TaskList> {
+  return App.CreateTaskList(name, color) as unknown as Promise<TaskList>
+}
+
+/** deleteTaskList removes a local task list and its tasks; the last one stays. */
+export function deleteTaskList(id: number): Promise<void> {
+  return App.DeleteTaskList(id)
+}
+
+/** listTasks returns every task, completed ones only as long as the settings keep them. */
+export function listTasks(): Promise<Task[]> {
+  if (isDemoActive()) {
+    return Promise.resolve([])
+  }
+  return App.ListTasks().then((list) => (list ?? []) as unknown as Task[])
+}
+
+/** getTask returns one task. */
+export function getTask(id: number): Promise<Task> {
+  return App.GetTask(id) as unknown as Promise<Task>
+}
+
+/** createTask stores a new task and writes it to its list's server. */
+export function createTask(draft: TaskDraft): Promise<TaskSaveResult> {
+  return App.CreateTask(new desktop.TaskRequest(draft)) as unknown as Promise<TaskSaveResult>
+}
+
+/** updateTask saves an edit; another listId moves the task with its subtasks. */
+export function updateTask(draft: TaskDraft): Promise<TaskSaveResult> {
+  return App.UpdateTask(new desktop.TaskRequest(draft)) as unknown as Promise<TaskSaveResult>
+}
+
+/** setTaskDone completes a task or opens it again; a repeating one moves on instead. */
+export function setTaskDone(id: number, done: boolean): Promise<TaskSaveResult> {
+  return App.SetTaskDone(id, done) as unknown as Promise<TaskSaveResult>
+}
+
+/** setTaskDue moves a task's due date; empty clears it. */
+export function setTaskDue(id: number, due: string): Promise<TaskSaveResult> {
+  return App.SetTaskDue(id, due) as unknown as Promise<TaskSaveResult>
+}
+
+/** reorderTasks gives tasks the manual order they are listed in. */
+export function reorderTasks(ids: number[]): Promise<void> {
+  return App.ReorderTasks(ids)
+}
+
+/** deleteTask deletes a task with its subtasks and returns what went, for undo. */
+export function deleteTask(id: number, force = false): Promise<TaskDeleteResult> {
+  return App.DeleteTask(id, force) as unknown as Promise<TaskDeleteResult>
+}
+
+/** restoreTasks brings deleted tasks back as they were. */
+export function restoreTasks(items: RemovedTask[]): Promise<void> {
+  return App.RestoreTasks(items.map((i) => new desktop.RemovedTaskDTO(i)))
+}
+
+/** resolveTaskConflict keeps the local version (keepMine) or takes the server's. */
+export function resolveTaskConflict(id: number, keepMine: boolean): Promise<Task> {
+  return App.ResolveTaskConflict(id, keepMine) as unknown as Promise<Task>
+}
+
+/** listTaskMailMarks returns the stored messages that tasks link to. */
+export function listTaskMailMarks(): Promise<TaskMailMark[]> {
+  if (isDemoActive()) {
+    return Promise.resolve([])
+  }
+  return App.ListTaskMailMarks().then((list) => (list ?? []) as unknown as TaskMailMark[])
+}
+
+/** findEventByUID finds the event a task links to; found is false when it is gone. */
+export function findEventByUID(uid: string): Promise<{ found: boolean; eventId: number; start: string; allDay: boolean; summary: string }> {
+  return App.FindEventByUID(uid)
+}
+
+/** getTaskSettings returns the task preferences. */
+export function getTaskSettings(): Promise<TaskSettings> {
+  return App.GetTaskSettings() as unknown as Promise<TaskSettings>
+}
+
+/** setTaskSettings saves the task preferences. */
+export function setTaskSettings(settings: TaskSettings): Promise<void> {
+  return App.SetTaskSettings(new desktop.TaskSettingsDTO(settings))
+}
+
 /** createEventDraftFromMessage prefills an event from a mail dropped on the calendar. */
 export function createEventDraftFromMessage(messageId: number): Promise<EventDraft> {
   return App.CreateEventDraftFromMessage(messageId) as unknown as Promise<EventDraft>
+}
+
+// demoSieve answers the sieve calls in demo mode, which never reaches a server.
+function demoSieve(accountId: number): SieveState {
+  return {
+    accountId,
+    status: 'unsupported',
+    detail: '',
+    host: '',
+    port: 0,
+    tls: '',
+    manual: false,
+    remembered: false,
+    caps: { implementation: '', extensions: [], vacation: false, dates: false, fileInto: false, flags: false, envelope: false, include: false },
+    exists: false,
+    active: false,
+    editable: true,
+    raw: '',
+    script: { vacation: null, rules: [], includes: [] },
+    otherActive: '',
+    hasPrevious: false,
+    addresses: [],
+  }
+}
+
+// sieveState connects to an account's sieve service (out of office and server
+// filters) and reports what is there.
+export function sieveState(accountId: number): Promise<SieveState> {
+  if (isDemoActive()) {
+    return Promise.resolve(demoSieve(accountId))
+  }
+  return sieveCall(App.SieveState(accountId))
+}
+
+function sieveCall(call: Promise<unknown>): Promise<SieveState> {
+  return call.then((s) => normalizeState(s as SieveState))
+}
+
+function sieveSaveCall(call: Promise<unknown>): Promise<SieveSave> {
+  return call.then((r) => {
+    const out = r as SieveSave
+    return { ...out, state: normalizeState(out.state) }
+  })
+}
+
+// recheckSieve looks for a sieve service again on a server remembered as having none.
+export function recheckSieve(accountId: number): Promise<SieveState> {
+  if (isDemoActive()) {
+    return Promise.resolve(demoSieve(accountId))
+  }
+  return sieveCall(App.RecheckSieve(accountId))
+}
+
+// setSieveConnection sets the sieve host, port and security by hand; '' and 0
+// go back to the defaults, tls is 'starttls' or 'ssl'.
+export function setSieveConnection(accountId: number, host: string, port: number, tls: string): Promise<SieveState> {
+  return sieveCall(App.SetSieveConnection(accountId, host, port, tls))
+}
+
+// saveSieveVacation writes the out of office to the server and activates it.
+export function saveSieveVacation(accountId: number, vacation: SieveVacation): Promise<SieveSave> {
+  return sieveSaveCall(App.SaveSieveVacation(accountId, vacation))
+}
+
+// saveSieveRules writes the server filters to the server and activates them.
+export function saveSieveRules(accountId: number, rules: SieveRule[]): Promise<SieveSave> {
+  return sieveSaveCall(App.SaveSieveRules(accountId, rules))
+}
+
+// checkSieveScript asks the server whether a script is valid, storing nothing.
+export function checkSieveScript(accountId: number, text: string): Promise<SieveSave> {
+  return sieveSaveCall(App.CheckSieveScript(accountId, text))
+}
+
+// saveSieveScript writes a script as text after the server checked it.
+export function saveSieveScript(accountId: number, text: string): Promise<SieveSave> {
+  return sieveSaveCall(App.SaveSieveScript(accountId, text))
+}
+
+// restoreSievePrevious undoes the last sieve save.
+export function restoreSievePrevious(accountId: number): Promise<SieveState> {
+  return sieveCall(App.RestoreSievePrevious(accountId))
 }

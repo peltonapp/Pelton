@@ -5,7 +5,7 @@
 // source of truth.
 
 import { writable } from 'svelte/store'
-import type { UIPrefs, ThemePref, DensityPref, EditorMode, ViewsPlacement, CloseAction, LogLevel, SelectAllScope, SearchKind, SearchSortPref, DesignPref, LayoutMode, NavStyle, RailSide, PaneStyle, AvatarPlacement, ContactsView, ComposeOpenIn, ReaderWidth } from '../lib/types'
+import type { UIPrefs, ThemePref, DensityPref, EditorMode, ViewsPlacement, CloseAction, LogLevel, SelectAllScope, SearchKind, SearchSortPref, DesignPref, LayoutMode, NavStyle, RailSide, PaneStyle, AvatarPlacement, ContactsView, ComposeOpenIn, ReaderWidth, AfterMove } from '../lib/types'
 import { getUIPrefs, setSetting, SettingKeys, systemColorScheme, setWindowTheme, getThemeApply } from '../lib/api'
 import { applyTheme, applyDensity, applyAccent, applyScale, applyReduceMotion, applyHandCursor, setThemeSchedule, applyUIFont, applyMonoFont, applyCorners, applyDesign, watchSystemTheme, setSystemSchemeOverride, resolveTheme } from '../theme/theme'
 import { applyUserTheme } from '../theme/usertheme'
@@ -30,6 +30,8 @@ const defaults: UIPrefs = {
   sendDelaySeconds: 0,
   flagHighlight: 'flag',
   showShortcutHints: true,
+  coachHints: true,
+  coachHold: true,
   harvestAddresses: true,
   showAccountEmail: false,
   alwaysLoadImages: false,
@@ -88,8 +90,16 @@ const defaults: UIPrefs = {
   quickFilterBar: false,
   composeOpenIn: 'window',
   threadedList: true,
+  afterMove: 'older',
+  warnMissingAttachment: true,
+  warnEmptySubject: true,
+  splitInbox: false,
+  splitTabs: 'important,newsletters,notifications',
+  splitActive: '',
   readerWidth: 'full',
   senderPanel: false,
+  mailDates: true,
+  myDayPanel: false,
   themeId: '',
   menuBarInApp: false,
   menuBarNativeMinimal: false,
@@ -346,6 +356,42 @@ export function setThreadedList(threadedList: boolean): void {
   void setSetting(SettingKeys.threadedList, String(threadedList))
 }
 
+/** Picks what the reader opens after the open message is archived, deleted or moved. */
+export function setAfterMove(afterMove: AfterMove): void {
+  prefs.update((p) => ({ ...p, afterMove }))
+  void setSetting(SettingKeys.afterMove, afterMove)
+}
+
+/** Turns the missing attachment check before sending on or off. */
+export function setWarnMissingAttachment(warnMissingAttachment: boolean): void {
+  prefs.update((p) => ({ ...p, warnMissingAttachment }))
+  void setSetting(SettingKeys.warnMissingAttachment, String(warnMissingAttachment))
+}
+
+/** Turns the empty subject check before sending on or off. */
+export function setWarnEmptySubject(warnEmptySubject: boolean): void {
+  prefs.update((p) => ({ ...p, warnEmptySubject }))
+  void setSetting(SettingKeys.warnEmptySubject, String(warnEmptySubject))
+}
+
+/** Turns the split inbox on or off. */
+export function setSplitInbox(splitInbox: boolean): void {
+  prefs.update((p) => ({ ...p, splitInbox }))
+  void setSetting(SettingKeys.splitInbox, String(splitInbox))
+}
+
+/** Stores the split inbox tab order, comma separated, without the catch-all. */
+export function setSplitTabs(splitTabs: string): void {
+  prefs.update((p) => ({ ...p, splitTabs }))
+  void setSetting(SettingKeys.splitTabs, splitTabs)
+}
+
+/** Remembers the split inbox tab last shown. */
+export function setSplitActive(splitActive: string): void {
+  prefs.update((p) => ({ ...p, splitActive }))
+  void setSetting(SettingKeys.splitActive, splitActive)
+}
+
 /** Picks how wide the reading column runs in the new design. */
 export function setReaderWidth(readerWidth: ReaderWidth): void {
   prefs.update((p) => ({ ...p, readerWidth }))
@@ -356,6 +402,18 @@ export function setReaderWidth(readerWidth: ReaderWidth): void {
 export function setSenderPanel(senderPanel: boolean): void {
   prefs.update((p) => ({ ...p, senderPanel }))
   void setSetting(SettingKeys.senderPanel, String(senderPanel))
+}
+
+/** Turns the marking of dates in an open mail on or off. */
+export function setMailDates(mailDates: boolean): void {
+  prefs.update((p) => ({ ...p, mailDates }))
+  void setSetting(SettingKeys.mailDates, String(mailDates))
+}
+
+/** Shows or hides the My Day panel beside the mail surface. */
+export function setMyDayPanel(myDayPanel: boolean): void {
+  prefs.update((p) => ({ ...p, myDayPanel }))
+  void setSetting(SettingKeys.myDayPanel, String(myDayPanel))
 }
 
 /** Turns the gliding caret of the compose editor on or off. */
@@ -783,6 +841,18 @@ export function setFlagHighlight(style: string): void {
 export function setShortcutHints(value: boolean): void {
   prefs.update((p) => ({ ...p, showShortcutHints: value }))
   void setSetting(SettingKeys.shortcutHints, String(value))
+}
+
+/** Turns the hint that names the key after a mouse action on or off. */
+export function setCoachHints(value: boolean): void {
+  prefs.update((p) => ({ ...p, coachHints: value }))
+  void setSetting(SettingKeys.coachHints, String(value))
+}
+
+/** Turns the shortcut sheet shown while the modifier is held on or off. */
+export function setCoachHold(value: boolean): void {
+  prefs.update((p) => ({ ...p, coachHold: value }))
+  void setSetting(SettingKeys.coachHold, String(value))
 }
 
 // setHarvestAddresses toggles learning addresses from mail for autocomplete.

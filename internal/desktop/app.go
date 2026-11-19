@@ -57,6 +57,11 @@ type App struct {
 	// in this run, by outbox id, so a scheduled or failed send can be taken
 	// back into a composer. Memory only; see bind_outbox_edit.go.
 	sentRequests sync.Map
+	// sendWorker is the running outbox worker, nil until it starts. activity
+	// is the memory only log of what it does, for the send activity window.
+	// See bind_outbox_controls.go.
+	sendWorker atomic.Pointer[outbox.Worker]
+	activity   *outbox.ActivityLog
 	// notifier posts the new-mail notifications (notify.go) and dock carries
 	// the unread badge on macOS. Both are nil in tests. notifyReady is set once
 	// the notification service has started (notifier.go).
@@ -187,6 +192,10 @@ type App struct {
 	// real accounts and mail. It never touches the store or the network.
 	demoMode bool
 
+	// sieveMu runs one sieve session at a time, so two saves cannot interleave
+	// their backup, upload and activation. See bind_sieve.go.
+	sieveMu sync.Mutex
+
 	// proxyMu guards proxyCfg, the cached outbound proxy preference (with its
 	// password from the keyring). It is loaded at startup and refreshed by
 	// SetProxyConfig, so the mail and http paths read it without touching the
@@ -213,6 +222,10 @@ type App struct {
 	// waiting for the next sidebar refresh.
 	badgeMu     sync.Mutex
 	unreadBadge int
+
+	// focusMu serialises changes to the stored focus state (bind_focus.go),
+	// which the ticker, the bindings and the new-mail path all write.
+	focusMu sync.Mutex
 }
 
 // IsDemoMode reports whether the app was launched in the cosmetic demo mode. The
@@ -235,7 +248,7 @@ func (a *App) IsDevMode() bool {
 // emit runtime events on.
 func newApp(version, channel string) *App {
 	w := logging.NewWriter()
-	return &App{
+	a := &App{
 		logWriter:  w,
 		log:        w.Logger(),
 		version:    version,
@@ -243,6 +256,8 @@ func newApp(version, channel string) *App {
 		startedAt:  time.Now(),
 		storeReady: make(chan struct{}),
 	}
+	a.activity = outbox.NewActivityLog(activityLogSize, a.emitActivity)
+	return a
 }
 
 // ServiceStartup is the wails service startup hook. It opens the store, runs

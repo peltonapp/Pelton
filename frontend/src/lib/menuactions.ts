@@ -44,8 +44,11 @@ import {
   IconFolderX,
   IconTrashX,
   IconPin,
+  IconBellOff,
+  IconNote,
   IconBrush,
   IconCommand,
+  IconCircleCheck,
 } from '@tabler/icons-svelte'
 import type { ShortcutAction } from './shortcuts'
 import { isMac } from './i18n'
@@ -112,6 +115,7 @@ export const menuActionCatalog: MenuActionDef[] = [
   { action: 'snooze', labelKey: 'shortcut.snooze', iconName: 'alarm-snooze', icon: IconAlarmSnooze, needsMessage: true },
   { action: 'download-offline', labelKey: 'shortcut.downloadOffline', iconName: 'download', icon: IconDownload, needsMessage: true },
   { action: 'archive', labelKey: 'menu.archive', iconName: 'archive', icon: IconArchive, needsMessage: true },
+  { action: 'done', labelKey: 'shortcut.done', iconName: 'circle-check', icon: IconCircleCheck, needsMessage: true },
   { action: 'toggle-spam', labelKey: 'shortcut.toggleSpam', iconName: 'alert-triangle', icon: IconAlertTriangle, needsMessage: true },
   { action: 'delete-message', labelKey: 'menu.deleteMessage', iconName: 'trash', icon: IconTrash, needsMessage: true, danger: true },
   { action: 'unsubscribe', labelKey: 'shortcut.unsubscribe', iconName: 'mail-x', icon: IconMailX, needsMessage: true },
@@ -120,6 +124,9 @@ export const menuActionCatalog: MenuActionDef[] = [
   { action: 'toggle-fullscreen', labelKey: 'menu.toggleFullscreen', iconName: 'maximize', icon: IconMaximize },
   { action: 'toggle-low-power', labelKey: 'menu.lowPower', iconName: 'battery-eco', icon: IconBatteryEco },
   { action: 'mark-vip', labelKey: 'palette.action.markVip', iconName: 'star', icon: IconStar, needsMessage: true },
+  { action: 'toggle-pin', labelKey: 'shortcut.togglePin', iconName: 'pin', icon: IconPin, needsMessage: true },
+  { action: 'toggle-mute', labelKey: 'shortcut.toggleMute', iconName: 'bell-off', icon: IconBellOff, needsMessage: true },
+  { action: 'edit-note', labelKey: 'shortcut.editNote', iconName: 'note', icon: IconNote, needsMessage: true },
   { action: 'move-to', labelKey: 'messageList.menu.moveTo', iconName: 'folder-symlink', icon: IconFolderSymlink, needsMessage: true },
   { action: 'flag-color', labelKey: 'palette.action.flagColor', iconName: 'palette', icon: IconPalette, needsMessage: true },
   { action: 'remove-offline', labelKey: 'messageList.menu.removeOffline', iconName: 'download-off', icon: IconDownloadOff, needsMessage: true },

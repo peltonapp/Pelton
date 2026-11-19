@@ -49,7 +49,7 @@ func TestFromJSCalendarExamples(t *testing.T) {
 				t.Errorf("updated %q", got)
 			}
 		}},
-		{"group with a task", rfcGroup, 1, 1, nil},
+		{"group with a task", rfcGroup, 1, 0, nil},
 		{"all day", rfcAllDay, 1, 0, func(t *testing.T, ev *Event, obj *Object) {
 			if !ev.Start.AllDay || ev.Start.Value() != "19000401" || ev.End.Value() != "19000402" {
 				t.Errorf("all day %+v to %+v", ev.Start, ev.End)
@@ -112,7 +112,7 @@ func TestFromJSCalendarExamples(t *testing.T) {
 func TestFromJSCalendarLenient(t *testing.T) {
 	data := `[{"@type":"Event","uid":"1","title":"no start"},{"@type":"Event","uid":"2","title":"ok","start":"2026-05-01T10:00:00","timeZone":"Etc/UTC","duration":"PT30M","futureProperty":{"x":1},"status":"tentative","freeBusyStatus":"free","privacy":"private","sequence":3,"alerts":{"a":{"@type":"Alert","trigger":{"@type":"OffsetTrigger","offset":"-PT15M"}},"b":{"@type":"Alert","trigger":{"@type":"UnknownTrigger"}}}},{"@type":"Task","uid":"3"},{"@type":"Note"}]`
 	objs, report := importJS(t, data)
-	if report.Events != 1 || len(report.Skipped) != 2 {
+	if report.Events != 1 || report.Tasks != 1 || len(report.Skipped) != 1 {
 		t.Fatalf("events %d skipped %+v", report.Events, report.Skipped)
 	}
 	ev := objs[0].Master
@@ -151,7 +151,7 @@ func TestIsJSCalendar(t *testing.T) {
 func TestJSCalendarRoundTrip(t *testing.T) {
 	for _, data := range []string{rfcSimpleEvent, rfcAllDay, rfcOverrides, rfcParticipants} {
 		objs, _ := importJS(t, data)
-		out, err := ToJSCalendar(objs, "Home")
+		out, err := ToJSCalendar(objs, nil, "Home")
 		if err != nil {
 			t.Fatal(err)
 		}

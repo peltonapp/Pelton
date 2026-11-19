@@ -226,6 +226,7 @@ func (im *Importer) storeMessage(ctx context.Context, accountID int64, folder st
 		SizeBytes:           parsed.Size,
 		ListUnsubscribe:     parsed.ListUnsubscribe,
 		ListUnsubscribePost: parsed.ListUnsubscribePost,
+		ListID:              parsed.ListID,
 		CharsetGuess:        parsed.CharsetGuess,
 	}
 

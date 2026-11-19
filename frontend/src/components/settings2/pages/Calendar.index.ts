@@ -8,6 +8,7 @@ const entries: SettingsIndexEntry[] = [
   { page: 'calendar', id: 'calendar-default-calendar', labelKey: 'calendarSettings.defaultCalendar', keywords: 'calendar default new event' },
   { page: 'calendar', id: 'calendar-default-reminder', labelKey: 'calendarSettings.defaultReminder', keywords: 'calendar reminder alarm alert notification default' },
   { page: 'calendar', id: 'calendar-reminders', labelKey: 'calendarSettings.reminders', keywords: 'calendar reminders notifications alarms' },
+  { page: 'calendar', id: 'calendar-show-tasks', labelKey: 'taskSettings.inCalendar', keywords: 'calendar tasks todo show due checkbox' },
   { page: 'calendar', id: 'calendar-ics-handler', labelKey: 'calendarSettings.icsHandler', keywords: 'ics ical file open default app handler import' },
   { page: 'calendar', id: 'calendar-sync', labelKey: 'calendarSettings.sync', keywords: 'calendar sync interval background caldav' },
   { page: 'calendar', id: 'calendar-accounts', labelKey: 'calendarSettings.accounts', keywords: 'caldav account server nextcloud fastmail icloud calendar add' },

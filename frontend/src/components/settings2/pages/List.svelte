@@ -33,7 +33,11 @@
     setSwipeLeftAction,
     setSwipeRightAction,
     setThreadedList,
+    setAfterMove,
+    setSplitInbox,
   } from '../../../stores/prefs'
+  import AfterMoveSkeleton from '../skeletons/AfterMoveSkeleton.svelte'
+  import SplitEditor from '../../list/SplitEditor.svelte'
   import { t } from '../../../lib/i18n'
   import { pfpDataUri, type PfpStyle } from '../../../lib/pfp'
   import { initials } from '../../../lib/format'
@@ -45,7 +49,14 @@
     SelectAllScope,
     SearchKind,
     SearchSortPref,
+    AfterMove,
   } from '../../../lib/types'
+
+  $: afterMoveOptions = [
+    { key: 'older', label: $t('list.afterMove.older') },
+    { key: 'newer', label: $t('list.afterMove.newer') },
+    { key: 'list', label: $t('list.afterMove.list') },
+  ]
 
   $: snippetCapable = $prefs.rowTemplate === 'relaxed' || $prefs.rowTemplate === 'comfortable'
 
@@ -212,6 +223,28 @@
       label={$t('list.threaded.label')}
       on:change={(e) => setThreadedList(e.detail)}
     />
+  </Row>
+  <Row id="after-move" label={$t('list.afterMove.label')} hint={$t('list.afterMove.hint')}>
+    <AfterMoveSkeleton slot="preview" mode={$prefs.afterMove} />
+    <Segmented
+      label={$t('list.afterMove.label')}
+      value={$prefs.afterMove}
+      options={afterMoveOptions}
+      on:change={(e) => setAfterMove(e.detail as AfterMove)}
+    />
+  </Row>
+</Card>
+
+<Card title={$t('settings.list.splitInbox')}>
+  <Row id="split-inbox" label={$t('settings.list.splitInbox')} hint={$t('settings.list.splitInboxHint')}>
+    <ToggleSwitch
+      checked={$prefs.splitInbox}
+      label={$t('settings.list.splitInbox')}
+      on:change={(e) => setSplitInbox(e.detail)}
+    />
+  </Row>
+  <Row id="split-tabs" label={$t('settings.list.splitTabs')} hint={$t('settings.list.splitTabsHint')} stacked disabled={!$prefs.splitInbox}>
+    <SplitEditor />
   </Row>
 </Card>
 

@@ -9,6 +9,7 @@
   import { shortcuts as registry, eventToCombo, type ShortcutAction } from '../../lib/shortcuts'
   import { bindings, recording, setBinding, resetBinding, resetAll, conflictsFor } from '../../stores/shortcuts'
   import { t, shortcutLabel } from '../../lib/i18n'
+  import { prefs } from '../../stores/prefs'
 
   let query = ''
 
@@ -19,6 +20,9 @@
   // filter rows by their localized label (and the action key as a fallback).
   // $t is a dependency so this re-filters when the language changes too.
   $: rows = registry.filter((s) => {
+    if (s.newDesignOnly && $prefs.design === 'classic') {
+      return false
+    }
     const q = query.trim().toLowerCase()
     if (!q) {
       return true

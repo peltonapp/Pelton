@@ -10,7 +10,7 @@ import { buildRRule, defaultRepeat, type Freq } from './recurrence'
 
 /** The part of a chrono result this module reads. */
 export interface ChronoComponents {
-  isCertain(component: 'day' | 'weekday' | 'hour' | 'month'): boolean
+  isCertain(component: 'day' | 'weekday' | 'hour' | 'month' | 'meridiem'): boolean
   date(): Date
 }
 
@@ -499,33 +499,14 @@ export interface FoundDate {
 export function datesInText(text: string, opts: { ref: Date; now: Date; lang: string; chrono: ChronoLike[]; defaultMinutes?: number }): FoundDate[] {
   const table = phraseTable(opts.lang)
   const length = opts.defaultMinutes ?? 60
-  let results: ChronoResult[] = []
-  for (const parser of opts.chrono) {
-    results = parser.parse(text, opts.ref)
-    if (results.length > 0) {
-      break
-    }
-  }
   const found: (FoundDate & { order: number; timed: boolean })[] = []
   const seen = new Set<string>()
-  results.forEach((r, order) => {
-    const timed = r.start.isCertain('hour')
-    if (!timed && !r.start.isCertain('day') && !r.start.isCertain('weekday')) {
+  parseFirst(text, opts.ref, opts.chrono).forEach((r, order) => {
+    const span = resultSpan(r, length)
+    if (!span) {
       return
     }
-    const startAt = r.start.date()
-    let start = timed ? startAt : startOfDay(startAt)
-    let end: Date
-    if (timed) {
-      end = r.end?.isCertain('hour') ? r.end.date() : new Date(start.getTime() + length * 60000)
-      if (end <= start) {
-        end = new Date(start.getTime() + length * 60000)
-      }
-    } else {
-      const last = r.end?.isCertain('day') ? startOfDay(r.end.date()) : start
-      end = addDays(last >= start ? last : start, 1)
-    }
-    start = new Date(start)
+    const { start, end, timed } = span
     const key = `${start.getTime()}|${timed}`
     if (seen.has(key)) {
       return
@@ -540,6 +521,85 @@ export function datesInText(text: string, opts: { ref: Date; now: Date; lang: st
     return Number(!a.timed) - Number(!b.timed) || futureA - futureB || a.order - b.order
   })
   return found.slice(0, 8).map(({ start, end, allDay, text: words, location }) => ({ start, end, allDay, text: words, location }))
+}
+
+// the results of the first parser that finds anything.
+function parseFirst(text: string, ref: Date, chrono: ChronoLike[]): ChronoResult[] {
+  for (const parser of chrono) {
+    const results = parser.parse(text, ref)
+    if (results.length > 0) {
+      return results
+    }
+  }
+  return []
+}
+
+// the span a result names: its times when it has an hour, else the days it
+// covers. null for a result that names neither a day nor a time.
+function resultSpan(r: ChronoResult, length: number): { start: Date; end: Date; timed: boolean } | null {
+  const timed = r.start.isCertain('hour')
+  if (!timed && !r.start.isCertain('day') && !r.start.isCertain('weekday')) {
+    return null
+  }
+  const startAt = r.start.date()
+  const start = timed ? new Date(startAt) : startOfDay(startAt)
+  let end: Date
+  if (timed) {
+    end = r.end?.isCertain('hour') ? r.end.date() : new Date(start.getTime() + length * 60000)
+    if (end <= start) {
+      end = new Date(start.getTime() + length * 60000)
+    }
+  } else {
+    const last = r.end?.isCertain('day') ? startOfDay(r.end.date()) : start
+    end = addDays(last >= start ? last : start, 1)
+  }
+  return { start, end, timed }
+}
+
+/** A date named in a text, by where it stands in it. */
+export interface DateMention {
+  /** Where the words start in the text, and how long they run. */
+  index: number
+  length: number
+  start: Date
+  end: Date
+  allDay: boolean
+}
+
+/**
+ * Finds every date and time a text names, in the order they stand, each with
+ * its place in the text, read against when the text was written. Read the
+ * way a mail means them: a bare weekday is the next one rather than the last,
+ * and an hour from 1 to 7 without am or pm and not written with a leading
+ * zero is in the afternoon. A mention that only says
+ * "now" or is shorter than three characters is left out.
+ */
+export function dateMentions(text: string, opts: { ref: Date; chrono: ChronoLike[]; defaultMinutes?: number }): DateMention[] {
+  const length = opts.defaultMinutes ?? 60
+  const out: DateMention[] = []
+  let reached = 0
+  for (const r of parseFirst(text, opts.ref, opts.chrono)) {
+    const words = r.text.trimEnd()
+    const lead = words.length - words.trimStart().length
+    const index = r.index + lead
+    const size = words.length - lead
+    const span = resultSpan(r, length)
+    if (!span || size < 3 || index < reached || /^now$/i.test(words.trim())) {
+      continue
+    }
+    let { start, end } = span
+    if (span.timed && !r.start.isCertain('meridiem') && start.getHours() >= 1 && start.getHours() <= 7 && !/(?<!\d)0\d[:.h]?\d{2}/.test(words)) {
+      start = new Date(start.getTime() + 12 * 3600000)
+      end = new Date(end.getTime() + 12 * 3600000)
+    }
+    if (!r.start.isCertain('day') && r.start.isCertain('weekday') && start < startOfDay(opts.ref)) {
+      start = addDays(start, 7)
+      end = addDays(end, 7)
+    }
+    out.push({ index, length: size, start, end, allDay: !span.timed })
+    reached = index + size
+  }
+  return out
 }
 
 // placeAfter reads "at <Place>" directly after a date, up to the end of the

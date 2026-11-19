@@ -113,6 +113,14 @@
     return view ? view.state.selection.main.head : 0
   }
 
+  // insertText puts text at the caret, in place of the selection.
+  export function insertText(text: string): void {
+    if (!view) return
+    const sel = view.state.selection.main
+    view.dispatch({ changes: { from: sel.from, to: sel.to, insert: text }, selection: { anchor: sel.from + text.length } })
+    view.focus()
+  }
+
   // wrapSelection surrounds the selection (or a placeholder) with token, used by
   // the markdown toolbar for bold/italic/code.
   export function wrapSelection(token: string, ph: string): void {
@@ -141,6 +149,43 @@
     }
     view.dispatch({ changes })
     view.focus()
+  }
+
+  // textBeforeCaret is the caret's line up to the caret, '' with a selection.
+  export function textBeforeCaret(): string {
+    if (!view) return ''
+    const sel = view.state.selection.main
+    if (!sel.empty) return ''
+    const line = view.state.doc.lineAt(sel.head)
+    return view.state.sliceDoc(line.from, sel.head)
+  }
+
+  // insertBeforeCaret replaces the count characters before the caret with
+  // text. It returns where the insert starts and how far its end is from the
+  // end of the document.
+  export function insertBeforeCaret(count: number, text: string): { from: number; tail: number } {
+    if (!view) return { from: 0, tail: 0 }
+    const head = view.state.selection.main.head
+    const from = Math.max(0, head - count)
+    view.dispatch({ changes: { from, to: head, insert: text }, selection: { anchor: from + text.length } })
+    view.focus()
+    return { from, tail: view.state.doc.length - (from + text.length) }
+  }
+
+  // selectNextPlaceholder selects the next {placeholder} from offset from (the
+  // end of the selection when left out) up to tail characters before the end,
+  // and reports whether it found one.
+  export function selectNextPlaceholder(tail: number, from?: number): boolean {
+    if (!view) return false
+    const at = from ?? view.state.selection.main.to
+    const until = view.state.doc.length - tail
+    const text = view.state.sliceDoc(at, Math.max(at, until))
+    const match = /\{[^{}\n]+\}/.exec(text)
+    if (!match) return false
+    const start = at + match.index
+    view.dispatch({ selection: { anchor: start, head: start + match[0].length } })
+    view.focus()
+    return true
   }
 
   // insertLink inserts a markdown link around the selection (or "link").

@@ -6,7 +6,7 @@
 // stays a pure, store-free library so it can be unit-reasoned and imported
 // anywhere.
 
-import { isMac } from './i18n'
+import { isMac } from './platform'
 
 // ShortcutAction is the set of app-wide actions a shortcut can trigger. The
 // second group are message-level actions that act on the open message, or on
@@ -37,6 +37,9 @@ export type ShortcutAction =
   | 'download-offline'
   | 'delete-message'
   | 'archive'
+  // archives the open or selected conversations whole and moves the reader on
+  // to the next one.
+  | 'done'
   // marks the message as spam, or rescues it when it is already in the spam
   // folder: one key, since only one of the two ever applies.
   | 'toggle-spam'
@@ -82,12 +85,67 @@ export type ShortcutAction =
   // the attachments browser and the reader's sender panel, new design only.
   | 'open-attachments'
   | 'toggle-sender-panel'
+  // shows or hides the My Day panel beside the mail.
+  | 'toggle-my-day'
+  // shows the Tasks space.
+  | 'go-tasks'
+  // makes a task from the open message, or from each selected one.
+  | 'create-task'
+  // the split inbox tabs, only while the message list has focus.
+  | 'next-split'
+  | 'prev-split'
+  // pin, mute and a private note on the open message or its conversation.
+  | 'toggle-pin'
+  | 'toggle-mute'
+  | 'edit-note'
+  // the newsletter manager on the mail surface, and the insights page.
+  | 'open-newsletters'
+  | 'open-insights'
+  // the shortcut sheet and focus mode, new design only.
+  | 'shortcut-sheet'
+  | 'focus-mode'
+  // composer actions of the new design. They act on the composer that last
+  // had focus, so they carry a modifier and work while typing.
+  | ComposeAction
+
+/** The shortcut actions that act on a composer rather than on mail. */
+export type ComposeAction =
+  | 'compose-follow-up'
+  | 'compose-insert-snippet'
+  | 'compose-intro-bcc'
+  | 'compose-toggle-reply-all'
+  | 'compose-cc-sender'
+  // move the recipient chip that has focus to the next field down (To, Cc,
+  // Bcc) or up.
+  | 'compose-recipient-down'
+  | 'compose-recipient-up'
+
+/** Every composer action, in the order Settings and the palette list them. */
+export const composeActions: readonly ComposeAction[] = [
+  'compose-follow-up',
+  'compose-insert-snippet',
+  'compose-intro-bcc',
+  'compose-toggle-reply-all',
+  'compose-cc-sender',
+  'compose-recipient-down',
+  'compose-recipient-up',
+]
+
+/** The composer actions that act on a focused recipient chip. */
+export const chipActions: readonly ComposeAction[] = ['compose-recipient-down', 'compose-recipient-up']
+
+/** isComposeAction reports whether an action belongs to a composer. */
+export function isComposeAction(action: string): action is ComposeAction {
+  return (composeActions as readonly string[]).includes(action)
+}
 
 // Shortcut pairs an action with its default combo and the label key for display.
 export interface Shortcut {
   action: ShortcutAction
   combo: string
   labelKey: string
+  /** The action exists in the new design only; classic does not list it. */
+  newDesignOnly?: boolean
   /**
    * A second key that fires the same action while the binding is untouched.
    * It exists for actions where two platforms disagree about which key is
@@ -139,6 +197,7 @@ export const shortcuts: Shortcut[] = [
   // move to trash with one undo behind it (#329).
   { action: 'delete-message', combo: 'backspace', alt: 'delete', labelKey: 'shortcut.deleteMessage' },
   { action: 'archive', combo: 'e', labelKey: 'shortcut.archive' },
+  { action: 'done', combo: 'd', labelKey: 'shortcut.done' },
   { action: 'toggle-spam', combo: '', labelKey: 'shortcut.toggleSpam' },
   { action: 'unsubscribe', combo: '', labelKey: 'shortcut.unsubscribe' },
   // saved views (preset searches), unbound by default so the user opts in.
@@ -181,6 +240,32 @@ export const shortcuts: Shortcut[] = [
   // mod+shift+i opens the web inspector in development builds.
   { action: 'open-attachments', combo: 'mod+shift+f', labelKey: 'shortcut.openAttachments' },
   { action: 'toggle-sender-panel', combo: 'i', labelKey: 'shortcut.toggleSenderPanel' },
+  // y for "your day"; the letters near it are taken by the spaces and tasks.
+  { action: 'toggle-my-day', combo: 'mod+shift+y', labelKey: 'shortcut.toggleMyDay' },
+  // the key Thunderbird shows its task list with.
+  { action: 'go-tasks', combo: 'mod+shift+d', labelKey: 'shortcut.goTasks' },
+  // t for task, free among the message letters.
+  { action: 'create-task', combo: 't', labelKey: 'shortcut.createTask' },
+  // Tab only moves between splits while the list has focus; everywhere else it
+  // keeps moving focus between controls.
+  { action: 'next-split', combo: 'tab', labelKey: 'shortcut.nextSplit' },
+  { action: 'prev-split', combo: 'shift+tab', labelKey: 'shortcut.prevSplit' },
+  { action: 'toggle-pin', combo: 'shift+p', labelKey: 'shortcut.togglePin' },
+  { action: 'toggle-mute', combo: 'shift+m', labelKey: 'shortcut.toggleMute' },
+  { action: 'edit-note', combo: 'shift+n', labelKey: 'shortcut.editNote' },
+  { action: 'open-newsletters', combo: 'mod+shift+l', labelKey: 'shortcut.openNewsletters' },
+  { action: 'open-insights', combo: '', labelKey: 'shortcut.openInsights' },
+  // "?" is shifted on every common layout, so the key arrives with shift held.
+  { action: 'shortcut-sheet', combo: 'shift+?', labelKey: 'shortcut.shortcutSheet', newDesignOnly: true },
+  { action: 'focus-mode', combo: 'mod+shift+h', labelKey: 'shortcut.focusMode', newDesignOnly: true },
+  { action: 'compose-follow-up', combo: 'mod+shift+u', labelKey: 'followUp.menu' },
+  { action: 'compose-insert-snippet', combo: 'mod+shift+i', labelKey: 'snippets.insert' },
+  { action: 'compose-intro-bcc', combo: 'mod+shift+b', labelKey: 'recipients.introBcc' },
+  { action: 'compose-toggle-reply-all', combo: 'mod+shift+e', labelKey: 'recipients.toggleReplyAll' },
+  { action: 'compose-cc-sender', combo: 'mod+shift+o', labelKey: 'recipients.ccSender' },
+  // alt with an arrow, since a focused chip has no text to move through.
+  { action: 'compose-recipient-down', combo: 'alt+arrowdown', labelKey: 'recipients.moveDown' },
+  { action: 'compose-recipient-up', combo: 'alt+arrowup', labelKey: 'recipients.moveUp' },
 ]
 
 // ParsedCombo is a combo broken into its modifier flags and final key.
@@ -249,6 +334,19 @@ export function isFunctionKeyCombo(combo: string): boolean {
 export function comboHasModifier(combo: string): boolean {
   const p = parseCombo(combo)
   return p.mod || p.alt || p.shift
+}
+
+/**
+ * Whether pressing the combo in a text field would type something, so it must
+ * not fire there: a key without modifiers, or a character typed with only
+ * Shift held. Function keys type nothing.
+ */
+export function comboTypes(combo: string): boolean {
+  const p = parseCombo(combo)
+  if (p.mod || p.alt || isFunctionKeyCombo(combo)) {
+    return false
+  }
+  return !p.shift || p.key.length === 1
 }
 
 // comboMatches reports whether a keydown event exactly matches a combo. the match

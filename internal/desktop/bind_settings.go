@@ -168,11 +168,35 @@ const (
 	settingComposeOpenIn = "compose_open_in"
 	// group the message list into conversations in the new design.
 	settingThreadedList = "threaded_list"
+	// what the reader shows after the open message is archived, deleted or
+	// moved in the new design: "older", "newer" or "list".
+	settingAfterMove = "after_move"
+	// the checks the new composer runs before sending: a text that speaks of
+	// an attachment it does not carry, and an empty subject.
+	settingWarnMissingAttachment = "warn_missing_attachment"
+	settingWarnEmptySubject      = "warn_empty_subject"
+	// split the inbox into tabs in the new design. Off by default.
+	settingSplitInbox = "split_inbox"
+	// the split inbox tabs in order, comma separated: important, newsletters,
+	// notifications, or view:<id> for a saved view. The catch-all tab is always
+	// last and not listed.
+	settingSplitTabs = "split_inbox_tabs"
+	// the split inbox tab last shown.
+	settingSplitActive = "split_inbox_active"
 	// how wide the reading column runs in the new design: "narrow", "medium"
 	// or "full".
 	settingReaderWidth = "reader_width"
 	// show the sender panel beside the reader in the new design.
 	settingSenderPanel = "sender_panel"
+	// the shortcut coach of the new design: a hint naming the key after an
+	// action done by mouse, and the sheet shown while the modifier is held.
+	settingCoachHints = "coach_hints"
+	settingCoachHold  = "coach_hold"
+	// mark the dates a mail names in the reader, with a calendar preview on
+	// hover. On by default.
+	settingMailDates = "mail_dates"
+	// show the My Day panel beside the mail surface in the new design.
+	settingMyDayPanel = "my_day_panel"
 	// general new-mail OS notifications (#126). VIP senders are stored
 	// separately in bind_vip.go and notify even when this is off.
 	settingNotifyNewMail = "notify_new_mail"
@@ -276,6 +300,12 @@ type UIPrefsDTO struct {
 	// ShowShortcutHints shows inline keyboard shortcut chips in the ui. Off by
 	// default to keep the interface clean.
 	ShowShortcutHints bool `json:"showShortcutHints"`
+	// CoachHints shows a short hint naming the key after an action done by
+	// mouse, in the new design.
+	CoachHints bool `json:"coachHints"`
+	// CoachHold shows the shortcuts that apply on screen while the platform
+	// modifier is held, in the new design.
+	CoachHold bool `json:"coachHold"`
 	// HarvestAddresses keeps learning addresses from the mail that passes
 	// through, for compose autocomplete. Off leaves only synced contacts.
 	HarvestAddresses bool `json:"harvestAddresses"`
@@ -432,12 +462,32 @@ type UIPrefsDTO struct {
 	ComposeOpenIn string `json:"composeOpenIn"`
 	// ThreadedList shows the message list as conversations in the new design.
 	ThreadedList bool `json:"threadedList"`
+	// AfterMove is what the reader opens once the open message is archived,
+	// deleted or moved in the new design: older, newer or list.
+	AfterMove string `json:"afterMove"`
+	// WarnMissingAttachment asks before sending a message whose text speaks of
+	// an attachment it does not carry. On by default.
+	WarnMissingAttachment bool `json:"warnMissingAttachment"`
+	// WarnEmptySubject asks before sending a message without a subject. On by
+	// default.
+	WarnEmptySubject bool `json:"warnEmptySubject"`
+	// SplitInbox splits the inbox into tabs in the new design. SplitTabs is
+	// the tab order, SplitActive the tab last shown.
+	SplitInbox  bool   `json:"splitInbox"`
+	SplitTabs   string `json:"splitTabs"`
+	SplitActive string `json:"splitActive"`
 	// ReaderWidth caps the reading column in the new design: narrow, medium
 	// or full.
 	ReaderWidth string `json:"readerWidth"`
 	// SenderPanel shows the panel about the open message's sender beside the
 	// reader in the new design.
 	SenderPanel bool `json:"senderPanel"`
+	// MailDates marks the dates a mail names in the reader, with a preview of
+	// the calendar around them on hover.
+	MailDates bool `json:"mailDates"`
+	// MyDayPanel shows today's agenda and tasks beside the mail surface in the
+	// new design.
+	MyDayPanel bool `json:"myDayPanel"`
 	// ThemeID selects an installed custom theme (see bind_themes.go). Empty
 	// means the built-in default themes driven by the Theme setting.
 	ThemeID string `json:"themeId"`
@@ -543,6 +593,8 @@ func (a *App) GetUIPrefs() (UIPrefsDTO, error) {
 		SendDelaySeconds:    a.intSetting(settingSendDelay, 0),
 		FlagHighlight:       a.stringSetting(settingFlagHighlight, defaultFlagHighlight),
 		ShowShortcutHints:   a.boolSetting(settingShortcutHints, true),
+		CoachHints:          a.boolSetting(settingCoachHints, true),
+		CoachHold:           a.boolSetting(settingCoachHold, true),
 		HarvestAddresses:    a.harvestAddresses(),
 		ShowAccountEmail:    a.boolSetting(settingAccountEmail, false),
 		AlwaysLoadImages:    a.boolSetting(settingRemoteAlways, false),
@@ -602,8 +654,16 @@ func (a *App) GetUIPrefs() (UIPrefsDTO, error) {
 		QuickFilterBar:             a.boolSetting(settingQuickFilterBar, false),
 		ComposeOpenIn:              a.stringSetting(settingComposeOpenIn, "window"),
 		ThreadedList:               a.boolSetting(settingThreadedList, true),
+		AfterMove:                  a.stringSetting(settingAfterMove, "older"),
+		WarnMissingAttachment:      a.boolSetting(settingWarnMissingAttachment, true),
+		WarnEmptySubject:           a.boolSetting(settingWarnEmptySubject, true),
+		SplitInbox:                 a.boolSetting(settingSplitInbox, false),
+		SplitTabs:                  a.stringSetting(settingSplitTabs, defaultSplitTabs),
+		SplitActive:                a.stringSetting(settingSplitActive, ""),
 		ReaderWidth:                a.stringSetting(settingReaderWidth, "full"),
 		SenderPanel:                a.boolSetting(settingSenderPanel, false),
+		MailDates:                  a.boolSetting(settingMailDates, true),
+		MyDayPanel:                 a.boolSetting(settingMyDayPanel, false),
 		ThemeID:                    a.stringSetting(settingThemeID, ""),
 		MenuBarInApp:               a.boolSetting(settingMenuBarInApp, false),
 		MenuBarNativeMinimal:       a.boolSetting(settingMenuBarNativeMinimal, false),

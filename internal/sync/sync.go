@@ -204,7 +204,7 @@ func (e *Engine) syncFolder(ctx context.Context, folder storage.Folder, backfill
 	}
 	locals, localByUID := localView(localStates)
 
-	servers, serverColors, err := loadServerView(e.client)
+	servers, serverColors, serverPins, err := loadServerView(e.client)
 	if err != nil {
 		return res, err
 	}
@@ -230,6 +230,7 @@ func (e *Engine) syncFolder(ctx context.Context, folder storage.Folder, backfill
 	if e.ColorSync {
 		e.adoptColors(ctx, folder, serverColors)
 	}
+	e.syncPins(ctx, folder, mbox, serverPins)
 
 	newHigh := max(highestUID(servers), state.LastSeenUID)
 	if err := e.store.SetFolderLastSeenUID(ctx, folder.ID, newHigh); err != nil {
