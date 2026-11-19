@@ -12,7 +12,6 @@
   import MenuBar from './components/common/MenuBar.svelte'
   import MessageList from './components/list/MessageList.svelte'
   import MessageDetail from './components/detail/MessageDetail.svelte'
-  import Compose from './components/compose/Compose.svelte'
   import Toasts from './components/common/Toasts.svelte'
   import StatusBar from './components/common/StatusBar.svelte'
   import ContextMenu from './components/common/ContextMenu.svelte'
@@ -27,23 +26,15 @@
   import { orderedSpaces, visibleSpaces } from './lib/spaces'
   import { startChat, stopChat } from './stores/chat'
   import { popupIsOpen } from './lib/popups'
+  import { openMenuFromKeyboard } from './lib/keymenu'
   import { calendarFocus, calendarImport, calendarQuickAdd } from './stores/calendar'
   import { formatTime } from './lib/calformat'
   import type { TimeFormat } from './lib/format'
   import { frameIntegrated } from './stores/windowframe'
   import { setDraft, submitSearch, searchOpenedId } from './stores/search'
-  import SnoozeDialog from './components/detail/SnoozeDialog.svelte'
-  import ClassicSnoozeDialog from './components/detail/classic/SnoozeDialog.svelte'
   import DragStack from './components/list/DragStack.svelte'
   import ConfirmDialog from './components/common/ConfirmDialog.svelte'
-  import SyncFailureDialog from './components/common/SyncFailureDialog.svelte'
   import { loadSyncStates, watchSyncStates } from './stores/syncfailures'
-  import FolderDialog from './components/sidebar/FolderDialog.svelte'
-  import ClassicFolderDialog from './components/sidebar/classic/FolderDialog.svelte'
-  import AttachmentPreview from './components/detail/AttachmentPreview.svelte'
-  import MoveDialog from './components/detail/MoveDialog.svelte'
-  import ClassicMoveDialog from './components/detail/classic/MoveDialog.svelte'
-  import CommandPalette from './components/common/CommandPalette.svelte'
 
   import { initPrefs, prefs, setPaneWidths, setListHeight, setLowPowerMode } from './stores/prefs'
   import { applyScale } from './theme/theme'
@@ -59,7 +50,7 @@
   import { initProgress } from './stores/progress'
   import { composeSessions, openCompose, openComposeWith, initComposePrefs, openReply, openForward, requestComposeClose, setForcedComposeMode, updateCompose } from './stores/compose'
   import { routeComposeSessions } from './stores/composeroute'
-  import Composer2 from './components/compose/Composer2.svelte'
+  import { loadAttachmentsBrowser, loadClassicCompose, loadComposer, loadMenuBarEditor, warmUp } from './lib/lazyload'
   import ComposeTabLayer from './components/compose/ComposeTabLayer.svelte'
   import { openSnooze, openSnoozeMany } from './stores/snooze'
   import { patchInList } from './stores/messages'
@@ -203,7 +194,6 @@
   import './lib/palette-contacts'
   import './lib/palette-attachments'
   import './lib/palette-sieve'
-  import AttachmentsBrowser from './components/attachments/AttachmentsBrowser.svelte'
   import { attachmentsOpen, toggleAttachments } from './stores/attachments'
   import { setSenderPanel } from './stores/prefs'
   import { toggleReadingView } from './stores/readingview'
@@ -212,7 +202,6 @@
   import { reloadVault, requestNotes, startNotes } from './stores/notes'
   import './lib/palette-chat'
   import './lib/palette-chatshare'
-  import ShareToChatDialog from './components/chat/ShareToChatDialog.svelte'
   import './lib/palette-availability'
   import './lib/palette-projects'
   import { startProjects, fileMailRequest } from './stores/projects'
@@ -246,7 +235,6 @@
     paletteMail,
     paletteQuery,
   } from './stores/palette'
-  import AccountPasswordDialog from './components/settings/AccountPasswordDialog.svelte'
   import DevOverlays from './components/dev/DevOverlays.svelte'
   import peltonLogo from './assets/images/icons/pelton-logo.png'
   import {
@@ -679,6 +667,11 @@
     await initPrefs()
     await initSidebarState()
     await initComposePrefs()
+    warmUp([
+      get(prefs).design === 'classic' ? loadClassicCompose : loadComposer,
+      ...(get(prefs).design === 'classic' ? [] : [loadAttachmentsBrowser]),
+      ...(showMenuBar ? [loadMenuBarEditor] : []),
+    ])
     void initShortcuts()
     void initCoach().then((stop) => unsubscribers.push(stop))
     void initFirstTips()
@@ -2109,6 +2102,9 @@
     if (event.key === 'Escape' && (anyDialogOpen() || overlayOpen || popupIsOpen())) {
       event.preventDefault()
     }
+    if ($prefs.design !== 'classic' && openMenuFromKeyboard(event)) {
+      return
+    }
     if (tryVimNav(event)) {
       event.preventDefault()
       return
@@ -2323,6 +2319,8 @@
       <div
         class="mail"
         class:with-myday={showMyDay}
+        role="main"
+        aria-label={$t('space.mail')}
         style={`grid-template-columns: ${sidebarW}px 0 minmax(0, 1fr)${showMyDay ? ' var(--myday-width)' : ''}`}
         bind:clientWidth={mailWidth}
       >
@@ -2357,7 +2355,9 @@
               : `grid-template-columns: ${listW}px 0 minmax(0, 1fr)`}
         >
           {#if $attachmentsOpen}
-            <AttachmentsBrowser />
+            {#await loadAttachmentsBrowser() then m}
+              <svelte:component this={m.default} />
+            {/await}
           {:else}
             <MessageList />
             {#if stacked}
@@ -2375,7 +2375,7 @@
         {/if}
       </div>
     {:else if $space === 'contacts'}
-      <div class="space-host">
+      <div class="space-host" role="main" aria-label={$t(`space.${$space}`)}>
         {#await import('./components/contacts/ContactsSpace.svelte') then m}
           <svelte:component
             this={m.default}
@@ -2384,19 +2384,19 @@
         {/await}
       </div>
     {:else if $space === 'calendar'}
-      <div class="space-host">
+      <div class="space-host" role="main" aria-label={$t(`space.${$space}`)}>
         {#await import('./components/calendar/CalendarScreen.svelte') then m}
           <svelte:component this={m.default} />
         {/await}
       </div>
     {:else if $space === 'tasks'}
-      <div class="space-host">
+      <div class="space-host" role="main" aria-label={$t(`space.${$space}`)}>
         {#await import('./components/tasks/TasksScreen.svelte') then m}
           <svelte:component this={m.default} />
         {/await}
       </div>
     {:else if $space === 'projects'}
-      <div class="space-host">
+      <div class="space-host" role="main" aria-label={$t(`space.${$space}`)}>
         {#await import('./components/projects/ProjectsScreen.svelte') then m}
           <svelte:component
             this={m.default}
@@ -2405,25 +2405,25 @@
         {/await}
       </div>
     {:else if $space === 'notes'}
-      <div class="space-host">
+      <div class="space-host" role="main" aria-label={$t(`space.${$space}`)}>
         {#await import('./components/notes/NotesScreen.svelte') then m}
           <svelte:component this={m.default} />
         {/await}
       </div>
     {:else if $space === 'feeds'}
-      <div class="space-host">
+      <div class="space-host" role="main" aria-label={$t(`space.${$space}`)}>
         {#await import('./components/feeds/FeedsScreen.svelte') then m}
           <svelte:component this={m.default} on:compose={(e) => shareFromFeeds(e.detail)} />
         {/await}
       </div>
     {:else if $space === 'chat' && chatWanted}
-      <div class="space-host">
+      <div class="space-host" role="main" aria-label={$t(`space.${$space}`)}>
         {#await import('./components/chat/ChatSpace.svelte') then m}
           <svelte:component this={m.default} />
         {/await}
       </div>
     {:else if $space === 'automations'}
-      <div class="space-host">
+      <div class="space-host" role="main" aria-label={$t(`space.${$space}`)}>
         {#await import('./components/automations/AutomationsSpace.svelte') then m}
           <svelte:component this={m.default} />
         {/await}
@@ -2460,16 +2460,21 @@
   <div class="compose-layer">
     {#each $composeSessions as session (session.id)}
       {#if classic}
-        <Compose {session} />
+        {#await loadClassicCompose() then m}
+          <svelte:component this={m.default} {session} />
+        {/await}
       {:else if session.placement === 'docked'}
-        <Composer2 {session} layout="docked" mainWindow />
+        {#await loadComposer() then m}
+          <svelte:component this={m.default} {session} layout="docked" mainWindow />
+        {/await}
       {/if}
     {/each}
   </div>
 {/if}
 
 <!-- settings and the wizard are code-split: their js/css load only when opened,
-     so they cost nothing at startup. compose stays eager (used constantly). -->
+     so they cost nothing at startup. compose is split too, and loaded once the
+     window has settled so it is ready before it is first opened. -->
 {#if automationsOpen && classic}
   {#await import('./components/automations/AutomationsOverlay.svelte') then m}
     <svelte:component this={m.default} on:close={() => (automationsOpen = false)} />
@@ -2573,21 +2578,39 @@
 <ContextMenu />
 <ConfirmDialog />
 <DragStack />
+<!-- the dialogs below show only when asked for, so their code loads after the
+     window's first paint. -->
 {#if classic}
-  <ClassicSnoozeDialog />
-  <ClassicFolderDialog />
+  {#await import('./components/detail/classic/SnoozeDialog.svelte') then m}
+    <svelte:component this={m.default} />
+  {/await}
+  {#await import('./components/sidebar/classic/FolderDialog.svelte') then m}
+    <svelte:component this={m.default} />
+  {/await}
 {:else}
-  <SnoozeDialog />
-  <FolderDialog />
+  {#await import('./components/detail/SnoozeDialog.svelte') then m}
+    <svelte:component this={m.default} />
+  {/await}
+  {#await import('./components/sidebar/FolderDialog.svelte') then m}
+    <svelte:component this={m.default} />
+  {/await}
 {/if}
-<AttachmentPreview />
+{#await import('./components/detail/AttachmentPreview.svelte') then m}
+  <svelte:component this={m.default} />
+{/await}
 {#if classic}
-  <ClassicMoveDialog />
+  {#await import('./components/detail/classic/MoveDialog.svelte') then m}
+    <svelte:component this={m.default} />
+  {/await}
 {:else}
-  <MoveDialog />
+  {#await import('./components/detail/MoveDialog.svelte') then m}
+    <svelte:component this={m.default} />
+  {/await}
 {/if}
 
-<CommandPalette commands={paletteCommands} mail={paletteMailCommands} />
+{#await import('./components/common/CommandPalette.svelte') then m}
+  <svelte:component this={m.default} commands={paletteCommands} mail={paletteMailCommands} />
+{/await}
 
 {#if !classic}
   <CoachLayer suspended={overlayOpen} />
@@ -2595,15 +2618,21 @@
 {/if}
 
 {#if chatWanted}
-  <ShareToChatDialog />
+  {#await import('./components/chat/ShareToChatDialog.svelte') then m}
+    <svelte:component this={m.default} />
+  {/await}
   {#await import('./components/chat/VerificationDialog.svelte') then m}
     <svelte:component this={m.default} />
   {/await}
 {/if}
 
-<AccountPasswordDialog account={$passwordPrompt} onDone={answerPasswordPrompt} />
+{#await import('./components/settings/AccountPasswordDialog.svelte') then m}
+  <svelte:component this={m.default} account={$passwordPrompt} onDone={answerPasswordPrompt} />
+{/await}
 
-<SyncFailureDialog />
+{#await import('./components/common/SyncFailureDialog.svelte') then m}
+  <svelte:component this={m.default} />
+{/await}
 
 <DevOverlays />
 

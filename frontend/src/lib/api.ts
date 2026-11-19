@@ -3901,16 +3901,6 @@ export function scriptValue(valueType: string, id: string): Promise<Record<strin
   return App.ScriptValue(valueType, id).then((m) => (m ?? {}) as Record<string, unknown>)
 }
 
-/** How long a question of a script nobody started waits, in seconds. */
-export function scriptAskSeconds(): Promise<number> {
-  return App.ScriptAskSeconds()
-}
-
-/** Sets how long such a question waits, 10 seconds to a day. */
-export function setScriptAskSeconds(seconds: number): Promise<void> {
-  return App.SetScriptAskSeconds(seconds)
-}
-
 /** Dry runs a script as written, against a message (0 for the sample). Nothing changes. */
 export function testScript(input: ScriptInput, messageId: number): Promise<ScriptRun> {
   return App.TestScript(toDTO(input), messageId).then(asRun)
@@ -4052,9 +4042,9 @@ export function testScriptMatch(req: MatchRequest): Promise<MatchReport> {
   })
 }
 
-/** The scripting API as an English document, markdown or plain text. */
-export function scriptReference(markdown: boolean): Promise<string> {
-  return App.ScriptReference(markdown)
+/** The scripting reference as one English markdown document, the one an assistant reads over MCP. */
+export function scriptReference(): Promise<string> {
+  return App.ScriptReference()
 }
 
 /** The kinds of AI provider that can be added. */
@@ -4103,9 +4093,9 @@ export function aiScriptOptions(scriptId: number): Promise<AIScriptOptions> {
   return App.AIScriptOptions(scriptId) as Promise<AIScriptOptions>
 }
 
-/** Test runs a script as testScript does, with its AI steps really asking the model; changes stay planned. */
-export function testScriptAskingAI(input: ScriptInput, messageId: number): Promise<ScriptRun> {
-  return App.TestScriptAskingAI(toDTO(input), messageId).then(asRun)
+/** Test runs a script as testScript does, with its AI steps really asking a model the user approved for the saved script scriptId; changes stay planned. */
+export function testScriptAskingAI(scriptId: number, input: ScriptInput, messageId: number): Promise<ScriptRun> {
+  return App.TestScriptAskingAI(scriptId, toDTO(input), messageId).then(asRun)
 }
 
 /** Changes a script's AI switches. */

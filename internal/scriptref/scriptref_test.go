@@ -37,7 +37,7 @@ func registerWeather(r *scripting.Registry) error {
 
 func build(t *testing.T) *scriptref.Reference {
 	t.Helper()
-	return scriptref.Build(scriptingtest.Registry(t, registerWeather), nil)
+	return scriptref.Build(scriptingtest.Registry(t, registerWeather))
 }
 
 func TestReferenceListsOutsideEntries(t *testing.T) {
@@ -115,35 +115,19 @@ func TestSearchNeedsEveryWord(t *testing.T) {
 	}
 }
 
-func TestEnglishStrings(t *testing.T) {
-	got := scriptref.EnglishStrings(`const en = {
-  'a.b': 'Plain',
-  'a.c': 'It\'s quoted',
-  'a.d': "Don't",
-  'a.e':
-    'multi line is skipped',
-}`)
-	want := map[string]string{"a.b": "Plain", "a.c": "It's quoted", "a.d": "Don't"}
-	if len(got) != len(want) {
-		t.Fatalf("got %v", got)
-	}
-	for k, v := range want {
-		if got[k] != v {
-			t.Errorf("%s = %q, want %q", k, got[k], v)
-		}
-	}
-}
-
-// With the app's English catalog the built-ins get their descriptions.
-func TestReferenceUsesTheEnglishCatalog(t *testing.T) {
+// The built-ins carry their English text from registration, which is the
+// same text the frontend's catalog has.
+func TestReferenceHasTheBuiltinsEnglish(t *testing.T) {
 	data, err := os.ReadFile(filepath.Join("..", "..", "frontend", "src", "lib", "locales", "en.ts"))
 	if err != nil {
 		t.Skip("frontend catalog not found:", err)
 	}
-	texts := scriptref.EnglishStrings(string(data))
-	ref := scriptref.Build(scriptingtest.Registry(t), func(k string) string { return texts[k] })
-	mods, _ := ref.Section("modules")
-	if want := texts["scripts.fn.mail.move"]; want == "" || !strings.Contains(mods.Body, want) {
-		t.Fatalf("mail.move has no description from the catalog (%q)", want)
+	f, _ := scriptingtest.Registry(t).Function("mail.move")
+	if f.Description == "" || !strings.Contains(string(data), f.Description) {
+		t.Fatalf("mail.move has no description matching en.ts: %q", f.Description)
+	}
+	mods, _ := scriptref.Build(scriptingtest.Registry(t)).Section("modules")
+	if !strings.Contains(mods.Body, f.Description) {
+		t.Fatal("the reference leaves out mail.move's description")
 	}
 }

@@ -145,7 +145,26 @@ func TestScriptTestRunAsksTheModelOnlyWhenTold(t *testing.T) {
 	if err != nil || run.Status != "ok" || len(*auths) != 0 {
 		t.Fatalf("%v %s %s, %d requests", err, run.Status, run.Error, len(*auths))
 	}
-	run, err = a.TestScriptAskingAI(in, 0)
+	run, err = a.TestScriptAskingAI(0, in, 0)
+	if err != nil || run.Status != "error" || len(*auths) != 0 {
+		t.Fatalf("an unsaved, unapproved script asked the model: %v %s %s, %d requests", err, run.Status, run.Error, len(*auths))
+	}
+	sc, err := a.CreateScript(in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if run, _ = a.TestScriptAskingAI(sc.ID, in, 0); run.Status != "error" || len(*auths) != 0 {
+		t.Fatalf("a saved script not yet approved asked the model: %s, %d requests", run.Status, len(*auths))
+	}
+	if _, err := a.SetScriptEnabled(sc.ID, true, sc.Permissions); err != nil {
+		t.Fatal(err)
+	}
+	edited := in
+	edited.Source += "\nprint(1)"
+	if run, _ = a.TestScriptAskingAI(sc.ID, edited, 0); run.Status != "error" || len(*auths) != 0 {
+		t.Fatalf("code changed since the approval asked the model: %s, %d requests", run.Status, len(*auths))
+	}
+	run, err = a.TestScriptAskingAI(sc.ID, in, 0)
 	if err != nil || run.Status != "ok" || len(*auths) != 1 {
 		t.Fatalf("%v %s %s, %d requests", err, run.Status, run.Error, len(*auths))
 	}

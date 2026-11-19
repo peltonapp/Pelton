@@ -98,6 +98,12 @@ func TestNamesMustNotPointToLocalAddresses(t *testing.T) {
 		"mapped":     {netip.MustParseAddr("::ffff:127.0.0.1")},
 		"cgnat":      {netip.MustParseAddr("100.64.0.1")},
 		"ula":        {netip.MustParseAddr("fd00::1")},
+		"nat64":      {netip.MustParseAddr("64:ff9b::7f00:1")},
+		"6to4":       {netip.MustParseAddr("2002:c0a8:0104::1")},
+		"site-local": {netip.MustParseAddr("fec0::1")},
+		"benchmark":  {netip.MustParseAddr("198.18.0.1")},
+		"broadcast":  {netip.MustParseAddr("255.255.255.255")},
+		"ietf":       {netip.MustParseAddr("192.0.0.8")},
 	}
 	for name, addrs := range cases {
 		cfg := Config{

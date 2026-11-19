@@ -5,6 +5,7 @@
   // permissions, so it declares none of its own.
   import { onDestroy } from 'svelte'
   import LuaWorkbench from './LuaWorkbench.svelte'
+  import Live from './Live.svelte'
   import { t } from '../../lib/i18n'
   import { checkScriptLua } from '../../lib/api'
   import type { ScriptCatalog, ScriptLibrary, ScriptLibraryInput } from '../../lib/scripting'
@@ -89,7 +90,7 @@
 
 <section class="editor" aria-label={$t('scripts.library.editor')}>
   <header class="bar">
-    <input class="cal-field name" aria-label={$t('scripts.library.name')} aria-invalid={!nameOk} spellcheck="false" bind:value={input.name} />
+    <input class="cal-field name" aria-label={$t('scripts.library.name')} aria-invalid={!nameOk} aria-describedby={nameOk ? undefined : 'library-name-rule'} spellcheck="false" bind:value={input.name} />
     <div class="actions">
       <button type="button" class="cal-btn" on:click={() => void exportLibrary(library.id).catch((err) => toastError(errorMessage(err)))}>{$t('scripts.export')}</button>
       <button type="button" class="cal-btn danger" on:click={() => void remove()}>{$t('scripts.delete')}</button>
@@ -97,14 +98,16 @@
     </div>
   </header>
   <div class="scroll">
-    {#if !nameOk}<p class="error" role="alert">{$t('scripts.library.nameRule')}</p>{/if}
+    {#if !nameOk}<p class="error" id="library-name-rule">{$t('scripts.library.nameRule')}</p>{/if}
+    <Live text={nameOk ? '' : $t('scripts.library.nameRule')} assertive />
     {#if library.origin !== 'user'}
       <p class="notice">{$t(`scripts.origin.${library.origin}.notice`)}</p>
     {/if}
     <input class="cal-field" aria-label={$t('scripts.library.description')} placeholder={$t('scripts.library.description')} bind:value={input.description} />
     <p class="hint">{$t('scripts.library.hint').replace('{use}', `local ${input.name || 'lib'} = require("${input.name}")`)}</p>
     <LuaWorkbench label={$t('scripts.code')} content={input.source} {catalog} {assist} {marks} on:change={(e) => (input = { ...input, source: e.detail })} />
-    {#if syntax}<p class="error" role="alert">{syntax}</p>{/if}
+    {#if syntax}<p class="error">{syntax}</p>{/if}
+    <Live text={syntax} />
   </div>
 </section>
 

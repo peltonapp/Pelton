@@ -214,7 +214,7 @@
       return
     }
     await tick()
-    const el = listEl?.querySelector<HTMLElement>(`[id="msg-${id}"]`)
+    const el = listEl?.querySelector<HTMLElement>(`[data-msg-id="${id}"]`)
     if (el) {
       bandTop = el.offsetTop
       bandHeight = el.offsetHeight
@@ -229,7 +229,7 @@
     if (!bandOn || event.pointerType !== 'mouse') {
       return
     }
-    const el = (event.target as HTMLElement).closest<HTMLElement>('[id^="msg-"]')
+    const el = (event.target as HTMLElement).closest<HTMLElement>('[data-msg-id]')
     if (!el) {
       hoverShown = false
       return
@@ -314,6 +314,13 @@
   // the new design searches from the top bar; classic keeps its own bar here.
   $: classic = $prefs.design === 'classic'
   $: inSearch = !classic && $activeSearch !== null
+  // a finished search says how much it found; browsing a folder stays quiet.
+  $: searchStatus =
+    inSearch && $messageList.status !== 'loading'
+      ? items.length === 0
+        ? $t('messageList.empty.noMatch')
+        : $t('a11y.results').replace('{count}', String(items.length))
+      : ''
 
   let searchFilter: SearchFilter = emptyFilter
   let lastKey = ''
@@ -1155,7 +1162,7 @@
 
 <svelte:window on:resize={onResize} />
 
-<section class="list-col" class:new={!classic}>
+<section class="list-col" class:new={!classic} aria-label={$t('a11y.region.messages')}>
   {#if classic}
     <div class="header">
       <SearchBar value={$searchQuery} on:search={onSearch} on:filter={onFilter} on:sort={onSort} />
@@ -1320,6 +1327,9 @@
     <FollowUpBand items={inboxFollowUps} />
   {/if}
 
+  {#if inSearch}
+    <div class="sr-only" role="status">{searchStatus}</div>
+  {/if}
   <div
     class="rows"
     role="listbox"
@@ -1397,8 +1407,11 @@
         {#if groupLabels.includes(index)}
           <div class="group-label" aria-hidden="true">{index === 0 ? $t('pin.group') : $t('pin.groupRest')}</div>
         {/if}
-        <div id={`msg-${item.id}`} use:maildragSource={() => dragItems(item)}>
+        <div data-msg-id={item.id} use:maildragSource={() => dragItems(item)}>
           <MessageRow
+            optionId={`msg-${item.id}`}
+            position={index + 1}
+            setSize={items.length}
             message={item}
             thread={row.thread}
             expanded={row.thread !== null && expanded.has(row.thread.threadId)}

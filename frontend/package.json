@@ -13,6 +13,7 @@
     "preview": "vite preview",
     "check": "svelte-check --tsconfig ./tsconfig.json",
     "check:locales": "node scripts/check-locales.mjs",
+    "check:bundle": "node scripts/check-bundle.mjs",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage"
@@ -35,6 +36,7 @@
   },
   "dependencies": {
     "@codemirror/commands": "^6.11.1",
+    "@codemirror/language": "6.12.4",
     "@codemirror/legacy-modes": "6.5.4",
     "@codemirror/state": "^6.7.6",
     "@codemirror/view": "^6.43.15",

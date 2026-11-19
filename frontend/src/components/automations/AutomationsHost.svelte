@@ -69,7 +69,7 @@
       return
     }
     const id = confirm.id
-    const keep = always
+    const keep = always && !confirm.everyTime
     always = false
     await answerConfirm(id, allow, keep).catch((err) => toastError(errorMessage(err)))
   }
@@ -86,10 +86,12 @@
 {#if confirm}
   <Modal title={$t('scripts.confirm.title').replace('{name}', confirm.scriptName)} hint={$t('scripts.confirm.hint')} size="small" on:close={() => void answer(false)}>
     <pre class="summary">{confirm.summary}</pre>
-    <label class="always">
-      <input type="checkbox" bind:checked={always} />
-      {$t('scripts.confirm.always')}
-    </label>
+    {#if !confirm.everyTime}
+      <label class="always">
+        <input type="checkbox" bind:checked={always} />
+        {$t('scripts.confirm.always')}
+      </label>
+    {/if}
     <svelte:fragment slot="footer">
       <button type="button" class="cal-btn" on:click={() => void answer(false)}>{$t('scripts.confirm.deny')}</button>
       <button type="button" class="cal-btn primary" on:click={() => void answer(true)}>{$t('scripts.confirm.allow')}</button>

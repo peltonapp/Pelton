@@ -178,6 +178,7 @@
             class:selected
             class:range={inRange(day)}
             aria-selected={selected}
+            aria-current={sameDay(day, today) ? 'date' : undefined}
             aria-label={day.toLocaleDateString(undefined, { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
             tabindex={selected ? 0 : -1}
             data-day={dayKey(day)}

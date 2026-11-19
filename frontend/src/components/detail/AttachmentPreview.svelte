@@ -14,6 +14,7 @@
   import { prefs } from '../../stores/prefs'
   import { errorMessage, toastError, toastSuccess } from '../../stores/toast'
   import { t } from '../../lib/i18n'
+  import { calm } from '../../lib/motion'
   import type { AttachmentContent } from '../../lib/types'
   import PdfView from './PdfView.svelte'
 
@@ -141,8 +142,8 @@
 
 {#if $previewTarget}
   <!-- svelte-ignore a11y-click-events-have-key-events a11y-no-static-element-interactions -->
-  <div class="backdrop" transition:fade={{ duration: 120 }} on:click={closePreview}></div>
-  <div class="viewer" role="dialog" aria-modal="true" aria-label={$t('detail.attachments.previewDialogLabel')} transition:scale={{ duration: 150, start: 0.96 }}>
+  <div class="backdrop" transition:fade={{ duration: calm(120) }} on:click={closePreview}></div>
+  <div class="viewer" role="dialog" aria-modal="true" aria-label={$t('detail.attachments.previewDialogLabel')} transition:scale={{ duration: calm(150), start: 0.96 }}>
     <header>
       <span class="name" title={$previewTarget.attachment.filename}>{$previewTarget.attachment.filename}</span>
       <span class="spacer"></span>

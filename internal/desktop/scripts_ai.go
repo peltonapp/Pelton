@@ -404,9 +404,11 @@ func (a *App) FetchAIModels(in AIProviderInput) ([]string, error) {
 
 // TestScriptAskingAI dry runs a script as TestScript does, except that its AI
 // steps really ask the model, so a branch on the answer can be tried. Every
-// change, including those the model asks for, stays a planned step.
-func (a *App) TestScriptAskingAI(in ScriptInput, messageID int64) (ScriptRunDTO, error) {
-	return a.testScript(ai.WithModelInTest(a.ctx), in, messageID)
+// change, including those the model asks for, stays a planned step. Only a
+// provider the user approved for the saved script scriptID is asked, and
+// only while the code in the editor is the code they approved.
+func (a *App) TestScriptAskingAI(scriptID int64, in ScriptInput, messageID int64) (ScriptRunDTO, error) {
+	return a.testScript(ai.WithModelInTest(a.ctx), in, messageID, scriptID)
 }
 
 func (a *App) aiScriptOptions() map[string]AIScriptOptionsDTO {

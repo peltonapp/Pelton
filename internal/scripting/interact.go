@@ -99,8 +99,11 @@ var ErrRunCancelled = errors.New("scripting: cancelled")
 // DefaultAskTimeout is how long a question of a run nobody started waits.
 const DefaultAskTimeout = 2 * time.Minute
 
-// maxResultText caps the text of one result.
-const maxResultText = 256 << 10
+// maxResultText caps the text of one result, and maxPromptBytes a question.
+const (
+	maxResultText  = 256 << 10
+	maxPromptBytes = 2000
+)
 
 // RegisterInputKind adds an input kind, and with it the block action
 // "ui.<id>" that asks it and outputs the answer as "value".
@@ -329,6 +332,7 @@ func uiModule() Module {
 			return nil, fmt.Errorf("ui.ask: there is no question kind %q", kind)
 		}
 		text, _ := prompt.(string)
+		text = clip(text, maxPromptBytes)
 		if opts == nil {
 			opts = map[string]any{}
 		}

@@ -17,6 +17,7 @@
   import { recording } from '../../stores/shortcuts'
   import { toastError, errorMessage } from '../../stores/toast'
   import { t } from '../../lib/i18n'
+  import { dur } from '../../lib/motion'
 
   /**
    * Page to open on, as a page key or a classic category key, optionally
@@ -130,7 +131,7 @@
       return
     }
     const found = row
-    found.scrollIntoView({ block: 'center', behavior: 'smooth' })
+    found.scrollIntoView({ block: 'center', behavior: dur(1) ? 'smooth' : 'auto' })
     found.classList.remove('s2-found')
     void found.offsetWidth
     found.classList.add('s2-found')

@@ -85,7 +85,7 @@
   }
 </script>
 
-<aside class="sidebar">
+<aside class="sidebar" aria-label={$t('a11y.region.folders')}>
   <div class="top">
     <button type="button" class="compose-btn" on:click={() => dispatch('compose')}>
       <IconPencil size={16} stroke={1.8} />

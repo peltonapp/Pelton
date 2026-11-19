@@ -54,9 +54,9 @@ export function AIScriptOptions(scriptID: number): $CancellablePromise<$models.A
 
 /**
  * AcceptScriptProposal applies a proposed change. When it changes the code,
- * the trigger or the declared permissions of a script that was on or
- * approved, the script is switched off and its approvals and allowances are
- * cleared, so the user approves the new version afresh.
+ * the trigger or the declared permissions, the update switches the script
+ * off and clears its approvals and allowances, so the user approves the new
+ * version afresh.
  */
 export function AcceptScriptProposal(id: number): $CancellablePromise<$models.ScriptDTO> {
     return $Call.ByID(3375767223, id).then(($result: any) => {
@@ -2009,15 +2009,6 @@ export function GetQuickComposeStatus(): $CancellablePromise<$models.QuickCompos
 }
 
 /**
- * GetScript returns one script.
- */
-export function GetScript(id: number): $CancellablePromise<$models.ScriptDTO> {
-    return $Call.ByID(236853393, id).then(($result: any) => {
-        return $$createType5($result);
-    });
-}
-
-/**
  * GetSetting returns a single setting's raw value. found is false when the key
  * has never been written, so the frontend can fall back to its own default.
  */
@@ -3753,14 +3744,6 @@ export function ScanURL(rawURL: string): $CancellablePromise<$models.VerdictDTO>
 }
 
 /**
- * ScriptAskSeconds returns how long a question of a script nobody started
- * waits before it takes its default.
- */
-export function ScriptAskSeconds(): $CancellablePromise<number> {
-    return $Call.ByID(305353439);
-}
-
-/**
  * ScriptFolder returns the folder a script may read and write files in, ""
  * when it has none.
  */
@@ -3805,11 +3788,11 @@ export function ScriptProposal(id: number): $CancellablePromise<$models.ScriptPr
 }
 
 /**
- * ScriptReference returns the scripting API as a document in English,
- * markdown when markdown is set and plain text otherwise.
+ * ScriptReference returns the scripting reference as one markdown document
+ * in English, the same one an assistant reads over MCP.
  */
-export function ScriptReference(markdown: boolean): $CancellablePromise<string> {
-    return $Call.ByID(1749449554, markdown);
+export function ScriptReference(): $CancellablePromise<string> {
+    return $Call.ByID(1749449554);
 }
 
 /**
@@ -4243,14 +4226,6 @@ export function SetScriptAllowUnasked(id: number, $function: string, allow: bool
 }
 
 /**
- * SetScriptAskSeconds sets how long such a question waits, 10 seconds to a
- * day.
- */
-export function SetScriptAskSeconds(seconds: number): $CancellablePromise<void> {
-    return $Call.ByID(1083915591, seconds);
-}
-
-/**
  * SetScriptCatchUp sets what a mail script does with mail that arrived
  * while the app was closed: "run", "live" or "ask", and the most messages
  * it runs over.
@@ -4617,10 +4592,12 @@ export function TestScript($in: $models.ScriptInput, messageID: number): $Cancel
 /**
  * TestScriptAskingAI dry runs a script as TestScript does, except that its AI
  * steps really ask the model, so a branch on the answer can be tried. Every
- * change, including those the model asks for, stays a planned step.
+ * change, including those the model asks for, stays a planned step. Only a
+ * provider the user approved for the saved script scriptID is asked, and
+ * only while the code in the editor is the code they approved.
  */
-export function TestScriptAskingAI($in: $models.ScriptInput, messageID: number): $CancellablePromise<$models.ScriptRunDTO> {
-    return $Call.ByID(957971532, $in, messageID).then(($result: any) => {
+export function TestScriptAskingAI(scriptID: number, $in: $models.ScriptInput, messageID: number): $CancellablePromise<$models.ScriptRunDTO> {
+    return $Call.ByID(957971532, scriptID, $in, messageID).then(($result: any) => {
         return $$createType195($result);
     });
 }

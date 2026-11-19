@@ -19,6 +19,7 @@ vi.mock('../../lib/api', async (importOriginal) => ({
 
 vi.mock('../../stores/confirm', () => ({ askConfirm: vi.fn().mockResolvedValue(true) }))
 
+import { expectAccessible } from '../../test/a11y'
 import AiProviders from './AiProviders.svelte'
 import AiAccess from './AiAccess.svelte'
 import type { AIKind, AIProvider } from '../../lib/ai'
@@ -72,6 +73,7 @@ describe('the AI providers list', () => {
     expect(screen.getByText('Leaves this device')).toBeInTheDocument()
     expect(screen.getByText('On your device or network')).toBeInTheDocument()
     expect(screen.getByText('Default')).toBeInTheDocument()
+    expectAccessible()
     expect(api.testAIProvider).not.toHaveBeenCalled()
     expect(api.fetchAIModels).not.toHaveBeenCalled()
   })
@@ -101,7 +103,7 @@ describe('the AI providers list', () => {
     expect(api.testAIProvider).not.toHaveBeenCalled()
 
     await userEvent.click(within(dialog).getByRole('button', { name: 'Test connection' }))
-    expect(await within(dialog).findByText('It answered, from this device or your network.')).toBeInTheDocument()
+    expect((await within(dialog).findAllByText('It answered, from this device or your network.'))[0]).toBeInTheDocument()
 
     await userEvent.click(save)
     await waitFor(() => expect(api.saveAIProvider).toHaveBeenCalledOnce())

@@ -141,6 +141,9 @@ type ScriptConfirmDTO struct {
 	ScriptName string `json:"scriptName"`
 	Function   string `json:"function"`
 	Summary    string `json:"summary"`
+	// EveryTime is set for a question asked every time, which offers no
+	// "allow without asking".
+	EveryTime bool `json:"everyTime"`
 }
 
 // ScriptCatchUpDTO asks whether a script runs over mail that arrived while
@@ -295,19 +298,6 @@ func (a *App) ListScripts() ([]ScriptDTO, error) {
 	return out, nil
 }
 
-// GetScript returns one script.
-func (a *App) GetScript(id int64) (ScriptDTO, error) {
-	svc, err := a.scriptService()
-	if err != nil {
-		return ScriptDTO{}, err
-	}
-	sc, err := svc.Script(a.ctx, id)
-	if err != nil {
-		return ScriptDTO{}, err
-	}
-	return toScriptDTO(sc), nil
-}
-
 // CreateScript stores a new script, switched off.
 func (a *App) CreateScript(in ScriptInput) (ScriptDTO, error) {
 	svc, err := a.scriptService()
@@ -357,6 +347,7 @@ func (a *App) DeleteScript(id int64) error {
 	if err := a.dropAIScriptOptions(id); err != nil {
 		return err
 	}
+	a.dropScriptProposal(id)
 	return a.setScriptFolder(id, "")
 }
 
@@ -481,10 +472,12 @@ func (a *App) RunScript(id, messageID int64) (ScriptRunDTO, error) {
 // against a message (0 for the sample message). Reads work; every change is
 // listed as a planned step and nothing is changed.
 func (a *App) TestScript(in ScriptInput, messageID int64) (ScriptRunDTO, error) {
-	return a.testScript(a.ctx, in, messageID)
+	return a.testScript(a.ctx, in, messageID, 0)
 }
 
-func (a *App) testScript(ctx context.Context, in ScriptInput, messageID int64) (ScriptRunDTO, error) {
+// testScript dry runs in. With approvedFrom set, the run holds the approvals
+// of that saved script when in does not change what was approved.
+func (a *App) testScript(ctx context.Context, in ScriptInput, messageID, approvedFrom int64) (ScriptRunDTO, error) {
 	svc, err := a.scriptService()
 	if err != nil {
 		return ScriptRunDTO{}, err
@@ -498,6 +491,11 @@ func (a *App) testScript(ctx context.Context, in ScriptInput, messageID int64) (
 	}
 	if err := sc.Validate(svc.Registry()); err != nil {
 		return ScriptRunDTO{}, err
+	}
+	if approvedFrom != 0 {
+		if saved, err := svc.Script(ctx, approvedFrom); err == nil && !scripting.ResetsApproval(saved, sc) {
+			sc.Approved = saved.Approved
+		}
 	}
 	var data map[string]any
 	if messageID != 0 {
@@ -722,24 +720,6 @@ func (a *App) ScriptValue(valueType, id string) (map[string]any, error) {
 		return nil, err
 	}
 	return svc.Value(a.ctx, valueType, id)
-}
-
-// ScriptAskSeconds returns how long a question of a script nobody started
-// waits before it takes its default.
-func (a *App) ScriptAskSeconds() int {
-	return int(a.scriptAskTimeout() / time.Second)
-}
-
-// SetScriptAskSeconds sets how long such a question waits, 10 seconds to a
-// day.
-func (a *App) SetScriptAskSeconds(seconds int) error {
-	if err := a.ready(); err != nil {
-		return err
-	}
-	if seconds < 10 || seconds > 86400 {
-		return fmt.Errorf("pelton: a question waits 10 seconds to a day")
-	}
-	return a.store.Set(a.ctx, settingScriptAskSeconds, strconv.Itoa(seconds))
 }
 
 // ResolveScriptCatchUp answers a catch-up question: run over the mail that

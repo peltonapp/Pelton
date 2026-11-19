@@ -478,7 +478,7 @@
           {$t('wizard.field.fromName')}
           <InfoTip text={$t('mailboxes.fromNameHint')} />
         </span>
-        <input type="text" bind:value={draft.displayName} />
+        <input type="text" bind:value={draft.displayName} aria-label={$t('wizard.field.fromName')} />
       </label>
       <!-- the local label is the one that never leaves the machine, so it says
            so, and switching it off keeps what was typed (#326). -->
@@ -496,7 +496,7 @@
             {$t('wizard.field.localLabel')}
             <InfoTip text={$t('mailboxes.localLabelHint')} />
           </span>
-          <input type="text" bind:value={draft.localLabel} placeholder={draft.displayName || draft.email} />
+          <input type="text" bind:value={draft.localLabel} placeholder={draft.displayName || draft.email} aria-label={$t('wizard.field.localLabel')} />
         </label>
       {/if}
       <label class="field">

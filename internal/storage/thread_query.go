@@ -190,6 +190,15 @@ func threadWhere(q MessageQuery) (string, []any) {
 	return messageWhere(q)
 }
 
+// MessagesByID reads several messages at once, keyed by id. Ids with no
+// message are left out.
+func (d *DB) MessagesByID(ctx context.Context, ids []int64) (map[int64]Message, error) {
+	if len(ids) == 0 {
+		return map[int64]Message{}, nil
+	}
+	return d.messagesByID(ctx, ids)
+}
+
 func (d *DB) messagesByID(ctx context.Context, ids []int64) (map[int64]Message, error) {
 	marks, args := inClause(ids)
 	rows, err := d.sql.QueryContext(ctx, selectMessageColumns+`

@@ -519,6 +519,8 @@ export interface ScriptConfirmRequest {
   scriptName: string
   function: string
   summary: string
+  /** Asked every time, e.g. a call an AI model chose or changed recipients; offers no "allow without asking". */
+  everyTime?: boolean
 }
 
 /** A script asking whether to run over mail that arrived while Pelton was closed. */
@@ -704,4 +706,34 @@ export function placementFits(p: ScriptPlacementDef, s: Pick<Script, 'trigger'>)
 /** Whether two inputs differ, for the editor's unsaved state. */
 export function inputsDiffer(a: ScriptInput, b: ScriptInput): boolean {
   return JSON.stringify(a) !== JSON.stringify(b)
+}
+
+/**
+ * Markdown a script wrote with every "<" outside code turned into text, so
+ * none of it renders as html: a meta refresh or a form in a result could
+ * otherwise load a page, and carry what the script read, without the
+ * script's network permission.
+ */
+export function inertMarkdown(md: string): string {
+  let fence = ''
+  return md
+    .split('\n')
+    .map((line) => {
+      const marker = /^\s{0,3}(`{3,}|~{3,})/.exec(line)?.[1]
+      if (fence) {
+        if (marker && marker[0] === fence[0] && marker.length >= fence.length) {
+          fence = ''
+        }
+        return line
+      }
+      if (marker) {
+        fence = marker
+        return line
+      }
+      return line
+        .split(/(`+[^`]*`+)/)
+        .map((part, i) => (i % 2 === 1 ? part : part.replaceAll('<', '&lt;')))
+        .join('')
+    })
+    .join('\n')
 }

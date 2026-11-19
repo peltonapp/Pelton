@@ -85,7 +85,7 @@ func registerOutside(r *scripting.Registry) error {
 }
 
 func newFakeScripts(t *testing.T) *fakeScripts {
-	return &fakeScripts{ref: scriptref.Build(scriptingtest.Registry(t, registerOutside), nil)}
+	return &fakeScripts{ref: scriptref.Build(scriptingtest.Registry(t, registerOutside))}
 }
 
 func allScriptPermissions() Permissions {

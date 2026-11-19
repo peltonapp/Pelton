@@ -5,6 +5,7 @@ import { get } from 'svelte/store'
 import type { BlockCond, ScriptCatalog, ScriptRun } from '../../lib/scripting'
 import { needs, permissionMet } from '../../lib/scripting'
 import { blockCatalog, catalogFixture, scriptFixture } from '../../test/scriptfixtures'
+import { expectAccessible } from '../../test/a11y'
 import { onTestedMessage, testableOnMail } from './blocks/matchcond'
 
 const api = vi.hoisted(() => ({
@@ -112,6 +113,7 @@ describe('ScriptEditor and AI', () => {
     await userEvent.click(screen.getByRole('checkbox', { name: /Ask the model/ }))
     await userEvent.click(screen.getByRole('button', { name: 'Run a test' }))
     expect(api.testScriptAskingAI).toHaveBeenCalledTimes(1)
+    expect(api.testScriptAskingAI.mock.calls[0][0]).toBe(aiScript.id)
   })
 
   it('shows no AI controls for a script without AI', () => {
@@ -136,6 +138,7 @@ describe('ScriptEditor and AI', () => {
     const panel = screen.getByRole('complementary', { name: 'Reference' })
     await userEvent.type(within(panel).getByRole('searchbox'), 'mail.send')
     expect(within(panel).getByText('mail.send()')).toBeInTheDocument()
+    expectAccessible()
   })
 })
 
@@ -165,7 +168,7 @@ describe('MatchTester', () => {
     render(MatchTester, { props: { pattern: 'Invoice \\d+' } })
     await userEvent.click(screen.getByRole('button', { name: 'Try it' }))
     expect(api.testScriptMatch).toHaveBeenCalledWith(expect.objectContaining({ pattern: 'Invoice \\d+', field: 'subject', folder: 'inbox', limit: 100 }))
-    expect(await screen.findByText('1 of 40 messages match.')).toBeInTheDocument()
+    expect((await screen.findAllByText('1 of 40 messages match.'))[0]).toBeInTheDocument()
     expect(screen.getByText('Invoice 7', { selector: 'mark' })).toBeInTheDocument()
   })
 
@@ -185,7 +188,7 @@ describe('MatchTester', () => {
     expect(screen.queryByRole('textbox', { name: 'Regular expression' })).not.toBeInTheDocument()
     await userEvent.click(screen.getByRole('button', { name: 'Try it' }))
     expect(api.testScriptMatch).toHaveBeenCalledWith(expect.objectContaining({ pattern: '', when: tried }))
-    expect(await screen.findByText('0 of 2 messages match.')).toBeInTheDocument()
+    expect((await screen.findAllByText('0 of 2 messages match.'))[0]).toBeInTheDocument()
   })
 })
 
@@ -211,6 +214,8 @@ describe('libraries', () => {
     await userEvent.clear(name)
     await userEvent.type(name, 'Bad Name')
     expect(screen.getByRole('button', { name: 'Save' })).toBeDisabled()
+    expect(name).toHaveAccessibleDescription(/lower case letters/)
+    expectAccessible()
     await userEvent.clear(name)
     await userEvent.type(name, 'dates')
     await userEvent.type(screen.getByRole('textbox', { name: 'What this library offers' }), '!')

@@ -133,6 +133,8 @@
   --compose-send-width: 92px;
   --popover-width: 340px;
   --popover-max-height: 440px;
+  /* the smallest press target a control gets, drawn or not (wcag 2.5.8). */
+  --target-min: 24px;
   /* a pressed button sinks by this much. */
   --press-scale: 0.96;
 
@@ -442,6 +444,19 @@
   --chrome-bg: color-mix(in srgb, var(--text-primary) 2.5%, var(--surface-sunken));
   --sidebar-bg: var(--surface-sunken);
   --radius-card: 7px;
+}
+
+/* the new design lifts the text tokens that fall short of 4.5:1 on a surface.
+   theme packs get theirs computed in legible.ts, whose BASE_TOKENS must stay in
+   step with these values. */
+:root[data-design="new"]:not([data-theme="dark"]) {
+  --text-tertiary: #676a72;
+  --success: #197a48;
+  --warning: #916100;
+}
+
+:root[data-design="new"][data-theme="dark"] {
+  --text-tertiary: #8b8f97;
 }
 
 :root[data-design="new"][data-panes="hybrid"],
