@@ -10,7 +10,7 @@
   import ProtectedNotice from './ProtectedNotice.svelte'
   import PhishingNotice from './PhishingNotice.svelte'
   import AttachmentList from './AttachmentList.svelte'
-  import InviteCard from './InviteCard.svelte'
+  import { loadInviteCard } from '../../lib/lazyload'
   import InfoModal from './InfoModal.svelte'
   import SourceModal from './SourceModal.svelte'
   import ClassicInfoModal from './classic/InfoModal.svelte'
@@ -444,7 +444,9 @@ ${bodyHtml}
           <PhishingNotice report={detail.phishing} messageId={detail.id} />
         {/if}
         {#if $prefs.design !== 'classic'}
-          <InviteCard messageId={detail.id} attachments={detail.attachments} />
+          {#await loadInviteCard() then m}
+            <svelte:component this={m.default} messageId={detail.id} attachments={detail.attachments} />
+          {/await}
         {/if}
         {#if detail.pgpState !== '' && detail.pgpState !== 'open'}
           <!-- the body here is still the armor, so showing it would put
