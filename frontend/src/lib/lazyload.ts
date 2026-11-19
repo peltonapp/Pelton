@@ -13,6 +13,18 @@ export const loadAttachmentsBrowser = () => import('../components/attachments/At
 /** loadMenuBarEditor loads the in-place editor of the in-app menu bar. */
 export const loadMenuBarEditor = () => import('../components/common/MenuBarEditor.svelte')
 
+/** loadPromiseStrip loads the reader's strip of promises found in a message. */
+export const loadPromiseStrip = () => import('../components/detail/PromiseStrip.svelte')
+
+/** loadEncryptionIndicator loads the reader's line about an encrypted or signed message. */
+export const loadEncryptionIndicator = () => import('../components/detail/EncryptionIndicator.svelte')
+
+/** loadInviteCard loads the reader's card for a calendar invitation. */
+export const loadInviteCard = () => import('../components/detail/InviteCard.svelte')
+
+/** loadDatePeek loads the preview a date in a mail opens. */
+export const loadDatePeek = () => import('../components/detail/DatePeek.svelte')
+
 /** warmUp runs each loader once the window is idle, ignoring failures. */
 export function warmUp(loaders: (() => Promise<unknown>)[]): void {
   const load = () => {

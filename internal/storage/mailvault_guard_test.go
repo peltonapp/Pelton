@@ -12,8 +12,9 @@ import (
 	"testing"
 )
 
-// touchesMessages matches SQL that reads or writes the messages table itself.
-var touchesMessages = regexp.MustCompile(`(?i)\b(from|join|update|into)\s+messages\b(?:[^_]|$)`)
+// touchesMessages matches SQL that reads or writes the messages table itself,
+// or message_trust, which holds a message's sender headers in clear.
+var touchesMessages = regexp.MustCompile(`(?i)\b(from|join|update|into)\s+(messages\b(?:[^_]|$)|message_trust\b)`)
 
 // vaultGuards are the names that keep vault mail out of a query: the SQL
 // predicate for aggregates and the gates for the mail space.
@@ -39,6 +40,7 @@ var vaultOptOuts = map[string]string{
 	"CountVaultWork":         "counts of one vault for its progress",
 	"DeleteMailVaultIfEmpty": "existence check of one vault",
 	"rebuildThreadKeys":      "rewrites thread keys from the ids already in the rows, keyed hashes for sealed mail",
+	"purgeDerived":           "deletes what other tables copied out of a message being sealed",
 
 	// writes keyed by a row, folder or thread the caller already holds.
 	"SetMessageFlags": "write by id", "DeleteMessage": "write by id",

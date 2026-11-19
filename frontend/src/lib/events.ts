@@ -53,6 +53,7 @@ export const EventNames = {
   taskReminder: 'tasks:reminder',
   followUpsChanged: 'followups:changed',
   promisesChanged: 'promises:changed',
+  privacyChanged: 'privacy:changed',
   focusChanged: 'focus:changed',
   focusEnded: 'focus:ended',
   projectsChanged: 'projects:changed',
@@ -335,6 +336,11 @@ export function onFollowUpsChanged(cb: () => void): Unsubscribe {
 /** Fires when promises were found, accepted, dismissed or closed. Subscribers refetch. */
 export function onPromisesChanged(cb: () => void): Unsubscribe {
   return EventsOn(EventNames.promisesChanged, () => cb())
+}
+
+/** Fires when the tracking counters or an unsubscribe's state changed. Subscribers refetch. */
+export function onPrivacyChanged(cb: () => void): Unsubscribe {
+  return EventsOn(EventNames.privacyChanged, () => cb())
 }
 
 // onMenu fires when a native menubar item is chosen. the payload is a short

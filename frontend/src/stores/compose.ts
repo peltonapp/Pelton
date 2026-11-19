@@ -7,6 +7,7 @@ import { writable, get } from 'svelte/store'
 import type { Address, ComposeRequest, Draft, EditorMode, MessageDetail, ComposeAttachment } from '../lib/types'
 import { getSetting, setSetting } from '../lib/api'
 import { noteAction } from '../lib/coach'
+import { guarded, replyCheck } from './trust'
 import { formatAddress, formatAddressList, parseAddressList, renderBody } from '../lib/mailcompose'
 import { formatFullDate } from '../lib/format'
 import { escapeHtml, textToHtml } from '../lib/richtext'
@@ -292,8 +293,15 @@ export function replySession(detail: MessageDetail, mode: EditorMode, kind: Repl
 /**
  * openReplyWith opens a reply, reply all or forward in the composer, with
  * typed (plain text) already written above the original, and returns its id.
+ * A reply to a message with a strong sender warning waits for the user to
+ * confirm where it goes instead, and returns -1.
  */
 export function openReplyWith(detail: MessageDetail, mode: EditorMode, kind: ReplyKind, typed: string): number {
+  const warned = kind !== 'forward' && document.documentElement.dataset.design === 'new' ? guarded(detail.id) : null
+  if (warned) {
+    replyCheck.set({ detail, mode, kind: kind === 'replyAll' ? 'replyAll' : 'reply', typed, to: warned.replyGoesTo })
+    return -1
+  }
   noteAction(kind === 'replyAll' ? 'reply-all' : kind === 'forward' ? 'forward' : 'reply')
   const session = replySession(detail, mode, kind, typed)
   composeSessions.update((list) => [...list, session])

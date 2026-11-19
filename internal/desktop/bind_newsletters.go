@@ -115,6 +115,9 @@ func (a *App) ListNewsletters() ([]NewsletterSenderDTO, error) {
 	out := make([]NewsletterSenderDTO, 0, len(senders))
 	for _, s := range senders {
 		kind, _ := parseListUnsubscribe(s.ListUnsubscribe, s.ListUnsubscribePost)
+		if kind == unsubKindOneClick && !a.oneClickVerified(s.LatestID) {
+			kind = unsubKindLink
+		}
 		out = append(out, NewsletterSenderDTO{
 			Email:           s.Email,
 			Name:            displayNameOf(s.LatestFromAddress, s.LatestFromName),

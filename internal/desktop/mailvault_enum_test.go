@@ -46,7 +46,7 @@ func carriesMessageData(t reflect.Type, seen map[reflect.Type]bool) bool {
 	return false
 }
 
-var mailish = regexp.MustCompile(`(?i)message|thread|mail|attachment|search|sender|newsletter|insight|draft|source|promise|meeting|unread|split|note|count|invite|quote`)
+var mailish = regexp.MustCompile(`(?i)message|thread|mail|attachment|search|sender|newsletter|insight|draft|source|promise|meeting|unread|split|note|count|invite|quote|passport|shield|privacy|trust|unsubscribe|tracker`)
 
 var (
 	errorType = reflect.TypeOf((*error)(nil)).Elem()
@@ -248,26 +248,36 @@ func vaultProbes(f *vaultFixture) map[string]func() (any, error) {
 		"NewsletterMessageIDs": func() (any, error) {
 			return wrap(a.NewsletterMessageIDs(NewsletterSelectionDTO{Emails: []string{"vaultmarkfrom9@example.org"}}))
 		},
-		"InsightsPeople":              func() (any, error) { return wrap(a.InsightsPeople(30)) },
-		"InsightsStorage":             func() (any, error) { return wrap(a.InsightsStorage()) },
-		"InsightsVolume":              func() (any, error) { return wrap(a.InsightsVolume(30)) },
-		"PromisesForMessage":          func() (any, error) { return wrap(a.PromisesForMessage(f.sealedID)) },
-		"FindPromises":                func() (any, error) { return wrap(a.FindPromises(f.sealedID)) },
-		"ListPromises":                func() (any, error) { return wrap(a.ListPromises()) },
-		"ScanMessage":                 func() (any, error) { return wrap(a.ScanMessage(f.sealedID, true, true)) },
-		"ScanAttachment":              func() (any, error) { return wrap(a.ScanAttachment(f.sealedID, f.sealedAtt)) },
-		"ExportMessageEML":            func() (any, error) { return wrap(a.ExportMessageEML(f.sealedID)) },
-		"FindMessageByLink":           func() (any, error) { return wrap(a.FindMessageByLink("message:<sealed@example.org>")) },
-		"MailEventSource":             func() (any, error) { return wrap(a.MailEventSource(f.sealedID)) },
-		"CreateEventDraftFromMessage": func() (any, error) { return wrap(a.CreateEventDraftFromMessage(f.sealedID)) },
-		"ParseInvite":                 func() (any, error) { return wrap(a.ParseInvite(f.sealedID)) },
-		"ApplyInvite":                 func() (any, error) { return wrap(a.ApplyInvite(f.sealedID)) },
-		"AnswerInvite":                func() (any, error) { return wrap(a.AnswerInvite(InviteAnswerRequest{MessageID: f.sealedID})) },
-		"MoveMessage":                 func() (any, error) { return wrap(a.MoveMessage(f.sealedID, f.inbox)) },
-		"ArchiveMessage":              func() (any, error) { return wrap(a.ArchiveMessage(f.sealedID)) },
-		"ArchiveMessages":             func() (any, error) { return wrap(a.ArchiveMessages([]int64{f.sealedID})) },
-		"DeleteMessages":              func() (any, error) { return wrap(a.DeleteMessages([]int64{f.sealedID})) },
-		"AddMailToProject":            func() (any, error) { return wrap(a.AddMailToProject(0, []int64{f.sealedID}, "")) },
+		"InsightsPeople":                 func() (any, error) { return wrap(a.InsightsPeople(30)) },
+		"InsightsStorage":                func() (any, error) { return wrap(a.InsightsStorage()) },
+		"InsightsVolume":                 func() (any, error) { return wrap(a.InsightsVolume(30)) },
+		"PromisesForMessage":             func() (any, error) { return wrap(a.PromisesForMessage(f.sealedID)) },
+		"FindPromises":                   func() (any, error) { return wrap(a.FindPromises(f.sealedID)) },
+		"ListPromises":                   func() (any, error) { return wrap(a.ListPromises()) },
+		"ScanMessage":                    func() (any, error) { return wrap(a.ScanMessage(f.sealedID, true, true)) },
+		"ScanAttachment":                 func() (any, error) { return wrap(a.ScanAttachment(f.sealedID, f.sealedAtt)) },
+		"ExportMessageEML":               func() (any, error) { return wrap(a.ExportMessageEML(f.sealedID)) },
+		"FindMessageByLink":              func() (any, error) { return wrap(a.FindMessageByLink("message:<sealed@example.org>")) },
+		"MailEventSource":                func() (any, error) { return wrap(a.MailEventSource(f.sealedID)) },
+		"CreateEventDraftFromMessage":    func() (any, error) { return wrap(a.CreateEventDraftFromMessage(f.sealedID)) },
+		"ParseInvite":                    func() (any, error) { return wrap(a.ParseInvite(f.sealedID)) },
+		"ApplyInvite":                    func() (any, error) { return wrap(a.ApplyInvite(f.sealedID)) },
+		"AnswerInvite":                   func() (any, error) { return wrap(a.AnswerInvite(InviteAnswerRequest{MessageID: f.sealedID})) },
+		"MoveMessage":                    func() (any, error) { return wrap(a.MoveMessage(f.sealedID, f.inbox)) },
+		"ArchiveMessage":                 func() (any, error) { return wrap(a.ArchiveMessage(f.sealedID)) },
+		"ArchiveMessages":                func() (any, error) { return wrap(a.ArchiveMessages([]int64{f.sealedID})) },
+		"DeleteMessages":                 func() (any, error) { return wrap(a.DeleteMessages([]int64{f.sealedID})) },
+		"AddMailToProject":               func() (any, error) { return wrap(a.AddMailToProject(0, []int64{f.sealedID}, "")) },
+		"GetMessageHTMLBlockingTrackers": func() (any, error) { return wrap(a.GetMessageHTMLBlockingTrackers(f.sealedID)) },
+		"GetSenderPassport":              func() (any, error) { return wrap(a.GetSenderPassport(f.sealedID)) },
+		"GetPrivacyShield":               func() (any, error) { return wrap(a.GetPrivacyShield(f.sealedID)) },
+		"PrivacyReport": func() (any, error) {
+			if err := a.store.Set(a.ctx, settingPrivacyCounters, "true"); err != nil {
+				return nil, err
+			}
+			a.privacyPass([]int64{f.sealedID})
+			return wrap(a.PrivacyReport(30))
+		},
 		"TestScriptMatch": func() (any, error) {
 			return wrap(a.TestScriptMatch(scripting.MatchRequest{Folder: "Secret", Limit: 50, Pattern: ".", Field: "subject"}))
 		},
@@ -417,11 +427,28 @@ func TestUnlockedVaultIsOpenOnlyToItsAudience(t *testing.T) {
 		t.Fatal("MCP flagged vault mail without the switch")
 	}
 
+	st := scriptTrust{app: a}
+	if _, err := st.Passport(context.Background(), f.sealedID); err == nil {
+		t.Fatal("a script read the passport of vault mail")
+	}
+	if _, err := st.Shield(context.Background(), f.sealedID); err == nil {
+		t.Fatal("a script read the shield of vault mail")
+	}
+	if err := st.Unsubscribe(context.Background(), f.sealedID); err == nil {
+		t.Fatal("a script unsubscribed through vault mail")
+	}
+
 	if err := a.UpdateMailVaultSettings(MailVaultSettingsDTO{ID: f.vault, Name: "Private", AllowScripts: true}); err != nil {
 		t.Fatal(err)
 	}
 	if msg, err := sm.Message(context.Background(), f.sealedID); err != nil || msg.Subject != vaultMarkSubject {
 		t.Fatalf("scripts with the switch on: %+v %v", msg, err)
+	}
+	if _, err := st.Passport(context.Background(), f.sealedID); err == nil {
+		t.Fatal("vault mail has no passport, even for scripts the vault admits")
+	}
+	if html, err := a.GetMessageHTMLBlockingTrackers(f.sealedID); err != nil || !strings.Contains(html, vaultMarkBody) {
+		t.Fatalf("the tracker-blocking reader cannot show unlocked vault mail: %q %v", html, err)
 	}
 	if _, err := mb.GetMessage(context.Background(), f.sealedID); err == nil {
 		t.Fatal("the scripts switch opened the vault to MCP")
@@ -447,6 +474,12 @@ func TestScriptAndMCPAdaptersAreCovered(t *testing.T) {
 	for _, name := range messageMethods(&scriptMail{}) {
 		if !covered[name] {
 			t.Errorf("scriptMail.%s returns mail and is not covered by TestUnlockedVaultIsOpenOnlyToItsAudience", name)
+		}
+	}
+	trust := map[string]bool{"Passport": true, "Shield": true}
+	for _, name := range messageMethods(scriptTrust{}) {
+		if !trust[name] {
+			t.Errorf("scriptTrust.%s returns mail data and is not covered", name)
 		}
 	}
 	mcp := map[string]bool{"GetMessage": true, "ListMessages": true, "Search": true}

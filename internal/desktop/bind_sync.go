@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/peltonapp/Pelton/internal/outbox"
+	"github.com/peltonapp/Pelton/internal/phishing"
 	psmtp "github.com/peltonapp/Pelton/internal/smtp"
 	"github.com/peltonapp/Pelton/internal/storage"
 	psync "github.com/peltonapp/Pelton/internal/sync"
@@ -435,6 +436,7 @@ func (a *App) syncFolders(client mailClient, accountID int64) error {
 			goSafe("announcing new mail", func() { a.notifyNewMail(f, res.NewIDs) })
 			a.scriptMailArrived(res.NewIDs, firstSync)
 			a.promisesAfterSync(f, res.NewIDs)
+			a.privacyAfterSync(f, res.NewIDs)
 		}
 		if !firstSync {
 			a.scriptServerFlags(res.FlagChanges)
@@ -637,6 +639,9 @@ func (a *App) newSyncEngine(client mailClient, accountID int64) *psync.Engine {
 	if trash, ok := a.findTrashFolder(accountID); ok {
 		engine.TrashPath = trash.IMAPPath
 		engine.TrashFolderID = trash.ID
+	}
+	if acc, err := a.store.GetAccount(a.ctx, accountID); err == nil {
+		engine.AuthServ = phishing.ServerFor(acc.Email, acc.IMAPHost, acc.SMTPHost)
 	}
 	return engine
 }

@@ -445,6 +445,51 @@ func TestVaultedAccountCoversNewFolders(t *testing.T) {
 	}
 }
 
+func TestSealingDropsPassportAndShieldRecords(t *testing.T) {
+	f := newVaultFixture(t)
+	ctx := context.Background()
+	before := f.insert(t, f.secret, 1, "a")
+	m, err := f.db.GetMessage(ctx, before)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := f.db.SetMessageTrust(ctx, MessageTrust{MessageID: before, AuthState: "trusted", ReturnPath: markFrom, Sender: markFrom}); err != nil {
+		t.Fatal(err)
+	}
+	if err := f.db.RecordPrivacyScan(ctx, PrivacyScan{Key: PrivacyKey(*m), Sender: markFrom, ListID: "list", Date: time.Now(), Pixels: 1}); err != nil {
+		t.Fatal(err)
+	}
+	f.makeVault(t)
+	for {
+		n, err := f.db.SealPending(ctx, f.vault, 10)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if n == 0 {
+			break
+		}
+	}
+	var trust, scans int
+	f.db.sql.QueryRow(`SELECT COUNT(*) FROM message_trust`).Scan(&trust)
+	f.db.sql.QueryRow(`SELECT COUNT(*) FROM privacy_scans`).Scan(&scans)
+	if trust != 0 || scans != 0 {
+		t.Fatalf("sealing left %d trust records and %d privacy scans", trust, scans)
+	}
+
+	after := f.insert(t, f.secret, 2, "b")
+	if err := f.db.SetMessageTrust(ctx, MessageTrust{MessageID: after, AuthState: "trusted", Sender: markFrom}); err != nil {
+		t.Fatal(err)
+	}
+	f.db.sql.QueryRow(`SELECT COUNT(*) FROM message_trust`).Scan(&trust)
+	if trust != 0 {
+		t.Fatal("a trust record was stored in clear for vault mail")
+	}
+	f.gate.set(true)
+	if got, err := f.db.GetMessageTrust(userCtx(), after); err != nil || got.Sender != "" {
+		t.Fatalf("trust record for vault mail: %+v %v", got, err)
+	}
+}
+
 func TestSealedThreadsStayApart(t *testing.T) {
 	f := newVaultFixture(t)
 	ctx := context.Background()

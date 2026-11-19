@@ -107,6 +107,13 @@ func (a *App) inMailVault(folderID int64) bool {
 	return err != nil || v != 0
 }
 
+// inMailVaultMessage is inMailVault for a message id, locked or not. A
+// message it cannot place counts as in a vault.
+func (a *App) inMailVaultMessage(id int64) bool {
+	v, err := a.store.MessageVault(a.ctx, id)
+	return err != nil || v != 0
+}
+
 // mailVaultGate is the storage.VaultGate the app installs.
 type mailVaultGate struct{ a *App }
 

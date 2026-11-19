@@ -376,6 +376,16 @@ func (d *DB) sealedState(ctx context.Context, messageID int64) (folderID, vaultI
 	return folderID, vaultID, nil
 }
 
+// MessageVault returns the vault a message is sealed to or whose folder it
+// is in, 0 for none, locked or not.
+func (d *DB) MessageVault(ctx context.Context, messageID int64) (int64, error) {
+	folderID, vaultID, err := d.sealedState(ctx, messageID)
+	if err != nil || vaultID != 0 {
+		return vaultID, err
+	}
+	return d.FolderVault(ctx, folderID)
+}
+
 // sealedKey checks that ctx may see a message and returns its vault and, for
 // a sealed message, its key and envelope. A message in clear returns a nil
 // key.
@@ -578,7 +588,12 @@ func purgeDerived(ctx context.Context, tx *sql.Tx, m *Message) error {
 		q    string
 		args []any
 	}
-	stmts := []stmt{{`DELETE FROM message_pgp WHERE message_id = ?`, []any{m.ID}}}
+	stmts := []stmt{
+		{`DELETE FROM message_pgp WHERE message_id = ?`, []any{m.ID}},
+		{`DELETE FROM message_trust WHERE message_id = ?`, []any{m.ID}},
+		{`DELETE FROM privacy_scans WHERE msg_key IN (?, ?)`, []any{PrivacyKey(*m), fmt.Sprintf("row:%d", m.ID)}},
+		{`UPDATE unsubscribes SET still_message_id = 0 WHERE still_message_id = ?`, []any{m.ID}},
+	}
 	if key := threadKey(m.MessageID); key != "" {
 		stmts = append(stmts,
 			stmt{`DELETE FROM message_replies WHERE account_id = ? AND (original_message_id = ? OR reply_message_id = ?)`, []any{m.AccountID, key, key}},

@@ -12,7 +12,16 @@
   import NetworkSection from '../../settings/NetworkSection.svelte'
   import RemoteContentPreview from '../skeletons/RemoteContentPreview.svelte'
   import Segmented from '../ui/Segmented.svelte'
-  import { prefs, setAlwaysLoadImages, setAutoconfigLookup, setBlockTrackingPixels, setCleanLinks } from '../../../stores/prefs'
+  import {
+    prefs,
+    setAlwaysLoadImages,
+    setAutoconfigLookup,
+    setBlockTrackingPixels,
+    setCleanLinks,
+    setPrivacyCounters,
+    setUnsubscribeGraceDays,
+  } from '../../../stores/prefs'
+  import { openMailScreen } from '../../../stores/mailscreen'
   import { t } from '../../../lib/i18n'
   import type { AutoconfigLookup } from '../../../lib/types'
 
@@ -40,6 +49,18 @@
   }
 
   let allowlistOpen = false
+
+  function onGrace(value: string): void {
+    const days = Math.round(Number(value))
+    if (Number.isFinite(days) && days >= 1 && days <= 90) {
+      setUnsubscribeGraceDays(days)
+    }
+  }
+
+  function openReport(): void {
+    openMailScreen('privacy')
+    dispatch('close')
+  }
 </script>
 
 <Card title={$t('settings2.privacy.remote')}>
@@ -88,6 +109,25 @@
     />
   </Row>
 </Card>
+<Card title={$t('privacy.report.title')}>
+  <Row id="privacy-counters" label={$t('privacy.counters.label')} hint={$t('privacy.counters.hint')}>
+    <ToggleSwitch checked={$prefs.privacyCounters} label={$t('privacy.counters.label')} on:change={(e) => setPrivacyCounters(e.detail)} />
+  </Row>
+  <Row id="unsubscribe-grace" label={$t('privacy.grace.label')} hint={$t('privacy.grace.hint')}>
+    <input
+      class="cal-field grace"
+      type="number"
+      min="1"
+      max="90"
+      aria-label={$t('privacy.grace.label')}
+      value={$prefs.unsubscribeGraceDays}
+      on:change={(e) => onGrace(e.currentTarget.value)}
+    />
+  </Row>
+  <Row id="privacy-report" label={$t('privacy.report.title')}>
+    <button type="button" class="s2-btn" on:click={openReport}>{$t('privacy.report.title')}</button>
+  </Row>
+</Card>
 <AppLockCard />
 <VaultCard />
 
@@ -109,3 +149,9 @@
     />
   {/await}
 {/if}
+
+<style>
+  .grace {
+    width: 6em;
+  }
+</style>

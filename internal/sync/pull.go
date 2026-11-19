@@ -164,12 +164,20 @@ func (e *Engine) storeMessage(ctx context.Context, folder storage.Folder, msg *p
 		return 0, fmt.Errorf("sync: store message uid %d: %w", uid, err)
 	}
 
+	// mail in a vault gets no passport record, no header observers and no
+	// metadata log: each would put its sender in clear outside the vault.
 	vaulted, err := e.store.FolderVault(ctx, folder.ID)
 	if err != nil {
 		return id, fmt.Errorf("sync: vault of %q: %w", folder.IMAPPath, err)
 	}
 	if vaulted != 0 {
 		return id, nil
+	}
+
+	// a failure costs this message its passport, which then reads as not
+	// checked, not the sync.
+	if err := e.store.SetMessageTrust(ctx, trustRecord(id, msg, e.AuthServ)); err != nil {
+		e.log.Error("store message trust", "uid", uid, "err", err)
 	}
 	if e.ObserveRaw != nil && len(msg.Raw) > 0 {
 		e.ObserveRaw(folder, msg.Raw)
@@ -211,6 +219,21 @@ func storedAuth(headers []string) storage.MessageAuth {
 		DMARC:      auth.DMARC,
 		SPFDomain:  auth.SPFDomain,
 		DKIMDomain: auth.DKIMDomain,
+	}
+}
+
+// trustRecord reads what the account's own server said about a message, by
+// the rule in phishing.ReadAuth, together with the sender's claims.
+func trustRecord(id int64, msg *pimap.Message, serv phishing.AuthServ) storage.MessageTrust {
+	rec := phishing.ReadAuth(msg.AuthResults, serv)
+	c := msg.Claims
+	return storage.MessageTrust{
+		MessageID: id, AuthState: rec.State, ServID: rec.ServID,
+		SPF: rec.SPF, SPFDomain: rec.SPFDomain,
+		DKIM: rec.DKIM, DKIMDomain: rec.DKIMDomain, DKIMDomains: rec.DKIMDomains,
+		DMARC: rec.DMARC, DMARCPolicy: rec.DMARCPolicy, HeaderFrom: rec.HeaderFrom,
+		ReturnPath: c.ReturnPath, Sender: c.Sender, Signers: c.Signers, UnsubSigners: c.UnsubSigners,
+		ReceivedSPF: c.ReceivedSPF, ARC: c.ARC, ReadReceiptTo: c.ReadReceiptTo,
 	}
 }
 

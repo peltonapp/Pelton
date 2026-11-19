@@ -139,6 +139,8 @@ const defaults: UIPrefs = {
   notifyActionMarkRead: true,
   notifyActionReply: true,
   cleanLinks: false,
+  privacyCounters: true,
+  unsubscribeGraceDays: 10,
   autoconfigLookup: 'ask',
   verboseSync: false,
   syncProgressBar: true,
@@ -583,6 +585,18 @@ export function setNotifyAction(action: NotifyAction, value: boolean): void {
 export function setCleanLinks(value: boolean): void {
   prefs.update((p) => ({ ...p, cleanLinks: value }))
   void setSetting(SettingKeys.cleanLinks, String(value))
+}
+
+/** Turns the tracking report's counters on or off. */
+export function setPrivacyCounters(value: boolean): void {
+  prefs.update((p) => ({ ...p, privacyCounters: value }))
+  void setSetting(SettingKeys.privacyCounters, String(value))
+}
+
+/** Sets how many days after an unsubscribe mail may still come. */
+export function setUnsubscribeGraceDays(days: number): void {
+  prefs.update((p) => ({ ...p, unsubscribeGraceDays: days }))
+  void setSetting(SettingKeys.unsubscribeGraceDays, String(days))
 }
 
 /**
