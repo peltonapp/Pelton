@@ -9,11 +9,9 @@ CREATE TABLE IF NOT EXISTS privacy_scans (
     sender_name TEXT NOT NULL DEFAULT '',
     list_id TEXT NOT NULL DEFAULT '',
     date TEXT NOT NULL DEFAULT '',
-    remote_images INTEGER NOT NULL DEFAULT 0,
     pixels INTEGER NOT NULL DEFAULT 0,
     links INTEGER NOT NULL DEFAULT 0,
     receipt INTEGER NOT NULL DEFAULT 0,
-    other INTEGER NOT NULL DEFAULT 0,
     -- the tracking companies recognised in the message, separated by '|'
     companies TEXT NOT NULL DEFAULT ''
 );

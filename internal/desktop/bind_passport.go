@@ -118,12 +118,10 @@ func (a *App) GetSenderPassport(id int64) (PassportDTO, error) {
 func (a *App) passportFor(m storage.Message) (PassportDTO, error) {
 	addr := addressOnly(m.FromAddress)
 	in := passportInput{
-		MessageID: m.ID,
-		Address:   addr,
-		Name:      displayNameOf(m.FromAddress, m.FromName),
-		ReplyTo:   addressOnly(m.ReplyTo),
-		Date:      m.Date,
-		Known:     a.knownPeople(),
+		Address: addr,
+		Name:    displayNameOf(m.FromAddress, m.FromName),
+		ReplyTo: addressOnly(m.ReplyTo),
+		Known:   a.knownPeople(),
 	}
 	var err error
 	if in.Trust, err = a.store.GetMessageTrust(a.ctx, m.ID); err != nil {

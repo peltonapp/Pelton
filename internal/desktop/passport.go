@@ -97,8 +97,7 @@ type PassportEvidenceDTO struct {
 
 // PassportDTO is the passport of one message.
 type PassportDTO struct {
-	MessageID int64  `json:"messageId"`
-	Address   string `json:"address"`
+	Address string `json:"address"`
 	// Domain is the From domain as the reader should see it, decoded from
 	// punycode.
 	Domain string `json:"domain"`
@@ -132,11 +131,9 @@ type PassportDTO struct {
 
 // passportInput is everything the verdict is made from.
 type passportInput struct {
-	MessageID int64
-	Address   string
-	Name      string
-	ReplyTo   string
-	Date      time.Time
+	Address string
+	Name    string
+	ReplyTo string
 	// Trust is the stored record; a zero AuthState means there is none.
 	Trust storage.MessageTrust
 	Mark  string
@@ -173,15 +170,14 @@ func buildPassport(in passportInput) PassportDTO {
 	rec := recordOf(in.Trust)
 	align := rec.Aligned(addr)
 	out := PassportDTO{
-		MessageID: in.MessageID,
-		Address:   addr,
-		Domain:    domain,
-		Mark:      in.Mark,
-		Received:  in.Received,
-		Sent:      in.Sent,
-		Contact:   in.Contact,
-		Changes:   []PassportChangeDTO{},
-		Warnings:  []string{},
+		Address:  addr,
+		Domain:   domain,
+		Mark:     in.Mark,
+		Received: in.Received,
+		Sent:     in.Sent,
+		Contact:  in.Contact,
+		Changes:  []PassportChangeDTO{},
+		Warnings: []string{},
 		Evidence: PassportEvidenceDTO{
 			AuthState: in.Trust.AuthState, ServID: in.Trust.ServID,
 			SPF: in.Trust.SPF, SPFDomain: in.Trust.SPFDomain,

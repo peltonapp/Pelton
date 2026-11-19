@@ -67,12 +67,8 @@ type ShieldUnsubDTO struct {
 
 // ShieldDTO is the shield of one message.
 type ShieldDTO struct {
-	MessageID int64 `json:"messageId"`
 	// RemoteAllowed: remote content loads for this message without asking.
 	RemoteAllowed bool `json:"remoteAllowed"`
-	// HoldsTrackers: the block-tracking-pixels setting keeps pixels out even
-	// when images load.
-	HoldsTrackers bool `json:"holdsTrackers"`
 	// Trackers is how many tracking requests were kept from the sender: the
 	// pixels blocked and an unanswered read receipt request.
 	Trackers int             `json:"trackers"`
@@ -121,7 +117,7 @@ func (a *App) GetPrivacyShield(id int64) (ShieldDTO, error) {
 
 // buildShield works out the shield of a message from its body and record.
 func buildShield(m storage.Message, trust storage.MessageTrust, remote, holdTrackers bool) ShieldDTO {
-	dto := ShieldDTO{MessageID: m.ID, RemoteAllowed: remote, HoldsTrackers: holdTrackers, Items: []ShieldItemDTO{}}
+	dto := ShieldDTO{RemoteAllowed: remote, Items: []ShieldItemDTO{}}
 	imageStatus := shieldBlocked
 	if remote {
 		imageStatus = shieldLoaded
@@ -209,16 +205,14 @@ func (a *App) countPrivacy(m storage.Message, dto ShieldDTO) {
 		switch it.Kind {
 		case "pixel":
 			scan.Pixels++
-		case "image":
-			scan.RemoteImages++
 		case "link":
 			scan.Links++
 		case "receipt":
 			scan.Receipt = true
 		default:
-			scan.Other++
+			continue
 		}
-		if it.Company != "" && it.Kind != "image" && !slices.Contains(scan.Companies, it.Company) {
+		if it.Company != "" && !slices.Contains(scan.Companies, it.Company) {
 			scan.Companies = append(scan.Companies, it.Company)
 		}
 	}
@@ -321,7 +315,6 @@ type PrivacySenderDTO struct {
 	Pixels    int      `json:"pixels"`
 	Links     int      `json:"links"`
 	Receipts  int      `json:"receipts"`
-	Other     int      `json:"other"`
 	First     string   `json:"first"`
 	Last      string   `json:"last"`
 	Companies []string `json:"companies"`
@@ -334,8 +327,6 @@ type PrivacyReportDTO struct {
 	// Counting reports the keep-counters setting; with it off the report
 	// shows what was counted before.
 	Counting bool `json:"counting"`
-	// Since is the start of the period, '' for all time.
-	Since string `json:"since"`
 	// Totals over the period: tracking requests (pixels and read receipt
 	// requests), tracked links, mails, and senders that tried to track.
 	Trackers int                `json:"trackers"`
@@ -368,7 +359,7 @@ func (a *App) PrivacyReport(days int) (PrivacyReportDTO, error) {
 	for _, u := range unsubs {
 		bySender[u.Sender] = u
 	}
-	out := PrivacyReportDTO{Counting: a.privacyCounting(), Since: formatDate(since), Rows: []PrivacySenderDTO{}}
+	out := PrivacyReportDTO{Counting: a.privacyCounting(), Rows: []PrivacySenderDTO{}}
 	for _, r := range rows {
 		out.Mails += r.Mails
 		u, unsubscribed := bySender[r.Sender]
@@ -383,7 +374,7 @@ func (a *App) PrivacyReport(days int) (PrivacyReportDTO, error) {
 		out.Links += r.Links
 		row := PrivacySenderDTO{
 			Address: r.Sender, Name: r.Name, Mails: r.Mails, Pixels: r.Pixels, Links: r.Links, Receipts: r.Receipts,
-			Other: r.Other, First: formatDate(r.First), Last: formatDate(r.Last), Companies: nonNil(r.Companies),
+			First: formatDate(r.First), Last: formatDate(r.Last), Companies: nonNil(r.Companies),
 		}
 		if unsubscribed {
 			row.Unsub = unsubState(u)

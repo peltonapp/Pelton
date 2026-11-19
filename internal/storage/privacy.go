@@ -14,17 +14,15 @@ import (
 // privacy report counts it (see migration 0112).
 type PrivacyScan struct {
 	// Key identifies the message across resyncs: see PrivacyKey.
-	Key          string
-	Sender       string
-	SenderName   string
-	ListID       string
-	Date         time.Time
-	RemoteImages int
-	Pixels       int
-	Links        int
-	Receipt      bool
-	Other        int
-	Companies    []string
+	Key        string
+	Sender     string
+	SenderName string
+	ListID     string
+	Date       time.Time
+	Pixels     int
+	Links      int
+	Receipt    bool
+	Companies  []string
 }
 
 // PrivacyKey is the counter key of a message: its account and Message-ID, or
@@ -45,10 +43,10 @@ func (d *DB) RecordPrivacyScan(ctx context.Context, s PrivacyScan) error {
 		receipt = 1
 	}
 	_, err := d.sql.ExecContext(ctx, `INSERT OR IGNORE INTO privacy_scans
-(msg_key, sender, sender_name, list_id, date, remote_images, pixels, links, receipt, other, companies)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-		s.Key, normalizeAddress(s.Sender), s.SenderName, s.ListID, formatTime(s.Date), s.RemoteImages,
-		s.Pixels, s.Links, receipt, s.Other, strings.Join(s.Companies, "|"))
+(msg_key, sender, sender_name, list_id, date, pixels, links, receipt, companies)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		s.Key, normalizeAddress(s.Sender), s.SenderName, s.ListID, formatTime(s.Date),
+		s.Pixels, s.Links, receipt, strings.Join(s.Companies, "|"))
 	if err != nil {
 		return fmt.Errorf("storage: record privacy scan: %w", err)
 	}
@@ -82,11 +80,9 @@ type PrivacySender struct {
 	Sender    string
 	Name      string
 	Mails     int
-	Images    int
 	Pixels    int
 	Links     int
 	Receipts  int
-	Other     int
 	First     time.Time
 	Last      time.Time
 	Companies []string
@@ -95,8 +91,8 @@ type PrivacySender struct {
 // PrivacySenders sums the counters per sender for mail dated since since; the
 // zero time means all of it.
 func (d *DB) PrivacySenders(ctx context.Context, since time.Time) ([]PrivacySender, error) {
-	rows, err := d.sql.QueryContext(ctx, `SELECT sender, MAX(sender_name), COUNT(*), SUM(remote_images), SUM(pixels),
-    SUM(links), SUM(receipt), SUM(other), MIN(date), MAX(date), GROUP_CONCAT(companies, '|')
+	rows, err := d.sql.QueryContext(ctx, `SELECT sender, MAX(sender_name), COUNT(*), SUM(pixels),
+    SUM(links), SUM(receipt), MIN(date), MAX(date), GROUP_CONCAT(companies, '|')
 FROM privacy_scans WHERE date >= ? GROUP BY sender`, formatTime(since))
 	if err != nil {
 		return nil, fmt.Errorf("storage: privacy senders: %w", err)
@@ -107,7 +103,7 @@ FROM privacy_scans WHERE date >= ? GROUP BY sender`, formatTime(since))
 		var s PrivacySender
 		var first, last string
 		var companies sql.NullString
-		if err := rows.Scan(&s.Sender, &s.Name, &s.Mails, &s.Images, &s.Pixels, &s.Links, &s.Receipts, &s.Other,
+		if err := rows.Scan(&s.Sender, &s.Name, &s.Mails, &s.Pixels, &s.Links, &s.Receipts,
 			&first, &last, &companies); err != nil {
 			return nil, fmt.Errorf("storage: scan privacy sender: %w", err)
 		}
