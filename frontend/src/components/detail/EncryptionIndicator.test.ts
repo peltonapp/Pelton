@@ -1,9 +1,18 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { render, screen } from '@testing-library/svelte'
+import { render, screen, waitFor } from '@testing-library/svelte'
 import userEvent from '@testing-library/user-event'
 
-const api = vi.hoisted(() => ({ importKeyFromSetupMessage: vi.fn() }))
-vi.mock('../../lib/api', async (importOriginal) => ({ ...(await importOriginal<typeof import('../../lib/api')>()), ...api }))
+const backend = vi.hoisted(() => ({
+  calls: [] as [number, string][],
+  answer: (): Promise<void> => Promise.resolve(),
+}))
+vi.mock('../../lib/api', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../../lib/api')>()),
+  importKeyFromSetupMessage: (id: number, code: string) => {
+    backend.calls.push([id, code])
+    return backend.answer()
+  },
+}))
 
 import EncryptionIndicator from './EncryptionIndicator.svelte'
 import { expectAccessible } from '../../test/a11y'
@@ -13,7 +22,10 @@ function enc(over: Partial<MessageEncryption> = {}): MessageEncryption {
   return { encrypted: false, signature: '', signerEmail: '', subject: '', setupMessage: false, ...over }
 }
 
-beforeEach(() => api.importKeyFromSetupMessage.mockReset())
+beforeEach(() => {
+  backend.calls = []
+  backend.answer = () => Promise.resolve()
+})
 
 describe('EncryptionIndicator', () => {
   it.each([
@@ -36,22 +48,21 @@ describe('EncryptionIndicator', () => {
   })
 
   it('imports a key from another device with its setup code', async () => {
-    api.importKeyFromSetupMessage.mockResolvedValue(undefined)
     render(EncryptionIndicator, { props: { encryption: enc({ setupMessage: true }), messageId: 7 } })
     expectAccessible()
     const button = screen.getByRole('button', { name: 'Use this key' })
     expect(button).toBeDisabled()
     await userEvent.type(screen.getByRole('textbox', { name: 'Setup code' }), '1234-5678')
     await userEvent.click(button)
-    expect(api.importKeyFromSetupMessage).toHaveBeenCalledWith(7, '1234-5678')
+    expect(backend.calls).toEqual([[7, '1234-5678']])
     expect(await screen.findByText('The key from your other device is now used here.')).toBeInTheDocument()
   })
 
   it('reports a wrong code', async () => {
-    api.importKeyFromSetupMessage.mockRejectedValue(new Error('that setup code does not open this message'))
+    backend.answer = () => Promise.reject(new Error('that setup code does not open this message'))
     render(EncryptionIndicator, { props: { encryption: enc({ setupMessage: true }), messageId: 7 } })
     await userEvent.type(screen.getByRole('textbox', { name: 'Setup code' }), '0000')
     await userEvent.click(screen.getByRole('button', { name: 'Use this key' }))
-    expect(await screen.findByText(/does not open this message/)).toBeInTheDocument()
+    await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent('does not open this message'))
   })
 })
