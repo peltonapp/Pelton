@@ -19,6 +19,9 @@ export const loadPromiseStrip = () => import('../components/detail/PromiseStrip.
 /** loadEncryptionIndicator loads the reader's line about an encrypted or signed message. */
 export const loadEncryptionIndicator = () => import('../components/detail/EncryptionIndicator.svelte')
 
+/** loadInviteCard loads the reader's card for a calendar invitation. */
+export const loadInviteCard = () => import('../components/detail/InviteCard.svelte')
+
 /** warmUp runs each loader once the window is idle, ignoring failures. */
 export function warmUp(loaders: (() => Promise<unknown>)[]): void {
   const load = () => {
