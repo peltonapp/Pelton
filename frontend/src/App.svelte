@@ -22,7 +22,7 @@
   import { space, openSpace, runSpaceAction, isMailOnlyAction } from './stores/space'
   import { meetingPrepTarget, openMeetingPrep, closeMeetingPrep } from './stores/meetingprep'
   import { mailScreen, openMailScreen, closeMailScreen } from './stores/mailscreen'
-  import { IconMailX, IconChartBar } from '@tabler/icons-svelte'
+  import { IconMailX, IconChartBar, IconShieldCheck } from '@tabler/icons-svelte'
   import { orderedSpaces, visibleSpaces } from './lib/spaces'
   import { startChat, stopChat } from './stores/chat'
   import { popupIsOpen } from './lib/popups'
@@ -624,8 +624,8 @@
     }
   })
 
-  // the newsletter manager and the insights page in the palette, with their
-  // live shortcut as the hint.
+  // the newsletter manager, the insights page and the tracking report in the
+  // palette, with their live shortcut as the hint.
   registerPaletteSource('mailtools', (tr) => {
     const hint = (action: 'open-newsletters' | 'open-insights'): string => {
       const combo = get(bindings)[action]
@@ -649,6 +649,15 @@
         hint: hint('open-insights'),
         icon: IconChartBar,
         run: () => openSettingsAt('insights'),
+      },
+      {
+        id: 'open-privacy-report',
+        group: 'navigate',
+        label: tr('privacy.report.title'),
+        keywords: tr('privacy.report.keywords'),
+        hint: '',
+        icon: IconShieldCheck,
+        run: () => openMailScreen('privacy'),
       },
     ]
   })
@@ -2356,6 +2365,12 @@
         {#if $mailScreen === 'newsletters'}
           <div class="screen">
             {#await import('./components/newsletters/NewsletterManager.svelte') then m}
+              <svelte:component this={m.default} on:close={closeMailScreen} />
+            {/await}
+          </div>
+        {:else if $mailScreen === 'privacy'}
+          <div class="screen">
+            {#await import('./components/privacy/PrivacyReport.svelte') then m}
               <svelte:component this={m.default} on:close={closeMailScreen} />
             {/await}
           </div>

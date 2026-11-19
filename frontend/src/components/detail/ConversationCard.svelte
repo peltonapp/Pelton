@@ -20,6 +20,7 @@
   import FollowUpNotice from './FollowUpNotice.svelte'
   import { loadEncryptionIndicator, loadPromiseStrip } from '../../lib/lazyload'
   import { promiseSettings } from '../../stores/promises'
+  import { passports } from '../../stores/trust'
   import { prefs } from '../../stores/prefs'
   import { formatListDate, displayName, type TimeFormat } from '../../lib/format'
   import { dur, motion } from '../../lib/motion'
@@ -132,8 +133,9 @@
         {#if detail.messageId}
           <FollowUpNotice messageId={detail.messageId} />
         {/if}
-        {#if detail.phishing.level !== 'none'}
-          <PhishingNotice report={detail.phishing} messageId={detail.id} />
+        {@const banner = $passports.get(detail.id)?.banner ?? detail.phishing}
+        {#if banner.level !== 'none'}
+          <PhishingNotice report={banner} messageId={detail.id} />
         {/if}
         {#if detail.encryption}
           {#await loadEncryptionIndicator() then m}

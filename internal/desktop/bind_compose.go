@@ -168,6 +168,7 @@ func (a *App) sendMessage(ctx context.Context, req ComposeRequest) (int64, error
 			}
 		}
 	}
+	forgetKnownPeople()
 	return id, nil
 }
 

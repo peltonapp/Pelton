@@ -415,6 +415,116 @@ export interface UnsubscribeInfo {
   target: string
   // done is true when this sender was already unsubscribed from.
   done: boolean
+  // unverified marks a one-click header authentication did not vouch for,
+  // offered as a web page instead (new design only).
+  unverified?: boolean
+}
+
+/** One verdict of the sender passport; see internal/desktop/passport.go. */
+export type PassportState = 'impostor' | 'failed' | 'lookalike' | 'verified' | 'unverified' | 'unchecked'
+
+/** Something about a sender that differs from their earlier mail. */
+export interface PassportChange {
+  kind: 'new_domain' | 'new_reply_to' | 'name_elsewhere'
+  detail: string
+  before?: string
+}
+
+/** The technical record behind a passport. */
+export interface PassportEvidence {
+  authState: string
+  servId: string
+  spf: string
+  spfDomain: string
+  dkim: string
+  dkimDomains: string[]
+  dmarc: string
+  dmarcPolicy: string
+  headerFrom: string
+  alignedSpf: boolean
+  alignedDkim: boolean
+  sendingDomain: string
+  returnPath: string
+  sender: string
+  signers: string[]
+  receivedSpf: string
+  arc: string
+  mixedScript: boolean
+}
+
+/** Who sent a message, as far as the local mail and the user's server say. */
+export interface Passport {
+  address: string
+  domain: string
+  state: PassportState
+  reason?: 'legacy' | 'none' | 'untrusted' | 'other_domain' | 'no_pass'
+  mark: '' | 'known' | 'impostor'
+  first: boolean
+  received: number
+  sent: number
+  since: string
+  contact: boolean
+  sameDomain: boolean
+  changes: PassportChange[]
+  lookalike: { kind: 'name' | 'domain'; of: string; address?: string } | null
+  replyGoesTo: string
+  replyElsewhere: boolean
+  warnings: string[]
+  evidence: PassportEvidence
+  banner: PhishingReport
+}
+
+/** One thing a message tried to load or learn. */
+export interface ShieldItem {
+  kind: 'pixel' | 'image' | 'link' | 'receipt' | 'font' | 'stylesheet' | 'form' | 'frame' | 'media' | 'background'
+  host: string
+  company: string
+  url: string
+  reasons: string[]
+  destination: string
+  status: 'blocked' | 'loaded' | 'removed' | 'click' | 'not_sent'
+}
+
+/** The unsubscribe state of a sender. */
+export interface ShieldUnsub {
+  at: string
+  stillSending: boolean
+  stillCount: number
+  blocked: '' | 'junk' | 'trash'
+  sender: string
+}
+
+/** What one message tried to learn about its reader. */
+export interface Shield {
+  remoteAllowed: boolean
+  trackers: number
+  links: number
+  items: ShieldItem[]
+  unsub: ShieldUnsub | null
+}
+
+/** One sender of the tracking report. */
+export interface PrivacySender {
+  address: string
+  name: string
+  mails: number
+  pixels: number
+  links: number
+  receipts: number
+  first: string
+  last: string
+  companies: string[]
+  unsub: ShieldUnsub | null
+}
+
+/** The tracking report over a period. */
+export interface PrivacyReport {
+  counting: boolean
+  trackers: number
+  links: number
+  mails: number
+  senders: number
+  rows: PrivacySender[]
 }
 
 export interface MessageList {
@@ -1059,6 +1169,11 @@ export interface UIPrefs {
   // cleanLinks takes known tracking parameters and redirect wrappers off links
   // opened from a mail. Off by default: it can break a sign-in or verification link.
   cleanLinks: boolean
+  // privacyCounters keeps the tracking report's counters, on this device only.
+  privacyCounters: boolean
+  // unsubscribeGraceDays is how long after an unsubscribe mail may still come
+  // before Pelton says the sender is still sending.
+  unsubscribeGraceDays: number
   // autoconfigLookup is whether the add-mailbox wizard may look up a typed
   // address's domain: ask (the default, it asks first), allow or manual.
   autoconfigLookup: AutoconfigLookup

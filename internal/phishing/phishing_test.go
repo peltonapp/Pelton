@@ -312,7 +312,9 @@ func TestLookalike(t *testing.T) {
 		{"paypal.com.evil.test", "paypal.com", true},
 		{"example.org", "example.com", true},
 		{"paypal.co", "paypal.com", true},
-		{"bbc.co.uk", "abc.co.uk", true},
+		// two broadcasters: one arbitrary letter on a short name is another name.
+		{"bbc.co.uk", "abc.co.uk", false},
+		{"bbc.co.uk", "bbc.co", true},
 		{"totally-different.test", "paypal.com", false},
 		{"ab.com", "ac.com", false},
 	}
