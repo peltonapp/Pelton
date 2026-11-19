@@ -350,6 +350,11 @@ func Registrable(domain string) string {
 	return registrable(domainOf(domain))
 }
 
+// FoldName reduces a display name to the form the display-name check compares.
+func FoldName(name string) string {
+	return foldName(name)
+}
+
 // SameOrg reports whether two addresses or domains belong to the same
 // registrable domain.
 func SameOrg(a, b string) bool {
