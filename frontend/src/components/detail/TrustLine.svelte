@@ -150,10 +150,8 @@
     white-space: nowrap;
   }
 
-  .verdict.good :global(.ph) {
-    color: var(--success);
-  }
-
+  /* a verified sender keeps the neutral color: the check is of the sending
+     domain, and a green mark would read as a verdict on the content. */
   .verdict.caution :global(.ph) {
     color: var(--warning);
   }
