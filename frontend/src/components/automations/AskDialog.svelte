@@ -5,6 +5,7 @@
   // dialog counts that down.
   import { createEventDispatcher, onDestroy, onMount } from 'svelte'
   import Modal from '../common/Modal.svelte'
+  import Live from './Live.svelte'
   import { t } from '../../lib/i18n'
   import type { ScriptAsk } from '../../lib/scripting'
   import { askControl } from './ask/controls'
@@ -20,9 +21,27 @@
   let left = ask.timeoutSeconds
   let timer: ReturnType<typeof setInterval> | undefined
 
+  const promptId = `ask-prompt-${Math.random().toString(36).slice(2, 9)}`
+  let spoken = ''
+  let promptEl: HTMLElement
+
+  // the countdown is read out when it starts and at 30 and 10 seconds, not
+  // every tick.
+  function speak(n: number): void {
+    const key = ask.default != null ? 'scripts.ask.timeoutDefault' : 'scripts.ask.timeoutStop'
+    spoken = $t(key).replace('{n}', String(n))
+  }
+
   onMount(() => {
+    promptEl?.closest('[role="dialog"]')?.setAttribute('aria-describedby', promptId)
     if (left > 0) {
-      timer = setInterval(() => (left = Math.max(0, left - 1)), 1000)
+      speak(left)
+      timer = setInterval(() => {
+        left = Math.max(0, left - 1)
+        if (left === 30 || left === 10) {
+          speak(left)
+        }
+      }, 1000)
     }
   })
 
@@ -36,12 +55,13 @@
 <Modal title={$t('scripts.ask.title').replace('{name}', ask.scriptName)} size="small" on:close={() => dispatch('cancel')}>
   <div class="body">
     {#if ask.dry}<p class="badge">{$t('scripts.ask.dry')}</p>{/if}
-    <p class="prompt">{ask.prompt}</p>
+    <p class="prompt" id={promptId} bind:this={promptEl}>{ask.prompt}</p>
     {#if control.component}
       <svelte:component this={control.component} {ask} bind:value on:answer={(e) => answer(e.detail)} />
     {/if}
+    <Live text={spoken} />
     {#if ask.timeoutSeconds > 0}
-      <p class="hint" role="timer">{$t(ask.default != null ? 'scripts.ask.timeoutDefault' : 'scripts.ask.timeoutStop').replace('{n}', String(left))}</p>
+      <p class="hint">{$t(ask.default != null ? 'scripts.ask.timeoutDefault' : 'scripts.ask.timeoutStop').replace('{n}', String(left))}</p>
     {/if}
   </div>
   <svelte:fragment slot="footer">

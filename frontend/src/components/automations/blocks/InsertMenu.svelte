@@ -76,12 +76,13 @@
               role="option"
               aria-selected={i === active}
               aria-disabled={!!item.unavailable}
+              aria-describedby={item.unavailable || item.description ? `insert-desc-${item.key}` : undefined}
               title={item.unavailable || undefined}
               on:pointerdown|preventDefault={() => !item.unavailable && dispatch('pick', item)}
               on:pointermove={() => i >= 0 && (active = i)}
             >
               <span class="label">{item.label}</span>
-              {#if item.description}<span class="desc">{item.unavailable || item.description}</span>{/if}
+              {#if item.unavailable || item.description}<span class="desc" id={`insert-desc-${item.key}`}>{item.unavailable || item.description}</span>{/if}
             </li>
           {/each}
         {/each}

@@ -34,6 +34,8 @@ export interface EditorContext {
   dragging: Readable<DragPayload | null>
   /** Replaces the tree as one undoable edit, and selects a block if given. */
   apply(next: BlockTree, select?: string): void
+  /** Replaces the tree with a moved block and announces where it landed. */
+  move(next: BlockTree, id: string): void
   /** Starts dragging from a pointer press. */
   startDrag(event: PointerEvent, payload: DragPayload, label: string): void
   /** Opens the add menu at a target, hanging off an element. */

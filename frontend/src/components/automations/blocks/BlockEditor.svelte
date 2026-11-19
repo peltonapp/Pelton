@@ -5,7 +5,8 @@
   // with the keyboard, and every edit can be undone. what each block needs,
   // what is wrong with it and what the last test run did with it shows on the
   // block itself.
-  import { createEventDispatcher, onDestroy, onMount } from 'svelte'
+  import { createEventDispatcher, onDestroy, onMount, tick } from 'svelte'
+  import Live from '../Live.svelte'
   import { derived, writable } from 'svelte/store'
   import undoIcon from '@phosphor-icons/core/assets/duotone/arrow-counter-clockwise-duotone.svg?raw'
   import redoIcon from '@phosphor-icons/core/assets/duotone/arrow-clockwise-duotone.svg?raw'
@@ -50,6 +51,7 @@
     redo,
     removeBlock,
     rootSlot,
+    slotBlocks,
     undo,
     type History,
   } from './tree'
@@ -78,6 +80,7 @@
   let insert: { anchor: HTMLElement; target: InsertTarget } | null = null
   let canvasEl: HTMLDivElement
   let emptyEl: HTMLDivElement
+  let moved = ''
   let lastPerms = ''
   let lastProp = serializeTree(tree)
 
@@ -136,6 +139,21 @@
     if (select !== undefined) {
       selected.set(select)
     }
+  }
+
+  function move(next: BlockTree, id: string): void {
+    apply(next, id)
+    const place = locate(next, id)
+    const b = findBlock(next, id)
+    if (!place || !b) {
+      return
+    }
+    const total = slotBlocks(next, place.slot)?.length ?? 0
+    const name = b.kind === 'action' ? issueLabel(id) : $t(`scripts.blocks.kind.${b.kind}`)
+    moved = ''
+    void tick().then(() => {
+      moved = $t('scripts.blocks.moved').replace('{name}', name).replace('{n}', String(place.index + 1)).replace('{total}', String(total))
+    })
   }
 
   function step(dir: 'undo' | 'redo'): void {
@@ -208,13 +226,13 @@
     const at = order.findIndex((b) => b.id === id)
     let handled = true
     if (e.altKey && e.key === 'ArrowUp') {
-      apply(moveUp(current, id), id)
+      move(moveUp(current, id), id)
     } else if (e.altKey && e.key === 'ArrowDown') {
-      apply(moveDown(current, id), id)
+      move(moveDown(current, id), id)
     } else if (e.altKey && e.key === 'ArrowRight') {
-      apply(indent(current, id), id)
+      move(indent(current, id), id)
     } else if (e.altKey && e.key === 'ArrowLeft') {
-      apply(outdent(current, id), id)
+      move(outdent(current, id), id)
     } else if (e.key === 'ArrowUp' && !mod) {
       selected.set(order[Math.max(0, at - 1)]?.id ?? id)
     } else if (e.key === 'ArrowDown' && !mod) {
@@ -379,8 +397,10 @@
       return
     }
     const next = result(d.payload, target)
-    if (next) {
-      apply(next, d.payload.kind === 'block' ? d.payload.id : d.payload.cp.block)
+    if (next && d.payload.kind === 'block') {
+      move(next, d.payload.id)
+    } else if (next) {
+      apply(next, d.payload.kind === 'cond' ? d.payload.cp.block : undefined)
     }
   }
 
@@ -403,6 +423,7 @@
     dropAt,
     dragging,
     apply,
+    move,
     startDrag,
     openInsert,
     blockKey,
@@ -486,6 +507,7 @@
     </p>
   {/if}
 
+  <Live text={moved} />
   <div class="body">
     {#if showPalette && !narrow}
       <Palette {items} on:add={(e) => addFromPalette(e.detail)} />
