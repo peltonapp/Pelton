@@ -2,7 +2,9 @@ package ai
 
 import (
 	"context"
+	"crypto/x509"
 	"encoding/json"
+	"errors"
 	"net"
 	"net/netip"
 	"slices"
@@ -78,10 +80,12 @@ func local(f *fakeProvider) Provider {
 	return Provider{ID: "local", Name: "Local", Kind: "openai_compatible", BaseURL: f.srv.URL + "/v1", Model: "small", Default: true}
 }
 
-// cloudNet makes "cloud.test" resolve to a public address and connects it to
-// the fake server, standing in for the app's proxy dial.
+// cloudNet makes every host name resolve to a public address and connects it
+// to the https fake server, standing in for the app's proxy dial.
 func cloudNet(f *fakeProvider, dialled *atomic.Int32) Network {
 	addr := f.srv.Listener.Addr().String()
+	roots := x509.NewCertPool()
+	roots.AddCert(f.srv.Certificate())
 	return Network{
 		Lookup: func(context.Context, string) ([]netip.Addr, error) {
 			return []netip.Addr{netip.MustParseAddr("203.0.113.10")}, nil
@@ -90,6 +94,7 @@ func cloudNet(f *fakeProvider, dialled *atomic.Int32) Network {
 			dialled.Add(1)
 			return (&net.Dialer{}).DialContext(ctx, network, addr)
 		},
+		RootCAs: roots,
 	}
 }
 
@@ -158,10 +163,11 @@ func TestLogTextSwitch(t *testing.T) {
 }
 
 func TestPermissionNamesTheProvider(t *testing.T) {
-	f := newFake(t, reply(oaAnswer("ok")), reply(oaAnswer("ok")))
+	f := newFake(t, reply(oaAnswer("ok")))
+	fc := newFakeTLS(t, reply(oaAnswer("ok")))
 	var dialled atomic.Int32
-	cloud := Provider{ID: "cloud", Name: "Cloud", Kind: "openai", BaseURL: "http://cloud.test/v1", Model: "big"}
-	e := setup(t, cloudNet(f, &dialled), local(f), cloud)
+	cloud := Provider{ID: "cloud", Name: "Cloud", Kind: "openai", BaseURL: "https://example.com/v1", Model: "big"}
+	e := setup(t, cloudNet(fc, &dialled), local(f), cloud)
 	cases := []struct {
 		name   string
 		src    string
@@ -181,7 +187,7 @@ func TestPermissionNamesTheProvider(t *testing.T) {
 			}
 		})
 	}
-	if n := len(f.requests()); n != 0 || dialled.Load() != 0 {
+	if n := len(f.requests()) + len(fc.requests()); n != 0 || dialled.Load() != 0 {
 		t.Fatalf("%d requests sent, %d dials without permission", n, dialled.Load())
 	}
 	run := e.run(t, `local r = ai.ask("x", {provider = "Cloud"}) print(r.ok, r.error)`, false, "ai:cloud")
@@ -191,7 +197,7 @@ func TestPermissionNamesTheProvider(t *testing.T) {
 	if dialled.Load() != 1 {
 		t.Fatal("the cloud request did not go through the proxy dial")
 	}
-	if got := f.requests()[0].Header.Get("Authorization"); got != "Bearer "+testKey {
+	if got := fc.requests()[0].Header.Get("Authorization"); got != "Bearer "+testKey {
 		t.Fatalf("authorization %q", got)
 	}
 	run = e.run(t, `ai.ask("x")`, false, "ai:local")
@@ -570,5 +576,63 @@ func TestPrivateHostNameCountsAsLocal(t *testing.T) {
 	}
 	if tg, _ := n.Resolve(context.Background(), p); tg.Local {
 		t.Fatal("a name with a public address counts as local")
+	}
+}
+
+func TestProviderOutsideTheNetworkNeedsHTTPS(t *testing.T) {
+	var lookups atomic.Int32
+	var resolved atomic.Value
+	resolved.Store(netip.MustParseAddr("203.0.113.5"))
+	n := Network{Lookup: func(context.Context, string) ([]netip.Addr, error) {
+		lookups.Add(1)
+		return []netip.Addr{resolved.Load().(netip.Addr)}, nil
+	}}
+	cases := []struct {
+		url  string
+		addr string
+		ok   bool
+	}{
+		{"https://api.example.com/v1", "203.0.113.5", true},
+		{"http://api.example.com/v1", "203.0.113.5", false},
+		{"http://8.8.8.8/v1", "", false},
+		{"http://gpu-box.lan:11434", "192.168.1.20", true},
+		{"http://localhost:11434", "127.0.0.1", true},
+		{"http://127.0.0.1:8000/v1", "", true},
+		{"http://[::1]:8000", "", true},
+	}
+	for _, tc := range cases {
+		if tc.addr != "" {
+			resolved.Store(netip.MustParseAddr(tc.addr))
+		}
+		err := n.CheckAddress(context.Background(), Provider{Name: "p", Kind: "openai_compatible", BaseURL: tc.url})
+		if tc.ok != (err == nil) {
+			t.Fatalf("%s: %v", tc.url, err)
+		}
+		if !tc.ok && (!errors.Is(err, ErrPlainHTTP) || !strings.Contains(err.Error(), "https://")) {
+			t.Fatalf("%s: unclear refusal %v", tc.url, err)
+		}
+	}
+	before := lookups.Load()
+	if err := n.CheckAddress(context.Background(), Provider{Name: "p", Kind: "openai", BaseURL: "https://other.example/v1"}); err != nil || lookups.Load() != before {
+		t.Fatalf("an https address was looked up or refused: %v", err)
+	}
+
+	var dialled atomic.Int32
+	resolved.Store(netip.MustParseAddr("192.168.1.20"))
+	box := Provider{ID: "box", Name: "Box", Kind: "ollama", BaseURL: "http://gpu-box.lan:11434", Model: "m"}
+	if err := n.CheckAddress(context.Background(), box); err != nil {
+		t.Fatalf("a private host was refused when saved: %v", err)
+	}
+	resolved.Store(netip.MustParseAddr("203.0.113.9"))
+	e := setup(t, Network{
+		Lookup: n.Lookup,
+		Dial: func(context.Context, string, string) (net.Conn, error) {
+			dialled.Add(1)
+			return nil, errors.New("dialled")
+		},
+	}, box)
+	run := e.run(t, `local r = ai.ask("x") print(r.ok)`, false, "ai:box")
+	if run.Status != scripting.StatusError || !strings.Contains(run.Error, "https://") || dialled.Load() != 0 {
+		t.Fatalf("a host that moved off the network was asked over http: %s %s, %d dials", run.Status, run.Error, dialled.Load())
 	}
 }

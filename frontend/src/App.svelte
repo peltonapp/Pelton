@@ -22,7 +22,7 @@
   import { space, openSpace, runSpaceAction, isMailOnlyAction } from './stores/space'
   import { meetingPrepTarget, openMeetingPrep, closeMeetingPrep } from './stores/meetingprep'
   import { mailScreen, openMailScreen, closeMailScreen } from './stores/mailscreen'
-  import { IconMailX, IconChartBar } from '@tabler/icons-svelte'
+  import { IconMailX, IconChartBar, IconShieldCheck } from '@tabler/icons-svelte'
   import { orderedSpaces, visibleSpaces } from './lib/spaces'
   import { startChat, stopChat } from './stores/chat'
   import { popupIsOpen } from './lib/popups'
@@ -50,7 +50,7 @@
   import { initProgress } from './stores/progress'
   import { composeSessions, openCompose, openComposeWith, initComposePrefs, openReply, openForward, requestComposeClose, setForcedComposeMode, updateCompose } from './stores/compose'
   import { routeComposeSessions } from './stores/composeroute'
-  import { loadAttachmentsBrowser, loadClassicCompose, loadComposer, loadMenuBarEditor, warmUp } from './lib/lazyload'
+  import { loadAttachmentsBrowser, loadClassicCompose, loadComposer, loadMenuBarEditor, loadDatePeek, loadEncryptionIndicator, loadInviteCard, loadPromiseStrip, warmUp } from './lib/lazyload'
   import ComposeTabLayer from './components/compose/ComposeTabLayer.svelte'
   import { openSnooze, openSnoozeMany } from './stores/snooze'
   import { patchInList } from './stores/messages'
@@ -198,6 +198,8 @@
   import { setSenderPanel } from './stores/prefs'
   import { toggleReadingView } from './stores/readingview'
   import './lib/palette-tasks'
+  import './lib/palette-promises'
+  import { startPromises } from './stores/promises'
   import './lib/palette-notes'
   import { reloadVault, requestNotes, startNotes } from './stores/notes'
   import './lib/palette-chat'
@@ -518,6 +520,16 @@
     stopTasks()
     stopTasks = undefined
   }
+
+  // the promises found in mail feed the reader's suggestions and the task
+  // lists "I owe" and "Owed to me", in the new design only.
+  let stopPromises: (() => void) | undefined
+  $: if ($prefs.design === 'new' && !stopPromises) {
+    stopPromises = startPromises()
+  } else if ($prefs.design !== 'new' && stopPromises) {
+    stopPromises()
+    stopPromises = undefined
+  }
   onDestroy(() => stopTasks?.())
 
   // the projects feed the mail chips, the reader's suggestions and the
@@ -612,8 +624,8 @@
     }
   })
 
-  // the newsletter manager and the insights page in the palette, with their
-  // live shortcut as the hint.
+  // the newsletter manager, the insights page and the tracking report in the
+  // palette, with their live shortcut as the hint.
   registerPaletteSource('mailtools', (tr) => {
     const hint = (action: 'open-newsletters' | 'open-insights'): string => {
       const combo = get(bindings)[action]
@@ -637,6 +649,15 @@
         hint: hint('open-insights'),
         icon: IconChartBar,
         run: () => openSettingsAt('insights'),
+      },
+      {
+        id: 'open-privacy-report',
+        group: 'navigate',
+        label: tr('privacy.report.title'),
+        keywords: tr('privacy.report.keywords'),
+        hint: '',
+        icon: IconShieldCheck,
+        run: () => openMailScreen('privacy'),
       },
     ]
   })
@@ -671,6 +692,10 @@
       get(prefs).design === 'classic' ? loadClassicCompose : loadComposer,
       ...(get(prefs).design === 'classic' ? [] : [loadAttachmentsBrowser]),
       ...(showMenuBar ? [loadMenuBarEditor] : []),
+      loadEncryptionIndicator,
+      loadDatePeek,
+      ...(get(prefs).design === 'classic' ? [] : [loadInviteCard]),
+      ...(get(prefs).design === 'classic' ? [] : [loadPromiseStrip]),
     ])
     void initShortcuts()
     void initCoach().then((stop) => unsubscribers.push(stop))
@@ -2340,6 +2365,12 @@
         {#if $mailScreen === 'newsletters'}
           <div class="screen">
             {#await import('./components/newsletters/NewsletterManager.svelte') then m}
+              <svelte:component this={m.default} on:close={closeMailScreen} />
+            {/await}
+          </div>
+        {:else if $mailScreen === 'privacy'}
+          <div class="screen">
+            {#await import('./components/privacy/PrivacyReport.svelte') then m}
               <svelte:component this={m.default} on:close={closeMailScreen} />
             {/await}
           </div>

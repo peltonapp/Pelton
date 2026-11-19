@@ -28,6 +28,8 @@
   import { space } from '../../stores/space'
   import { highlightRuns } from '../../lib/fuzzy'
   import { t, isMac, shortcutLabel } from '../../lib/i18n'
+  import { scriptEntryName, scriptText } from '../../lib/scriptmark'
+  import ScriptMark from './ScriptMark.svelte'
   import { prefs } from '../../stores/prefs'
   import { calm } from '../../lib/motion'
 
@@ -378,13 +380,16 @@
               id="palette-row-{i}"
               role="option"
               aria-selected={i === active}
+              title={entry.command.script !== undefined ? scriptEntryName(entry.command.label, entry.command.script, $t) : undefined}
               data-active={i === active}
               tabindex="-1"
               on:click={() => void run(entry.command)}
               on:mousemove={() => (active = i)}
             >
               <span class="icon">
-                {#if entry.command.swatch}
+                {#if entry.command.script !== undefined}
+                  <ScriptMark size={16} />
+                {:else if entry.command.swatch}
                   <span class="swatch" style="background: {entry.command.swatch}"></span>
                 {:else}
                   <svelte:component this={entry.command.icon} size={16} stroke={1.6} />
@@ -393,7 +398,7 @@
               <span class="label">
                 {#each highlightRuns(entry.command.label, entry.positions) as part}
                   {#if part.hit}<mark>{part.text}</mark>{:else}{part.text}{/if}
-                {/each}
+                {/each}{#if entry.command.script !== undefined}<span class="sr-only">, {$t('scripts.mark.name').replace('{name}', scriptText(entry.command.script))}</span>{/if}
               </span>
               {#if entry.command.hint}
                 <span class="hint">{entry.command.hint}</span>

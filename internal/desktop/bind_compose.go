@@ -76,6 +76,14 @@ type ComposeRequest struct {
 	// ProjectID files the message under a project once it is queued, with
 	// the replies it gets. 0 files it nowhere.
 	ProjectID int64 `json:"projectId"`
+	// AutoEncrypt marks a message from the composer of automatic encryption:
+	// keys come from everything Pelton learned rather than the keyring alone,
+	// Bcc recipients are hidden, and a reply to encrypted mail is not sent in
+	// the clear without PlaintextConfirmed.
+	AutoEncrypt bool `json:"autoEncrypt"`
+	// PlaintextConfirmed is the user's deliberate choice to send a reply to an
+	// encrypted message without encryption.
+	PlaintextConfirmed bool `json:"plaintextConfirmed"`
 }
 
 // SendMessage builds the mime message and enqueues it in the durable outbox. The
@@ -124,7 +132,7 @@ func (a *App) sendMessage(ctx context.Context, req ComposeRequest) (int64, error
 	if err != nil {
 		return 0, err
 	}
-	mode, opts, engine, err := a.protectionOptions(*account, req)
+	mode, opts, engine, used, err := a.messageProtection(*account, req, msg)
 	if err != nil {
 		return 0, err
 	}
@@ -141,6 +149,7 @@ func (a *App) sendMessage(ctx context.Context, req ComposeRequest) (int64, error
 		return 0, err
 	}
 	a.sentRequests.Store(id, req)
+	a.pinUsedKeys(used)
 	if info, ok := scripting.RunInfoFrom(ctx); ok {
 		a.scriptState.sentBy.Store(id, info)
 	}
@@ -159,6 +168,7 @@ func (a *App) sendMessage(ctx context.Context, req ComposeRequest) (int64, error
 			}
 		}
 	}
+	forgetKnownPeople()
 	return id, nil
 }
 

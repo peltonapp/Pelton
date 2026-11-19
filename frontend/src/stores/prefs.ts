@@ -5,8 +5,8 @@
 // source of truth.
 
 import { writable } from 'svelte/store'
-import type { QuickComposeStatus, UIPrefs, ThemePref, DensityPref, EditorMode, ViewsPlacement, CloseAction, LogLevel, SelectAllScope, SearchKind, SearchSortPref, DesignPref, LayoutMode, NavStyle, RailSide, PaneStyle, AvatarPlacement, ContactsView, ComposeOpenIn, ReaderWidth, AfterMove, AfterReplySend, FollowUpInterval, ProjectsView, NoteEditorMode, ChatNotifyMode, HtmlColors, AutoconfigLookup } from '../lib/types'
-import { getUIPrefs, setSetting, SettingKeys, systemColorScheme, setWindowTheme, getThemeApply, setQuickCompose } from '../lib/api'
+import type { QuickComposeStatus, UIPrefs, ThemePref, DensityPref, EditorMode, ViewsPlacement, CloseAction, LogLevel, SelectAllScope, SearchKind, SearchSortPref, DesignPref, LayoutMode, NavStyle, RailSide, PaneStyle, AvatarPlacement, ContactsView, ComposeOpenIn, ReaderWidth, AfterMove, AfterReplySend, FollowUpInterval, ProjectsView, NoteEditorMode, ChatNotifyMode, HtmlColors, AutoconfigLookup, KeySources } from '../lib/types'
+import { getUIPrefs, setSetting, SettingKeys, systemColorScheme, setWindowTheme, getThemeApply, setQuickCompose, enableAutoEncrypt } from '../lib/api'
 import { applyTheme, applyDensity, applyAccent, applyScale, applyReduceMotion, applyHandCursor, setThemeSchedule, applyUIFont, applyMonoFont, applyCorners, applyDesign, watchSystemTheme, setSystemSchemeOverride, resolveTheme } from '../theme/theme'
 import { applyUserTheme } from '../theme/usertheme'
 import { uiFontStack, monoFontStack } from '../lib/fonts'
@@ -139,12 +139,15 @@ const defaults: UIPrefs = {
   notifyActionMarkRead: true,
   notifyActionReply: true,
   cleanLinks: false,
+  privacyCounters: true,
+  unsubscribeGraceDays: 10,
   autoconfigLookup: 'ask',
   verboseSync: false,
   syncProgressBar: true,
   statusClock: true,
   statusUnread: true,
   chatEnabled: false,
+  autoEncrypt: false,
   chatSendReceipts: true,
   chatSendTyping: true,
   chatNotify: 'mentions',
@@ -584,6 +587,18 @@ export function setCleanLinks(value: boolean): void {
   void setSetting(SettingKeys.cleanLinks, String(value))
 }
 
+/** Turns the tracking report's counters on or off. */
+export function setPrivacyCounters(value: boolean): void {
+  prefs.update((p) => ({ ...p, privacyCounters: value }))
+  void setSetting(SettingKeys.privacyCounters, String(value))
+}
+
+/** Sets how many days after an unsubscribe mail may still come. */
+export function setUnsubscribeGraceDays(days: number): void {
+  prefs.update((p) => ({ ...p, unsubscribeGraceDays: days }))
+  void setSetting(SettingKeys.unsubscribeGraceDays, String(days))
+}
+
 /**
  * Sets whether the add-mailbox wizard may look up a typed address's domain.
  * Resolves once stored, since the backend refuses lookups until it is.
@@ -910,6 +925,17 @@ export function setStatusUnread(value: boolean): void {
 export function setChatEnabled(value: boolean): void {
   prefs.update((p) => ({ ...p, chatEnabled: value }))
   void setSetting(SettingKeys.chatEnabled, String(value))
+}
+
+// setAutoEncrypt switches automatic encryption on with the sources the user
+// allowed in its setup, or off. The backend makes the keys.
+export async function setAutoEncrypt(value: boolean, sources?: KeySources): Promise<void> {
+  if (value && sources) {
+    await enableAutoEncrypt(sources)
+  } else {
+    await setSetting(SettingKeys.autoEncrypt, String(value))
+  }
+  prefs.update((p) => ({ ...p, autoEncrypt: value }))
 }
 
 // setChatSendReceipts picks public (on) or private (off) chat read receipts.

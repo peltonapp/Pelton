@@ -1,0 +1,62 @@
+# Held out: written after the rules and never used to change them.
+# label	sentence
+commit	I'll get the quote over to you first thing Monday.
+commit	We'll invoice you at the end of the month as usual.
+commit	I'll swing by your desk after lunch to sort out the printer.
+commit	Leave it with me, I'll chase the courier today.
+commit	I will circle back with the legal team by Thursday.
+commit	We're going to migrate the remaining mailboxes over the weekend.
+commit	I'll set up a shared folder for the project tomorrow.
+commit	I'll talk to Mark and come back to you with a date.
+commit	Our team will send the onboarding pack within 3 working days.
+commit	I'll go over the numbers again tonight.
+commit	I'll check the warranty terms and let you know.
+commit	I'll confirm the hotel booking by Wednesday at the latest.
+commit	I'll drop off the keys at reception on Friday.
+commit	I'll prepare a cost estimate for the extra work.
+commit	Will do, I'll update the roadmap after the call.
+commit	I'll send a calendar invite for next Thursday at 2pm.
+commit	We'll provide the test credentials by the end of next week.
+commit	I'll fix the broken link this afternoon.
+commit	I'll make the changes and resend the PDF.
+commit	I am going to review all open tickets before the release.
+request	Could you send over the floor plan when you get a moment?
+request	Can you confirm the PO number for this order?
+request	Please forward me the customer's original email.
+request	Would you review section 3 before our call on Tuesday?
+request	Could you book me on the 7:15 train to Hamburg?
+request	Please send your bank details so we can process the refund.
+request	Can you upload the final logo files by tomorrow noon?
+request	Please approve the leave request in the portal.
+request	Could you look at the error report from last night?
+request	Please submit the conference abstract by 1 December.
+request	Can you ring the client and explain the delay?
+request	I need you to sign off on the budget by Friday.
+request	Can you pick up the parcel from the post office?
+request	Please let us know by 20 November if you plan to attend.
+request	Could you add Julia to the distribution list?
+none	I'll be at the conference all week.
+none	We sent the parcel on Monday.
+none	If the client agrees, I'll start the work next week.
+none	I will not be able to attend tomorrow.
+none	I'll try my best to finish it by Friday.
+none	Attached you'll find the slides from today.
+none	Did you manage to call the client?
+none	The report is due next Friday.
+none	Could you have forgotten the password?
+none	I would have sent it earlier but I was ill.
+none	Please excuse the delay in getting back to you.
+none	Our newsletter goes out every Tuesday.
+none	Thanks again for reviewing the draft so quickly.
+none	Why did you send it to the whole team?
+none	Maybe we'll get to it next sprint.
+none	I'll be honest, I don't love the new design.
+none	I've already booked the hotel.
+none	Have a great weekend!
+none	Once the payment arrives, we'll ship the order.
+none	Just so you know, the office will be closed on Friday.
+none	You did not send the attachment.
+none	Can you believe the price of coffee these days?
+none	I'm afraid I can't help with that.
+none	The meeting has been moved to Thursday.
+none	As discussed, I've shared the folder with you.

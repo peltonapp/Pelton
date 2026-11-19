@@ -252,7 +252,7 @@ describe('cell menu', () => {
     const columns = document.querySelectorAll<HTMLElement>('.col')
     await fireEvent.contextMenu(columns[2], { clientX: 300, clientY: 200 })
     const menu = get(contextMenu)
-    expect(menu?.entries.map((e) => (typeof e === 'object' && 'label' in e ? [e.label, e.hint] : e))).toEqual([
+    expect(menu?.entries.map((e) => (typeof e === 'object' && 'action' in e ? [e.label, e.hint] : e))).toEqual([
       ['Create event...', undefined],
       ['Quick add here...', 'Q'],
     ])

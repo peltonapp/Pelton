@@ -25,6 +25,7 @@
   import SettingsSchemaEditor from './SettingsSchemaEditor.svelte'
   import PlacementEditor from './PlacementEditor.svelte'
   import AssistantReview from './AssistantReview.svelte'
+  import LibraryNote from './LibraryNote.svelte'
   import { t } from '../../lib/i18n'
   import { checkScriptLua } from '../../lib/api'
   import { aiTarget, permCloud, permLocal, usesAI } from '../../lib/ai'
@@ -270,6 +271,7 @@
       <p class="notice">{$t(`scripts.origin.${script.origin}.notice`)}</p>
     {/if}
     <AssistantReview {script} />
+    <LibraryNote {script} />
 
     <input class="cal-field" aria-label={$t('scripts.description')} placeholder={$t('scripts.description')} bind:value={input.description} />
 

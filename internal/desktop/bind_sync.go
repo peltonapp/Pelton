@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/peltonapp/Pelton/internal/outbox"
+	"github.com/peltonapp/Pelton/internal/phishing"
 	psmtp "github.com/peltonapp/Pelton/internal/smtp"
 	"github.com/peltonapp/Pelton/internal/storage"
 	psync "github.com/peltonapp/Pelton/internal/sync"
@@ -434,6 +435,8 @@ func (a *App) syncFolders(client mailClient, accountID int64) error {
 			a.emit(EventMailNew, MailNewEvent{AccountID: accountID, FolderID: f.ID, Count: res.New})
 			goSafe("announcing new mail", func() { a.notifyNewMail(f, res.NewIDs) })
 			a.scriptMailArrived(res.NewIDs, firstSync)
+			a.promisesAfterSync(f, res.NewIDs)
+			a.privacyAfterSync(f, res.NewIDs)
 		}
 		if !firstSync {
 			a.scriptServerFlags(res.FlagChanges)
@@ -516,6 +519,7 @@ func (a *App) syncOneFolder(client mailClient, folder storage.Folder) error {
 		a.emit(EventMailNew, MailNewEvent{AccountID: folder.AccountID, FolderID: folder.ID, Count: res.New})
 		goSafe("announcing new mail", func() { a.notifyNewMail(folder, res.NewIDs) })
 		a.scriptMailArrived(res.NewIDs, false)
+		a.promisesAfterSync(folder, res.NewIDs)
 		goSafe("indexing new mail", func() { _ = a.indexNewMessages() })
 		goSafe("counting unread mail", a.refreshViewCounts)
 		if !a.lowPowerMode() {
@@ -619,6 +623,7 @@ func (a *App) newSyncEngine(client mailClient, accountID int64) *psync.Engine {
 	// and the list fills as mail arrives rather than staying empty until the
 	// whole folder is down.
 	engine.OnStored = a.announceStored
+	engine.ObserveRaw = a.observeIncoming
 	// the counts behind the progress bar. The account and server are captured
 	// here because the engine does not know them and the line names them.
 	email := a.accountEmail(accountID)
@@ -634,6 +639,9 @@ func (a *App) newSyncEngine(client mailClient, accountID int64) *psync.Engine {
 	if trash, ok := a.findTrashFolder(accountID); ok {
 		engine.TrashPath = trash.IMAPPath
 		engine.TrashFolderID = trash.ID
+	}
+	if acc, err := a.store.GetAccount(a.ctx, accountID); err == nil {
+		engine.AuthServ = phishing.ServerFor(acc.Email, acc.IMAPHost, acc.SMTPHost)
 	}
 	return engine
 }

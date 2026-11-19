@@ -167,30 +167,32 @@
   {#key dayKey(shown)}
     <div class="grid days" role="grid" aria-label={title} in:fly={{ x: 10 * direction, duration: dur(motion.base) }}>
       {#each weeks as week, w (w)}
-        {#each week as day (dayKey(day))}
-          {@const selected = sameDay(day, value)}
-          <button
-            type="button"
-            role="gridcell"
-            class="day"
-            class:other={day.getMonth() !== shown.getMonth()}
-            class:today={sameDay(day, today)}
-            class:selected
-            class:range={inRange(day)}
-            aria-selected={selected}
-            aria-current={sameDay(day, today) ? 'date' : undefined}
-            aria-label={day.toLocaleDateString(undefined, { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
-            tabindex={selected ? 0 : -1}
-            data-day={dayKey(day)}
-            on:click={() => dispatch('pick', day)}
-            on:keydown={onKeydown}
-          >
-            {day.getDate()}
-            {#if busy.has(dayKey(day))}
-              <span class="dot" aria-hidden="true"></span>
-            {/if}
-          </button>
-        {/each}
+        <div class="week" role="row">
+          {#each week as day (dayKey(day))}
+            {@const selected = sameDay(day, value)}
+            <button
+              type="button"
+              role="gridcell"
+              class="day"
+              class:other={day.getMonth() !== shown.getMonth()}
+              class:today={sameDay(day, today)}
+              class:selected
+              class:range={inRange(day)}
+              aria-selected={selected}
+              aria-current={sameDay(day, today) ? 'date' : undefined}
+              aria-label={day.toLocaleDateString(undefined, { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
+              tabindex={selected ? 0 : -1}
+              data-day={dayKey(day)}
+              on:click={() => dispatch('pick', day)}
+              on:keydown={onKeydown}
+            >
+              {day.getDate()}
+              {#if busy.has(dayKey(day))}
+                <span class="dot" aria-hidden="true"></span>
+              {/if}
+            </button>
+          {/each}
+        </div>
       {/each}
     </div>
   {/key}
@@ -314,6 +316,10 @@
 
   .days {
     row-gap: var(--space-1);
+  }
+
+  .week {
+    display: contents;
   }
 
   .day {

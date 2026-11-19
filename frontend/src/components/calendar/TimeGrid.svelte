@@ -508,7 +508,7 @@
             class:today={sameDay(day, today)}
             class:weekend={day.getDay() === 0 || day.getDay() === 6}
             aria-current={sameDay(day, today) ? 'date' : undefined}
-            aria-label={formatLongDay(day)}
+            aria-label={`${day.toLocaleDateString(undefined, { weekday: 'short' })} ${day.getDate()}, ${formatLongDay(day)}`}
             style={`grid-column:${i + 2}`}
             on:click={() => dispatch('day', day)}
           >
@@ -619,7 +619,7 @@
                 style={`top:${pct(b.top)};height:${pct(b.bottom - b.top)};--col:${b.col};--cols:${b.cols};--ev:${colorOf(occ)}`}
                 aria-label={occ.task ? undefined : eventLabel({
                   title: occ.summary || $t('calendar.untitled'),
-                  when: `${formatLongDay(b.placed.start)}, ${formatTimeRange(b.placed.start, b.placed.end, timeFormat)}`,
+                  when: `${formatTimeRange(b.placed.start, b.placed.end, timeFormat)}, ${occ.location && !short ? `${occ.location}, ` : ''}${formatLongDay(b.placed.start)}`,
                   calendar: calendarNameOf(occ.calendarId),
                   status: occ.status,
                   free: occ.transparency === 'TRANSPARENT',

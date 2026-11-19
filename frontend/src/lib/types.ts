@@ -367,6 +367,9 @@ export interface MessageDetail extends MessageSummary {
   // when it was opened, so the pane can offer the right next step rather than
   // one generic error.
   pgpState: PGPState
+  // encryption says, for the new reader, whether the message was encrypted
+  // and how its signature checked out; null for mail that is neither.
+  encryption?: MessageEncryption | null
   // replyIds and forwardIds are the cached copies of what the user sent from
   // Pelton in reply to or as a forward of this message, oldest first. A sent
   // message appears once its Sent folder has synced.
@@ -412,6 +415,116 @@ export interface UnsubscribeInfo {
   target: string
   // done is true when this sender was already unsubscribed from.
   done: boolean
+  // unverified marks a one-click header authentication did not vouch for,
+  // offered as a web page instead (new design only).
+  unverified?: boolean
+}
+
+/** One verdict of the sender passport; see internal/desktop/passport.go. */
+export type PassportState = 'impostor' | 'failed' | 'lookalike' | 'verified' | 'unverified' | 'unchecked'
+
+/** Something about a sender that differs from their earlier mail. */
+export interface PassportChange {
+  kind: 'new_domain' | 'new_reply_to' | 'name_elsewhere'
+  detail: string
+  before?: string
+}
+
+/** The technical record behind a passport. */
+export interface PassportEvidence {
+  authState: string
+  servId: string
+  spf: string
+  spfDomain: string
+  dkim: string
+  dkimDomains: string[]
+  dmarc: string
+  dmarcPolicy: string
+  headerFrom: string
+  alignedSpf: boolean
+  alignedDkim: boolean
+  sendingDomain: string
+  returnPath: string
+  sender: string
+  signers: string[]
+  receivedSpf: string
+  arc: string
+  mixedScript: boolean
+}
+
+/** Who sent a message, as far as the local mail and the user's server say. */
+export interface Passport {
+  address: string
+  domain: string
+  state: PassportState
+  reason?: 'legacy' | 'none' | 'untrusted' | 'other_domain' | 'no_pass'
+  mark: '' | 'known' | 'impostor'
+  first: boolean
+  received: number
+  sent: number
+  since: string
+  contact: boolean
+  sameDomain: boolean
+  changes: PassportChange[]
+  lookalike: { kind: 'name' | 'domain'; of: string; address?: string } | null
+  replyGoesTo: string
+  replyElsewhere: boolean
+  warnings: string[]
+  evidence: PassportEvidence
+  banner: PhishingReport
+}
+
+/** One thing a message tried to load or learn. */
+export interface ShieldItem {
+  kind: 'pixel' | 'image' | 'link' | 'receipt' | 'font' | 'stylesheet' | 'form' | 'frame' | 'media' | 'background'
+  host: string
+  company: string
+  url: string
+  reasons: string[]
+  destination: string
+  status: 'blocked' | 'loaded' | 'removed' | 'click' | 'not_sent'
+}
+
+/** The unsubscribe state of a sender. */
+export interface ShieldUnsub {
+  at: string
+  stillSending: boolean
+  stillCount: number
+  blocked: '' | 'junk' | 'trash'
+  sender: string
+}
+
+/** What one message tried to learn about its reader. */
+export interface Shield {
+  remoteAllowed: boolean
+  trackers: number
+  links: number
+  items: ShieldItem[]
+  unsub: ShieldUnsub | null
+}
+
+/** One sender of the tracking report. */
+export interface PrivacySender {
+  address: string
+  name: string
+  mails: number
+  pixels: number
+  links: number
+  receipts: number
+  first: string
+  last: string
+  companies: string[]
+  unsub: ShieldUnsub | null
+}
+
+/** The tracking report over a period. */
+export interface PrivacyReport {
+  counting: boolean
+  trackers: number
+  links: number
+  mails: number
+  senders: number
+  rows: PrivacySender[]
 }
 
 export interface MessageList {
@@ -483,6 +596,11 @@ export interface ComposeRequest {
   // projectId files the message, and the replies it gets, under a project.
   // 0 or left out files it nowhere.
   projectId?: number
+  // autoEncrypt marks a message from the composer of automatic encryption,
+  // and plaintextConfirmed the user's choice to answer encrypted mail
+  // unencrypted.
+  autoEncrypt?: boolean
+  plaintextConfirmed?: boolean
 }
 
 /**
@@ -518,6 +636,70 @@ export interface FollowUp {
   localId: number
   folderId: number
   threadId: number
+}
+
+/** Who owes a promise: the user ('mine') or someone else ('theirs'). */
+export type PromiseDirection = 'mine' | 'theirs'
+
+/** Where a promise is: a suggestion on its mail, a task, set aside, or closed by a reply. */
+export type PromiseState = 'suggested' | 'accepted' | 'dismissed' | 'closed'
+
+/** A promise found in mail. mailId is the Message-ID it was found in, messageId a cached copy (0 for none). */
+export interface MailPromise {
+  id: number
+  accountId: number
+  mailId: string
+  messageId: number
+  threadId: number
+  direction: PromiseDirection
+  personName: string
+  personEmail: string
+  title: string
+  quote: string
+  /** A date, rfc3339, or ''. */
+  due: string
+  confidence: number
+  source: string
+  state: PromiseState
+  taskUid: string
+  /** The reply that closed it (theirs) or offers to (mine), with a cached copy of it. */
+  replyId: string
+  replyAt: string
+  replyMessageId: number
+  mailDate: string
+  /** A follow-up reminder already watches the thread. */
+  followUp: boolean
+}
+
+/** A suggestion as the user accepts it. */
+export interface PromiseEdit {
+  id: number
+  title: string
+  due: string
+  direction: PromiseDirection
+  personName: string
+  personEmail: string
+}
+
+/** The promise switches of one account. */
+export interface PromiseAccount {
+  accountId: number
+  name: string
+  email: string
+  on: boolean
+  ai: boolean
+  provider: string
+}
+
+/** The promise preferences. */
+export interface PromiseSettings {
+  enabled: boolean
+  autoAcceptMine: boolean
+  nudge: boolean
+  taskList: 'local' | 'default'
+  accounts: PromiseAccount[]
+  aiMaxChars: number
+  aiPerDay: number
 }
 
 // ProtectionStatus is what the compose window needs to offer the pgp controls
@@ -987,6 +1169,11 @@ export interface UIPrefs {
   // cleanLinks takes known tracking parameters and redirect wrappers off links
   // opened from a mail. Off by default: it can break a sign-in or verification link.
   cleanLinks: boolean
+  // privacyCounters keeps the tracking report's counters, on this device only.
+  privacyCounters: boolean
+  // unsubscribeGraceDays is how long after an unsubscribe mail may still come
+  // before Pelton says the sender is still sending.
+  unsubscribeGraceDays: number
   // autoconfigLookup is whether the add-mailbox wizard may look up a typed
   // address's domain: ask (the default, it asks first), allow or manual.
   autoconfigLookup: AutoconfigLookup
@@ -1003,6 +1190,9 @@ export interface UIPrefs {
   // chatEnabled turns the Matrix chat space on. Off by default; nothing chat
   // related runs or connects until it is on.
   chatEnabled: boolean
+  // autoEncrypt is automatic encryption. Off by default; until it is on no
+  // key is made, no header added and nothing looked up.
+  autoEncrypt: boolean
   // chatSendReceipts sends public read receipts; off keeps them private.
   chatSendReceipts: boolean
   // chatSendTyping tells rooms while the user types.
@@ -3064,4 +3254,106 @@ export interface ChatMediaProgress {
   bytesDone: number
   bytesTotal: number
   error: string
+}
+
+/** A signature verdict in the words the new reader uses. */
+export type SignatureWord = '' | 'known' | 'verified' | 'new' | 'invalid' | 'unchecked'
+
+/** MessageEncryption is what the new reader says about a message's protection. */
+export interface MessageEncryption {
+  encrypted: boolean
+  signature: SignatureWord
+  signerEmail: string
+  /** The real subject of a message that hid it, '' otherwise. */
+  subject: string
+  /** A key transfer from one of the user's own devices. */
+  setupMessage: boolean
+}
+
+/** Places keys may be found in, and the user's own key servers. */
+export interface KeySources {
+  autocrypt: boolean
+  wkd: boolean
+  keysOpenpgpOrg: boolean
+  keyServers: boolean
+  servers: string[]
+}
+
+/** How a mailbox encrypts: auto turns it on when the recommendation says so, manual never does. */
+export type AutoEncryptMode = 'auto' | 'manual'
+
+/** OwnKey is the key one mailbox encrypts and signs with. */
+export interface OwnKey {
+  accountId: number
+  email: string
+  fingerprint: string
+  /** RFC 3339; expires is '' for a key that does not expire. */
+  created: string
+  expires: string
+  /** Pelton made the key and renews it. */
+  generated: boolean
+  usable: boolean
+  mode: AutoEncryptMode
+}
+
+/** AutoEncryptSettings is everything the encryption settings show. */
+export interface AutoEncryptSettings {
+  enabled: boolean
+  sources: KeySources
+  protectSubject: boolean
+  accounts: OwnKey[]
+}
+
+/** The specification's answer to "should this be encrypted", weakest first. */
+export type EncryptRecommendation = 'disable' | 'discourage' | 'available' | 'encrypt'
+
+/** A contact's encryption preference: follow the recommendation, always or never. */
+export type ContactEncryptPref = '' | 'always' | 'never'
+
+/** RecipientEncryption is what the composer knows about one recipient. */
+export interface RecipientEncryption {
+  email: string
+  state: 'ready' | 'verified' | 'missing' | 'changed'
+  /** manual, autocrypt, gossip, wkd, keys.openpgp.org or server:<url>; '' with no key. */
+  source: string
+  fingerprint: string
+  recommendation: EncryptRecommendation
+  preference: ContactEncryptPref
+  /** For a key change: the fingerprint last used and when the new key was first seen. */
+  previous: string
+  changedAt: string
+  /** Why a key that was found cannot be used: expired, revoked or noencryption. */
+  problem: string
+  bcc: boolean
+}
+
+/** AutoEncryptStatus is what would happen to a message from one mailbox to some recipients. */
+export interface AutoEncryptStatus {
+  enabled: boolean
+  ownKey: boolean
+  recommendation: EncryptRecommendation
+  replyToEncrypted: boolean
+  mode: AutoEncryptMode
+  recipients: RecipientEncryption[]
+}
+
+/** ContactKey is one correspondent's key as the settings list shows it. */
+export interface ContactKey {
+  email: string
+  fingerprint: string
+  source: string
+  firstSeen: string
+  expires: string
+  state: 'ready' | 'verified' | 'missing' | 'changed'
+  problem: string
+  preference: ContactEncryptPref
+  previous: string
+}
+
+/** KeyLookupLogEntry is one request a key lookup made. */
+export interface KeyLookupLogEntry {
+  at: string
+  source: string
+  email: string
+  outcome: 'found' | 'none' | 'unusable' | 'failed'
 }

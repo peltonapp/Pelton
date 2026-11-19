@@ -76,6 +76,7 @@ var confusable = strings.NewReplacer(
 	"а", "a", "с", "c", "е", "e", "ѕ", "s", "і", "l", "ј", "j", "о", "o",
 	"р", "p", "ԛ", "q", "х", "x", "у", "y", "ь", "b", "һ", "h", "ԁ", "d",
 	"ɑ", "a", "ο", "o", "ρ", "p", "ν", "v", "τ", "t", "ϲ", "c",
+	"ԝ", "w", "ӏ", "l", "ɡ", "g", "ı", "l", "ɩ", "l", "κ", "k", "ꓲ", "l",
 )
 
 // skeleton is a domain reduced to what it looks like rather than what it is:
@@ -115,17 +116,185 @@ func lookalikeStrength(candidate, known string) weight {
 	if cs == ks {
 		return strong
 	}
-	// one edit apart only counts on names long enough for it to be a
-	// substitution rather than a different word: at four characters, half the
-	// short domains in the world are one edit from each other.
-	if len(ks) >= 6 && editDistanceAtMost(cs, ks, 1) {
-		return strong
+	cn, kn := nameOf(c), nameOf(k)
+	if cn != "" && kn != "" {
+		csn, ksn := skeleton(cn), skeleton(kn)
+		// one small edit that the eye skips over, or the known name with a
+		// word added, as in paypal-secure.com.
+		if readsAs(csn, ksn) || baitWord(csn, ksn) {
+			return strong
+		}
 	}
 	// the same name under a different suffix, as in paypal.co for paypal.com.
-	if cn, kn := nameOf(c), nameOf(k); cn != "" && cn == kn {
+	if cn != "" && cn == kn {
 		return medium
 	}
 	return 0
+}
+
+// readsAs reports whether the name candidate is one edit from known that a
+// reader skims past: two neighbouring letters swapped, a letter doubled or
+// dropped, one letter swapped for a similar-looking one, a vowel for another
+// vowel on a longer name, or any one edit on a name long enough that no other
+// real name sits one letter away. An arbitrary letter on a short name is a
+// different word: slack and stack, notion and motion are different companies.
+func readsAs(candidate, known string) bool {
+	n := len([]rune(known))
+	if n < 4 || candidate == known {
+		return false
+	}
+	if transposed(candidate, known) || sameCollapsed(candidate, known) {
+		return true
+	}
+	if a, b, ok := substitution(candidate, known); ok {
+		switch {
+		case similarLetters[[2]rune{a, b}] || similarLetters[[2]rune{b, a}]:
+			return true
+		case n >= 6 && isVowel(a) && isVowel(b):
+			return true
+		}
+		return n >= 9
+	}
+	return n >= 8 && editDistanceAtMost(candidate, known, 1)
+}
+
+// similarLetters are pairs that look alike in the fonts a mail client uses and
+// that the skeleton does not already fold.
+var similarLetters = map[[2]rune]bool{
+	{'c', 'e'}: true, {'u', 'v'}: true, {'n', 'h'}: true, {'g', 'q'}: true,
+	{'b', 'd'}: true, {'p', 'q'}: true, {'j', 'l'}: true, {'c', 'o'}: true,
+}
+
+func isVowel(r rune) bool {
+	return strings.ContainsRune("aeiouy", r)
+}
+
+// substitution returns the one pair of differing letters when a and b have
+// the same length and differ in exactly one position.
+func substitution(a, b string) (rune, rune, bool) {
+	ra, rb := []rune(a), []rune(b)
+	if len(ra) != len(rb) {
+		return 0, 0, false
+	}
+	at := -1
+	for i := range ra {
+		if ra[i] != rb[i] {
+			if at >= 0 {
+				return 0, 0, false
+			}
+			at = i
+		}
+	}
+	if at < 0 {
+		return 0, 0, false
+	}
+	return ra[at], rb[at], true
+}
+
+// transposed reports whether a and b differ only by one pair of neighbouring
+// characters swapped.
+func transposed(a, b string) bool {
+	ra, rb := []rune(a), []rune(b)
+	if len(ra) != len(rb) || a == b {
+		return false
+	}
+	for i := 0; i < len(ra)-1; i++ {
+		if ra[i] == rb[i] {
+			continue
+		}
+		return ra[i] == rb[i+1] && ra[i+1] == rb[i] && string(ra[i+2:]) == string(rb[i+2:])
+	}
+	return false
+}
+
+// sameCollapsed reports whether a and b are the same once every run of a
+// repeated character is read as one: a doubled or a dropped letter.
+func sameCollapsed(a, b string) bool {
+	return a != b && collapse(a) == collapse(b)
+}
+
+func collapse(s string) string {
+	var out []rune
+	for _, r := range s {
+		if len(out) > 0 && out[len(out)-1] == r {
+			continue
+		}
+		out = append(out, r)
+	}
+	return string(out)
+}
+
+// baitWords are what a lookalike adds to a real name to look official.
+var baitWords = []string{
+	"secure", "security", "login", "signin", "verify", "verification", "account", "accounts",
+	"support", "service", "services", "billing", "payment", "update", "alert", "alerts",
+	"notice", "help", "helpdesk", "team", "online", "auth", "id", "portal", "mail", "info",
+}
+
+// baitWord reports whether candidate is the known name with one of the bait
+// words before or after it. The names are skeletons, so hyphens are gone and
+// paypal-secure reads as paypalsecure.
+func baitWord(candidate, known string) bool {
+	if len(known) < 4 || candidate == known {
+		return false
+	}
+	for _, w := range baitWords {
+		sw := skeleton(w)
+		if candidate == known+sw || candidate == sw+known {
+			return true
+		}
+	}
+	return false
+}
+
+// MixedScript reports whether any label of the domain mixes latin letters
+// with cyrillic or greek ones, which no ordinary name does and every homoglyph
+// attack needs.
+func MixedScript(domain string) bool {
+	for _, label := range strings.Split(unicodeDomain(domainOf(domain)), ".") {
+		var latin, other bool
+		for _, r := range label {
+			switch {
+			case r >= 'a' && r <= 'z':
+				latin = true
+			case r >= 0x0370 && r <= 0x03FF, r >= 0x0400 && r <= 0x052F:
+				other = true
+			}
+		}
+		if latin && other {
+			return true
+		}
+	}
+	return false
+}
+
+// LookalikeOf returns the known domain candidate imitates and whether the
+// resemblance is strong, checking against every domain in known. A candidate
+// that is itself one of the known domains imitates nobody: two organisations
+// the user writes to are both real, however alike their names.
+func LookalikeOf(candidate string, known []string) (string, bool) {
+	c := registrable(domainOf(candidate))
+	if c == "" {
+		return "", false
+	}
+	for _, k := range known {
+		if registrable(domainOf(k)) == c {
+			return "", false
+		}
+	}
+	var best string
+	var bestWeight weight
+	for _, k := range known {
+		if w := lookalikeStrength(c, domainOf(k)); w > bestWeight {
+			best, bestWeight = registrable(domainOf(k)), w
+		}
+	}
+	return best, bestWeight == strong
+}
+
+// UnicodeDomain renders a punycode domain in the characters it stands for.
+func UnicodeDomain(domain string) string {
+	return unicodeDomain(domain)
 }
 
 // editDistanceAtMost reports whether a and b are within max insertions,

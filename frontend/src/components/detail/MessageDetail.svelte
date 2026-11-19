@@ -10,7 +10,7 @@
   import ProtectedNotice from './ProtectedNotice.svelte'
   import PhishingNotice from './PhishingNotice.svelte'
   import AttachmentList from './AttachmentList.svelte'
-  import InviteCard from './InviteCard.svelte'
+  import { loadInviteCard } from '../../lib/lazyload'
   import InfoModal from './InfoModal.svelte'
   import SourceModal from './SourceModal.svelte'
   import ClassicInfoModal from './classic/InfoModal.svelte'
@@ -57,6 +57,7 @@
     IconChecklist,
     IconLayoutKanban,
     IconFilterPlus,
+    IconHeartHandshake,
     IconMessageShare,
   } from '@tabler/icons-svelte'
   import { chatAvailable } from '../../lib/chatavailable'
@@ -67,6 +68,7 @@
   import { openContextMenu, type MenuEntry } from '../../stores/contextmenu'
   import { menuHint } from '../../stores/shortcuts'
   import { createTasksFromMail } from '../../lib/taskmail'
+  import { findPromisesIn, promiseSettings } from '../../stores/promises'
   import { pickProjectFor } from '../../lib/projectpicker'
   import { createRuleFromMail } from '../automations/blocks/rulefrommail'
   import { forgetCard } from '../../stores/threads'
@@ -149,6 +151,9 @@
       { label: $t('shortcut.createTask'), icon: IconChecklist, hint: menuHint('create-task'), action: () => void createTasksFromMail([message.id]) },
       { label: $t('projects.addTo'), icon: IconLayoutKanban, hint: menuHint('add-to-project'), action: () => pickProjectFor([message.id], message.threadId) },
       ...(newDesign ? [{ label: $t('scripts.blocks.ruleFromMail'), icon: IconFilterPlus, action: () => void createRuleFromMail(message.id) }] : []),
+      ...($prefs.design === 'new' && $promiseSettings.enabled
+        ? [{ label: $t('promises.find'), icon: IconHeartHandshake, action: () => void findPromisesIn(message.id) }]
+        : []),
       'separator',
       { label: $t('messageList.menu.openInWindow'), icon: IconAppWindow, action: () => void openMessageWindow(message.id, message.subject) },
       { label: $t('detail.toolbar.print'), icon: IconPrinter, action: () => printMessage(message) },
@@ -439,7 +444,9 @@ ${bodyHtml}
           <PhishingNotice report={detail.phishing} messageId={detail.id} />
         {/if}
         {#if $prefs.design !== 'classic'}
-          <InviteCard messageId={detail.id} attachments={detail.attachments} />
+          {#await loadInviteCard() then m}
+            <svelte:component this={m.default} messageId={detail.id} attachments={detail.attachments} />
+          {/await}
         {/if}
         {#if detail.pgpState !== '' && detail.pgpState !== 'open'}
           <!-- the body here is still the armor, so showing it would put

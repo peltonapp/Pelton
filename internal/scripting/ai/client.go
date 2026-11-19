@@ -3,6 +3,8 @@ package ai
 import (
 	"bytes"
 	"context"
+	"crypto/tls"
+	"crypto/x509"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -90,7 +92,14 @@ type Network struct {
 	Dial func(ctx context.Context, network, addr string) (net.Conn, error)
 	// Lookup resolves a host name. Nil uses the system resolver.
 	Lookup func(ctx context.Context, host string) ([]netip.Addr, error)
+	// RootCAs are the certificate authorities https trusts. Nil uses the
+	// system's.
+	RootCAs *x509.CertPool
 }
+
+// ErrPlainHTTP is returned for a provider outside this device and the local
+// network whose address starts with http://.
+var ErrPlainHTTP = errors.New("ai: a provider that is not on this device or the local network must use an https:// address, so the API key and your mail are encrypted on the way")
 
 // Target is where a provider's requests go: the address its host resolved
 // to, checked once and used for the connection, so a second lookup cannot
@@ -136,7 +145,25 @@ func (n Network) Resolve(ctx context.Context, p Provider) (Target, error) {
 			local = false
 		}
 	}
+	if u.Scheme != "https" && !local {
+		return Target{}, fmt.Errorf("%w (%s)", ErrPlainHTTP, host)
+	}
 	return Target{addr: ips[0].Unmap(), Local: local}, nil
+}
+
+// CheckAddress refuses a provider that would talk plain http to a host
+// outside this device and the local network. An https address passes
+// without a lookup; an http one is looked up.
+func (n Network) CheckAddress(ctx context.Context, p Provider) error {
+	u, err := parseBase(p.BaseURL)
+	if err != nil {
+		return err
+	}
+	if u.Scheme == "https" {
+		return nil
+	}
+	_, err = n.Resolve(ctx, p)
+	return err
 }
 
 // errRedirect refuses every redirect: an API answers where it was asked.
@@ -154,15 +181,19 @@ func (n Network) client(t Target, timeout time.Duration) *http.Client {
 		}
 		return n.Dial(ctx, network, pinned)
 	}
+	transport := &http.Transport{
+		DialContext:            dial,
+		DisableKeepAlives:      true,
+		TLSHandshakeTimeout:    10 * time.Second,
+		ResponseHeaderTimeout:  timeout,
+		MaxResponseHeaderBytes: 64 << 10,
+	}
+	if n.RootCAs != nil {
+		transport.TLSClientConfig = &tls.Config{RootCAs: n.RootCAs, MinVersion: tls.VersionTLS12}
+	}
 	return &http.Client{
-		Transport: &http.Transport{
-			DialContext:            dial,
-			DisableKeepAlives:      true,
-			TLSHandshakeTimeout:    10 * time.Second,
-			ResponseHeaderTimeout:  timeout,
-			MaxResponseHeaderBytes: 64 << 10,
-		},
-		Timeout: timeout,
+		Transport: transport,
+		Timeout:   timeout,
 		CheckRedirect: func(*http.Request, []*http.Request) error {
 			return errRedirect
 		},

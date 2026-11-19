@@ -48,6 +48,10 @@ const (
 // settingScriptLogDays is how many days of script runs the log keeps.
 const settingScriptLogDays = "scripts_log_days"
 
+// settingScriptAskSeconds is how long a question of a script nobody started,
+// and the before-send recipient confirmation, wait for an answer.
+const settingScriptAskSeconds = "scripts_ask_seconds"
+
 // scriptResultsKept is how many results stay ready for their buttons.
 const scriptResultsKept = 20
 
@@ -102,6 +106,7 @@ func (a *App) startScripts() {
 		OnChange:      func() { a.emit(EventScriptsChanged, nil) },
 		OnCatchUp:     a.onScriptCatchUp,
 		RetentionDays: func() int { return a.intSetting(settingScriptLogDays, scripting.DefaultRetentionDays) },
+		AskTimeout:    a.scriptAskTimeout,
 		OnProgress:    func(l scripting.LiveRun) { a.emit(EventScriptProgress, l) },
 	})
 	if err != nil {
@@ -343,11 +348,14 @@ func (a *App) confirmRecipients(ctx context.Context, scripts []string, before, a
 	name := strings.Join(scripts, ", ")
 	summary := fmt.Sprintf("Before-send scripts changed who %q goes to.\n\nWritten to:\n%s\n\nWould now go to:\n%s",
 		before.Subject, recipientsText(before), recipientsText(after))
+	if line := a.encryptionSummary(after); line != "" {
+		summary += "\n\n" + line
+	}
 	confirmer := a.recipientConfirmer
 	if confirmer == nil {
 		confirmer = &scriptConfirm{app: a}
 	}
-	askCtx, cancel := context.WithTimeout(ctx, scripting.DefaultAskTimeout)
+	askCtx, cancel := context.WithTimeout(ctx, a.scriptAskTimeout())
 	defer cancel()
 	ans, err := confirmer.Confirm(askCtx, scripting.ConfirmRequest{
 		ScriptName: name, Function: "outgoing.recipients", Summary: summary, EveryTime: true,
@@ -363,6 +371,12 @@ func (a *App) confirmRecipients(ctx context.Context, scripts []string, before, a
 	}
 	a.emit(EventScriptToast, ScriptToastDTO{Script: name, Text: held.Error(), Level: "warning"})
 	return held
+}
+
+// scriptAskTimeout is how long a question of a script nobody started waits.
+func (a *App) scriptAskTimeout() time.Duration {
+	secs := a.intSetting(settingScriptAskSeconds, int(scripting.DefaultAskTimeout/time.Second))
+	return scripting.ClampAskTimeout(time.Duration(secs) * time.Second)
 }
 
 func (a *App) onScriptRun(sc *scripting.Script, r *scripting.Run) {

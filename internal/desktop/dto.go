@@ -238,6 +238,9 @@ type MessageDetailDTO struct {
 	// or "failed" (the pgp data could not be read). The reading pane offers a
 	// different next step for each, rather than one generic error.
 	PGPState string `json:"pgpState"`
+	// Encryption describes encryption and signature in the words the new
+	// reader uses, nil for mail that is neither.
+	Encryption *MessageEncryptionDTO `json:"encryption"`
 	// Unsubscribe describes the unsubscribe mechanism the message advertises
 	// via its List-Unsubscribe headers, nil when it has none on record.
 	Unsubscribe *UnsubscribeDTO `json:"unsubscribe"`

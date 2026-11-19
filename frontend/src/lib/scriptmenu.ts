@@ -4,11 +4,12 @@
 import { openContextMenu } from '../stores/contextmenu'
 import type { PlacedItem, PlacedScript } from './scripting'
 import { placedNow } from './scriptplacements'
+import { scriptText } from './scriptmark'
 
 /** The text of a placed script's button: its label option, else the script's name. */
 export function placedLabel(script: PlacedScript): string {
-  const label = script.options.label
-  return typeof label === 'string' && label.trim() !== '' ? label.trim() : script.name
+  const label = typeof script.options.label === 'string' ? scriptText(script.options.label) : ''
+  return label !== '' ? label : scriptText(script.name)
 }
 
 /**

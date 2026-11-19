@@ -140,4 +140,22 @@ describe('calendar helpers', () => {
     const t = task({ contacts: [{ name: 'Ada', email: 'Ada@Example.com' }] })
     expect(tasksForContact([t, task()], 'ada@example.com')).toEqual([t])
   })
+
+  it('lists the open tasks of accepted promises by who owes them', () => {
+    const now = new Date(2026, 10, 18, 10)
+    const mine = task({ due: '2026-11-17' })
+    const theirs = task()
+    const closed = task({ done: true })
+    const plain = task()
+    const owed = new Map<string, 'mine' | 'theirs'>([
+      [mine.uid, 'mine'],
+      [theirs.uid, 'theirs'],
+      [closed.uid, 'theirs'],
+    ])
+    const all = [mine, theirs, closed, plain]
+    expect(tasksInScope(all, { kind: 'smart', key: 'iowe' }, now, owed)).toEqual([mine])
+    expect(tasksInScope(all, { kind: 'smart', key: 'owedtome' }, now, owed)).toEqual([theirs])
+    expect(tasksInScope(all, { kind: 'smart', key: 'iowe' }, now)).toEqual([])
+    expect(inSmartList(mine, 'overdue', now, owed)).toBe(true)
+  })
 })

@@ -237,6 +237,12 @@ const (
 	// links opened from a mail have tracking parameters and redirect wrappers
 	// taken off. Off by default.
 	settingCleanLinks = "clean_links"
+	// the privacy report keeps counters of what mail tried to track. On by
+	// default; they never leave this device.
+	settingPrivacyCounters = "privacy_counters"
+	// days after an unsubscribe before more mail from the list counts as
+	// still sending.
+	settingUnsubscribeGrace = "unsubscribe_grace_days"
 	// verbose sync surfaces the mailbox currently being synced in the status
 	// line instead of a plain "Syncing" (#128). Off by default.
 	settingVerboseSync = "verbose_sync"
@@ -632,6 +638,11 @@ type UIPrefsDTO struct {
 	// CleanLinks removes tracking parameters and redirect wrappers from links
 	// opened from a mail.
 	CleanLinks bool `json:"cleanLinks"`
+	// PrivacyCounters keeps the privacy report's counters.
+	PrivacyCounters bool `json:"privacyCounters"`
+	// UnsubscribeGraceDays is how long after an unsubscribe mail from the
+	// list may still arrive before Pelton says they are still sending.
+	UnsubscribeGraceDays int `json:"unsubscribeGraceDays"`
 	// AutoconfigLookup is whether the add-mailbox wizard may look up a typed
 	// address's domain: ask (default), allow or manual.
 	AutoconfigLookup string `json:"autoconfigLookup"`
@@ -647,6 +658,9 @@ type UIPrefsDTO struct {
 	// ChatEnabled turns the Matrix chat space on. Off by default: nothing
 	// chat related runs or connects until it is on.
 	ChatEnabled bool `json:"chatEnabled"`
+	// AutoEncrypt is automatic encryption. Off by default: until it is on no
+	// key is made, no header added and nothing looked up.
+	AutoEncrypt bool `json:"autoEncrypt"`
 	// ChatSendReceipts sends public read receipts in chat; off keeps them
 	// private.
 	ChatSendReceipts bool `json:"chatSendReceipts"`
@@ -854,12 +868,15 @@ func (a *App) GetUIPrefs() (UIPrefsDTO, error) {
 		NotifyActionMarkRead:       a.boolSetting(settingNotifyActionMarkRead, true),
 		NotifyActionReply:          a.boolSetting(settingNotifyActionReply, true),
 		CleanLinks:                 a.boolSetting(settingCleanLinks, false),
+		PrivacyCounters:            a.privacyCounting(),
+		UnsubscribeGraceDays:       a.unsubscribeGraceDays(),
 		AutoconfigLookup:           a.stringSetting(settingAutoconfigLookup, "ask"),
 		VerboseSync:                a.boolSetting(settingVerboseSync, false),
 		SyncProgressBar:            a.boolSetting(settingSyncProgress, true),
 		StatusClock:                a.boolSetting(settingStatusClock, true),
 		StatusUnread:               a.boolSetting(settingStatusUnread, true),
 		ChatEnabled:                a.boolSetting(settingChatEnabled, false),
+		AutoEncrypt:                a.boolSetting(settingAutoEncrypt, false),
 		ChatSendReceipts:           a.boolSetting(settingChatSendReceipts, true),
 		ChatSendTyping:             a.boolSetting(settingChatSendTyping, true),
 		ChatNotify:                 a.stringSetting(settingChatNotify, "mentions"),
@@ -952,6 +969,9 @@ func (a *App) SetSetting(key, value string) error {
 	}
 	if key == settingChatEnabled {
 		a.chatSettingChanged(value)
+	}
+	if key == settingAutoEncrypt || key == settingKeySourceAutocrypt {
+		a.loadAutoEncryptFlags()
 	}
 	if key == settingIndexDecrypted {
 		// rebuilt from scratch rather than re-indexed in place: switching this

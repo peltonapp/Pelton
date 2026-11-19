@@ -18,6 +18,9 @@
   import ProtectedNotice from './ProtectedNotice.svelte'
   import AttachmentStrip from './AttachmentStrip.svelte'
   import FollowUpNotice from './FollowUpNotice.svelte'
+  import { loadEncryptionIndicator, loadPromiseStrip } from '../../lib/lazyload'
+  import { promiseSettings } from '../../stores/promises'
+  import { passports } from '../../stores/trust'
   import { prefs } from '../../stores/prefs'
   import { formatListDate, displayName, type TimeFormat } from '../../lib/format'
   import { dur, motion } from '../../lib/motion'
@@ -130,8 +133,19 @@
         {#if detail.messageId}
           <FollowUpNotice messageId={detail.messageId} />
         {/if}
-        {#if detail.phishing.level !== 'none'}
-          <PhishingNotice report={detail.phishing} messageId={detail.id} />
+        {@const banner = $passports.get(detail.id)?.banner ?? detail.phishing}
+        {#if banner.level !== 'none'}
+          <PhishingNotice report={banner} messageId={detail.id} />
+        {/if}
+        {#if detail.encryption}
+          {#await loadEncryptionIndicator() then m}
+            <svelte:component this={m.default} encryption={detail.encryption} messageId={detail.id} />
+          {/await}
+        {/if}
+        {#if $prefs.design === 'new' && $promiseSettings.enabled && detail.messageId}
+          {#await loadPromiseStrip() then m}
+            <svelte:component this={m.default} messageId={detail.id} accountId={detail.accountId} mailId={detail.messageId} />
+          {/await}
         {/if}
         {#if detail.pgpState !== '' && detail.pgpState !== 'open'}
           <ProtectedNotice state={detail.pgpState} messageId={detail.id} on:opened={() => dispatch('reload')} />

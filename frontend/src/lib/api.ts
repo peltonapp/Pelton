@@ -45,6 +45,9 @@ import type {
   ComposeRequest,
   Draft,
   FollowUp,
+  MailPromise,
+  PromiseEdit,
+  PromiseSettings,
   Snippet,
   OutboxRow,
   OutboxEdit,
@@ -117,6 +120,9 @@ import type {
   AttachmentPage,
   AttachmentQuery,
   SenderOverview,
+  Passport,
+  Shield,
+  PrivacyReport,
   ThemeInfo,
   ThemeApply,
   ThemeImportPreview,
@@ -181,6 +187,13 @@ import type {
   ChatProfile,
   ChatVerification,
   ChatDevice,
+  AutoEncryptMode,
+  AutoEncryptSettings,
+  AutoEncryptStatus,
+  ContactEncryptPref,
+  ContactKey,
+  KeyLookupLogEntry,
+  KeySources,
 } from './types'
 import { normalizeState } from './sieve'
 import type {
@@ -198,6 +211,9 @@ import type {
   ScriptInput,
   ScriptLibrary,
   ScriptLibraryInput,
+  ScriptLibraryNote,
+  ScriptLibrarySaved,
+  ScriptRef,
   ScriptRun,
 } from './scripting'
 import type { ScriptProposal } from './assistantScripts'
@@ -624,6 +640,55 @@ export function unsubscribeMessage(id: number): Promise<void> {
     return Promise.resolve()
   }
   return App.Unsubscribe(id)
+}
+
+/** Records that the user opened a message's unsubscribe web page, for the still-sending watch. */
+export function noteUnsubscribeLink(id: number): Promise<void> {
+  return isDemoActive() ? Promise.resolve() : App.NoteUnsubscribeLink(id)
+}
+
+// the demo's sample ids can be real messages of the install behind it, so the
+// passport and the shield say nothing in demo mode rather than read those.
+const demoNone = (): Promise<never> => Promise.reject(new Error('demo'))
+
+/** The sender passport of a message. */
+export function senderPassport(id: number): Promise<Passport> {
+  return isDemoActive() ? demoNone() : (App.GetSenderPassport(id) as unknown as Promise<Passport>)
+}
+
+/** Records "known" or "impostor" for a sender, or forgets either with ''. */
+export function setSenderMark(address: string, mark: '' | 'known' | 'impostor'): Promise<void> {
+  return isDemoActive() ? Promise.resolve() : App.SetSenderMark(address, mark)
+}
+
+/** What a message tried to learn about its reader, counted for the report. */
+export function privacyShield(id: number): Promise<Shield> {
+  return isDemoActive() ? demoNone() : (App.GetPrivacyShield(id) as unknown as Promise<Shield>)
+}
+
+/** A message's html with remote images loaded and tracking pixels left out. */
+export function getMessageHtmlBlockingTrackers(id: number): Promise<string> {
+  return isDemoActive() ? Promise.resolve(demoHtml()) : App.GetMessageHTMLBlockingTrackers(id)
+}
+
+/** The tracking report over the last days days, 0 for all of it. */
+export function privacyReport(days: number): Promise<PrivacyReport> {
+  return App.PrivacyReport(days).then((r) => ({ ...r, rows: r.rows ?? [] }) as unknown as PrivacyReport)
+}
+
+/** Forgets every tracking counter. */
+export function clearPrivacyHistory(): Promise<void> {
+  return App.ClearPrivacyHistory()
+}
+
+/** Stops the still-sending notice for a sender until more mail comes. */
+export function dismissStillSending(sender: string): Promise<void> {
+  return App.DismissStillSending(sender)
+}
+
+/** Moves new mail from an unsubscribed sender to junk or trash, or stops with ''. */
+export function blockUnsubscribedSender(sender: string, where: '' | 'junk' | 'trash'): Promise<void> {
+  return App.BlockUnsubscribedSender(sender, where)
 }
 
 // getMessageSource fetches a message's raw RFC 822 source on demand over imap.
@@ -1152,6 +1217,59 @@ export function reorderSnippets(ids: number[]): Promise<void> {
 // cancelFollowUp drops a reminder, waiting or fired.
 export function cancelFollowUp(id: number): Promise<void> {
   return App.CancelFollowUp(id)
+}
+
+/** The promises that are suggested, accepted or closed. */
+export function listPromises(): Promise<MailPromise[]> {
+  if (isDemoActive()) {
+    return Promise.resolve([])
+  }
+  return App.ListPromises().then((list) => (list ?? []) as MailPromise[])
+}
+
+/** Reads one message for promises now and returns what it holds. */
+export function findPromises(messageId: number): Promise<MailPromise[]> {
+  return App.FindPromises(messageId).then((list) => (list ?? []) as MailPromise[])
+}
+
+/** Makes a task of a suggested promise, with the user's edits. */
+export function acceptPromise(edit: PromiseEdit): Promise<MailPromise> {
+  return App.AcceptPromise(new desktop.PromiseEditDTO(edit)) as Promise<MailPromise>
+}
+
+/** Sets a suggestion aside for good. */
+export function dismissPromise(id: number): Promise<void> {
+  return App.DismissPromise(id)
+}
+
+/** Brings a dismissed suggestion back. */
+export function restorePromise(id: number): Promise<void> {
+  return App.RestorePromise(id)
+}
+
+/** Stops reading a sender's mail for promises; returns the suggestions it dismissed. */
+export function quietPromiseSender(email: string): Promise<number[]> {
+  return App.QuietPromiseSender(email).then((ids) => ids ?? [])
+}
+
+/** Undoes quietPromiseSender. */
+export function unquietPromiseSender(email: string, ids: number[]): Promise<void> {
+  return App.UnquietPromiseSender(email, ids)
+}
+
+/** Opens a promise a reply closed, or turns down the offer to complete one. */
+export function reopenPromise(id: number): Promise<void> {
+  return App.ReopenPromise(id)
+}
+
+/** The promise preferences. */
+export function getPromiseSettings(): Promise<PromiseSettings> {
+  return App.GetPromiseSettings().then((s) => ({ ...s, accounts: s.accounts ?? [] }) as PromiseSettings)
+}
+
+/** Saves the promise preferences. */
+export function setPromiseSettings(s: PromiseSettings): Promise<void> {
+  return App.SetPromiseSettings(new desktop.PromiseSettingsDTO(s))
 }
 
 // clearSentOutbox prunes rows already marked sent after the ui has shown the
@@ -2147,12 +2265,15 @@ export const SettingKeys = {
   notifyActionMarkRead: 'notify_action_mark_read',
   notifyActionReply: 'notify_action_reply',
   cleanLinks: 'clean_links',
+  privacyCounters: 'privacy_counters',
+  unsubscribeGraceDays: 'unsubscribe_grace_days',
   autoconfigLookup: 'autoconfig_lookup',
   verboseSync: 'verbose_sync',
   syncProgressBar: 'sync_progress_bar',
   statusClock: 'status_clock',
   statusUnread: 'status_unread',
   chatEnabled: 'chat_enabled',
+  autoEncrypt: 'auto_encrypt',
   chatSendReceipts: 'chat_send_receipts',
   chatSendTyping: 'chat_send_typing',
   chatNotify: 'chat_notify',
@@ -3929,6 +4050,16 @@ export function setScriptLogDays(days: number): Promise<void> {
   return App.SetScriptLogDays(days)
 }
 
+/** How long a question of a script nobody started, and a before-send recipient confirmation, wait, in seconds. */
+export function scriptAskSeconds(): Promise<number> {
+  return App.ScriptAskSeconds()
+}
+
+/** Sets how long such a question waits, 10 seconds to an hour. */
+export function setScriptAskSeconds(seconds: number): Promise<void> {
+  return App.SetScriptAskSeconds(seconds)
+}
+
 /** Reverses the mail changes of a run. */
 export function undoScriptRun(runId: number): Promise<void> {
   return App.UndoScriptRun(runId)
@@ -4004,19 +4135,36 @@ export function listScriptLibraries(): Promise<ScriptLibrary[]> {
   return App.ListScriptLibraries().then((list) => (list ?? []) as ScriptLibrary[])
 }
 
-/** Stores a new shared library; its name must be free. */
-export function createScriptLibrary(input: ScriptLibraryInput): Promise<ScriptLibrary> {
-  return App.CreateScriptLibrary(input) as Promise<ScriptLibrary>
+function asLibrarySaved(s: { library: unknown; switchedOff: unknown[] | null }): ScriptLibrarySaved {
+  return { library: s.library as ScriptLibrary, switchedOff: (s.switchedOff ?? []) as ScriptRef[] }
 }
 
-/** Saves a shared library. */
-export function updateScriptLibrary(id: number, input: ScriptLibraryInput): Promise<ScriptLibrary> {
-  return App.UpdateScriptLibrary(id, input) as Promise<ScriptLibrary>
+/** Stores a new shared library; its name must be free. Scripts that already required the name are switched off and listed. */
+export function createScriptLibrary(input: ScriptLibraryInput): Promise<ScriptLibrarySaved> {
+  return App.CreateScriptLibrary(input).then(asLibrarySaved)
 }
 
-/** Removes a shared library. */
-export function deleteScriptLibrary(id: number): Promise<void> {
-  return App.DeleteScriptLibrary(id)
+/** Saves a shared library and lists the scripts that load it, which a change to its code or name switches off. */
+export function updateScriptLibrary(id: number, input: ScriptLibraryInput): Promise<ScriptLibrarySaved> {
+  return App.UpdateScriptLibrary(id, input).then(asLibrarySaved)
+}
+
+/** Removes a shared library and lists the scripts that load it, which are switched off. */
+export function deleteScriptLibrary(id: number): Promise<ScriptRef[]> {
+  return App.DeleteScriptLibrary(id).then((list) => (list ?? []) as ScriptRef[])
+}
+
+/** The scripts saving a library under name would switch off; id is 0 for a new library. */
+export function scriptLibraryImpact(id: number, name: string): Promise<ScriptRef[]> {
+  return App.ScriptLibraryImpact(id, name).then((list) => (list ?? []) as ScriptRef[])
+}
+
+/** Why a script was switched off by a library change, with what changed; exists is false when it was not. */
+export function scriptLibraryNote(scriptId: number): Promise<ScriptLibraryNote> {
+  if (isDemoActive()) {
+    return Promise.resolve({ scriptId, exists: false, library: '', when: '', deleted: false, diff: [] })
+  }
+  return App.ScriptLibraryNote(scriptId).then((n) => ({ ...n, diff: n.diff ?? [] }) as ScriptLibraryNote)
 }
 
 /** Writes a library to a file the user picks; resolves to the path, '' when cancelled. */
@@ -4024,9 +4172,9 @@ export function exportScriptLibrary(id: number): Promise<string> {
   return App.ExportScriptLibrary(id)
 }
 
-/** Stores the library in a file's text; one of the same name is not replaced. */
-export function importScriptLibrary(text: string): Promise<ScriptLibrary> {
-  return App.ImportScriptLibrary(text) as Promise<ScriptLibrary>
+/** Stores the library in a file's text; one of the same name is not replaced. Scripts that already required the name are switched off and listed. */
+export function importScriptLibrary(text: string): Promise<ScriptLibrarySaved> {
+  return App.ImportScriptLibrary(text).then(asLibrarySaved)
 }
 
 /** Stores a copy of a gallery template as a new script, switched off. */
@@ -4106,12 +4254,12 @@ export function setAIScriptOptions(scriptId: number, options: AIScriptOptions): 
 /** The change an assistant proposed to a script, with a diff; exists is false when none waits. */
 export function scriptProposal(scriptId: number): Promise<ScriptProposal> {
   if (isDemoActive()) {
-    return Promise.resolve({ scriptId, exists: false, when: '', diff: [], addedPermissions: [], removedPermissions: [], resetsApproval: false, problem: '' })
+    return Promise.resolve({ scriptId, exists: false, when: '', diff: [], addedPermissions: [], removedPermissions: [], resetsApproval: false, resetReasons: [], problem: '' })
   }
-  return App.ScriptProposal(scriptId) as Promise<ScriptProposal>
+  return App.ScriptProposal(scriptId).then((p) => ({ ...p, resetReasons: p.resetReasons ?? [] }) as ScriptProposal)
 }
 
-/** Applies a proposed change; one that changes code or permissions switches the script off for approval. */
+/** Applies a proposed change; one that changes code, trigger, permissions or placements switches the script off for approval. */
 export function acceptScriptProposal(scriptId: number): Promise<Script> {
   return App.AcceptScriptProposal(scriptId).then(asScript)
 }
@@ -4119,4 +4267,91 @@ export function acceptScriptProposal(scriptId: number): Promise<Script> {
 /** Throws a proposed change away. */
 export function rejectScriptProposal(scriptId: number): Promise<void> {
   return App.RejectScriptProposal(scriptId)
+}
+
+// --- automatic encryption ---
+
+/** The state of automatic encryption, its sources and each mailbox's key. */
+export function getAutoEncryptSettings(): Promise<AutoEncryptSettings> {
+  return App.GetAutoEncryptSettings() as unknown as Promise<AutoEncryptSettings>
+}
+
+/** Switches automatic encryption on with the sources the user allowed; keys are made in the background. */
+export function enableAutoEncrypt(sources: KeySources): Promise<void> {
+  return App.EnableAutoEncrypt(new desktop.KeySourcesDTO(sources))
+}
+
+/** Changes which places keys may be found in. */
+export function setKeySources(sources: KeySources): Promise<void> {
+  return App.SetKeySources(new desktop.KeySourcesDTO(sources))
+}
+
+/** Chooses whether encrypted mail hides its subject. */
+export function setProtectSubject(on: boolean): Promise<void> {
+  return App.SetProtectSubject(on)
+}
+
+/** Sets a mailbox to turn encryption on by itself (auto) or never (manual). */
+export function setAutoEncryptAccountMode(accountId: number, mode: AutoEncryptMode): Promise<void> {
+  return App.SetAutoEncryptAccountMode(accountId, mode)
+}
+
+/** What would happen to a message from one mailbox to these recipients; never asks the network. */
+export function autoEncryptStatus(query: { accountId: number; to: string[]; cc: string[]; bcc: string[]; inReplyTo: string }): Promise<AutoEncryptStatus> {
+  return App.AutoEncryptStatus(new desktop.AutoEncryptQuery(query)) as unknown as Promise<AutoEncryptStatus>
+}
+
+/** Asks the allowed sources for keys of recipients without one; resolves whether any was found. */
+export function lookupRecipientKeys(accountId: number, emails: string[]): Promise<boolean> {
+  return App.LookupRecipientKeys(accountId, emails)
+}
+
+/** Makes the key found for addr after a change the one to send with. */
+export function acceptContactKey(email: string, fingerprint: string): Promise<void> {
+  return App.AcceptContactKey(email, fingerprint)
+}
+
+/** Records that the user compared a contact's fingerprint and it matched. */
+export function verifyContactKey(email: string, fingerprint: string): Promise<void> {
+  return App.VerifyContactKey(email, fingerprint)
+}
+
+/** Sets a contact's encryption preference. */
+export function setContactEncryption(email: string, pref: ContactEncryptPref): Promise<void> {
+  return App.SetContactEncryption(email, pref)
+}
+
+/** Forgets every key learned for a contact. */
+export function forgetContactKey(email: string): Promise<void> {
+  return App.ForgetContactKey(email)
+}
+
+/** Every correspondent Pelton learned a key for. */
+export function listContactKeys(): Promise<ContactKey[]> {
+  return App.ListContactKeys().then((list) => (list ?? []) as unknown as ContactKey[])
+}
+
+/** The most recent key lookups, newest first. */
+export function listKeyLookupLog(): Promise<KeyLookupLogEntry[]> {
+  return App.ListKeyLookupLog().then((list) => (list ?? []) as unknown as KeyLookupLogEntry[])
+}
+
+/** Empties the key lookup log. */
+export function clearKeyLookupLog(): Promise<void> {
+  return App.ClearKeyLookupLog()
+}
+
+/** Writes a passphrase protected backup of a mailbox's key; resolves the path, '' when cancelled. */
+export function backupOwnKey(accountId: number, passphrase: string): Promise<string> {
+  return App.BackupOwnKey(accountId, passphrase)
+}
+
+/** Mails the key to the user's own address for another device; resolves the setup code. */
+export function sendKeyToOtherDevice(accountId: number): Promise<string> {
+  return App.SendKeyToOtherDevice(accountId)
+}
+
+/** Opens a key transfer from another device with its setup code. */
+export function importKeyFromSetupMessage(messageId: number, code: string): Promise<void> {
+  return App.ImportKeyFromSetupMessage(messageId, code)
 }

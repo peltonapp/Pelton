@@ -51,6 +51,8 @@ export const EventNames = {
   icsOpen: 'calendar:open-files',
   taskReminder: 'tasks:reminder',
   followUpsChanged: 'followups:changed',
+  promisesChanged: 'promises:changed',
+  privacyChanged: 'privacy:changed',
   focusChanged: 'focus:changed',
   focusEnded: 'focus:ended',
   projectsChanged: 'projects:changed',
@@ -76,6 +78,7 @@ export const EventNames = {
   scriptResult: 'scripts:result',
   scriptProgress: 'scripts:progress',
   assistantScript: 'scripts:assistant',
+  autoEncryptChanged: 'autoencrypt:changed',
   // sent between windows by the frontend, not by go.
   archiveAfterSend: 'compose:archive-after-send',
 } as const
@@ -109,6 +112,11 @@ export interface VaultChangeEvent {
 /** onVaultChanged fires when notes in the notes folder changed. */
 export function onVaultChanged(cb: (e: VaultChangeEvent) => void): Unsubscribe {
   return EventsOn(EventNames.vaultChanged, (e: VaultChangeEvent) => cb(e))
+}
+
+/** onAutoEncryptChanged fires when own keys were made or renewed or a lookup found keys. */
+export function onAutoEncryptChanged(cb: () => void): () => void {
+  return EventsOn(EventNames.autoEncryptChanged, () => cb())
 }
 
 /** onICSOpen fires when the system asks the running app to open .ics files; collect them with consumePendingICS. */
@@ -322,6 +330,16 @@ export function onOutboxLog(cb: (e: OutboxLogEntry) => void): Unsubscribe {
 // answered or is cancelled. It carries no payload; subscribers refetch.
 export function onFollowUpsChanged(cb: () => void): Unsubscribe {
   return EventsOn(EventNames.followUpsChanged, () => cb())
+}
+
+/** Fires when promises were found, accepted, dismissed or closed. Subscribers refetch. */
+export function onPromisesChanged(cb: () => void): Unsubscribe {
+  return EventsOn(EventNames.promisesChanged, () => cb())
+}
+
+/** Fires when the tracking counters or an unsubscribe's state changed. Subscribers refetch. */
+export function onPrivacyChanged(cb: () => void): Unsubscribe {
+  return EventsOn(EventNames.privacyChanged, () => cb())
 }
 
 // onMenu fires when a native menubar item is chosen. the payload is a short

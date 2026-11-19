@@ -360,6 +360,93 @@ func TestUpdateOfUsersScriptIsAProposal(t *testing.T) {
 	}
 }
 
+// approvedScript stores a script the user wrote, switched on, approved and
+// allowed a risky call, with the given trigger and placements.
+func approvedScript(t *testing.T, a *App, trigger ScriptTriggerDTO, placements ...scripting.PlacementConfig) ScriptDTO {
+	t.Helper()
+	sc, err := a.CreateScript(ScriptInput{Name: "Mine", Kind: "lua", Trigger: trigger, Source: "print('one')", Permissions: []string{scripting.PermNotify}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(placements) > 0 {
+		if _, err := a.SetScriptPlacements(sc.ID, placements); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if _, err := a.SetScriptEnabled(sc.ID, true, []string{scripting.PermNotify}); err != nil {
+		t.Fatal(err)
+	}
+	if sc, err = a.SetScriptAllowUnasked(sc.ID, "mail.send", true); err != nil {
+		t.Fatal(err)
+	}
+	return sc
+}
+
+// A change an assistant proposes to a trigger's parameters or, through
+// them, to where the script is placed switches the script off once the user
+// accepts it, and the proposal says why beforehand. The user's own change to
+// the same things keeps the approval.
+func TestAcceptedAssistantChangeToTriggerOrPlacementsResetsApproval(t *testing.T) {
+	a, _, cs := mcpScriptSession(t)
+	propose := func(id int64, trigger map[string]any) ScriptProposalDTO {
+		t.Helper()
+		d := draft("Mine", "print('one')", scripting.PermNotify)
+		d["trigger"] = trigger
+		if out := mustCall(t, cs, mcpserver.ToolUpdateScript, map[string]any{"id": id, "script": d}); !strings.Contains(out, `"status": "proposed"`) {
+			t.Fatalf("update %s", out)
+		}
+		p, err := a.ScriptProposal(id)
+		if err != nil || !p.Exists {
+			t.Fatalf("proposal %+v %v", p, err)
+		}
+		return p
+	}
+	off := func(sc ScriptDTO) bool { return !sc.Enabled && len(sc.Approved) == 0 && len(sc.AllowUnasked) == 0 }
+
+	every := ScriptTriggerDTO{Type: scripting.TriggerEvery, Params: map[string]any{"minutes": 60}}
+	sched := approvedScript(t, a, every)
+	p := propose(sched.ID, map[string]any{"type": scripting.TriggerEvery, "params": map[string]any{"minutes": 1}})
+	if !p.ResetsApproval || strings.Join(p.ResetReasons, ",") != scripting.ChangeTriggerParams {
+		t.Fatalf("proposal %+v", p)
+	}
+	got, err := a.AcceptScriptProposal(sched.ID)
+	if err != nil || !off(got) {
+		t.Fatalf("accepted a new schedule and stayed approved: %+v %v", got, err)
+	}
+
+	placed := approvedScript(t, a, ScriptTriggerDTO{Type: scripting.TriggerManual, Params: map[string]any{"scope": "message"}}, scripting.PlacementConfig{ID: "mail.row"})
+	if len(placed.Placements) != 1 {
+		t.Fatalf("placements %+v", placed.Placements)
+	}
+	p = propose(placed.ID, map[string]any{"type": scripting.TriggerManual, "params": map[string]any{"scope": "none"}})
+	if !p.ResetsApproval || strings.Join(p.ResetReasons, ",") != scripting.ChangeTriggerParams+","+scripting.ChangePlacements {
+		t.Fatalf("proposal %+v", p)
+	}
+	if got, err = a.AcceptScriptProposal(placed.ID); err != nil || !off(got) || len(got.Placements) != 0 {
+		t.Fatalf("accepted a change that drops a placement and stayed approved: %+v %v", got, err)
+	}
+
+	same := approvedScript(t, a, every)
+	d := draft("Renamed", "print('one')", scripting.PermNotify)
+	d["trigger"] = map[string]any{"type": scripting.TriggerEvery, "params": map[string]any{"minutes": 60}}
+	mustCall(t, cs, mcpserver.ToolUpdateScript, map[string]any{"id": same.ID, "script": d})
+	if p, _ := a.ScriptProposal(same.ID); p.ResetsApproval || len(p.ResetReasons) != 0 {
+		t.Fatalf("a rename resets the approval: %+v", p)
+	}
+	if got, err = a.AcceptScriptProposal(same.ID); err != nil || !got.Enabled || len(got.AllowUnasked) != 1 || got.Name != "Renamed" {
+		t.Fatalf("a rename switched the script off: %+v %v", got, err)
+	}
+
+	own := approvedScript(t, a, ScriptTriggerDTO{Type: scripting.TriggerManual, Params: map[string]any{"scope": "message"}}, scripting.PlacementConfig{ID: "mail.row"})
+	edited, err := a.UpdateScript(own.ID, ScriptInput{Name: "Mine", Kind: "lua", Trigger: ScriptTriggerDTO{Type: scripting.TriggerManual, Params: map[string]any{"scope": "none"}}, Source: "print('one')", Permissions: []string{scripting.PermNotify}})
+	if err != nil || !edited.Enabled || len(edited.Approved) != 1 {
+		t.Fatalf("the user's own trigger change took the approval: %+v %v", edited, err)
+	}
+	if edited, err = a.SetScriptPlacements(own.ID, []scripting.PlacementConfig{{ID: "palette"}}); err != nil || !edited.Enabled || len(edited.AllowUnasked) != 1 {
+		t.Fatalf("the user's own placement change took the approval: %+v %v", edited, err)
+	}
+}
+
 // An assistant's own script that is still off and was never approved is
 // changed directly and stays off; once the user approved it, changes become
 // proposals too.
