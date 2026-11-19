@@ -286,6 +286,9 @@ type App struct {
 	// aiLookup resolves an AI provider's host; nil uses the system resolver.
 	// Tests put a fake here.
 	aiLookup func(ctx context.Context, host string) ([]netip.Addr, error)
+
+	// autoEnc is the state of automatic encryption. See autoencrypt.go.
+	autoEnc autoEncryptState
 }
 
 // locked reports whether the app lock is engaged. An App built without one,
@@ -436,6 +439,7 @@ func (a *App) startup(ctx context.Context) {
 	a.startBackgroundServices()
 	a.startScripts()
 	goSafe("promise clock", a.runPromiseClock)
+	a.startAutoEncrypt()
 
 	// the notes folder, when the user has one: the mail reader and the other
 	// spaces list the notes about what they show.

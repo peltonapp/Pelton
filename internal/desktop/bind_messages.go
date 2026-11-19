@@ -181,11 +181,18 @@ func (a *App) GetMessage(id int64) (MessageDetailDTO, error) {
 	// protected mail is decrypted here and only here: the plaintext replaces the
 	// armor for this response and is never written back. The stored body stays
 	// the ciphertext, so closing the message loses nothing that was not sent.
-	if body, isHTML, state, sig := a.openProtected(*m); state != "" {
-		detail.PGPState = state
-		detail.SMIME = smimeDTO(sig)
-		if state == pgpStateOpen {
-			if isHTML {
+	if p := a.openProtectedWith(*m, a.signatureKeysFor(*m)); p.state != "" {
+		detail.PGPState = p.state
+		detail.SMIME = smimeDTO(p.sig)
+		if p.opened != nil {
+			enc := a.messageEncryption(*m, p.opened)
+			detail.Encryption = &enc
+			if p.opened.Encrypted {
+				a.learnGossip(*m, p.opened.Body)
+			}
+		}
+		if body := p.body; p.state == pgpStateOpen {
+			if p.isHTML {
 				detail.IsHTML = true
 				detail.BodyPlain = ""
 				detail.BodyQuote = quoteText("", body)
@@ -200,6 +207,12 @@ func (a *App) GetMessage(id int64) (MessageDetailDTO, error) {
 				detail.BodyHTMLSafe = ""
 			}
 		}
+	}
+	if _, ok := a.setupAttachment(*m); ok {
+		if detail.Encryption == nil {
+			detail.Encryption = &MessageEncryptionDTO{}
+		}
+		detail.Encryption.SetupMessage = true
 	}
 	return detail, nil
 }

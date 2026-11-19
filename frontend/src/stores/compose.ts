@@ -93,6 +93,13 @@ export interface ComposeSession {
   // projectId files the message and its replies under a project once it is
   // sent, unset for none.
   projectId?: number
+  // autoEncrypt is set by the new composer while automatic encryption is on;
+  // encrypt is the user's choice for this message, unset to follow the
+  // recommendation; plaintextConfirmed lets a reply to encrypted mail go out
+  // unencrypted.
+  autoEncrypt?: boolean
+  encrypt?: 'on' | 'off'
+  plaintextConfirmed?: boolean
 }
 
 /** The three reply types a reply can be switched between. */

@@ -77,6 +77,7 @@ export const EventNames = {
   scriptResult: 'scripts:result',
   scriptProgress: 'scripts:progress',
   assistantScript: 'scripts:assistant',
+  autoEncryptChanged: 'autoencrypt:changed',
   // sent between windows by the frontend, not by go.
   archiveAfterSend: 'compose:archive-after-send',
 } as const
@@ -110,6 +111,11 @@ export interface VaultChangeEvent {
 /** onVaultChanged fires when notes in the notes folder changed. */
 export function onVaultChanged(cb: (e: VaultChangeEvent) => void): Unsubscribe {
   return EventsOn(EventNames.vaultChanged, (e: VaultChangeEvent) => cb(e))
+}
+
+/** onAutoEncryptChanged fires when own keys were made or renewed or a lookup found keys. */
+export function onAutoEncryptChanged(cb: () => void): () => void {
+  return EventsOn(EventNames.autoEncryptChanged, () => cb())
 }
 
 /** onICSOpen fires when the system asks the running app to open .ics files; collect them with consumePendingICS. */

@@ -367,6 +367,9 @@ export interface MessageDetail extends MessageSummary {
   // when it was opened, so the pane can offer the right next step rather than
   // one generic error.
   pgpState: PGPState
+  // encryption says, for the new reader, whether the message was encrypted
+  // and how its signature checked out; null for mail that is neither.
+  encryption?: MessageEncryption | null
   // replyIds and forwardIds are the cached copies of what the user sent from
   // Pelton in reply to or as a forward of this message, oldest first. A sent
   // message appears once its Sent folder has synced.
@@ -483,6 +486,11 @@ export interface ComposeRequest {
   // projectId files the message, and the replies it gets, under a project.
   // 0 or left out files it nowhere.
   projectId?: number
+  // autoEncrypt marks a message from the composer of automatic encryption,
+  // and plaintextConfirmed the user's choice to answer encrypted mail
+  // unencrypted.
+  autoEncrypt?: boolean
+  plaintextConfirmed?: boolean
 }
 
 /**
@@ -1067,6 +1075,9 @@ export interface UIPrefs {
   // chatEnabled turns the Matrix chat space on. Off by default; nothing chat
   // related runs or connects until it is on.
   chatEnabled: boolean
+  // autoEncrypt is automatic encryption. Off by default; until it is on no
+  // key is made, no header added and nothing looked up.
+  autoEncrypt: boolean
   // chatSendReceipts sends public read receipts; off keeps them private.
   chatSendReceipts: boolean
   // chatSendTyping tells rooms while the user types.
@@ -3128,4 +3139,106 @@ export interface ChatMediaProgress {
   bytesDone: number
   bytesTotal: number
   error: string
+}
+
+/** A signature verdict in the words the new reader uses. */
+export type SignatureWord = '' | 'known' | 'verified' | 'new' | 'invalid' | 'unchecked'
+
+/** MessageEncryption is what the new reader says about a message's protection. */
+export interface MessageEncryption {
+  encrypted: boolean
+  signature: SignatureWord
+  signerEmail: string
+  /** The real subject of a message that hid it, '' otherwise. */
+  subject: string
+  /** A key transfer from one of the user's own devices. */
+  setupMessage: boolean
+}
+
+/** Places keys may be found in, and the user's own key servers. */
+export interface KeySources {
+  autocrypt: boolean
+  wkd: boolean
+  keysOpenpgpOrg: boolean
+  keyServers: boolean
+  servers: string[]
+}
+
+/** How a mailbox encrypts: auto turns it on when the recommendation says so, manual never does. */
+export type AutoEncryptMode = 'auto' | 'manual'
+
+/** OwnKey is the key one mailbox encrypts and signs with. */
+export interface OwnKey {
+  accountId: number
+  email: string
+  fingerprint: string
+  /** RFC 3339; expires is '' for a key that does not expire. */
+  created: string
+  expires: string
+  /** Pelton made the key and renews it. */
+  generated: boolean
+  usable: boolean
+  mode: AutoEncryptMode
+}
+
+/** AutoEncryptSettings is everything the encryption settings show. */
+export interface AutoEncryptSettings {
+  enabled: boolean
+  sources: KeySources
+  protectSubject: boolean
+  accounts: OwnKey[]
+}
+
+/** The specification's answer to "should this be encrypted", weakest first. */
+export type EncryptRecommendation = 'disable' | 'discourage' | 'available' | 'encrypt'
+
+/** A contact's encryption preference: follow the recommendation, always or never. */
+export type ContactEncryptPref = '' | 'always' | 'never'
+
+/** RecipientEncryption is what the composer knows about one recipient. */
+export interface RecipientEncryption {
+  email: string
+  state: 'ready' | 'verified' | 'missing' | 'changed'
+  /** manual, autocrypt, gossip, wkd, keys.openpgp.org or server:<url>; '' with no key. */
+  source: string
+  fingerprint: string
+  recommendation: EncryptRecommendation
+  preference: ContactEncryptPref
+  /** For a key change: the fingerprint last used and when the new key was first seen. */
+  previous: string
+  changedAt: string
+  /** Why a key that was found cannot be used: expired, revoked or noencryption. */
+  problem: string
+  bcc: boolean
+}
+
+/** AutoEncryptStatus is what would happen to a message from one mailbox to some recipients. */
+export interface AutoEncryptStatus {
+  enabled: boolean
+  ownKey: boolean
+  recommendation: EncryptRecommendation
+  replyToEncrypted: boolean
+  mode: AutoEncryptMode
+  recipients: RecipientEncryption[]
+}
+
+/** ContactKey is one correspondent's key as the settings list shows it. */
+export interface ContactKey {
+  email: string
+  fingerprint: string
+  source: string
+  firstSeen: string
+  expires: string
+  state: 'ready' | 'verified' | 'missing' | 'changed'
+  problem: string
+  preference: ContactEncryptPref
+  previous: string
+}
+
+/** KeyLookupLogEntry is one request a key lookup made. */
+export interface KeyLookupLogEntry {
+  at: string
+  source: string
+  email: string
+  outcome: 'found' | 'none' | 'unusable' | 'failed'
 }

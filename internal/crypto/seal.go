@@ -58,7 +58,7 @@ func (p *PGP) Seal(email string, plaintext []byte) ([]byte, error) {
 // ErrPassphraseRequired, which the caller turns into a prompt rather than a
 // failure.
 func (p *PGP) Unseal(sealed, passphrase []byte) ([]byte, error) {
-	opened, err := p.decrypt(sealed, passphrase)
+	opened, err := p.decrypt(sealed, passphrase, nil)
 	if err != nil {
 		return nil, err
 	}

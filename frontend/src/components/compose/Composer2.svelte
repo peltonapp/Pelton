@@ -28,6 +28,9 @@
   import AnchoredPopover from '../common/AnchoredPopover.svelte'
   import SendButton from './v2/SendButton.svelte'
   import ProtectionMenu from './v2/ProtectionMenu.svelte'
+  import EncryptionLock from './v2/EncryptionLock.svelte'
+  import EncryptionNotice from './v2/EncryptionNotice.svelte'
+  import { AutoEncryptWatch, needsPlaintextConfirm, willEncrypt, type EncryptOverride } from '../../lib/autoencrypt'
   import HeaderFields from './v2/HeaderFields.svelte'
   import AttachmentStrip from './v2/AttachmentStrip.svelte'
   import FormatBar from './v2/FormatBar.svelte'
@@ -38,7 +41,7 @@
   import SendCheckBar from './v2/SendCheckBar.svelte'
   import { sendIssues, type SendIssue } from '../../lib/sendcheck'
   import { canArchiveAfter, sendPlan, type SendVariant } from '../../lib/sendvariants'
-  import { emitArchiveAfterSend } from '../../lib/events'
+  import { emitArchiveAfterSend, onAutoEncryptChanged } from '../../lib/events'
   import { parseAddressList } from '../../lib/mailcompose'
   import { snippets } from '../../stores/snippets'
   import { expandPlaceholders, matchTrigger, recipientNames, snippetFields } from '../../lib/snippets'
@@ -66,8 +69,8 @@
     type ComposeSession,
     type ReplyKind,
   } from '../../stores/compose'
-  import { draftState, hasContent, ProtectionWatch, recipientsOf, saveSession, sendSession, settled } from '../../lib/composeactions'
-  import { openComposeWindow, showMessageInMainWindow, titleBarDoubleClick } from '../../lib/api'
+  import { draftState, hasContent, isEncrypting, ProtectionWatch, recipientsOf, saveSession, sendSession, settled } from '../../lib/composeactions'
+  import { acceptContactKey, lookupRecipientKeys, openComposeWindow, setContactEncryption, showMessageInMainWindow, titleBarDoubleClick } from '../../lib/api'
   import { isDemoActive } from '../../lib/demo'
   import { convertEditorBody, htmlToText } from '../../lib/richtext'
   import { withSignatureBlock } from '../../lib/signatureblock'
@@ -83,7 +86,7 @@
   import { revealMessage } from '../../stores/selection'
   import { focusPane } from '../../stores/tabs'
   import { errorMessage, toastError, toastInfo } from '../../stores/toast'
-  import type { FollowUpInterval, ProtectionStatus, Signature, Snippet } from '../../lib/types'
+  import type { AutoEncryptStatus, ContactEncryptPref, FollowUpInterval, ProtectionStatus, RecipientEncryption, Signature, Snippet } from '../../lib/types'
   import type CodeMirrorEditor from './CodeMirrorEditor.svelte'
   import type RichEditorView from './RichEditor.svelte'
 
@@ -224,12 +227,103 @@
   })
 
   $: recipientList = recipientsOf(session)
-  $: void refreshProtection(session.accountId, recipientList)
+  $: if (!autoOn) void refreshProtection(session.accountId, recipientList)
 
   async function refreshProtection(accountId: number, recipients: string[]): Promise<void> {
     if (await protectionWatch.refresh(accountId, recipients)) {
       protectionStatus = protectionWatch.status
     }
+  }
+
+  // with automatic encryption on, what the recipients' keys allow decides
+  // the protection, the user can override it per message, and keys missing
+  // are looked up once typing pauses.
+  const lookupPauseMs = 1200
+  const encryptWatch = new AutoEncryptWatch()
+  let encryptStatus: AutoEncryptStatus | null = null
+  let lookupTimer: ReturnType<typeof setTimeout> | undefined
+
+  $: autoOn = $prefs.autoEncrypt
+  $: if (autoOn !== (session.autoEncrypt ?? false)) {
+    updateCompose(session.id, { autoEncrypt: autoOn })
+  }
+  $: encryptQuery = {
+    accountId: session.accountId,
+    to: parseAddressList(session.to).map((a) => a.email),
+    cc: parseAddressList(session.cc).map((a) => a.email),
+    bcc: parseAddressList(session.bcc).map((a) => a.email),
+    inReplyTo: session.inReplyTo,
+  }
+  $: if (autoOn) void refreshEncryption(encryptQuery)
+  $: encrypting = autoOn && willEncrypt(encryptStatus, session.encrypt)
+  $: if (autoOn && encryptStatus) syncProtection(encrypting)
+
+  async function refreshEncryption(query: typeof encryptQuery, force = false): Promise<void> {
+    if (await encryptWatch.refresh(query, force)) {
+      encryptStatus = encryptWatch.status
+      clearTimeout(lookupTimer)
+      lookupTimer = setTimeout(() => void lookUpMissing(), lookupPauseMs)
+    }
+  }
+
+  async function lookUpMissing(): Promise<void> {
+    const emails = encryptWatch.lookupCandidates()
+    if (emails.length === 0) {
+      return
+    }
+    try {
+      if (await lookupRecipientKeys(session.accountId, emails)) {
+        await refreshEncryption(encryptQuery, true)
+      }
+    } catch {
+      // a failed lookup leaves the recipient without a key, which the lock says.
+    }
+  }
+
+  function syncProtection(on: boolean): void {
+    const want = on ? 'signencrypt' : 'none'
+    if ((getSession(session.id) ?? session).protection !== want) {
+      updateCompose(session.id, { protection: want })
+    }
+  }
+
+  function setOverride(value: 'on' | 'off' | 'auto'): void {
+    const encrypt: EncryptOverride = value === 'auto' ? undefined : value
+    updateCompose(session.id, { encrypt })
+  }
+
+  async function setPreference(email: string, pref: ContactEncryptPref): Promise<void> {
+    try {
+      await setContactEncryption(email, pref)
+      await refreshEncryption(encryptQuery, true)
+    } catch (err) {
+      toastError(errorMessage(err))
+    }
+  }
+
+  async function acceptKey(r: RecipientEncryption): Promise<void> {
+    try {
+      await acceptContactKey(r.email, r.fingerprint)
+      toastInfo($t('autoEncrypt.changed.accepted').replace('{email}', r.email))
+      await refreshEncryption(encryptQuery, true)
+    } catch (err) {
+      toastError(errorMessage(err))
+    }
+  }
+
+  const stopEncryptEvents = onAutoEncryptChanged(() => {
+    if (autoOn) {
+      void refreshEncryption(encryptQuery, true)
+    }
+  })
+  onDestroy(() => {
+    stopEncryptEvents()
+    clearTimeout(lookupTimer)
+  })
+
+  // a draft saved encrypted opens encrypted, whatever the recommendation says.
+  if (session.saved && session.encrypt === undefined && isEncrypting(session.protection) && $prefs.autoEncrypt) {
+    updateCompose(session.id, { encrypt: 'on' })
   }
 
   function wait(ms: number): Promise<void> {
@@ -315,6 +409,10 @@
       return
     }
     checkIssue = null
+    if (autoOn && needsPlaintextConfirm(encryptStatus, encrypting, current.plaintextConfirmed ?? false)) {
+      toastInfo($t('autoEncrypt.downgrade.confirmFirst'))
+      return
+    }
     const plan = sendPlan(current, variant, $prefs, new Date(), interval)
     const followUpBefore = current.followUpAt
     if (plan.followUpAt) {
@@ -780,7 +878,17 @@
           <Ph svg={xIcon} size={16} />
         </button>
       {:else}
-      <ProtectionMenu protection={session.protection} status={protectionStatus} on:change={(e) => updateCompose(session.id, { protection: e.detail })} />
+      {#if autoOn}
+        <EncryptionLock
+          status={encryptStatus}
+          encrypt={encrypting}
+          override={session.encrypt}
+          on:override={(e) => setOverride(e.detail)}
+          on:preference={(e) => void setPreference(e.detail.email, e.detail.pref)}
+        />
+      {:else}
+        <ProtectionMenu protection={session.protection} status={protectionStatus} on:change={(e) => updateCompose(session.id, { protection: e.detail })} />
+      {/if}
       <FollowUpMenu
         bind:this={followMenu}
         compact={!session.followUpAt}
@@ -850,6 +958,18 @@
       />
     {/if}
 
+    {#if autoOn}
+      <EncryptionNotice
+        status={encryptStatus}
+        encrypt={encrypting}
+        plaintextConfirmed={session.plaintextConfirmed ?? false}
+        on:accept={(e) => void acceptKey(e.detail)}
+        on:plain={() => updateCompose(session.id, { encrypt: 'off', plaintextConfirmed: true })}
+        on:encrypt={() => setOverride('on')}
+        on:confirmPlain={() => updateCompose(session.id, { plaintextConfirmed: true })}
+      />
+    {/if}
+
     {#if rich && !quick}
       <FormatBar editor={richEditor} {revision} />
     {/if}
@@ -912,7 +1032,19 @@
         <button type="button" class="c2-tool compact" aria-label={$t('compose.attach.button')} use:tip={{ text: $t('compose.attach.button'), side: 'top' }} on:click={() => strip.pick()}>
           <Ph svg={paperclipIcon} size={16} />
         </button>
-        <ProtectionMenu compact menuAbove protection={session.protection} status={protectionStatus} on:change={(e) => updateCompose(session.id, { protection: e.detail })} />
+        {#if autoOn}
+          <EncryptionLock
+            compact
+            menuAbove
+            status={encryptStatus}
+            encrypt={encrypting}
+            override={session.encrypt}
+            on:override={(e) => setOverride(e.detail)}
+            on:preference={(e) => void setPreference(e.detail.email, e.detail.pref)}
+          />
+        {:else}
+          <ProtectionMenu compact menuAbove protection={session.protection} status={protectionStatus} on:change={(e) => updateCompose(session.id, { protection: e.detail })} />
+        {/if}
         <FollowUpMenu
           bind:this={followMenu}
           compact

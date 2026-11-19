@@ -16,6 +16,7 @@
   import MailBody from './MailBody.svelte'
   import PhishingNotice from './PhishingNotice.svelte'
   import ProtectedNotice from './ProtectedNotice.svelte'
+  import EncryptionIndicator from './EncryptionIndicator.svelte'
   import AttachmentStrip from './AttachmentStrip.svelte'
   import FollowUpNotice from './FollowUpNotice.svelte'
   import PromiseStrip from './PromiseStrip.svelte'
@@ -134,6 +135,9 @@
         {/if}
         {#if detail.phishing.level !== 'none'}
           <PhishingNotice report={detail.phishing} messageId={detail.id} />
+        {/if}
+        {#if detail.encryption}
+          <EncryptionIndicator encryption={detail.encryption} messageId={detail.id} />
         {/if}
         {#if $prefs.design === 'new' && $promiseSettings.enabled && detail.messageId}
           <PromiseStrip messageId={detail.id} accountId={detail.accountId} mailId={detail.messageId} />
