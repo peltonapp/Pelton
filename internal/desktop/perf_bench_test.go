@@ -577,6 +577,31 @@ func BenchmarkFeedSidebar(b *testing.B) {
 	}
 }
 
+// BenchmarkListingIndexMigration is what migration 0106 costs on the synthetic
+// store: its indexes are dropped and the migration's sql run again. Run it with
+// -benchtime 1x.
+func BenchmarkListingIndexMigration(b *testing.B) {
+	app, _ := benchStore(b)
+	migration, err := os.ReadFile(filepath.Join("..", "storage", "migrations", "0106_listing_indexes.sql"))
+	if err != nil {
+		b.Fatal(err)
+	}
+	h := app.store.Handle()
+	b.ResetTimer()
+	for b.Loop() {
+		b.StopTimer()
+		for _, name := range []string{"idx_messages_listing", "idx_messages_copies", "idx_feed_entries_unread_list"} {
+			if _, err := h.ExecContext(app.ctx, `DROP INDEX IF EXISTS `+name); err != nil {
+				b.Fatal(err)
+			}
+		}
+		b.StartTimer()
+		if _, err := h.ExecContext(app.ctx, string(migration)); err != nil {
+			b.Fatal(err)
+		}
+	}
+}
+
 func BenchmarkVaultIndexLoad(b *testing.B) {
 	app, _ := benchStore(b)
 	b.ResetTimer()
