@@ -19,7 +19,7 @@ import {
   updateTask,
 } from '../lib/api'
 import { onCalendarChanged, type Unsubscribe } from '../lib/events'
-import { badgeCount } from '../lib/tasklogic'
+import { badgeCount, type TaskScope } from '../lib/tasklogic'
 import { errorMessage, pushActions, toastError, toastInfo } from './toast'
 import { t } from '../lib/i18n'
 import type { RemovedTask, Task, TaskDraft, TaskList, TaskSaveResult, TaskSettings } from '../lib/types'
@@ -60,6 +60,9 @@ export const taskSeed = writable<number[] | null>(null)
  * do not know which mail that is, such as the command palette.
  */
 export const taskFromMailRequest = writable<boolean>(false)
+
+/** A list for the Tasks screen to show when it opens, set from elsewhere in the app. */
+export const taskScopeRequest = writable<TaskScope | null>(null)
 
 /** A task to show when the Tasks screen opens, set from elsewhere in the app. */
 export const taskFocus = writable<number | null>(null)

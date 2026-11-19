@@ -198,6 +198,8 @@
   import { setSenderPanel } from './stores/prefs'
   import { toggleReadingView } from './stores/readingview'
   import './lib/palette-tasks'
+  import './lib/palette-promises'
+  import { startPromises } from './stores/promises'
   import './lib/palette-notes'
   import { reloadVault, requestNotes, startNotes } from './stores/notes'
   import './lib/palette-chat'
@@ -517,6 +519,16 @@
   } else if (classic && stopTasks) {
     stopTasks()
     stopTasks = undefined
+  }
+
+  // the promises found in mail feed the reader's suggestions and the task
+  // lists "I owe" and "Owed to me", in the new design only.
+  let stopPromises: (() => void) | undefined
+  $: if ($prefs.design === 'new' && !stopPromises) {
+    stopPromises = startPromises()
+  } else if ($prefs.design !== 'new' && stopPromises) {
+    stopPromises()
+    stopPromises = undefined
   }
   onDestroy(() => stopTasks?.())
 

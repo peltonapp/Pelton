@@ -39,6 +39,8 @@
   import { searchAddresses } from '../../lib/api'
   import { draftOf, localZone, saveTask, toggleDone } from '../../stores/tasks'
   import NoteMentions from '../notes/NoteMentions.svelte'
+  import PromiseTaskNote from './PromiseTaskNote.svelte'
+  import { prefs } from '../../stores/prefs'
   import { t } from '../../lib/i18n'
   import type { TimeFormat } from '../../lib/format'
   import type { AddressBookEntry, Reminder, Task, TaskContact, TaskDraft, TaskList } from '../../lib/types'
@@ -497,6 +499,10 @@
         {/if}
       </div>
     </div>
+
+    {#if $prefs.design === 'new'}
+      <PromiseTaskNote {task} />
+    {/if}
 
     {#if task.mailLinks.length > 0 || task.eventUids.length > 0}
       <div class="row">

@@ -26,6 +26,7 @@
   import type { BodyDetail, RemoteSource, Verdict } from '../../lib/types'
   import { markClass, markDocument } from '../../lib/highlight'
   import { highlightTerms, searchOpenedId } from '../../stores/search'
+  import { highlightTerms as promiseTerms, promiseHighlight } from '../../stores/promises'
   import Highlight from '../common/Highlight.svelte'
   import Ph from '../common/Ph.svelte'
   import dotsIcon from '@phosphor-icons/core/assets/duotone/dots-three-duotone.svg?raw'
@@ -688,7 +689,10 @@
   }
 
   // the words of the search this message was opened from, marked in the body.
-  $: markTerms = $searchOpenedId === detail.id ? $highlightTerms : []
+  $: markTerms = [
+    ...($searchOpenedId === detail.id ? $highlightTerms : []),
+    ...($promiseHighlight?.messageId === detail.id ? promiseTerms($promiseHighlight.quote) : []),
+  ]
 
   // markMatches wraps the search words in mark elements inside the iframe's
   // own document, the same way decorateLinks adds its badges: built with

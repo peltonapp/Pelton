@@ -25,7 +25,11 @@
   import { errorMessage, toastError, toastSuccess } from '../../stores/toast'
   import { openSettingsAt } from '../../stores/settingsnav'
   import { calendarColor, paletteHex, paletteSize } from '../../lib/calformat'
-  import { inSmartList, smartLists, type SmartList, type TaskScope } from '../../lib/tasklogic'
+  import { inSmartList, promiseLists, smartLists, type SmartList, type TaskScope } from '../../lib/tasklogic'
+  import oweIcon from '@phosphor-icons/core/assets/duotone/arrow-circle-up-right-duotone.svg?raw'
+  import owedIcon from '@phosphor-icons/core/assets/duotone/arrow-circle-down-left-duotone.svg?raw'
+  import { owedByTask, promiseSettings } from '../../stores/promises'
+  import { prefs } from '../../stores/prefs'
   import { t } from '../../lib/i18n'
   import type { TaskList } from '../../lib/types'
 
@@ -40,9 +44,12 @@
     overdue: overdueIcon,
     nodate: nodateIcon,
     completed: doneIcon,
+    iowe: oweIcon,
+    owedtome: owedIcon,
   }
 
   $: counts = Object.fromEntries(smartLists.map((k) => [k, $tasks.filter((x) => inSmartList(x, k, $taskClock)).length])) as Record<SmartList, number>
+  $: promiseCounts = Object.fromEntries(promiseLists.map((k) => [k, $tasks.filter((x) => inSmartList(x, k, $taskClock, $owedByTask)).length])) as Record<SmartList, number>
   $: openIn = (id: number): number => $tasks.filter((x) => x.listId === id && !x.done).length
 
   type Group = { key: string; label: string; error: string; items: TaskList[] }
@@ -200,6 +207,28 @@
       </li>
     {/each}
   </ul>
+
+  {#if $prefs.design === 'new' && $promiseSettings.enabled}
+    <ul class="smart" role="list" aria-label={$t('tasks.promiseLists')}>
+      {#each promiseLists as key (key)}
+        <li>
+          <button
+            type="button"
+            class="entry"
+            class:on={isOn({ kind: 'smart', key })}
+            aria-current={isOn({ kind: 'smart', key }) ? 'page' : undefined}
+            on:click={() => dispatch('scope', { kind: 'smart', key })}
+          >
+            <Ph svg={smartIcons[key]} size={16} />
+            <span class="name">{$t(`tasks.smart.${key}`)}</span>
+            {#if promiseCounts[key] > 0}
+              <span class="count">{promiseCounts[key]}</span>
+            {/if}
+          </button>
+        </li>
+      {/each}
+    </ul>
+  {/if}
 
   <div class="lists">
     {#each groups as group (group.key)}

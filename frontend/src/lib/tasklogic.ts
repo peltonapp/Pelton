@@ -6,11 +6,17 @@
 import { addDays, dayKey, parseDayKey, startOfDay } from './caldate'
 import type { Task, TaskBadge, TaskSort } from './types'
 
-/** The smart lists every install has. */
-export type SmartList = 'today' | 'upcoming' | 'overdue' | 'nodate' | 'completed'
+/** The smart lists: the ones every install has, and the two of promises found in mail. */
+export type SmartList = 'today' | 'upcoming' | 'overdue' | 'nodate' | 'completed' | 'iowe' | 'owedtome'
 
-/** The smart lists in sidebar order. */
+/** The smart lists every install has, in sidebar order. */
 export const smartLists: SmartList[] = ['today', 'upcoming', 'overdue', 'nodate', 'completed']
+
+/** The smart lists of promises, shown while promises are on. */
+export const promiseLists: SmartList[] = ['iowe', 'owedtome']
+
+/** Who owes the task an accepted promise became, by task UID. */
+export type OwedMap = ReadonlyMap<string, 'mine' | 'theirs'>
 
 /** What the task list shows: a smart list or one task list. */
 export type TaskScope = { kind: 'smart'; key: SmartList } | { kind: 'list'; id: number }
@@ -51,10 +57,15 @@ export function isDueToday(task: Pick<Task, 'due' | 'done'>, now: Date): boolean
 /**
  * Whether a task belongs in a smart list. Today holds what is due today,
  * Overdue what is past, Upcoming what is due after today, No date the open
- * tasks without one and Completed the done ones.
+ * tasks without one and Completed the done ones. I owe and Owed to me hold
+ * the open tasks of accepted promises, as owed says.
  */
-export function inSmartList(task: Pick<Task, 'due' | 'done'>, key: SmartList, now: Date): boolean {
+export function inSmartList(task: Pick<Task, 'due' | 'done'> & Partial<Pick<Task, 'uid'>>, key: SmartList, now: Date, owed?: OwedMap): boolean {
   switch (key) {
+    case 'iowe':
+      return !task.done && owed?.get(task.uid ?? '') === 'mine'
+    case 'owedtome':
+      return !task.done && owed?.get(task.uid ?? '') === 'theirs'
     case 'today':
       return isDueToday(task, now)
     case 'overdue':
@@ -69,11 +80,11 @@ export function inSmartList(task: Pick<Task, 'due' | 'done'>, key: SmartList, no
 }
 
 /** The tasks a scope shows. Completed tasks show only in Completed and in their list. */
-export function tasksInScope(tasks: Task[], scope: TaskScope, now: Date): Task[] {
+export function tasksInScope(tasks: Task[], scope: TaskScope, now: Date, owed?: OwedMap): Task[] {
   if (scope.kind === 'list') {
     return tasks.filter((t) => t.listId === scope.id)
   }
-  return tasks.filter((t) => inSmartList(t, scope.key, now))
+  return tasks.filter((t) => inSmartList(t, scope.key, now, owed))
 }
 
 // a priority's place when sorting: 1 first, 9 last, none after that.
