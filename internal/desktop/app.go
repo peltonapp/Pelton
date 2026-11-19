@@ -431,6 +431,7 @@ func (a *App) startup(ctx context.Context) {
 
 	a.startBackgroundServices()
 	a.startScripts()
+	goSafe("promise clock", a.runPromiseClock)
 
 	// the notes folder, when the user has one: the mail reader and the other
 	// spaces list the notes about what they show.
