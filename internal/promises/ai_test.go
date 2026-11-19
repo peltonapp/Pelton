@@ -53,7 +53,9 @@ func TestCheckWithAI(t *testing.T) {
 }
 
 func TestCheckWithAIRefusesAnUnreadableAnswer(t *testing.T) {
-	chat := func(context.Context, ai.Request) (ai.Response, error) { return ai.Response{Text: "sure! here you go"}, nil }
+	chat := func(context.Context, ai.Request) (ai.Response, error) {
+		return ai.Response{Text: "sure! here you go"}, nil
+	}
 	_, err := CheckWithAI(context.Background(), chat, "m", Input{Text: "I'll send it tomorrow.", Clock: Clock{Ref: time.Now()}})
 	if !errors.Is(err, ErrAIAnswer) {
 		t.Fatalf("err %v", err)
