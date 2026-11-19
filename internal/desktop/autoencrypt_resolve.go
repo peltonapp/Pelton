@@ -301,12 +301,13 @@ func (a *App) AutoEncryptStatus(q AutoEncryptQuery) (AutoEncryptStatusDTO, error
 	out.ReplyToEncrypted = a.replyToEncrypted(q.InReplyTo)
 	keys, kerr := a.keyStore()
 	if kerr == nil {
-		if _, _, err := a.ownKey(keys, account.Email); err == nil {
-			out.OwnKey = true
+		if fp, _, err := a.ownKey(keys, account.Email); err == nil {
+			_, err := keys.AutocryptKeyData(fp, account.Email, a.autoNow())
+			out.OwnKey = err == nil
 		}
 	}
 	if !out.OwnKey && kerr == nil {
-		goSafe("making encryption keys", a.ensureOwnKeys)
+		a.ensureOwnKeysSoon()
 	}
 
 	resolved, bcc := a.resolveAll(keys, account.ID, q, out.ReplyToEncrypted)

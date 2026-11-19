@@ -6,9 +6,12 @@ import (
 	"encoding/base64"
 	"errors"
 	"io"
+	"mime"
+	"mime/multipart"
 	"net"
 	"net/http"
 	"net/http/httptest"
+	"net/mail"
 	"net/netip"
 	"strings"
 	"sync/atomic"
@@ -209,6 +212,23 @@ func TestEnableMakesAProtectedKeyPerMailbox(t *testing.T) {
 	app.ensureOwnKeys()
 	if list, _ := keys.List(); len(list) != 1 {
 		t.Errorf("%d keys after a second pass", len(list))
+	}
+}
+
+func TestOwnKeyIsRenewedBeforeItExpires(t *testing.T) {
+	app, _ := autoTestApp(t)
+	clock := time.Now()
+	app.autoEnc.now = func() time.Time { return clock }
+	switchOn(t, app, KeySourcesDTO{Autocrypt: true})
+	before, _ := app.GetAutoEncryptSettings()
+	expires, _ := time.Parse(time.RFC3339, before.Accounts[0].Expires)
+
+	clock = expires.Add(-90 * 24 * time.Hour)
+	app.ensureOwnKeys()
+	after, _ := app.GetAutoEncryptSettings()
+	renewed, _ := time.Parse(time.RFC3339, after.Accounts[0].Expires)
+	if !renewed.After(expires) || after.Accounts[0].Fingerprint != before.Accounts[0].Fingerprint {
+		t.Errorf("expiry %v -> %v", expires, renewed)
 	}
 }
 
@@ -673,6 +693,87 @@ func TestSyncHeadersAreAppliedInTheBackground(t *testing.T) {
 	}
 	if _, ok, _ := app.store.AutocryptPeerFor(app.ctx, "me@example.com"); ok {
 		t.Error("a header from the user's own address was applied")
+	}
+}
+
+// setupFile pulls the setup file out of a sent Autocrypt Setup Message.
+func setupFile(t *testing.T, raw []byte) []byte {
+	t.Helper()
+	msg, err := mail.ReadMessage(bytes.NewReader(raw))
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, params, err := mime.ParseMediaType(msg.Header.Get("Content-Type"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	r := multipart.NewReader(msg.Body, params["boundary"])
+	for {
+		part, err := r.NextPart()
+		if err != nil {
+			t.Fatal("no setup file in the message")
+		}
+		if strings.HasPrefix(part.Header.Get("Content-Type"), "application/autocrypt-setup") {
+			data, _ := io.ReadAll(base64.NewDecoder(base64.StdEncoding, part))
+			return data
+		}
+	}
+}
+
+func TestSetupMessageImportsOnTheOtherDevice(t *testing.T) {
+	first, firstAccount := autoTestApp(t)
+	switchOn(t, first, KeySourcesDTO{Autocrypt: true})
+	code, err := first.SendKeyToOtherDevice(firstAccount)
+	if err != nil {
+		t.Fatal(err)
+	}
+	file := setupFile(t, sentRaw(t, first))
+	firstKeys, _ := first.keyStore()
+	moved, _ := firstKeys.SenderKey("me@example.com")
+
+	second, secondAccount := autoTestApp(t)
+	switchOn(t, second, KeySourcesDTO{Autocrypt: true})
+	secondKeys, _ := second.keyStore()
+	own, _ := secondKeys.SenderKey("me@example.com")
+
+	folder, err := second.store.CreateFolder(second.ctx, &storage.Folder{AccountID: secondAccount, Name: "INBOX", IMAPPath: "INBOX"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	id, err := second.store.InsertMessageWithAttachments(second.ctx, &storage.Message{
+		AccountID: secondAccount, FolderID: folder, UID: 1, FromAddress: "me@example.com", Subject: "Autocrypt Setup Message",
+	}, []storage.IncomingAttachment{{Filename: setupMessageFilename, ContentType: setupMessageType, Content: bytes.NewReader(file)}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	detail, err := second.GetMessage(id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if detail.Encryption == nil || !detail.Encryption.SetupMessage {
+		t.Fatalf("setup message not recognised: %+v", detail.Encryption)
+	}
+	if err := second.ImportKeyFromSetupMessage(id, "0000-0000-0000-0000-0000-0000-0000-0000-0000"); err == nil {
+		t.Error("a wrong code imported the key")
+	}
+	if err := second.ImportKeyFromSetupMessage(id, code); err != nil {
+		t.Fatalf("import: %v", err)
+	}
+	now, _ := secondKeys.SenderKey("me@example.com")
+	if crypto.Fingerprint(now) != crypto.Fingerprint(moved) {
+		t.Error("the key from the other device is not the one used now")
+	}
+	// the key it replaced stays, to read what was encrypted to it.
+	list, _ := secondKeys.List()
+	found := false
+	for _, k := range list {
+		found = found || k.Fingerprint == crypto.Fingerprint(own)
+	}
+	if !found {
+		t.Error("the replaced key was deleted")
+	}
+	if fp, pass, err := second.ownKey(secondKeys, "me@example.com"); err != nil || pass == nil || fp != crypto.Fingerprint(moved) {
+		t.Errorf("imported key cannot be used without asking: %v", err)
 	}
 }
 

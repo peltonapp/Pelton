@@ -71,8 +71,10 @@ type autoEncryptState struct {
 	autocrypt atomic.Bool
 	loaded    atomic.Bool
 
-	// keysMu runs one own-key pass at a time.
-	keysMu sync.Mutex
+	// keysMu runs one own-key pass at a time; lastEnsure is when the composer
+	// last started one, in unix seconds.
+	keysMu     sync.Mutex
+	lastEnsure atomic.Int64
 
 	// incoming is the bounded queue of headers sync handed over; draining
 	// says a goroutine is working through it.
@@ -334,6 +336,22 @@ func newKeyPassphrase() ([]byte, error) {
 		return nil, err
 	}
 	return []byte(base64.RawStdEncoding.EncodeToString(buf)), nil
+}
+
+// ensureRetry is how long after one own-key pass another may be started from
+// the composer, so a mailbox whose key cannot be made is not retried on every
+// keystroke.
+const ensureRetry = time.Minute
+
+// ensureOwnKeysSoon starts an own-key pass in the background unless one ran
+// within ensureRetry.
+func (a *App) ensureOwnKeysSoon() {
+	now := time.Now().Unix()
+	last := a.autoEnc.lastEnsure.Load()
+	if now-last < int64(ensureRetry/time.Second) || !a.autoEnc.lastEnsure.CompareAndSwap(last, now) {
+		return
+	}
+	goSafe("making encryption keys", a.ensureOwnKeys)
 }
 
 // ensureOwnKeys gives every mailbox without a key one, and renews generated
