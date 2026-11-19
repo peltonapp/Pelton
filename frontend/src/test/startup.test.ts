@@ -3,20 +3,29 @@
 // use, and a static import of any of them would put it back on the startup
 // path without failing anything else.
 import { describe, expect, it } from 'vitest'
-import fs from 'node:fs'
-import path from 'node:path'
-import { fileURLToPath } from 'node:url'
 
-const src = path.dirname(path.dirname(fileURLToPath(import.meta.url)))
+const sources = import.meta.glob('/src/**/*.{ts,svelte}', { query: '?raw', import: 'default', eager: true }) as Record<string, string>
 
 const importPattern = /(?:^|[\s;])(?:import|export)\s+(?!type\s)(?:[^'"`;]*?\sfrom\s+)?['"]([^'"]+)['"]/g
 
 function scriptOf(file: string): string {
-  const text = fs.readFileSync(file, 'utf8')
+  const text = sources[file]
   if (!file.endsWith('.svelte')) {
     return text
   }
   return [...text.matchAll(/<script[^>]*>([\s\S]*?)<\/script>/g)].map((m) => m[1]).join('\n')
+}
+
+function join(dir: string, rel: string): string {
+  const parts = dir.split('/')
+  for (const part of rel.split('/')) {
+    if (part === '..') {
+      parts.pop()
+    } else if (part !== '.') {
+      parts.push(part)
+    }
+  }
+  return parts.join('/')
 }
 
 function resolve(from: string, spec: string): string | null {
@@ -24,9 +33,9 @@ function resolve(from: string, spec: string): string | null {
   if (!bare.startsWith('.')) {
     return null
   }
-  const base = path.resolve(path.dirname(from), bare)
+  const base = join(from.slice(0, from.lastIndexOf('/')), bare)
   for (const candidate of [base, `${base}.ts`, `${base}/index.ts`]) {
-    if (fs.existsSync(candidate) && fs.statSync(candidate).isFile()) {
+    if (candidate in sources) {
       return candidate
     }
   }
@@ -47,9 +56,6 @@ function staticGraph(entry: string): Graph {
   const queue = [entry]
   while (queue.length > 0) {
     const file = queue.shift()!
-    if (!/\.(ts|svelte|js)$/.test(file)) {
-      continue
-    }
     const code = scriptOf(file).replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '')
     for (const m of code.matchAll(importPattern)) {
       const spec = m[1]
@@ -72,18 +78,18 @@ function staticGraph(entry: string): Graph {
 }
 
 function chain(graph: Graph, file: string): string {
-  const out = [path.relative(src, file)]
+  const out = [file]
   for (let at = graph.via.get(file); at; at = graph.via.get(at)) {
-    out.unshift(path.relative(src, at))
+    out.unshift(at)
   }
   return out.join(' -> ')
 }
 
 const windows = ['App.svelte', 'MessageWindow.svelte', 'ComposeWindow.svelte', 'OutboxWindow.svelte', 'QuickComposeWindow.svelte']
 
-const entry = staticGraph(path.join(src, 'main.ts'))
+const entry = staticGraph('/src/main.ts')
 // main.ts loads App.svelte before it mounts the main window.
-const main = staticGraph(path.join(src, 'App.svelte'))
+const main = staticGraph('/src/App.svelte')
 
 const lazyModules = [
   'components/compose/Compose.svelte',
@@ -111,21 +117,21 @@ const lazyPackages = ['@codemirror/', 'codemirror', '@replit/codemirror-vim', '@
 
 describe('startup imports', () => {
   it('follows the imports it is meant to', () => {
-    expect(entry.files.has(path.join(src, 'Root.svelte'))).toBe(true)
-    expect(main.files.has(path.join(src, 'components/list/MessageList.svelte'))).toBe(true)
-    expect(main.files.has(path.join(src, 'lib/i18n.ts'))).toBe(true)
+    expect(entry.files.has('/src/Root.svelte')).toBe(true)
+    expect(main.files.has('/src/components/list/MessageList.svelte')).toBe(true)
+    expect(main.files.has('/src/lib/i18n.ts')).toBe(true)
     expect(main.packages.has('svelte')).toBe(true)
   })
 
   it.each(windows)('main.ts does not statically import %s', (rel) => {
-    const file = path.join(src, rel)
-    expect(fs.existsSync(file)).toBe(true)
+    const file = `/src/${rel}`
+    expect(file in sources).toBe(true)
     expect(entry.files.has(file) ? chain(entry, file) : '').toBe('')
   })
 
   it.each(lazyModules)('the main window does not statically import %s', (rel) => {
-    const file = path.join(src, rel)
-    expect(fs.existsSync(file)).toBe(true)
+    const file = `/src/${rel}`
+    expect(file in sources).toBe(true)
     for (const graph of [entry, main]) {
       expect(graph.files.has(file) ? chain(graph, file) : '').toBe('')
     }
@@ -134,7 +140,7 @@ describe('startup imports', () => {
   it('reaches no heavy package statically', () => {
     for (const graph of [entry, main]) {
       const heavy = [...graph.packages].filter((p) => lazyPackages.some((h) => p === h || p.startsWith(h)))
-      expect(heavy.map((p) => `${p} via ${path.relative(src, graph.via.get(p) ?? '')}`)).toEqual([])
+      expect(heavy.map((p) => `${p} via ${graph.via.get(p) ?? ''}`)).toEqual([])
     }
   })
 })
