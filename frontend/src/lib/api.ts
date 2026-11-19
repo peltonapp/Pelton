@@ -120,6 +120,9 @@ import type {
   AttachmentPage,
   AttachmentQuery,
   SenderOverview,
+  Passport,
+  Shield,
+  PrivacyReport,
   ThemeInfo,
   ThemeApply,
   ThemeImportPreview,
@@ -627,6 +630,55 @@ export function unsubscribeMessage(id: number): Promise<void> {
     return Promise.resolve()
   }
   return App.Unsubscribe(id)
+}
+
+/** Records that the user opened a message's unsubscribe web page, for the still-sending watch. */
+export function noteUnsubscribeLink(id: number): Promise<void> {
+  return isDemoActive() ? Promise.resolve() : App.NoteUnsubscribeLink(id)
+}
+
+// the demo's sample ids can be real messages of the install behind it, so the
+// passport and the shield say nothing in demo mode rather than read those.
+const demoNone = (): Promise<never> => Promise.reject(new Error('demo'))
+
+/** The sender passport of a message. */
+export function senderPassport(id: number): Promise<Passport> {
+  return isDemoActive() ? demoNone() : (App.GetSenderPassport(id) as unknown as Promise<Passport>)
+}
+
+/** Records "known" or "impostor" for a sender, or forgets either with ''. */
+export function setSenderMark(address: string, mark: '' | 'known' | 'impostor'): Promise<void> {
+  return isDemoActive() ? Promise.resolve() : App.SetSenderMark(address, mark)
+}
+
+/** What a message tried to learn about its reader, counted for the report. */
+export function privacyShield(id: number): Promise<Shield> {
+  return isDemoActive() ? demoNone() : (App.GetPrivacyShield(id) as unknown as Promise<Shield>)
+}
+
+/** A message's html with remote images loaded and tracking pixels left out. */
+export function getMessageHtmlBlockingTrackers(id: number): Promise<string> {
+  return isDemoActive() ? Promise.resolve(demoHtml()) : App.GetMessageHTMLBlockingTrackers(id)
+}
+
+/** The tracking report over the last days days, 0 for all of it. */
+export function privacyReport(days: number): Promise<PrivacyReport> {
+  return App.PrivacyReport(days).then((r) => ({ ...r, rows: r.rows ?? [] }) as unknown as PrivacyReport)
+}
+
+/** Forgets every tracking counter. */
+export function clearPrivacyHistory(): Promise<void> {
+  return App.ClearPrivacyHistory()
+}
+
+/** Stops the still-sending notice for a sender until more mail comes. */
+export function dismissStillSending(sender: string): Promise<void> {
+  return App.DismissStillSending(sender)
+}
+
+/** Moves new mail from an unsubscribed sender to junk or trash, or stops with ''. */
+export function blockUnsubscribedSender(sender: string, where: '' | 'junk' | 'trash'): Promise<void> {
+  return App.BlockUnsubscribedSender(sender, where)
 }
 
 // getMessageSource fetches a message's raw RFC 822 source on demand over imap.
@@ -2203,6 +2255,8 @@ export const SettingKeys = {
   notifyActionMarkRead: 'notify_action_mark_read',
   notifyActionReply: 'notify_action_reply',
   cleanLinks: 'clean_links',
+  privacyCounters: 'privacy_counters',
+  unsubscribeGraceDays: 'unsubscribe_grace_days',
   autoconfigLookup: 'autoconfig_lookup',
   verboseSync: 'verbose_sync',
   syncProgressBar: 'sync_progress_bar',

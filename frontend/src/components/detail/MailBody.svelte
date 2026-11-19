@@ -13,7 +13,8 @@
   import { IconPhoto, IconUserCheck, IconWorldCheck, IconMailCheck, IconShieldSearch, IconChevronDown, IconEyeOff, IconCopy, IconExternalLink } from '@tabler/icons-svelte'
   import { resolveLink } from '../../lib/linkclean'
   import { prefs } from '../../stores/prefs'
-  import { getMessageHtml, trustSenderImages, allowDomainImages, allowRemoteForMessage, scanUrl } from '../../lib/api'
+  import { getMessageHtml, getMessageHtmlBlockingTrackers, trustSenderImages, allowDomainImages, allowRemoteForMessage, scanUrl } from '../../lib/api'
+  import { guarded, imageRequest, linkCheck, noteLoaded, trackedLink } from '../../stores/trust'
   import { setBodyHtml } from '../../stores/message'
   import { openContextMenu, type MenuItem } from '../../stores/contextmenu'
   import { virusTotal, linkVerdicts, putLinkVerdict, scanEnabled } from '../../stores/virustotal'
@@ -744,10 +745,25 @@
 
   let hoverUrl = ''
   let hoverCleaned = false
+  let hoverVia = ''
 
-  // openLink opens a link in the system browser, cleaned when that is on.
+  // the sender passport and the shield reach a mail's links in the new design
+  // only, and never a feed entry's.
+  $: trustLinks = $prefs.design === 'new' && !remote
+  $: if (trustLinks && $imageRequest === detail.id) {
+    imageRequest.set(null)
+    void loadRemote(false, true)
+  }
+
+  // openLink opens a link in the system browser, cleaned when that is on. A
+  // mail with a strong sender warning shows where the link goes first.
   function openLink(href: string): void {
-    openURL(resolveLink(href, cleanOn).url)
+    const url = resolveLink(href, cleanOn).url
+    if (trustLinks && /^https?:/i.test(href) && guarded(detail.id)) {
+      linkCheck.set({ messageId: detail.id, url, item: trackedLink(detail.id, href) })
+      return
+    }
+    openURL(url)
   }
 
   // showHover updates the status overlay with the address a hovered link goes
@@ -756,11 +772,16 @@
   // is anchored to the message pane, outside its scroll area.
   function showHover(href: string): void {
     const link = /^https?:/i.test(href) ? resolveLink(href, cleanOn) : null
-    const shown = /^mailto:/i.test(href) ? href.slice(7).split('?')[0] : (link?.url ?? '')
+    // a tracking redirect whose destination is in its own url shows where it
+    // really goes, and through whom.
+    const tracked = trustLinks && link && !link.unwrapped ? trackedLink(detail.id, href) : null
+    const via = tracked?.destination ? tracked.host : ''
+    const shown = /^mailto:/i.test(href) ? href.slice(7).split('?')[0] : via ? (tracked?.destination ?? '') : (link?.url ?? '')
     const cleaned = link?.changed ?? false
-    if (shown === hoverUrl && cleaned === hoverCleaned) return
+    if (shown === hoverUrl && cleaned === hoverCleaned && via === hoverVia) return
     hoverUrl = shown
     hoverCleaned = cleaned
+    hoverVia = via
     hoverSlide = 0
     if (shown) void measureHover()
   }
@@ -853,6 +874,11 @@
       items.push({ label: $t('links.copy'), icon: IconCopy, action: () => void copyLink(link.url) })
       if (link.changed) {
         items.push({ label: $t('links.openOriginal'), icon: IconExternalLink, action: () => openURL(url) })
+      }
+      const tracked = trustLinks && !link.unwrapped ? trackedLink(detail.id, url) : null
+      if (tracked?.destination) {
+        const destination = tracked.destination
+        items.push({ label: $t('trust.link.direct'), icon: IconExternalLink, action: () => openURL(destination) })
       }
     }
     if (canScan) {
@@ -989,13 +1015,15 @@
     return text === key ? reason : text
   }
 
-  async function loadRemote(includeTrackers = false): Promise<void> {
+  // keepTrackers is the shield's "load images, keep trackers blocked": the
+  // pixels stay out whatever the block-tracking-pixels setting says.
+  async function loadRemote(includeTrackers = false, keepTrackers = false): Promise<void> {
     try {
       const id = detail.id
       if (remote) {
         await remote.load(includeTrackers)
       } else {
-        const html = await getMessageHtml(id, true, includeTrackers)
+        const html = keepTrackers ? await getMessageHtmlBlockingTrackers(id) : await getMessageHtml(id, true, includeTrackers)
         setBodyHtml(id, html)
         dispatch('html', { id, html })
       }
@@ -1005,6 +1033,9 @@
       }
       remoteLoaded = true
       pixelsBlocked = !includeTrackers && trackers.length > 0
+      if (trustLinks) {
+        noteLoaded(id, !includeTrackers && (keepTrackers || $prefs.blockTrackingPixels) ? 'images' : 'all')
+      }
       pixelMenu = null
     } catch (err) {
       toastError(errorMessage(err))
@@ -1292,6 +1323,9 @@
     >
     {#if hoverCleaned}
       <span class="link-hover-tag">{$t('links.cleaned')}</span>
+    {/if}
+    {#if hoverVia}
+      <span class="link-hover-tag">{$t('trust.link.viaHover').replace('{host}', hoverVia)}</span>
     {/if}
   </div>
 {/if}
