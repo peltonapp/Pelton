@@ -36,6 +36,7 @@ func (a *App) ListFolders(accountID int64) ([]FolderDTO, error) {
 		return nil, err
 	}
 	out := make([]FolderDTO, 0, len(folders))
+	mark := a.vaultMarker()
 	for _, f := range folders {
 		dto := toFolderDTO(f)
 		total, unread, err := a.folderCounts(f)
@@ -44,9 +45,30 @@ func (a *App) ListFolders(accountID int64) ([]FolderDTO, error) {
 		}
 		dto.TotalCount = total
 		dto.UnreadCount = unread
+		mark(&dto)
 		out = append(out, dto)
 	}
 	return out, nil
+}
+
+// vaultMarker returns what marks a folder DTO with its vault and whether that
+// vault is locked, reading the vaults once for a whole listing.
+func (a *App) vaultMarker() func(*FolderDTO) {
+	hide := map[int64]bool{}
+	if vaults, err := a.store.ListMailVaults(a.ctx); err == nil {
+		for _, v := range vaults {
+			hide[v.ID] = v.HideLocked
+		}
+	}
+	return func(dto *FolderDTO) {
+		v, err := a.store.FolderVault(a.ctx, dto.ID)
+		if err != nil || v == 0 {
+			return
+		}
+		dto.VaultID = v
+		dto.VaultLocked = !a.mailVaultUnlocked(v)
+		dto.VaultHidden = dto.VaultLocked && hide[v]
+	}
 }
 
 // folderCounts is a folder's badge counts. An inbox leaves muted

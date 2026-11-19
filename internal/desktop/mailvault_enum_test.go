@@ -107,7 +107,8 @@ var testVaultKDF = mailvault.KDFParams{Time: 1, MemoryKiB: 64, Threads: 1}
 func newVaultApp(t *testing.T) *vaultFixture {
 	t.Helper()
 	ctx, stopBackground := testContext(t)
-	store, err := storage.Open(filepath.Join(t.TempDir(), "test.db"))
+	dir := t.TempDir()
+	store, err := storage.Open(filepath.Join(dir, "test.db"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -116,7 +117,7 @@ func newVaultApp(t *testing.T) *vaultFixture {
 	if err := store.RunMigrations(ctx); err != nil {
 		t.Fatal(err)
 	}
-	a := &App{ctx: ctx, store: store, log: slog.New(slog.DiscardHandler)}
+	a := &App{ctx: ctx, store: store, log: slog.New(slog.DiscardHandler), dataDir: dir}
 	a.mailVault.kdf = &testVaultKDF
 	a.initMailVault()
 	f := &vaultFixture{app: a}

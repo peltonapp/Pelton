@@ -1,6 +1,7 @@
 package desktop
 
 import (
+	"bytes"
 	"errors"
 	"log/slog"
 	"os"
@@ -9,6 +10,7 @@ import (
 	"time"
 
 	"github.com/peltonapp/Pelton/internal/applock"
+	"github.com/peltonapp/Pelton/internal/search"
 	"github.com/peltonapp/Pelton/internal/storage"
 )
 
@@ -74,7 +76,8 @@ func TestMailVaultPassphraseChange(t *testing.T) {
 
 func TestMailVaultRecoveryCodeSetsNewPassphrase(t *testing.T) {
 	ctx, stopBackground := testContext(t)
-	store, err := storage.Open(filepath.Join(t.TempDir(), "test.db"))
+	dir := t.TempDir()
+	store, err := storage.Open(filepath.Join(dir, "test.db"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -83,7 +86,7 @@ func TestMailVaultRecoveryCodeSetsNewPassphrase(t *testing.T) {
 	if err := store.RunMigrations(ctx); err != nil {
 		t.Fatal(err)
 	}
-	a := &App{ctx: ctx, store: store, log: slog.New(slog.DiscardHandler)}
+	a := &App{ctx: ctx, store: store, log: slog.New(slog.DiscardHandler), dataDir: dir}
 	a.mailVault.kdf = &testVaultKDF
 	a.initMailVault()
 	acct, _ := store.CreateAccount(ctx, &storage.Account{Email: "me@example.com", IMAPHost: "h", IMAPPort: 993})
@@ -172,6 +175,79 @@ func TestMailVaultTempFilesNeedConsentAndGoAtLock(t *testing.T) {
 	if _, err := os.Stat(filepath.Dir(dir)); !os.IsNotExist(err) {
 		t.Fatal("the vault temp folder survived the lock")
 	}
+}
+
+// TestSealingRebuildsTheSearchIndex seals a folder whose mail was already
+// indexed and scans the index directory afterwards for its text.
+func TestSealingRebuildsTheSearchIndex(t *testing.T) {
+	ctx, stopBackground := testContext(t)
+	dir := t.TempDir()
+	store, err := storage.Open(filepath.Join(dir, "test.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = store.Close() })
+	t.Cleanup(stopBackground)
+	if err := store.RunMigrations(ctx); err != nil {
+		t.Fatal(err)
+	}
+	a := &App{ctx: ctx, store: store, log: slog.New(slog.DiscardHandler), dataDir: dir}
+	a.mailVault.kdf = &testVaultKDF
+	a.initMailVault()
+	idx, err := openSearchIndex(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	a.index = idx
+	t.Cleanup(func() { _ = a.index.Close() })
+	acct, _ := store.CreateAccount(ctx, &storage.Account{Email: "me@example.com", IMAPHost: "h", IMAPPort: 993})
+	secret, _ := store.CreateFolder(ctx, &storage.Folder{AccountID: acct, Name: "Secret", IMAPPath: "Secret"})
+	for i := range 3 {
+		if _, err := store.InsertMessage(ctx, &storage.Message{AccountID: acct, FolderID: secret, UID: uint32(i + 1),
+			Subject: "zebraquokka subject", BodyPlain: "pangolinwombat body", FromAddress: "narwhal@example.org",
+			Date: time.Now()}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := a.indexNewMessages(); err != nil {
+		t.Fatal(err)
+	}
+	index := filepath.Join(dir, indexFileName)
+	if found := scanDir(t, index, "pangolinwombat"); !found {
+		t.Fatal("the control found nothing: the scan cannot see indexed text")
+	}
+
+	created, err := a.CreateMailVault(MailVaultCreateRequest{Passphrase: "correct horse battery",
+		Members: []MailVaultMemberDTO{{AccountID: acct, FolderID: secret}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	waitForVaultState(t, a, created.ID, storage.MailVaultReady)
+	for _, word := range []string{"zebraquokka", "pangolinwombat", "narwhal"} {
+		if scanDir(t, index, word) {
+			t.Errorf("the search index still holds %q after sealing", word)
+		}
+	}
+	res, err := a.index.Search(search.Query{Text: "pangolinwombat", Limit: 10})
+	if err != nil || res.Total != 0 {
+		t.Fatalf("the index still finds sealed mail: %+v %v", res, err)
+	}
+}
+
+func scanDir(t *testing.T, dir, word string) bool {
+	t.Helper()
+	found := false
+	_ = filepath.WalkDir(dir, func(path string, d os.DirEntry, err error) error {
+		if err != nil || d.IsDir() {
+			return nil
+		}
+		data, err := os.ReadFile(path)
+		if err == nil && bytes.Contains(bytes.ToLower(data), []byte(word)) {
+			found = true
+		}
+		return nil
+	})
+	return found
 }
 
 func TestMailVaultRemoveUnsealsAndDeletes(t *testing.T) {

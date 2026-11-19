@@ -4509,6 +4509,15 @@ export class FolderDTO {
      */
     "syncExcluded": boolean;
 
+    /**
+     * VaultID is the mail vault the folder is in, 0 for none. VaultLocked is
+     * set while that vault is locked, and VaultHidden when it also asks for
+     * its folders to stay out of the sidebar then.
+     */
+    "vaultId": number;
+    "vaultLocked": boolean;
+    "vaultHidden": boolean;
+
     /** Creates a new FolderDTO instance. */
     constructor($$source: Partial<FolderDTO> = {}) {
         if (!("id" in $$source)) {
@@ -4549,6 +4558,15 @@ export class FolderDTO {
         }
         if (!("syncExcluded" in $$source)) {
             this["syncExcluded"] = false;
+        }
+        if (!("vaultId" in $$source)) {
+            this["vaultId"] = 0;
+        }
+        if (!("vaultLocked" in $$source)) {
+            this["vaultLocked"] = false;
+        }
+        if (!("vaultHidden" in $$source)) {
+            this["vaultHidden"] = false;
         }
 
         Object.assign(this, $$source);

@@ -88,6 +88,12 @@ type FolderDTO struct {
 	// SyncExcluded means the user unchecked this folder, so sync skips it.
 	// Whatever was already cached stays readable (#173).
 	SyncExcluded bool `json:"syncExcluded"`
+	// VaultID is the mail vault the folder is in, 0 for none. VaultLocked is
+	// set while that vault is locked, and VaultHidden when it also asks for
+	// its folders to stay out of the sidebar then.
+	VaultID     int64 `json:"vaultId"`
+	VaultLocked bool  `json:"vaultLocked"`
+	VaultHidden bool  `json:"vaultHidden"`
 }
 
 // UnifiedViewDTO is a cross account view (inbox/flagged/sent/drafts). The ui

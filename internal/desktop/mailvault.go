@@ -2,6 +2,8 @@ package desktop
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"os"
 	"path/filepath"
@@ -156,6 +158,7 @@ func (g mailVaultGate) MessageKey(vaultID int64, epk []byte) (*mailvault.Message
 // unsealing resumes when its vault is next unlocked.
 func (a *App) initMailVault() {
 	a.store.SetVaultGate(mailVaultGate{a})
+	a.sweepMailVaultTemp()
 	vaults, err := a.store.ListMailVaults(a.ctx)
 	if err != nil {
 		a.log.Error("list mail vaults", "err", err)
@@ -463,7 +466,7 @@ func (a *App) mailVaultTempDir() (string, error) {
 	if st.tempDir != "" {
 		return st.tempDir, nil
 	}
-	dir, err := os.MkdirTemp("", "pelton-vault-")
+	dir, err := os.MkdirTemp("", a.mailVaultTempPrefix())
 	if err != nil {
 		return "", err
 	}
@@ -489,6 +492,13 @@ func (a *App) mailVaultTempFor(id int64) (string, error) {
 	return filepath.Join(dir, strconv.FormatInt(id, 10)), nil
 }
 
+// mailVaultTempPrefix names this install's temporary vault folders, so a
+// dev or nightly build running beside it never sweeps the other's files.
+func (a *App) mailVaultTempPrefix() string {
+	sum := sha256.Sum256([]byte(a.dataDir))
+	return "pelton-vault-" + hex.EncodeToString(sum[:4]) + "-"
+}
+
 // removeMailVaultTemp overwrites and removes the files opened from vaults.
 func (a *App) removeMailVaultTemp() {
 	st := &a.mailVault
@@ -496,9 +506,23 @@ func (a *App) removeMailVaultTemp() {
 	dir := st.tempDir
 	st.tempDir = ""
 	st.mu.Unlock()
-	if dir == "" {
+	if dir != "" {
+		a.wipeTempDir(dir)
+	}
+}
+
+// sweepMailVaultTemp removes the temporary vault folders a crash left behind.
+func (a *App) sweepMailVaultTemp() {
+	left, err := filepath.Glob(filepath.Join(os.TempDir(), a.mailVaultTempPrefix()+"*"))
+	if err != nil {
 		return
 	}
+	for _, dir := range left {
+		a.wipeTempDir(dir)
+	}
+}
+
+func (a *App) wipeTempDir(dir string) {
 	_ = filepath.WalkDir(dir, func(path string, d os.DirEntry, err error) error {
 		if err == nil && !d.IsDir() {
 			_ = storage.WipeFile(path)
