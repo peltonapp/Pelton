@@ -18,6 +18,8 @@
   import ProtectedNotice from './ProtectedNotice.svelte'
   import AttachmentStrip from './AttachmentStrip.svelte'
   import FollowUpNotice from './FollowUpNotice.svelte'
+  import PromiseStrip from './PromiseStrip.svelte'
+  import { promiseSettings } from '../../stores/promises'
   import { prefs } from '../../stores/prefs'
   import { formatListDate, displayName, type TimeFormat } from '../../lib/format'
   import { dur, motion } from '../../lib/motion'
@@ -132,6 +134,9 @@
         {/if}
         {#if detail.phishing.level !== 'none'}
           <PhishingNotice report={detail.phishing} messageId={detail.id} />
+        {/if}
+        {#if $prefs.design === 'new' && $promiseSettings.enabled && detail.messageId}
+          <PromiseStrip messageId={detail.id} accountId={detail.accountId} mailId={detail.messageId} />
         {/if}
         {#if detail.pgpState !== '' && detail.pgpState !== 'open'}
           <ProtectedNotice state={detail.pgpState} messageId={detail.id} on:opened={() => dispatch('reload')} />

@@ -51,6 +51,7 @@ export const EventNames = {
   icsOpen: 'calendar:open-files',
   taskReminder: 'tasks:reminder',
   followUpsChanged: 'followups:changed',
+  promisesChanged: 'promises:changed',
   focusChanged: 'focus:changed',
   focusEnded: 'focus:ended',
   projectsChanged: 'projects:changed',
@@ -322,6 +323,11 @@ export function onOutboxLog(cb: (e: OutboxLogEntry) => void): Unsubscribe {
 // answered or is cancelled. It carries no payload; subscribers refetch.
 export function onFollowUpsChanged(cb: () => void): Unsubscribe {
   return EventsOn(EventNames.followUpsChanged, () => cb())
+}
+
+/** Fires when promises were found, accepted, dismissed or closed. Subscribers refetch. */
+export function onPromisesChanged(cb: () => void): Unsubscribe {
+  return EventsOn(EventNames.promisesChanged, () => cb())
 }
 
 // onMenu fires when a native menubar item is chosen. the payload is a short

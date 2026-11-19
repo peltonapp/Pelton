@@ -520,6 +520,70 @@ export interface FollowUp {
   threadId: number
 }
 
+/** Who owes a promise: the user ('mine') or someone else ('theirs'). */
+export type PromiseDirection = 'mine' | 'theirs'
+
+/** Where a promise is: a suggestion on its mail, a task, set aside, or closed by a reply. */
+export type PromiseState = 'suggested' | 'accepted' | 'dismissed' | 'closed'
+
+/** A promise found in mail. mailId is the Message-ID it was found in, messageId a cached copy (0 for none). */
+export interface MailPromise {
+  id: number
+  accountId: number
+  mailId: string
+  messageId: number
+  threadId: number
+  direction: PromiseDirection
+  personName: string
+  personEmail: string
+  title: string
+  quote: string
+  /** A date, rfc3339, or ''. */
+  due: string
+  confidence: number
+  source: string
+  state: PromiseState
+  taskUid: string
+  /** The reply that closed it (theirs) or offers to (mine), with a cached copy of it. */
+  replyId: string
+  replyAt: string
+  replyMessageId: number
+  mailDate: string
+  /** A follow-up reminder already watches the thread. */
+  followUp: boolean
+}
+
+/** A suggestion as the user accepts it. */
+export interface PromiseEdit {
+  id: number
+  title: string
+  due: string
+  direction: PromiseDirection
+  personName: string
+  personEmail: string
+}
+
+/** The promise switches of one account. */
+export interface PromiseAccount {
+  accountId: number
+  name: string
+  email: string
+  on: boolean
+  ai: boolean
+  provider: string
+}
+
+/** The promise preferences. */
+export interface PromiseSettings {
+  enabled: boolean
+  autoAcceptMine: boolean
+  nudge: boolean
+  taskList: 'local' | 'default'
+  accounts: PromiseAccount[]
+  aiMaxChars: number
+  aiPerDay: number
+}
+
 // ProtectionStatus is what the compose window needs to offer the pgp controls
 // honestly for one account and one set of recipients.
 export interface ProtectionStatus {

@@ -45,6 +45,9 @@ import type {
   ComposeRequest,
   Draft,
   FollowUp,
+  MailPromise,
+  PromiseEdit,
+  PromiseSettings,
   Snippet,
   OutboxRow,
   OutboxEdit,
@@ -1152,6 +1155,59 @@ export function reorderSnippets(ids: number[]): Promise<void> {
 // cancelFollowUp drops a reminder, waiting or fired.
 export function cancelFollowUp(id: number): Promise<void> {
   return App.CancelFollowUp(id)
+}
+
+/** The promises that are suggested, accepted or closed. */
+export function listPromises(): Promise<MailPromise[]> {
+  if (isDemoActive()) {
+    return Promise.resolve([])
+  }
+  return App.ListPromises().then((list) => (list ?? []) as MailPromise[])
+}
+
+/** Reads one message for promises now and returns what it holds. */
+export function findPromises(messageId: number): Promise<MailPromise[]> {
+  return App.FindPromises(messageId).then((list) => (list ?? []) as MailPromise[])
+}
+
+/** Makes a task of a suggested promise, with the user's edits. */
+export function acceptPromise(edit: PromiseEdit): Promise<MailPromise> {
+  return App.AcceptPromise(new desktop.PromiseEditDTO(edit)) as Promise<MailPromise>
+}
+
+/** Sets a suggestion aside for good. */
+export function dismissPromise(id: number): Promise<void> {
+  return App.DismissPromise(id)
+}
+
+/** Brings a dismissed suggestion back. */
+export function restorePromise(id: number): Promise<void> {
+  return App.RestorePromise(id)
+}
+
+/** Stops reading a sender's mail for promises; returns the suggestions it dismissed. */
+export function quietPromiseSender(email: string): Promise<number[]> {
+  return App.QuietPromiseSender(email).then((ids) => ids ?? [])
+}
+
+/** Undoes quietPromiseSender. */
+export function unquietPromiseSender(email: string, ids: number[]): Promise<void> {
+  return App.UnquietPromiseSender(email, ids)
+}
+
+/** Opens a promise a reply closed, or turns down the offer to complete one. */
+export function reopenPromise(id: number): Promise<void> {
+  return App.ReopenPromise(id)
+}
+
+/** The promise preferences. */
+export function getPromiseSettings(): Promise<PromiseSettings> {
+  return App.GetPromiseSettings().then((s) => ({ ...s, accounts: s.accounts ?? [] }) as PromiseSettings)
+}
+
+/** Saves the promise preferences. */
+export function setPromiseSettings(s: PromiseSettings): Promise<void> {
+  return App.SetPromiseSettings(new desktop.PromiseSettingsDTO(s))
 }
 
 // clearSentOutbox prunes rows already marked sent after the ui has shown the
