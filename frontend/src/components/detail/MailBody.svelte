@@ -23,10 +23,35 @@
   import { frameKeyRelay, relayedKey, replayKey } from '../../lib/framekeys'
   import { t } from '../../lib/i18n'
   import type { MessageDetail, Verdict } from '../../lib/types'
+  import { markClass, markDocument } from '../../lib/highlight'
+  import { highlightTerms, searchOpenedId } from '../../stores/search'
+  import Highlight from '../common/Highlight.svelte'
+  import Ph from '../common/Ph.svelte'
+  import dotsIcon from '@phosphor-icons/core/assets/duotone/dots-three-duotone.svg?raw'
+  import { splitHtmlQuote, splitPlainQuote } from '../../lib/quotes'
 
   export let detail: MessageDetail
+  /** Folds the quoted original at the end of a reply behind a toggle. */
+  export let collapseQuotes: boolean = false
 
   $: canScan = scanEnabled($virusTotal)
+
+  // the quoted original, split off when it is folded. showQuote resets with
+  // the message.
+  let showQuote = false
+  let quoteFor = -1
+  $: if (detail.id !== quoteFor) {
+    quoteFor = detail.id
+    showQuote = false
+  }
+  $: quoteSplit = !collapseQuotes
+    ? null
+    : detail.isHtml
+      ? splitHtmlQuote(detail.bodyHtmlSafe)
+      : splitPlainQuote(detail.bodyPlain)
+  $: folded = quoteSplit?.hasQuote === true && !showQuote
+  $: shownHtml = folded && detail.isHtml && quoteSplit ? quoteSplit.head : detail.bodyHtmlSafe
+  $: shownPlain = folded && !detail.isHtml && quoteSplit ? quoteSplit.head : detail.bodyPlain
 
   // remoteLoaded starts true when the backend already rendered remote content
   // because the sender/domain is trusted (or the global override is on).
@@ -111,7 +136,8 @@
   .pelton-vt-flagged{color:#c0392b;}
   .pelton-vt-unknown{color:#6b7280;}
   .pelton-vt-error{color:#9a6700;}
-  .pelton-phish{display:inline-block;margin-inline-start:3px;font-weight:700;font-size:0.85em;color:#c0392b;cursor:default;}`
+  .pelton-phish{display:inline-block;margin-inline-start:3px;font-weight:700;font-size:0.85em;color:#c0392b;cursor:default;}
+  .${markClass}{background:color-mix(in srgb, ${readVar('--accent') || '#465af2'} 32%, #ffffff);color:inherit;border-radius:2px;}`
     const imgSrc = allowRemote ? 'data: https: http:' : 'data:'
     // media rides on the same choice as images: a message that embeds a video
     // can only reach out once the reader has allowed remote content for it.
@@ -180,12 +206,12 @@
     nonce = makeNonce()
   }
 
-  $: srcdoc = buildSrcdoc(detail.bodyHtmlSafe, remoteLoaded, $prefs.messageFontSize, $prefs.bodyFont, nonce, canScan)
+  $: srcdoc = buildSrcdoc(shownHtml, remoteLoaded, $prefs.messageFontSize, $prefs.bodyFont, nonce, canScan)
 
   // plain-text bodies render in a <pre>, not the sandboxed iframe, so bare
   // urls need their own linkification: nothing upstream turns them into real
   // links the way html mail's own <a> tags already are.
-  $: plainSegments = detail.isHtml ? [] : linkifySegments(detail.bodyPlain)
+  $: plainSegments = detail.isHtml ? [] : linkifySegments(shownPlain)
 
   // the iframe is sized to its content height so the reading pane has a single
   // scrollbar instead of a nested one (which the interface zoom made worse).
@@ -250,6 +276,24 @@
     // a fresh srcdoc replaces the document, so any badges from the previous
     // render are gone and have to be put back.
     decorateLinks(get(linkVerdicts), suspectLinks)
+    markMatches(markTerms)
+  }
+
+  // the words of the search this message was opened from, marked in the body.
+  $: markTerms = $searchOpenedId === detail.id ? $highlightTerms : []
+
+  // markMatches wraps the search words in mark elements inside the iframe's
+  // own document, the same way decorateLinks adds its badges: built with
+  // createElement over text nodes, so nothing from the mail is parsed again.
+  function markMatches(terms: readonly string[]): void {
+    const doc = frame?.contentDocument
+    if (readyBody() && doc) {
+      markDocument(doc, terms)
+    }
+  }
+
+  $: if (frame && detail.isHtml) {
+    markMatches(markTerms)
   }
 
   // onFrameLoad fires when the iframe's srcdoc finishes loading. It is the
@@ -659,7 +703,20 @@
         on:contextmenu={(e) => onPlainContext(e, segment.href ?? '')}
         on:mouseenter={() => showHover(segment.href ?? '')}
         on:mouseleave={() => showHover('')}
-      >{segment.text}</a>{#if $linkVerdicts.has(segment.href ?? '')}<VerdictBadge verdict={$linkVerdicts.get(segment.href ?? '')!} size={12} />{/if}{:else}{segment.text}{/if}{/each}</pre>
+      >{segment.text}</a>{#if $linkVerdicts.has(segment.href ?? '')}<VerdictBadge verdict={$linkVerdicts.get(segment.href ?? '')!} size={12} />{/if}{:else}<Highlight text={segment.text} terms={markTerms} />{/if}{/each}</pre>
+{/if}
+
+{#if quoteSplit?.hasQuote}
+  <button
+    type="button"
+    class="quote-toggle"
+    aria-expanded={showQuote}
+    aria-label={showQuote ? $t('reader.quote.hide') : $t('reader.quote.show')}
+    title={showQuote ? $t('reader.quote.hide') : $t('reader.quote.show')}
+    on:click={() => (showQuote = !showQuote)}
+  >
+    <Ph svg={dotsIcon} size={16} />
+  </button>
 {/if}
 
 {#if hoverUrl}
@@ -674,6 +731,34 @@
 {/if}
 
 <style>
+  .quote-toggle {
+    align-self: flex-start;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    margin-top: var(--space-2);
+    padding: 0 var(--space-2);
+    height: var(--chip-height);
+    border: var(--hairline) solid var(--border-default);
+    border-radius: var(--radius-control);
+    background: var(--surface-sunken);
+    color: var(--text-secondary);
+    cursor: var(--cursor-action);
+    transition:
+      background-color var(--motion-fast) var(--ease-out),
+      border-color var(--motion-fast) var(--ease-out);
+  }
+
+  .quote-toggle:hover {
+    background: var(--surface-hover);
+    border-color: var(--border-strong);
+    color: var(--text-primary);
+  }
+
+  .quote-toggle[aria-expanded='true'] {
+    background: var(--surface-hover);
+  }
+
   .link-hover {
     position: absolute;
     right: 0;

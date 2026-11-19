@@ -2,8 +2,10 @@ package sync
 
 import (
 	"context"
+	"errors"
 	"path/filepath"
 	"slices"
+	"strings"
 	"testing"
 
 	"github.com/emersion/go-imap/v2"
@@ -219,6 +221,11 @@ type fakeClient struct {
 	// flags is the server's flag set per uid; AddFlags and RemoveFlags change it
 	// the way a STORE would.
 	flags map[uint32][]imap.Flag
+	// refuseKeywords makes a STORE naming a keyword fail, the way a server
+	// without keyword support answers.
+	refuseKeywords bool
+	// messageIDs gives a uid a Message-ID header; unset uids have none.
+	messageIDs map[uint32]string
 }
 
 func (c *fakeClient) Select(string) (*pimap.Mailbox, error) {
@@ -239,7 +246,7 @@ func (c *fakeClient) FetchAllFlags() ([]pimap.MessageHeader, error) {
 
 func (c *fakeClient) FetchMessage(uid imap.UID) (*pimap.Message, error) {
 	c.fetched = append(c.fetched, uint32(uid))
-	return &pimap.Message{UID: uid, Subject: "test", Flags: slices.Clone(c.flags[uint32(uid)])}, nil
+	return &pimap.Message{UID: uid, Subject: "test", MessageID: c.messageIDs[uint32(uid)], Flags: slices.Clone(c.flags[uint32(uid)])}, nil
 }
 
 func (c *fakeClient) Addr() string { return "imap.example.com:993" }
@@ -264,6 +271,9 @@ func (c *fakeClient) FetchMessages(uids []imap.UID, fn func(imap.UID, *pimap.Mes
 func (c *fakeClient) AddFlags(uid imap.UID, flags ...imap.Flag) error {
 	if c.flags == nil {
 		c.flags = map[uint32][]imap.Flag{}
+	}
+	if c.refuseKeywords && slices.ContainsFunc(flags, func(f imap.Flag) bool { return strings.HasPrefix(string(f), "$") }) {
+		return errors.New("NO keywords are not supported")
 	}
 	for _, f := range flags {
 		if !slices.Contains(c.flags[uint32(uid)], f) {

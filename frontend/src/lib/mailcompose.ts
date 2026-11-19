@@ -148,6 +148,7 @@ export function buildRequest(session: ComposeSession): ComposeRequest {
     sendAt: '',
     protection: session.protection,
     draftMessageId: session.draftMessageId,
+    forwardOf: session.origin?.kind === 'forward' ? session.origin.id : 0,
   } as ComposeRequest
 }
 

@@ -95,6 +95,8 @@
   --accent-fg: #ffffff;
   --selection-bg: color-mix(in srgb, var(--accent) 14%, transparent);
   --selection-bg-strong: color-mix(in srgb, var(--accent) 22%, transparent);
+  /* a hover fill that can lie over content. */
+  --hover-tint: color-mix(in srgb, var(--text-primary) 6%, transparent);
   --link: var(--accent);
 
   /* elevation, used sparingly for overlays and popovers. */
@@ -112,10 +114,33 @@
   /* shell geometry of the new design. the pane gap and radius are zero unless a
      pane style below sets them, so the classic design never sees them. */
   --topbar-height: 38px;
+  --topsearch-width: 560px;
+  --topsearch-min-width: 140px;
+  --suggest-max-height: 420px;
+  --popover-width: 256px;
+  --chip-height: 20px;
   --rail-width: 40px;
   --pane-gap: 0px;
   --pane-radius: 0px;
   --chrome-bg: var(--surface-base);
+
+  /* the new composer: the docked panel's size, the label column the header
+     fields line up on, the send button's width (fixed so it does not jump as
+     it turns into a loader and a check) and the popovers' width. */
+  --compose-dock-width: 640px;
+  --compose-dock-height: 620px;
+  --compose-label-width: 64px;
+  --compose-send-width: 92px;
+  --popover-width: 340px;
+  --popover-max-height: 440px;
+  /* a pressed button sinks by this much. */
+  --press-scale: 0.96;
+
+  /* conversations: the column the expand control sits in, which replies are
+     indented by, and the widths the reading column can be capped at. */
+  --thread-twisty: 16px;
+  --reader-width-narrow: 640px;
+  --reader-width-medium: 820px;
 
   /* default density (medium) row + pane spacing. overridden per density below. */
   --row-pad-y: 8px;
@@ -162,6 +187,10 @@
 
   /* the dim behind a modal. */
   --scrim: rgba(0, 0, 0, 0.4);
+
+  /* search matches marked in list rows and the reading pane. */
+  --highlight-bg: color-mix(in srgb, var(--accent) 24%, transparent);
+  --highlight-fg: inherit;
 }
 
 /* dark theme. every token has a dark value so the toggle never leaves a gap. */
@@ -199,6 +228,9 @@
   --nightly-bg: color-mix(in srgb, #b965e2 22%, transparent);
 
   --scrim: rgba(0, 0, 0, 0.55);
+
+  --highlight-bg: color-mix(in srgb, var(--accent) 40%, transparent);
+  --highlight-fg: var(--text-primary);
 
   --shadow-overlay: 0 8px 24px rgba(0, 0, 0, 0.5);
 }
@@ -292,7 +324,10 @@
    as one rounded surface, soft raises every pane on its own, flat keeps them
    edge to edge with hairlines. */
 :root[data-design="new"] {
-  --chrome-bg: var(--surface-sunken);
+  /* the window chrome (top bar, rail, status bar) is a hair off the folder
+     pane, which keeps the sunken surface itself. */
+  --chrome-bg: color-mix(in srgb, var(--text-primary) 2.5%, var(--surface-sunken));
+  --sidebar-bg: var(--surface-sunken);
   --radius-card: 7px;
 }
 

@@ -21,7 +21,9 @@
   import SpaceSwitcher from './components/shell/SpaceSwitcher.svelte'
   import { space, openSpace } from './stores/space'
   import { frameIntegrated } from './stores/windowframe'
+  import { setDraft, submitSearch, searchOpenedId } from './stores/search'
   import SnoozeDialog from './components/detail/SnoozeDialog.svelte'
+  import DragStack from './components/list/DragStack.svelte'
   import ConfirmDialog from './components/common/ConfirmDialog.svelte'
   import SyncFailureDialog from './components/common/SyncFailureDialog.svelte'
   import { loadSyncStates, watchSyncStates } from './stores/syncfailures'
@@ -42,7 +44,10 @@
   import { selection, applyStartupSelection, searchQuery } from './stores/selection'
   import { loadList, messageList } from './stores/messages'
   import { initProgress } from './stores/progress'
-  import { composeSessions, openCompose, openComposeWith, initComposePrefs, openReply, openForward, requestComposeClose } from './stores/compose'
+  import { composeSessions, openCompose, openComposeWith, initComposePrefs, openReply, openForward, requestComposeClose, setForcedComposeMode } from './stores/compose'
+  import { routeComposeSessions } from './stores/composeroute'
+  import Composer2 from './components/compose/Composer2.svelte'
+  import ComposeTabLayer from './components/compose/ComposeTabLayer.svelte'
   import { openSnooze, openSnoozeMany } from './stores/snooze'
   import { patchInList, removeFromList } from './stores/messages'
   import {
@@ -226,6 +231,8 @@
 
   // the new design. classic keeps the shell below it exactly as it was.
   $: classic = $prefs.design === 'classic'
+  $: setForcedComposeMode(classic ? null : $prefs.composeVimMode ? 'plaintext' : 'wysiwyg')
+  unsubscribers.push(routeComposeSessions({ tabs: true }))
   $: stacked = $prefs.layoutMode === 'stacked'
   // below this window width the rail folds into the top bar as tabs.
   const railFoldWidth = 760
@@ -621,7 +628,7 @@
   }
 
   function focusSearch(): void {
-    const input = document.querySelector<HTMLInputElement>('input[type="search"]')
+    const input = document.querySelector<HTMLInputElement>(classic ? 'input[type="search"]' : 'input[data-top-search]')
     input?.focus()
   }
 
@@ -1151,7 +1158,14 @@
   // palette holds the same results the reading pane is showing rather than
   // whatever folder happened to be open.
   function openMailHit(item: MessageSummary): void {
-    searchQuery.set(parseQuery(get(paletteQuery)).text)
+    const query = parseQuery(get(paletteQuery)).text
+    searchQuery.set(query)
+    if (!classic && query.trim() !== '') {
+      setDraft({ text: query, chips: [] })
+      submitSearch()
+      openSpace('mail')
+      searchOpenedId.set(item.id)
+    }
     openMessage(item.id)
   }
 
@@ -1570,14 +1584,17 @@
     on:dblclick={titleBarDoubleClick}
   >
     <!-- the app mark sits where a native title bar would put the title, just
-         past the traffic lights -->
-    <img class="titlebar-logo" src={peltonLogo} alt="" draggable="false" />
+         past the traffic lights. the new design's overlays have headers of
+         their own there. -->
+    {#if classic}
+      <img class="titlebar-logo" src={peltonLogo} alt="" draggable="false" />
+    {/if}
   </div>
 {/if}
 
 {#if !classic}
 <div class="frame" class:rail-right={$prefs.railSide === 'right'} class:has-rail={showRail}>
-  <TopBar tabs={$prefs.navStyle === 'tabs' || railFolded} on:search={focusSearch}>
+  <TopBar tabs={$prefs.navStyle === 'tabs' || railFolded}>
     <svelte:fragment slot="menu">
       {#if showMenuBar}
         <MenuBar on:action={(e) => handleMenu(e.detail)} />
@@ -1624,6 +1641,7 @@
             <Resizer disabled={locked} label={$t('app.pane.resizeMessageList')} on:resize={resizeList} on:end={commitPanes} />
           {/if}
           <MessageDetail />
+          <ComposeTabLayer />
         </div>
       </div>
     {:else if $space === 'contacts'}
@@ -1667,7 +1685,11 @@
 {#if $composeSessions.length > 0}
   <div class="compose-layer">
     {#each $composeSessions as session (session.id)}
-      <Compose {session} />
+      {#if classic}
+        <Compose {session} />
+      {:else if session.placement === 'docked'}
+        <Composer2 {session} layout="docked" mainWindow />
+      {/if}
     {/each}
   </div>
 {/if}
@@ -1739,6 +1761,7 @@
 <Toasts />
 <ContextMenu />
 <ConfirmDialog />
+<DragStack />
 <SnoozeDialog />
 <FolderDialog />
 <AttachmentPreview />
@@ -1828,6 +1851,7 @@
 
   /* the list and the reader. hybrid raises the two as one rounded surface. */
   .surface {
+    position: relative;
     display: grid;
     grid-template-rows: minmax(0, 1fr);
     min-width: 0;
@@ -1850,6 +1874,33 @@
   /* flat: edge to edge, split by hairlines only. */
   :global(:root[data-panes='flat']) .surface {
     border-width: var(--hairline) 0 var(--hairline) var(--hairline);
+  }
+
+  .frame .side-col {
+    position: relative;
+    background: var(--sidebar-bg);
+    border-start-start-radius: var(--pane-radius);
+    border-end-start-radius: var(--pane-radius);
+  }
+
+  /* the folder pane's color runs on under the rounded corners of the surface
+     beside it, so no chrome shows through between the two. */
+  .frame .side-col::after {
+    content: '';
+    position: absolute;
+    inset-block: 0;
+    inset-inline-start: 100%;
+    width: var(--pane-radius);
+    background: var(--sidebar-bg);
+    pointer-events: none;
+  }
+
+  :global(:root[data-panes='soft']) .frame .side-col {
+    border-radius: var(--pane-radius);
+  }
+
+  :global(:root[data-panes='soft']) .frame .side-col::after {
+    display: none;
   }
 
   /* soft: every pane is a rounded panel of its own, with a gap between. */

@@ -5,6 +5,9 @@
 import mailIcon from '@phosphor-icons/core/assets/duotone/envelope-simple-duotone.svg?raw'
 import contactsIcon from '@phosphor-icons/core/assets/duotone/address-book-duotone.svg?raw'
 import type { Space } from './types'
+import type { MailDropOptions } from '../stores/maildrag'
+import { contactSeed } from '../stores/contacts'
+import { openSpace } from '../stores/space'
 
 /** One entry of the space switcher. */
 export interface SpaceEntry {
@@ -13,6 +16,23 @@ export interface SpaceEntry {
   labelKey: string
   /** Raw Phosphor svg. */
   icon: string
+}
+
+/**
+ * What a space does with mail dropped on its entry in the switcher: contacts
+ * starts a new contact from the sender, mail takes nothing.
+ */
+export function spaceDrop(key: Space): MailDropOptions {
+  return {
+    accepts: () => key === 'contacts',
+    onDrop: (items) => {
+      const first = items[0]
+      if (key === 'contacts' && first) {
+        contactSeed.set({ name: first.fromName, email: first.fromAddress })
+        openSpace('contacts')
+      }
+    },
+  }
 }
 
 /** The areas the app offers, in display order. */

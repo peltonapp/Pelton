@@ -1,7 +1,6 @@
 <script lang="ts">
   // the Reading page: how a message is shown once it is open (type size, fonts,
-  // character encoding, technical badges), what opening a message does, and the
-  // status bar.
+  // character encoding, technical badges) and what opening a message does.
   import { onMount } from 'svelte'
   import Card from '../ui/Card.svelte'
   import Row from '../ui/Row.svelte'
@@ -10,18 +9,13 @@
   import {
     prefs,
     setToggle,
-    setRestoreTabs,
     setMessageFontSize,
     setBodyFont,
     setSenderFonts,
-    setUIFont,
-    setMonoFont,
     setMarkReadOnOpen,
     setOpenOnArrow,
-    setStatusClock,
-    setStatusUnread,
   } from '../../../stores/prefs'
-  import { bodyFonts, uiFonts, monoFonts, bodyFontStack, uiFontStack, monoFontStack } from '../../../lib/fonts'
+  import { bodyFonts, bodyFontStack } from '../../../lib/fonts'
   import { listSystemFonts, getSetting, setSetting } from '../../../lib/api'
   import { t } from '../../../lib/i18n'
   import type { SelectItem } from '../../../lib/selectnav'
@@ -35,8 +29,6 @@
   ]
 
   $: bodyFontOptions = bodyFonts.map((f) => ({ key: f.key, label: f.label ?? $t(f.labelKey ?? '') }))
-  $: uiFontOptions = uiFonts.map((f) => ({ key: f.key, label: f.label ?? $t(f.labelKey ?? '') }))
-  $: monoFontOptions = monoFonts.map((f) => ({ key: f.key, label: f.label ?? $t(f.labelKey ?? '') }))
 
   // every installed system font, loaded once when the page opens. the list is
   // backend-cached, so reopening settings is instant.
@@ -47,8 +39,8 @@
       .catch(() => (systemFonts = []))
   })
 
-  // the three font pickers share a shape: a curated list, then whatever the
-  // system has, prefixed so the backend can tell the two apart.
+  // a curated list, then whatever the system has, prefixed so the backend can
+  // tell the two apart.
   function fontItems(curated: { key: string; label: string }[]): SelectItem[] {
     const items: SelectItem[] = [{ label: $t('settingsPanel.bodyFont.groupCurated'), options: curated.map((o) => ({ value: o.key, label: o.label })) }]
     if (systemFonts.length > 0) {
@@ -61,8 +53,6 @@
   }
 
   $: bodyStack = bodyFontStack($prefs.bodyFont) ?? 'var(--font-ui)'
-  $: uiStack = uiFontStack($prefs.uiFont) ?? 'var(--font-ui)'
-  $: monoStack = monoFontStack($prefs.monoFont) ?? 'var(--font-mono)'
 
   // how mail that names no encoding, or names one nothing knows, is read. It is
   // a parser setting rather than a ui preference, so it is read from and written
@@ -136,24 +126,6 @@
   <Row id="sender-fonts" label={$t('settingsPanel.toggle.senderFonts')} hint={$t('settingsPanel.hint.senderFonts')}>
     <ToggleSwitch checked={$prefs.senderFonts} label={$t('settingsPanel.toggle.senderFonts')} on:change={(e) => setSenderFonts(e.detail)} />
   </Row>
-  <Row id="ui-font" label={$t('settingsPanel.label.uiFont')} hint={$t('settingsPanel.hint.uiFont')}>
-    <div slot="preview" class="sample" style={`font-family:${uiStack}`}>{$t('reading.sample')}</div>
-    <Select
-      value={$prefs.uiFont}
-      ariaLabel={$t('settingsPanel.label.uiFont')}
-      items={fontItems(uiFontOptions)}
-      on:change={(e) => setUIFont(e.detail)}
-    />
-  </Row>
-  <Row id="mono-font" label={$t('settingsPanel.label.monoFont')} hint={$t('settingsPanel.hint.monoFont')}>
-    <div slot="preview" class="sample" style={`font-family:${monoStack}`}>{$t('reading.sample')}</div>
-    <Select
-      value={$prefs.monoFont}
-      ariaLabel={$t('settingsPanel.label.monoFont')}
-      items={fontItems(monoFontOptions)}
-      on:change={(e) => setMonoFont(e.detail)}
-    />
-  </Row>
   <Row id="charset-fallback" label={$t('settingsPanel.label.charsetFallback')} hint={$t('settingsPanel.hint.charsetFallback')}>
     <Select
       value={charsetFallback}
@@ -178,18 +150,6 @@
   </Row>
   <Row id="open-on-arrow" label={$t('settingsPanel.toggle.openOnArrow')}>
     <ToggleSwitch checked={$prefs.openOnArrow} label={$t('settingsPanel.toggle.openOnArrow')} on:change={(e) => setOpenOnArrow(e.detail)} />
-  </Row>
-  <Row id="restore-tabs" label={$t('settingsPanel.toggle.restoreTabs')} hint={$t('settingsPanel.hint.restoreTabs')}>
-    <ToggleSwitch checked={$prefs.restoreTabs} label={$t('settingsPanel.toggle.restoreTabs')} on:change={(e) => setRestoreTabs(e.detail)} />
-  </Row>
-</Card>
-
-<Card title={$t('settingsPanel.heading.statusBar')}>
-  <Row id="status-clock" label={$t('settingsPanel.toggle.statusClock')}>
-    <ToggleSwitch checked={$prefs.statusClock} label={$t('settingsPanel.toggle.statusClock')} on:change={(e) => setStatusClock(e.detail)} />
-  </Row>
-  <Row id="status-unread" label={$t('settingsPanel.toggle.statusUnread')} hint={$t('settingsPanel.hint.statusUnread')}>
-    <ToggleSwitch checked={$prefs.statusUnread} label={$t('settingsPanel.toggle.statusUnread')} on:change={(e) => setStatusUnread(e.detail)} />
   </Row>
 </Card>
 

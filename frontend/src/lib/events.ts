@@ -27,6 +27,7 @@ export const EventNames = {
   foldersChanged: 'folders:changed',
   profileChanged: 'profile:changed',
   importProgress: 'import:progress',
+  filesDropped: 'files:dropped',
   agentProposals: 'agent:proposals',
   openMessage: 'message:open',
   composeCloseRequest: 'compose:close-request',
@@ -39,8 +40,10 @@ export interface MailNewEvent {
   count: number
 }
 
-// MailRepairedEvent reports messages whose stored text was replaced because it
-// had been cached in an encoding nothing could read.
+// MailRepairedEvent reports cached messages that changed underneath an open
+// list: text replaced because it had been cached in an encoding nothing could
+// read, conversations regrouped, or messages marked answered or forwarded.
+// accountId and folderId are 0 when the change spans more than one.
 export interface MailRepairedEvent {
   accountId: number
   folderId: number
@@ -159,8 +162,9 @@ export function onMailNew(cb: (e: MailNewEvent) => void): Unsubscribe {
   return EventsOn(EventNames.mailNew, (e: MailNewEvent) => cb(e))
 }
 
-// onMailRepaired fires when a sync rewrote the text of cached messages, so the
-// list and any open message show the fixed text without a reload.
+// onMailRepaired fires when cached messages changed without new mail arriving
+// (text rewritten, conversations regrouped, reply state changed), so the list
+// and any open message reload.
 export function onMailRepaired(cb: (e: MailRepairedEvent) => void): Unsubscribe {
   return EventsOn(EventNames.mailRepaired, (e: MailRepairedEvent) => cb(e))
 }
@@ -218,6 +222,18 @@ export function onMailtoCompose(cb: (e: MailtoDraft) => void): Unsubscribe {
 // with running false when the job ends.
 export function onImportProgress(cb: (e: ImportProgressEvent) => void): Unsubscribe {
   return EventsOn(EventNames.importProgress, (e: ImportProgressEvent) => cb(e))
+}
+
+/** FilesDroppedEvent names the drop target files from the system landed on. */
+export interface FilesDroppedEvent {
+  /** The target's data-file-drop-target value. */
+  target: string
+  paths: string[]
+}
+
+/** onFilesDropped fires when files are dropped onto an element marked data-file-drop-target. */
+export function onFilesDropped(cb: (e: FilesDroppedEvent) => void): Unsubscribe {
+  return EventsOn(EventNames.filesDropped, (e: FilesDroppedEvent) => cb(e))
 }
 
 // onViewsChanged fires when saved views or their eager-run counts change. it

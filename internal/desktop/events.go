@@ -16,8 +16,10 @@ var errSearchUnavailable = errors.New("pelton: search index is unavailable")
 const (
 	// EventMailNew fires when a sync or idle cycle pulled new messages.
 	EventMailNew = "mail:new"
-	// EventMailRepaired fires when a sync replaced the text of messages that
-	// were cached with an encoding nothing could read, so the list reloads.
+	// EventMailRepaired fires when cached messages changed underneath an open
+	// list without new mail arriving, so the list reloads: a sync replaced text
+	// cached with an encoding nothing could read, conversations were regrouped,
+	// or messages became answered or forwarded.
 	EventMailRepaired = "mail:repaired"
 	// EventSyncProgress fires as folders are synced so the ui can show progress.
 	EventSyncProgress = "sync:progress"
@@ -60,6 +62,9 @@ const (
 	// EventImportProgress fires while mail is being imported from files, and
 	// once more with Running false when the job ends.
 	EventImportProgress = "import:progress"
+	// EventFilesDropped fires when files from the system are dropped onto an
+	// element of the page marked as a drop target. The payload says which.
+	EventFilesDropped = "files:dropped"
 	// EventProfileChanged fires when the app switches profile, or when the
 	// profile it is in is edited. Everything the ui holds is scoped to a profile,
 	// so the frontend reloads its preferences, sidebar, list and views rather
@@ -123,6 +128,14 @@ type ImportProgressEvent struct {
 	Error     string   `json:"error"`
 }
 
+// FilesDroppedEvent is the payload for EventFilesDropped. Target is the value
+// of the drop target's data-file-drop-target attribute, so the page can tell
+// its drop targets apart; Paths are the dropped files.
+type FilesDroppedEvent struct {
+	Target string   `json:"target"`
+	Paths  []string `json:"paths"`
+}
+
 // MailNewEvent is the payload for EventMailNew.
 type MailNewEvent struct {
 	AccountID int64 `json:"accountId"`
@@ -131,7 +144,8 @@ type MailNewEvent struct {
 }
 
 // MailRepairedEvent is the payload for EventMailRepaired. Count is how many
-// messages in the folder were rewritten.
+// messages changed. AccountID and FolderID are 0 when the change spans more
+// than one.
 type MailRepairedEvent struct {
 	AccountID int64 `json:"accountId"`
 	FolderID  int64 `json:"folderId"`

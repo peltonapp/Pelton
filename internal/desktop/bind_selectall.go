@@ -1,13 +1,5 @@
 package desktop
 
-import (
-	"strings"
-	"time"
-
-	"github.com/peltonapp/Pelton/internal/search"
-	"github.com/peltonapp/Pelton/internal/storage"
-)
-
 // selectAllCap is the most ids one select-all will hand back. A selection is an
 // id list all the way through to the bulk actions, so this is what keeps a
 // mailbox of a hundred thousand messages from becoming a hundred thousand
@@ -74,26 +66,12 @@ func (a *App) SearchMessageIDs(req SearchRequestDTO) (MessageIDsDTO, error) {
 	if a.index == nil {
 		return MessageIDsDTO{}, errSearchUnavailable
 	}
-	q := search.Query{
-		Text:    strings.TrimSpace(req.Query),
-		From:    strings.TrimSpace(req.From),
-		To:      strings.TrimSpace(req.To),
-		Subject: strings.TrimSpace(req.Subject),
-		Limit:   selectAllCap,
-		// the same order the list is showing. The cap means this can be a prefix
-		// of the matches rather than all of them, and "select everything" should
-		// take the ones the user can see, not a different slice ranked another
-		// way.
-		Sort: searchSort(req.Sort),
-	}
-	if req.AfterUnix > 0 {
-		q.After = time.Unix(req.AfterUnix, 0)
-	}
-	if req.BeforeUnix > 0 {
-		q.Before = time.Unix(req.BeforeUnix, 0)
-	}
-	if q.Text == "" && q.From == "" && q.To == "" && q.Subject == "" &&
-		q.After.IsZero() && q.Before.IsZero() && !req.HasAttachment && !req.UnreadOnly {
+	// the same order the list is showing. The cap means this can be a prefix of
+	// the matches rather than all of them, and "select everything" should take
+	// the ones the user can see, not a different slice ranked another way.
+	req.Offset = 0
+	q, ok := req.searchQuery(selectAllCap)
+	if !ok {
 		return MessageIDsDTO{IDs: []int64{}}, nil
 	}
 
@@ -103,19 +81,13 @@ func (a *App) SearchMessageIDs(req SearchRequestDTO) (MessageIDsDTO, error) {
 	}
 	ids := make([]int64, 0, len(res.Hits))
 	for _, h := range res.Hits {
-		// the has:attachment and is:unread chips are message fields rather than
-		// indexed ones, so they are applied here exactly as the result list
-		// applies them. A hit whose message is gone is skipped, which also covers
-		// stale index entries.
-		if req.HasAttachment || req.UnreadOnly {
+		// the stored-field filters are message fields rather than indexed ones,
+		// so they are applied here exactly as the result list applies them. A
+		// hit whose message is gone is skipped, which also covers stale index
+		// entries.
+		if req.hasStoredFilter() {
 			m, err := a.store.GetMessage(a.ctx, h.ID)
-			if err != nil {
-				continue
-			}
-			if req.HasAttachment && !m.HasAttachments {
-				continue
-			}
-			if req.UnreadOnly && m.Flags.Has(storage.FlagSeen) {
+			if err != nil || !req.keeps(m) {
 				continue
 			}
 		}

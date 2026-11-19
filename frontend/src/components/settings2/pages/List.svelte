@@ -18,27 +18,20 @@
     setRowShowSnippet,
     setPreviewLines,
     setFlagHighlight,
-    setShowAccountEmail,
     setToggle,
-    setTimeFormat,
     setMultiSelectEnabled,
     setShowSelectedCount,
     setSelectAllScope,
     setSelectAllUnified,
     setSearchSort,
     searchSortPref,
-    setSidebarIndentGuides,
-    setShowUnsyncedFolder,
-    setShowFlaggedCount,
-    setStartupSelection,
-    setViewsPlacement,
     setAvatarSource,
     setAvatarStyle,
     setSwipeEnabled,
     setSwipeLeftAction,
     setSwipeRightAction,
+    setThreadedList,
   } from '../../../stores/prefs'
-  import { sidebar } from '../../../stores/accounts'
   import { t } from '../../../lib/i18n'
   import { pfpDataUri, type PfpStyle } from '../../../lib/pfp'
   import { initials } from '../../../lib/format'
@@ -47,7 +40,6 @@
   import type {
     AvatarPlacement,
     RowTemplate,
-    ViewsPlacement,
     SelectAllScope,
     SearchKind,
     SearchSortPref,
@@ -82,12 +74,6 @@
     { key: 'off', label: $t('onboarding.flagopt.off') },
   ]
 
-  $: timeFormatOptions = [
-    { key: 'auto', label: $t('settingsPanel.timeFormat.auto') },
-    { key: '12', label: $t('settingsPanel.timeFormat.h12') },
-    { key: '24', label: $t('settingsPanel.timeFormat.h24') },
-  ]
-
   $: selectAllScopeItems = [
     { value: 'offer', label: $t('settingsPanel.selectAllScope.offer') },
     { value: 'all', label: $t('settingsPanel.selectAllScope.all') },
@@ -109,43 +95,6 @@
       ...searchSorts.map((option) => ({ value: option, label: $t(`messageList.search.sort.${option}`) })),
     ]
   }
-
-  $: viewsPlacementOptions = [
-    { key: 'hidden', label: $t('views.setting.hidden') },
-    { key: 'sidebar', label: $t('views.setting.sidebar') },
-    { key: 'tab', label: $t('views.setting.tab') },
-  ]
-
-  // unified view names are localized by key in the sidebar; reuse that here so
-  // the setting and the row it points at read the same.
-  function unifiedViewName(key: string, fallback: string): string {
-    const lookup = key === 'inbox' ? 'sidebar.unifiedInbox' : `sidebar.view.${key}`
-    const translated = $t(lookup)
-    return translated === lookup ? fallback : translated
-  }
-
-  // "last used", then every unified view and every folder grouped by account.
-  $: startupItems = [
-    { value: 'last', label: $t('settingsPanel.startup.lastUsed') },
-    ...($sidebar.data
-      ? [
-          {
-            label: $t('sidebar.unifiedViews.heading'),
-            options: $sidebar.data.views.map((view) => ({
-              value: `view:${view.key}`,
-              label: unifiedViewName(view.key, view.label),
-            })),
-          },
-          ...$sidebar.data.accounts.map((account) => ({
-            label: account.email,
-            options: ($sidebar.data?.foldersByAccount[account.id] ?? []).map((folder) => ({
-              value: `folder:${folder.id}`,
-              label: folder.imapPath,
-            })),
-          })),
-        ]
-      : []),
-  ] satisfies SelectItem[]
 
   $: avatarSourceItems = [
     { value: 'bimi_gravatar', label: $t('settingsPanel.avatarSource.bimiGravatar') },
@@ -178,10 +127,9 @@
   }
 </script>
 
-<ListPreview />
-
 <Card title={$t('list.card.layout')}>
   <Row id="avatar-placement" label={$t('list.avatarPlacement.label')} hint={$t('list.avatarPlacement.hint')} stacked>
+    <ListPreview slot="preview" />
     <div class="fill">
       <ChoiceCards
         label={$t('list.avatarPlacement.label')}
@@ -198,6 +146,7 @@
     {/if}
   </Row>
   <Row id="row-template" label={$t('settingsPanel.label.rowLayout')} stacked>
+    <ListPreview slot="preview" />
     <div class="fill">
       <ChoiceCards
         label={$t('settingsPanel.label.rowLayout')}
@@ -212,9 +161,7 @@
     </div>
   </Row>
   <Row id="snippet" label={$t('settingsPanel.toggle.showMessagePreview')} hint={$t('settingsPanel.hint.previewShowsOn')} disabled={!snippetCapable}>
-    <span slot="preview">
-      <RowSkeleton avatar={$prefs.avatarPlacement} template="relaxed" height={84} />
-    </span>
+    <ListPreview slot="preview" />
     <ToggleSwitch
       checked={$prefs.rowShowSnippet}
       disabled={!snippetCapable}
@@ -223,11 +170,7 @@
     />
   </Row>
   <Row id="preview-lines" label={$t('settingsPanel.label.previewLines')} disabled={!snippetCapable || !$prefs.rowShowSnippet}>
-    <span slot="preview" class="lines-pic">
-      {#each Array($prefs.previewLines) as _, i (i)}
-        <span class="bar" class:short={i === $prefs.previewLines - 1}></span>
-      {/each}
-    </span>
+    <ListPreview slot="preview" />
     <Segmented
       label={$t('settingsPanel.label.previewLines')}
       value={String($prefs.previewLines)}
@@ -235,17 +178,8 @@
       on:change={(e) => setPreviewLines(Number(e.detail))}
     />
   </Row>
-  <Row id="account-email" label={$t('settingsPanel.toggle.showMailboxEmail')}>
-    <ToggleSwitch
-      checked={$prefs.showAccountEmail}
-      label={$t('settingsPanel.toggle.showMailboxEmail')}
-      on:change={(e) => setShowAccountEmail(e.detail)}
-    />
-  </Row>
-</Card>
-
-<Card title={$t('settingsPanel.label.flaggedHighlight')} description={$t('settingsPanel.hint.barIconFlag')} bare>
-  <div data-setting="flag-highlight">
+  <Row id="flag-highlight" label={$t('settingsPanel.label.flaggedHighlight')} hint={$t('settingsPanel.hint.barIconFlag')} stacked>
+    <ListPreview slot="preview" />
     <ChoiceCards
       label={$t('settingsPanel.label.flaggedHighlight')}
       value={$prefs.flagHighlight}
@@ -256,23 +190,27 @@
     >
       <FlagSkeleton mode={option.key as 'flag' | 'left' | 'both' | 'off'} />
     </ChoiceCards>
-  </div>
+  </Row>
+</Card>
+
+<Card title={$t('list.card.conversations')}>
+  <Row id="threaded-list" label={$t('list.threaded.label')} hint={$t('list.threaded.hint')}>
+    <ListPreview slot="preview" />
+    <ToggleSwitch
+      checked={$prefs.threadedList}
+      label={$t('list.threaded.label')}
+      on:change={(e) => setThreadedList(e.detail)}
+    />
+  </Row>
 </Card>
 
 <Card title={$t('list.card.dateTime')}>
   <Row id="date-time" label={$t('settingsPanel.dateTime')} hint={$t('settingsPanel.dateTimeNote')}>
+    <ListPreview slot="preview" />
     <ToggleSwitch
       checked={$prefs.showDateTime}
       label={$t('settingsPanel.dateTime')}
       on:change={(e) => setToggle('showDateTime', e.detail)}
-    />
-  </Row>
-  <Row id="time-format" label={$t('settingsPanel.label.timeFormat')} hint={$t('settingsPanel.hint.timeFormat')}>
-    <Segmented
-      label={$t('settingsPanel.label.timeFormat')}
-      value={$prefs.timeFormat}
-      options={timeFormatOptions}
-      on:change={(e) => setTimeFormat(e.detail)}
     />
   </Row>
 </Card>
@@ -323,46 +261,6 @@
       />
     </Row>
   {/each}
-</Card>
-
-<Card title={$t('settingsPanel.category.sidebar')}>
-  <Row id="indent-guides" label={$t('settingsPanel.toggle.indentGuides')} hint={$t('settingsPanel.hint.indentGuides')}>
-    <ToggleSwitch
-      checked={$prefs.sidebarIndentGuides}
-      label={$t('settingsPanel.toggle.indentGuides')}
-      on:change={(e) => setSidebarIndentGuides(e.detail)}
-    />
-  </Row>
-  <Row id="unsynced-folder" label={$t('settingsPanel.toggle.unsyncedFolder')} hint={$t('settingsPanel.hint.unsyncedFolder')}>
-    <ToggleSwitch
-      checked={$prefs.showUnsyncedFolder}
-      label={$t('settingsPanel.toggle.unsyncedFolder')}
-      on:change={(e) => setShowUnsyncedFolder(e.detail)}
-    />
-  </Row>
-  <Row id="flagged-count" label={$t('settingsPanel.toggle.flaggedCount')} hint={$t('settingsPanel.hint.flaggedCount')}>
-    <ToggleSwitch
-      checked={$prefs.showFlaggedCount}
-      label={$t('settingsPanel.toggle.flaggedCount')}
-      on:change={(e) => setShowFlaggedCount(e.detail)}
-    />
-  </Row>
-  <Row id="startup-selection" label={$t('settingsPanel.label.startupSelection')} hint={$t('settingsPanel.hint.startupSelection')}>
-    <Select
-      value={$prefs.startupSelection}
-      ariaLabel={$t('settingsPanel.label.startupSelection')}
-      items={startupItems}
-      on:change={(e) => setStartupSelection(e.detail)}
-    />
-  </Row>
-  <Row id="views-placement" label={$t('views.setting.label')} hint={$t('views.setting.hint')}>
-    <Segmented
-      label={$t('views.setting.label')}
-      value={$prefs.viewsPlacement}
-      options={viewsPlacementOptions}
-      on:change={(e) => setViewsPlacement(e.detail as ViewsPlacement)}
-    />
-  </Row>
 </Card>
 
 <Card title={$t('settingsPanel.category.avatars')}>
@@ -464,20 +362,4 @@
     border-radius: 50%;
   }
 
-  .lines-pic {
-    display: flex;
-    flex-direction: column;
-    gap: var(--space-2);
-  }
-
-  .bar {
-    display: block;
-    height: 6px;
-    border-radius: 3px;
-    background: var(--border-strong);
-  }
-
-  .bar.short {
-    width: 60%;
-  }
 </style>

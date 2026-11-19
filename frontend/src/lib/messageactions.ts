@@ -19,9 +19,10 @@ import {
   markNotSpam,
   exportMessageEml,
   exportMessagesEml,
+  moveMessage,
 } from './api'
 import type { ArchiveUndo } from './api'
-import type { MessageSummary } from './types'
+import type { MessageSummary, Folder } from './types'
 import { patchInList, removeFromList, neighbourInList } from '../stores/messages'
 import { openMessageId } from '../stores/selection'
 import { clearSelection } from '../stores/listselect'
@@ -29,7 +30,7 @@ import { recordDeleted, recordDeletedBatch } from '../stores/undodelete'
 import { recordArchived, archivedEntry, recordArchivedBatch, type ArchivedMessage } from '../stores/undoarchive'
 import { askConfirm } from '../stores/confirm'
 import { isVIPAddress, addVIP, removeVIP } from '../stores/vip'
-import { errorMessage, toastError, toastSuccess } from '../stores/toast'
+import { errorMessage, toastError, toastInfo, toastSuccess } from '../stores/toast'
 import { sidebar } from '../stores/accounts'
 import { t } from './i18n'
 import { get } from 'svelte/store'
@@ -135,6 +136,47 @@ export function reportArchiveExport(undo: ArchiveUndo): void {
 }
 
 /** Archives one message, recording it for undo and closing it if it was open. */
+/**
+ * Moves messages to a folder of their account as one undo step. Messages
+ * already in that folder are left alone. The rows leave the list at once and
+ * a failure is reported as a toast.
+ */
+export async function moveToFolder(items: MessageSummary[], folder: Folder): Promise<void> {
+  const targets = items.filter((m) => m.folderId !== folder.id)
+  if (targets.length === 0) {
+    return
+  }
+  for (const target of targets) {
+    removeFromList(target.id)
+    if (get(openMessageId) === target.id) {
+      openMessageId.set(null)
+    }
+  }
+  const undone: ArchivedMessage[] = []
+  let failure = ''
+  for (const target of targets) {
+    try {
+      const entry = archivedEntry(target, await moveMessage(target.id, folder.id))
+      if (entry) {
+        undone.push(entry)
+      }
+    } catch (err) {
+      failure = errorMessage(err)
+    }
+  }
+  recordArchivedBatch(undone)
+  if (failure !== '') {
+    toastError(failure)
+    return
+  }
+  const say = get(t)
+  toastInfo(
+    targets.length === 1
+      ? say('detail.moveDialog.moved').replace('{folder}', folder.name)
+      : say('detail.moveDialog.movedCount').replace('{n}', String(targets.length)).replace('{folder}', folder.name),
+  )
+}
+
 export async function archive(item: MessageSummary): Promise<void> {
   try {
     const undo = await archiveMessage(item.id)

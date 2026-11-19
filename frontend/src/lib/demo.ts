@@ -12,6 +12,8 @@ import type {
   MessageSummary,
   MessageDetail,
   OutboxRow,
+  Thread,
+  ThreadList,
 } from './types'
 import { blankAccountProxy } from './proxyroute'
 
@@ -161,6 +163,10 @@ function msg(
     senderVip: false,
     // the demo mail is not signed, so there is no verdict to show.
     smime: { status: '', signer: '', email: '', issuer: '', detail: '' },
+    // every sample is a conversation of its own.
+    threadId: id,
+    answered: false,
+    forwarded: false,
     ...opts,
   }
 }
@@ -235,7 +241,35 @@ export function demoMessage(id: number): MessageDetail {
     attachments: summary.hasAttachments
       ? [{ id: id * 10, filename: 'q4-potato-yields.xlsx', contentType: 'application/vnd.ms-excel', sizeBytes: 48213, inline: false }]
       : [],
+    replyIds: [],
+    forwardIds: [],
   }
+}
+
+/** demoThreads returns the sample inbox as conversations, one message each. */
+export function demoThreads(): ThreadList {
+  return {
+    threads: messages.map((m) => ({
+      threadId: m.threadId,
+      head: m,
+      count: 1,
+      unreadCount: m.seen ? 0 : 1,
+      participants: [m.fromName],
+      hasAttachments: m.hasAttachments,
+      flagged: m.flagged,
+      answered: m.answered,
+      forwarded: m.forwarded,
+      messageIds: [m.id],
+    })),
+    total: messages.length,
+    hasOlder: false,
+  }
+}
+
+/** demoThread returns the one-message conversation of a sample. */
+export function demoThread(threadId: number): Thread {
+  const m = messages.find((x) => x.threadId === threadId) ?? messages[0]
+  return { threadId: m.threadId, messages: [{ ...m, folderRole: 'inbox', fromMe: false }] }
 }
 
 /** demoSearch returns the sample inbox as a result page, so searching in demo
@@ -283,6 +317,7 @@ export function demoOutbox(): OutboxRow[] {
       lastError: '',
       nextAttemptAt: '',
       createdAt: ago(0),
+      editable: false,
     },
   ]
 }

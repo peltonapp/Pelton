@@ -49,11 +49,16 @@
     patchInList,
     removeFromList,
     restoreToList,
-    emptyFilter,
-    filterActive,
     searchSortKind,
-    type SearchFilter,
   } from '../../stores/messages'
+  import { emptyFilter, filterActive, buildFilter, type SearchFilter } from '../../lib/searchquery'
+  import { applyQuickFilter, quickFilterActive } from '../../lib/quickfilter'
+  import ListHeader from './ListHeader.svelte'
+  import ResultsFilters from './ResultsFilters.svelte'
+  import QuickFilterBar from './QuickFilterBar.svelte'
+  import { activeSearch, clearSearch, searchOpenedId, type SearchState } from '../../stores/search'
+  import { quickFilter, contactAddresses, resetQuickFilter } from '../../stores/quickfilter'
+  import { views as savedViews } from '../../stores/views'
   import {
     selectedIds,
     clearSelection,
@@ -63,6 +68,7 @@
     selectOnly,
     toggleSelect,
     selectRange,
+    selectAll,
   } from '../../stores/listselect'
   import {
     expandOffer,
@@ -73,6 +79,10 @@
     clearAll,
   } from '../../stores/selectall'
   import { prefs, setSearchSort } from '../../stores/prefs'
+  import { maildragSource } from '../../stores/maildrag'
+  import { threadedOn, threadMessages, loadThread } from '../../stores/threads'
+  import { listRows, threadAware, type ListRow } from '../../lib/threadrows'
+  import { motion } from '../../lib/motion'
   import {
     setSeen,
     getMessage,
@@ -134,6 +144,58 @@
   let highlightId: number | null = null
   let activeIndex = -1
   $: activeIndex = highlightId === null ? -1 : items.findIndex((m) => m.id === highlightId)
+
+  // in the new design the selection is one band that slides from row to row,
+  // sitting on the highlighted row or else on the open message.
+  $: bandOn = $prefs.design !== 'classic'
+  $: bandIndex = activeIndex >= 0 ? activeIndex : items.findIndex((m) => m.id === $openMessageId)
+  $: bandId = bandIndex >= 0 ? items[bandIndex].id : null
+
+  let bandTop = 0
+  let bandHeight = 0
+  let hoverTop = 0
+  let hoverHeight = 0
+  let hoverShown = false
+
+  $: if (bandOn) {
+    void placeBand(bandId, bandIndex, estRowHeight, windowRows)
+  }
+
+  // the band takes the place of the row it marks. a rendered row is measured;
+  // one outside the rendered window gets the place its index gives it.
+  async function placeBand(id: number | null, index: number, height: number, _rendered: unknown): Promise<void> {
+    if (id === null) {
+      return
+    }
+    await tick()
+    const el = listEl?.querySelector<HTMLElement>(`[id="msg-${id}"]`)
+    if (el) {
+      bandTop = el.offsetTop
+      bandHeight = el.offsetHeight
+    } else {
+      bandTop = index * height
+      bandHeight = height
+    }
+  }
+
+  // a second, fainter band follows the pointer from row to row.
+  function onRowsPointerMove(event: PointerEvent): void {
+    if (!bandOn || event.pointerType !== 'mouse') {
+      return
+    }
+    const el = (event.target as HTMLElement).closest<HTMLElement>('[id^="msg-"]')
+    if (!el) {
+      hoverShown = false
+      return
+    }
+    hoverTop = el.offsetTop
+    hoverHeight = el.offsetHeight
+    hoverShown = true
+  }
+
+  function hideHover(): void {
+    hoverShown = false
+  }
 
   // virtualization. the list can hold thousands of rows, so we only render the
   // window around the viewport plus a little overscan, padding the rest with
@@ -199,19 +261,128 @@
     }
   }
 
+  // the new design searches from the top bar; classic keeps its own bar here.
+  $: classic = $prefs.design === 'classic'
+  $: inSearch = !classic && $activeSearch !== null
+
   let searchFilter: SearchFilter = emptyFilter
   let lastKey = ''
-  $: if ($selection && selectionKey($selection) !== lastKey) {
-    lastKey = selectionKey($selection)
-    // the search bar drops its chips with the folder, so the filter they
-    // stood for must go too, or the next search still carries it.
-    searchFilter = emptyFilter
-    clearSelection()
-    resetScroll()
-    void loadList($selection)
+  let lastActive: SearchState | null = null
+  $: if ($selection) {
+    syncList($selection, $activeSearch, classic)
   }
 
-  $: items = $messageList.data?.items ?? []
+  // syncList keeps the list on whatever it should show: the selection's list,
+  // or in the new design the top bar's search while one is running. Moving to
+  // another folder ends a running search.
+  function syncList(sel: Selection, active: SearchState | null, isClassic: boolean): void {
+    const key = selectionKey(sel)
+    if (key !== lastKey) {
+      const first = lastKey === ''
+      lastKey = key
+      // the search bar drops its chips with the folder, so the filter they
+      // stood for must go too, or the next search still carries it.
+      searchFilter = emptyFilter
+      expanded = new Set()
+      clearSelection()
+      resetScroll()
+      resetQuickFilter()
+      if (!isClassic && active && first) {
+        lastActive = active
+        applySearch(active.text, buildFilter(active.chips))
+        return
+      }
+      lastActive = null
+      if (!isClassic && active) {
+        clearSearch()
+      }
+      void loadList(sel)
+      return
+    }
+    if (isClassic || active === lastActive) {
+      return
+    }
+    lastActive = active
+    if (active) {
+      searchQuery.set(active.text)
+      applySearch(active.text, buildFilter(active.chips))
+    } else {
+      searchQuery.set('')
+      applySearch('', emptyFilter)
+    }
+  }
+
+  $: loadedItems = $messageList.data?.items ?? []
+  $: threads = $messageList.data?.threads
+  // the quick filter narrows what is loaded; paging still follows the
+  // unfiltered list underneath. A conversation passes on what any of its
+  // messages has, not only its newest.
+  $: quickOn = !classic && $prefs.quickFilterBar && quickFilterActive($quickFilter)
+  $: heads = quickOn ? filterHeads(loadedItems, threads) : loadedItems
+
+  function filterHeads(list: MessageSummary[], groups: typeof threads): MessageSummary[] {
+    const kept = new Set(applyQuickFilter(threadAware(list, groups), $quickFilter, $contactAddresses).map((m) => m.id))
+    return list.filter((m) => kept.has(m.id))
+  }
+
+  // the conversations shown open, by thread id. They stay open while the list
+  // reloads under them and close when the list moves elsewhere.
+  let expanded = new Set<number>()
+  // the conversation just opened, whose replies slide in; only that one, so a
+  // reply scrolled back into view does not animate again.
+  let entering = 0
+  let enteringTimer: ReturnType<typeof setTimeout> | undefined
+
+  // a grouped list is one row per conversation with the open ones' replies
+  // beneath. items is what is on screen in order, so selection, keyboard and
+  // the virtual window work on replies the way they do on any row.
+  $: rows = listRows(heads, threads, expanded, $threadMessages)
+  $: items = rows.map((r) => r.message)
+
+  // an open conversation whose replies were dropped by a reload reads them
+  // again.
+  $: for (const threadId of expanded) {
+    if (!$threadMessages.has(threadId)) {
+      loadThread(threadId).catch((err) => toastError(errorMessage(err)))
+    }
+  }
+
+  // toggleThread opens or closes a conversation's replies. Closing one with
+  // the highlight on a reply moves the highlight up to the conversation.
+  function toggleThread(row: ListRow): void {
+    const thread = row.thread
+    if (!thread || thread.count < 2) {
+      return
+    }
+    const next = new Set(expanded)
+    if (next.has(thread.threadId)) {
+      next.delete(thread.threadId)
+      const lit = rows.find((r) => r.message.id === highlightId)
+      if (lit?.parentId === row.message.id) {
+        highlightId = row.message.id
+      }
+    } else {
+      next.add(thread.threadId)
+      hideHover()
+      entering = thread.threadId
+      clearTimeout(enteringTimer)
+      enteringTimer = setTimeout(() => (entering = 0), motion.slow)
+    }
+    expanded = next
+  }
+
+  // the grouping follows the preference: turning it on or off reads the
+  // list again in the other shape.
+  $: threaded = threadedOn($prefs)
+  let lastThreaded: boolean | null = null
+  $: if (threaded !== lastThreaded) {
+    const changed = lastThreaded !== null
+    lastThreaded = threaded
+    expanded = new Set()
+    if (changed && !inSearch && lastKey !== '') {
+      void loadList($selection)
+    }
+  }
   // each account's colour (#486), shown only while the list mixes accounts.
   $: accountColors = Object.fromEntries(($sidebar.data?.accounts ?? []).map((a) => [a.id, a.color ?? '']))
   $: mixedAccounts = items.some((m) => m.accountId !== items[0].accountId)
@@ -221,8 +392,8 @@
   $: searching = $messageList.data?.searching ?? false
   $: hasMore = searching
     ? !($messageList.data?.exhausted ?? false) &&
-      ($messageList.data?.loadedHits ?? items.length) < ($messageList.data?.total ?? 0)
-    : items.length < ($messageList.data?.total ?? 0)
+      ($messageList.data?.loadedHits ?? loadedItems.length) < ($messageList.data?.total ?? 0)
+    : loadedItems.length < ($messageList.data?.total ?? 0)
   // the cache is exhausted but the server still has older mail. hasMore covers
   // paging what is cached; this covers going back to the server for the rest.
   $: backfilling = $messageList.data?.backfilling ?? false
@@ -241,13 +412,22 @@
   $: startIndex = Math.max(0, Math.floor(scrollTop / estRowHeight) - OVERSCAN)
   $: visibleCount = Math.ceil(viewportHeight / estRowHeight) + OVERSCAN * 2
   $: endIndex = Math.min(items.length, startIndex + visibleCount)
-  $: windowItems = items.slice(startIndex, endIndex)
+  $: windowRows = rows.slice(startIndex, endIndex)
   $: topPad = startIndex * estRowHeight
   $: bottomPad = Math.max(0, (items.length - endIndex) * estRowHeight)
 
   // the live multi-selection, intersected with what is still loaded so bulk
   // actions never act on rows that have scrolled out of the data.
   $: selectedItems = items.filter((m) => $selectedIds.has(m.id))
+
+  // what a drag that starts on a row carries: the whole selection when the row
+  // is part of it, otherwise that row alone. the classic design has no drag.
+  function dragItems(item: MessageSummary): MessageSummary[] {
+    if ($prefs.design === 'classic') {
+      return []
+    }
+    return $selectedIds.has(item.id) ? selectedItems : [item]
+  }
 
   // select-all is not offered in the unified views unless it is asked for: one
   // of those lists spans every account, so "everything in this list" is a much
@@ -268,6 +448,17 @@
   async function onSelectAllClick(): Promise<void> {
     if (allLoadedSelected && selectionCount > 0) {
       clearAll()
+      return
+    }
+    await selectEveryRow()
+  }
+
+  // a quick-filtered list selects only the rows it shows: widening to the
+  // whole mailbox would take in the messages the filter hides.
+  async function selectEveryRow(): Promise<void> {
+    if (quickOn) {
+      clearExpandOffer()
+      selectAll(items.map((m) => m.id))
       return
     }
     await selectAllInList(items.map((m) => m.id))
@@ -330,7 +521,45 @@
       return
     }
     setSearchSort($searchSortKind, event.detail)
+    if (!classic && $activeSearch) {
+      applySearch($activeSearch.text, buildFilter($activeSearch.chips))
+      return
+    }
     applySearch($searchQuery.trim(), searchFilter)
+  }
+
+  // listTitle names what the new design's header shows.
+  function listTitle(sel: Selection, isSearching: boolean): string {
+    return isSearching ? $t('search.results.title') : viewTitle(sel)
+  }
+
+  // unreadFor reads the selection's unread count from the sidebar, which keeps
+  // it current as mail is read.
+  function unreadFor(sel: Selection): number {
+    if (sel.kind === 'view') {
+      return $sidebar.data?.views.find((v) => v.key === sel.view)?.unreadCount ?? 0
+    }
+    if (sel.kind === 'savedView') {
+      return $savedViews.find((v) => v.id === sel.viewId)?.unreadCount ?? 0
+    }
+    return $sidebar.data?.foldersByAccount[sel.accountId]?.find((f) => f.id === sel.folderId)?.unreadCount ?? 0
+  }
+
+  // countText words the count beside the title.
+  function countText(data: typeof $messageList.data, shown: number, quick: boolean): string {
+    if (!data) {
+      return ''
+    }
+    if (quick) {
+      return $t('list.header.shown').replace('{shown}', String(shown)).replace('{total}', String(data.items.length))
+    }
+    if (data.searching) {
+      if (data.items.length < data.total) {
+        return $t('messageList.resultsOf').replace('{loaded}', String(data.items.length)).replace('{total}', String(data.total))
+      }
+      return `${data.items.length} ${data.items.length === 1 ? $t('messageList.result') : $t('messageList.results')}`
+    }
+    return `${data.total.toLocaleString()} ${data.total === 1 ? $t('messageList.message') : $t('messageList.messages')}`
   }
 
   // open marks the message seen if needed (and wanted) and shows it in the detail pane. a
@@ -357,6 +586,7 @@
     clearSelection()
     // the row that was opened is where a following shift-click measures from.
     anchorAt(item.id)
+    searchOpenedId.set(!classic && searching ? item.id : null)
     openMessage(item.id)
     if (!item.seen && $prefs.markReadOnOpen) {
       patchInList(item.id, { seen: true })
@@ -410,7 +640,7 @@
     // loaded (#320).
     if (selectAllAvailable && (event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 'a') {
       event.preventDefault()
-      await selectAllInList(items.map((m) => m.id))
+      await selectEveryRow()
       return
     }
     if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
@@ -437,6 +667,24 @@
         anchorAt(id)
       }
       await scrollActiveIntoView()
+    } else if ((event.key === 'ArrowRight' || event.key === 'ArrowLeft') && activeIndex >= 0 && threads) {
+      // right opens a conversation and left closes it, or steps from a reply
+      // up to its conversation; mirrored for a right to left interface.
+      const row = rows[activeIndex]
+      const rtl = getComputedStyle(listEl).direction === 'rtl'
+      const opening = (event.key === 'ArrowRight') !== rtl
+      if (row.parentId !== 0) {
+        if (!opening) {
+          event.preventDefault()
+          highlightId = row.parentId
+          anchorAt(row.parentId)
+          await tick()
+          await scrollActiveIntoView()
+        }
+      } else if (row.thread && row.thread.count > 1 && opening !== expanded.has(row.thread.threadId)) {
+        event.preventDefault()
+        toggleThread(row)
+      }
     } else if (event.key === 'Enter' && activeIndex >= 0) {
       event.preventDefault()
       await open(activeIndex)
@@ -731,10 +979,12 @@
 
 <svelte:window on:resize={onResize} />
 
-<section class="list-col">
-  <div class="header">
-    <SearchBar value={$searchQuery} on:search={onSearch} on:filter={onFilter} on:sort={onSort} />
-  </div>
+<section class="list-col" class:new={!classic}>
+  {#if classic}
+    <div class="header">
+      <SearchBar value={$searchQuery} on:search={onSearch} on:filter={onFilter} on:sort={onSort} />
+    </div>
+  {/if}
 
   {#if selectionCount > 0}
     <div class="select-bar">
@@ -793,6 +1043,31 @@
         <IconTrash size={16} stroke={1.7} />
       </button>
     </div>
+  {:else if !classic}
+    <ListHeader
+      title={listTitle($selection, inSearch)}
+      count={countText($messageList.data, heads.length, quickOn)}
+      unread={unreadFor($selection)}
+      searching={inSearch}
+      backLabel={viewTitle($selection)}
+      on:sort={onSort}
+    >
+      <svelte:fragment slot="lead">
+        {#if selectAllAvailable && items.length > 0}
+          <button
+            type="button"
+            class="select-all quiet"
+            role="checkbox"
+            aria-checked="false"
+            aria-label={$t('list.selectAll.label')}
+            title={$t('list.selectAll.label')}
+            on:click={onSelectAllClick}
+          >
+            <IconSquare size={16} stroke={1.7} />
+          </button>
+        {/if}
+      </svelte:fragment>
+    </ListHeader>
   {:else}
     <div class="meta-bar">
       {#if selectAllAvailable && items.length > 0}
@@ -829,6 +1104,13 @@
     </div>
   {/if}
 
+  {#if inSearch}
+    <ResultsFilters on:sort={onSort} />
+  {/if}
+  {#if !classic && $prefs.quickFilterBar}
+    <QuickFilterBar />
+  {/if}
+
   <!-- selecting the loaded rows is not the same as selecting the mailbox, so
        the difference is offered rather than assumed (#320). -->
   {#if $expandOffer}
@@ -854,6 +1136,9 @@
     bind:this={listEl}
     on:keydown={onKeydown}
     on:scroll={onScroll}
+    on:scroll={hideHover}
+    on:pointermove={onRowsPointerMove}
+    on:pointerleave={hideHover}
   >
     {#if $messageList.status === 'loading' && items.length === 0}
       <!-- placeholders rather than a spinner, and only once the load has taken
@@ -861,10 +1146,15 @@
       <MessageSkeleton active rows={10} />
     {:else if $messageList.status === 'error'}
       <ErrorState message={$messageList.error} onRetry={() => loadList($selection)} />
+    {:else if items.length === 0 && quickOn && loadedItems.length > 0}
+      <EmptyState title={$t('quickFilter.empty')} detail={$t('quickFilter.emptyDetail')}>
+        <IconMail size={28} stroke={1.4} />
+        <button slot="action" type="button" class="load-older-btn" on:click={resetQuickFilter}>{$t('quickFilter.clear')}</button>
+      </EmptyState>
     {:else if items.length === 0}
       <EmptyState
-        title={$searchQuery ? $t('messageList.empty.noMatch') : $t('messageList.empty.noMessages')}
-        detail={$searchQuery ? $t('messageList.empty.tryDifferentSearch') : $t('messageList.empty.viewEmpty')}
+        title={$searchQuery || inSearch ? $t('messageList.empty.noMatch') : $t('messageList.empty.noMessages')}
+        detail={$searchQuery || inSearch ? $t('messageList.empty.tryDifferentSearch') : $t('messageList.empty.viewEmpty')}
       >
         <IconMail size={28} stroke={1.4} />
       </EmptyState>
@@ -872,11 +1162,32 @@
       {#if topPad > 0}
         <div class="spacer" style={`height:${topPad}px`} aria-hidden="true"></div>
       {/if}
-      {#each windowItems as item, i (item.id)}
+      {#if bandOn}
+        <div
+          class="hover-band"
+          class:shown={hoverShown}
+          style={`transform: translateY(${hoverTop}px); height: ${hoverHeight}px`}
+          aria-hidden="true"
+        ></div>
+        <div
+          class="select-band"
+          class:shown={bandIndex >= 0}
+          style={`transform: translateY(${bandTop}px); height: ${bandHeight}px`}
+          aria-hidden="true"
+        ></div>
+      {/if}
+      {#each windowRows as row, i (row.key)}
         {@const index = startIndex + i}
-        <div id={`msg-${item.id}`}>
+        {@const item = row.message}
+        <div id={`msg-${item.id}`} use:maildragSource={() => dragItems(item)}>
           <MessageRow
             message={item}
+            thread={row.thread}
+            expanded={row.thread !== null && expanded.has(row.thread.threadId)}
+            child={row.parentId !== 0}
+            fromMe={row.fromMe}
+            entering={row.threadId !== 0 && row.threadId === entering}
+            banded={bandOn && index === bandIndex}
             accountColor={mixedAccounts ? (accountColors[item.accountId] ?? '') : ''}
             selected={item.id === $openMessageId || index === activeIndex}
             checked={$selectedIds.has(item.id)}
@@ -885,6 +1196,7 @@
             on:dblclick={() => void openMessageWindow(item.id, item.subject)}
             on:contextmenu={(e) => onContext(e, item)}
             on:swipe={(e) => performSwipe(item, e.detail)}
+            on:toggle={() => toggleThread(row)}
           />
         </div>
       {/each}
@@ -917,6 +1229,20 @@
     background: var(--surface-raised);
     border-inline-end: var(--hairline) solid var(--border-default);
     min-width: 0;
+  }
+
+  .list-col.new {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .list-col.new .rows {
+    flex: 1;
+  }
+
+  .select-all.quiet {
+    padding: var(--space-1);
+    color: var(--text-tertiary);
   }
 
   .header {
@@ -1070,6 +1396,48 @@
     min-height: 0;
     overflow-y: auto;
     outline: none;
+    position: relative;
+  }
+
+  /* lies over the rows as a tint, so it can travel between them. */
+  .select-band {
+    position: absolute;
+    top: 0;
+    inset-inline: 0;
+    z-index: 1;
+    background: var(--selection-bg);
+    opacity: 0;
+    pointer-events: none;
+    transition:
+      transform var(--motion-base) var(--ease-out),
+      height var(--motion-fast) var(--ease-out),
+      opacity var(--motion-fast) var(--ease-out);
+  }
+
+  .select-band.shown,
+  .hover-band.shown {
+    opacity: 1;
+  }
+
+  .hover-band {
+    position: absolute;
+    top: 0;
+    inset-inline: 0;
+    z-index: 1;
+    background: var(--hover-tint);
+    opacity: 0;
+    pointer-events: none;
+    transition:
+      transform var(--motion-fast) var(--ease-out),
+      height var(--motion-fast) var(--ease-out),
+      opacity var(--motion-fast) var(--ease-out);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .hover-band,
+    .select-band {
+      transition: none;
+    }
   }
 
   /* virtualization spacers stand in for the rows outside the rendered window. */

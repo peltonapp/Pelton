@@ -53,6 +53,10 @@ type App struct {
 	// compose windows by name. See windows.go.
 	composeHandoff sync.Map
 	composeWindows sync.Map
+	// sentRequests holds the compose request behind each outbox message sent
+	// in this run, by outbox id, so a scheduled or failed send can be taken
+	// back into a composer. Memory only; see bind_outbox_edit.go.
+	sentRequests sync.Map
 	// notifier posts the new-mail notifications (notify.go) and dock carries
 	// the unread badge on macOS. Both are nil in tests. notifyReady is set once
 	// the notification service has started (notifier.go).
@@ -335,6 +339,10 @@ func (a *App) startup(ctx context.Context) {
 	// hold a window open for.
 	goSafe("checking cached mail for broken text", a.markMangledMail)
 
+	// mail cached before threading existed gets its conversations here, in
+	// small batches so a sync is never kept waiting on the database for long.
+	goSafe("threading cached mail", a.backfillThreads)
+
 	a.startBackgroundServices()
 
 	// off by default; only runs at all if the user turned on a check
@@ -359,6 +367,7 @@ func (a *App) createWindow() {
 	a.win.OnWindowEvent(events.Common.WindowRuntimeReady, func(*application.WindowEvent) {
 		a.domReady()
 	})
+	a.win.OnWindowEvent(events.Common.WindowFilesDropped, a.onFilesDropped)
 }
 
 // domReady runs once the frontend's runtime is loaded in the window. Native

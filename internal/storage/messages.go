@@ -21,6 +21,10 @@ const (
 	FlagSeen Flag = 1 << iota
 	FlagFlagged
 	FlagDeleted
+	// FlagAnswered mirrors imap \Answered.
+	FlagAnswered
+	// FlagForwarded mirrors the $Forwarded keyword.
+	FlagForwarded
 )
 
 // Has reports whether mask contains flag.
@@ -78,6 +82,10 @@ type Message struct {
 	// headers were fetched and contained no IDs.
 	InReplyTo  []string
 	References []string
+	// ThreadID groups the messages of one conversation within an account. It is
+	// assigned on insert; 0 means the row predates threading and the background
+	// backfill has not reached it yet.
+	ThreadID int64
 }
 
 // MessageAuth is the stored Authentication-Results verdict for one message.
@@ -119,9 +127,22 @@ type IncomingAttachment struct {
 	Content     io.Reader
 }
 
-// InsertMessage inserts a single message row and returns its new id.
+// InsertMessage inserts a single message row, assigning it to a conversation
+// thread, and returns its new id.
 func (d *DB) InsertMessage(ctx context.Context, m *Message) (int64, error) {
-	return insertMessage(ctx, d.sql, m)
+	tx, err := d.sql.BeginTx(ctx, nil)
+	if err != nil {
+		return 0, fmt.Errorf("storage: begin message insert: %w", err)
+	}
+	defer tx.Rollback()
+	id, err := insertMessage(ctx, tx, m)
+	if err != nil {
+		return 0, err
+	}
+	if err := tx.Commit(); err != nil {
+		return 0, fmt.Errorf("storage: commit message insert: %w", err)
+	}
+	return id, nil
 }
 
 // InsertMessageWithAttachments inserts a message and its attachments
@@ -176,7 +197,14 @@ func orEmptyBlob(b []byte) []byte {
 	return b
 }
 
+// insertMessage writes the row and its thread assignment. ex must be a
+// transaction, so the thread lookup and the row land together.
 func insertMessage(ctx context.Context, ex execer, m *Message) (int64, error) {
+	assigned, err := resolveThread(ctx, ex, threadInputFor(m))
+	if err != nil {
+		return 0, err
+	}
+	m.ThreadID = assigned.threadID
 	const query = `
 INSERT INTO messages (
     account_id, folder_id, uid, message_id, subject, from_address, from_name,
@@ -185,8 +213,8 @@ INSERT INTO messages (
     smime_status, smime_signer, smime_email, smime_issuer, smime_detail,
     smime_certs, smime_fingerprint,
     reply_to, auth_spf, auth_dkim, auth_dmarc, auth_spf_domain, auth_dkim_domain,
-    charset_guess, in_reply_to, [references]
-) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+    charset_guess, in_reply_to, [references], thread_id, thread_subject, thread_loose
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
 	res, err := ex.ExecContext(ctx, query,
 		m.AccountID, m.FolderID, m.UID, m.MessageID, m.Subject, m.FromAddress,
 		m.FromName, m.ToAddresses, m.CcAddresses, formatTime(m.Date), uint8(m.Flags),
@@ -195,7 +223,8 @@ INSERT INTO messages (
 		m.SMIME.Status, m.SMIME.Signer, m.SMIME.Email, m.SMIME.Issuer, m.SMIME.Detail,
 		orEmptyBlob(m.SMIME.Certs), m.SMIME.Fingerprint,
 		m.ReplyTo, m.Auth.SPF, m.Auth.DKIM, m.Auth.DMARC, m.Auth.SPFDomain, m.Auth.DKIMDomain,
-		m.CharsetGuess, encodeThreadingIDs(m.InReplyTo), encodeThreadingIDs(m.References))
+		m.CharsetGuess, encodeThreadingIDs(m.InReplyTo), encodeThreadingIDs(m.References),
+		assigned.threadID, assigned.subject, boolToInt(assigned.loose))
 	if err != nil {
 		return 0, fmt.Errorf("storage: insert message uid %d: %w", m.UID, err)
 	}
@@ -297,7 +326,7 @@ SELECT id, account_id, folder_id, uid, message_id, subject, from_address,
        snooze_hidden, offline, list_unsubscribe, list_unsubscribe_post,
        smime_status, smime_signer, smime_email, smime_issuer, smime_detail,
        smime_fingerprint, reply_to, auth_spf, auth_dkim, auth_dmarc, auth_spf_domain,
-       auth_dkim_domain, charset_guess, in_reply_to, [references]`
+       auth_dkim_domain, charset_guess, in_reply_to, [references], thread_id`
 
 const selectMessageByID = selectMessageColumns + `
 FROM messages WHERE id = ?`
@@ -321,7 +350,8 @@ func scanMessage(row rowScanner) (*Message, error) {
 		&m.ListUnsubscribe, &unsubPost,
 		&m.SMIME.Status, &m.SMIME.Signer, &m.SMIME.Email, &m.SMIME.Issuer,
 		&m.SMIME.Detail, &m.SMIME.Fingerprint, &m.ReplyTo, &m.Auth.SPF, &m.Auth.DKIM, &m.Auth.DMARC,
-		&m.Auth.SPFDomain, &m.Auth.DKIMDomain, &m.CharsetGuess, &inReplyTo, &references); err != nil {
+		&m.Auth.SPFDomain, &m.Auth.DKIMDomain, &m.CharsetGuess, &inReplyTo, &references,
+		&m.ThreadID); err != nil {
 		return nil, err
 	}
 	t, err := parseTime(date)
