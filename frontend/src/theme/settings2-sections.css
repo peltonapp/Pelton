@@ -1,0 +1,81 @@
+/* brings the classic settings sections in line with the new settings screen when
+   they are mounted inside a page. a page wraps each section in .s2-section. */
+
+:root[data-design="new"] .screen .s2-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-4);
+  border: var(--hairline) solid var(--border-default);
+  border-radius: var(--radius-card);
+  background: var(--surface-raised);
+}
+
+:root[data-design="new"] .screen .s2-section.found {
+  animation: s2-found var(--motion-slow) var(--ease-out) 3 alternate;
+}
+
+@keyframes s2-found {
+  to {
+    background: var(--selection-bg);
+  }
+}
+
+/* the page card already carries the section's title. */
+:root[data-design="new"] .screen .s2-section :is(h3) {
+  display: none;
+}
+
+:root[data-design="new"] .screen .s2-section :is(h4, h5) {
+  margin: var(--space-4) 0 var(--space-2);
+  font-family: var(--font-mono);
+  font-size: var(--fz-meta);
+  font-weight: var(--fw-medium);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-tertiary);
+}
+
+:root[data-design="new"] .screen .s2-section :is(.hint, .sub-hint) {
+  max-width: 62ch;
+  margin: 0;
+  font-size: var(--fz-label);
+  line-height: 1.4;
+  color: var(--text-tertiary);
+}
+
+:root[data-design="new"] .screen .s2-section :is(.empty) {
+  margin: 0;
+  font-size: var(--fz-label);
+  color: var(--text-tertiary);
+}
+
+:root[data-design="new"] .screen .s2-section :is(.list li, .block, .card, .pins li, .log li) {
+  padding: var(--space-3) var(--space-4);
+  border: var(--hairline) solid var(--border-subtle);
+  border-radius: var(--radius-card);
+  background: var(--surface-base);
+}
+
+:root[data-design="new"] .screen .s2-section :is(.list, .blocks, .assign) {
+  gap: var(--space-2);
+  margin: 0;
+}
+
+:root[data-design="new"] .screen .s2-section :is(button.primary, button.ghost, button.danger, .add-btn, .add, .action-btn) {
+  min-height: var(--control-height);
+  border-radius: var(--radius-control);
+  font-size: var(--fz-label);
+}
+
+:root[data-design="new"] .screen .s2-section :is(input[type="text"], input[type="password"], input[type="email"], input[type="number"], input[type="search"], textarea) {
+  border: var(--hairline) solid var(--border-default);
+  border-radius: var(--radius-control);
+  background: var(--surface-base);
+  color: var(--text-primary);
+  font-size: var(--fz-label);
+}
+
+:root[data-design="new"] .screen .s2-section :is(input[type="text"], input[type="password"], input[type="email"], input[type="number"], input[type="search"]) {
+  min-height: var(--control-height);
+}

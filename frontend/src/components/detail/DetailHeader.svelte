@@ -17,6 +17,8 @@
 
   export let detail: MessageDetail
 
+  $: avatarPlacement = $prefs.design === 'classic' ? 'column' : $prefs.avatarPlacement
+
   // what the signing certificate's authority says about it now. The check runs
   // when a signed message is opened rather than at sync: a certificate valid
   // when the mail arrived can be withdrawn afterwards, which is the case worth
@@ -148,9 +150,14 @@
   <h1 dir="auto" class="subject">{detail.subject || $t('detail.noSubject')}</h1>
 
   <div class="from-row">
-    <Avatar name={detail.fromName} email={detail.fromAddress} size={36} />
+    {#if avatarPlacement === 'column'}
+      <Avatar name={detail.fromName} email={detail.fromAddress} size={36} />
+    {/if}
     <div class="from-info">
       <div class="from-line">
+        {#if avatarPlacement === 'inline'}
+          <Avatar name={detail.fromName} email={detail.fromAddress} size={18} />
+        {/if}
         <button
           type="button"
           class="vip-toggle"

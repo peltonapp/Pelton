@@ -42,7 +42,12 @@
   $: unread = !message.seen
   $: template = $prefs.rowTemplate as RowTemplate
 
-  $: showAvatar = $prefs.rowShowAvatar && template !== 'single'
+  // the classic design only knows a picture column that is on or off; the new
+  // one can also set a small picture into the sender line.
+  $: avatarPlacement =
+    $prefs.design === 'classic' ? ($prefs.rowShowAvatar ? 'column' : 'hidden') : $prefs.avatarPlacement
+  $: showAvatar = avatarPlacement === 'column' && template !== 'single'
+  $: inlineAvatar = avatarPlacement === 'inline'
   $: showSnippet =
     $prefs.rowShowSnippet && (template === 'relaxed' || template === 'comfortable') && !!message.snippet
   $: avatarSize = template === 'relaxed' ? 36 : 30
@@ -238,6 +243,9 @@
              interface's, so each reads in its own direction (#356). The row
              around them keeps the interface direction, so the layout stays put
              while an Arabic subject reads right to left inside it. -->
+        {#if inlineAvatar}
+          <Avatar name={message.fromName} email={message.fromAddress} size={16} />
+        {/if}
         <span dir="auto" class="sender">{displayName(message.fromName, message.fromAddress)}</span>
         {#if template === 'single'}
           <span dir="auto" class="subject inline">{message.subject || $t('messageList.noSubject')}</span>

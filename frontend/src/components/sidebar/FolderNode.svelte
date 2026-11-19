@@ -6,6 +6,8 @@
   // the whole node (row plus children) is one element so the parent's reorder
   // container sees exactly one child per folder. this node's own children are a
   // separate container, which is what keeps a drag inside its sibling group.
+  import { slide } from 'svelte/transition'
+  import { dur, motion } from '../../lib/motion'
   import {
     IconInbox,
     IconSend,
@@ -194,6 +196,7 @@
 
   {#if expanded && children.length > 0}
     <div
+      transition:slide|local={{ duration: dur(motion.base) }}
       use:reorder
       on:reorderstart={() => startFolderDrag(folder.accountId)}
       on:reorderend={endFolderDrag}

@@ -14,7 +14,12 @@
   import { sidebar, loadSidebar } from '../../stores/accounts'
   import { views, openViewEditor, editViewInEditor } from '../../stores/views'
   import { syncing } from '../../stores/outbox'
-  import { prefs } from '../../stores/prefs'
+  import { prefs, setPaneLocked } from '../../stores/prefs'
+  import { openContextMenu } from '../../stores/contextmenu'
+  import { openSettingsAt } from '../../stores/settingsnav'
+  import moreIcon from '@phosphor-icons/core/assets/regular/dots-three.svg?raw'
+  import Ph from '../common/Ph.svelte'
+  import { tip } from '../../lib/tip'
   import { selection } from '../../stores/selection'
   import { reorder, type ReorderDetail } from '../../lib/reorder'
   import { reorderAccounts } from '../../lib/api'
@@ -49,6 +54,22 @@
     await loadSidebar()
   }
 
+  // the folder pane's own menu, in the new design: what you would otherwise
+  // go looking for in settings while standing in front of the folders.
+  function openOptions(event: MouseEvent): void {
+    const anchor = (event.currentTarget as HTMLElement).getBoundingClientRect()
+    openContextMenu(anchor.left, anchor.bottom + 4, [
+      { label: $t('addMailbox.cta'), action: () => dispatch('addMailbox') },
+      { label: $t('views.new'), action: openNew },
+      'separator',
+      {
+        label: $prefs.paneLocked ? $t('sidebar.options.unlockPanes') : $t('settings.lockPanes'),
+        action: () => setPaneLocked(!$prefs.paneLocked),
+      },
+      { label: $t('sidebar.options.settings'), action: () => openSettingsAt('layout') },
+    ])
+  }
+
   function openNew(): void {
     openViewEditor()
   }
@@ -73,6 +94,18 @@
     >
       <IconRefresh size={16} stroke={1.8} />
     </button>
+    {#if $prefs.design !== 'classic'}
+      <button
+        type="button"
+        class="sync-btn"
+        aria-label={$t('sidebar.options')}
+        aria-haspopup="menu"
+        use:tip={{ text: $t('sidebar.options'), side: 'bottom' }}
+        on:click={openOptions}
+      >
+        <Ph svg={moreIcon} size={16} />
+      </button>
+    {/if}
   </div>
 
   <div class="scroll">
@@ -174,6 +207,35 @@
   .sync-btn:hover {
     background: var(--surface-hover);
     color: var(--text-primary);
+  }
+
+  /* the new design: writing a message is the one accent action of the pane,
+     and its buttons press in. */
+  :global(:root[data-design='new']) .compose-btn {
+    border-color: var(--accent);
+    background: var(--accent);
+    color: var(--accent-fg);
+    transition:
+      filter var(--motion-fast) var(--ease-out),
+      transform var(--motion-fast) var(--ease-press);
+  }
+
+  :global(:root[data-design='new']) .compose-btn:hover {
+    background: var(--accent);
+    filter: brightness(1.08);
+  }
+
+  :global(:root[data-design='new']) .compose-btn:active,
+  :global(:root[data-design='new']) .sync-btn:active {
+    transform: scale(0.97);
+  }
+
+  :global(:root[data-design='new']) .sync-btn {
+    border-color: transparent;
+    background: transparent;
+    transition:
+      background-color var(--motion-fast) var(--ease-out),
+      transform var(--motion-fast) var(--ease-press);
   }
 
   .sync-btn.spinning :global(svg) {

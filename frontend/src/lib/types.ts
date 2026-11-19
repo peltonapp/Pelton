@@ -522,6 +522,8 @@ export interface UIPrefs {
   // the recipient fields fall back to a plain comma-separated text input.
   composeAutocomplete: boolean
   composeChips: boolean
+  // composeMarkdown formats Markdown as it is typed in the composer.
+  composeMarkdown: boolean
   // updateCheckFrequency controls the automatic GitHub-releases update check:
   // 'off' (default), 'startup', 'weekly', or 'monthly'.
   updateCheckFrequency: string
@@ -533,6 +535,25 @@ export interface UIPrefs {
   emptyStateFullscreen: boolean
   // cornerStyle picks the corner radius look: default, square, or round.
   cornerStyle: string
+  // design picks the interface design; classic is the shell and settings
+  // screen from before the redesign.
+  design: DesignPref
+  // layoutMode arranges the mail panes in the new design.
+  layoutMode: LayoutMode
+  // navStyle places the Mail/Contacts/Calendar switcher in the new design.
+  navStyle: NavStyle
+  // railSide is the window edge the rail sits on.
+  railSide: RailSide
+  // paneStyle draws the panes in the new design.
+  paneStyle: PaneStyle
+  // avatarPlacement puts the sender picture in its own column, inline in the
+  // address line, or hides it.
+  avatarPlacement: AvatarPlacement
+  // listHeight is the message list height in the stacked layout, in px.
+  listHeight: number
+  // nativeTitlebar uses the operating system's title bar instead of the
+  // integrated one.
+  nativeTitlebar: boolean
   // themeId selects an installed custom theme; empty means the built-in
   // default themes driven by the theme (light/dark/system) setting.
   themeId: string
@@ -1018,6 +1039,20 @@ export type EditorMode = 'plaintext' | 'markdown' | 'wysiwyg'
 // theme and density preference values.
 export type ThemePref = 'system' | 'light' | 'dark' | 'schedule'
 export type DensityPref = 'compact' | 'medium' | 'luxe'
+/** The interface design: the redesign or the shell from before it. */
+export type DesignPref = 'new' | 'classic'
+/** How the mail panes are arranged in the new design. */
+export type LayoutMode = 'columns' | 'stacked'
+/** Where the Mail/Contacts/Calendar switcher sits in the new design. */
+export type NavStyle = 'rail' | 'footer' | 'tabs' | 'hidden'
+/** The window edge the rail sits on. */
+export type RailSide = 'left' | 'right'
+/** How the panes are drawn in the new design. */
+export type PaneStyle = 'hybrid' | 'flat' | 'soft'
+/** Where the sender picture goes in a list row and the reading header. */
+export type AvatarPlacement = 'column' | 'inline' | 'hidden'
+/** One of the top-level areas of the app. */
+export type Space = 'mail' | 'contacts' | 'calendar'
 export type SelectAllScope = 'offer' | 'all' | 'loaded'
 
 // SearchSort is an order search results can actually come back in. The backend

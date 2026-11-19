@@ -45,6 +45,9 @@ type App struct {
 	// windowMaterial is set when the window was created over a native
 	// material (material.go).
 	windowMaterial bool
+	// integratedFrame is set while the main window draws its own title bar
+	// instead of the operating system's.
+	integratedFrame bool
 	// composeHandoff holds a compose pane on its way into a window of its own,
 	// by token, until the window takes it; composeWindows tracks the open
 	// compose windows by name. See windows.go.
@@ -290,6 +293,7 @@ func (a *App) startup(ctx context.Context) {
 	// frame rather than resizing in front of the user.
 	a.applySavedGeometry(&a.windowOptions)
 	a.applyWindowMaterial(&a.windowOptions)
+	a.applyWindowFrame(&a.windowOptions)
 	a.createWindow()
 
 	// the tray icon (Windows and Linux; no-op elsewhere). started after the

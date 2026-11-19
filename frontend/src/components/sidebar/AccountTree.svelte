@@ -3,6 +3,8 @@
   // folder tree below it. the header chevron collapses the whole account. root
   // folders are those without a parent; the rest nest via FolderNode recursion.
   import { IconChevronRight, IconFolderPlus, IconAlertTriangle, IconCloudOff } from '@tabler/icons-svelte'
+  import { slide } from 'svelte/transition'
+  import { dur, motion } from '../../lib/motion'
   import FolderNode from './FolderNode.svelte'
   import DragGrip from './DragGrip.svelte'
   import { prefs } from '../../stores/prefs'
@@ -113,6 +115,7 @@
       <p class="empty-note">{$t('sidebar.account.noFolders')}</p>
     {:else}
       <div
+        transition:slide|local={{ duration: dur(motion.base) }}
         use:reorder
         on:reorderstart={() => startFolderDrag(account.id)}
         on:reorderend={endFolderDrag}

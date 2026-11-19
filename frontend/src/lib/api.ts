@@ -1340,6 +1340,29 @@ export function isFullscreen(): Promise<boolean> {
   return App.IsFullscreen()
 }
 
+/**
+ * Reports whether the main window draws its own title bar, in which case the
+ * interface supplies the window buttons and the drag region.
+ */
+export function windowFrameIntegrated(): Promise<boolean> {
+  return App.WindowFrameIntegrated()
+}
+
+/** Minimises the main window. */
+export function minimiseWindow(): void {
+  void App.MinimiseWindow()
+}
+
+/** Maximises the main window, or restores it. */
+export function toggleMaximiseWindow(): Promise<void> {
+  return App.ToggleMaximiseWindow()
+}
+
+/** Reports whether the main window is maximised. */
+export function isWindowMaximised(): Promise<boolean> {
+  return App.IsWindowMaximised()
+}
+
 // toggleFullscreen enters or leaves fullscreen.
 export function toggleFullscreen(): Promise<void> {
   return App.ToggleFullscreen()
@@ -1443,10 +1466,19 @@ export const SettingKeys = {
   defaultEditorMode: 'default_editor_mode',
   composeAutocomplete: 'compose_autocomplete',
   composeChips: 'compose_chips',
+  composeMarkdown: 'compose_markdown',
   updateCheckFrequency: 'update_check_frequency',
   emptyStateImage: 'empty_state_image',
   emptyStateFullscreen: 'empty_state_fullscreen',
   cornerStyle: 'corner_style',
+  design: 'design',
+  layoutMode: 'layout_mode',
+  navStyle: 'nav_style',
+  railSide: 'rail_side',
+  paneStyle: 'pane_style',
+  avatarPlacement: 'avatar_placement',
+  listHeight: 'list_height',
+  nativeTitlebar: 'native_titlebar',
   themeId: 'theme_id',
   menuBarInApp: 'menu_bar_in_app',
   menuBarNativeMinimal: 'menu_bar_native_minimal',

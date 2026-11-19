@@ -988,6 +988,13 @@ export function IsNightly(): $CancellablePromise<boolean> {
 }
 
 /**
+ * IsWindowMaximised reports whether the main window is maximised.
+ */
+export function IsWindowMaximised(): $CancellablePromise<boolean> {
+    return $Call.ByID(767259207);
+}
+
+/**
  * Licenses returns the generated third-party license manifest as json, an array
  * of {group, name, license, text}. Empty when `make licenses` has not been run.
  */
@@ -1247,6 +1254,14 @@ export function MessageIDs(req: $models.ListMessagesRequest): $CancellablePromis
     return $Call.ByID(3727472753, req).then(($result: any) => {
         return $$createType71($result);
     });
+}
+
+/**
+ * MinimiseWindow minimises the main window, for the window buttons of an
+ * integrated title bar.
+ */
+export function MinimiseWindow(): $CancellablePromise<void> {
+    return $Call.ByID(879396139);
 }
 
 /**
@@ -2102,6 +2117,13 @@ export function ToggleFullscreen(): $CancellablePromise<void> {
 }
 
 /**
+ * ToggleMaximiseWindow maximises the main window or restores it.
+ */
+export function ToggleMaximiseWindow(): $CancellablePromise<void> {
+    return $Call.ByID(1702121329);
+}
+
+/**
  * TriggerSync syncs all accounts on demand (the ui refresh action). It returns a
  * clear error only when no account could be synced for lack of credentials.
  */
@@ -2236,6 +2258,15 @@ export function UpdateProfile(req: $models.ProfileRequest): $CancellablePromise<
  */
 export function UploadDraft(id: number): $CancellablePromise<string> {
     return $Call.ByID(929478990, id);
+}
+
+/**
+ * WindowFrameIntegrated reports whether the running main window draws its own
+ * title bar, which tells the frontend to show window buttons and a drag
+ * region. It can differ from the setting until the next launch on macOS.
+ */
+export function WindowFrameIntegrated(): $CancellablePromise<boolean> {
+    return $Call.ByID(699906454);
 }
 
 /**
