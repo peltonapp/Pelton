@@ -1,0 +1,83 @@
+{
+  "lang": "en",
+  "dateOrder": "mdy",
+  "stopwords": ["the", "and", "you", "to", "is", "will", "with", "for", "this", "that", "have", "be", "on", "it", "of", "in", "we", "i", "can", "please", "thanks", "your", "are", "my", "me", "by", "if", "what", "just", "hi", "hello", "would", "could", "let", "know"],
+  "abbreviations": ["e.g", "i.e", "mr", "mrs", "ms", "dr", "etc", "approx", "vs", "no", "fig", "st", "jan", "feb", "mar", "apr", "jun", "jul", "aug", "sep", "sept", "oct", "nov", "dec", "inc", "ltd", "co", "corp", "p.s", "a.m", "p.m"],
+  "cut": [
+    "^--\\s*$",
+    "^__+\\s*$",
+    "^on\\b.{4,200}\\bwrote:\\s*$",
+    "^on\\b.{4,120}$\\n^.{0,120}\\bwrote:\\s*$",
+    "^-{2,}\\s*original message\\s*-{2,}\\s*$",
+    "^-{2,}\\s*forwarded message\\s*-{2,}\\s*$",
+    "^begin forwarded message:?\\s*$",
+    "^from:\\s.+$\\n^(?:sent|date):\\s.+$",
+    "^sent from my \\w+",
+    "^get outlook for \\w+"
+  ],
+  "signoff": "^(?:best|best regards|kind regards|warm regards|regards|cheers|thanks|thanks again|thank you|many thanks|best wishes|all the best|talk soon|speak soon|yours|sincerely|yours sincerely|yours truly|with thanks)\\s*[,.!]?\\s*$",
+  "lists": {
+    "ADV": ["also", "definitely", "certainly", "then", "just", "quickly", "personally", "gladly", "happily", "first", "still", "now", "immediately", "promptly", "asap", "please"],
+    "VERB": ["send", "resend", "send over", "forward", "share", "email", "e-mail", "mail", "get back to you", "get back to", "get back", "follow up", "circle back", "check", "double-check", "double check", "look into", "look at", "review", "read through", "go through", "go over", "call", "ring", "phone", "confirm", "prepare", "draft", "write up", "write", "update", "finish", "complete", "deliver", "ship", "fix", "sort out", "take care of", "handle", "book", "schedule", "arrange", "organize", "organise", "set up", "pay", "transfer", "sign", "submit", "provide", "put together", "compile", "upload", "publish", "reply", "respond", "answer", "let you know", "keep you posted", "keep you updated", "keep you in the loop", "be in touch", "reach out", "talk to", "find out", "investigate", "deploy", "release", "merge", "approve", "order", "invoice", "test", "return", "bring", "drop off", "pick up", "print", "create", "add", "ping", "remind", "chase", "revise", "edit", "correct", "get you", "get it to you", "get that to you", "have a look", "take a look", "dig into", "follow through", "wrap up", "file", "renew", "cancel", "refund", "fill out", "fill in", "loop in", "introduce", "post", "check in", "make", "do", "come back to you", "come back"],
+    "RVERB": ["send", "resend", "send over", "forward", "share", "email", "e-mail", "get back to me", "get back to us", "follow up", "check", "double-check", "look into", "look at", "review", "go through", "go over", "call", "ring", "confirm", "prepare", "draft", "write up", "update", "finish", "complete", "deliver", "ship", "fix", "sort out", "take care of", "handle", "book", "schedule", "arrange", "organize", "organise", "set up", "pay", "transfer", "sign", "countersign", "submit", "provide", "put together", "upload", "publish", "reply", "respond", "answer", "find out", "investigate", "deploy", "approve", "order", "return", "bring", "drop off", "pick up", "print", "add", "ping", "remind", "revise", "edit", "correct", "have a look", "take a look", "fill out", "fill in", "loop in", "introduce", "renew", "cancel", "refund", "check in", "send me", "send us", "let me know", "let us know", "get me", "get us"]
+  },
+  "commitments": [
+    {"re": "\\b(?:i|we)(?:'ll|\\s+will|\\s+shall|'m going to|\\s+am going to|'re going to|\\s+are going to|'m gonna|\\s+am gonna)(?:\\s+{ADV}){0,2}\\s+{VERB}\\b", "conf": 0.75},
+    {"re": "\\b(?:i|we)\\s+(?:promise|commit|plan|intend|aim|expect|undertake)\\s+to(?:\\s+{ADV}){0,2}\\s+{VERB}\\b", "conf": 0.75},
+    {"re": "\\b(?:i|we)(?:'ll|\\s+will)(?:\\s+{ADV}){0,2}\\s+make sure\\b", "conf": 0.7},
+    {"re": "\\b(?:i|we)(?:'ll|\\s+will)\\s+have\\s+(?:it|this|that|them|the\\s+\\w+|my\\s+\\w+|our\\s+\\w+)(?:\\s+\\w+){0,3}?\\s+(?:ready|done|finished|sent|over to you|to you)\\b", "conf": 0.75},
+    {"re": "\\blet me(?:\\s+{ADV}){0,2}\\s+(?:check|double-check|look into|look at|find out|confirm|review|ask|get back to you|follow up|sort out|take care of|dig into|have a look|take a look|investigate)\\b", "conf": 0.65},
+    {"re": "\\byou(?:'ll|\\s+will)\\s+(?:have|get|receive)\\s+(?:it|this|that|them|the\\s+\\w+|my\\s+\\w+|our\\s+\\w+|an?\\s+\\w+)\\b", "conf": 0.6, "needsDue": true},
+    {"re": "\\b(?:it|this|that|they|the(?:\\s+\\w+){1,2}|your(?:\\s+\\w+){1,2})\\s+will\\s+be\\s+(?:sent|shipped|delivered|ready|done|finished|fixed|deployed|released|paid|transferred|signed)\\b", "conf": 0.6, "needsDue": true}
+  ],
+  "requests": [
+    {"re": "\\b(?:can|could|would|will)\\s+you(?:\\s+please)?(?:\\s+{ADV}){0,2}\\s+{RVERB}\\b", "conf": 0.7},
+    {"re": "\\b(?:please|pls|kindly)(?:\\s*,)?(?:\\s+{ADV}){0,1}\\s+{RVERB}\\b", "conf": 0.7},
+    {"re": "^(?:{RVERB})\\b", "conf": 0.6, "needsDue": true},
+    {"re": "\\b(?:i|we)(?:'d|\\s+would|\\s+really|\\s+will|\\s+just)?\\s+(?:need|like|want)\\s+you\\s+to(?:\\s+{ADV}){0,2}\\s+{RVERB}\\b", "conf": 0.7},
+    {"re": "\\b(?:i|we)(?:'d|\\s+would|\\s+really|\\s+will|\\s+just)?\\s+need\\s+(?:it|this|that|them|the\\s+\\w+|your\\s+\\w+)(?:\\s+\\w+){0,3}?\\s+(?:by|before|until|no later than)\\b", "conf": 0.65, "needsDue": true},
+    {"re": "\\blet (?:me|us) know(?:\\s+\\S+){0,6}?\\s+(?:by|before|until|no later than)\\b", "conf": 0.65, "needsDue": true},
+    {"re": "\\bmake sure (?:to|you)\\s+{RVERB}\\b", "conf": 0.6},
+    {"re": "\\b(?:don't|do not) forget to\\s+{RVERB}\\b", "conf": 0.65, "allowNegation": true},
+    {"re": "\\b(?:can|could|may) (?:i|we) (?:ask|get) you to\\s+{RVERB}\\b", "conf": 0.7},
+    {"re": "\\b(?:you|you'll)\\s+(?:need|have)\\s+to\\s+{RVERB}(?:\\s+\\S+){0,6}?\\s+(?:by|before|until|no later than)\\b", "conf": 0.6, "needsDue": true}
+  ],
+  "negation": "\\b(?:not|never|no longer|unable|won't|wont|can't|cant|cannot|couldn't|wouldn't|don't|didn't|isn't|aren't|wasn't|shan't|nobody|nothing)\\b",
+  "conditional": "\\b(?:if|unless|in case|as soon as|once\\s+(?:i|we|you|it|it's|they|he|she|the|this|that|everything|all)|should you|provided that|assuming|depending on|whenever|otherwise)\\b",
+  "notConditional": "\\b(?:check|see|ask|find out|verify|look)\\s+if\\b",
+  "openQuestion": "^(?:when|what|why|where|who|whom|how|which)\\b",
+  "habitual": "\\b(?:every|each|always|usually|normally|often|sometimes|generally|typically)\\b",
+  "hedge": "\\b(?:try|trying|maybe|perhaps|possibly|probably|hopefully|might|attempt|my best|if possible|not sure|i think|i guess)\\b",
+  "past": "^(?:did|have|has|had|were|was|didn't|haven't|hasn't)\\b|\\b(?:did you|have you|has anyone|had you|were you able|was it)\\b",
+  "done": "\\b(?:attached|herewith|enclosed|please find|here is|here's|here are|below you|sent you|have sent|i've sent|we've sent|already)\\b",
+  "futureCue": "\\b(?:soon|shortly|later|asap|next|tomorrow|today|tonight|this afternoon|this evening)\\b",
+  "dates": {
+    "weekdays": {"sunday": 0, "monday": 1, "tuesday": 2, "tue": 2, "tues": 2, "wednesday": 3, "wed": 3, "thursday": 4, "thu": 4, "thur": 4, "thurs": 4, "friday": 5, "fri": 5, "saturday": 6},
+    "months": {"january": 1, "jan": 1, "february": 2, "feb": 2, "march": 3, "mar": 3, "april": 4, "apr": 4, "may": 5, "june": 6, "jun": 6, "july": 7, "jul": 7, "august": 8, "aug": 8, "september": 9, "sep": 9, "sept": 9, "october": 10, "oct": 10, "november": 11, "nov": 11, "december": 12, "dec": 12},
+    "numbers": {"a": 1, "an": 1, "one": 1, "two": 2, "three": 3, "four": 4, "five": 5, "six": 6, "seven": 7, "eight": 8, "nine": 9, "ten": 10, "a couple of": 2, "a few": 3, "couple of": 2},
+    "units": {"day": "day", "days": "day", "business day": "bday", "business days": "bday", "working day": "bday", "working days": "bday", "week": "week", "weeks": "week", "month": "month", "months": "month", "hour": "hour", "hours": "hour"},
+    "phrases": [
+      {"re": "\\b(?:today|tonight|this evening|this afternoon|end of (?:the |my )?day|eod|close of business|cob)\\b", "rel": "today"},
+      {"re": "\\b(?:the )?day after tomorrow\\b", "rel": "day", "n": 2},
+      {"re": "\\btomorrow\\b", "rel": "day", "n": 1},
+      {"re": "\\bend of next week\\b", "rel": "weekend", "n": 1},
+      {"re": "\\b(?:end of (?:the |this )?week|eow|this week|later this week)\\b", "rel": "weekend", "n": 0},
+      {"re": "\\b(?:early next week|beginning of next week|start of next week)\\b", "rel": "weekstart", "n": 1},
+      {"re": "\\bnext week\\b", "rel": "weekend", "n": 1},
+      {"re": "\\bend of next month\\b", "rel": "monthend", "n": 1},
+      {"re": "\\b(?:end of (?:the |this )?month|eom|this month|later this month)\\b", "rel": "monthend", "n": 0},
+      {"re": "\\bnext month\\b", "rel": "monthend", "n": 1},
+      {"re": "\\bnext\\s+{WEEKDAY}\\b", "rel": "nextweekday"},
+      {"re": "\\b(?:this|this coming|coming)\\s+{WEEKDAY}\\b", "rel": "weekday"},
+      {"re": "\\b{WEEKDAY}\\b", "rel": "weekday"},
+      {"re": "\\b(?:in|within)\\s+(?:the next\\s+)?{NUMBER}\\s+{UNIT}\\b", "rel": "in"},
+      {"re": "\\b{DAY}(?:st|nd|rd|th)?\\s+(?:of\\s+)?{MONTH}\\b(?:,?\\s+{YEAR})?", "rel": "daymonth"},
+      {"re": "\\b{MONTH}\\s+{DAY}(?:st|nd|rd|th)?\\b(?:,?\\s+{YEAR})?", "rel": "monthday"}
+    ],
+    "times": [
+      {"re": "\\b(\\d{1,2})(?::(\\d{2}))?\\s*(am|pm|a\\.m\\.|p\\.m\\.)", "ampm": true},
+      {"re": "\\b(?:at|by|before|until|till|around)\\s+(\\d{1,2}):(\\d{2})\\b"},
+      {"re": "\\b(?:noon|midday)\\b", "fixed": "12:00"}
+    ]
+  }
+}
