@@ -53,9 +53,9 @@ func (a *App) ListFolders(accountID int64) ([]FolderDTO, error) {
 // conversations out, as its list does.
 func (a *App) folderCounts(f storage.Folder) (total, unread int, err error) {
 	if folderRole(f) == roleInbox {
-		return a.store.FolderCountsHidingMuted(a.ctx, f.ID)
+		return a.store.FolderCountsHidingMuted(a.mailCtx(), f.ID)
 	}
-	return a.store.FolderCounts(a.ctx, f.ID)
+	return a.store.FolderCounts(a.mailCtx(), f.ID)
 }
 
 // unifiedView is one entry in the built-in cross-account group. The label is a
@@ -97,15 +97,15 @@ func (a *App) ListUnifiedViews() ([]UnifiedViewDTO, error) {
 			return nil, err
 		}
 		q.HideMuted = v.key == viewInbox
-		total, err := a.store.CountMessages(a.ctx, q)
+		total, err := a.store.CountMessages(a.mailCtx(), q)
 		if err != nil {
 			return nil, err
 		}
 		var unread int
 		if q.HideMuted {
-			unread, err = a.store.UnreadCountFor(a.ctx, q)
+			unread, err = a.store.UnreadCountFor(a.mailCtx(), q)
 		} else {
-			unread, err = a.store.UnreadCount(a.ctx, q.FolderIDs)
+			unread, err = a.store.UnreadCount(a.mailCtx(), q.FolderIDs)
 		}
 		if err != nil {
 			return nil, err

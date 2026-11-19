@@ -103,7 +103,7 @@ func TestFetchAndPinPreservesThreadingMetadata(t *testing.T) {
 					if atts[0].Filename != "note.txt" {
 						t.Fatalf("attachment filename = %q", atts[0].Filename)
 					}
-					r, err := db.OpenAttachment(atts[0].DiskPath)
+					r, err := db.OpenAttachment(app.ctx, atts[0])
 					if err != nil {
 						t.Fatal(err)
 					}

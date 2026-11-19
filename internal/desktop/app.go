@@ -289,6 +289,10 @@ type App struct {
 
 	// autoEnc is the state of automatic encryption. See autoencrypt.go.
 	autoEnc autoEncryptState
+
+	// mailVault is which mail vaults are unlocked and their keys. See
+	// mailvault.go.
+	mailVault mailVaultState
 }
 
 // locked reports whether the app lock is engaged. An App built without one,
@@ -377,6 +381,7 @@ func (a *App) startup(ctx context.Context) {
 	}
 	a.store = store
 	a.dataDir = dataDir
+	a.initMailVault()
 	a.applyLogSettings()
 	a.applyCharsetFallback()
 	a.queue = outbox.NewQueue(store)
@@ -485,6 +490,7 @@ func (a *App) domReady() {
 func (a *App) shutdown() {
 	// before the store closes, and before anything else can fail on the way out.
 	a.saveGeometry()
+	a.lockMailVaults()
 	a.stopTray()
 	a.stopMCP()
 	a.stopChat()

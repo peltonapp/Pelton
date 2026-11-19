@@ -38,7 +38,7 @@ func (a *App) SetFlagColor(id int64, color int) error {
 // clearing a color leaves a single (or no) label. Failures are logged only; the
 // local color is already saved and authoritative.
 func (a *App) pushColorKeyword(id int64, color int) {
-	m, err := a.store.GetMessage(a.ctx, id)
+	m, err := a.store.GetMessage(a.mailCtx(), id)
 	if err != nil {
 		a.log.Error("color sync: load message", "id", id, "err", err)
 		return

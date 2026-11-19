@@ -24,13 +24,19 @@ func (a *App) ExportMessagePrintView(id int64) error {
 	if err := a.ready(); err != nil {
 		return err
 	}
-	m, err := a.store.GetMessage(a.ctx, id)
+	m, err := a.store.GetMessage(a.mailCtx(), id)
 	if err != nil {
 		return err
 	}
-	atts, err := a.store.ListAttachments(a.ctx, id)
+	atts, err := a.store.ListAttachments(a.mailCtx(), id)
 	if err != nil {
 		return err
+	}
+	dir := os.TempDir()
+	if m.VaultID != 0 {
+		if dir, err = a.mailVaultTempFor(0); err != nil {
+			return err
+		}
 	}
 
 	email, folderName := a.lookupContext(a.ctx, m.AccountID, m.FolderID)
@@ -50,7 +56,7 @@ func (a *App) ExportMessagePrintView(id int64) error {
 		Folder:  folderName,
 	}, body, allowRemote)
 
-	path := filepath.Join(os.TempDir(), fmt.Sprintf("pelton-message-%d.html", id))
+	path := filepath.Join(dir, fmt.Sprintf("pelton-message-%d.html", id))
 	if err := os.WriteFile(path, []byte(doc), 0o600); err != nil {
 		return fmt.Errorf("pelton: write print view: %w", err)
 	}
