@@ -15,6 +15,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/peltonapp/Pelton/internal/applock"
 	"github.com/peltonapp/Pelton/internal/certtrust"
 	"github.com/peltonapp/Pelton/internal/configsync"
 	pimap "github.com/peltonapp/Pelton/internal/imap"
@@ -27,7 +28,6 @@ import (
 	"github.com/wailsapp/wails/v3/pkg/application"
 	"github.com/wailsapp/wails/v3/pkg/events"
 	"github.com/wailsapp/wails/v3/pkg/services/dock"
-	"github.com/wailsapp/wails/v3/pkg/services/notifications"
 	"golang.org/x/oauth2"
 )
 
@@ -65,10 +65,13 @@ type App struct {
 	// notifier posts the new-mail notifications (notify.go) and dock carries
 	// the unread badge on macOS. Both are nil in tests. notifyReady is set once
 	// the notification service has started (notifier.go).
-	notifier    *notifications.NotificationService
+	notifier    notificationCenter
 	notifyReady atomic.Bool
-	dock        *dock.DockService
-	log         *slog.Logger
+	// notifyCategories holds the ids of the button sets already registered
+	// with the notification service in this run (notify_actions.go).
+	notifyCategories sync.Map
+	dock             *dock.DockService
+	log              *slog.Logger
 	// sentCopies tracks the copies of sent mail still on their way to the Sent
 	// folder (bind_sync.go), which run after the outbox has moved on.
 	sentCopies sync.WaitGroup
@@ -105,6 +108,9 @@ type App struct {
 	// draftsMu serializes draft changes: the drafts live in one settings value
 	// and every change is a load, modify, write.
 	draftsMu sync.Mutex
+	// merges holds this session's contact merges that can still be undone. See
+	// bind_contacts_merge.go.
+	merges mergeHistory
 	// queuedSyncs holds the ids of accounts with a queueSync waiting for
 	// syncMu, so a burst of changes queues one sync rather than one each.
 	queuedSyncs sync.Map
@@ -226,6 +232,26 @@ type App struct {
 	// focusMu serialises changes to the stored focus state (bind_focus.go),
 	// which the ticker, the bindings and the new-mail path all write.
 	focusMu sync.Mutex
+
+	// lock is the app lock (applock.go) and sysAuth the system's own
+	// authentication prompt behind it. authMu keeps to one prompt at a time,
+	// and lockHidden, under lockWinMu, names the windows the lock hid.
+	lock       *applock.Locker
+	sysAuth    systemAuth
+	authMu     sync.Mutex
+	lockWinMu  sync.Mutex
+	lockHidden []string
+
+	// quickMu guards quickAccel, the global shortcut registered for quick
+	// compose, empty while none is (quickcompose.go).
+	quickMu    sync.Mutex
+	quickAccel string
+}
+
+// locked reports whether the app lock is engaged. An App built without one,
+// as most tests build it, is never locked.
+func (a *App) locked() bool {
+	return a.lock != nil && a.lock.Locked()
 }
 
 // IsDemoMode reports whether the app was launched in the cosmetic demo mode. The
@@ -257,6 +283,9 @@ func newApp(version, channel string) *App {
 		storeReady: make(chan struct{}),
 	}
 	a.activity = outbox.NewActivityLog(activityLogSize, a.emitActivity)
+	a.lock = applock.New(nil)
+	a.lock.OnChange(a.onLockChanged)
+	a.sysAuth = newSystemAuth()
 	return a
 }
 
@@ -309,6 +338,9 @@ func (a *App) startup(ctx context.Context) {
 	a.applyCharsetFallback()
 	a.queue = outbox.NewQueue(store)
 	a.loadProxy()
+	// before the window exists, so a lock that starts locked is in place
+	// before anything can ask for mail.
+	a.initLock()
 	close(a.storeReady)
 
 	// as early as the store allows, so the window opens at its remembered

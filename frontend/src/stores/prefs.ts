@@ -5,8 +5,8 @@
 // source of truth.
 
 import { writable } from 'svelte/store'
-import type { UIPrefs, ThemePref, DensityPref, EditorMode, ViewsPlacement, CloseAction, LogLevel, SelectAllScope, SearchKind, SearchSortPref, DesignPref, LayoutMode, NavStyle, RailSide, PaneStyle, AvatarPlacement, ContactsView, ComposeOpenIn, ReaderWidth, AfterMove } from '../lib/types'
-import { getUIPrefs, setSetting, SettingKeys, systemColorScheme, setWindowTheme, getThemeApply } from '../lib/api'
+import type { QuickComposeStatus, UIPrefs, ThemePref, DensityPref, EditorMode, ViewsPlacement, CloseAction, LogLevel, SelectAllScope, SearchKind, SearchSortPref, DesignPref, LayoutMode, NavStyle, RailSide, PaneStyle, AvatarPlacement, ContactsView, ComposeOpenIn, ReaderWidth, AfterMove, AfterReplySend, FollowUpInterval, ProjectsView } from '../lib/types'
+import { getUIPrefs, setSetting, SettingKeys, systemColorScheme, setWindowTheme, getThemeApply, setQuickCompose } from '../lib/api'
 import { applyTheme, applyDensity, applyAccent, applyScale, applyReduceMotion, applyHandCursor, setThemeSchedule, applyUIFont, applyMonoFont, applyCorners, applyDesign, watchSystemTheme, setSystemSchemeOverride, resolveTheme } from '../theme/theme'
 import { applyUserTheme } from '../theme/usertheme'
 import { uiFontStack, monoFontStack } from '../lib/fonts'
@@ -91,6 +91,8 @@ const defaults: UIPrefs = {
   composeOpenIn: 'window',
   threadedList: true,
   afterMove: 'older',
+  afterReplySend: 'nothing',
+  sendRemindAfter: 'threeDays',
   warnMissingAttachment: true,
   warnEmptySubject: true,
   splitInbox: false,
@@ -100,6 +102,8 @@ const defaults: UIPrefs = {
   senderPanel: false,
   mailDates: true,
   myDayPanel: false,
+  projectsView: 'grid',
+  projectSuggestions: true,
   themeId: '',
   menuBarInApp: false,
   menuBarNativeMinimal: false,
@@ -116,6 +120,10 @@ const defaults: UIPrefs = {
   uiFont: 'default',
   monoFont: 'default',
   notifyNewMail: false,
+  notifyActionArchive: true,
+  notifyActionMarkRead: true,
+  notifyActionReply: true,
+  cleanLinks: false,
   verboseSync: false,
   syncProgressBar: true,
   statusClock: true,
@@ -125,6 +133,12 @@ const defaults: UIPrefs = {
   signatureAboveQuote: false,
   closeAction: 'background',
   startHidden: false,
+  quickCompose: false,
+  quickComposeShortcut: '',
+  appLock: false,
+  appLockIdleMinutes: 5,
+  appLockOnLaunch: true,
+  appLockHideNotifications: true,
   syncMessageLimit: 50,
   syncAutoBackfill: true,
   startupSelection: 'view:inbox',
@@ -362,6 +376,18 @@ export function setAfterMove(afterMove: AfterMove): void {
   void setSetting(SettingKeys.afterMove, afterMove)
 }
 
+/** Picks what plain Send does with the conversation a reply answered. */
+export function setAfterReplySend(afterReplySend: AfterReplySend): void {
+  prefs.update((p) => ({ ...p, afterReplySend }))
+  void setSetting(SettingKeys.afterReplySend, afterReplySend)
+}
+
+/** Picks when Send and remind sets its reminder. */
+export function setSendRemindAfter(sendRemindAfter: FollowUpInterval): void {
+  prefs.update((p) => ({ ...p, sendRemindAfter }))
+  void setSetting(SettingKeys.sendRemindAfter, sendRemindAfter)
+}
+
 /** Turns the missing attachment check before sending on or off. */
 export function setWarnMissingAttachment(warnMissingAttachment: boolean): void {
   prefs.update((p) => ({ ...p, warnMissingAttachment }))
@@ -414,6 +440,18 @@ export function setMailDates(mailDates: boolean): void {
 export function setMyDayPanel(myDayPanel: boolean): void {
   prefs.update((p) => ({ ...p, myDayPanel }))
   void setSetting(SettingKeys.myDayPanel, String(myDayPanel))
+}
+
+/** Lists projects as a grid of tiles or as rows. */
+export function setProjectsView(projectsView: ProjectsView): void {
+  prefs.update((p) => ({ ...p, projectsView }))
+  void setSetting(SettingKeys.projectsView, projectsView)
+}
+
+/** Turns the reader's "add to project" suggestions on or off. */
+export function setProjectSuggestions(projectSuggestions: boolean): void {
+  prefs.update((p) => ({ ...p, projectSuggestions }))
+  void setSetting(SettingKeys.projectSuggestions, String(projectSuggestions))
 }
 
 /** Turns the gliding caret of the compose editor on or off. */
@@ -471,6 +509,28 @@ export function setFlagColorSync(value: boolean): void {
 export function setNotifyNewMail(value: boolean): void {
   prefs.update((p) => ({ ...p, notifyNewMail: value }))
   void setSetting(SettingKeys.notifyNewMail, String(value))
+}
+
+/** The buttons a new-mail notification can carry. */
+export type NotifyAction = 'archive' | 'markRead' | 'reply'
+
+const notifyActionKeys = {
+  archive: ['notifyActionArchive', SettingKeys.notifyActionArchive],
+  markRead: ['notifyActionMarkRead', SettingKeys.notifyActionMarkRead],
+  reply: ['notifyActionReply', SettingKeys.notifyActionReply],
+} as const
+
+// setNotifyAction shows or hides one button on new-mail notifications.
+export function setNotifyAction(action: NotifyAction, value: boolean): void {
+  const [field, key] = notifyActionKeys[action]
+  prefs.update((p) => ({ ...p, [field]: value }))
+  void setSetting(key, String(value))
+}
+
+// setCleanLinks turns tracking and redirect cleaning of opened links on or off.
+export function setCleanLinks(value: boolean): void {
+  prefs.update((p) => ({ ...p, cleanLinks: value }))
+  void setSetting(SettingKeys.cleanLinks, String(value))
 }
 
 // setShowOfflineIndicator toggles the little downloaded badge on pinned messages.
@@ -787,6 +847,42 @@ export function setCloseAction(value: CloseAction): void {
 export function setStartHidden(value: boolean): void {
   prefs.update((p) => ({ ...p, startHidden: value }))
   void setSetting(SettingKeys.startHidden, String(value))
+}
+
+/**
+ * Turns quick compose on or off with a shortcut. The store follows only what
+ * the backend actually registered and stored; the returned status says why a
+ * shortcut was refused.
+ */
+export async function setQuickComposePref(enabled: boolean, shortcut: string): Promise<QuickComposeStatus> {
+  const status = await setQuickCompose(enabled, shortcut)
+  if (!status.error) {
+    prefs.update((p) => ({ ...p, quickCompose: status.enabled, quickComposeShortcut: status.shortcut }))
+  }
+  return status
+}
+
+/** Records in the store that the app lock was turned on or off by the backend. */
+export function noteAppLock(on: boolean): void {
+  prefs.update((p) => ({ ...p, appLock: on }))
+}
+
+/** Sets how many idle minutes lock the app; 0 locks only on demand and at launch. */
+export function setAppLockIdleMinutes(value: number): void {
+  prefs.update((p) => ({ ...p, appLockIdleMinutes: value }))
+  void setSetting(SettingKeys.appLockIdleMinutes, String(value))
+}
+
+/** Picks whether Pelton starts locked while the lock is on. */
+export function setAppLockOnLaunch(value: boolean): void {
+  prefs.update((p) => ({ ...p, appLockOnLaunch: value }))
+  void setSetting(SettingKeys.appLockOnLaunch, String(value))
+}
+
+/** Picks whether notifications leave out senders and subjects while locked. */
+export function setAppLockHideNotifications(value: boolean): void {
+  prefs.update((p) => ({ ...p, appLockHideNotifications: value }))
+  void setSetting(SettingKeys.appLockHideNotifications, String(value))
 }
 
 // setSyncMessageLimit caps how many of a folder's newest messages a first sync

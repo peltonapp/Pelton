@@ -71,6 +71,9 @@ type ComposeRequest struct {
 	// FollowUpAt is an optional RFC3339 time to be reminded at if nobody has
 	// replied by then. Empty sets no reminder. It must come after the send.
 	FollowUpAt string `json:"followUpAt"`
+	// ProjectID files the message under a project once it is queued, with
+	// the replies it gets. 0 files it nowhere.
+	ProjectID int64 `json:"projectId"`
 }
 
 // SendMessage builds the mime message and enqueues it in the durable outbox. The
@@ -128,6 +131,7 @@ func (a *App) SendMessage(req ComposeRequest) (int64, error) {
 	a.activity.Add(outbox.Entry{MessageID: id, Step: outbox.StepQueued, Recipients: msg.Recipients()})
 	a.emit(EventOutboxChanged, nil)
 	a.recordFollowUp(req, id, msg.MessageID, followUp, notBefore)
+	a.recordProjectMail(req, msg.MessageID)
 
 	// harvest every recipient into the address book so autocomplete learns from
 	// who the user writes to. best effort: a failure here must not fail the send.

@@ -16,7 +16,9 @@
   } from '@tabler/icons-svelte'
   import { snoozeTarget, closeSnooze } from '../../stores/snooze'
   import { snoozeMessage } from '../../lib/api'
-  import { patchInList, removeFromList } from '../../stores/messages'
+  import { get } from 'svelte/store'
+  import { messageList, patchInList, removeFromList } from '../../stores/messages'
+  import { recordSnooze } from '../../lib/organize'
   import { toastError, toastInfo, errorMessage } from '../../stores/toast'
   import { t } from '../../lib/i18n'
   import DateTimePicker from '../common/DateTimePicker.svelte'
@@ -101,9 +103,12 @@
     // and the whole selection from a bulk one. A failure on one message is
     // reported and does not hold back the rest.
     let failure = ''
+    const snoozed: number[] = []
+    const rows = new Map((get(messageList).data?.items ?? []).filter((m) => target.ids.includes(m.id)).map((m) => [m.id, m]))
     for (const id of target.ids) {
       try {
         await snoozeMessage(id, when.toISOString(), hideNow)
+        snoozed.push(id)
         if (hideNow) {
           removeFromList(id)
         } else {
@@ -114,6 +119,9 @@
       }
     }
     busy = false
+    if (snoozed.length > 0) {
+      recordSnooze(snoozed, rows, target.subject, when.toISOString(), hideNow)
+    }
     if (failure !== '') {
       toastError(failure)
       return

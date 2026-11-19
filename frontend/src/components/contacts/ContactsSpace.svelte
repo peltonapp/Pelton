@@ -13,6 +13,8 @@
   import ContactGrid from './ContactGrid.svelte'
   import ContactPane from './ContactPane.svelte'
   import ContactConflictDialog from './ContactConflictDialog.svelte'
+  import ContactDuplicates from './ContactDuplicates.svelte'
+  import mergeIcon from '@phosphor-icons/core/assets/duotone/git-merge-duotone.svg?raw'
   import bookIcon from '@phosphor-icons/core/assets/duotone/address-book-duotone.svg?raw'
   import syncIcon from '@phosphor-icons/core/assets/duotone/arrows-clockwise-duotone.svg?raw'
   import plusIcon from '@phosphor-icons/core/assets/duotone/plus-duotone.svg?raw'
@@ -30,6 +32,7 @@
     contactSeed,
   } from '../../stores/contacts'
   import { contactOrg, selectedContactId } from '../../stores/contactsview'
+  import { duplicateGroups, loadDuplicates } from '../../stores/duplicates'
   import { sidebar } from '../../stores/accounts'
   import { askConfirm } from '../../stores/confirm'
   import { openSettingsAt } from '../../stores/settingsnav'
@@ -58,6 +61,14 @@
   let editing: ContactDraft | null = null
   let dirty = false
   let sideOpen = false
+  let duplicatesOpen = false
+
+  // the badge on the Duplicates button follows the contacts: a sync or an edit
+  // that changes them asks again.
+  $: if (ready) {
+    $contacts
+    void loadDuplicates()
+  }
 
   $: view = $prefs.contactsView as ContactsView
   // an unmeasured window (width 0) is treated as wide.
@@ -286,6 +297,18 @@
           <Ph svg={gridIcon} size={16} />
         </button>
       </div>
+      <button
+        type="button"
+        class="btn"
+        aria-pressed={duplicatesOpen}
+        aria-label={$duplicateGroups.length > 0 ? $t('contacts.duplicates.buttonCount').replace('{n}', String($duplicateGroups.length)) : $t('contacts.duplicates.button')}
+        disabled={$addressBooks.length === 0}
+        on:click={() => (duplicatesOpen = !duplicatesOpen)}
+      >
+        <Ph svg={mergeIcon} size={16} />
+        {#if mode !== 'narrow'}{$t('contacts.duplicates.button')}{/if}
+        {#if $duplicateGroups.length > 0}<span class="badge" aria-hidden="true">{$duplicateGroups.length}</span>{/if}
+      </button>
       <button type="button" class="btn" on:click={refreshContacts} disabled={$contactsLoading}>
         <span class="spin" class:on={$contactsLoading}><Ph svg={syncIcon} size={16} /></span>
         {#if mode !== 'narrow'}{$t('contacts.sync')}{/if}
@@ -315,6 +338,8 @@
       <p>{$t('contacts.noBooks')}</p>
       <button type="button" class="btn primary" on:click={manageBooks}>{$t('contacts.addBook')}</button>
     </div>
+  {:else if duplicatesOpen}
+    <ContactDuplicates on:back={() => (duplicatesOpen = false)} />
   {:else}
     <div class="content {layout}">
       {#if mode === 'wide'}
@@ -489,6 +514,21 @@
 
   .btn:active:not(:disabled) {
     transform: scale(0.98);
+  }
+
+  .btn[aria-pressed='true'] {
+    background: var(--selection-bg);
+  }
+
+  .badge {
+    min-width: calc(var(--fz-meta) * 1.6);
+    padding: 0 var(--space-1);
+    border-radius: var(--radius-control);
+    background: var(--surface-sunken);
+    color: var(--text-secondary);
+    font-size: var(--fz-meta);
+    font-variant-numeric: tabular-nums;
+    text-align: center;
   }
 
   .btn.primary {

@@ -56,6 +56,9 @@ type OccurrenceDTO struct {
 	Transparency string `json:"transparency"`
 	ReadOnly     bool   `json:"readOnly"`
 	HasReminders bool   `json:"hasReminders"`
+	// HasAttendees is true when others are invited, which is when preparing
+	// for the meeting has something to show.
+	HasAttendees bool `json:"hasAttendees"`
 	// Pending is true while a change made here has not reached the server.
 	Pending  bool `json:"pending"`
 	Conflict bool `json:"conflict"`
@@ -224,6 +227,7 @@ func (a *App) ListOccurrences(from, to string, calendarIDs []int64) ([]Occurrenc
 				Transparency:  occ.Event.Transparency,
 				ReadOnly:      cal.ReadOnly,
 				HasReminders:  len(occ.Event.Alarms) > 0,
+				HasAttendees:  len(occ.Event.Attendees) > 0,
 				Pending:       row.Pending != "",
 				Conflict:      row.Conflict,
 			})

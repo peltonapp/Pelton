@@ -26,6 +26,9 @@ type notification struct {
 	title     string
 	body      string
 	messageID int64
+	// actions asks for the Archive, Mark read and Reply buttons the user left
+	// on (notify_actions.go). Only a notification about one message has them.
+	actions bool
 }
 
 // notifyDataMessageID is the key of the message id in a notification's data.
@@ -71,28 +74,39 @@ func (a *App) deliverNotification(n notification) error {
 	if n.messageID > 0 {
 		data[notifyDataMessageID] = n.messageID
 	}
-	return a.notifier.SendNotification(notifications.NotificationOptions{
+	options := notifications.NotificationOptions{
 		ID:    "pelton-" + strconv.FormatInt(notifySeq.Add(1), 10),
 		Title: n.title,
 		Body:  n.body,
 		Data:  data,
 		Sound: &notifications.NotificationSound{Silent: true},
-	})
+	}
+	if n.actions && n.messageID > 0 {
+		lang := a.stringSetting(settingLanguage, "en")
+		actions := enabledNotifyActions(func(key string) bool { return a.boolSetting(key, true) })
+		if len(actions) > 0 {
+			if category, ok := a.ensureNotifyCategory(actions, lang, notifyStringsFor(lang)); ok {
+				options.CategoryID = category
+				return a.notifier.SendNotificationWithActions(options)
+			}
+		}
+	}
+	return a.notifier.SendNotification(options)
 }
 
-// onNotificationResponse runs when a notification is clicked. A click on one
-// about a message opens that message; any other click still asked for Pelton,
-// so it brings the window up.
+// onNotificationResponse runs when a notification is clicked or one of its
+// buttons is pressed. See dispatchNotificationResponse. A button's work can
+// reach the mail server, so it runs off the thread the system called on.
 func (a *App) onNotificationResponse(result notifications.NotificationResult) {
 	if result.Error != nil {
 		a.log.Warn("notification response", "err", result.Error)
 		return
 	}
-	if id, ok := notifyMessageID(result.Response.UserInfo); ok {
-		a.openFromNotification(id)
-		return
-	}
-	a.showWindow()
+	go func() {
+		if err := dispatchNotificationResponse(a.notifyHandlers(), result.Response); err != nil {
+			a.log.Warn("notification button", "action", result.Response.ActionIdentifier, "err", err)
+		}
+	}()
 }
 
 // notifyStrings holds the localizable text of a new-mail notification. Like the
@@ -115,6 +129,14 @@ type notifyStrings struct {
 	focusOneVIP     string // one message, from a VIP
 	focusManyVIP    string // %d messages, %d of them from VIPs
 	focusManyOneVIP string // %d messages, one of them from a VIP
+
+	// the buttons of a new-mail notification (notify_actions.go).
+	actionArchive  string
+	actionMarkRead string
+	actionReply    string
+	// the body that stands in for any notification while the app is locked
+	// with notifications hidden (applock.go).
+	locked string
 }
 
 var notifyLocales = map[string]notifyStrings{
@@ -123,72 +145,96 @@ var notifyLocales = map[string]notifyStrings{
 		followUp: "No reply yet", followUpTo: "To %s",
 		focusEnded: "Focus ended", focusOne: "1 new message", focusOneVIP: "1 new message, from a VIP",
 		focusManyVIP: "%d new messages, %d from VIPs", focusManyOneVIP: "%d new messages, 1 from a VIP",
+		actionArchive: "Archive", actionMarkRead: "Mark read", actionReply: "Reply",
+		locked: "Unlock Pelton to see what is new.",
 	},
 	"de": {
 		newMail: "Neue Nachricht", vipNewMail: "Neue Nachricht von einem VIP", noSubject: "(kein Betreff)", fromUnknown: "Unbekannter Absender", summary: "%d neue Nachrichten",
 		followUp: "Noch keine Antwort", followUpTo: "An %s",
 		focusEnded: "Fokus beendet", focusOne: "1 neue Nachricht", focusOneVIP: "1 neue Nachricht, von einem VIP",
 		focusManyVIP: "%d neue Nachrichten, %d von VIPs", focusManyOneVIP: "%d neue Nachrichten, 1 von einem VIP",
+		actionArchive: "Archivieren", actionMarkRead: "Als gelesen markieren", actionReply: "Antworten",
+		locked: "Entsperre Pelton, um zu sehen, was neu ist.",
 	},
 	"fr": {
 		newMail: "Nouveau message", vipNewMail: "Nouveau message d'un VIP", noSubject: "(sans objet)", fromUnknown: "Expéditeur inconnu", summary: "%d nouveaux messages",
 		followUp: "Pas encore de réponse", followUpTo: "À %s",
 		focusEnded: "Concentration terminée", focusOne: "1 nouveau message", focusOneVIP: "1 nouveau message, d'un VIP",
 		focusManyVIP: "%d nouveaux messages, dont %d de VIP", focusManyOneVIP: "%d nouveaux messages, dont 1 d'un VIP",
+		actionArchive: "Archiver", actionMarkRead: "Marquer comme lu", actionReply: "Répondre",
+		locked: "Déverrouille Pelton pour voir les nouveautés.",
 	},
 	"nl": {
 		newMail: "Nieuw bericht", vipNewMail: "Nieuw bericht van een VIP", noSubject: "(geen onderwerp)", fromUnknown: "Onbekende afzender", summary: "%d nieuwe berichten",
 		followUp: "Nog geen antwoord", followUpTo: "Aan %s",
 		focusEnded: "Focus beëindigd", focusOne: "1 nieuw bericht", focusOneVIP: "1 nieuw bericht, van een VIP",
 		focusManyVIP: "%d nieuwe berichten, %d van VIP's", focusManyOneVIP: "%d nieuwe berichten, 1 van een VIP",
+		actionArchive: "Archiveren", actionMarkRead: "Markeer als gelezen", actionReply: "Beantwoorden",
+		locked: "Ontgrendel Pelton om te zien wat er nieuw is.",
 	},
 	"es": {
 		newMail: "Nuevo mensaje", vipNewMail: "Nuevo mensaje de un VIP", noSubject: "(sin asunto)", fromUnknown: "Remitente desconocido", summary: "%d mensajes nuevos",
 		followUp: "Aún sin respuesta", followUpTo: "Para %s",
 		focusEnded: "Concentración terminada", focusOne: "1 mensaje nuevo", focusOneVIP: "1 mensaje nuevo, de un VIP",
 		focusManyVIP: "%d mensajes nuevos, %d de VIP", focusManyOneVIP: "%d mensajes nuevos, 1 de un VIP",
+		actionArchive: "Archivar", actionMarkRead: "Marcar como leído", actionReply: "Responder",
+		locked: "Desbloquea Pelton para ver las novedades.",
 	},
 	"it": {
 		newMail: "Nuova email", vipNewMail: "Nuova email da un VIP", noSubject: "(nessun oggetto)", fromUnknown: "Mittente sconosciuto", summary: "%d nuove email",
 		followUp: "Ancora nessuna risposta", followUpTo: "A %s",
 		focusEnded: "Concentrazione terminata", focusOne: "1 nuova email", focusOneVIP: "1 nuova email, da un VIP",
 		focusManyVIP: "%d nuove email, %d da VIP", focusManyOneVIP: "%d nuove email, 1 da un VIP",
+		actionArchive: "Archivia", actionMarkRead: "Segna come letto", actionReply: "Rispondi",
+		locked: "Sblocca Pelton per vedere le novità.",
 	},
 	"pl": {
 		newMail: "Nowa wiadomość", vipNewMail: "Nowa wiadomość od VIP-a", noSubject: "(bez tematu)", fromUnknown: "Nieznany nadawca", summary: "Nowe wiadomości: %d",
 		followUp: "Brak odpowiedzi", followUpTo: "Do: %s",
 		focusEnded: "Skupienie zakończone", focusOne: "1 nowa wiadomość", focusOneVIP: "1 nowa wiadomość, od VIP-a",
 		focusManyVIP: "Nowe wiadomości: %d, od VIP-ów: %d", focusManyOneVIP: "Nowe wiadomości: %d, od VIP-a: 1",
+		actionArchive: "Archiwizuj", actionMarkRead: "Oznacz jako przeczytane", actionReply: "Odpowiedz",
+		locked: "Odblokuj Pelton, aby zobaczyć, co nowego.",
 	},
 	"ru": {
 		newMail: "Новая почта", vipNewMail: "Новая почта от VIP-отправителя", noSubject: "(без темы)", fromUnknown: "Неизвестный отправитель", summary: "Новых писем: %d",
 		followUp: "Ответа пока нет", followUpTo: "Кому: %s",
 		focusEnded: "Режим фокуса завершён", focusOne: "1 новое письмо", focusOneVIP: "1 новое письмо, от VIP-отправителя",
 		focusManyVIP: "Новых писем: %d, от VIP: %d", focusManyOneVIP: "Новых писем: %d, от VIP: 1",
+		actionArchive: "В архив", actionMarkRead: "Прочитано", actionReply: "Ответить",
+		locked: "Разблокируйте Pelton, чтобы увидеть новое.",
 	},
 	"tr": {
 		newMail: "Yeni posta", vipNewMail: "Bir VIP'ten yeni posta", noSubject: "(konu yok)", fromUnknown: "Bilinmeyen gönderici", summary: "%d yeni posta",
 		followUp: "Henüz yanıt yok", followUpTo: "Alıcı: %s",
 		focusEnded: "Odak sona erdi", focusOne: "1 yeni posta", focusOneVIP: "1 yeni posta, bir VIP'ten",
 		focusManyVIP: "%d yeni posta, %d tanesi VIP'lerden", focusManyOneVIP: "%d yeni posta, 1 tanesi bir VIP'ten",
+		actionArchive: "Arşivle", actionMarkRead: "Okundu işaretle", actionReply: "Yanıtla",
+		locked: "Yenilikleri görmek için Pelton'un kilidini açın.",
 	},
 	"pt": {
 		newMail: "Correio novo", vipNewMail: "Correio novo de um VIP", noSubject: "(sem assunto)", fromUnknown: "Remetente desconhecido", summary: "%d mensagens novas",
 		followUp: "Ainda sem resposta", followUpTo: "Para %s",
 		focusEnded: "Foco terminado", focusOne: "1 mensagem nova", focusOneVIP: "1 mensagem nova, de um VIP",
 		focusManyVIP: "%d mensagens novas, %d de VIPs", focusManyOneVIP: "%d mensagens novas, 1 de um VIP",
+		actionArchive: "Arquivar", actionMarkRead: "Marcar como lida", actionReply: "Responder",
+		locked: "Desbloqueie o Pelton para ver as novidades.",
 	},
 	"ar": {
 		newMail: "بريد جديد", vipNewMail: "بريد جديد من جهة مهمة", noSubject: "(بلا موضوع)", fromUnknown: "مرسل غير معروف", summary: "رسائل جديدة: %d",
 		followUp: "لا رد بعد", followUpTo: "إلى %s",
 		focusEnded: "انتهى وضع التركيز", focusOne: "رسالة جديدة واحدة", focusOneVIP: "رسالة جديدة واحدة من جهة مهمة",
 		focusManyVIP: "رسائل جديدة: %d، من جهات مهمة: %d", focusManyOneVIP: "رسائل جديدة: %d، من جهة مهمة: 1",
+		actionArchive: "أرشفة", actionMarkRead: "تعليم كمقروء", actionReply: "رد",
+		locked: "افتح قفل Pelton لرؤية الجديد.",
 	},
 	"zh-CN": {
 		newMail: "新邮件", vipNewMail: "来自 VIP 的新邮件", noSubject: "（无主题）", fromUnknown: "未知发件人", summary: "%d 封新邮件",
 		followUp: "尚无回复", followUpTo: "收件人：%s",
 		focusEnded: "专注已结束", focusOne: "1 封新邮件", focusOneVIP: "1 封新邮件，来自 VIP",
 		focusManyVIP: "%d 封新邮件，其中 %d 封来自 VIP", focusManyOneVIP: "%d 封新邮件，其中 1 封来自 VIP",
+		actionArchive: "归档", actionMarkRead: "标为已读", actionReply: "回复",
+		locked: "解锁 Pelton 以查看新内容。",
 	},
 }
 
@@ -254,7 +300,7 @@ func (a *App) notifyNewMail(folder storage.Folder, ids []int64) {
 		if vip {
 			title = s.vipNewMail
 		}
-		pending = append(pending, notification{title: title, body: notifyBody(m, s), messageID: m.ID})
+		pending = append(pending, notification{title: title, body: notifyBody(m, s), messageID: m.ID, actions: true})
 	}
 	if held > 0 {
 		a.recordHeld(held, heldVIP)
@@ -301,6 +347,7 @@ func notifyBody(m *storage.Message, s notifyStrings) string {
 // The delivery itself is per platform: see notify_darwin.go, notify_windows.go
 // and notify_other.go.
 func (a *App) sendNotification(n notification) {
+	n = a.maskForLock(n)
 	if err := a.deliverNotification(n); err != nil {
 		a.log.Warn("notify", "err", err)
 	}

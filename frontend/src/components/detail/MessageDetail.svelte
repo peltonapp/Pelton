@@ -18,8 +18,8 @@
   import TabBar from './TabBar.svelte'
   import { visibleMessageId, hasTabs, activeTabId, tabs, markTabStale, labelTab, closeTab } from '../../stores/tabs'
   import { messageDetail, loadMessage, clearMessage } from '../../stores/message'
-  import { setFlagged, deleteMessage, archiveMessage, scanMessage, openMessageWindow } from '../../lib/api'
-  import { reportArchiveExport, dropDeleted, leaveList, exportEml, markSeen } from '../../lib/messageactions'
+  import { deleteMessage, archiveMessage, scanMessage, openMessageWindow } from '../../lib/api'
+  import { reportArchiveExport, dropDeleted, leaveList, exportEml, markFlagged, markSeen } from '../../lib/messageactions'
   import { editNote, toggleMute, togglePin } from '../../lib/organize'
   import {
     virusTotal,
@@ -30,7 +30,6 @@
     putAttachmentVerdict,
     currentVerdictMessage,
   } from '../../stores/virustotal'
-  import { patchInList } from '../../stores/messages'
   import { recordDeleted } from '../../stores/undodelete'
   import { recordArchived } from '../../stores/undoarchive'
   import { openReply, openForward } from '../../stores/compose'
@@ -54,11 +53,13 @@
     IconCode,
     IconTrash,
     IconChecklist,
+    IconLayoutKanban,
   } from '@tabler/icons-svelte'
   import Conversation from './Conversation.svelte'
   import { openContextMenu, type MenuEntry } from '../../stores/contextmenu'
   import { menuHint } from '../../stores/shortcuts'
   import { createTasksFromMail } from '../../lib/taskmail'
+  import { pickProjectFor } from '../../lib/projectpicker'
   import { forgetCard } from '../../stores/threads'
   import { readerMinWidth } from '../../lib/myday'
   import type { MessageDetail, EditorMode } from '../../lib/types'
@@ -132,6 +133,7 @@
         : { label: $t('messageList.flag'), icon: IconFlagFilled, hint: menuHint('flag'), action: () => void toggleFlag(message) },
       { label: $t('shortcut.markUnread'), icon: IconMailFilled, hint: menuHint('mark-unread'), action: () => void markSeen(message, false) },
       { label: $t('shortcut.createTask'), icon: IconChecklist, hint: menuHint('create-task'), action: () => void createTasksFromMail([message.id]) },
+      { label: $t('projects.addTo'), icon: IconLayoutKanban, hint: menuHint('add-to-project'), action: () => pickProjectFor([message.id], message.threadId) },
       'separator',
       { label: $t('messageList.menu.openInWindow'), icon: IconAppWindow, action: () => void openMessageWindow(message.id, message.subject) },
       { label: $t('detail.toolbar.print'), icon: IconPrinter, action: () => printMessage(message) },
@@ -238,18 +240,7 @@
   }
 
   async function toggleFlag(detail: MessageDetail): Promise<void> {
-    const next = !detail.flagged
-    const apply = (flagged: boolean) => {
-      messageDetail.update((s) => (s.data?.id === detail.id ? { ...s, data: { ...s.data, flagged } } : s))
-      patchInList(detail.id, { flagged })
-    }
-    apply(next)
-    try {
-      await setFlagged(detail.id, next)
-    } catch (err) {
-      apply(!next)
-      toastError(errorMessage(err))
-    }
+    await markFlagged(detail, !detail.flagged)
   }
 
   async function remove(detail: MessageDetail): Promise<void> {

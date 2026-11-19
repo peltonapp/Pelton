@@ -171,6 +171,12 @@ const (
 	// what the reader shows after the open message is archived, deleted or
 	// moved in the new design: "older", "newer" or "list".
 	settingAfterMove = "after_move"
+	// what plain Send does after a reply or forward is sent in the new
+	// composer: "nothing" or "archive" the conversation it answered.
+	settingAfterReplySend = "after_reply_send"
+	// when Send and remind sets its reminder: "tomorrow", "threeDays" or
+	// "week".
+	settingSendRemindAfter = "send_remind_after"
 	// the checks the new composer runs before sending: a text that speaks of
 	// an attachment it does not carry, and an empty subject.
 	settingWarnMissingAttachment = "warn_missing_attachment"
@@ -197,9 +203,22 @@ const (
 	settingMailDates = "mail_dates"
 	// show the My Day panel beside the mail surface in the new design.
 	settingMyDayPanel = "my_day_panel"
+	// how the Projects space lists projects: "grid" or "list".
+	settingProjectsView = "projects_view"
+	// offer to file mail from a project's people under the project, in the
+	// reader. On by default.
+	settingProjectSuggestions = "project_suggestions"
 	// general new-mail OS notifications (#126). VIP senders are stored
 	// separately in bind_vip.go and notify even when this is off.
 	settingNotifyNewMail = "notify_new_mail"
+	// the buttons a new-mail notification carries where the system supports
+	// them. All on by default.
+	settingNotifyActionArchive  = "notify_action_archive"
+	settingNotifyActionMarkRead = "notify_action_mark_read"
+	settingNotifyActionReply    = "notify_action_reply"
+	// links opened from a mail have tracking parameters and redirect wrappers
+	// taken off. Off by default.
+	settingCleanLinks = "clean_links"
 	// verbose sync surfaces the mailbox currently being synced in the status
 	// line instead of a plain "Syncing" (#128). Off by default.
 	settingVerboseSync = "verbose_sync"
@@ -465,6 +484,12 @@ type UIPrefsDTO struct {
 	// AfterMove is what the reader opens once the open message is archived,
 	// deleted or moved in the new design: older, newer or list.
 	AfterMove string `json:"afterMove"`
+	// AfterReplySend is what plain Send does after a reply or forward goes
+	// out: nothing or archive.
+	AfterReplySend string `json:"afterReplySend"`
+	// SendRemindAfter is when Send and remind sets its reminder: tomorrow,
+	// threeDays or week.
+	SendRemindAfter string `json:"sendRemindAfter"`
 	// WarnMissingAttachment asks before sending a message whose text speaks of
 	// an attachment it does not carry. On by default.
 	WarnMissingAttachment bool `json:"warnMissingAttachment"`
@@ -488,6 +513,11 @@ type UIPrefsDTO struct {
 	// MyDayPanel shows today's agenda and tasks beside the mail surface in the
 	// new design.
 	MyDayPanel bool `json:"myDayPanel"`
+	// ProjectsView is how the Projects space lists projects: grid or list.
+	ProjectsView string `json:"projectsView"`
+	// ProjectSuggestions offers, in the reader, to file mail from a project's
+	// people under that project.
+	ProjectSuggestions bool `json:"projectSuggestions"`
 	// ThemeID selects an installed custom theme (see bind_themes.go). Empty
 	// means the built-in default themes driven by the Theme setting.
 	ThemeID string `json:"themeId"`
@@ -528,6 +558,14 @@ type UIPrefsDTO struct {
 	// inbox. Off by default. VIP-sender notifications fire regardless of this
 	// (see bind_vip.go), so important senders cut through when it is off.
 	NotifyNewMail bool `json:"notifyNewMail"`
+	// NotifyActionArchive, NotifyActionMarkRead and NotifyActionReply choose
+	// which buttons a new-mail notification carries.
+	NotifyActionArchive  bool `json:"notifyActionArchive"`
+	NotifyActionMarkRead bool `json:"notifyActionMarkRead"`
+	NotifyActionReply    bool `json:"notifyActionReply"`
+	// CleanLinks removes tracking parameters and redirect wrappers from links
+	// opened from a mail.
+	CleanLinks bool `json:"cleanLinks"`
 	// VerboseSync shows which mailbox is currently syncing in the status line,
 	// with the account and server it is talking to. SyncProgressBar puts a real
 	// progress bar next to it, counting message bodies rather than mailboxes.
@@ -550,6 +588,20 @@ type UIPrefsDTO struct {
 	CloseAction string `json:"closeAction"`
 	// StartHidden keeps the window hidden at launch (#483).
 	StartHidden bool `json:"startHidden"`
+	// QuickCompose registers QuickComposeShortcut as a system-wide shortcut
+	// that opens a small compose window. Off by default; the shortcut is a
+	// Wails accelerator such as "Ctrl+Alt+M".
+	QuickCompose         bool   `json:"quickCompose"`
+	QuickComposeShortcut string `json:"quickComposeShortcut"`
+	// AppLock is whether the app lock is on. It is turned on and off through
+	// EnableAppLock and DisableAppLock. AppLockIdleMinutes locks after that
+	// long unused (0 only on demand), AppLockOnLaunch starts locked, and
+	// AppLockHideNotifications keeps senders and subjects out of
+	// notifications while locked.
+	AppLock                  bool `json:"appLock"`
+	AppLockIdleMinutes       int  `json:"appLockIdleMinutes"`
+	AppLockOnLaunch          bool `json:"appLockOnLaunch"`
+	AppLockHideNotifications bool `json:"appLockHideNotifications"`
 	// SyncMessageLimit caps how many of a folder's newest messages the first
 	// sync fetches; older mail stays on the server until it is asked for. 0
 	// means no limit. SyncAutoBackfill fetches the next batch automatically on
@@ -655,6 +707,8 @@ func (a *App) GetUIPrefs() (UIPrefsDTO, error) {
 		ComposeOpenIn:              a.stringSetting(settingComposeOpenIn, "window"),
 		ThreadedList:               a.boolSetting(settingThreadedList, true),
 		AfterMove:                  a.stringSetting(settingAfterMove, "older"),
+		AfterReplySend:             a.stringSetting(settingAfterReplySend, "nothing"),
+		SendRemindAfter:            a.stringSetting(settingSendRemindAfter, "threeDays"),
 		WarnMissingAttachment:      a.boolSetting(settingWarnMissingAttachment, true),
 		WarnEmptySubject:           a.boolSetting(settingWarnEmptySubject, true),
 		SplitInbox:                 a.boolSetting(settingSplitInbox, false),
@@ -664,6 +718,8 @@ func (a *App) GetUIPrefs() (UIPrefsDTO, error) {
 		SenderPanel:                a.boolSetting(settingSenderPanel, false),
 		MailDates:                  a.boolSetting(settingMailDates, true),
 		MyDayPanel:                 a.boolSetting(settingMyDayPanel, false),
+		ProjectsView:               a.stringSetting(settingProjectsView, "grid"),
+		ProjectSuggestions:         a.boolSetting(settingProjectSuggestions, true),
 		ThemeID:                    a.stringSetting(settingThemeID, ""),
 		MenuBarInApp:               a.boolSetting(settingMenuBarInApp, false),
 		MenuBarNativeMinimal:       a.boolSetting(settingMenuBarNativeMinimal, false),
@@ -680,6 +736,10 @@ func (a *App) GetUIPrefs() (UIPrefsDTO, error) {
 		MonoFont:                   a.stringSetting(settingMonoFont, "default"),
 		SenderFonts:                a.senderFonts(),
 		NotifyNewMail:              a.boolSetting(settingNotifyNewMail, false),
+		NotifyActionArchive:        a.boolSetting(settingNotifyActionArchive, true),
+		NotifyActionMarkRead:       a.boolSetting(settingNotifyActionMarkRead, true),
+		NotifyActionReply:          a.boolSetting(settingNotifyActionReply, true),
+		CleanLinks:                 a.boolSetting(settingCleanLinks, false),
 		VerboseSync:                a.boolSetting(settingVerboseSync, false),
 		SyncProgressBar:            a.boolSetting(settingSyncProgress, true),
 		StatusClock:                a.boolSetting(settingStatusClock, true),
@@ -689,6 +749,12 @@ func (a *App) GetUIPrefs() (UIPrefsDTO, error) {
 		SignatureAboveQuote:        a.boolSetting(settingSignatureAboveQuote, false),
 		CloseAction:                a.stringSetting(settingCloseAction, closeActionBackground),
 		StartHidden:                a.startHiddenEnabled(),
+		QuickCompose:               a.boolSetting(settingQuickCompose, false),
+		QuickComposeShortcut:       a.stringSetting(settingQuickComposeShortcut, defaultQuickComposeShortcut()),
+		AppLock:                    a.boolSetting(settingAppLock, false) && a.lockMethod() != "",
+		AppLockIdleMinutes:         max(a.intSetting(settingAppLockIdle, defaultAppLockIdle), 0),
+		AppLockOnLaunch:            a.boolSetting(settingAppLockOnLaunch, true),
+		AppLockHideNotifications:   a.boolSetting(settingAppLockHideNotifications, true),
 		SyncMessageLimit:           a.syncMessageLimit(),
 		SyncAutoBackfill:           a.boolSetting(settingSyncAutoBackfill, true),
 		StartupSelection:           a.stringSetting(settingStartupSelection, defaultStartupSelection),
@@ -721,8 +787,17 @@ func (a *App) SetSetting(key, value string) error {
 	if err := a.ready(); err != nil {
 		return err
 	}
+	if protectedLockSettings[key] {
+		return errLockSetting
+	}
+	if key == settingQuickCompose || key == settingQuickComposeShortcut {
+		return errQuickComposeSetting
+	}
 	if err := a.store.Set(a.ctx, key, value); err != nil {
 		return err
+	}
+	if key == settingAppLockIdle && a.lock != nil {
+		a.applyLockSettings()
 	}
 	if key == storage.SettingTheme {
 		a.applyNativeTheme(value)

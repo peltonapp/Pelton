@@ -641,7 +641,7 @@ func TestCalendarSettingsRefusesInvalid(t *testing.T) {
 		name   string
 		change func(*CalendarSettingsDTO)
 	}{
-		{"unknown view", func(s *CalendarSettingsDTO) { s.DefaultView = "year" }},
+		{"unknown view", func(s *CalendarSettingsDTO) { s.DefaultView = "decade" }},
 		{"week start", func(s *CalendarSettingsDTO) { s.WeekStart = 7 }},
 		{"end before start", func(s *CalendarSettingsDTO) { s.WorkDayStart, s.WorkDayEnd = 600, 540 }},
 		{"past midnight", func(s *CalendarSettingsDTO) { s.WorkDayEnd = 25 * 60 }},

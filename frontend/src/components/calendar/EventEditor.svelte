@@ -4,7 +4,8 @@
   // an icon. it edits a draft and hands the finished one back; the screen
   // saves it and asks, for one occurrence of a series, which occurrences the
   // change is for. Cmd or Ctrl+Enter saves; escape asks before it throws edits
-  // away.
+  // away. once someone is invited, a scheduling view next to the form shows
+  // everyone's busy time and moves the event to a time that suits them.
   import { createEventDispatcher, tick } from 'svelte'
   import { slide } from 'svelte/transition'
   import clockIcon from '@phosphor-icons/core/assets/duotone/clock-duotone.svg?raw'
@@ -24,7 +25,9 @@
   import ToggleSwitch from '../common/ToggleSwitch.svelte'
   import AnchoredPopover from '../common/AnchoredPopover.svelte'
   import Ph from '../common/Ph.svelte'
+  import Segmented from '../settings2/ui/Segmented.svelte'
   import DateField from './DateField.svelte'
+  import SchedulingAssistant from './SchedulingAssistant.svelte'
   import { addDays, atMinutes, dayKey, daysBetween, minutesOfDay, parseEventTime, startOfDay, toRFC3339 } from '../../lib/caldate'
   import { calendarColor, formatTime } from '../../lib/calformat'
   import {
@@ -42,6 +45,7 @@
   import { reminderChoices, reminderLabel, partStatKey } from './labels'
   import { localZone } from './occurrence'
   import { mailLinks, openMailLink } from '../../lib/maillink'
+  import { openMeetingPrep } from '../../stores/meetingprep'
   import { dur, motion } from '../../lib/motion'
   import { isMac, t } from '../../lib/i18n'
   import type { TimeFormat } from '../../lib/format'
@@ -202,6 +206,19 @@
     }
   }
 
+  // a time picked in the scheduling view. an all-day event keeps its length
+  // in days and only moves.
+  function setTimes(from: Date, to: Date): void {
+    if (allDay) {
+      setStartDay(from)
+      return
+    }
+    startDay = startOfDay(from)
+    startMin = minutesOfDay(from)
+    endDay = startOfDay(to)
+    endMin = minutesOfDay(to)
+  }
+
   function isFound(f: FoundDate, from: Date, to: Date, whole: boolean): boolean {
     return whole === f.allDay && from.getTime() === (f.allDay ? startOfDay(f.start).getTime() : f.start.getTime()) && (whole || to.getTime() === f.end.getTime())
   }
@@ -308,6 +325,26 @@
     }
   }
 
+  // --- details or scheduling ------------------------------------------------------
+
+  let view: 'details' | 'scheduling' = 'details'
+
+  $: if (attendees.length === 0 && view === 'scheduling') {
+    view = 'details'
+  }
+  $: viewItems = [
+    { key: 'details', label: $t('calendar.sched.details') },
+    { key: 'scheduling', label: $t('calendar.sched.scheduling') },
+  ]
+  $: inviteAs = draft.organizer.email || identity?.email || ''
+
+  function showView(next: string): void {
+    if (guest.trim()) {
+      addGuests()
+    }
+    view = next === 'scheduling' ? 'scheduling' : 'details'
+  }
+
   // --- notes --------------------------------------------------------------------
 
   // the notes grow with what is in them rather than scrolling inside a box;
@@ -345,11 +382,16 @@
   $: saveHint = `${isMac ? '⌘' : 'Ctrl+'}Enter`
 </script>
 
-<Modal title={draft.id === 0 ? $t('calendar.newEvent') : $t('calendar.editEvent')} size="medium" {dirty} on:close>
+<Modal title={draft.id === 0 ? $t('calendar.newEvent') : $t('calendar.editEvent')} size={view === 'scheduling' ? 'large' : 'medium'} {dirty} on:close>
   <!-- svelte-ignore a11y-no-noninteractive-element-interactions -->
-  <form id="event-editor" class="editor" style={`--cal:${calendarColor(chosen)}`} on:submit|preventDefault={submit} on:keydown={onKeydown}>
-    <!-- svelte-ignore a11y-autofocus -->
-    <input class="title" bind:value={summary} placeholder={$t('calendar.addTitle')} aria-label={$t('calendar.title')} autofocus />
+  <form id="event-editor" class="editor" class:scheduling={view === 'scheduling'} style={`--cal:${calendarColor(chosen)}`} on:submit|preventDefault={submit} on:keydown={onKeydown}>
+    <div class="top">
+      <!-- svelte-ignore a11y-autofocus -->
+      <input class="title" bind:value={summary} placeholder={$t('calendar.addTitle')} aria-label={$t('calendar.title')} autofocus />
+      {#if attendees.length > 0}
+        <Segmented value={view} options={viewItems} label={$t('calendar.sched.view')} on:change={(e) => showView(e.detail)} />
+      {/if}
+    </div>
 
     {#if note}
       <p class="note lead">{note}</p>
@@ -363,6 +405,21 @@
           </button>
         {/each}
       </div>
+    {/if}
+
+    {#if view === 'scheduling'}
+      <SchedulingAssistant
+        {start}
+        {end}
+        {allDay}
+        {attendees}
+        {calendarId}
+        organizer={inviteAs}
+        eventId={draft.id}
+        {weekStart}
+        {timeFormat}
+        on:change={(e) => setTimes(e.detail.start, e.detail.end)}
+      />
     {/if}
 
     <div class="row">
@@ -579,6 +636,9 @@
     <div class="foot">
       {#if draft.id !== 0}
         <button type="button" class="cal-btn danger" on:click={() => dispatch('remove')}>{$t('calendar.delete')}</button>
+        {#if attendees.length > 0}
+          <button type="button" class="cal-btn" on:click={() => openMeetingPrep(draft.id, draft.recurrenceId)}>{$t('prep.button')}</button>
+        {/if}
       {/if}
       <span class="spacer"></span>
       <kbd class="hint" aria-hidden="true">{saveHint}</kbd>
@@ -604,11 +664,24 @@
     flex-direction: column;
   }
 
+  .top {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+    border-bottom: var(--hairline) solid var(--border-subtle);
+  }
+
+  /* the scheduling view stands in for the form; the rows stay mounted so
+     nothing in them is lost on the way back. */
+  .editor.scheduling > .row {
+    display: none;
+  }
+
   .title {
-    width: 100%;
+    flex: 1;
+    min-width: 0;
     padding: var(--space-2) 0 var(--space-3);
     border: none;
-    border-bottom: var(--hairline) solid var(--border-subtle);
     background: transparent;
     color: var(--text-primary);
     font: inherit;

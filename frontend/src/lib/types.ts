@@ -464,6 +464,9 @@ export interface ComposeRequest {
   // followUpAt is an optional RFC3339 time to be reminded at when nobody has
   // replied by then. Empty or left out sets no reminder.
   followUpAt?: string
+  // projectId files the message, and the replies it gets, under a project.
+  // 0 or left out files it nowhere.
+  projectId?: number
 }
 
 /**
@@ -858,6 +861,11 @@ export interface UIPrefs {
   // afterMove is what the reader opens once the open message is archived,
   // deleted or moved in the new design.
   afterMove: AfterMove
+  // afterReplySend is what plain Send does with the conversation a reply or
+  // forward answered, once it is on its way.
+  afterReplySend: AfterReplySend
+  // sendRemindAfter is when Send and remind sets its reminder.
+  sendRemindAfter: FollowUpInterval
   // warnMissingAttachment asks before sending a message whose text speaks of
   // an attachment it does not carry.
   warnMissingAttachment: boolean
@@ -881,6 +889,11 @@ export interface UIPrefs {
   // myDayPanel shows today's agenda and tasks beside the mail surface in the
   // new design.
   myDayPanel: boolean
+  // projectsView is how the Projects space lists projects.
+  projectsView: ProjectsView
+  // projectSuggestions offers, in the reader, to file mail from a project's
+  // people under that project.
+  projectSuggestions: boolean
   // themeId selects an installed custom theme; empty means the built-in
   // default themes driven by the theme (light/dark/system) setting.
   themeId: string
@@ -920,6 +933,14 @@ export interface UIPrefs {
   // notifyNewMail raises a native OS notification for new inbox mail. VIP
   // senders notify regardless of this (see stores/vip.ts).
   notifyNewMail: boolean
+  // notifyActionArchive, notifyActionMarkRead and notifyActionReply choose the
+  // buttons a new-mail notification carries where the system supports them.
+  notifyActionArchive: boolean
+  notifyActionMarkRead: boolean
+  notifyActionReply: boolean
+  // cleanLinks takes known tracking parameters and redirect wrappers off links
+  // opened from a mail. Off by default: it can break a sign-in or verification link.
+  cleanLinks: boolean
   // verboseSync shows which mailbox is currently syncing in the status line,
   // with the account and the server it is talking to.
   verboseSync: boolean
@@ -941,6 +962,20 @@ export interface UIPrefs {
   closeAction: CloseAction
   // startHidden keeps the window hidden at launch (#483).
   startHidden: boolean
+  // quickCompose registers quickComposeShortcut, a Wails accelerator such as
+  // 'Ctrl+Alt+M', as a system-wide shortcut for a small compose window. Both
+  // change only through setQuickCompose, which registers before it stores.
+  quickCompose: boolean
+  quickComposeShortcut: string
+  // appLock is whether the app lock is on; it changes only through
+  // enableAppLock and disableAppLock. appLockIdleMinutes locks after that long
+  // unused (0 only on demand), appLockOnLaunch starts locked, and
+  // appLockHideNotifications keeps senders and subjects out of notifications
+  // while locked.
+  appLock: boolean
+  appLockIdleMinutes: number
+  appLockOnLaunch: boolean
+  appLockHideNotifications: boolean
   // syncMessageLimit caps how many of a folder's newest messages the first sync
   // fetches; older mail stays on the server until asked for. 0 means no limit.
   syncMessageLimit: number
@@ -963,6 +998,47 @@ export interface UIPrefs {
 
 // how much detail the log records.
 export type LogLevel = 'debug' | 'info' | 'warn' | 'error'
+
+/** How the app lock is opened: the system prompt or Pelton's own passphrase. */
+export type LockMethod = 'system' | 'passphrase'
+
+/** What the lock screen and the lock settings need to know. */
+export interface LockState {
+  enabled: boolean
+  locked: boolean
+  /** Empty while the lock is off. */
+  method: LockMethod | ''
+  /** Whether the system prompt (Touch ID or the account password) exists here. */
+  systemAvailable: boolean
+  /** How long the next passphrase attempt has to wait. */
+  retryAfterMs: number
+  /** The look of the lock screen, which cannot read the full preferences while locked. */
+  theme: string
+  accent: string
+  language: string
+}
+
+/** Why an unlock or a lock setting change did not go through. */
+export type LockFailure = 'wrong' | 'wait' | 'cancelled' | 'unavailable' | 'busy' | 'short' | 'off' | 'on'
+
+/** The outcome of an unlock or of a lock setting change that authenticated first. */
+export interface LockAuthResult {
+  ok: boolean
+  reason?: LockFailure
+  retryAfterMs?: number
+}
+
+/** The state of the quick compose shortcut. */
+export interface QuickComposeStatus {
+  enabled: boolean
+  shortcut: string
+  /** Set while the operating system holds the shortcut. */
+  registered: boolean
+  /** A Wayland session, where the desktop decides how the shortcut is bound. */
+  wayland: boolean
+  /** Why the shortcut was not registered: not a shortcut, or refused by the system. */
+  error?: 'invalid' | 'taken'
+}
 
 // LogStatus is what the settings ui shows about logging: where the files are,
 // whether anything is being written, and whether the last run crashed.
@@ -1449,8 +1525,14 @@ export type ReaderWidth = 'narrow' | 'medium' | 'full'
  * delete or move: the older neighbour, the newer one, or nothing.
  */
 export type AfterMove = 'older' | 'newer' | 'list'
+/** What plain Send does with the conversation a reply answered. */
+export type AfterReplySend = 'nothing' | 'archive'
+/** When a follow-up reminder set from a preset comes: each lands at nine. */
+export type FollowUpInterval = 'tomorrow' | 'threeDays' | 'week'
 /** One of the top-level areas of the app. */
-export type Space = 'mail' | 'contacts' | 'calendar' | 'tasks'
+export type Space = 'mail' | 'contacts' | 'calendar' | 'tasks' | 'projects'
+/** How the Projects space lists projects. */
+export type ProjectsView = 'grid' | 'list'
 export type SelectAllScope = 'offer' | 'all' | 'loaded'
 
 // SearchSort is an order search results can actually come back in. The backend
@@ -1640,6 +1722,49 @@ export interface ContactConflict {
   saved: Contact
 }
 
+/** What makes a group of contacts look like one person. */
+export interface DuplicateReason {
+  kind: 'email' | 'phone' | 'name'
+  /** The shared address, number or name. */
+  value: string
+  /** What backs up a shared name: organization, domain (same company) or empty (one has no address or number). */
+  overlap: ('organization' | 'domain' | 'empty')[]
+}
+
+/** Contacts that probably are the same person, with the reasons. */
+export interface DuplicateGroup {
+  contacts: Contact[]
+  /** 60 to 100: how sure the match is. */
+  score: number
+  reasons: DuplicateReason[]
+}
+
+/** The answer of the duplicate search. */
+export interface Duplicates {
+  groups: DuplicateGroup[]
+  /** How many pairs were marked as not duplicates. */
+  dismissed: number
+}
+
+/** A merge: the contacts in mergeIds are folded into survivorId. */
+export interface MergeRequest {
+  survivorId: number
+  mergeIds: number[]
+  /** The address book the merged contact goes in; required when the contacts are in several. */
+  targetBookId: number
+  /** Field name (name, organization, title, note) to the id of the contact it comes from; -1 keeps both notes. */
+  choices: Record<string, number>
+}
+
+/** What a merge did. */
+export interface MergeResult {
+  contact: Contact
+  /** Undoes the merge for the rest of the session. */
+  token: string
+  /** Merged contacts the server refused to delete; they are still there. */
+  kept: number
+}
+
 // ContactDraft is the editor's shape. id 0 creates, and then bookId says which
 // address book it goes in.
 export interface ContactDraft {
@@ -1763,7 +1888,7 @@ export interface CalendarSettings {
 }
 
 /** The views of the calendar screen. */
-export type CalendarView = 'month' | 'week' | 'day' | 'agenda'
+export type CalendarView = 'month' | 'week' | 'day' | 'agenda' | 'year'
 
 /** How the time grid names time zones. */
 export type TimeZoneDisplay = 'off' | 'label' | 'dual'
@@ -1795,6 +1920,9 @@ export interface Occurrence {
   transparency: string
   readOnly: boolean
   hasReminders: boolean
+  // others are invited, so preparing for the meeting has something to show.
+  // unset on the entries the calendar draws for tasks.
+  hasAttendees?: boolean
   // a change made here has not reached the server yet.
   pending: boolean
   conflict: boolean
@@ -1824,6 +1952,75 @@ export interface Attendee {
   // NEEDS-ACTION, ACCEPTED, TENTATIVE, DECLINED or DELEGATED.
   partStat: string
   rsvp: boolean
+}
+
+/** A person invited to a meeting, with the address book's card for them. */
+export interface PrepAttendee {
+  email: string
+  name: string
+  role: string
+  // NEEDS-ACTION, ACCEPTED, TENTATIVE, DECLINED or DELEGATED.
+  partStat: string
+  organizer: boolean
+  /** The user's own address. */
+  self: boolean
+  contact: Contact | null
+}
+
+/** A conversation worth a look before a meeting. */
+export interface PrepThread {
+  threadId: number
+  subject: string
+  /** rfc3339 of the newest message found. */
+  last: string
+  messages: number
+  /** The invited who take part, by name or address. */
+  people: string[]
+  titleMatch: boolean
+  /** The newest message, to open in the reader. */
+  message: MessageSummary
+}
+
+/** An earlier meeting with the same people. */
+export interface PrepMeeting {
+  eventId: number
+  recurrenceId: string
+  title: string
+  start: string
+  end: string
+  allDay: boolean
+  /** An earlier occurrence of the same recurring event. */
+  sameSeries: boolean
+  /** The invited of this meeting who were at that one too. */
+  shared: string[]
+}
+
+/** How to join a call. */
+export interface JoinLink {
+  url: string
+  /** The service, when the address is a known one. */
+  provider: string
+}
+
+/** Everything the Prepare panel shows for one meeting. */
+export interface MeetingPrep {
+  eventId: number
+  recurrenceId: string
+  uid: string
+  title: string
+  description: string
+  location: string
+  url: string
+  start: string
+  end: string
+  allDay: boolean
+  recurring: boolean
+  join: JoinLink | null
+  attendees: PrepAttendee[]
+  threads: PrepThread[]
+  files: AttachmentEntry[]
+  tasks: Task[]
+  previous: PrepMeeting[]
 }
 
 /** CalendarEvent is one event, or one occurrence of a series, for the editor. */
@@ -1902,6 +2099,46 @@ export interface EventSaveResult {
   // settles which one stays.
   conflict: boolean
   server: CalendarEvent
+}
+
+/** FreeBusyQuery asks for busy time between from and to, both rfc3339. */
+export interface FreeBusyQuery {
+  // the event's calendar; its CalDAV server is asked about the attendees.
+  calendarId: number
+  from: string
+  to: string
+  // the address the request is made as; empty for the server's first one.
+  organizer: string
+  attendees: string[]
+  // the event being edited, left out of the user's own time; 0 for none.
+  excludeEventId: number
+}
+
+/** BusyKind is how busy a stretch is. */
+export type BusyKind = 'busy' | 'tentative' | 'unavailable'
+
+/** BusySpan is one busy stretch, rfc3339 bounds. */
+export interface BusySpan {
+  start: string
+  end: string
+  kind: BusyKind
+}
+
+/** AttendeeFreeBusy is what is known of one attendee's time. */
+export interface AttendeeFreeBusy {
+  email: string
+  known: boolean
+  // why nothing is known: local, unsupported or unanswered.
+  reason: '' | 'local' | 'unsupported' | 'unanswered'
+  // the server's request-status, when it gave one.
+  status: string
+  busy: BusySpan[]
+}
+
+/** FreeBusy is the user's own busy time and the attendees', in the order asked. */
+export interface FreeBusy {
+  mine: BusySpan[]
+  attendees: AttendeeFreeBusy[]
 }
 
 /** Invite is the invitation a message carries. */
@@ -2134,4 +2371,172 @@ export interface TaskSettings {
   // how long a completed task stays listed, -1 for good.
   completedDays: number
   sort: TaskSort
+}
+
+/** Whether a project is worked on or put away. */
+export type ProjectStatus = 'active' | 'archived'
+
+/** ProjectPerson is someone a project is with; their mail is suggested for it. */
+export interface ProjectPerson {
+  email: string
+  name: string
+}
+
+/**
+ * Project is one project with what its tile counts: cards whose task exists,
+ * done ones, overdue open ones, the earliest open due date (a date or rfc3339,
+ * empty for none), conversations, events and notes.
+ */
+export interface Project {
+  id: number
+  name: string
+  // #rrggbb, empty for the palette color picked by id.
+  color: string
+  // the name of an icon from lib/projecticons, empty for the default.
+  icon: string
+  description: string
+  status: ProjectStatus
+  // dates as 2006-01-02, empty for none.
+  startDate: string
+  dueDate: string
+  position: number
+  // the task list new cards go to, 0 for the default.
+  listId: number
+  createdAt: string
+  updatedAt: string
+  archivedAt: string
+  cards: number
+  done: number
+  overdue: number
+  nextDue: string
+  mail: number
+  events: number
+  notes: number
+  people: ProjectPerson[]
+}
+
+/** ProjectColumnDraft is a column made with a new project. */
+export interface ProjectColumnDraft {
+  name: string
+  wipLimit: number
+  done: boolean
+}
+
+/** ProjectDraft is the project editor's project; id 0 creates one with columns. */
+export interface ProjectDraft {
+  id: number
+  name: string
+  color: string
+  icon: string
+  description: string
+  startDate: string
+  dueDate: string
+  listId: number
+  columns: ProjectColumnDraft[]
+}
+
+/** ProjectColumn is one column of a board. wipLimit 0 means no limit. */
+export interface ProjectColumn {
+  id: number
+  projectId: number
+  name: string
+  position: number
+  wipLimit: number
+  // completed tasks gather here, and a card dropped here completes its task.
+  done: boolean
+}
+
+/**
+ * ProjectCard is a task on a board. mail, events and notes count what is
+ * attached, the task's own links included. sourceKind and sourceRef are empty
+ * for a card made in Pelton and name the outside item a mirrored card stands
+ * for.
+ */
+export interface ProjectCard {
+  task: Task
+  projectId: number
+  columnId: number
+  position: number
+  mail: number
+  events: number
+  notes: number
+  sourceKind: string
+  sourceRef: string
+}
+
+/** ProjectBoard is a project with its columns in order and its cards. */
+export interface ProjectBoard {
+  project: Project
+  columns: ProjectColumn[]
+  cards: ProjectCard[]
+}
+
+/** ProjectCardDraft makes a task and puts it in a column; index -1 appends. */
+export interface ProjectCardDraft {
+  projectId: number
+  columnId: number
+  title: string
+  notes: string
+  due: string
+  timeZone: string
+  priority: number
+  index: number
+}
+
+/** ProjectMoveResult is a card after a move; advanced when a repeating task moved on instead. */
+export interface ProjectMoveResult {
+  card: ProjectCard
+  advanced: boolean
+}
+
+/** What a project link points at. */
+export type ProjectLinkKind = 'mail' | 'event' | 'contact' | 'note'
+
+/** ProjectLink is something a card or a project points at; taskUid is empty for the project's own. */
+export interface ProjectLink {
+  id: number
+  projectId: number
+  taskUid: string
+  kind: ProjectLinkKind
+  accountId: number
+  threadId: number
+  ref: string
+  label: string
+  createdAt: string
+}
+
+/**
+ * ProjectEvent is an event filed under a project, at its next occurrence or
+ * its last one when past. found is false when no calendar has it any more.
+ */
+export interface ProjectEvent {
+  uid: string
+  taskUid: string
+  label: string
+  found: boolean
+  eventId: number
+  calendarColor: string
+  summary: string
+  start: string
+  end: string
+  allDay: boolean
+  recurring: boolean
+  recurrenceId: string
+  past: boolean
+}
+
+/** ProjectNoteRecord is a note as the backend stores it, its body Markdown. */
+export interface ProjectNoteRecord {
+  id: number
+  projectId: number
+  title: string
+  body: string
+  createdAt: string
+  updatedAt: string
+}
+
+/** ProjectMailMark says a conversation belongs to a project. */
+export interface ProjectMailMark {
+  threadId: number
+  projectId: number
 }

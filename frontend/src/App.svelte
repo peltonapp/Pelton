@@ -20,6 +20,7 @@
   import Rail from './components/shell/Rail.svelte'
   import SpaceSwitcher from './components/shell/SpaceSwitcher.svelte'
   import { space, openSpace, runSpaceAction, isMailOnlyAction } from './stores/space'
+  import { meetingPrepTarget, openMeetingPrep, closeMeetingPrep } from './stores/meetingprep'
   import { mailScreen, openMailScreen, closeMailScreen } from './stores/mailscreen'
   import { IconMailX, IconChartBar } from '@tabler/icons-svelte'
   import { spaces } from './lib/spaces'
@@ -51,7 +52,7 @@
   import { selection, applyStartupSelection, searchQuery } from './stores/selection'
   import { loadList, messageList } from './stores/messages'
   import { initProgress } from './stores/progress'
-  import { composeSessions, openCompose, openComposeWith, initComposePrefs, openReply, openForward, requestComposeClose, setForcedComposeMode } from './stores/compose'
+  import { composeSessions, openCompose, openComposeWith, initComposePrefs, openReply, openForward, requestComposeClose, setForcedComposeMode, updateCompose } from './stores/compose'
   import { routeComposeSessions } from './stores/composeroute'
   import Composer2 from './components/compose/Composer2.svelte'
   import ComposeTabLayer from './components/compose/ComposeTabLayer.svelte'
@@ -64,8 +65,6 @@
     SettingKeys,
     exportMessagePrintView,
     setWindowTitle,
-    setSeen,
-    setFlagged,
     deleteMessage,
     getMessage,
     downloadMessageOffline,
@@ -84,6 +83,7 @@
     setUnreadBadge,
     quitApp,
     hideApp,
+    lockNow,
     isFullscreen,
     toggleFullscreen as toggleWindowFullscreen,
   } from './lib/api'
@@ -91,7 +91,7 @@
   import { liabilityAccepted } from './lib/liability'
   import { setDemoActive } from './lib/demo'
   import { recordArchived } from './stores/undoarchive'
-  import { onMailNew, onMailRepaired, onSyncState, onSyncProgress, onOutboxChanged, onMenu, onViewsChanged, onFoldersChanged, onProfileChanged, onMailtoCompose, onAgentProposals, onOpenMessage, onCalendarReminder, onTaskReminder, onICSOpen, type Unsubscribe, type MailtoDraft, type CalendarReminderEvent, type TaskReminderEvent } from './lib/events'
+  import { onMailNew, onMailRepaired, onSyncState, onSyncProgress, onOutboxChanged, onMenu, onViewsChanged, onFoldersChanged, onProfileChanged, onMailtoCompose, onAgentProposals, onOpenMessage, onReplyMessage, onArchiveAfterSend, onCalendarReminder, onTaskReminder, onICSOpen, type Unsubscribe, type MailtoDraft, type CalendarReminderEvent, type TaskReminderEvent } from './lib/events'
   import { loadViews, editingView, closeViewEditor, openViewEditor, views as savedViews } from './stores/views'
   import { selectSavedView } from './stores/selection'
   import { isMac } from './lib/i18n'
@@ -100,6 +100,7 @@
     comboTypes,
     isComposeAction,
     chipActions,
+    sendActions,
     shortcuts as shortcutRegistry,
     type ShortcutAction,
   } from './lib/shortcuts'
@@ -112,9 +113,9 @@
   import { cyclePane, focusPane as focusPaneArea } from './lib/panes'
   import { bindings, recording, initShortcuts } from './stores/shortcuts'
   import { initMenuBar } from './stores/menubar'
-  import { triggerUndo } from './stores/undosend'
-  import { recordDeleted, triggerUndoDelete } from './stores/undodelete'
-  import { triggerUndoArchive } from './stores/undoarchive'
+  import { recordDeleted } from './stores/undodelete'
+  import { historyOpen, redoOrSay, undoOrSay } from './stores/undohistory'
+  import './lib/palette-history'
   import { openMessageId, openMessage } from './stores/selection'
   import {
     visibleMessageId,
@@ -177,7 +178,7 @@
     leaveList,
     toggleSpam,
   } from './lib/messageactions'
-  import { markDone } from './lib/triage'
+  import { markAnsweredDone, markDone } from './lib/triage'
   import { watchFollowUps } from './stores/followups'
   import { loadSnippets } from './stores/snippets'
   import { editNote, toggleMute, togglePin } from './lib/organize'
@@ -192,6 +193,9 @@
   import { setSenderPanel } from './stores/prefs'
   import './lib/palette-tasks'
   import './lib/palette-availability'
+  import './lib/palette-projects'
+  import { startProjects, fileMailRequest } from './stores/projects'
+  import { pickProjectFor } from './lib/projectpicker'
   import { startTasks, toggleDone, tasks as taskStore, taskFromMailRequest } from './stores/tasks'
   import { createTasksFromMail, openTask } from './lib/taskmail'
   import { getTask } from './lib/api'
@@ -257,6 +261,11 @@
   // onboarding, and the acknowledgement is deliberately never remembered.
   let nightlyOpen = false
   const unsubscribers: Unsubscribe[] = []
+
+  // set when the app mounts again after the app lock was opened. The stores
+  // still hold the session, so the launch-only steps (the startup folder,
+  // restored tabs, the nightly and crash notices) are skipped.
+  export let resumed = false
 
   // live pane widths. they track the persisted prefs unless the user is mid-drag,
   // so a resize feels immediate and only commits on release.
@@ -439,6 +448,22 @@
     void createTasksFromMail(ids)
   }
 
+  // files the open conversation, or the selected ones, under a project.
+  function addToProject(): void {
+    const items = selectedMessages.length > 1 ? selectedMessages : [currentMessage()].filter((m): m is MessageSummary => m !== null)
+    pickProjectFor(
+      items.map((m) => m.id),
+      items.length === 1 ? items[0].threadId : 0,
+    )
+  }
+
+  $: if ($fileMailRequest) {
+    fileMailRequest.set(false)
+    if (!classic) {
+      addToProject()
+    }
+  }
+
   $: if ($taskFromMailRequest) {
     taskFromMailRequest.set(false)
     if (!classic) {
@@ -456,6 +481,17 @@
     stopTasks = undefined
   }
   onDestroy(() => stopTasks?.())
+
+  // the projects feed the mail chips, the reader's suggestions and the
+  // composer's picker as well as their own space.
+  let stopProjects: (() => void) | undefined
+  $: if (!classic && !stopProjects) {
+    stopProjects = startProjects()
+  } else if (classic && stopProjects) {
+    stopProjects()
+    stopProjects = undefined
+  }
+  onDestroy(() => stopProjects?.())
 
   // the newsletter manager and the insights page in the palette, with their
   // live shortcut as the hint.
@@ -507,7 +543,7 @@
 
     // a nightly warns before anything else is on screen. demo mode is only used
     // for screenshots, so the dialog would just be in the way there.
-    nightlyOpen = !demo && (await isNightly().catch(() => false))
+    nightlyOpen = !demo && !resumed && (await isNightly().catch(() => false))
 
     await initPrefs()
     await initSidebarState()
@@ -527,14 +563,16 @@
     // a mailbox that failed its last sync is marked from the first paint, not
     // only once another sync run happens to end.
     void loadSyncStates()
-    void restoreTabs(get(prefs).restoreTabs)
+    if (!resumed) {
+      void restoreTabs(get(prefs).restoreTabs)
+    }
     void loadProfiles()
     initProgress()
     await loadSidebar()
     // the sidebar data has to be here first: a configured or remembered folder
     // is only honoured if it still exists (#187).
     const sidebarData = get(sidebar).data
-    if (sidebarData) {
+    if (sidebarData && !resumed) {
       await applyStartupSelection(get(prefs).startupSelection, sidebarData)
     }
     void loadViews()
@@ -556,7 +594,9 @@
       // onboarding collects the acknowledgement itself, so only ask separately
       // when the flow is not going to run.
       liabilityOpen = !onboardingOpen && !(await liabilityAccepted())
-      void offerCrashReport()
+      if (!resumed) {
+        void offerCrashReport()
+      }
     }
 
     unsubscribers.push(
@@ -568,7 +608,10 @@
     unsubscribers.push(
       onMailRepaired(() => {
         // the subjects and bodies changed underneath the list, so what is on
-        // screen is stale rather than merely incomplete.
+        // screen is stale rather than merely incomplete. the unread counts
+        // beside it can be too, after a notification button archived or read
+        // a message.
+        void refreshSidebar()
         void loadList(get(selection))
       }),
     )
@@ -630,7 +673,11 @@
     unsubscribers.push(
       onCalendarReminder((e) => {
         if (!classic) {
-          pushAction('info', reminderText(e), { label: $t('calendar.show'), run: () => showReminder(e) }, 10000)
+          const actions = [{ label: $t('calendar.show'), run: () => showReminder(e) }]
+          if (e.hasAttendees) {
+            actions.push({ label: $t('prep.button'), run: () => openMeetingPrep(e.eventId, e.recurrenceId) })
+          }
+          pushActions('info', reminderText(e), actions, 10000)
         }
       }),
     )
@@ -658,6 +705,21 @@
     // time this arrives; all that is left is to go to the message.
     unsubscribers.push(
       onOpenMessage((e) => revealMessage(e.messageId, e.accountId, e.folderId, get(sidebar).data ?? null)),
+    )
+    unsubscribers.push(
+      onReplyMessage(async (e) => {
+        try {
+          openReply(await getMessage(e.messageId), editorMode, false)
+        } catch (err) {
+          toastError(errorMessage(err))
+        }
+      }),
+    )
+    // a send and archive from a compose window, which closes as it sends.
+    unsubscribers.push(
+      onArchiveAfterSend((e) => {
+        setTimeout(() => void markAnsweredDone(e.messageId), e.delaySeconds * 1000)
+      }),
     )
 
     // a mailto: link that launched the app: the backend stashed it, so pick it
@@ -732,13 +794,16 @@
 
   // startComposeTo opens a new message addressed to one contact, which is what
   // clicking an address on the contacts screen does (#168).
-  function startComposeTo(email: string): void {
+  function startComposeTo(email: string, subject = '', projectId = 0): void {
     const accountId = composeAccountId()
     if (accountId === null) {
       toastError(get(t)('app.toast.addMailboxFirst'))
       return
     }
-    openComposeWith(accountId, editorMode, { to: email, cc: '', bcc: '', subject: '', body: '' })
+    const id = openComposeWith(accountId, editorMode, { to: email, cc: '', bcc: '', subject, body: '' })
+    if (projectId) {
+      updateCompose(id, { projectId })
+    }
   }
 
   // openPendingICS takes the .ics files the system asked Pelton to open and
@@ -940,16 +1005,13 @@
           openForward(await getMessage(msg.id), editorMode)
           break
         case 'mark-read':
-          patchInList(msg.id, { seen: true })
-          await setSeen(msg.id, true)
+          await markSeen(msg, true)
           break
         case 'mark-unread':
-          patchInList(msg.id, { seen: false })
-          await setSeen(msg.id, false)
+          await markSeen(msg, false)
           break
         case 'flag':
-          patchInList(msg.id, { flagged: !msg.flagged })
-          await setFlagged(msg.id, !msg.flagged)
+          await markFlagged(msg, !msg.flagged)
           break
         case 'snooze':
           openSnooze(msg.id, msg.subject)
@@ -1004,7 +1066,6 @@
   type MenuAction =
     | ShortcutAction
     | 'about'
-    | 'undo'
     | 'toggle-low-power'
     | 'open-mailboxes'
     | 'open-contacts'
@@ -1151,6 +1212,16 @@
           createTaskFromMail()
         }
         break
+      case 'go-projects':
+        if (!classic) {
+          goToSpace('projects')
+        }
+        break
+      case 'add-to-project':
+        if (!classic) {
+          addToProject()
+        }
+        break
       case 'toggle-my-day':
         // from another space it brings mail back with the panel open.
         if (!classic) {
@@ -1163,9 +1234,13 @@
         }
         break
       case 'undo':
-        if (!triggerUndo() && !triggerUndoDelete() && !triggerUndoArchive()) {
-          toastInfo(get(t)('app.toast.nothingToUndo'))
-        }
+        void undoOrSay()
+        break
+      case 'redo':
+        void redoOrSay()
+        break
+      case 'undo-history':
+        historyOpen.update((open) => !open)
         break
       case 'toggle-low-power':
         setLowPowerMode(!$prefs.lowPowerMode)
@@ -1222,6 +1297,14 @@
         break
       case 'quit':
         quitApp()
+        break
+      case 'lock-app':
+        if ($prefs.appLock) {
+          void lockNow()
+        } else {
+          toastInfo($t('applock.offHint'))
+          openSettingsAt('privacy')
+        }
         break
       case 'command-palette':
         togglePalette()
@@ -1773,29 +1856,12 @@
       event.preventDefault()
       return
     }
-    // cmd/ctrl+z undoes a pending delayed send, when one is in its window. it
-    // takes priority over other shortcuts and is swallowed only if it acted.
-    if ((event.metaKey || event.ctrlKey) && !event.shiftKey && event.key.toLowerCase() === 'z') {
-      // another space undoes its own last change, outside a text field.
-      if (!classic && !isEditableTarget(event.target) && runSpaceAction($space, 'undo')) {
-        event.preventDefault()
-        return
-      }
-      // undo-send takes priority; otherwise undo the last message deletion.
-      if (triggerUndo()) {
-        event.preventDefault()
-        return
-      }
-      if (triggerUndoDelete()) {
-        event.preventDefault()
-        return
-      }
-      if (triggerUndoArchive()) {
-        event.preventDefault()
-        return
-      }
-    }
     const action = matchShortcut(event, $bindings)
+    // undo and redo belong to a text field, a composer or an editor while one
+    // has focus, and are the history's everywhere else.
+    if ((action === 'undo' || action === 'redo') && isEditableTarget(event.target)) {
+      return
+    }
     // the split keys belong to the message list, which takes them itself while
     // it has focus; anywhere else Tab keeps moving focus.
     if (action === 'next-split' || action === 'prev-split') {
@@ -1812,6 +1878,11 @@
       // a recipient move only means something on a focused recipient chip;
       // anywhere else its keys keep their own meaning.
       if ((chipActions as readonly string[]).includes(action) &&!(event.target as HTMLElement | null)?.closest?.('[data-chip]')) {
+        return
+      }
+      // like send, a send variant only answers inside a composer, which takes
+      // the key before it gets here.
+      if ((sendActions as readonly string[]).includes(action)) {
         return
       }
       event.preventDefault()
@@ -2054,6 +2125,15 @@
           <svelte:component this={m.default} />
         {/await}
       </div>
+    {:else if $space === 'projects'}
+      <div class="space-host">
+        {#await import('./components/projects/ProjectsScreen.svelte') then m}
+          <svelte:component
+            this={m.default}
+            on:compose={(e) => { openSpace('mail'); startComposeTo(e.detail.email, '', e.detail.projectId) }}
+          />
+        {/await}
+      </div>
     {/if}
   </div>
 
@@ -2154,6 +2234,17 @@
       accounts={$sidebar.data?.accounts ?? []}
       on:close={closeViewEditor}
       on:saved={closeViewEditor}
+    />
+  {/await}
+{/if}
+
+{#if !classic && $meetingPrepTarget}
+  {#await import('./components/calendar/MeetingPrep.svelte') then m}
+    <svelte:component
+      this={m.default}
+      target={$meetingPrepTarget}
+      on:close={closeMeetingPrep}
+      on:compose={(e) => { closeMeetingPrep(); openSpace('mail'); startComposeTo(e.detail.to, e.detail.subject) }}
     />
   {/await}
 {/if}

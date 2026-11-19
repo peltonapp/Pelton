@@ -1,6 +1,7 @@
 // Package caldavtest is an in-memory CalDAV server for tests: one principal,
 // one calendar home with an event calendar and a task list, basic auth,
-// sync-collection, calendar-query, multiget and conditional writes.
+// sync-collection, calendar-query, multiget, conditional writes and, when
+// asked for, a scheduling outbox.
 package caldavtest
 
 import (
@@ -40,7 +41,19 @@ type Server struct {
 	User, Pass string
 	// Puts counts successful writes.
 	Puts int
+	// ScheduleReply, when set, makes the principal offer a scheduling outbox
+	// at OutboxPath for the address Address, which answers every post with
+	// this schedule-response. Scheduled holds the last body posted.
+	ScheduleReply string
+	Scheduled     string
 }
+
+// OutboxPath is the scheduling outbox offered with ScheduleReply, and Address
+// the address the principal is known by.
+const (
+	OutboxPath = "/dav/outbox/me/"
+	Address    = "me@example.com"
+)
 
 type resource struct {
 	etag    string
@@ -146,6 +159,14 @@ func (s *Server) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		delete(s.resources, p)
 		s.deleted[p] = s.version
 		w.WriteHeader(http.StatusNoContent)
+	case http.MethodPost:
+		if s.ScheduleReply == "" || p != OutboxPath {
+			w.WriteHeader(http.StatusMethodNotAllowed)
+			return
+		}
+		s.Scheduled = string(body)
+		w.Header().Set("Content-Type", "application/xml")
+		_, _ = io.WriteString(w, s.ScheduleReply)
 	default:
 		w.WriteHeader(http.StatusMethodNotAllowed)
 	}
@@ -177,7 +198,12 @@ func (s *Server) propfind(w http.ResponseWriter, r *http.Request, p string) {
 	case p == "/" || p == "/dav/":
 		multistatus(w, "<d:response>"+href(p)+ok("<d:current-user-principal>"+href(PrincipalPath)+"</d:current-user-principal><d:resourcetype><d:collection/></d:resourcetype>")+"</d:response>")
 	case p == PrincipalPath:
-		multistatus(w, "<d:response>"+href(p)+ok("<c:calendar-home-set>"+href(HomePath)+"</c:calendar-home-set>")+"</d:response>")
+		props := "<c:calendar-home-set>" + href(HomePath) + "</c:calendar-home-set>"
+		if s.ScheduleReply != "" {
+			props += "<c:schedule-outbox-URL>" + href(OutboxPath) + "</c:schedule-outbox-URL>" +
+				"<c:calendar-user-address-set><d:href>mailto:" + Address + "</d:href></c:calendar-user-address-set>"
+		}
+		multistatus(w, "<d:response>"+href(p)+ok(props)+"</d:response>")
 	case p == HomePath && r.Header.Get("Depth") == "1":
 		multistatus(w,
 			"<d:response>"+href(HomePath)+ok("<d:resourcetype><d:collection/></d:resourcetype>")+"</d:response>"+

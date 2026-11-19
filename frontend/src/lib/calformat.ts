@@ -75,6 +75,9 @@ export function formatViewTitle(view: CalendarView, from: Date, to: Date, focus:
   if (view === 'month') {
     return focus.toLocaleDateString(locale, { month: 'long', year: 'numeric' })
   }
+  if (view === 'year') {
+    return String(focus.getFullYear())
+  }
   if (view === 'day') {
     return from.toLocaleDateString(locale, { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
   }

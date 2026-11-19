@@ -78,6 +78,10 @@ const (
 	// It carries the folder as well as the message so the list can move to
 	// where the message actually lives rather than opening it out of context.
 	EventOpenMessage = "message:open"
+	// EventReplyMessage fires when something outside the ui asks for a reply
+	// to one message to be opened in a composer. Today that is the Reply
+	// button of a new-mail notification.
+	EventReplyMessage = "message:reply"
 	// EventCalendarSync fires as calendars sync, and once more with Running
 	// false when the run ends, carrying any error.
 	EventCalendarSync = "calendar:sync"
@@ -102,6 +106,9 @@ const (
 	// EventFocusEnded fires once when focus mode ends, with a FocusSummaryDTO
 	// saying what arrived meanwhile.
 	EventFocusEnded = "focus:ended"
+	// EventProjectsChanged fires when a project, its board, its links or its
+	// notes changed, with a ProjectsChangedEvent naming which.
+	EventProjectsChanged = "projects:changed"
 )
 
 // CalendarSyncEvent is the payload for EventCalendarSync. Done and Total
@@ -121,6 +128,12 @@ type CalendarChangedEvent struct {
 	CalendarIDs []int64 `json:"calendarIds"`
 }
 
+// ProjectsChangedEvent is the payload for EventProjectsChanged. An empty list
+// means any project may have changed.
+type ProjectsChangedEvent struct {
+	ProjectIDs []int64 `json:"projectIds"`
+}
+
 // CalendarReminderEvent is the payload for EventCalendarReminder.
 type CalendarReminderEvent struct {
 	EventID      int64  `json:"eventId"`
@@ -131,6 +144,9 @@ type CalendarReminderEvent struct {
 	Start        string `json:"start"`
 	End          string `json:"end"`
 	AllDay       bool   `json:"allDay"`
+	// HasAttendees is true when others are invited, so the reminder can offer
+	// to prepare for the meeting.
+	HasAttendees bool `json:"hasAttendees"`
 }
 
 // TaskReminderEvent is the payload for EventTaskReminder. Due is a date

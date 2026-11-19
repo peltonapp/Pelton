@@ -31,7 +31,9 @@ export const EventNames = {
   filesDropped: 'files:dropped',
   agentProposals: 'agent:proposals',
   openMessage: 'message:open',
+  replyMessage: 'message:reply',
   composeCloseRequest: 'compose:close-request',
+  appLock: 'applock:changed',
   calendarSync: 'calendar:sync',
   calendarChanged: 'calendar:changed',
   calendarReminder: 'calendar:reminder',
@@ -40,6 +42,9 @@ export const EventNames = {
   followUpsChanged: 'followups:changed',
   focusChanged: 'focus:changed',
   focusEnded: 'focus:ended',
+  projectsChanged: 'projects:changed',
+  // sent between windows by the frontend, not by go.
+  archiveAfterSend: 'compose:archive-after-send',
 } as const
 
 /** TaskReminderEvent is a task reminder that came due, alongside its notification. */
@@ -89,6 +94,8 @@ export interface CalendarReminderEvent {
   start: string
   end: string
   allDay: boolean
+  /** Others are invited, so the reminder can offer to prepare for the meeting. */
+  hasAttendees: boolean
 }
 
 // payloads, mirroring the go event structs.
@@ -211,6 +218,13 @@ export interface OpenMessageEvent {
   messageId: number
   accountId: number
   folderId: number
+}
+
+// ArchiveAfterSendEvent asks the main window to archive the conversation a
+// reply sent from a compose window answered, once delaySeconds have passed.
+export interface ArchiveAfterSendEvent {
+  messageId: number
+  delaySeconds: number
 }
 
 // Unsubscribe removes an event listener.
@@ -337,6 +351,12 @@ export function onOpenMessage(cb: (e: OpenMessageEvent) => void): Unsubscribe {
   return EventsOn(EventNames.openMessage, (e: OpenMessageEvent) => cb(e))
 }
 
+// onReplyMessage fires when something outside the ui asks for a reply to one
+// message in a composer: the Reply button of a new-mail notification.
+export function onReplyMessage(cb: (e: OpenMessageEvent) => void): Unsubscribe {
+  return EventsOn(EventNames.replyMessage, (e: OpenMessageEvent) => cb(e))
+}
+
 /** Fires when focus mode starts, ends or changes its end time. */
 export function onFocusChanged(cb: (e: FocusInfo) => void): Unsubscribe {
   return EventsOn(EventNames.focusChanged, (e: FocusInfo) => cb(e))
@@ -347,10 +367,27 @@ export function onFocusEnded(cb: (e: FocusSummary) => void): Unsubscribe {
   return EventsOn(EventNames.focusEnded, (e: FocusSummary) => cb(e))
 }
 
+// emitArchiveAfterSend hands a send and archive from a compose window to the
+// main window, which outlives it.
+export function emitArchiveAfterSend(e: ArchiveAfterSendEvent): void {
+  void Events.Emit(EventNames.archiveAfterSend, e)
+}
+
+// onArchiveAfterSend fires in every window when a compose window sent a reply
+// whose conversation is to be archived.
+export function onArchiveAfterSend(cb: (e: ArchiveAfterSendEvent) => void): Unsubscribe {
+  return EventsOn(EventNames.archiveAfterSend, cb)
+}
+
 // onComposeCloseRequest fires in a compose window whose close button was
 // pressed, so the compose closes the way its own close button does.
 export function onComposeCloseRequest(cb: () => void): Unsubscribe {
   return EventsOn(EventNames.composeCloseRequest, () => cb())
+}
+
+/** onAppLock fires in every window when the app locks or unlocks. */
+export function onAppLock(cb: (e: { locked: boolean }) => void): Unsubscribe {
+  return EventsOn(EventNames.appLock, (e: { locked: boolean }) => cb(e))
 }
 
 /** onCalendarSync fires as calendars sync, and once more when the run ends. */
@@ -361,6 +398,16 @@ export function onCalendarSync(cb: (e: CalendarSyncEvent) => void): Unsubscribe 
 /** onCalendarChanged fires when events or calendars changed, from a sync or an edit. */
 export function onCalendarChanged(cb: (e: CalendarChangedEvent) => void): Unsubscribe {
   return EventsOn(EventNames.calendarChanged, (e: CalendarChangedEvent | null) => cb({ calendarIds: e?.calendarIds ?? [] }))
+}
+
+/** ProjectsChangedEvent names the projects that changed; empty means any. */
+export interface ProjectsChangedEvent {
+  projectIds: number[]
+}
+
+/** onProjectsChanged fires when a project, its board, its links or its notes changed. */
+export function onProjectsChanged(cb: (e: ProjectsChangedEvent) => void): Unsubscribe {
+  return EventsOn(EventNames.projectsChanged, (e: ProjectsChangedEvent | null) => cb({ projectIds: e?.projectIds ?? [] }))
 }
 
 /** onCalendarReminder fires when an event's reminder is due. */
