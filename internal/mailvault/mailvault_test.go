@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"errors"
 	"strings"
+	"sync"
 	"testing"
 )
 
@@ -193,6 +194,64 @@ func TestLinkHashIsKeyed(t *testing.T) {
 	}
 	if strings.Contains(a, "abc") || strings.Contains(a, "example") {
 		t.Fatal("link hash leaks its input")
+	}
+}
+
+// TestWipeWhileSealing locks a key while other goroutines seal with it. Each
+// seal must either produce a box the vault opens or fail with ErrWiped; a box
+// sealed with a half-zeroed key would be unreadable forever.
+func TestWipeWhileSealing(t *testing.T) {
+	m, _, keys := newVault(t)
+	sealer, err := NewMessageKey(m.PublicKey, m.UID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	epk := sealer.EPK
+	shared, err := keys.MessageKey(epk)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var wg sync.WaitGroup
+	boxes := make(chan []byte, 400)
+	for range 8 {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for range 50 {
+				box, err := shared.Seal([]byte("attachment bytes"), "attachments", "1", "0")
+				if err != nil {
+					if !errors.Is(err, ErrWiped) {
+						t.Errorf("seal during a wipe: %v", err)
+					}
+					return
+				}
+				boxes <- box
+			}
+		}()
+	}
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		shared.Wipe()
+		keys.Wipe()
+	}()
+	wg.Wait()
+	close(boxes)
+	again, err := Open(m, []byte("correct horse"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	fresh, err := again.MessageKey(epk)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for box := range boxes {
+		if _, err := fresh.Open(box, "attachments", "1", "0"); err != nil {
+			t.Fatalf("a box sealed while the key was being wiped does not open: %v", err)
+		}
+	}
+	if _, err := keys.MessageKey(epk); !errors.Is(err, ErrWiped) {
+		t.Fatalf("wiped keys: %v", err)
 	}
 }
 

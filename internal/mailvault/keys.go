@@ -10,6 +10,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"sync"
 	"unicode"
 
 	"golang.org/x/crypto/argon2"
@@ -114,8 +115,10 @@ type Material struct {
 	LinkKey    []byte
 }
 
-// Keys is an unlocked vault. Wipe it when the vault locks.
+// Keys is an unlocked vault. Wipe it when the vault locks. It is safe for
+// concurrent use, and every method returns ErrWiped once it is wiped.
 type Keys struct {
+	mu      sync.RWMutex
 	uid     []byte
 	public  []byte
 	dataKey []byte
@@ -225,6 +228,8 @@ func openPrivate(m Material, dk []byte) (*Keys, error) {
 // Rewrap wraps the data key under a new passphrase. The mail and the
 // recovery wrap stay as they are.
 func (k *Keys) Rewrap(passphrase []byte, p KDFParams) (Wrapped, error) {
+	k.mu.RLock()
+	defer k.mu.RUnlock()
 	if k.dataKey == nil {
 		return Wrapped{}, ErrWiped
 	}
@@ -237,6 +242,8 @@ var ErrWiped = errors.New("mailvault: keys were wiped")
 // MessageKey derives the key of a sealed message from its ephemeral public
 // key.
 func (k *Keys) MessageKey(epk []byte) (*MessageKey, error) {
+	k.mu.RLock()
+	defer k.mu.RUnlock()
 	if k.private == nil {
 		return nil, ErrWiped
 	}
@@ -255,6 +262,8 @@ func (k *Keys) MessageKey(epk []byte) (*MessageKey, error) {
 // Wipe zeroes the data key and the private key bytes this Keys holds and
 // drops its reference to the X25519 key object.
 func (k *Keys) Wipe() {
+	k.mu.Lock()
+	defer k.mu.Unlock()
 	Wipe(k.dataKey)
 	Wipe(k.privRaw)
 	k.dataKey, k.privRaw, k.private = nil, nil, nil

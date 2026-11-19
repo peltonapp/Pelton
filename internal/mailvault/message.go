@@ -5,13 +5,20 @@ import (
 	"crypto/hkdf"
 	"crypto/sha256"
 	"fmt"
+	"sync"
 )
 
 // MessageKey seals and opens the fields of one message. A key made by
 // NewMessageKey needs only the vault's public key, which is how mail synced
 // while the vault is locked is sealed; the same key comes back from
 // Keys.MessageKey only once the vault is unlocked.
+//
+// A MessageKey is safe for concurrent use: Wipe waits for any Seal or Open in
+// progress, and after it both return ErrWiped, so a lock that wipes a key
+// another goroutine is using can fail that call but never let it seal with
+// a half-zeroed key.
 type MessageKey struct {
+	mu  sync.RWMutex
 	key []byte
 	uid []byte
 	// EPK is the ephemeral public key stored with the message.
@@ -51,6 +58,8 @@ func deriveMessageKey(shared, epk, public, uid []byte) (*MessageKey, error) {
 // Seal encrypts plaintext for the place named by binding, typically the
 // table, the row id and the column.
 func (k *MessageKey) Seal(plaintext []byte, binding ...string) ([]byte, error) {
+	k.mu.RLock()
+	defer k.mu.RUnlock()
 	if k.key == nil {
 		return nil, ErrWiped
 	}
@@ -60,6 +69,8 @@ func (k *MessageKey) Seal(plaintext []byte, binding ...string) ([]byte, error) {
 // Open decrypts a box sealed for the same binding. A box from another row or
 // column, or one with any byte changed, is ErrOpen.
 func (k *MessageKey) Open(box []byte, binding ...string) ([]byte, error) {
+	k.mu.RLock()
+	defer k.mu.RUnlock()
 	if k.key == nil {
 		return nil, ErrWiped
 	}
@@ -68,6 +79,8 @@ func (k *MessageKey) Open(box []byte, binding ...string) ([]byte, error) {
 
 // Wipe zeroes the key.
 func (k *MessageKey) Wipe() {
+	k.mu.Lock()
+	defer k.mu.Unlock()
 	Wipe(k.key)
 	k.key = nil
 }
