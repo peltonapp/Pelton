@@ -275,7 +275,7 @@ func TestParseBodyReadsClaims(t *testing.T) {
 		"Received-SPF: pass (mx.example.org: domain of bounce@mail.example.com designates 192.0.2.1)\r\n" +
 		"ARC-Authentication-Results: i=1; mx.example.org; dkim=pass header.d=example.com\r\n" +
 		"DKIM-Signature: v=1; a=rsa-sha256; c=relaxed/relaxed;\r\n\td=Example.com; s=s1;\r\n\th=from:to; bh=x; b=y\r\n" +
-		"DKIM-Signature: v=1; a=rsa-sha256; d=esp.test; s=k1; b=z\r\n" +
+		"DKIM-Signature: v=1; a=rsa-sha256; d=esp.test; s=k1; h=From:List-Unsubscribe:\r\n List-Unsubscribe-Post; b=z\r\n" +
 		"DKIM-Signature: v=1; d=esp.test; s=k2; b=z\r\n" +
 		"From: News <news@example.com>\r\n" +
 		"Sender: Esp Mailer <mailer@esp.test>\r\n" +
@@ -293,6 +293,9 @@ func TestParseBodyReadsClaims(t *testing.T) {
 	}
 	if strings.Join(c.Signers, " ") != "example.com esp.test" {
 		t.Errorf("Signers = %v, want each signing domain once", c.Signers)
+	}
+	if strings.Join(c.UnsubSigners, " ") != "esp.test" {
+		t.Errorf("UnsubSigners = %v, want only the signer covering both unsubscribe headers", c.UnsubSigners)
 	}
 	if !strings.HasPrefix(c.ReceivedSPF, "pass") || !strings.Contains(c.ARC, "dkim=pass") {
 		t.Errorf("ReceivedSPF = %q, ARC = %q", c.ReceivedSPF, c.ARC)

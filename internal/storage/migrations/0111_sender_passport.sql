@@ -27,6 +27,9 @@ CREATE TABLE IF NOT EXISTS message_trust (
     return_path TEXT NOT NULL DEFAULT '',
     sender TEXT NOT NULL DEFAULT '',
     signers TEXT NOT NULL DEFAULT '',
+    -- the signers whose signature covers List-Unsubscribe and
+    -- List-Unsubscribe-Post, which a one-click unsubscribe needs (RFC 8058)
+    unsub_signers TEXT NOT NULL DEFAULT '',
     received_spf TEXT NOT NULL DEFAULT '',
     arc TEXT NOT NULL DEFAULT '',
     -- the Disposition-Notification-To address a read receipt was asked for

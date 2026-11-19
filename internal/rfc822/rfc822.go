@@ -78,6 +78,10 @@ type Claims struct {
 	Sender     string
 	// Signers is the d= domain of each DKIM-Signature, lowercased, once each.
 	Signers []string
+	// UnsubSigners are the signers whose signature covers both
+	// List-Unsubscribe and List-Unsubscribe-Post, as RFC 8058 requires before
+	// a one-click unsubscribe is trusted.
+	UnsubSigners []string
 	// ReceivedSPF and ARC are the first Received-SPF and
 	// ARC-Authentication-Results values, cut to claimCap.
 	ReceivedSPF string
@@ -105,8 +109,16 @@ func readClaims(h *mail.Header) Claims {
 		c.ARC = capText(v[0])
 	}
 	for _, sig := range headerValues(h, "DKIM-Signature") {
-		if d := dkimTag(sig, "d"); d != "" && !slices.Contains(c.Signers, d) {
+		d := dkimTag(sig, "d")
+		if d == "" {
+			continue
+		}
+		if !slices.Contains(c.Signers, d) {
 			c.Signers = append(c.Signers, d)
+		}
+		signed := strings.Split(dkimTag(sig, "h"), ":")
+		if slices.Contains(signed, "list-unsubscribe") && slices.Contains(signed, "list-unsubscribe-post") && !slices.Contains(c.UnsubSigners, d) {
+			c.UnsubSigners = append(c.UnsubSigners, d)
 		}
 	}
 	return c

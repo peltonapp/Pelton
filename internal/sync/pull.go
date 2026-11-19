@@ -222,7 +222,7 @@ func trustRecord(id int64, msg *pimap.Message, serv phishing.AuthServ) storage.M
 		SPF: rec.SPF, SPFDomain: rec.SPFDomain,
 		DKIM: rec.DKIM, DKIMDomain: rec.DKIMDomain, DKIMDomains: rec.DKIMDomains,
 		DMARC: rec.DMARC, DMARCPolicy: rec.DMARCPolicy, HeaderFrom: rec.HeaderFrom,
-		ReturnPath: c.ReturnPath, Sender: c.Sender, Signers: c.Signers,
+		ReturnPath: c.ReturnPath, Sender: c.Sender, Signers: c.Signers, UnsubSigners: c.UnsubSigners,
 		ReceivedSPF: c.ReceivedSPF, ARC: c.ARC, ReadReceiptTo: c.ReadReceiptTo,
 	}
 }

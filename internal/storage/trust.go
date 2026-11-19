@@ -32,6 +32,10 @@ type MessageTrust struct {
 	Signers     []string
 	ReceivedSPF string
 	ARC         string
+	// UnsubSigners are the signers whose signature covers the unsubscribe
+	// headers; a one-click unsubscribe is trusted only when one of them also
+	// passed.
+	UnsubSigners []string
 	// ReadReceiptTo is where a read receipt was asked to go, empty when none
 	// was asked for.
 	ReadReceiptTo string
@@ -41,18 +45,18 @@ type MessageTrust struct {
 func (d *DB) SetMessageTrust(ctx context.Context, t MessageTrust) error {
 	const query = `
 INSERT INTO message_trust (message_id, auth_state, servid, spf, spf_domain, dkim, dkim_domain, dkim_domains,
-    dmarc, dmarc_policy, header_from, return_path, sender, signers, received_spf, arc, read_receipt_to)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    dmarc, dmarc_policy, header_from, return_path, sender, signers, unsub_signers, received_spf, arc, read_receipt_to)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 ON CONFLICT(message_id) DO UPDATE SET
     auth_state = excluded.auth_state, servid = excluded.servid, spf = excluded.spf,
     spf_domain = excluded.spf_domain, dkim = excluded.dkim, dkim_domain = excluded.dkim_domain,
     dkim_domains = excluded.dkim_domains, dmarc = excluded.dmarc, dmarc_policy = excluded.dmarc_policy,
     header_from = excluded.header_from, return_path = excluded.return_path, sender = excluded.sender,
-    signers = excluded.signers, received_spf = excluded.received_spf, arc = excluded.arc,
-    read_receipt_to = excluded.read_receipt_to`
+    signers = excluded.signers, unsub_signers = excluded.unsub_signers, received_spf = excluded.received_spf,
+    arc = excluded.arc, read_receipt_to = excluded.read_receipt_to`
 	_, err := d.sql.ExecContext(ctx, query, t.MessageID, t.AuthState, t.ServID, t.SPF, t.SPFDomain, t.DKIM,
 		t.DKIMDomain, strings.Join(t.DKIMDomains, " "), t.DMARC, t.DMARCPolicy, t.HeaderFrom, t.ReturnPath,
-		t.Sender, strings.Join(t.Signers, " "), t.ReceivedSPF, t.ARC, t.ReadReceiptTo)
+		t.Sender, strings.Join(t.Signers, " "), strings.Join(t.UnsubSigners, " "), t.ReceivedSPF, t.ARC, t.ReadReceiptTo)
 	if err != nil {
 		return fmt.Errorf("storage: set message trust %d: %w", t.MessageID, err)
 	}
@@ -60,16 +64,17 @@ ON CONFLICT(message_id) DO UPDATE SET
 }
 
 const trustColumns = `message_id, auth_state, servid, spf, spf_domain, dkim, dkim_domain, dkim_domains,
-    dmarc, dmarc_policy, header_from, return_path, sender, signers, received_spf, arc, read_receipt_to`
+    dmarc, dmarc_policy, header_from, return_path, sender, signers, unsub_signers, received_spf, arc, read_receipt_to`
 
 func scanTrust(row rowScanner) (MessageTrust, error) {
 	var t MessageTrust
-	var domains, signers string
+	var domains, signers, unsub string
 	err := row.Scan(&t.MessageID, &t.AuthState, &t.ServID, &t.SPF, &t.SPFDomain, &t.DKIM, &t.DKIMDomain,
-		&domains, &t.DMARC, &t.DMARCPolicy, &t.HeaderFrom, &t.ReturnPath, &t.Sender, &signers,
+		&domains, &t.DMARC, &t.DMARCPolicy, &t.HeaderFrom, &t.ReturnPath, &t.Sender, &signers, &unsub,
 		&t.ReceivedSPF, &t.ARC, &t.ReadReceiptTo)
 	t.DKIMDomains = strings.Fields(domains)
 	t.Signers = strings.Fields(signers)
+	t.UnsubSigners = strings.Fields(unsub)
 	return t, err
 }
 
