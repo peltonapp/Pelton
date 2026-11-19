@@ -1625,6 +1625,8 @@ const en: Record<string, string> = {
   'flagColor.purple': 'Purple',
   'flagColor.pink': 'Pink',
   'palette.group.mail': 'Mail',
+  'scripts.mark.name': 'Script: {name}',
+  'scripts.menu.heading': 'Scripts',
   'scripts.library.impact.title': 'Switch off {n} scripts?',
   'scripts.library.impact.body': 'This switches off {n} scripts that load the library: {list}. You review the change and approve them again before they run.',
   'scripts.library.impact.title.one': 'Switch off 1 script?',

@@ -476,6 +476,14 @@ func TestPlacements(t *testing.T) {
 	if _, err := s.SetPlacements(ctx, msg.ID, []PlacementConfig{{ID: "toolbar.list", Options: map[string]any{"icon": 4.0}}}); err == nil {
 		t.Fatal("a bad option was accepted")
 	}
+	for _, label := range []string{"⚡ Go", "Go ☇", "\U0001F5F2"} {
+		if _, err := s.SetPlacements(ctx, msg.ID, []PlacementConfig{{ID: "toolbar.list", Options: map[string]any{"icon": "star", "label": label}}}); err == nil {
+			t.Fatalf("a label drawing its own script mark was accepted: %q", label)
+		}
+	}
+	if _, err := s.Create(ctx, newScript("⚡ Archive", `log.info(1)`, TriggerManual)); err == nil {
+		t.Fatal("a name drawing its own script mark was accepted")
+	}
 	if _, err := s.SetPlacements(ctx, none.ID, []PlacementConfig{{ID: "palette"}}); err != nil {
 		t.Fatal(err)
 	}

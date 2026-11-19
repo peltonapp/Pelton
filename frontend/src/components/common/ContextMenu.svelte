@@ -11,6 +11,8 @@
   import { t } from '../../lib/i18n'
   import { prefs } from '../../stores/prefs'
   import { popPopup, pushPopup } from '../../lib/popups'
+  import { scriptEntryName, scriptText } from '../../lib/scriptmark'
+  import ScriptMark from './ScriptMark.svelte'
 
   let menuEl: HTMLDivElement
   let left = 0
@@ -129,6 +131,32 @@
     {#each $contextMenu.entries as entry}
       {#if entry === 'separator'}
         <div class="sep" role="separator"></div>
+      {:else if 'kind' in entry && entry.kind === 'group'}
+        <div class="group" role="group" aria-label={entry.label}>
+          <div class="heading" aria-hidden="true">{entry.label}</div>
+          {#each entry.items as item}
+            <button
+              type="button"
+              class="item"
+              class:danger={item.danger}
+              role="menuitem"
+              tabindex={managing ? -1 : undefined}
+              aria-label={item.script !== undefined ? scriptEntryName(item.label, item.script, $t) : undefined}
+              title={item.script !== undefined ? scriptEntryName(item.label, item.script, $t) : undefined}
+              on:click={() => run(item)}
+            >
+              {#if item.script !== undefined}
+                <span class="icon"><ScriptMark /></span>
+              {:else if item.icon}
+                <span class="icon"><svelte:component this={item.icon} size={15} stroke={1.7} /></span>
+              {/if}
+              <span class="label">{item.script !== undefined ? scriptText(item.label) : item.label}</span>
+              {#if item.hint}
+                <kbd class="hint">{item.hint}</kbd>
+              {/if}
+            </button>
+          {/each}
+        </div>
       {:else if 'kind' in entry}
         <div class="swatches" role="group" aria-label={$t('common.contextMenu.flagColor')}>
           <button
@@ -242,6 +270,13 @@
 
   .item:hover .hint {
     color: var(--text-secondary);
+  }
+
+  .heading {
+    padding: var(--space-1) var(--space-3);
+    font-size: var(--fz-meta);
+    font-weight: var(--fw-semibold);
+    color: var(--text-tertiary);
   }
 
   .sep {

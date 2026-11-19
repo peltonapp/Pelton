@@ -28,6 +28,8 @@
   import { space } from '../../stores/space'
   import { highlightRuns } from '../../lib/fuzzy'
   import { t, isMac, shortcutLabel } from '../../lib/i18n'
+  import { scriptEntryName } from '../../lib/scriptmark'
+  import ScriptMark from './ScriptMark.svelte'
   import { prefs } from '../../stores/prefs'
   import { calm } from '../../lib/motion'
 
@@ -378,13 +380,17 @@
               id="palette-row-{i}"
               role="option"
               aria-selected={i === active}
+              aria-label={entry.command.script !== undefined ? scriptEntryName(entry.command.label, entry.command.script, $t) : undefined}
+              title={entry.command.script !== undefined ? scriptEntryName(entry.command.label, entry.command.script, $t) : undefined}
               data-active={i === active}
               tabindex="-1"
               on:click={() => void run(entry.command)}
               on:mousemove={() => (active = i)}
             >
               <span class="icon">
-                {#if entry.command.swatch}
+                {#if entry.command.script !== undefined}
+                  <ScriptMark size={16} />
+                {:else if entry.command.swatch}
                   <span class="swatch" style="background: {entry.command.swatch}"></span>
                 {:else}
                   <svelte:component this={entry.command.icon} size={16} stroke={1.6} />
