@@ -265,6 +265,8 @@
         <MessageRow
           message={item.message}
           roomId={room.id}
+          roomName={room.name}
+          direct={room.kind === 'direct'}
           continued={item.continued}
           selected={messageIds[cursor] === item.key}
           on:reply={(e) => dispatch('reply', e.detail)}

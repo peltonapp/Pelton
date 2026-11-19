@@ -215,7 +215,7 @@
         { label: $t('feeds.share'), action: () => share(row) },
       )
     }
-    openContextMenu(x, y, entries)
+    openContextMenu(x, y, entries, row.mail ? undefined : { place: 'feeds.item', items: [{ id: String(row.id) }] })
   }
 
   async function runImport(): Promise<void> {

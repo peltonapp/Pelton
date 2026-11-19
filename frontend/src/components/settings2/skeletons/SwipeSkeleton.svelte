@@ -5,6 +5,9 @@
   import noneIcon from '@phosphor-icons/core/assets/duotone/prohibit-duotone.svg?raw'
   import Ph from '../../common/Ph.svelte'
   import { isRowAction, rowActionView } from '../../../lib/rowactions'
+  import { placed } from '../../../lib/scriptplacements'
+
+  const swipeScripts = placed('row.swipe')
 
   /** Which way the row is dragged. */
   export let direction: 'left' | 'right' = 'left'
@@ -20,7 +23,7 @@
   const state = { seen: false, flagged: false, pinned: false, muted: false, inSpam: false }
 
   // the colours the row's own reveal fills with once a swipe is armed.
-  $: view = isRowAction(action) ? rowActionView(action, state) : null
+  $: view = isRowAction(action) ? rowActionView(action, state, $swipeScripts) : null
   $: current = view
     ? { icon: view.icon, color: view.danger ? 'var(--danger)' : 'var(--accent)' }
     : { icon: noneIcon, color: 'var(--text-tertiary)' }

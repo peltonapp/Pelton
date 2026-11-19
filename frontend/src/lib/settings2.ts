@@ -32,6 +32,7 @@ import notificationsIcon from '@phosphor-icons/core/assets/duotone/bell-duotone.
 import insightsIcon from '@phosphor-icons/core/assets/duotone/chart-bar-duotone.svg?raw'
 import shortcutsIcon from '@phosphor-icons/core/assets/duotone/keyboard-duotone.svg?raw'
 import syncIcon from '@phosphor-icons/core/assets/duotone/arrows-clockwise-duotone.svg?raw'
+import aiIcon from '@phosphor-icons/core/assets/duotone/sparkle-duotone.svg?raw'
 import aboutIcon from '@phosphor-icons/core/assets/duotone/info-duotone.svg?raw'
 
 /** One page of the settings screen. */
@@ -103,6 +104,7 @@ export const settingsPages2: SettingsPage[] = [
   { key: 'encryption', group: 'privacy', labelKey: 'settings2.page.encryption', icon: encryptionIcon },
   { key: 'shortcuts', group: 'system', labelKey: 'settings2.page.shortcuts', icon: shortcutsIcon },
   { key: 'sync', group: 'system', labelKey: 'settings2.page.sync', icon: syncIcon },
+  { key: 'ai', group: 'system', labelKey: 'settings2.page.ai', icon: aiIcon },
   { key: 'about', group: 'system', labelKey: 'settings2.page.about', icon: aboutIcon },
 ]
 

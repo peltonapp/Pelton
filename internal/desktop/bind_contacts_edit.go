@@ -41,6 +41,14 @@ type ContactRequest struct {
 // refused write returns Conflict with both versions and changes nothing, local
 // or remote, so the user decides which one survives.
 func (a *App) SaveContact(req ContactRequest) (ContactConflictDTO, error) {
+	res, err := a.saveContact(req)
+	if err == nil && req.ID == 0 && res.Saved.ID != 0 {
+		a.scriptContactAdded(a.ctx, res.Saved.ID)
+	}
+	return res, err
+}
+
+func (a *App) saveContact(req ContactRequest) (ContactConflictDTO, error) {
 	if err := a.ready(); err != nil {
 		return ContactConflictDTO{}, err
 	}

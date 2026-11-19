@@ -3,6 +3,7 @@
   // contact under the same headers as the list; a card opens the contact in the
   // drawer the space slides in.
   import { createEventDispatcher } from 'svelte'
+  import { openScriptMenu } from '../../lib/scriptmenu'
   import ContactListEmpty from './ContactListEmpty.svelte'
   import ContactAvatar from './ContactAvatar.svelte'
   import ContactFilterBar from './ContactFilterBar.svelte'
@@ -35,6 +36,7 @@
                     class="card"
                     aria-current={contact.id === $selectedContactId ? 'true' : undefined}
                     on:click={() => dispatch('select', contact.id)}
+                    on:contextmenu={(e) => openScriptMenu(e, 'contacts.contact', { id: String(contact.id) })}
                   >
                     <ContactAvatar {contact} size={40} />
                     <span class="name">{displayName(contact)}</span>

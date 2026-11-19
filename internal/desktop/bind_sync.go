@@ -410,6 +410,7 @@ func (a *App) syncFolders(client mailClient, accountID int64) error {
 	a.syncTally.begin(len(folders))
 
 	newTotal := 0
+	firstSync := a.firstScriptSync(accountID)
 	// a folder that fails does not stop the others: mail the rest of the account
 	// can still fetch is worth having. But the failure is carried out of here,
 	// because reporting the account as synced when a folder did not sync is what
@@ -432,6 +433,10 @@ func (a *App) syncFolders(client mailClient, accountID int64) error {
 			newTotal += res.New
 			a.emit(EventMailNew, MailNewEvent{AccountID: accountID, FolderID: f.ID, Count: res.New})
 			goSafe("announcing new mail", func() { a.notifyNewMail(f, res.NewIDs) })
+			a.scriptMailArrived(res.NewIDs, firstSync)
+		}
+		if !firstSync {
+			a.scriptServerFlags(res.FlagChanges)
 		}
 		a.afterRepairs(f, res.RepairedIDs)
 		a.afterReplyStateSync(f, res.ReplyStateChanged)
@@ -506,9 +511,11 @@ func (a *App) syncOneFolder(client mailClient, folder storage.Folder) error {
 	}
 	a.afterRepairs(folder, res.RepairedIDs)
 	a.afterReplyStateSync(folder, res.ReplyStateChanged)
+	a.scriptServerFlags(res.FlagChanges)
 	if res.New > 0 {
 		a.emit(EventMailNew, MailNewEvent{AccountID: folder.AccountID, FolderID: folder.ID, Count: res.New})
 		goSafe("announcing new mail", func() { a.notifyNewMail(folder, res.NewIDs) })
+		a.scriptMailArrived(res.NewIDs, false)
 		goSafe("indexing new mail", func() { _ = a.indexNewMessages() })
 		goSafe("counting unread mail", a.refreshViewCounts)
 		if !a.lowPowerMode() {

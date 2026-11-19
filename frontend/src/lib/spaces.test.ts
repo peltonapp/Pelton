@@ -21,7 +21,7 @@ beforeEach(() => {
 
 describe('the navigation order', () => {
   it('is the default order with everything shown', () => {
-    expect(keys(get(visibleSpaces))).toEqual(['mail', 'calendar', 'tasks', 'projects', 'contacts', 'notes', 'feeds', 'chat'])
+    expect(keys(get(visibleSpaces))).toEqual(['mail', 'calendar', 'tasks', 'projects', 'contacts', 'notes', 'feeds', 'chat', 'automations'])
   })
 
   it('keeps chat out until it is switched on', () => {
@@ -32,7 +32,7 @@ describe('the navigation order', () => {
 
   it('applies the stored order and leaves hidden spaces out', () => {
     prefs.update((p) => ({ ...p, spaceOrder: 'notes,mail,bogus', hiddenSpaces: 'tasks,mail,feeds' }))
-    expect(keys(get(visibleSpaces))).toEqual(['notes', 'mail', 'calendar', 'projects', 'contacts', 'chat'])
+    expect(keys(get(visibleSpaces))).toEqual(['notes', 'mail', 'calendar', 'projects', 'contacts', 'chat', 'automations'])
     expect(get(orderedSpaces).filter((s) => s.hidden).map((s) => s.key)).toEqual(['tasks', 'feeds'])
   })
 })
@@ -64,15 +64,15 @@ describe('changing the navigation', () => {
     setSpaceHidden('tasks', true)
     moveSpaceShown('projects', -1)
     expect(keys(get(visibleSpaces)).slice(0, 3)).toEqual(['mail', 'projects', 'calendar'])
-    expect(get(prefs).spaceOrder).toBe('mail,projects,tasks,calendar,contacts,notes,feeds,chat')
+    expect(get(prefs).spaceOrder).toBe('mail,projects,tasks,calendar,contacts,notes,feeds,chat,automations')
   })
 
   it('moves in the settings list without passing a switched-off space', () => {
     prefs.update((p) => ({ ...p, chatEnabled: false }))
-    moveSpaceListed('feeds', 1)
+    moveSpaceListed('automations', 1)
     expect(get(prefs).spaceOrder).toBe('')
-    moveSpaceListed('feeds', -1)
-    expect(keys(get(orderedSpaces)).slice(-2)).toEqual(['feeds', 'notes'])
+    moveSpaceListed('automations', -1)
+    expect(keys(get(orderedSpaces)).slice(-2)).toEqual(['automations', 'feeds'])
   })
 
   it('takes a dragged order and resets to the default', () => {

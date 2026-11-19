@@ -22,6 +22,7 @@ require (
 	github.com/smallstep/pkcs7 v0.2.3
 	github.com/wailsapp/wails/v3 v3.1.0
 	github.com/yuin/goldmark v1.8.7
+	github.com/yuin/gopher-lua v1.1.2
 	github.com/zalando/go-keyring v0.2.8
 	go.mau.fi/util v0.11.1
 	golang.org/x/crypto v0.59.0

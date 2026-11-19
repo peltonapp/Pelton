@@ -40,7 +40,18 @@ func (a *App) ArchiveMessage(id int64) (ArchiveUndoDTO, error) {
 	if err != nil {
 		return ArchiveUndoDTO{}, err
 	}
-	return a.moveMessageTo(m, archive, nil)
+	return a.userMove(m, archive)
+}
+
+// userMove is moveMessageTo for a move the user made, which scripts hear
+// about.
+func (a *App) userMove(m *storage.Message, dest storage.Folder) (ArchiveUndoDTO, error) {
+	undo, err := a.moveMessageTo(m, dest, nil)
+	if err != nil {
+		return undo, err
+	}
+	a.scriptMoved(a.ctx, m, dest)
+	return undo, nil
 }
 
 // MoveMessage moves a message to any folder (of its own account) on the server,
@@ -61,7 +72,7 @@ func (a *App) MoveMessage(id, destFolderID int64) (ArchiveUndoDTO, error) {
 	if dest.AccountID != m.AccountID {
 		return ArchiveUndoDTO{}, fmt.Errorf("pelton: cannot move a message to another account's folder")
 	}
-	return a.moveMessageTo(m, *dest, nil)
+	return a.userMove(m, *dest)
 }
 
 // BulkArchiveDTO reports ArchiveMessages: the undo record of every message
@@ -213,6 +224,7 @@ func (a *App) archiveFromFolder(client mailClient, account storage.Account, sour
 				a.log.Error("archive export: write file", "id", m.ID, "err", err)
 			}
 		}
+		a.scriptMoved(a.ctx, m, dest)
 		res.Done = append(res.Done, m.ID)
 		res.Undo = append(res.Undo, ArchiveUndoDTO{
 			MessageID:        m.MessageID,

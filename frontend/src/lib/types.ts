@@ -987,6 +987,9 @@ export interface UIPrefs {
   // cleanLinks takes known tracking parameters and redirect wrappers off links
   // opened from a mail. Off by default: it can break a sign-in or verification link.
   cleanLinks: boolean
+  // autoconfigLookup is whether the add-mailbox wizard may look up a typed
+  // address's domain: ask (the default, it asks first), allow or manual.
+  autoconfigLookup: AutoconfigLookup
   // verboseSync shows which mailbox is currently syncing in the status line,
   // with the account and the server it is talking to.
   verboseSync: boolean
@@ -1312,6 +1315,9 @@ export type SwipeAction = 'none' | 'delete' | 'read' | 'unread' | 'flag' | 'arch
  */
 export type HtmlColors = 'auto' | 'adapt' | 'original'
 
+/** Whether a typed address's domain may be looked up for its server settings. */
+export type AutoconfigLookup = 'ask' | 'allow' | 'manual'
+
 // list row layouts, from most spacious to a single dense line.
 export type RowTemplate = 'relaxed' | 'comfortable' | 'compact' | 'single'
 
@@ -1588,7 +1594,7 @@ export type AfterReplySend = 'nothing' | 'archive'
 /** When a follow-up reminder set from a preset comes: each lands at nine. */
 export type FollowUpInterval = 'tomorrow' | 'threeDays' | 'week'
 /** One of the top-level areas of the app. */
-export type Space = 'mail' | 'contacts' | 'calendar' | 'tasks' | 'projects' | 'notes' | 'feeds' | 'chat'
+export type Space = 'mail' | 'contacts' | 'calendar' | 'tasks' | 'projects' | 'notes' | 'feeds' | 'chat' | 'automations'
 /** How the Projects space lists projects. */
 export type ProjectsView = 'grid' | 'list'
 /** Which chat messages notify: all, direct messages and mentions, or none. */

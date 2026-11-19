@@ -28,7 +28,7 @@ describe('Rail', () => {
   it('lists the spaces in the stored order without the hidden ones', () => {
     prefs.update((p) => ({ ...p, spaceOrder: 'notes,mail', hiddenSpaces: 'tasks' }))
     render(Rail)
-    expect(names()).toEqual(['notes', 'mail', 'calendar', 'projects', 'contacts', 'feeds'])
+    expect(names()).toEqual(['notes', 'mail', 'calendar', 'projects', 'contacts', 'feeds', 'automations'])
   })
 
   it('shows a hidden space while it is open, marked as not in the navigation', () => {

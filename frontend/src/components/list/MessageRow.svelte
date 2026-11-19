@@ -45,7 +45,8 @@
   import { projectColor } from '../../lib/projectlogic'
   import { highlightTerms } from '../../stores/search'
   import { idleSwipe, swipeWheel, swipeOutcome, swiping, anySwipe, swipeTuning, type SwipeState } from '../../lib/swipe'
-  import { isRowAction, rowActionApplies, rowActionView, type RowActionId } from '../../lib/rowactions'
+  import { isRowAction, placedRowActions, placedSwipeAction, rowActionApplies, rowActionView, type RowActionId } from '../../lib/rowactions'
+  import { placed } from '../../lib/scriptplacements'
   import { spamState } from '../../lib/messageactions'
   import { currentUIScale } from '../../theme/theme'
   import { dur, motion } from '../../lib/motion'
@@ -76,6 +77,9 @@
   export let actions: RowActionId[] = []
   /** The row has the list's keyboard focus, so its quick buttons take Tab. */
   export let active: boolean = false
+
+  const hoverScripts = placed('row.hover')
+  const swipeScripts = placed('row.swipe')
 
   const dispatch = createEventDispatcher<{
     swipe: 'left' | 'right'
@@ -162,10 +166,10 @@
 
   $: swipeActions = newDesign
     ? {
-        leftShort: $prefs.swipeLeftShort,
-        leftLong: $prefs.swipeLeftLong,
-        rightShort: $prefs.swipeRightShort,
-        rightLong: $prefs.swipeRightLong,
+        leftShort: placedSwipeAction($prefs.swipeLeftShort, $swipeScripts),
+        leftLong: placedSwipeAction($prefs.swipeLeftLong, $swipeScripts),
+        rightShort: placedSwipeAction($prefs.swipeRightShort, $swipeScripts),
+        rightLong: placedSwipeAction($prefs.swipeRightLong, $swipeScripts),
       }
     : { leftShort: $prefs.swipeLeftAction, leftLong: 'none', rightShort: $prefs.swipeRightAction, rightLong: 'none' }
   $: tuning = newDesign ? swipeTuning : { ...swipeTuning, shortFraction: 0.6 }
@@ -204,7 +208,7 @@
     muted: !!message.muted,
     inSpam: newDesign && spamState(message) === 'spam',
   }
-  $: swipeView = isRowAction(previewAction) ? rowActionView(previewAction, rowState) : null
+  $: swipeView = isRowAction(previewAction) ? rowActionView(previewAction, rowState, $swipeScripts) : null
 
   // the actions that take the row out of the list slide it the rest of the
   // way; the others let it settle back once they ran.
@@ -263,8 +267,10 @@
 
   // quick buttons over the row. the list hands over which to show, already
   // cut to what applies; they are only reachable by Tab on the focused row.
-  $: shownActions = actions.filter((id) => rowActionApplies(id, { threadId: message.threadId, spam: id === 'spam' ? spamState(message) : 'none' }))
-  $: actionViews = shownActions.map((id) => rowActionView(id, rowState))
+  $: shownActions = placedRowActions(actions, $hoverScripts).filter((id) =>
+    rowActionApplies(id, { threadId: message.threadId, spam: id === 'spam' ? spamState(message) : 'none' }),
+  )
+  $: actionViews = shownActions.map((id) => rowActionView(id, rowState, $hoverScripts))
   $: rowLabel = `${displayName(message.fromName, message.fromAddress)}, ${message.subject || $t('messageList.noSubject')}`
 
   function keysFor(action: ShortcutAction, map: Record<string, string>): string | undefined {
@@ -302,7 +308,7 @@
         {#key outcome.stage}
           <span class="reveal-mark"><Ph svg={swipeView.icon} size={18} /></span>
         {/key}
-        <span>{$t(swipeView.labelKey)}</span>
+        <span>{swipeView.label ?? $t(swipeView.labelKey)}</span>
       {/if}
     </div>
   {:else if offset !== 0}
@@ -475,8 +481,8 @@
           class="row-action"
           class:danger={view.danger}
           tabindex={active ? 0 : -1}
-          aria-label={$t(view.labelKey)}
-          use:tip={{ text: $t(view.labelKey), shortcut: keysFor(view.shortcut, $bindings), side: 'top' }}
+          aria-label={view.label ?? $t(view.labelKey)}
+          use:tip={{ text: view.label ?? $t(view.labelKey), shortcut: keysFor(view.shortcut, $bindings), side: 'top' }}
           on:click={(e) => runAction(e, view.id)}
         >
           <Ph svg={view.icon} size={15} />

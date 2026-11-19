@@ -18,6 +18,7 @@ vi.mock('../../lib/browser', () => ({
 }))
 
 import AddMailboxWizard from './AddMailboxWizard.svelte'
+import { prefs } from '../../stores/prefs'
 
 const bridgeCert: UntrustedCert = {
   server: 'imap',
@@ -41,6 +42,7 @@ beforeEach(() => {
     imapHost: '127.0.0.1', imapPort: 1143, smtpHost: '127.0.0.1', smtpPort: 1025,
     imapTls: 'starttls', smtpTls: 'starttls', oauth: false, source: 'guess',
   })
+  prefs.update((p) => ({ ...p, autoconfigLookup: 'allow' }))
 })
 
 describe('untrusted certificate in the connection test (#446)', () => {

@@ -3,6 +3,7 @@
   // events under it in order. days without events are left out, so a quiet
   // month reads as a short list.
   import { createEventDispatcher } from 'svelte'
+  import { openScriptMenu } from '../../lib/scriptmenu'
   import mapPinIcon from '@phosphor-icons/core/assets/duotone/map-pin-duotone.svg?raw'
   import repeatIcon from '@phosphor-icons/core/assets/duotone/repeat-duotone.svg?raw'
   import calendarIcon from '@phosphor-icons/core/assets/duotone/calendar-blank-duotone.svg?raw'
@@ -109,6 +110,7 @@
                 class:cancelled={p.occ.status === 'CANCELLED'}
                 style={`--ev:${colorOf(p.occ)}`}
                 on:click={(e) => dispatch('open', { occ: p.occ, anchor: e.currentTarget })}
+                on:contextmenu={(e) => !p.occ.task && openScriptMenu(e, 'calendar.event', { id: String(p.occ.eventId) })}
               >
                 <span class="time">{timeOf(p, day)}</span>
                 <span class="edge" aria-hidden="true"></span>

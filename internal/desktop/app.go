@@ -24,6 +24,7 @@ import (
 	"github.com/peltonapp/Pelton/internal/notes"
 	"github.com/peltonapp/Pelton/internal/outbox"
 	"github.com/peltonapp/Pelton/internal/proxy"
+	"github.com/peltonapp/Pelton/internal/scripting"
 	"github.com/peltonapp/Pelton/internal/search"
 	"github.com/peltonapp/Pelton/internal/storage"
 	"github.com/wailsapp/wails/v3/pkg/application"
@@ -267,6 +268,12 @@ type App struct {
 
 	// chat is the opt in Matrix chat of the active profile (bind_chat.go).
 	chat chatState
+
+	// scripts runs the user's automations, nil until the store is open and
+	// in demo mode; scriptState holds what the bindings around it keep in
+	// memory. See scripts.go and bind_scripts.go.
+	scripts     *scripting.Service
+	scriptState scriptState
 }
 
 // locked reports whether the app lock is engaged. An App built without one,
@@ -415,6 +422,7 @@ func (a *App) startup(ctx context.Context) {
 	goSafe("threading cached mail", a.backfillThreads)
 
 	a.startBackgroundServices()
+	a.startScripts()
 
 	// the notes folder, when the user has one: the mail reader and the other
 	// spaces list the notes about what they show.
@@ -463,6 +471,7 @@ func (a *App) shutdown() {
 	a.stopTray()
 	a.stopMCP()
 	a.stopChat()
+	a.stopScripts()
 	// a message sent just before quitting may still be on its way to Sent.
 	copied := make(chan struct{})
 	go func() {

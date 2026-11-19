@@ -132,6 +132,7 @@ func (a *App) syncAllCalendars(ctx context.Context) error {
 func (a *App) syncCalendarAccount(ctx context.Context, acct storage.CalendarAccount, report func(storage.Calendar)) ([]int64, error) {
 	ctx, cancel := context.WithTimeout(ctx, calendarAccountBudget)
 	defer cancel()
+	ctx = withScriptBudget(ctx)
 	client, err := a.calendarClient(acct)
 	if err != nil {
 		return nil, a.recordAccountFailure(ctx, acct, err)
@@ -409,11 +410,16 @@ func (a *App) storeResource(ctx context.Context, cal storage.Calendar, res calda
 	case row.ETag == res.ETag && res.ETag != "":
 		return false, nil
 	}
+	created, wasDone := row.ID == 0, row.TaskCompleted != ""
 	fill(row)
 	row.Data = string(res.Data)
 	row.Path, row.ETag = res.Path, res.ETag
 	row.Pending, row.Conflict, row.SyncError = "", false, ""
-	return true, a.store.SaveCalendarEvent(ctx, row)
+	if err := a.store.SaveCalendarEvent(ctx, row); err != nil {
+		return false, err
+	}
+	a.scriptResourceStored(ctx, cal, *row, created, wasDone)
+	return true, nil
 }
 
 // pushEvent writes one event's pending change to the server under the etag it

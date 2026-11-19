@@ -12,14 +12,21 @@
     maxRowActions,
     moveRowAction,
     parseRowActions,
+    placedRowActions,
     rowActionIds,
+    scriptRowAction,
+    scriptRowActionId,
     rowActionSettingKey,
     rowActionView,
     serializeRowActions,
     toggleRowAction,
+    type BuiltinRowActionId,
     type RowActionId,
   } from '../../lib/rowactions'
   import { t } from '../../lib/i18n'
+  import { placed } from '../../lib/scriptplacements'
+
+  const hoverScripts = placed('row.hover')
 
   /** The stored list, comma separated. */
   export let value: string
@@ -30,8 +37,9 @@
 
   const plainState = { seen: true, flagged: false, pinned: false, muted: false, inSpam: false }
 
-  $: shown = parseRowActions(value)
-  $: hidden = rowActionIds.filter((id) => !shown.includes(id))
+  $: shown = placedRowActions(parseRowActions(value), $hoverScripts)
+  $: offered = [...rowActionIds, ...$hoverScripts.map((s) => scriptRowAction(s.scriptId))] as RowActionId[]
+  $: hidden = offered.filter((id) => !shown.includes(id))
   $: full = shown.length >= maxRowActions
 
   let listEl: HTMLOListElement
@@ -41,7 +49,7 @@
   }
 
   function nameOf(id: RowActionId): string {
-    return $t(rowActionSettingKey(id))
+    return scriptRowActionId(id) !== null ? (rowActionView(id, plainState, $hoverScripts).label ?? '') : $t(rowActionSettingKey(id as BuiltinRowActionId))
   }
 
   function onReorder(event: CustomEvent<ReorderDetail>): void {
@@ -69,7 +77,7 @@
 <div class="editor" class:disabled>
   <ol class="list" bind:this={listEl} use:reorder on:reorder={onReorder} aria-label={$t('rowActions.choose')}>
     {#each shown as id, i (id)}
-      {@const view = rowActionView(id, plainState)}
+      {@const view = rowActionView(id, plainState, $hoverScripts)}
       <li class="item" data-reorder-id={id}>
         <button
           type="button"
@@ -93,7 +101,7 @@
   {/if}
   <ul class="list">
     {#each hidden as id (id)}
-      {@const view = rowActionView(id, plainState)}
+      {@const view = rowActionView(id, plainState, $hoverScripts)}
       <li class="item off">
         <span class="glyph" aria-hidden="true"><Ph svg={view.icon} size={15} /></span>
         <span class="name">{nameOf(id)}</span>

@@ -10,6 +10,7 @@ import projectsIcon from '@phosphor-icons/core/assets/duotone/kanban-duotone.svg
 import notesIcon from '@phosphor-icons/core/assets/duotone/notebook-duotone.svg?raw'
 import feedsIcon from '@phosphor-icons/core/assets/duotone/rss-duotone.svg?raw'
 import chatIcon from '@phosphor-icons/core/assets/duotone/chats-circle-duotone.svg?raw'
+import automationsIcon from '@phosphor-icons/core/assets/duotone/lightning-duotone.svg?raw'
 import { derived, get } from 'svelte/store'
 import { IconAdjustmentsHorizontal, IconArrowDown, IconArrowLeft, IconArrowRight, IconArrowUp, IconEye, IconEyeOff } from '@tabler/icons-svelte'
 import { prefs, setHiddenSpaces, setSpaceOrder } from '../stores/prefs'
@@ -108,6 +109,7 @@ export const spaces: SpaceEntry[] = [
   { key: 'notes', labelKey: 'space.notes', icon: notesIcon },
   { key: 'feeds', labelKey: 'space.feeds', icon: feedsIcon },
   { key: 'chat', labelKey: 'space.chat', icon: chatIcon },
+  { key: 'automations', labelKey: 'space.automations', icon: automationsIcon },
 ]
 
 /** Whether a space is switched on: chat only shows once the user turned it on. */

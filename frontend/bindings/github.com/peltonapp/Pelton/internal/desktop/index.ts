@@ -7,6 +7,11 @@ export {
 };
 
 export {
+    AIKindDTO,
+    AIProviderDTO,
+    AIProviderInput,
+    AIScriptOptionsDTO,
+    AITestDTO,
     AccountDTO,
     AccountProxyDTO,
     AccountSignaturesDTO,
@@ -129,6 +134,7 @@ export {
     PendingMailtoDTO,
     PhishingDTO,
     PhishingSignalDTO,
+    PlacedScriptDTO,
     PrepAttendeeDTO,
     PrepMeetingDTO,
     PrepThreadDTO,
@@ -159,6 +165,12 @@ export {
     SMIMEDTO,
     SMIMERevocationDTO,
     SaveThemeRequest,
+    ScriptCatchUpDTO,
+    ScriptDTO,
+    ScriptFileDTO,
+    ScriptInput,
+    ScriptRunDTO,
+    ScriptTriggerDTO,
     SearchRequestDTO,
     SearchResultDTO,
     SenderOverviewDTO,

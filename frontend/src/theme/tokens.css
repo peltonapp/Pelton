@@ -238,6 +238,19 @@
   --chat-media-width: 360px;
   --chat-media-height: 280px;
   --chat-composer-max: 200px;
+  /* automations: the script list and the run log beside the editor, the
+     gutter of the Lua editor, the tallest a run's step list grows in a
+     dialog, and the widest the space shows all three panes side by side. */
+  --automation-list-width: 260px;
+  --automation-log-width: 320px;
+  --automation-gutter: 40px;
+  --automation-steps-max: 360px;
+  --automation-narrow: 960px;
+  /* the block editor: its palette and Lua panel beside the canvas, and the
+     widest it is before both fold away below the canvas. */
+  --block-palette-width: 200px;
+  --block-lua-width: 300px;
+  --block-narrow: 720px;
   --chat-signin-width: 420px;
 
   /* default density (medium) row + pane spacing. overridden per density below. */

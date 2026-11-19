@@ -117,7 +117,21 @@ type FolderSyncResult struct {
 	// ReplyStateChanged counts cached messages whose answered or forwarded
 	// state this sync changed, so an open list can show it.
 	ReplyStateChanged int
+	// FlagChanges lists the server flag changes adopted locally, the first
+	// maxFlagChanges of them.
+	FlagChanges []FlagChange
 }
+
+// FlagChange is a cached message whose flags a sync took from the server.
+type FlagChange struct {
+	ID     int64
+	Before storage.Flag
+	After  storage.Flag
+}
+
+// maxFlagChanges caps FlagChanges, so a folder resync after another client
+// marked thousands of messages read keeps a short list.
+const maxFlagChanges = 200
 
 // replyStateFlags are the bits that say a message was answered or forwarded.
 const replyStateFlags = storage.FlagAnswered | storage.FlagForwarded
@@ -427,6 +441,9 @@ func (e *Engine) executePlan(ctx context.Context, folder storage.Folder, plan []
 				continue
 			}
 			res.FlagUpdated++
+			if len(res.FlagChanges) < maxFlagChanges {
+				res.FlagChanges = append(res.FlagChanges, FlagChange{ID: localByUID[d.UID].ID, Before: localByUID[d.UID].Flags, After: d.Flags})
+			}
 
 		case ActionPushFlags:
 			if err := e.pushFlags(ctx, localByUID[d.UID], d.Flags, d.Clear); err != nil {

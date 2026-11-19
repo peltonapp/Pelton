@@ -54,6 +54,7 @@
     IconTrash,
     IconChecklist,
     IconLayoutKanban,
+    IconFilterPlus,
     IconMessageShare,
   } from '@tabler/icons-svelte'
   import { chatAvailable } from '../../lib/chatavailable'
@@ -65,6 +66,7 @@
   import { menuHint } from '../../stores/shortcuts'
   import { createTasksFromMail } from '../../lib/taskmail'
   import { pickProjectFor } from '../../lib/projectpicker'
+  import { createRuleFromMail } from '../automations/blocks/rulefrommail'
   import { forgetCard } from '../../stores/threads'
   import { readerMinWidth } from '../../lib/myday'
   import type { MessageDetail, EditorMode } from '../../lib/types'
@@ -144,6 +146,7 @@
       { label: $t('shortcut.markUnread'), icon: IconMailFilled, hint: menuHint('mark-unread'), action: () => void markSeen(message, false) },
       { label: $t('shortcut.createTask'), icon: IconChecklist, hint: menuHint('create-task'), action: () => void createTasksFromMail([message.id]) },
       { label: $t('projects.addTo'), icon: IconLayoutKanban, hint: menuHint('add-to-project'), action: () => pickProjectFor([message.id], message.threadId) },
+      ...(newDesign ? [{ label: $t('scripts.blocks.ruleFromMail'), icon: IconFilterPlus, action: () => void createRuleFromMail(message.id) }] : []),
       'separator',
       { label: $t('messageList.menu.openInWindow'), icon: IconAppWindow, action: () => void openMessageWindow(message.id, message.subject) },
       { label: $t('detail.toolbar.print'), icon: IconPrinter, action: () => printMessage(message) },
@@ -157,7 +160,7 @@
       'separator',
       { label: $t('action.delete'), icon: IconTrash, danger: true, hint: menuHint('delete-message'), action: () => void remove(message) },
     ]
-    openContextMenu(x, y, entries)
+    openContextMenu(x, y, entries, { place: 'mail.message', items: [{ id: String(message.id) }] })
   }
 
   // the pane follows whichever message is visible: the active tab's, or the one

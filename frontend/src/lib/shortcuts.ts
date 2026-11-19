@@ -101,6 +101,8 @@ export type ShortcutAction =
   | 'add-to-project'
   // shows the Feeds space.
   | 'go-feeds'
+  // shows the Automations space, or its overlay in the classic design.
+  | 'go-automations'
   // the split inbox tabs, only while the message list has focus.
   | 'next-split'
   | 'prev-split'
@@ -138,6 +140,22 @@ export type ShortcutAction =
   // composer actions of the new design. They act on the composer that last
   // had focus, so they carry a modifier and work while typing.
   | ComposeAction
+  // a script placed as a shortcut, bound by the user alone.
+  | ScriptAction
+
+/** The action of a script placed as a shortcut: "script:" and its id. */
+export type ScriptAction = `script:${number}`
+
+/** The action id of a script. */
+export function scriptAction(scriptId: number): ScriptAction {
+  return `script:${scriptId}`
+}
+
+/** The script an action runs, or null for another action. */
+export function scriptOfAction(action: string): number | null {
+  const m = /^script:(\d+)$/.exec(action)
+  return m ? Number(m[1]) : null
+}
 
 /** Goes to the nth space of the navigation. */
 export type SpaceNumberAction = `go-space-${1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9}`
@@ -196,6 +214,8 @@ export interface Shortcut {
   action: ShortcutAction
   combo: string
   labelKey: string
+  /** A name shown instead of the label key, for an action that has no catalog entry. */
+  label?: string
   /** The action exists in the new design only; classic does not list it. */
   newDesignOnly?: boolean
   /**
@@ -309,6 +329,8 @@ export const shortcuts: Shortcut[] = [
   // in the reader it takes that one without asking.
   { action: 'add-to-project', combo: 'p', labelKey: 'shortcut.addToProject', newDesignOnly: true },
   { action: 'go-feeds', combo: 'mod+shift+g', labelKey: 'shortcut.goFeeds', newDesignOnly: true },
+  // s for scripts.
+  { action: 'go-automations', combo: 'mod+shift+s', labelKey: 'shortcut.goAutomations' },
   // Tab only moves between splits while the list has focus; everywhere else it
   // keeps moving focus between controls.
   { action: 'next-split', combo: 'tab', labelKey: 'shortcut.nextSplit' },

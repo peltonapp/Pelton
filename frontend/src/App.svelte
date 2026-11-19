@@ -104,6 +104,7 @@
     chipActions,
     sendActions,
     spaceNumber,
+    scriptOfAction,
     shortcuts as shortcutRegistry,
     type ShortcutAction,
   } from './lib/shortcuts'
@@ -119,7 +120,8 @@
   import { initFocus, focusMenuOpen, refreshFocus } from './stores/focus'
   import './lib/palette-focus'
   import { cyclePane, focusPane as focusPaneArea } from './lib/panes'
-  import { bindings, recording, initShortcuts } from './stores/shortcuts'
+  import { bindings, activeBindings, recording, initShortcuts } from './stores/shortcuts'
+  import { currentMessageItems, runAt } from './lib/scriptplacements'
   import { initMenuBar } from './stores/menubar'
   import { recordDeleted } from './stores/undodelete'
   import { historyOpen, redoOrSay, undoOrSay } from './stores/undohistory'
@@ -211,6 +213,8 @@
   import { startProjects, fileMailRequest } from './stores/projects'
   import { pickProjectFor } from './lib/projectpicker'
   import './lib/palette-feeds'
+  import './lib/palette-automations'
+  import AutomationsHost from './components/automations/AutomationsHost.svelte'
   import './lib/palette-navhistory'
   import './lib/location-mail'
   import './lib/location-calendar'
@@ -220,6 +224,7 @@
   import './lib/location-notes'
   import './lib/location-feeds'
   import './lib/location-chat'
+  import './lib/location-automations'
   import { startNavHistory, clearNavHistory, goBack, goForward } from './stores/navhistory'
   import { startFeeds, feedFocus } from './stores/feeds'
   import { startTasks, toggleDone, tasks as taskStore, taskFromMailRequest } from './stores/tasks'
@@ -285,6 +290,8 @@
   // exists as set up.
   let onboardingClassic = false
   let onboardingRerun = false
+  // the setup flow opens on the acknowledgement while it is owed.
+  let setupNeedsLegal = false
   // installs that predate the onboarding liability step have to acknowledge it
   // once before they can carry on.
   let liabilityOpen = false
@@ -341,7 +348,9 @@
   }
   // an overlay covers the top bar, so the window needs another handle to be
   // dragged by while one is open.
-  $: overlayOpen = settingsOpen || onboardingOpen || wizardOpen || contactsOpen
+  // classic shows automations as an overlay too.
+  let automationsOpen = false
+  $: overlayOpen = settingsOpen || onboardingOpen || wizardOpen || contactsOpen || automationsOpen
   $: setTipsSuspended(overlayOpen || nightlyOpen || liabilityOpen || $whatsNewOpen)
   $: if ($setupRequested) {
     setupRequested.set(false)
@@ -721,10 +730,11 @@
         // if the lookup fails, do not block the app with onboarding.
         onboardingOpen = false
       }
-      // the classic onboarding collects the acknowledgement itself, so only ask
-      // separately when it is not going to run. the setup flow leaves it to
-      // the dialog, which then shows above it.
-      liabilityOpen = (!onboardingOpen || !onboardingClassic) && !(await liabilityAccepted())
+      // both onboarding flows collect the acknowledgement as their first step,
+      // so only ask separately when neither is going to run.
+      const accepted = await liabilityAccepted()
+      setupNeedsLegal = !accepted
+      liabilityOpen = !onboardingOpen && !accepted
       if (!resumed) {
         void offerCrashReport()
       }
@@ -1017,6 +1027,7 @@
   // from settings and reopens the flow.
   function finishOnboarding(): void {
     onboardingOpen = false
+    setupNeedsLegal = false
     void setSetting(SettingKeys.onboarded, 'true')
     flushPendingMailto()
   }
@@ -1466,6 +1477,13 @@
         break
       case 'go-chat':
         goToSpace('chat')
+        break
+      case 'go-automations':
+        if (classic) {
+          automationsOpen = !settingsOpen && !onboardingOpen && !wizardOpen
+        } else {
+          goToSpace('automations')
+        }
         break
       case 'open-attachments':
         if (!classic && !overlayOpen) {
@@ -2047,7 +2065,7 @@
     if ((event.key !== 'ArrowDown' && event.key !== 'ArrowUp') || !$prefs.multiSelectEnabled) {
       return false
     }
-    if (matchShortcut(event, $bindings) !== null) {
+    if (matchShortcut(event, $activeBindings) !== null) {
       return false
     }
     vimMove(event.key === 'ArrowDown' ? 1 : -1, true)
@@ -2072,7 +2090,7 @@
       event.preventDefault()
       return
     }
-    const action = matchShortcut(event, $bindings)
+    const action = matchShortcut(event, $activeBindings)
     // undo and redo belong to a text field, a composer or an editor while one
     // has focus, and are the history's everywhere else.
     if ((action === 'undo' || action === 'redo') && isEditableTarget(event.target)) {
@@ -2091,6 +2109,12 @@
     if (action) {
       // a binding that types a character must not hijack typing in a field.
       if (comboTypes($bindings[action]) && isEditableTarget(event.target)) {
+        return
+      }
+      const scriptId = scriptOfAction(action)
+      if (scriptId !== null) {
+        event.preventDefault()
+        runAt('shortcut', scriptId, currentMessageItems())
         return
       }
       if (classic && newDesignOnly.has(action)) {
@@ -2253,7 +2277,7 @@
 {/if}
 
 {#if !classic}
-<div class="frame" class:rail-right={$prefs.railSide === 'right'} class:has-rail={showRail}>
+<div class="frame" class:rail-right={$prefs.railSide === 'right'} class:has-rail={showRail} data-file-drop-target="app">
   <TopBar tabs={$prefs.navStyle === 'tabs' || railFolded}>
     <svelte:fragment slot="menu">
       {#if showMenuBar}
@@ -2375,13 +2399,19 @@
           <svelte:component this={m.default} />
         {/await}
       </div>
+    {:else if $space === 'automations'}
+      <div class="space-host">
+        {#await import('./components/automations/AutomationsSpace.svelte') then m}
+          <svelte:component this={m.default} />
+        {/await}
+      </div>
     {/if}
   </div>
 
   <StatusBar />
 </div>
 {:else}
-<div class="shell" class:with-topbar={showMenuBar || macTitlebar}>
+<div class="shell" class:with-topbar={showMenuBar || macTitlebar} data-file-drop-target="app">
   {#if showMenuBar}
     <MenuBar on:action={(e) => handleMenu(e.detail)} />
   {:else if macTitlebar}
@@ -2417,6 +2447,14 @@
 
 <!-- settings and the wizard are code-split: their js/css load only when opened,
      so they cost nothing at startup. compose stays eager (used constantly). -->
+{#if automationsOpen && classic}
+  {#await import('./components/automations/AutomationsOverlay.svelte') then m}
+    <svelte:component this={m.default} on:close={() => (automationsOpen = false)} />
+  {/await}
+{/if}
+
+<AutomationsHost />
+
 {#if contactsOpen}
   {#await import('./components/contacts/ContactsScreen.svelte') then m}
     <svelte:component
@@ -2450,7 +2488,7 @@
 <!-- the liability acknowledgement for installs from before the onboarding step. -->
 {#if liabilityOpen}
   {#await import('./components/common/LiabilityDialog.svelte') then m}
-    <svelte:component this={m.default} on:accepted={() => (liabilityOpen = false)} />
+    <svelte:component this={m.default} on:accepted={() => { liabilityOpen = false; setupNeedsLegal = false }} />
   {/await}
 {/if}
 
@@ -2464,7 +2502,8 @@
     <svelte:component
       this={m.default}
       rerun={onboardingRerun}
-      blocked={nightlyOpen || liabilityOpen}
+      blocked={nightlyOpen}
+      legal={setupNeedsLegal}
       on:finish={finishSetup}
       on:added={onboardingAddedMailbox}
       on:classic={() => (onboardingClassic = true)}

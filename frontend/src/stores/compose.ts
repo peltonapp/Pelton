@@ -506,6 +506,10 @@ export function requestComposeClose(id: number): void {
 // availability panel, set from the command palette.
 export const availabilityRequest = writable<number | null>(null)
 
+// insertRequest asks a session's composer to put text in at the caret, e.g. a
+// script's result.
+export const insertRequest = writable<{ session: number; text: string } | null>(null)
+
 // getSession reads the current state of one session.
 export function getSession(id: number): ComposeSession | undefined {
   return get(composeSessions).find((s) => s.id === id)

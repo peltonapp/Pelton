@@ -27,6 +27,7 @@ import {
   demoThread,
 } from './demo'
 import { noteAction } from './coach'
+import type { AIKind, AIProvider, AIProviderInput, AITestResult, AIScriptOptions } from './ai'
 import type {
   Account,
   AccountProxy,
@@ -182,6 +183,19 @@ import type {
   ChatDevice,
 } from './types'
 import { normalizeState } from './sieve'
+import type {
+  CompileResult,
+  LiveRun,
+  PlacedItem,
+  PlacedScript,
+  PlacementConfig,
+  Script,
+  ScriptCatalog,
+  ScriptCatchUp,
+  ScriptFile,
+  ScriptInput,
+  ScriptRun,
+} from './scripting'
 
 // isDemoMode reports whether the app launched in the cosmetic --potatoes-are-nice
 // screenshot mode; the frontend reads it once to switch the data layer to samples.
@@ -2128,6 +2142,7 @@ export const SettingKeys = {
   notifyActionMarkRead: 'notify_action_mark_read',
   notifyActionReply: 'notify_action_reply',
   cleanLinks: 'clean_links',
+  autoconfigLookup: 'autoconfig_lookup',
   verboseSync: 'verbose_sync',
   syncProgressBar: 'sync_progress_bar',
   statusClock: 'status_clock',
@@ -3750,4 +3765,288 @@ export function chatSetViewing(roomId: string): Promise<void> {
     return Promise.resolve()
   }
   return App.ChatSetViewing(roomId)
+}
+
+// automations. The generated models type enums and maps their own way, so the
+// values cross this boundary as the shapes lib/scripting.ts declares.
+
+function asScript(s: desktop.ScriptDTO): Script {
+  return s as unknown as Script
+}
+
+function asRun(r: desktop.ScriptRunDTO): ScriptRun {
+  return r as unknown as ScriptRun
+}
+
+function toDTO(input: ScriptInput): desktop.ScriptInput {
+  return input as unknown as desktop.ScriptInput
+}
+
+/** Everything scripts can use, as data. */
+export function scriptRegistry(): Promise<ScriptCatalog> {
+  return App.ScriptRegistry().then((c) => c as unknown as ScriptCatalog)
+}
+
+/** Every script, by name. */
+export function listScripts(): Promise<Script[]> {
+  if (isDemoActive()) {
+    return Promise.resolve([])
+  }
+  return App.ListScripts().then((list) => (list ?? []).map(asScript))
+}
+
+/** Stores a new script, switched off. */
+export function createScript(input: ScriptInput): Promise<Script> {
+  return App.CreateScript(toDTO(input)).then(asScript)
+}
+
+/** Saves a script's content; a new permission switches it off until approved. */
+export function updateScript(id: number, input: ScriptInput): Promise<Script> {
+  return App.UpdateScript(id, toDTO(input)).then(asScript)
+}
+
+/** Removes a script with its log and storage. */
+export function deleteScript(id: number): Promise<void> {
+  return App.DeleteScript(id)
+}
+
+/** Switches a script on, approving the given permissions, or off. */
+export function setScriptEnabled(id: number, enabled: boolean, approve: string[]): Promise<Script> {
+  return App.SetScriptEnabled(id, enabled, approve).then(asScript)
+}
+
+/** Lets a script make a risky call, e.g. "mail.send", without asking, or takes that back. */
+export function setScriptAllowUnasked(id: number, fn: string, allow: boolean): Promise<Script> {
+  return App.SetScriptAllowUnasked(id, fn, allow).then(asScript)
+}
+
+/** Stores the values of a script's settings. */
+export function setScriptSettings(id: number, values: Record<string, unknown>): Promise<Script> {
+  return App.SetScriptSettings(id, values).then(asScript)
+}
+
+/** Sets what a mail script does with mail that arrived while Pelton was closed. */
+export function setScriptCatchUp(id: number, mode: string, cap: number): Promise<Script> {
+  return App.SetScriptCatchUp(id, mode, cap).then(asScript)
+}
+
+/** Compiles a block tree (JSON) to Lua for a trigger, with every problem found. */
+export function compileScriptBlocks(blocks: string, trigger: string): Promise<CompileResult> {
+  return App.CompileScriptBlocks(blocks, trigger).then((r) => r as unknown as CompileResult)
+}
+
+/** A syntax error in Lua, or '' when it parses. */
+export function checkScriptLua(source: string): Promise<string> {
+  return App.CheckScriptLua(source)
+}
+
+/** Turns a block script into a Lua script for good. */
+export function convertScriptToLua(id: number): Promise<Script> {
+  return App.ConvertScriptToLua(id).then(asScript)
+}
+
+/** Runs an enabled script now, on a message when it takes one (0 for none). */
+export function runScript(id: number, messageId: number): Promise<ScriptRun> {
+  return App.RunScript(id, messageId).then(asRun)
+}
+
+/** Answers a running script's question; cancelled ends the run. */
+export function answerScriptAsk(id: string, value: unknown, cancelled: boolean): Promise<void> {
+  return App.AnswerScriptAsk(id, value, cancelled)
+}
+
+/** Cancels a run in progress by the id its progress reports carry. */
+export function cancelScriptRun(liveId: number): Promise<void> {
+  return App.CancelScriptRun(liveId)
+}
+
+/** The runs in progress. */
+export function scriptLiveRuns(): Promise<LiveRun[]> {
+  if (isDemoActive()) {
+    return Promise.resolve([])
+  }
+  return App.ScriptLiveRuns().then((list) => (list ?? []) as unknown as LiveRun[])
+}
+
+/** The scripts offered at each placement, by placement id. */
+export function scriptPlacements(): Promise<Record<string, PlacedScript[]>> {
+  if (isDemoActive()) {
+    return Promise.resolve({})
+  }
+  return App.ScriptPlacements().then((m) => (m ?? {}) as unknown as Record<string, PlacedScript[]>)
+}
+
+/** Sets where in the app a script is offered. */
+export function setScriptPlacements(id: number, placements: PlacementConfig[]): Promise<Script> {
+  return App.SetScriptPlacements(id, placements as unknown as Parameters<typeof App.SetScriptPlacements>[1]).then(asScript)
+}
+
+/** Runs a script from a placement on the items it was used on. */
+export function runPlacedScript(id: number, placement: string, items: PlacedItem[]): Promise<ScriptRun> {
+  return App.RunPlacedScript(id, placement, items as unknown as Parameters<typeof App.RunPlacedScript>[2]).then(asRun)
+}
+
+/** Carries out a result action the backend handles; returns what to tell the user. */
+export function runScriptResultAction(resultId: string, action: string): Promise<string> {
+  return App.RunScriptResultAction(resultId, action)
+}
+
+/** An item as scripts see it, e.g. a message by its id. */
+export function scriptValue(valueType: string, id: string): Promise<Record<string, unknown>> {
+  return App.ScriptValue(valueType, id).then((m) => (m ?? {}) as Record<string, unknown>)
+}
+
+/** How long a question of a script nobody started waits, in seconds. */
+export function scriptAskSeconds(): Promise<number> {
+  return App.ScriptAskSeconds()
+}
+
+/** Sets how long such a question waits, 10 seconds to a day. */
+export function setScriptAskSeconds(seconds: number): Promise<void> {
+  return App.SetScriptAskSeconds(seconds)
+}
+
+/** Dry runs a script as written, against a message (0 for the sample). Nothing changes. */
+export function testScript(input: ScriptInput, messageId: number): Promise<ScriptRun> {
+  return App.TestScript(toDTO(input), messageId).then(asRun)
+}
+
+/** The latest runs of a script, or of every script for 0, newest first. */
+export function scriptRuns(scriptId: number, limit: number): Promise<ScriptRun[]> {
+  if (isDemoActive()) {
+    return Promise.resolve([])
+  }
+  return App.ScriptRuns(scriptId, limit).then((list) => (list ?? []).map(asRun))
+}
+
+/** Empties the log of a script, or every log for 0. */
+export function clearScriptRuns(scriptId: number): Promise<void> {
+  return App.ClearScriptRuns(scriptId)
+}
+
+/** How many days the run log keeps. */
+export function scriptLogDays(): Promise<number> {
+  return App.ScriptLogDays()
+}
+
+/** Sets how many days the run log keeps, 1 to 365. */
+export function setScriptLogDays(days: number): Promise<void> {
+  return App.SetScriptLogDays(days)
+}
+
+/** Reverses the mail changes of a run. */
+export function undoScriptRun(runId: number): Promise<void> {
+  return App.UndoScriptRun(runId)
+}
+
+/** Answers a confirmation a script asked for. */
+export function answerScriptConfirm(id: string, allow: boolean, always: boolean): Promise<void> {
+  return App.AnswerScriptConfirm(id, allow, always)
+}
+
+/** Answers whether a script runs over mail that arrived while Pelton was closed. */
+export function resolveScriptCatchUp(scriptId: number, run: boolean): Promise<void> {
+  return App.ResolveScriptCatchUp(scriptId, run)
+}
+
+/** The catch-up questions still open. */
+export function pendingScriptCatchUps(): Promise<ScriptCatchUp[]> {
+  if (isDemoActive()) {
+    return Promise.resolve([])
+  }
+  return App.PendingScriptCatchUps().then((list) => (list ?? []) as ScriptCatchUp[])
+}
+
+/** Writes a script to a file the user picks; resolves to the path, '' when cancelled. */
+export function exportScript(id: number): Promise<string> {
+  return App.ExportScript(id)
+}
+
+/** The folder a script may read and write files in, '' when it has none. */
+export function scriptFolder(id: number): Promise<string> {
+  if (isDemoActive()) {
+    return Promise.resolve('')
+  }
+  return App.ScriptFolder(id)
+}
+
+/** Asks for a folder and grants it to a script; resolves to it, '' when cancelled. */
+export function pickScriptFolder(id: number): Promise<string> {
+  return App.PickScriptFolder(id)
+}
+
+/** Takes back a script's folder. */
+export function clearScriptFolder(id: number): Promise<void> {
+  return App.ClearScriptFolder(id)
+}
+
+/** Asks for a script file; resolves to its path, '' when cancelled. */
+export function pickScriptFile(): Promise<string> {
+  return App.PickScriptFile()
+}
+
+/** Reads a script file for the import dialog, storing and running nothing. */
+export function readScriptFile(path: string): Promise<ScriptFile> {
+  return App.ReadScriptFile(path).then((f) => ({ script: asScript(f.script), text: f.text }))
+}
+
+/** Stores the script in a file's text, switched off and marked as imported. */
+export function importScript(text: string): Promise<Script> {
+  return App.ImportScript(text).then(asScript)
+}
+
+/** The kinds of AI provider that can be added. */
+export function aiProviderKinds(): Promise<AIKind[]> {
+  return App.AIProviderKinds().then((list) => (list ?? []) as AIKind[])
+}
+
+/** The AI providers the user set up. Contacts nothing. */
+export function aiProviders(): Promise<AIProvider[]> {
+  if (isDemoActive()) {
+    return Promise.resolve([])
+  }
+  return App.AIProviders().then((list) => (list ?? []).map((p) => ({ ...p, models: p.models ?? [] })) as AIProvider[])
+}
+
+/** Adds an AI provider, or changes the one with the input's id. */
+export function saveAIProvider(input: AIProviderInput): Promise<AIProvider> {
+  return App.SaveAIProvider(new desktop.AIProviderInput(input)).then((p) => ({ ...p, models: p.models ?? [] }) as AIProvider)
+}
+
+/** Removes an AI provider and its key. */
+export function deleteAIProvider(id: string): Promise<void> {
+  return App.DeleteAIProvider(id)
+}
+
+/** Makes an AI provider the default. */
+export function setDefaultAIProvider(id: string): Promise<void> {
+  return App.SetDefaultAIProvider(id)
+}
+
+/** Sends one tiny request to a provider, saved or not. */
+export function testAIProvider(input: AIProviderInput): Promise<AITestResult> {
+  return App.TestAIProvider(new desktop.AIProviderInput(input)) as Promise<AITestResult>
+}
+
+/** Asks a provider for its models; a saved provider keeps the list. */
+export function fetchAIModels(input: AIProviderInput): Promise<string[]> {
+  return App.FetchAIModels(new desktop.AIProviderInput(input)).then((list) => list ?? [])
+}
+
+/** A script's AI switches. */
+export function aiScriptOptions(scriptId: number): Promise<AIScriptOptions> {
+  if (isDemoActive()) {
+    return Promise.resolve({ logText: false })
+  }
+  return App.AIScriptOptions(scriptId) as Promise<AIScriptOptions>
+}
+
+/** Test runs a script as testScript does, with its AI steps really asking the model; changes stay planned. */
+export function testScriptAskingAI(input: ScriptInput, messageId: number): Promise<ScriptRun> {
+  return App.TestScriptAskingAI(toDTO(input), messageId).then(asRun)
+}
+
+/** Changes a script's AI switches. */
+export function setAIScriptOptions(scriptId: number, options: AIScriptOptions): Promise<void> {
+  return App.SetAIScriptOptions(scriptId, new desktop.AIScriptOptionsDTO(options))
 }

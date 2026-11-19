@@ -10,8 +10,16 @@
   import ToggleSwitch from '../../common/ToggleSwitch.svelte'
   import NetworkSection from '../../settings/NetworkSection.svelte'
   import RemoteContentPreview from '../skeletons/RemoteContentPreview.svelte'
-  import { prefs, setAlwaysLoadImages, setBlockTrackingPixels, setCleanLinks } from '../../../stores/prefs'
+  import Segmented from '../ui/Segmented.svelte'
+  import { prefs, setAlwaysLoadImages, setAutoconfigLookup, setBlockTrackingPixels, setCleanLinks } from '../../../stores/prefs'
   import { t } from '../../../lib/i18n'
+  import type { AutoconfigLookup } from '../../../lib/types'
+
+  $: lookupOptions = [
+    { key: 'ask', label: $t('privacy.lookup.ask') },
+    { key: 'allow', label: $t('privacy.lookup.allow') },
+    { key: 'manual', label: $t('privacy.lookup.manual') },
+  ]
   import '../../../theme/settings2-sections-system.css'
 
   const dispatch = createEventDispatcher<{ close: void }>()
@@ -69,6 +77,14 @@
 <Card title={$t('settings2.privacy.links')}>
   <Row id="clean-links" label={$t('links.clean.label')} hint={$t('links.clean.hint')}>
     <ToggleSwitch checked={$prefs.cleanLinks} label={$t('links.clean.label')} on:change={(e) => setCleanLinks(e.detail)} />
+  </Row>
+  <Row id="autoconfig-lookup" label={$t('privacy.lookup.label')} hint={$t('privacy.lookup.hint')}>
+    <Segmented
+      label={$t('privacy.lookup.label')}
+      value={$prefs.autoconfigLookup}
+      options={lookupOptions}
+      on:change={(e) => void setAutoconfigLookup(e.detail as AutoconfigLookup)}
+    />
   </Row>
 </Card>
 <AppLockCard />
