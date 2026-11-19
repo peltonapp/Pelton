@@ -14,6 +14,7 @@ const entries: SettingsIndexEntry[] = [
   { page: 'privacy', id: 'app-lock-launch', labelKey: 'applock.settings.onLaunch', keywords: 'lock start launch open' },
   { page: 'privacy', id: 'app-lock-notifications', labelKey: 'applock.settings.hideNotifications', keywords: 'lock notifications hide sender subject private' },
   { page: 'privacy', id: 'app-lock-now', labelKey: 'applock.settings.lockNow', keywords: 'lock now passphrase change' },
+  { page: 'privacy', id: 'mail-vault', labelKey: 'mailvault.settings.title', keywords: 'vault encrypt encryption folder account passphrase recovery code lock sealed private' },
   { page: 'privacy', id: 'proxy', labelKey: 'settingsPanel.category.network', keywords: 'proxy connection tls socks socks5 http network route' },
 ]
 

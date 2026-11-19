@@ -126,7 +126,7 @@ FROM privacy_scans WHERE date >= ? GROUP BY sender`, formatTime(since))
 // MessageListID returns a message's List-Id, which a message read leaves out.
 func (d *DB) MessageListID(ctx context.Context, id int64) (string, error) {
 	var listID string
-	err := d.sql.QueryRowContext(ctx, `SELECT list_id FROM messages WHERE id = ?`, id).Scan(&listID)
+	err := d.sql.QueryRowContext(ctx, `SELECT list_id FROM messages WHERE id = ? AND `+notVaulted, id).Scan(&listID)
 	if err != nil {
 		return "", fmt.Errorf("storage: message list id %d: %w", id, err)
 	}

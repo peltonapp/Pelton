@@ -207,7 +207,7 @@ func (a *App) localAttachment(att storage.Attachment) (*storage.Attachment, erro
 	if a.store.AttachmentOnDisk(att.DiskPath) {
 		return &att, nil
 	}
-	m, err := a.store.GetMessage(a.ctx, att.MessageID)
+	m, err := a.store.GetMessage(a.mailCtx(), att.MessageID)
 	if err != nil {
 		return nil, err
 	}
@@ -226,7 +226,7 @@ func (a *App) localAttachment(att storage.Attachment) (*storage.Attachment, erro
 	if err != nil {
 		return nil, err
 	}
-	return a.store.RestoreAttachmentFile(a.ctx, m.AccountID, att, bytes.NewReader(content))
+	return a.store.RestoreAttachmentFile(a.mailCtx(), m.AccountID, att, bytes.NewReader(content))
 }
 
 // fetchPart fetches one message and returns the content of the part that
@@ -237,7 +237,7 @@ func (a *App) fetchPart(account storage.Account, mailbox string, uid uint32, att
 	if err != nil {
 		return nil, err
 	}
-	stored, err := a.store.ListAttachments(a.ctx, att.MessageID)
+	stored, err := a.store.ListAttachments(a.mailCtx(), att.MessageID)
 	if err != nil {
 		return nil, err
 	}
@@ -297,6 +297,11 @@ func (a *App) OpenAttachmentFile(messageID, attachmentID int64) error {
 		return err
 	}
 	dir := filepath.Join(os.TempDir(), "pelton-attachments", strconv.FormatInt(att.ID, 10))
+	if m, err := a.store.GetMessage(a.mailCtx(), att.MessageID); err == nil && m.VaultID != 0 {
+		if dir, err = a.mailVaultTempFor(att.ID); err != nil {
+			return err
+		}
+	}
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return fmt.Errorf("pelton: open attachment: %w", err)
 	}

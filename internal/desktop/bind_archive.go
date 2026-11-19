@@ -32,7 +32,7 @@ func (a *App) ArchiveMessage(id int64) (ArchiveUndoDTO, error) {
 	if err := a.ready(); err != nil {
 		return ArchiveUndoDTO{}, err
 	}
-	m, err := a.store.GetMessage(a.ctx, id)
+	m, err := a.store.GetMessage(a.mailCtx(), id)
 	if err != nil {
 		return ArchiveUndoDTO{}, err
 	}
@@ -61,7 +61,7 @@ func (a *App) MoveMessage(id, destFolderID int64) (ArchiveUndoDTO, error) {
 	if err := a.ready(); err != nil {
 		return ArchiveUndoDTO{}, err
 	}
-	m, err := a.store.GetMessage(a.ctx, id)
+	m, err := a.store.GetMessage(a.mailCtx(), id)
 	if err != nil {
 		return ArchiveUndoDTO{}, err
 	}
@@ -107,7 +107,7 @@ func (a *App) ArchiveMessages(ids []int64) (BulkArchiveDTO, error) {
 	byAccount := map[int64]map[int64][]*storage.Message{}
 	var accounts []int64
 	for _, id := range ids {
-		m, err := a.store.GetMessage(a.ctx, id)
+		m, err := a.store.GetMessage(a.mailCtx(), id)
 		if err != nil {
 			res.fail(1, err)
 			continue
@@ -188,7 +188,7 @@ func (a *App) archiveFromFolder(client mailClient, account storage.Account, sour
 		return 0
 	}
 
-	export := exportWanted(account, dest)
+	export := exportWanted(account, dest) && !a.inMailVault(sourceID)
 	raws := make([][]byte, len(msgs))
 	exportErrs := make([]string, len(msgs))
 	uids := make([]imap.UID, len(msgs))
@@ -296,7 +296,7 @@ func (a *App) moveMessageTo(m *storage.Message, dest storage.Folder, kw *keyword
 		raw         []byte
 		exportError string
 	)
-	if exportWanted(*account, dest) {
+	if exportWanted(*account, dest) && !a.inMailVault(m.FolderID) {
 		raw, err = client.FetchRawMessage(imap.UID(m.UID))
 		if err != nil {
 			raw = nil

@@ -748,7 +748,7 @@ func (a *App) OpenDraft(messageID int64) (DraftDTO, error) {
 	if err := a.ready(); err != nil {
 		return DraftDTO{}, err
 	}
-	m, err := a.store.GetMessage(a.ctx, messageID)
+	m, err := a.store.GetMessage(a.mailCtx(), messageID)
 	if err != nil {
 		return DraftDTO{}, err
 	}

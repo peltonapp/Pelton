@@ -87,7 +87,7 @@
   import { liabilityAccepted } from './lib/liability'
   import { setDemoActive } from './lib/demo'
   import { recordArchived } from './stores/undoarchive'
-  import { onMailNew, onMailRepaired, onSyncState, onSyncProgress, onOutboxChanged, onMenu, onViewsChanged, onFoldersChanged, onProfileChanged, onMailtoCompose, onAgentProposals, onOpenMessage, onReplyMessage, onArchiveAfterSend, onFeedsOpen, onCalendarReminder, onTaskReminder, onICSOpen, onAssistantScript, type Unsubscribe, type MailtoDraft, type CalendarReminderEvent, type TaskReminderEvent } from './lib/events'
+  import { onMailNew, onMailRepaired, onMailVault, onSyncState, onSyncProgress, onOutboxChanged, onMenu, onViewsChanged, onFoldersChanged, onProfileChanged, onMailtoCompose, onAgentProposals, onOpenMessage, onReplyMessage, onArchiveAfterSend, onFeedsOpen, onCalendarReminder, onTaskReminder, onICSOpen, onAssistantScript, type Unsubscribe, type MailtoDraft, type CalendarReminderEvent, type TaskReminderEvent } from './lib/events'
   import { assistantToastKey } from './lib/assistantScripts'
   import { selectScript } from './stores/scripts'
   import { loadViews, editingView, closeViewEditor, openViewEditor, views as savedViews } from './stores/views'
@@ -186,9 +186,10 @@
   } from './lib/messageactions'
   import { markAnsweredDone, markDone } from './lib/triage'
   import { watchFollowUps } from './stores/followups'
+  import { lockVaultsNow, openVaultUnlock, vaultDialog } from './stores/vaultdialog'
   import { loadSnippets } from './stores/snippets'
   import { editNote, toggleMute, togglePin } from './lib/organize'
-  import { buildCommands, mailCommands, type CommandContext, type MessageOp, type FolderOp } from './lib/commands'
+  import { buildCommands, mailCommands, type CommandContext, type MessageOp, type FolderOp, type PaletteCommand } from './lib/commands'
   import { extraPaletteCommands, registerPaletteSource } from './lib/palettesources'
   import './lib/palette-calendar'
   import './lib/palette-contacts'
@@ -659,8 +660,23 @@
         icon: IconShieldCheck,
         run: () => openMailScreen('privacy'),
       },
+      ...vaultPaletteCommands(tr),
     ]
   })
+
+  // the vault's palette entries come from the vault marks on the folders.
+  function vaultPaletteCommands(tr: (key: string) => string): PaletteCommand[] {
+    const folders = Object.values(get(sidebar).data?.foldersByAccount ?? {}).flat()
+    const locked = folders.find((f) => f.vaultLocked)
+    return [
+      ...(folders.some((f) => f.vaultId && !f.vaultLocked)
+        ? [{ id: 'mailvault:lock', group: 'action' as const, label: tr('mailvault.lockNow'), icon: IconShieldCheck, run: lockVaultsNow }]
+        : []),
+      ...(locked
+        ? [{ id: 'mailvault:unlock', group: 'action' as const, label: tr('mailvault.unlock'), icon: IconShieldCheck, run: () => openVaultUnlock(locked.vaultId ?? 0) }]
+        : []),
+    ]
+  }
 
   // the newsletter manager or the attachments browser fills the mail surface
   // in place of the list and the reader.
@@ -767,6 +783,13 @@
       onMailNew(() => {
         void refreshSidebar()
         void loadList(get(selection))
+      }),
+    )
+    unsubscribers.push(
+      onMailVault((e) => {
+        void refreshSidebar()
+        void loadList(get(selection))
+        void import('./stores/mailvault').then((m) => m.vaultChanged(e.locked))
       }),
     )
     unsubscribers.push(
@@ -2642,6 +2665,12 @@
 {#await import('./components/common/CommandPalette.svelte') then m}
   <svelte:component this={m.default} commands={paletteCommands} mail={paletteMailCommands} />
 {/await}
+
+{#if $vaultDialog}
+  {#await import('./components/vault/VaultDialogs.svelte') then m}
+    <svelte:component this={m.default} />
+  {/await}
+{/if}
 
 {#if !classic}
   <CoachLayer suspended={overlayOpen} />

@@ -93,7 +93,7 @@ func (d *DB) ClearRevocations(ctx context.Context) error {
 func (d *DB) MessageSMIMECerts(ctx context.Context, messageID int64) ([][]byte, error) {
 	var blob []byte
 	err := d.sql.QueryRowContext(ctx,
-		`SELECT smime_certs FROM messages WHERE id = ?`, messageID).Scan(&blob)
+		`SELECT smime_certs FROM messages WHERE id = ? AND `+notVaulted, messageID).Scan(&blob)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, ErrMessageNotFound
 	}

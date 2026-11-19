@@ -124,7 +124,7 @@ func (a *App) ImportKeyFromSetupMessage(messageID int64, code string) error {
 	if att.DiskPath == "" {
 		return fmt.Errorf("pelton: download this message first, its key file is not on this device yet")
 	}
-	f, err := a.store.OpenAttachment(att.DiskPath)
+	f, err := a.store.OpenAttachment(a.ctx, att)
 	if err != nil {
 		return err
 	}

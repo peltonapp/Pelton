@@ -123,9 +123,10 @@ func (a *App) recordSeen(addr string, key []byte, source string, at time.Time) {
 
 // learnGossip applies the Autocrypt-Gossip headers of a decrypted message.
 // Only gossip about the message's own recipients counts, and never about the
-// user's own addresses.
+// user's own addresses. Mail in a vault teaches nothing: the peers table is in
+// clear and would name who the vault corresponds with.
 func (a *App) learnGossip(m storage.Message, entity []byte) {
-	if !a.autocryptOn() {
+	if !a.autocryptOn() || m.VaultID != 0 || a.inMailVault(m.FolderID) {
 		return
 	}
 	recipients := append(autocrypt.AddressesIn(m.ToAddresses), autocrypt.AddressesIn(m.CcAddresses)...)

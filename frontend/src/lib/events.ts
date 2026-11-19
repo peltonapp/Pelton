@@ -45,6 +45,7 @@ export const EventNames = {
   replyMessage: 'message:reply',
   composeCloseRequest: 'compose:close-request',
   appLock: 'applock:changed',
+  mailVault: 'mailvault:changed',
   calendarSync: 'calendar:sync',
   calendarChanged: 'calendar:changed',
   calendarReminder: 'calendar:reminder',
@@ -496,6 +497,11 @@ export function onComposeCloseRequest(cb: () => void): Unsubscribe {
 /** onAppLock fires in every window when the app locks or unlocks. */
 export function onAppLock(cb: (e: { locked: boolean }) => void): Unsubscribe {
   return EventsOn(EventNames.appLock, (e: { locked: boolean }) => cb(e))
+}
+
+/** onMailVault fires when a mail vault locks, unlocks, changes or moves along sealing. */
+export function onMailVault(cb: (e: { id: number; locked: boolean; removed: boolean }) => void): Unsubscribe {
+  return EventsOn(EventNames.mailVault, (e: { id: number; locked: boolean; removed: boolean }) => cb(e))
 }
 
 /** onCalendarSync fires as calendars sync, and once more when the run ends. */

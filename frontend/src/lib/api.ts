@@ -1483,7 +1483,7 @@ export function exportMessagePrintView(id: number): Promise<void> {
   if (isDemoActive()) {
     return Promise.resolve()
   }
-  return App.ExportMessagePrintView(id)
+  return withVaultTempConsent(() => App.ExportMessagePrintView(id))
 }
 
 // exportMessageEml asks where to save one message and writes it as an .eml
@@ -1768,7 +1768,7 @@ export function openAttachmentFile(messageId: number, attachmentId: number): Pro
   if (isDemoActive()) {
     return Promise.resolve()
   }
-  return App.OpenAttachmentFile(messageId, attachmentId)
+  return withVaultTempConsent(() => App.OpenAttachmentFile(messageId, attachmentId))
 }
 
 /**
@@ -2034,6 +2034,32 @@ export function disableAppLock(passphrase: string, reason: string): Promise<Lock
 /** Replaces the lock passphrase once the current one has been checked. */
 export function changeLockPassphrase(current: string, next: string): Promise<LockAuthResult> {
   return App.ChangeLockPassphrase(current, next) as unknown as Promise<LockAuthResult>
+}
+
+// --- mail vaults: the rest is in mailvaultapi.ts, which loads on first use ---
+
+let askVaultTempConsent: (() => Promise<boolean>) | null = null
+
+/** Sets what asks the user, once, before a vault file is written to a temporary folder. */
+export function setVaultTempConsent(ask: () => Promise<boolean>): void {
+  askVaultTempConsent = ask
+}
+
+// withVaultTempConsent runs an action that may write a vault file for
+// opening. The first time, the backend refuses until the user has been told;
+// after a yes it is recorded and the action runs again.
+async function withVaultTempConsent(run: () => Promise<void>): Promise<void> {
+  try {
+    await run()
+  } catch (err) {
+    if (!String(err).includes('vault-temp-consent') || !askVaultTempConsent) {
+      throw err
+    }
+    if (await askVaultTempConsent()) {
+      await App.ConsentMailVaultTempFiles()
+      await run()
+    }
+  }
 }
 
 // --- quick compose ---

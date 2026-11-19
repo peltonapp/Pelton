@@ -86,7 +86,7 @@ func (a *App) scriptInvitations(ids []int64, firstSync bool) {
 	}
 	ctx := withScriptBudget(a.ctx)
 	for _, id := range ids {
-		atts, err := a.store.ListAttachments(a.ctx, id)
+		atts, err := a.store.ListAttachments(scriptsCtx(a.ctx), id)
 		if err != nil || !slices.ContainsFunc(atts, func(att storage.Attachment) bool { return rfc822.IsCalendar(att.ContentType, att.Filename) }) {
 			continue
 		}
@@ -94,7 +94,7 @@ func (a *App) scriptInvitations(ids []int64, firstSync bool) {
 		if err != nil || !inv.Found {
 			continue
 		}
-		m, err := a.store.GetMessage(a.ctx, id)
+		m, err := a.store.GetMessage(scriptsCtx(a.ctx), id)
 		if err != nil {
 			continue
 		}
@@ -113,6 +113,9 @@ func (a *App) scriptInvitations(ids []int64, firstSync bool) {
 func (a *App) scriptServerFlags(changes []psync.FlagChange) {
 	ctx := withScriptBudget(a.ctx)
 	for _, ch := range changes {
+		if !a.scriptSeesMessage(ch.ID) {
+			continue
+		}
 		if (ch.Before^ch.After)&storage.FlagSeen != 0 {
 			a.scriptEventBudgeted(ctx, scripting.TriggerMailReadMark, map[string]any{"message_id": ch.ID, "read": ch.After&storage.FlagSeen != 0})
 		}

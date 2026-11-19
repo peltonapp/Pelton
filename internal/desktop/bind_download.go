@@ -59,7 +59,7 @@ func (a *App) ReadAttachment(messageID, attachmentID int64) (AttachmentContentDT
 	if err != nil {
 		return AttachmentContentDTO{}, err
 	}
-	rc, err := a.store.OpenAttachment(target.DiskPath)
+	rc, err := a.store.OpenAttachment(a.mailCtx(), *target)
 	if err != nil {
 		return AttachmentContentDTO{}, err
 	}
@@ -74,7 +74,7 @@ func (a *App) ReadAttachment(messageID, attachmentID int64) (AttachmentContentDT
 
 // findAttachment resolves one attachment row within a message.
 func (a *App) findAttachment(messageID, attachmentID int64) (*storage.Attachment, error) {
-	atts, err := a.store.ListAttachments(a.ctx, messageID)
+	atts, err := a.store.ListAttachments(a.mailCtx(), messageID)
 	if err != nil {
 		return nil, err
 	}
@@ -93,7 +93,7 @@ func (a *App) SaveAllAttachments(messageID int64) (string, error) {
 	if err := a.ready(); err != nil {
 		return "", err
 	}
-	atts, err := a.store.ListAttachments(a.ctx, messageID)
+	atts, err := a.store.ListAttachments(a.mailCtx(), messageID)
 	if err != nil {
 		return "", err
 	}
@@ -123,7 +123,7 @@ func (a *App) SaveAllAttachments(messageID int64) (string, error) {
 // copyAttachmentProgress streams one attachment to dest, emitting byte progress
 // so the ui can show a bar even though the source is a local cached file.
 func (a *App) copyAttachmentProgress(att storage.Attachment, dest string, fileIndex, filesTotal int) error {
-	src, err := a.store.OpenAttachment(att.DiskPath)
+	src, err := a.store.OpenAttachment(a.mailCtx(), att)
 	if err != nil {
 		return err
 	}

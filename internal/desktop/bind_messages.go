@@ -52,7 +52,7 @@ func (a *App) ListMessages(req ListMessagesRequest) (MessageListDTO, error) {
 		pq := q
 		pq.Pin = storage.PinOnly
 		pq.Limit = maxPinned
-		msgs, err := a.store.QueryMessages(a.ctx, pq)
+		msgs, err := a.store.QueryMessages(a.mailCtx(), pq)
 		if err != nil {
 			return MessageListDTO{}, err
 		}
@@ -64,11 +64,11 @@ func (a *App) ListMessages(req ListMessagesRequest) (MessageListDTO, error) {
 	q.Limit = req.Limit
 	q.Offset = req.Offset
 
-	messages, err := a.store.QueryMessages(a.ctx, q)
+	messages, err := a.store.QueryMessages(a.mailCtx(), q)
 	if err != nil {
 		return MessageListDTO{}, err
 	}
-	total, err := a.store.CountMessages(a.ctx, q)
+	total, err := a.store.CountMessages(a.mailCtx(), q)
 	if err != nil {
 		return MessageListDTO{}, err
 	}
@@ -109,7 +109,7 @@ func (a *App) GetMessage(id int64) (MessageDetailDTO, error) {
 	if err := a.ready(); err != nil {
 		return MessageDetailDTO{}, err
 	}
-	m, err := a.store.GetMessage(a.ctx, id)
+	m, err := a.store.GetMessage(a.mailCtx(), id)
 	if err != nil {
 		return MessageDetailDTO{}, err
 	}
@@ -118,7 +118,7 @@ func (a *App) GetMessage(id int64) (MessageDetailDTO, error) {
 	summary := toSummaryDTO(*m, email, folderName)
 	summary.SenderVIP = a.isVIP(m.FromAddress)
 
-	atts, err := a.store.ListAttachments(a.ctx, id)
+	atts, err := a.store.ListAttachments(a.mailCtx(), id)
 	if err != nil {
 		return MessageDetailDTO{}, err
 	}
@@ -228,11 +228,11 @@ func (a *App) GetMessageHTML(id int64, allowRemote, includeTrackers bool) (strin
 	if err := a.ready(); err != nil {
 		return "", err
 	}
-	m, err := a.store.GetMessage(a.ctx, id)
+	m, err := a.store.GetMessage(a.mailCtx(), id)
 	if err != nil {
 		return "", err
 	}
-	atts, err := a.store.ListAttachments(a.ctx, id)
+	atts, err := a.store.ListAttachments(a.mailCtx(), id)
 	if err != nil {
 		return "", err
 	}
@@ -314,7 +314,7 @@ func (a *App) inlineDataURLs(atts []storage.Attachment) map[string]string {
 		if att.ContentID == "" || !strings.HasPrefix(strings.ToLower(att.ContentType), "image/") {
 			continue
 		}
-		rc, err := a.store.OpenAttachment(att.DiskPath)
+		rc, err := a.store.OpenAttachment(a.mailCtx(), att)
 		if err != nil {
 			continue
 		}
@@ -355,7 +355,7 @@ func (a *App) updateFlag(id int64, flag storage.Flag, on bool) error {
 	if err := a.ready(); err != nil {
 		return err
 	}
-	m, err := a.store.GetMessage(a.ctx, id)
+	m, err := a.store.GetMessage(a.mailCtx(), id)
 	if err != nil {
 		return err
 	}
@@ -403,7 +403,7 @@ func (a *App) DeleteMessage(id int64) error {
 // deleteMessage is DeleteMessage without the badge refresh, so a bulk delete
 // refreshes once at the end.
 func (a *App) deleteMessage(id int64) error {
-	m, err := a.store.GetMessage(a.ctx, id)
+	m, err := a.store.GetMessage(a.mailCtx(), id)
 	if err != nil {
 		return err
 	}
@@ -493,7 +493,7 @@ func (a *App) SaveAttachment(messageID, attachmentID int64) (string, error) {
 	if err := a.ready(); err != nil {
 		return "", err
 	}
-	atts, err := a.store.ListAttachments(a.ctx, messageID)
+	atts, err := a.store.ListAttachments(a.mailCtx(), messageID)
 	if err != nil {
 		return "", err
 	}

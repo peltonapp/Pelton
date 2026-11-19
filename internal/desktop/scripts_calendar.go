@@ -259,7 +259,7 @@ func (s *scriptCalendar) CreateTask(ctx context.Context, in spaces.TaskInput) (s
 	a := s.app
 	req := TaskRequest{ListID: in.ListID, Title: in.Title, Notes: in.Notes, Due: taskDueText(in.Due), Priority: in.Priority, MailLinks: []string{}}
 	if in.MessageID != 0 {
-		m, err := a.store.GetMessage(a.ctx, in.MessageID)
+		m, err := a.store.GetMessage(scriptsCtx(a.ctx), in.MessageID)
 		if err != nil {
 			return spaces.Task{}, err
 		}
@@ -320,7 +320,7 @@ func (s *scriptCalendar) UpdateTask(ctx context.Context, id int64, ch spaces.Tas
 
 func (s *scriptCalendar) TaskFromMessage(_ context.Context, messageID int64) (spaces.TaskInput, error) {
 	a := s.app
-	m, err := a.store.GetMessage(a.ctx, messageID)
+	m, err := a.store.GetMessage(scriptsCtx(a.ctx), messageID)
 	if err != nil {
 		return spaces.TaskInput{}, err
 	}

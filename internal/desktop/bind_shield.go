@@ -232,7 +232,7 @@ func (a *App) privacyAfterSync(f storage.Folder, ids []int64) {
 	case roleSent, roleDrafts, roleTrash:
 		return
 	}
-	if len(ids) == 0 {
+	if len(ids) == 0 || a.inMailVault(f.ID) {
 		return
 	}
 	goSafe("reading new mail for the privacy report", func() {
@@ -438,11 +438,11 @@ func (a *App) GetMessageHTMLBlockingTrackers(id int64) (string, error) {
 	if err := a.ready(); err != nil {
 		return "", err
 	}
-	m, err := a.store.GetMessage(a.ctx, id)
+	m, err := a.store.GetMessage(a.mailCtx(), id)
 	if err != nil {
 		return "", err
 	}
-	atts, err := a.store.ListAttachments(a.ctx, id)
+	atts, err := a.store.ListAttachments(a.mailCtx(), id)
 	if err != nil {
 		return "", err
 	}

@@ -235,9 +235,11 @@ type SplitCount struct {
 // the last for the catch-all.
 func (d *DB) SplitCounts(ctx context.Context, q MessageQuery, rules []SplitRule) ([]SplitCount, error) {
 	out := make([]SplitCount, len(rules)+1)
-	if len(q.FolderIDs) == 0 {
-		return out, nil
+	visible, err := d.visibleFolderIDs(ctx, q.FolderIDs)
+	if err != nil || len(visible) == 0 {
+		return out, err
 	}
+	q.FolderIDs = visible
 	q.Split = nil
 	q.Pin = PinAny
 	expr, exprArgs := splitCaseExpr(rules, time.Now())

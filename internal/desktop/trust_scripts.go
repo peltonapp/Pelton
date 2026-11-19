@@ -85,7 +85,20 @@ type scriptTrust struct {
 	app *App
 }
 
+// reach applies the script audience to a trust condition or action. Mail in
+// a vault has no passport or shield record, so even a vault that admits
+// scripts answers as if the message were not there.
+func (s scriptTrust) reach(id int64) error {
+	if !s.app.scriptSeesMessage(id) || s.app.inMailVaultMessage(id) {
+		return storage.ErrMessageNotFound
+	}
+	return nil
+}
+
 func (s scriptTrust) Passport(_ context.Context, id int64) (map[string]any, error) {
+	if err := s.reach(id); err != nil {
+		return nil, err
+	}
 	p, err := s.app.GetSenderPassport(id)
 	if err != nil {
 		return nil, err
@@ -97,6 +110,9 @@ func (s scriptTrust) Passport(_ context.Context, id int64) (map[string]any, erro
 }
 
 func (s scriptTrust) Shield(_ context.Context, id int64) (map[string]any, error) {
+	if err := s.reach(id); err != nil {
+		return nil, err
+	}
 	m, err := s.app.listedMessage(id)
 	if err != nil {
 		return nil, err
@@ -114,5 +130,8 @@ func (s scriptTrust) Shield(_ context.Context, id int64) (map[string]any, error)
 }
 
 func (s scriptTrust) Unsubscribe(_ context.Context, id int64) error {
+	if err := s.reach(id); err != nil {
+		return err
+	}
 	return s.app.Unsubscribe(id)
 }

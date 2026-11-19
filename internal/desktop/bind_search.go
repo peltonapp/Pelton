@@ -172,6 +172,12 @@ func (a *App) rebuildSearchIndex() error {
 		a.log.Error("close search index for rebuild", "err", err)
 	}
 	path := filepath.Join(a.dataDir, indexFileName)
+	_ = filepath.WalkDir(path, func(file string, d os.DirEntry, err error) error {
+		if err == nil && !d.IsDir() {
+			_ = storage.WipeFile(file)
+		}
+		return nil
+	})
 	if err := os.RemoveAll(path); err != nil {
 		a.log.Error("remove search index for rebuild", "err", err)
 	}
@@ -411,9 +417,15 @@ func (a *App) Search(req SearchRequestDTO) (SearchResultDTO, error) {
 			kept = append(kept, m)
 		}
 	}
+	total := int(res.Total)
+	if req.Offset == 0 {
+		vault := a.searchMailVaults(req, max(req.Limit, 1))
+		kept = append(kept, vault...)
+		total += len(vault)
+	}
 	out, err := a.buildSummaries(a.ctx, kept)
 	if err != nil {
 		return empty, err
 	}
-	return SearchResultDTO{Messages: out, Total: int(res.Total)}, nil
+	return SearchResultDTO{Messages: out, Total: total}, nil
 }

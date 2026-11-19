@@ -34,6 +34,8 @@ type menuStrings struct {
 	switchProfile    string
 	closeTab         string
 	lockApp          string
+	// lockVaults locks every mail vault; languages without it use English.
+	lockVaults string
 }
 
 // menuLocales mirrors the frontend's supported languages
@@ -74,6 +76,7 @@ var menuLocales = map[string]menuStrings{
 		switchProfile:    "Switch Profile…",
 		closeTab:         "Close Tab",
 		lockApp:          "Lock Pelton",
+		lockVaults:       "Lock Vaults",
 	},
 	"de": {
 		appMenu:          "Pelton",
@@ -434,8 +437,12 @@ var menuLocales = map[string]menuStrings{
 // menuStringsFor returns the translation table for lang, falling back to
 // English for an unrecognized or empty language code.
 func menuStringsFor(lang string) menuStrings {
-	if s, ok := menuLocales[lang]; ok {
-		return s
+	s, ok := menuLocales[lang]
+	if !ok {
+		return menuLocales["en"]
 	}
-	return menuLocales["en"]
+	if s.lockVaults == "" {
+		s.lockVaults = menuLocales["en"].lockVaults
+	}
+	return s
 }
