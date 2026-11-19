@@ -239,19 +239,6 @@ func (a *App) EnableAutoEncrypt(sources KeySourcesDTO) error {
 	return nil
 }
 
-// DisableAutoEncrypt switches automatic encryption off. Keys and what was
-// learned stay, so switching it back on does not start from nothing.
-func (a *App) DisableAutoEncrypt() error {
-	if err := a.ready(); err != nil {
-		return err
-	}
-	if err := a.store.SetBool(a.ctx, settingAutoEncrypt, false); err != nil {
-		return err
-	}
-	a.loadAutoEncryptFlags()
-	return nil
-}
-
 // SetKeySources changes which places keys may be found in.
 func (a *App) SetKeySources(sources KeySourcesDTO) error {
 	if err := a.ready(); err != nil {

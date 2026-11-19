@@ -151,6 +151,8 @@ export function buildRequest(session: ComposeSession): ComposeRequest {
     forwardOf: session.origin?.kind === 'forward' ? session.origin.id : 0,
     followUpAt: session.followUpAt ?? '',
     projectId: session.projectId ?? 0,
+    autoEncrypt: session.autoEncrypt ?? false,
+    plaintextConfirmed: session.plaintextConfirmed ?? false,
   } as ComposeRequest
 }
 

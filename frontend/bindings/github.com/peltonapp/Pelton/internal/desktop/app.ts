@@ -1504,14 +1504,6 @@ export function DisableAppLock(passphrase: string, reason: string): $Cancellable
 }
 
 /**
- * DisableAutoEncrypt switches automatic encryption off. Keys and what was
- * learned stay, so switching it back on does not start from nothing.
- */
-export function DisableAutoEncrypt(): $CancellablePromise<void> {
-    return $Call.ByID(2156407094);
-}
-
-/**
  * DiscardAgentProposal throws a proposed message away unsent.
  */
 export function DiscardAgentProposal(id: number): $CancellablePromise<void> {
@@ -4109,8 +4101,8 @@ export function SetCalendarVisible(id: number, visible: boolean): $CancellablePr
 }
 
 /**
- * SetContactEncryption sets the user's preference for one contact: '' (follow
- * the recommendation), always or never.
+ * SetContactEncryption sets the user's preference for one contact: empty to
+ * follow the recommendation, always or never.
  */
 export function SetContactEncryption(addr: string, pref: string): $CancellablePromise<void> {
     return $Call.ByID(305161275, addr, pref);

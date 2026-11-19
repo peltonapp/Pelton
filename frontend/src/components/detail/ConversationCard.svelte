@@ -16,6 +16,7 @@
   import MailBody from './MailBody.svelte'
   import PhishingNotice from './PhishingNotice.svelte'
   import ProtectedNotice from './ProtectedNotice.svelte'
+  import EncryptionIndicator from './EncryptionIndicator.svelte'
   import AttachmentStrip from './AttachmentStrip.svelte'
   import FollowUpNotice from './FollowUpNotice.svelte'
   import { prefs } from '../../stores/prefs'
@@ -132,6 +133,9 @@
         {/if}
         {#if detail.phishing.level !== 'none'}
           <PhishingNotice report={detail.phishing} messageId={detail.id} />
+        {/if}
+        {#if detail.encryption}
+          <EncryptionIndicator encryption={detail.encryption} messageId={detail.id} />
         {/if}
         {#if detail.pgpState !== '' && detail.pgpState !== 'open'}
           <ProtectedNotice state={detail.pgpState} messageId={detail.id} on:opened={() => dispatch('reload')} />

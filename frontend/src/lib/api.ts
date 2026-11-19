@@ -181,6 +181,13 @@ import type {
   ChatProfile,
   ChatVerification,
   ChatDevice,
+  AutoEncryptMode,
+  AutoEncryptSettings,
+  AutoEncryptStatus,
+  ContactEncryptPref,
+  ContactKey,
+  KeyLookupLogEntry,
+  KeySources,
 } from './types'
 import { normalizeState } from './sieve'
 import type {
@@ -2153,6 +2160,7 @@ export const SettingKeys = {
   statusClock: 'status_clock',
   statusUnread: 'status_unread',
   chatEnabled: 'chat_enabled',
+  autoEncrypt: 'auto_encrypt',
   chatSendReceipts: 'chat_send_receipts',
   chatSendTyping: 'chat_send_typing',
   chatNotify: 'chat_notify',
@@ -4119,4 +4127,91 @@ export function acceptScriptProposal(scriptId: number): Promise<Script> {
 /** Throws a proposed change away. */
 export function rejectScriptProposal(scriptId: number): Promise<void> {
   return App.RejectScriptProposal(scriptId)
+}
+
+// --- automatic encryption ---
+
+/** The state of automatic encryption, its sources and each mailbox's key. */
+export function getAutoEncryptSettings(): Promise<AutoEncryptSettings> {
+  return App.GetAutoEncryptSettings() as unknown as Promise<AutoEncryptSettings>
+}
+
+/** Switches automatic encryption on with the sources the user allowed; keys are made in the background. */
+export function enableAutoEncrypt(sources: KeySources): Promise<void> {
+  return App.EnableAutoEncrypt(new desktop.KeySourcesDTO(sources))
+}
+
+/** Changes which places keys may be found in. */
+export function setKeySources(sources: KeySources): Promise<void> {
+  return App.SetKeySources(new desktop.KeySourcesDTO(sources))
+}
+
+/** Chooses whether encrypted mail hides its subject. */
+export function setProtectSubject(on: boolean): Promise<void> {
+  return App.SetProtectSubject(on)
+}
+
+/** Sets a mailbox to turn encryption on by itself (auto) or never (manual). */
+export function setAutoEncryptAccountMode(accountId: number, mode: AutoEncryptMode): Promise<void> {
+  return App.SetAutoEncryptAccountMode(accountId, mode)
+}
+
+/** What would happen to a message from one mailbox to these recipients; never asks the network. */
+export function autoEncryptStatus(query: { accountId: number; to: string[]; cc: string[]; bcc: string[]; inReplyTo: string }): Promise<AutoEncryptStatus> {
+  return App.AutoEncryptStatus(new desktop.AutoEncryptQuery(query)) as unknown as Promise<AutoEncryptStatus>
+}
+
+/** Asks the allowed sources for keys of recipients without one; resolves whether any was found. */
+export function lookupRecipientKeys(accountId: number, emails: string[]): Promise<boolean> {
+  return App.LookupRecipientKeys(accountId, emails)
+}
+
+/** Makes the key found for addr after a change the one to send with. */
+export function acceptContactKey(email: string, fingerprint: string): Promise<void> {
+  return App.AcceptContactKey(email, fingerprint)
+}
+
+/** Records that the user compared a contact's fingerprint and it matched. */
+export function verifyContactKey(email: string, fingerprint: string): Promise<void> {
+  return App.VerifyContactKey(email, fingerprint)
+}
+
+/** Sets a contact's encryption preference. */
+export function setContactEncryption(email: string, pref: ContactEncryptPref): Promise<void> {
+  return App.SetContactEncryption(email, pref)
+}
+
+/** Forgets every key learned for a contact. */
+export function forgetContactKey(email: string): Promise<void> {
+  return App.ForgetContactKey(email)
+}
+
+/** Every correspondent Pelton learned a key for. */
+export function listContactKeys(): Promise<ContactKey[]> {
+  return App.ListContactKeys().then((list) => (list ?? []) as unknown as ContactKey[])
+}
+
+/** The most recent key lookups, newest first. */
+export function listKeyLookupLog(): Promise<KeyLookupLogEntry[]> {
+  return App.ListKeyLookupLog().then((list) => (list ?? []) as unknown as KeyLookupLogEntry[])
+}
+
+/** Empties the key lookup log. */
+export function clearKeyLookupLog(): Promise<void> {
+  return App.ClearKeyLookupLog()
+}
+
+/** Writes a passphrase protected backup of a mailbox's key; resolves the path, '' when cancelled. */
+export function backupOwnKey(accountId: number, passphrase: string): Promise<string> {
+  return App.BackupOwnKey(accountId, passphrase)
+}
+
+/** Mails the key to the user's own address for another device; resolves the setup code. */
+export function sendKeyToOtherDevice(accountId: number): Promise<string> {
+  return App.SendKeyToOtherDevice(accountId)
+}
+
+/** Opens a key transfer from another device with its setup code. */
+export function importKeyFromSetupMessage(messageId: number, code: string): Promise<void> {
+  return App.ImportKeyFromSetupMessage(messageId, code)
 }

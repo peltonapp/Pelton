@@ -53,6 +53,7 @@ export const releases: WhatsNewRelease[] = [
       { id: 'notify-actions', titleKey: 'whatsnew.notifyActions.title', bodyKey: 'whatsnew.notifyActions.body', target: { kind: 'settings', anchor: 'notifications#notify-action-archive' } },
       { id: 'scheduling', titleKey: 'whatsnew.scheduling.title', bodyKey: 'whatsnew.scheduling.body', target: { kind: 'space', space: 'calendar' } },
       { id: 'send-variants', titleKey: 'whatsnew.sendVariants.title', bodyKey: 'whatsnew.sendVariants.body', target: { kind: 'settings', anchor: 'composing#after-reply-send' } },
+      { id: 'auto-encrypt', titleKey: 'whatsnew.autoEncrypt.title', bodyKey: 'whatsnew.autoEncrypt.body', target: { kind: 'settings', anchor: 'encryption#auto-encrypt' } },
     ],
   },
 ]
