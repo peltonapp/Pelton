@@ -111,10 +111,6 @@
   }
 
   function onContext(event: MouseEvent): void {
-    if (locked) {
-      openContextMenu(event.clientX, event.clientY, [{ label: $t('mailvault.unlock'), icon: IconFolder, action: () => openVaultUnlock(folder.vaultId ?? 0) }])
-      return
-    }
     const entries: MenuEntry[] = [
       {
         label: folder.pinned ? $t('folders.unpin') : $t('folders.pin'),
@@ -225,7 +221,7 @@
         {expanded}
         on:select={() => openVaultUnlock(folder.vaultId ?? 0)}
         on:toggle={() => (expanded = !expanded)}
-        on:contextmenu={(e) => onContext(e.detail)}
+        on:contextmenu={(e) => openContextMenu(e.detail.clientX, e.detail.clientY, [{ label: $t('mailvault.unlock'), action: () => openVaultUnlock(folder.vaultId ?? 0) }])}
       >
         <Ph svg={lockIcon} size={15} />
       </SidebarRow>

@@ -121,6 +121,7 @@ const lazyModules = [
   'components/vault/VaultConsentDialog.svelte',
   'components/settings2/VaultCard.svelte',
   'stores/mailvault.ts',
+  'lib/mailvaultapi.ts',
 ]
 
 const lazyPackages = ['@codemirror/', 'codemirror', '@replit/codemirror-vim', '@tiptap/', 'pdfjs-dist', 'tabler-nodes-outline', '@tabler/icons/']

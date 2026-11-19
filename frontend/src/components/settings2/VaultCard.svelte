@@ -7,7 +7,7 @@
   import Row from './ui/Row.svelte'
   import ToggleSwitch from '../common/ToggleSwitch.svelte'
   import Select from '../common/Select.svelte'
-  import { changeMailVaultPassphrase, lockAllMailVaults, removeMailVault, updateMailVaultSettings } from '../../lib/api'
+  import { changeMailVaultPassphrase, lockAllMailVaults, removeMailVault, updateMailVaultSettings } from '../../lib/mailvaultapi'
   import { mailVaults, refreshMailVaults } from '../../stores/mailvault'
   import { openVaultCreate, openVaultUnlock } from '../../stores/vaultdialog'
   import { onMount } from 'svelte'

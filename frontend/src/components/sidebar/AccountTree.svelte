@@ -21,8 +21,7 @@
   import { toastError, errorMessage } from '../../stores/toast'
   import type { Account, Folder } from '../../lib/types'
   import { t } from '../../lib/i18n'
-  import { openVaultUnlock } from '../../stores/vaultdialog'
-  import { lockAllMailVaults } from '../../lib/api'
+  import { lockVaultsNow, openVaultUnlock } from '../../stores/vaultdialog'
   import { openContextMenu } from '../../stores/contextmenu'
   import SidebarRow from './SidebarRow.svelte'
   import Ph from '../common/Ph.svelte'
@@ -83,6 +82,11 @@
   $: vaultRows = [...new Map(folders.filter((f) => f.vaultId).map((f) => [f.vaultId, f])).values()]
     .filter((f) => !f.vaultLocked || $prefs.design === 'classic' || f.vaultHidden)
     .map((f) => ({ id: f.vaultId ?? 0, locked: f.vaultLocked ?? false }))
+  // the vault store clears the screen on lock, so it loads once there is a
+  // vault to speak of.
+  $: if (folders.some((f) => f.vaultId)) {
+    void import('../../stores/mailvault')
+  }
 
   function onAccountContext(event: MouseEvent): void {
     if ($prefs.design !== 'new' || account.local || folders.some((f) => f.vaultId)) {
@@ -167,7 +171,7 @@
     {#each vaultRows as v (v.id)}
       <SidebarRow
         label={v.locked ? $t('mailvault.unlock') : $t('mailvault.lockNow')}
-        on:select={() => (v.locked ? openVaultUnlock(v.id) : void lockAllMailVaults())}
+        on:select={() => (v.locked ? openVaultUnlock(v.id) : lockVaultsNow())}
       >
         <Ph svg={v.locked ? lockIcon : openIcon} size={15} />
       </SidebarRow>

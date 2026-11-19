@@ -6,7 +6,7 @@
   import { createEventDispatcher } from 'svelte'
   import Modal from '../common/Modal.svelte'
   import Select from '../common/Select.svelte'
-  import { createMailVault } from '../../lib/api'
+  import { createMailVault } from '../../lib/mailvaultapi'
   import { passphraseStrength } from '../../lib/vaultstrength'
   import { refreshMailVaults } from '../../stores/mailvault'
   import { sidebar } from '../../stores/accounts'

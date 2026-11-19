@@ -1,7 +1,8 @@
 // mailvault.ts holds the mail vaults for the dialogs and the settings, which
 // load it on first use. It is never on the window's startup path: the sidebar
 // reads the vault marks the backend puts on each folder, and vaultdialog.ts
-// opens the dialogs.
+// opens the dialogs. The sidebar loads it once a vault exists, so that it can
+// clear the screen when the vault locks.
 //
 // Keeping locked mail out of lists, counts, search and everything else is the
 // backend's job, which returns none of it. What this module adds is that
@@ -9,7 +10,7 @@
 // undo history forgets the vault mail it acted on.
 
 import { get, writable } from 'svelte/store'
-import { addToMailVault, listMailVaults } from '../lib/api'
+import { addToMailVault, listMailVaults } from '../lib/mailvaultapi'
 import type { MailVault, MailVaultMember } from '../lib/types'
 import { messageList } from './messages'
 import { messageDetail, clearMessage } from './message'

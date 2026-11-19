@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log/slog"
 	"maps"
+	"os"
 	"path/filepath"
 	"reflect"
 	"regexp"
@@ -489,6 +490,27 @@ func TestScriptAndMCPAdaptersAreCovered(t *testing.T) {
 		}
 	}
 	var _ mcpserver.Mailbox = (*mcpMailbox)(nil)
+}
+
+// TestMailVaultAPINamesAreBound checks the method names the frontend's lazy
+// vault api calls by name, since nothing generated checks them.
+func TestMailVaultAPINamesAreBound(t *testing.T) {
+	src, err := os.ReadFile(filepath.Join("..", "..", "frontend", "src", "lib", "mailvaultapi.ts"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	names := regexp.MustCompile(`call(?:<[^>]*>)?\('(\w+)'`).FindAllStringSubmatch(string(src), -1)
+	if len(names) < 9 {
+		t.Fatalf("found %d calls, the pattern no longer matches the file", len(names))
+	}
+	for _, n := range names {
+		if _, ok := reflect.TypeFor[*App]().MethodByName(n[1]); !ok {
+			t.Errorf("mailvaultapi.ts calls %s, which App does not bind", n[1])
+		}
+	}
+	if !strings.Contains(string(src), reflect.TypeFor[App]().PkgPath()+".App.") {
+		t.Error("mailvaultapi.ts does not use the bound name prefix of App")
+	}
 }
 
 func TestVaultNotificationNamesNothing(t *testing.T) {

@@ -12,8 +12,8 @@ const api = vi.hoisted(() => ({
   createMailVault: vi.fn(),
 }))
 
-vi.mock('../../lib/api', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('../../lib/api')>()),
+vi.mock('../../lib/mailvaultapi', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../../lib/mailvaultapi')>()),
   ...api,
 }))
 

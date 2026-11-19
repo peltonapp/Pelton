@@ -186,10 +186,10 @@
   } from './lib/messageactions'
   import { markAnsweredDone, markDone } from './lib/triage'
   import { watchFollowUps } from './stores/followups'
-  import { vaultDialog } from './stores/vaultdialog'
+  import { lockVaultsNow, openVaultUnlock, vaultDialog } from './stores/vaultdialog'
   import { loadSnippets } from './stores/snippets'
   import { editNote, toggleMute, togglePin } from './lib/organize'
-  import { buildCommands, mailCommands, type CommandContext, type MessageOp, type FolderOp } from './lib/commands'
+  import { buildCommands, mailCommands, type CommandContext, type MessageOp, type FolderOp, type PaletteCommand } from './lib/commands'
   import { extraPaletteCommands, registerPaletteSource } from './lib/palettesources'
   import './lib/palette-calendar'
   import './lib/palette-contacts'
@@ -660,8 +660,23 @@
         icon: IconShieldCheck,
         run: () => openMailScreen('privacy'),
       },
+      ...vaultPaletteCommands(tr),
     ]
   })
+
+  // the vault's palette entries come from the vault marks on the folders.
+  function vaultPaletteCommands(tr: (key: string) => string): PaletteCommand[] {
+    const folders = Object.values(get(sidebar).data?.foldersByAccount ?? {}).flat()
+    const locked = folders.find((f) => f.vaultLocked)
+    return [
+      ...(folders.some((f) => f.vaultId && !f.vaultLocked)
+        ? [{ id: 'mailvault:lock', group: 'action' as const, label: tr('mailvault.lockNow'), icon: IconShieldCheck, run: lockVaultsNow }]
+        : []),
+      ...(locked
+        ? [{ id: 'mailvault:unlock', group: 'action' as const, label: tr('mailvault.unlock'), icon: IconShieldCheck, run: () => openVaultUnlock(locked.vaultId ?? 0) }]
+        : []),
+    ]
+  }
 
   // the newsletter manager or the attachments browser fills the mail surface
   // in place of the list and the reader.
