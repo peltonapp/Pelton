@@ -6,12 +6,16 @@
 // connection goes to the checked address, so a second lookup cannot point it
 // somewhere else. Loopback, private, link-local and other local addresses are
 // refused unless the script declared that address literally, e.g.
-// "net:192.168.1.10". Redirects are followed only to declared hosts.
+// "net:192.168.1.10". Redirects are followed only to declared hosts, and a
+// request that starts on https never moves to plain http.
 package web
 
 import (
 	"context"
+	"crypto/tls"
+	"crypto/x509"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -49,7 +53,13 @@ type Config struct {
 	Dial func(ctx context.Context, network, addr string) (net.Conn, error)
 	// Lookup resolves a host name. Nil uses the system resolver.
 	Lookup func(ctx context.Context, host string) ([]netip.Addr, error)
+	// RootCAs are the certificate authorities https trusts. Nil uses the
+	// system's.
+	RootCAs *x509.CertPool
 }
+
+// errDowngrade refuses a redirect from https to plain http.
+var errDowngrade = errors.New("refused a redirect from https to plain http")
 
 func (c Config) dial(ctx context.Context, network, addr string) (net.Conn, error) {
 	if c.Dial != nil {
@@ -174,7 +184,7 @@ func (cfg Config) resolve(ctx context.Context, host string) (netip.Addr, error) 
 }
 
 // client builds a client for one call: no cookies, no connection reuse, and
-// redirects only to declared hosts.
+// redirects only to declared hosts and never from https to http.
 func (cfg Config) client(c *scripting.Call) *http.Client {
 	transport := &http.Transport{
 		DialContext:            cfg.dialer(c),
@@ -182,6 +192,9 @@ func (cfg Config) client(c *scripting.Call) *http.Client {
 		TLSHandshakeTimeout:    10 * time.Second,
 		ResponseHeaderTimeout:  requestTimeout,
 		MaxResponseHeaderBytes: 64 << 10,
+	}
+	if cfg.RootCAs != nil {
+		transport.TLSClientConfig = &tls.Config{RootCAs: cfg.RootCAs, MinVersion: tls.VersionTLS12}
 	}
 	return &http.Client{
 		Transport: transport,
@@ -192,6 +205,9 @@ func (cfg Config) client(c *scripting.Call) *http.Client {
 			}
 			if err := checkURL(c, req.URL); err != nil {
 				return err
+			}
+			if req.URL.Scheme == "http" && slices.ContainsFunc(via, func(r *http.Request) bool { return r.URL.Scheme == "https" }) {
+				return fmt.Errorf("%s: %w (%s)", c.Function, errDowngrade, hostOf(req.URL))
 			}
 			if !c.Granted(PermNet + ":" + hostOf(req.URL)) {
 				return fmt.Errorf("%s: refused a redirect to %s, which the script did not declare", c.Function, hostOf(req.URL))
@@ -287,6 +303,10 @@ func (cfg Config) send(c *scripting.Call, u *url.URL, r request) (map[string]any
 	req.Header.Set("User-Agent", UserAgent)
 	resp, err := cfg.client(c).Do(req)
 	if err != nil {
+		var ue *url.Error
+		if errors.Is(err, errDowngrade) && errors.As(err, &ue) {
+			return nil, ue.Err
+		}
 		return nil, err
 	}
 	defer resp.Body.Close()
