@@ -111,6 +111,8 @@ const lazyModules = [
   'components/attachments/AttachmentsBrowser.svelte',
   'components/common/MenuBarEditor.svelte',
   'components/common/CommandPalette.svelte',
+  'components/detail/PromiseStrip.svelte',
+  'components/detail/EncryptionIndicator.svelte',
 ]
 
 const lazyPackages = ['@codemirror/', 'codemirror', '@replit/codemirror-vim', '@tiptap/', 'pdfjs-dist', 'tabler-nodes-outline', '@tabler/icons/']
