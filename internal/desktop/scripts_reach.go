@@ -52,6 +52,9 @@ func (a *App) registerScriptReach(r *scripting.Registry) error {
 	if err := a.registerScriptPromises(r); err != nil {
 		return err
 	}
+	if err := a.registerScriptTrust(r); err != nil {
+		return err
+	}
 	if err := templates.Register(r); err != nil {
 		return err
 	}
