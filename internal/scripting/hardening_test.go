@@ -2,6 +2,7 @@ package scripting
 
 import (
 	"context"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -66,11 +67,11 @@ func TestApprovalIsBoundToTheCode(t *testing.T) {
 func TestLibraryChangeRevokesItsScripts(t *testing.T) {
 	ctx := context.Background()
 	s := testService(t, newFakeMail(), nil)
-	util, err := s.CreateLibrary(ctx, &Library{Name: "util", Source: "return {}"})
+	util, _, err := s.CreateLibrary(ctx, &Library{Name: "util", Source: "return {}"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := s.CreateLibrary(ctx, &Library{Name: "wrap", Source: `return require("util")`}); err != nil {
+	if _, _, err := s.CreateLibrary(ctx, &Library{Name: "wrap", Source: `return require("util")`}); err != nil {
 		t.Fatal(err)
 	}
 	direct := enabledScript(t, s, "direct", `local u = require("util")`, "mail.send")
@@ -78,25 +79,47 @@ func TestLibraryChangeRevokesItsScripts(t *testing.T) {
 	other := enabledScript(t, s, "other", `print(1)`, "mail.send")
 	later := enabledScript(t, s, "later", `local x = require("later")`, "mail.send")
 
+	if deps, err := s.LibraryDependents(ctx, "util"); err != nil || !sameIDs(deps, direct.ID, through.ID) {
+		t.Fatalf("dependents %v %v", deps, err)
+	}
+
 	util.Description = "only the words"
-	if _, err := s.UpdateLibrary(ctx, util); err != nil {
-		t.Fatal(err)
+	if _, revoked, err := s.UpdateLibrary(ctx, util); err != nil || len(revoked) != 0 {
+		t.Fatal(err, revoked)
 	}
 	assertRevoked(t, s, direct.ID, false)
 
 	util.Source = "return { evil = true }"
-	if _, err := s.UpdateLibrary(ctx, util); err != nil {
-		t.Fatal(err)
+	_, revoked, err := s.UpdateLibrary(ctx, util)
+	if err != nil || !sameIDs(revoked, direct.ID, through.ID) || !revoked[0].Enabled {
+		t.Fatalf("revoked %v %v", revoked, err)
 	}
 	assertRevoked(t, s, direct.ID, true)
 	assertRevoked(t, s, through.ID, true)
 	assertRevoked(t, s, other.ID, false)
 
-	if _, err := s.CreateLibrary(ctx, &Library{Name: "later", Source: "return 1"}); err != nil {
-		t.Fatal(err)
+	if _, revoked, err = s.CreateLibrary(ctx, &Library{Name: "later", Source: "return 1"}); err != nil || !sameIDs(revoked, later.ID) {
+		t.Fatalf("revoked %v %v", revoked, err)
 	}
 	assertRevoked(t, s, later.ID, true)
 	assertRevoked(t, s, other.ID, false)
+
+	again := enabledScript(t, s, "again", `local x = require("later")`, "mail.send")
+	lib, _ := s.store.LibraryByName(ctx, "later")
+	if revoked, err := s.DeleteLibrary(ctx, lib.ID); err != nil || !sameIDs(revoked, again.ID) {
+		t.Fatalf("revoked %v %v", revoked, err)
+	}
+	assertRevoked(t, s, again.ID, true)
+}
+
+func sameIDs(list []*Script, ids ...int64) bool {
+	got := make([]int64, 0, len(list))
+	for _, sc := range list {
+		got = append(got, sc.ID)
+	}
+	slices.Sort(got)
+	slices.Sort(ids)
+	return slices.Equal(got, ids)
 }
 
 // TestBlockValuesCannotBreakOutOfTheirLiteral checks that values, variable

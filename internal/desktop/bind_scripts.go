@@ -348,6 +348,7 @@ func (a *App) DeleteScript(id int64) error {
 		return err
 	}
 	a.dropScriptProposal(id)
+	a.dropLibraryNote(id)
 	return a.setScriptFolder(id, "")
 }
 
@@ -361,6 +362,9 @@ func (a *App) SetScriptEnabled(id int64, enabled bool, approve []string) (Script
 	out, err := svc.SetEnabled(a.ctx, id, enabled, approve)
 	if err != nil {
 		return ScriptDTO{}, err
+	}
+	if out.Enabled {
+		a.dropLibraryNote(id)
 	}
 	return toScriptDTO(out), nil
 }

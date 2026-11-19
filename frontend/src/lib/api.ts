@@ -198,6 +198,9 @@ import type {
   ScriptInput,
   ScriptLibrary,
   ScriptLibraryInput,
+  ScriptLibraryNote,
+  ScriptLibrarySaved,
+  ScriptRef,
   ScriptRun,
 } from './scripting'
 import type { ScriptProposal } from './assistantScripts'
@@ -4014,19 +4017,36 @@ export function listScriptLibraries(): Promise<ScriptLibrary[]> {
   return App.ListScriptLibraries().then((list) => (list ?? []) as ScriptLibrary[])
 }
 
-/** Stores a new shared library; its name must be free. */
-export function createScriptLibrary(input: ScriptLibraryInput): Promise<ScriptLibrary> {
-  return App.CreateScriptLibrary(input) as Promise<ScriptLibrary>
+function asLibrarySaved(s: { library: unknown; switchedOff: unknown[] | null }): ScriptLibrarySaved {
+  return { library: s.library as ScriptLibrary, switchedOff: (s.switchedOff ?? []) as ScriptRef[] }
 }
 
-/** Saves a shared library. */
-export function updateScriptLibrary(id: number, input: ScriptLibraryInput): Promise<ScriptLibrary> {
-  return App.UpdateScriptLibrary(id, input) as Promise<ScriptLibrary>
+/** Stores a new shared library; its name must be free. Scripts that already required the name are switched off and listed. */
+export function createScriptLibrary(input: ScriptLibraryInput): Promise<ScriptLibrarySaved> {
+  return App.CreateScriptLibrary(input).then(asLibrarySaved)
 }
 
-/** Removes a shared library. */
-export function deleteScriptLibrary(id: number): Promise<void> {
-  return App.DeleteScriptLibrary(id)
+/** Saves a shared library and lists the scripts that load it, which a change to its code or name switches off. */
+export function updateScriptLibrary(id: number, input: ScriptLibraryInput): Promise<ScriptLibrarySaved> {
+  return App.UpdateScriptLibrary(id, input).then(asLibrarySaved)
+}
+
+/** Removes a shared library and lists the scripts that load it, which are switched off. */
+export function deleteScriptLibrary(id: number): Promise<ScriptRef[]> {
+  return App.DeleteScriptLibrary(id).then((list) => (list ?? []) as ScriptRef[])
+}
+
+/** The scripts saving a library under name would switch off; id is 0 for a new library. */
+export function scriptLibraryImpact(id: number, name: string): Promise<ScriptRef[]> {
+  return App.ScriptLibraryImpact(id, name).then((list) => (list ?? []) as ScriptRef[])
+}
+
+/** Why a script was switched off by a library change, with what changed; exists is false when it was not. */
+export function scriptLibraryNote(scriptId: number): Promise<ScriptLibraryNote> {
+  if (isDemoActive()) {
+    return Promise.resolve({ scriptId, exists: false, library: '', when: '', deleted: false, diff: [] })
+  }
+  return App.ScriptLibraryNote(scriptId).then((n) => ({ ...n, diff: n.diff ?? [] }) as ScriptLibraryNote)
 }
 
 /** Writes a library to a file the user picks; resolves to the path, '' when cancelled. */
@@ -4034,9 +4054,9 @@ export function exportScriptLibrary(id: number): Promise<string> {
   return App.ExportScriptLibrary(id)
 }
 
-/** Stores the library in a file's text; one of the same name is not replaced. */
-export function importScriptLibrary(text: string): Promise<ScriptLibrary> {
-  return App.ImportScriptLibrary(text) as Promise<ScriptLibrary>
+/** Stores the library in a file's text; one of the same name is not replaced. Scripts that already required the name are switched off and listed. */
+export function importScriptLibrary(text: string): Promise<ScriptLibrarySaved> {
+  return App.ImportScriptLibrary(text).then(asLibrarySaved)
 }
 
 /** Stores a copy of a gallery template as a new script, switched off. */
