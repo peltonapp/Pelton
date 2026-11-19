@@ -54,9 +54,9 @@ export function AIScriptOptions(scriptID: number): $CancellablePromise<$models.A
 
 /**
  * AcceptScriptProposal applies a proposed change. When it changes the code,
- * the trigger or the declared permissions, the update switches the script
- * off and clears its approvals and allowances, so the user approves the new
- * version afresh.
+ * the trigger or its parameters, the declared permissions or where the
+ * script is placed, the update switches the script off and clears its
+ * approvals and allowances, so the user approves the new version afresh.
  */
 export function AcceptScriptProposal(id: number): $CancellablePromise<$models.ScriptDTO> {
     return $Call.ByID(3375767223, id).then(($result: any) => {

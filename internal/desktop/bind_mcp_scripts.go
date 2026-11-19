@@ -570,8 +570,10 @@ type ScriptProposalDTO struct {
 	AddedPermissions   []string `json:"addedPermissions"`
 	RemovedPermissions []string `json:"removedPermissions"`
 	// ResetsApproval says accepting switches the script off and clears its
-	// approvals and allowances, because its code or permissions change.
-	ResetsApproval bool `json:"resetsApproval"`
+	// approvals and allowances, and ResetReasons says which changes do that:
+	// code, trigger, permissions, triggerParams or placements.
+	ResetsApproval bool     `json:"resetsApproval"`
+	ResetReasons   []string `json:"resetReasons"`
 	// Problem is set when the proposal can no longer be applied, e.g. it
 	// names a trigger that is gone; it can still be rejected.
 	Problem string `json:"problem"`
@@ -595,7 +597,7 @@ func (a *App) loadProposal(svc *scripting.Service, id int64) (*scriptProposal, *
 // ScriptProposal returns the change an agent proposed to a script, with a
 // line diff against the script as it is.
 func (a *App) ScriptProposal(id int64) (ScriptProposalDTO, error) {
-	out := ScriptProposalDTO{ScriptID: id, Diff: []ScriptDiffLineDTO{}, AddedPermissions: []string{}, RemovedPermissions: []string{}}
+	out := ScriptProposalDTO{ScriptID: id, Diff: []ScriptDiffLineDTO{}, AddedPermissions: []string{}, RemovedPermissions: []string{}, ResetReasons: []string{}}
 	svc, err := a.scriptService()
 	if err != nil {
 		return out, err
@@ -624,14 +626,22 @@ func (a *App) ScriptProposal(id int64) (ScriptProposalDTO, error) {
 			out.RemovedPermissions = append(out.RemovedPermissions, perm)
 		}
 	}
-	out.ResetsApproval = scripting.ResetsApproval(cur, next) && (cur.Enabled || len(cur.Approved) > 0 || len(cur.AllowUnasked) > 0)
+	if cur.Enabled || len(cur.Approved) > 0 || len(cur.AllowUnasked) > 0 {
+		reasons, err := svc.AssistantChanges(a.ctx, next)
+		if err != nil {
+			out.Problem = err.Error()
+			return out, nil
+		}
+		out.ResetReasons = orEmpty(reasons)
+		out.ResetsApproval = len(reasons) > 0
+	}
 	return out, nil
 }
 
 // AcceptScriptProposal applies a proposed change. When it changes the code,
-// the trigger or the declared permissions, the update switches the script
-// off and clears its approvals and allowances, so the user approves the new
-// version afresh.
+// the trigger or its parameters, the declared permissions or where the
+// script is placed, the update switches the script off and clears its
+// approvals and allowances, so the user approves the new version afresh.
 func (a *App) AcceptScriptProposal(id int64) (ScriptDTO, error) {
 	svc, err := a.scriptService()
 	if err != nil {
@@ -644,7 +654,7 @@ func (a *App) AcceptScriptProposal(id int64) (ScriptDTO, error) {
 	if p == nil {
 		return ScriptDTO{}, fmt.Errorf("pelton: there is no proposed change to this script")
 	}
-	out, err := svc.Update(a.ctx, next)
+	out, _, err := svc.UpdateFromAssistant(a.ctx, next)
 	if err != nil {
 		return ScriptDTO{}, err
 	}

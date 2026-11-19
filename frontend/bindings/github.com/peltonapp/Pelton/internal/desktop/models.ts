@@ -9425,9 +9425,11 @@ export class ScriptProposalDTO {
 
     /**
      * ResetsApproval says accepting switches the script off and clears its
-     * approvals and allowances, because its code or permissions change.
+     * approvals and allowances, and ResetReasons says which changes do that:
+     * code, trigger, permissions, triggerParams or placements.
      */
     "resetsApproval": boolean;
+    "resetReasons": string[];
 
     /**
      * Problem is set when the proposal can no longer be applied, e.g. it
@@ -9458,6 +9460,9 @@ export class ScriptProposalDTO {
         if (!("resetsApproval" in $$source)) {
             this["resetsApproval"] = false;
         }
+        if (!("resetReasons" in $$source)) {
+            this["resetReasons"] = [];
+        }
         if (!("problem" in $$source)) {
             this["problem"] = "";
         }
@@ -9472,6 +9477,7 @@ export class ScriptProposalDTO {
         const $$createField3_0 = $$createType112;
         const $$createField4_0 = $$createType0;
         const $$createField5_0 = $$createType0;
+        const $$createField7_0 = $$createType0;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("diff" in $$parsedSource) {
             $$parsedSource["diff"] = $$createField3_0($$parsedSource["diff"]);
@@ -9481,6 +9487,9 @@ export class ScriptProposalDTO {
         }
         if ("removedPermissions" in $$parsedSource) {
             $$parsedSource["removedPermissions"] = $$createField5_0($$parsedSource["removedPermissions"]);
+        }
+        if ("resetReasons" in $$parsedSource) {
+            $$parsedSource["resetReasons"] = $$createField7_0($$parsedSource["resetReasons"]);
         }
         return new ScriptProposalDTO($$parsedSource as Partial<ScriptProposalDTO>);
     }

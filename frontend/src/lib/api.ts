@@ -4116,12 +4116,12 @@ export function setAIScriptOptions(scriptId: number, options: AIScriptOptions): 
 /** The change an assistant proposed to a script, with a diff; exists is false when none waits. */
 export function scriptProposal(scriptId: number): Promise<ScriptProposal> {
   if (isDemoActive()) {
-    return Promise.resolve({ scriptId, exists: false, when: '', diff: [], addedPermissions: [], removedPermissions: [], resetsApproval: false, problem: '' })
+    return Promise.resolve({ scriptId, exists: false, when: '', diff: [], addedPermissions: [], removedPermissions: [], resetsApproval: false, resetReasons: [], problem: '' })
   }
-  return App.ScriptProposal(scriptId) as Promise<ScriptProposal>
+  return App.ScriptProposal(scriptId).then((p) => ({ ...p, resetReasons: p.resetReasons ?? [] }) as ScriptProposal)
 }
 
-/** Applies a proposed change; one that changes code or permissions switches the script off for approval. */
+/** Applies a proposed change; one that changes code, trigger, permissions or placements switches the script off for approval. */
 export function acceptScriptProposal(scriptId: number): Promise<Script> {
   return App.AcceptScriptProposal(scriptId).then(asScript)
 }
