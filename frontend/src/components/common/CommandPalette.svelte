@@ -25,6 +25,7 @@
     type RankedCommand,
   } from '../../stores/palette'
   import type { PaletteCommand, CommandGroup } from '../../lib/commands'
+  import { space } from '../../stores/space'
   import { highlightRuns } from '../../lib/fuzzy'
   import { t, isMac, shortcutLabel } from '../../lib/i18n'
 
@@ -76,7 +77,15 @@
   // comes before going somewhere, which comes before changing a preference:
   // typing three letters should not put a settings pane above the action of
   // the same name.
-  const groupRank: CommandGroup[] = ['action', 'mail', 'navigate', 'setting']
+  // the entries of the space on screen lead, so in the calendar "new" finds
+  // the event before the message.
+  $: groupRank = (
+    $space === 'calendar'
+      ? ['calendar', 'action', 'mail', 'navigate', 'contacts', 'setting']
+      : $space === 'contacts'
+        ? ['contacts', 'action', 'mail', 'navigate', 'calendar', 'setting']
+        : ['action', 'mail', 'calendar', 'contacts', 'navigate', 'setting']
+  ) as CommandGroup[]
 
   /**
    * Buckets ranked results by group. The buckets are in a fixed order rather
@@ -107,6 +116,12 @@
     }
     if (group === 'mail') {
       return $t('palette.group.mail')
+    }
+    if (group === 'calendar') {
+      return $t('space.calendar')
+    }
+    if (group === 'contacts') {
+      return $t('space.contacts')
     }
     return $t('palette.group.settings')
   }

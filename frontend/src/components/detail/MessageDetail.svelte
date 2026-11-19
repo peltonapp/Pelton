@@ -9,6 +9,7 @@
   import ProtectedNotice from './ProtectedNotice.svelte'
   import PhishingNotice from './PhishingNotice.svelte'
   import AttachmentList from './AttachmentList.svelte'
+  import InviteCard from './InviteCard.svelte'
   import InfoModal from './InfoModal.svelte'
   import SourceModal from './SourceModal.svelte'
   import Spinner from '../common/Spinner.svelte'
@@ -394,6 +395,9 @@ ${bodyHtml}
       <div class="body-wrap">
         {#if detail.phishing.level !== 'none'}
           <PhishingNotice report={detail.phishing} messageId={detail.id} />
+        {/if}
+        {#if $prefs.design !== 'classic'}
+          <InviteCard messageId={detail.id} attachments={detail.attachments} />
         {/if}
         {#if detail.pgpState !== '' && detail.pgpState !== 'open'}
           <!-- the body here is still the armor, so showing it would put

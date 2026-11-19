@@ -1730,6 +1730,8 @@ const ar: Record<string, string> = {
   'contacts.pickOne': 'اختر جهة اتصال لرؤيتها.',
   'contacts.deleteConfirm': 'حذف جهة الاتصال هذه من الخادم؟',
   'contacts.deleted': 'تم حذف جهة الاتصال.',
+  'calendar.eventDeleted': 'تم حذف الحدث.',
+  'calendar.eventQueued': 'تم الحفظ هنا. سيُرسل إلى الخادم عندما يصبح متاحًا.',
   'contacts.extraFields': 'تحمل هذه البطاقة أيضاً {fields}، وتبقى كما هي عند الحفظ.',
   'contacts.updated': 'حُدِّثت {when}',
   'contacts.readOnly': 'دفتر العناوين هذا للقراءة فقط.',

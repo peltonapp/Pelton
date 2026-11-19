@@ -166,7 +166,7 @@ func parts(mr *mail.Reader, msg *Message) error {
 
 		header := part.Header
 		if ih, ok := header.(*mail.InlineHeader); ok {
-			if !isTextHeader(ih) {
+			if !isTextHeader(ih) || isCalendarHeader(ih) {
 				header = &mail.AttachmentHeader{Header: ih.Header}
 			}
 		}
@@ -214,9 +214,75 @@ func parts(mr *mail.Reader, msg *Message) error {
 	return nil
 }
 
+// CalendarParts returns the decoded content of every iCalendar part in raw:
+// a text/calendar part, which invitations usually carry inline as an
+// alternative of the body and which the body walk above does not keep, and an
+// application/ics or .ics attachment.
+func CalendarParts(raw []byte) ([][]byte, error) {
+	mr, err := reader(raw)
+	if err != nil {
+		return nil, err
+	}
+	var out [][]byte
+	for {
+		part, err := mr.NextPart()
+		if err == io.EOF {
+			break
+		}
+		if err != nil && !message.IsUnknownCharset(err) {
+			return out, fmt.Errorf("rfc822: read part: %w", err)
+		}
+		header := &mail.AttachmentHeader{Header: headerOf(part.Header)}
+		contentType, _, _ := header.ContentType()
+		filename, _ := header.Filename()
+		if !IsCalendar(contentType, filename) {
+			continue
+		}
+		body, err := io.ReadAll(part.Body)
+		if err != nil {
+			return out, fmt.Errorf("rfc822: read calendar part: %w", err)
+		}
+		out = append(out, body)
+	}
+	return out, nil
+}
+
+// IsCalendar reports whether a part's type or filename marks it as iCalendar
+// data.
+func IsCalendar(contentType, filename string) bool {
+	contentType = strings.ToLower(contentType)
+	return contentType == "text/calendar" || contentType == "application/ics" ||
+		strings.HasSuffix(strings.ToLower(filename), ".ics")
+}
+
+func headerOf(h mail.PartHeader) message.Header {
+	switch v := h.(type) {
+	case *mail.InlineHeader:
+		return v.Header
+	case *mail.AttachmentHeader:
+		return v.Header
+	}
+	return message.Header{}
+}
+
+// calendarFilename names an inline invitation kept as an attachment, which
+// carries no filename of its own.
+const calendarFilename = "invite.ics"
+
+// isCalendarHeader reports whether an inline part is the text/calendar
+// alternative an invitation carries. It is kept as an attachment rather than
+// read as body text, so the invitation can be read again without the source.
+func isCalendarHeader(h *mail.InlineHeader) bool {
+	mediaType, _, _ := h.ContentType()
+	return strings.EqualFold(mediaType, "text/calendar")
+}
+
 func attachmentFrom(header *mail.AttachmentHeader, content []byte) Attachment {
 	filename, _ := header.Filename()
 	contentType, _, _ := header.ContentType()
+	if filename == "" && strings.EqualFold(contentType, "text/calendar") {
+		filename = calendarFilename
+	}
 	return Attachment{
 		Filename:    filename,
 		ContentType: contentType,

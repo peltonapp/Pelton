@@ -17,6 +17,8 @@ export interface Toast {
   kind: ToastKind
   message: string
   action?: ToastAction
+  /** More buttons after the action, such as Open beside Undo. */
+  more?: ToastAction[]
 }
 
 export const toasts = writable<Toast[]>([])
@@ -38,6 +40,18 @@ export function push(kind: ToastKind, message: string): void {
 export function pushAction(kind: ToastKind, message: string, action: ToastAction, ttl: number): number {
   const id = nextId++
   toasts.update((list) => [...list, { id, kind, message, action }])
+  if (ttl > 0) {
+    setTimeout(() => dismiss(id), ttl)
+  }
+  return id
+}
+
+// pushActions adds a toast with several buttons; each one also dismisses it.
+export function pushActions(kind: ToastKind, message: string, actions: ToastAction[], ttl: number): number {
+  const id = nextId++
+  const wrap = (a: ToastAction): ToastAction => ({ label: a.label, run: () => (dismiss(id), a.run()) })
+  const [first, ...rest] = actions.map(wrap)
+  toasts.update((list) => [...list, { id, kind, message, action: first, more: rest }])
   if (ttl > 0) {
     setTimeout(() => dismiss(id), ttl)
   }

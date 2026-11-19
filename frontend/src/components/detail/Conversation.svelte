@@ -348,7 +348,10 @@
     outline: none;
   }
 
+  /* the column takes the room a short conversation leaves, which keeps the
+     action bar at the foot of the pane instead of under the last card. */
   .column {
+    flex: 1 0 auto;
     width: 100%;
     margin-inline: auto;
     padding: var(--pane-pad) var(--pane-pad) calc(var(--control-height) * 2 + var(--space-6));

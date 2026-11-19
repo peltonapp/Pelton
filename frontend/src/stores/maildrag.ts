@@ -16,6 +16,15 @@ export interface MailDrag {
   y: number
   /** True while the pointer is over a target that takes these messages. */
   over: boolean
+  /** True while Shift is held, which some targets read as a different drop. */
+  shift: boolean
+  /** What the target under the pointer says a drop would do, or empty. */
+  hint: string
+}
+
+/** How the messages were dropped. */
+export interface MailDropInfo {
+  shift: boolean
 }
 
 /** What a drop target does with mail. */
@@ -23,7 +32,9 @@ export interface MailDropOptions {
   /** Says whether the target takes these messages; omitted means it takes any. */
   accepts?: (items: MessageSummary[]) => boolean
   /** Runs when the messages are dropped on the target. */
-  onDrop: (items: MessageSummary[]) => void
+  onDrop: (items: MessageSummary[], info: MailDropInfo) => void
+  /** Says what a drop here would do, shown with the dragged stack. */
+  hint?: (items: MessageSummary[], shift: boolean) => string
 }
 
 /** The drag in progress, or null. */
@@ -56,13 +67,17 @@ function setHovered(next: HTMLElement | null): void {
   hovered = next
 }
 
+function hintFor(items: MessageSummary[], shift: boolean): string {
+  return (hovered && targets.get(hovered)?.hint?.(items, shift)) || ''
+}
+
 function onMove(event: PointerEvent): void {
   const drag = get(mailDrag)
   if (!drag) {
     return
   }
   setHovered(targetAt(event.clientX, event.clientY, drag.items))
-  mailDrag.set({ ...drag, x: event.clientX, y: event.clientY, over: hovered !== null })
+  mailDrag.set({ ...drag, x: event.clientX, y: event.clientY, over: hovered !== null, shift: event.shiftKey, hint: hintFor(drag.items, event.shiftKey) })
 }
 
 function finish(drop: boolean): void {
@@ -72,31 +87,42 @@ function finish(drop: boolean): void {
   window.removeEventListener('pointermove', onMove, true)
   window.removeEventListener('pointerup', onUp, true)
   window.removeEventListener('keydown', onKey, true)
+  window.removeEventListener('keyup', onKey, true)
   document.body.classList.remove('mail-dragging')
   mailDrag.set(null)
   if (drop && drag && target) {
-    targets.get(target)?.onDrop(drag.items)
+    targets.get(target)?.onDrop(drag.items, { shift: drag.shift })
   }
 }
 
-function onUp(): void {
+function onUp(event: PointerEvent): void {
+  const drag = get(mailDrag)
+  if (drag && drag.shift !== event.shiftKey) {
+    mailDrag.set({ ...drag, shift: event.shiftKey })
+  }
   finish(true)
 }
 
 function onKey(event: KeyboardEvent): void {
-  if (event.key === 'Escape') {
+  if (event.type === 'keydown' && event.key === 'Escape') {
     event.preventDefault()
     event.stopPropagation()
     finish(false)
+    return
+  }
+  const drag = get(mailDrag)
+  if (event.key === 'Shift' && drag && drag.shift !== event.shiftKey) {
+    mailDrag.set({ ...drag, shift: event.shiftKey, hint: hintFor(drag.items, event.shiftKey) })
   }
 }
 
 function begin(items: MessageSummary[], x: number, y: number): void {
-  mailDrag.set({ items, x, y, over: false })
+  mailDrag.set({ items, x, y, over: false, shift: false, hint: '' })
   document.body.classList.add('mail-dragging')
   window.addEventListener('pointermove', onMove, true)
   window.addEventListener('pointerup', onUp, true)
   window.addEventListener('keydown', onKey, true)
+  window.addEventListener('keyup', onKey, true)
 }
 
 /**

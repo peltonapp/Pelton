@@ -19,7 +19,10 @@
   import TopBar from './components/shell/TopBar.svelte'
   import Rail from './components/shell/Rail.svelte'
   import SpaceSwitcher from './components/shell/SpaceSwitcher.svelte'
-  import { space, openSpace } from './stores/space'
+  import { space, openSpace, runSpaceAction } from './stores/space'
+  import { calendarFocus, calendarImport, calendarQuickAdd } from './stores/calendar'
+  import { formatTime } from './lib/calformat'
+  import type { TimeFormat } from './lib/format'
   import { frameIntegrated } from './stores/windowframe'
   import { setDraft, submitSearch, searchOpenedId } from './stores/search'
   import SnoozeDialog from './components/detail/SnoozeDialog.svelte'
@@ -68,6 +71,7 @@
     isNightly,
     unsubscribeMessage,
     consumePendingMailto,
+    consumePendingICS,
     closeWindow,
     getLogStatus,
     openCrashReport,
@@ -82,7 +86,7 @@
   import { liabilityAccepted } from './lib/liability'
   import { setDemoActive } from './lib/demo'
   import { recordArchived } from './stores/undoarchive'
-  import { onMailNew, onMailRepaired, onSyncState, onSyncProgress, onOutboxChanged, onMenu, onViewsChanged, onFoldersChanged, onProfileChanged, onMailtoCompose, onAgentProposals, onOpenMessage, type Unsubscribe, type MailtoDraft } from './lib/events'
+  import { onMailNew, onMailRepaired, onSyncState, onSyncProgress, onOutboxChanged, onMenu, onViewsChanged, onFoldersChanged, onProfileChanged, onMailtoCompose, onAgentProposals, onOpenMessage, onCalendarReminder, onICSOpen, type Unsubscribe, type MailtoDraft, type CalendarReminderEvent } from './lib/events'
   import { loadViews, editingView, closeViewEditor, openViewEditor, views as savedViews } from './stores/views'
   import { selectSavedView } from './stores/selection'
   import { isMac } from './lib/i18n'
@@ -153,6 +157,9 @@
     toggleSpam,
   } from './lib/messageactions'
   import { buildCommands, mailCommands, type CommandContext, type MessageOp, type FolderOp } from './lib/commands'
+  import { extraPaletteCommands } from './lib/palettesources'
+  import './lib/palette-calendar'
+  import './lib/palette-contacts'
   import { catalogByAction } from './lib/menuactions'
   import { shortcutLabel } from './lib/i18n'
   import {
@@ -343,6 +350,20 @@
     )
   }
 
+  // the toast line of a calendar reminder: the title and when it starts.
+  function reminderText(e: CalendarReminderEvent): string {
+    const title = e.summary || $t('calendar.untitled')
+    if (e.allDay) {
+      return `${title}, ${$t('calendar.allDay')}`
+    }
+    return `${title}, ${formatTime(new Date(e.start), $prefs.timeFormat as TimeFormat)}`
+  }
+
+  function showReminder(e: CalendarReminderEvent): void {
+    calendarFocus.set(e.allDay ? new Date(`${e.start}T00:00:00`) : new Date(e.start))
+    openSpace('calendar')
+  }
+
   onMount(async () => {
     // cosmetic demo mode (--potatoes-are-nice). main.ts has normally answered
     // this before the first component mounted; this is the backstop for a
@@ -469,6 +490,15 @@
     unsubscribers.push(onFoldersChanged(() => void refreshSidebar()))
     unsubscribers.push(onProfileChanged(() => void reloadForProfile()))
     unsubscribers.push(onAgentProposals(() => void loadProposals()))
+    // the system notification already went out; in the new design the reminder
+    // also shows here with a way to the event.
+    unsubscribers.push(
+      onCalendarReminder((e) => {
+        if (!classic) {
+          pushAction('info', reminderText(e), { label: $t('calendar.show'), run: () => showReminder(e) }, 10000)
+        }
+      }),
+    )
     void loadProposals()
     unsubscribers.push(onMenu(handleMenu))
     // a mailto: link opened while the app is already running.
@@ -491,6 +521,9 @@
       } catch {
         // a failed lookup just means no prefilled compose; not worth surfacing.
       }
+      // .ics files opened with Pelton, at launch and while it runs.
+      unsubscribers.push(onICSOpen(() => void openPendingICS()))
+      void openPendingICS()
     }
 
     // WebKitGTK (Linux) has a known quirk where maximizing the window - a
@@ -555,6 +588,20 @@
       return
     }
     openComposeWith(accountId, editorMode, { to: email, cc: '', bcc: '', subject: '', body: '' })
+  }
+
+  // openPendingICS takes the .ics files the system asked Pelton to open and
+  // hands them to the calendar's import. Classic has no calendar to take them.
+  async function openPendingICS(): Promise<void> {
+    try {
+      const paths = await consumePendingICS()
+      if (paths.length > 0 && !classic) {
+        calendarImport.set(paths)
+        openSpace('calendar')
+      }
+    } catch {
+      // nothing to open is the same as a failed lookup here.
+    }
   }
 
   // a mailto: link waiting for a mailbox to exist. onboarding-first: if the link
@@ -812,6 +859,11 @@
 
   // dispatch maps an action (from a shortcut or a menu item) to its handler.
   function dispatchAction(action: MenuAction): void {
+    // the space on screen gets the first say, so the same key makes a new
+    // event in the calendar and a new message in mail.
+    if (!classic && !overlayOpen && runSpaceAction($space, action)) {
+      return
+    }
     switch (action) {
       case 'compose':
         startCompose()
@@ -896,6 +948,13 @@
         break
       case 'focus-reader':
         focusPaneArea('reader')
+        break
+      case 'calendar-quick-add':
+        // from another space: go to the calendar, which opens quick add.
+        if (!classic) {
+          calendarQuickAdd.set(true)
+          openSpace('calendar')
+        }
         break
       case 'undo':
         if (!triggerUndo() && !triggerUndoDelete() && !triggerUndoArchive()) {
@@ -1152,7 +1211,9 @@
   // rebuilt whenever anything the entries depend on moves, so the open palette
   // never offers a folder that was just deleted or a message action with no
   // message behind it.
-  $: paletteCommands = $paletteOpen ? buildCommands(commandContext) : []
+  $: paletteCommands = $paletteOpen
+    ? [...buildCommands(commandContext), ...(classic ? [] : extraPaletteCommands($t))]
+    : []
 
   // opening a hit also puts the query in the search bar, so the list behind the
   // palette holds the same results the reading pane is showing rather than
@@ -1432,6 +1493,11 @@
     // cmd/ctrl+z undoes a pending delayed send, when one is in its window. it
     // takes priority over other shortcuts and is swallowed only if it acted.
     if ((event.metaKey || event.ctrlKey) && !event.shiftKey && event.key.toLowerCase() === 'z') {
+      // another space undoes its own last change, outside a text field.
+      if (!classic && !isEditableTarget(event.target) && runSpaceAction($space, 'undo')) {
+        event.preventDefault()
+        return
+      }
       // undo-send takes priority; otherwise undo the last message deletion.
       if (triggerUndo()) {
         event.preventDefault()
@@ -1646,12 +1712,17 @@
       </div>
     {:else if $space === 'contacts'}
       <div class="space-host">
-        {#await import('./components/contacts/ContactsScreen.svelte') then m}
+        {#await import('./components/contacts/ContactsSpace.svelte') then m}
           <svelte:component
             this={m.default}
-            on:close={() => openSpace('mail')}
             on:compose={(e) => { openSpace('mail'); startComposeTo(e.detail) }}
           />
+        {/await}
+      </div>
+    {:else if $space === 'calendar'}
+      <div class="space-host">
+        {#await import('./components/calendar/CalendarScreen.svelte') then m}
+          <svelte:component this={m.default} />
         {/await}
       </div>
     {/if}

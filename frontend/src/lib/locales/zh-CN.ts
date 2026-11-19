@@ -1730,6 +1730,8 @@ const zhCN: Record<string, string> = {
   'contacts.pickOne': '选择一个联系人以查看详情。',
   'contacts.deleteConfirm': '从服务器上删除这个联系人？',
   'contacts.deleted': '联系人已删除。',
+  'calendar.eventDeleted': '日程已删除。',
+  'calendar.eventQueued': '已在本地保存，服务器可访问时会同步。',
   'contacts.extraFields': '这张名片还包含 {fields}，保存时会原样保留。',
   'contacts.updated': '更新于 {when}',
   'contacts.readOnly': '此通讯录为只读。',

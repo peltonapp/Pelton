@@ -73,6 +73,8 @@ export type ShortcutAction =
   | 'focus-sidebar'
   | 'focus-list'
   | 'focus-reader'
+  // opens the calendar's quick add, from the calendar or any other space.
+  | 'calendar-quick-add'
 
 // Shortcut pairs an action with its default combo and the label key for display.
 export interface Shortcut {
@@ -160,6 +162,9 @@ export const shortcuts: Shortcut[] = [
   { action: 'focus-sidebar', combo: '', labelKey: 'shortcut.focusSidebar' },
   { action: 'focus-list', combo: '', labelKey: 'shortcut.focusList' },
   { action: 'focus-reader', combo: '', labelKey: 'shortcut.focusReader' },
+  // q is the key other calendars open quick add with, and nothing else here
+  // uses it; like every bare letter it never fires from inside a text field.
+  { action: 'calendar-quick-add', combo: 'q', labelKey: 'shortcut.calendarQuickAdd' },
 ]
 
 // ParsedCombo is a combo broken into its modifier flags and final key.

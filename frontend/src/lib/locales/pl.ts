@@ -1730,6 +1730,8 @@ const pl: Record<string, string> = {
   'contacts.pickOne': 'Wybierz kontakt, aby go zobaczyć.',
   'contacts.deleteConfirm': 'Usunąć ten kontakt z serwera?',
   'contacts.deleted': 'Kontakt usunięty.',
+  'calendar.eventDeleted': 'Wydarzenie usunięte.',
+  'calendar.eventQueued': 'Zapisano tutaj. Zmiana trafi na serwer, gdy będzie dostępny.',
   'contacts.extraFields': 'Ta wizytówka zawiera też {fields}. Przy zapisie zostaje to bez zmian.',
   'contacts.updated': 'Zaktualizowano {when}',
   'contacts.readOnly': 'Ta książka adresowa jest tylko do odczytu.',

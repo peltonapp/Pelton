@@ -136,6 +136,26 @@
   /* a pressed button sinks by this much. */
   --press-scale: 0.96;
 
+  /* the calendar: its sidebar, the gutter the hour labels sit in, one line of
+     a month cell or the all-day lane, the width of an event's color edge, and
+     the event popover and editor. the hour height follows the density below. */
+  --cal-sidebar-width: 236px;
+  --cal-gutter: 56px;
+  --cal-lane-height: 20px;
+  --cal-edge: 3px;
+  --cal-popover-width: 320px;
+  --cal-editor-width: 600px;
+  --cal-hour-height: 46px;
+  /* the colors a calendar gets when its server named none, in picker order.
+     events tint them against the surface, so one set reads in both themes. */
+  --cal-1: #3b6fd4;
+  --cal-2: #1d9488;
+  --cal-3: #4f8f2b;
+  --cal-4: #c08516;
+  --cal-5: #d0642a;
+  --cal-6: #c9394a;
+  --cal-7: #b9428a;
+  --cal-8: #7552c4;
   /* conversations: the column the expand control sits in, which replies are
      indented by, and the widths the reading column can be capped at. */
   --thread-twisty: 16px;
@@ -285,6 +305,7 @@
   --pane-pad: 12px;
   --control-height: 27px;
   --stack-gap: 8px;
+  --cal-hour-height: 38px;
 }
 
 :root[data-density="medium"] {
@@ -305,6 +326,7 @@
   --pane-pad: 22px;
   --control-height: 34px;
   --stack-gap: 14px;
+  --cal-hour-height: 56px;
 }
 
 /* corner style variants. these swap only the radius tokens, so every

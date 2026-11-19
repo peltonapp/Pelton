@@ -31,7 +31,46 @@ export const EventNames = {
   agentProposals: 'agent:proposals',
   openMessage: 'message:open',
   composeCloseRequest: 'compose:close-request',
+  calendarSync: 'calendar:sync',
+  calendarChanged: 'calendar:changed',
+  calendarReminder: 'calendar:reminder',
+  icsOpen: 'calendar:open-files',
 } as const
+
+/** onICSOpen fires when the system asks the running app to open .ics files; collect them with consumePendingICS. */
+export function onICSOpen(cb: () => void): () => void {
+  return EventsOn(EventNames.icsOpen, () => cb())
+}
+
+/**
+ * CalendarSyncEvent reports a running calendar sync. running is false on the
+ * final event, which carries any error. done and total count calendars.
+ */
+export interface CalendarSyncEvent {
+  running: boolean
+  calendarId: number
+  calendar: string
+  done: number
+  total: number
+  error: string
+}
+
+/** CalendarChangedEvent names the calendars whose events changed; empty means any. */
+export interface CalendarChangedEvent {
+  calendarIds: number[]
+}
+
+/** CalendarReminderEvent is a reminder that came due, alongside its notification. */
+export interface CalendarReminderEvent {
+  eventId: number
+  calendarId: number
+  recurrenceId: string
+  summary: string
+  location: string
+  start: string
+  end: string
+  allDay: boolean
+}
 
 // payloads, mirroring the go event structs.
 export interface MailNewEvent {
@@ -271,4 +310,19 @@ export function onOpenMessage(cb: (e: OpenMessageEvent) => void): Unsubscribe {
 // pressed, so the compose closes the way its own close button does.
 export function onComposeCloseRequest(cb: () => void): Unsubscribe {
   return EventsOn(EventNames.composeCloseRequest, () => cb())
+}
+
+/** onCalendarSync fires as calendars sync, and once more when the run ends. */
+export function onCalendarSync(cb: (e: CalendarSyncEvent) => void): Unsubscribe {
+  return EventsOn(EventNames.calendarSync, (e: CalendarSyncEvent) => cb(e))
+}
+
+/** onCalendarChanged fires when events or calendars changed, from a sync or an edit. */
+export function onCalendarChanged(cb: (e: CalendarChangedEvent) => void): Unsubscribe {
+  return EventsOn(EventNames.calendarChanged, (e: CalendarChangedEvent | null) => cb({ calendarIds: e?.calendarIds ?? [] }))
+}
+
+/** onCalendarReminder fires when an event's reminder is due. */
+export function onCalendarReminder(cb: (e: CalendarReminderEvent) => void): Unsubscribe {
+  return EventsOn(EventNames.calendarReminder, (e: CalendarReminderEvent) => cb(e))
 }

@@ -5,7 +5,7 @@
 // source of truth.
 
 import { writable } from 'svelte/store'
-import type { UIPrefs, ThemePref, DensityPref, EditorMode, ViewsPlacement, CloseAction, LogLevel, SelectAllScope, SearchKind, SearchSortPref, DesignPref, LayoutMode, NavStyle, RailSide, PaneStyle, AvatarPlacement, ComposeOpenIn, ReaderWidth } from '../lib/types'
+import type { UIPrefs, ThemePref, DensityPref, EditorMode, ViewsPlacement, CloseAction, LogLevel, SelectAllScope, SearchKind, SearchSortPref, DesignPref, LayoutMode, NavStyle, RailSide, PaneStyle, AvatarPlacement, ContactsView, ComposeOpenIn, ReaderWidth } from '../lib/types'
 import { getUIPrefs, setSetting, SettingKeys, systemColorScheme, setWindowTheme, getThemeApply } from '../lib/api'
 import { applyTheme, applyDensity, applyAccent, applyScale, applyReduceMotion, applyHandCursor, setThemeSchedule, applyUIFont, applyMonoFont, applyCorners, applyDesign, watchSystemTheme, setSystemSchemeOverride, resolveTheme } from '../theme/theme'
 import { applyUserTheme } from '../theme/usertheme'
@@ -70,6 +70,7 @@ const defaults: UIPrefs = {
   composeAutocomplete: true,
   composeChips: true,
   composeMarkdown: false,
+  smoothCaret: true,
   updateCheckFrequency: 'off',
   emptyStateImage: '',
   emptyStateFullscreen: false,
@@ -80,6 +81,7 @@ const defaults: UIPrefs = {
   railSide: 'left',
   paneStyle: 'hybrid',
   avatarPlacement: 'inline',
+  contactsView: 'panes',
   listHeight: 320,
   nativeTitlebar: false,
   quickFilterBar: false,
@@ -308,6 +310,12 @@ export function setQuickFilterBar(quickFilterBar: boolean): void {
   void setSetting(SettingKeys.quickFilterBar, String(quickFilterBar))
 }
 
+/** Chooses between the list with a detail pane and the card grid in Contacts. */
+export function setContactsView(contactsView: ContactsView): void {
+  prefs.update((p) => ({ ...p, contactsView }))
+  void setSetting(SettingKeys.contactsView, contactsView)
+}
+
 /** Picks where a new message, reply or forward opens in the new design. */
 export function setComposeOpenIn(composeOpenIn: ComposeOpenIn): void {
   prefs.update((p) => ({ ...p, composeOpenIn }))
@@ -324,6 +332,12 @@ export function setThreadedList(threadedList: boolean): void {
 export function setReaderWidth(readerWidth: ReaderWidth): void {
   prefs.update((p) => ({ ...p, readerWidth }))
   void setSetting(SettingKeys.readerWidth, readerWidth)
+}
+
+/** Turns the gliding caret of the compose editor on or off. */
+export function setSmoothCaret(smoothCaret: boolean): void {
+  prefs.update((p) => ({ ...p, smoothCaret }))
+  void setSetting(SettingKeys.smoothCaret, String(smoothCaret))
 }
 
 /** Turns Markdown conversion in the compose editor on or off. */

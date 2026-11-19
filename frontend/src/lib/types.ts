@@ -592,6 +592,8 @@ export interface UIPrefs {
   composeChips: boolean
   // composeMarkdown formats Markdown as it is typed in the composer.
   composeMarkdown: boolean
+  // smoothCaret glides the compose editor's caret between positions.
+  smoothCaret: boolean
   // updateCheckFrequency controls the automatic GitHub-releases update check:
   // 'off' (default), 'startup', 'weekly', or 'monthly'.
   updateCheckFrequency: string
@@ -617,6 +619,8 @@ export interface UIPrefs {
   // avatarPlacement puts the sender picture in its own column, inline in the
   // address line, or hides it.
   avatarPlacement: AvatarPlacement
+  // contactsView is how the contacts space shows its contacts.
+  contactsView: ContactsView
   // listHeight is the message list height in the stacked layout, in px.
   listHeight: number
   // nativeTitlebar uses the operating system's title bar instead of the
@@ -1130,6 +1134,8 @@ export type RailSide = 'left' | 'right'
 export type PaneStyle = 'hybrid' | 'flat' | 'soft'
 /** Where the sender picture goes in a list row and the reading header. */
 export type AvatarPlacement = 'column' | 'inline' | 'hidden'
+/** How the contacts space shows its contacts: a list with a detail pane, or a card grid. */
+export type ContactsView = 'panes' | 'grid'
 /** Where compose opens in the new design: its own window, docked, or a tab. */
 export type ComposeOpenIn = 'window' | 'docked' | 'tab'
 /** How wide the reading column runs in the new design. */
@@ -1350,4 +1356,333 @@ export interface AddressBookDraft {
   collectionPath: string
   username: string
   password: string
+}
+
+/** CalendarAccount is one CalDAV login. */
+export interface CalendarAccount {
+  id: number
+  // the mail account it was discovered from, 0 for none.
+  accountId: number
+  // the address book whose login it shares, 0 for none.
+  addressBookId: number
+  name: string
+  url: string
+  username: string
+  // rfc3339, empty when it has never synced.
+  lastSync: string
+  // the last sync failure in the server's words, empty once one succeeds.
+  lastError: string
+  hasPassword: boolean
+  calendarCount: number
+}
+
+/**
+ * CalendarAccountDraft is the add/edit calendar account form, and what
+ * discovery starts from. With addressBookId set, an empty url, username or
+ * password is taken from that address book; with accountId and no url,
+ * .well-known/caldav on the mailbox's domain is tried.
+ */
+export interface CalendarAccountDraft {
+  id: number
+  accountId: number
+  addressBookId: number
+  name: string
+  url: string
+  username: string
+  // empty on update leaves the stored password alone.
+  password: string
+}
+
+/** DiscoveredCalendar is one calendar a login can see. */
+export interface DiscoveredCalendar {
+  name: string
+  path: string
+  color: string
+  readOnly: boolean
+}
+
+/** CalendarDiscovery is the endpoint discovery resolved and its calendars. */
+export interface CalendarDiscovery {
+  // the url to add the account with.
+  url: string
+  username: string
+  calendars: DiscoveredCalendar[]
+  // an account for this url and login already exists.
+  exists: boolean
+}
+
+/** Calendar is one calendar, synced or local. */
+export interface Calendar {
+  id: number
+  // 0 for a local calendar.
+  accountId: number
+  accountName: string
+  // empty for the local calendar the app starts with; the ui labels it.
+  name: string
+  description: string
+  // #rrggbb, or empty for the ui to pick.
+  color: string
+  local: boolean
+  readOnly: boolean
+  visible: boolean
+  lastSync: string
+  lastError: string
+  // where new events go unless another calendar is chosen.
+  default: boolean
+}
+
+/** CalendarSettings are the calendar preferences. */
+export interface CalendarSettings {
+  // background sync interval, 0 turns it off.
+  syncIntervalMinutes: number
+  remindersEnabled: boolean
+  // the reminder a new event gets, -1 for none.
+  defaultReminderMinutes: number
+  // where new events go, 0 for the first writable calendar.
+  defaultCalendarId: number
+  // the view the calendar opens in.
+  defaultView: CalendarView
+  // first day of the week, 0 for Sunday through 6, -1 to follow the locale.
+  weekStart: number
+  // working hours as minutes after midnight.
+  workDayStart: number
+  workDayEnd: number
+  // off, the zone's name over the hours, or a second column of hours.
+  timeZoneDisplay: TimeZoneDisplay
+  // IANA zone of the second column, empty for none.
+  secondaryTimeZone: string
+}
+
+/** The views of the calendar screen. */
+export type CalendarView = 'month' | 'week' | 'day' | 'agenda'
+
+/** How the time grid names time zones. */
+export type TimeZoneDisplay = 'off' | 'label' | 'dual'
+
+/** The scope an edit or delete of one occurrence of a series applies to. */
+export type EventScope = 'this' | 'future' | 'all'
+
+/**
+ * Occurrence is one already expanded occurrence in a window. start and end are
+ * rfc3339, or yyyy-mm-dd dates for an all-day occurrence with end exclusive.
+ */
+export interface Occurrence {
+  eventId: number
+  calendarId: number
+  calendarColor: string
+  uid: string
+  summary: string
+  location: string
+  start: string
+  end: string
+  allDay: boolean
+  recurring: boolean
+  // names the occurrence for getEvent, updateEvent and deleteEvent: the
+  // rfc3339 utc instant it originally started at. Empty when not recurring.
+  recurrenceId: string
+  // this occurrence was edited on its own.
+  override: boolean
+  status: string
+  transparency: string
+  readOnly: boolean
+  hasReminders: boolean
+  // a change made here has not reached the server yet.
+  pending: boolean
+  conflict: boolean
+}
+
+/**
+ * Reminder is one VALARM. minutesBefore counts back from the start (from the
+ * end with relatedEnd); negative means after. absolute, an rfc3339 time,
+ * replaces both when set.
+ */
+export interface Reminder {
+  minutesBefore: number
+  relatedEnd: boolean
+  absolute: string
+  // DISPLAY, AUDIO or EMAIL; empty means DISPLAY.
+  action: string
+}
+
+/** Attendee is an attendee or the organizer of an event. */
+export interface Attendee {
+  email: string
+  name: string
+  // REQ-PARTICIPANT, OPT-PARTICIPANT, NON-PARTICIPANT or CHAIR.
+  role: string
+  // NEEDS-ACTION, ACCEPTED, TENTATIVE, DECLINED or DELEGATED.
+  partStat: string
+  rsvp: boolean
+}
+
+/** CalendarEvent is one event, or one occurrence of a series, for the editor. */
+export interface CalendarEvent {
+  id: number
+  calendarId: number
+  calendarName: string
+  calendarColor: string
+  uid: string
+  summary: string
+  description: string
+  location: string
+  url: string
+  status: string
+  transparency: string
+  categories: string[]
+  start: string
+  end: string
+  allDay: boolean
+  // IANA zone the event was written in, empty for utc or floating.
+  timeZone: string
+  // the series' RRULE value, empty for none.
+  rrule: string
+  recurring: boolean
+  // rfc3339 starts of occurrences removed from the series.
+  exDates: string[]
+  // set when this is one occurrence of a series.
+  recurrenceId: string
+  reminders: Reminder[]
+  // email is empty when the event has no organizer.
+  organizer: Attendee
+  attendees: Attendee[]
+  readOnly: boolean
+  pending: boolean
+  conflict: boolean
+  syncError: string
+  // iCalendar properties kept on every save that the editor has no field for.
+  extra: string[]
+}
+
+/**
+ * EventDraft is the editor's event. id 0 creates in calendarId. For an
+ * occurrence of a series, recurrenceId names it and scope says what changes.
+ * The draft is the full state: an empty rrule removes the recurrence.
+ */
+export interface EventDraft {
+  id: number
+  calendarId: number
+  summary: string
+  description: string
+  location: string
+  url: string
+  status: string
+  transparency: string
+  categories: string[]
+  start: string
+  end: string
+  allDay: boolean
+  timeZone: string
+  rrule: string
+  reminders: Reminder[]
+  organizer: Attendee
+  attendees: Attendee[]
+  scope: EventScope | ''
+  recurrenceId: string
+  // set only by "keep mine" on a conflict: write over the server's copy.
+  force: boolean
+}
+
+/** EventSaveResult is the outcome of a save or delete. */
+export interface EventSaveResult {
+  event: CalendarEvent
+  // the server was unreachable; the change goes out with the next sync.
+  queued: boolean
+  // the server's copy moved on; server holds it and resolveEventConflict
+  // settles which one stays.
+  conflict: boolean
+  server: CalendarEvent
+}
+
+/** Invite is the invitation a message carries. */
+export interface Invite {
+  // false for a message without calendar data; nothing else is set then.
+  found: boolean
+  // REQUEST, CANCEL, REPLY or PUBLISH, or empty.
+  method: string
+  uid: string
+  sequence: number
+  summary: string
+  description: string
+  location: string
+  start: string
+  end: string
+  allDay: boolean
+  timeZone: string
+  recurring: boolean
+  rrule: string
+  recurrenceId: string
+  organizer: Attendee
+  attendees: Attendee[]
+  // the mailbox address the invitation is read for and its answer so far.
+  myEmail: string
+  myPartStat: string
+  // the copy an earlier answer stored, 0 for none.
+  existingEventId: number
+  existingCalendarId: number
+  // the stored copy is newer than this invitation.
+  outdated: boolean
+}
+
+/** InviteResponse is an answer to an invitation. */
+export type InviteResponse = 'accepted' | 'tentative' | 'declined'
+
+/** InviteAnswer is the request to answer an invitation. */
+export interface InviteAnswer {
+  messageId: number
+  // where an accepted event goes when no copy is stored, 0 for the default.
+  calendarId: number
+  response: InviteResponse
+  sendReply: boolean
+}
+
+/** InviteAnswerResult says what answering or applying an invitation did. */
+export interface InviteAnswerResult {
+  // 0 when the answer removed the event.
+  eventId: number
+  // 0 when no reply was queued.
+  outboxId: number
+}
+
+/** ICSImportResult counts what an .ics import did. */
+export interface ICSImportResult {
+  imported: number
+  updated: number
+  skipped: number
+}
+
+/** ICSFile is a calendar file read for import, iCalendar or JSCalendar. */
+export interface ICSFile {
+  name: string
+  data: string
+  /** How many events an import would take, and the titles of the first few. */
+  events: number
+  summaries: string[]
+  /** Set instead of the rest when the file could not be read. */
+  error: string
+}
+
+/** EventBundle is the events a pasted link or JSCalendar text carries, as drafts with no calendar. */
+export interface EventBundle {
+  events: EventDraft[]
+  skipped: number
+}
+
+/** MailEventSource is what the calendar reads from a mail dropped on it. */
+export interface MailEventSource {
+  subject: string
+  text: string
+  /** When the mail was sent, rfc3339; empty when unknown. */
+  date: string
+  fromName: string
+  fromAddress: string
+  /** A mid: link back to the mail, empty when it has no Message-ID. */
+  link: string
+}
+
+/** MessageRef says where a stored message lives. */
+export interface MessageRef {
+  found: boolean
+  id: number
+  accountId: number
+  folderId: number
 }

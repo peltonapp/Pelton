@@ -98,6 +98,7 @@ const (
 	settingComposeAutocomplete = "compose_autocomplete"
 	settingComposeChips        = "compose_chips"
 	settingComposeMarkdown     = "compose_markdown"
+	settingSmoothCaret         = "smooth_caret"
 	settingEmptyStateImage     = "empty_state_image"
 	settingEmptyStateFull      = "empty_state_fullscreen"
 	// menu bar settings only matter on macOS: Windows/Linux always use the
@@ -150,6 +151,9 @@ const (
 	// where the sender picture goes in a list row and the reading header:
 	// "column", "inline" or "hidden".
 	settingAvatarPlacement = "avatar_placement"
+	// how the contacts space shows its contacts: "panes" (list and detail) or
+	// "grid" (a card grid).
+	settingContactsView = "contacts_view"
 	// height of the message list in the stacked layout, in pixels.
 	settingListHeight = "list_height"
 	// use the operating system's own title bar instead of the integrated one.
@@ -376,6 +380,9 @@ type UIPrefsDTO struct {
 	// ComposeMarkdown formats Markdown as it is typed in the composer. Off by
 	// default.
 	ComposeMarkdown bool `json:"composeMarkdown"`
+	// SmoothCaret glides the text caret of the compose editor between
+	// positions in the new design. On by default.
+	SmoothCaret bool `json:"smoothCaret"`
 	// UpdateCheckFrequency controls the automatic GitHub-releases update
 	// check: off (default), startup (every launch), weekly, or monthly. A
 	// manual check ("Check now" in settings) always runs regardless.
@@ -402,6 +409,8 @@ type UIPrefsDTO struct {
 	// AvatarPlacement puts the sender picture in its own column, inline in the
 	// address line, or hides it: column, inline or hidden.
 	AvatarPlacement string `json:"avatarPlacement"`
+	// ContactsView is how the contacts space shows its contacts: panes or grid.
+	ContactsView string `json:"contactsView"`
 	// ListHeight is the message list height in the stacked layout, in pixels.
 	ListHeight int `json:"listHeight"`
 	// NativeTitlebar uses the operating system's title bar instead of the
@@ -564,6 +573,7 @@ func (a *App) GetUIPrefs() (UIPrefsDTO, error) {
 		ComposeAutocomplete:        a.boolSetting(settingComposeAutocomplete, true),
 		ComposeChips:               a.boolSetting(settingComposeChips, true),
 		ComposeMarkdown:            a.boolSetting(settingComposeMarkdown, false),
+		SmoothCaret:                a.boolSetting(settingSmoothCaret, true),
 		UpdateCheckFrequency:       a.stringSetting(settingUpdateCheckFreq, defaultUpdateCheckFrequency),
 		EmptyStateImage:            a.stringSetting(settingEmptyStateImage, ""),
 		EmptyStateFullscreen:       a.boolSetting(settingEmptyStateFull, false),
@@ -574,6 +584,7 @@ func (a *App) GetUIPrefs() (UIPrefsDTO, error) {
 		RailSide:                   a.stringSetting(settingRailSide, "left"),
 		PaneStyle:                  a.stringSetting(settingPaneStyle, "hybrid"),
 		AvatarPlacement:            a.stringSetting(settingAvatarPlacement, "inline"),
+		ContactsView:               a.stringSetting(settingContactsView, "panes"),
 		ListHeight:                 a.intSetting(settingListHeight, 320),
 		NativeTitlebar:             a.boolSetting(settingNativeTitlebar, false),
 		QuickFilterBar:             a.boolSetting(settingQuickFilterBar, false),
