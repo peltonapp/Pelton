@@ -5,7 +5,7 @@
   import { createEventDispatcher } from 'svelte'
   import fileIcon from '@phosphor-icons/core/assets/duotone/file-text-duotone.svg?raw'
   import warningIcon from '@phosphor-icons/core/assets/duotone/warning-duotone.svg?raw'
-  import './controls.css'
+  import '../../theme/controls.css'
   import Modal from '../common/Modal.svelte'
   import Select from '../common/Select.svelte'
   import Ph from '../common/Ph.svelte'

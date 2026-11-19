@@ -6,10 +6,11 @@
   import closeIcon from '@phosphor-icons/core/assets/regular/x.svg?raw'
   import clockIcon from '@phosphor-icons/core/assets/duotone/clock-duotone.svg?raw'
   import calendarIcon from '@phosphor-icons/core/assets/duotone/calendar-blank-duotone.svg?raw'
-  import '../calendar/controls.css'
+  import '../../theme/controls.css'
   import Ph from '../common/Ph.svelte'
   import Avatar from '../common/Avatar.svelte'
   import PieProgress from '../common/PieProgress.svelte'
+  import EmptyState from '../common/EmptyState.svelte'
   import { listProjectEvents, listProjectThreads, setEventProject } from '../../lib/api'
   import { onMailNew, onProjectsChanged } from '../../lib/events'
   import { dueLabel, duePassed, nextDeadlines, progressOf, projectColor } from '../../lib/projectlogic'
@@ -148,7 +149,7 @@
       <button type="button" class="link" on:click={() => dispatch('tab', 'board')}>{$t('projects.overview.toBoard')}</button>
     </header>
     {#if deadlines.length === 0}
-      <p class="empty">{$t('projects.overview.noDeadlines')}</p>
+      <EmptyState size="compact" title={$t('projects.overview.noDeadlines')} />
     {:else}
       <ul class="rows">
         {#each deadlines as c (c.task.uid)}
@@ -169,7 +170,7 @@
       {#if loading}<PieProgress label={$t('projects.loading')} />{/if}
     </header>
     {#if !loading && upcoming.length === 0}
-      <p class="empty">{events.length > 0 ? $t('projects.overview.noUpcoming') : $t('projects.overview.noEvents')}</p>
+      <EmptyState size="compact" title={events.length > 0 ? $t('projects.overview.noUpcoming') : $t('projects.overview.noEvents')} />
     {/if}
     <ul class="rows">
       {#each upcoming as e (e.uid)}
@@ -204,7 +205,7 @@
       {/if}
     </header>
     {#if !loading && recent.length === 0}
-      <p class="empty">{$t('projects.overview.noMail')}</p>
+      <EmptyState size="compact" title={$t('projects.overview.noMail')} />
     {/if}
     <ul class="rows">
       {#each recent as th (th.threadId)}
@@ -225,7 +226,7 @@
       <button type="button" class="link" on:click={() => dispatch('tab', 'people')}>{$t('projects.overview.managePeople')}</button>
     </header>
     {#if project.people.length === 0}
-      <p class="empty">{$t('projects.overview.noPeople')}</p>
+      <EmptyState size="compact" title={$t('projects.overview.noPeople')} />
     {:else}
       <ul class="faces">
         {#each project.people as p (p.email)}
@@ -382,7 +383,7 @@
 
   .stack {
     display: flex;
-    gap: 2px;
+    gap: var(--space-1);
     height: 6px;
     border-radius: var(--radius-control);
     overflow: hidden;
@@ -426,15 +427,10 @@
     font-variant-numeric: tabular-nums;
   }
 
-  .empty,
   .hint {
     margin: 0;
-    font-size: var(--fz-label);
-    color: var(--text-tertiary);
-  }
-
-  .hint {
     font-size: var(--fz-meta);
+    color: var(--text-tertiary);
   }
 
   .rows {

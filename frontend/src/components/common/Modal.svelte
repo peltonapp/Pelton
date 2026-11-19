@@ -70,11 +70,15 @@
     return [...found].filter((el) => el.offsetParent !== null)
   }
 
-  // the dialog itself takes focus unless a field asked for it. Focusing the
-  // first control instead would put the ring on whatever happens to come first,
-  // and anything that reacts to focus (a tooltip, a picker) would fire on open.
+  // a field that asked for focus gets it, else the first plain text field, else
+  // the dialog itself. buttons, pickers and comboboxes are skipped: anything
+  // that reacts to focus (a tooltip, a list) would fire on open.
   function focusFirst(): void {
-    const wanted = dialog?.querySelector<HTMLElement>('[autofocus]')
+    const wanted =
+      dialog?.querySelector<HTMLElement>('[autofocus]') ??
+      dialog?.querySelector<HTMLElement>(
+        '.body input:is([type="text"], [type="search"], [type="email"], [type="url"], :not([type])):not([disabled]):not([readonly]):not([role="combobox"]), .body textarea:not([disabled]):not([readonly])',
+      )
     if (wanted) {
       wanted.focus()
       return

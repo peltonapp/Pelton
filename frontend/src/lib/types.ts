@@ -737,6 +737,9 @@ export interface UIPrefs {
   // coachHold shows the shortcuts that apply on screen while the platform
   // modifier is held, in the new design. On by default.
   coachHold: boolean
+  // showTips shows a one-time tip the first time a feature's context comes
+  // up, in the new design. On by default.
+  showTips: boolean
   // harvestAddresses keeps learning addresses from mail for compose
   // autocomplete. off leaves only the contacts from a synced address book.
   harvestAddresses: boolean
@@ -804,6 +807,18 @@ export interface UIPrefs {
   swipeEnabled: boolean
   swipeLeftAction: string
   swipeRightAction: string
+  // the new design's swipes: a short and a long one each way, each a row
+  // action id or 'none'.
+  swipeLeftShort: string
+  swipeLeftLong: string
+  swipeRightShort: string
+  swipeRightLong: string
+  // quick buttons over a hovered row in the new design, and which ones in
+  // what order (comma separated row action ids, five at most).
+  rowActions: boolean
+  rowActionList: string
+  // how html mail is coloured in a dark theme.
+  htmlColors: HtmlColors
   // composeVimMode enables vim keybindings in the compose editor.
   composeVimMode: boolean
   // downloadIncludeAttachments is the remembered default for the range download.
@@ -853,6 +868,10 @@ export interface UIPrefs {
   // railPins lists the views pinned to the middle of the rail, comma
   // separated: "u:inbox" for a unified view, "v:12" for a saved one.
   railPins: string
+  // spaceOrder lists the space keys in navigation order, comma separated.
+  spaceOrder: string
+  // hiddenSpaces lists the space keys left out of the navigation.
+  hiddenSpaces: string
   // paneStyle draws the panes in the new design.
   paneStyle: PaneStyle
   // avatarPlacement puts the sender picture in its own column, inline in the
@@ -1285,6 +1304,13 @@ export interface SenderOverview {
 
 // swipe gesture actions for message rows.
 export type SwipeAction = 'none' | 'delete' | 'read' | 'unread' | 'flag' | 'archive' | 'snooze'
+
+/**
+ * How html mail is coloured in a dark theme: 'auto' adapts plain and lightly
+ * styled mail and keeps designed mail on a light sheet, 'adapt' adapts all of
+ * it, 'original' keeps every message as it was sent.
+ */
+export type HtmlColors = 'auto' | 'adapt' | 'original'
 
 // list row layouts, from most spacious to a single dense line.
 export type RowTemplate = 'relaxed' | 'comfortable' | 'compact' | 'single'

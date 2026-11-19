@@ -20,7 +20,7 @@
   import flagIcon from '@phosphor-icons/core/assets/duotone/flag-duotone.svg?raw'
   import columnsIcon from '@phosphor-icons/core/assets/duotone/columns-plus-right-duotone.svg?raw'
   import taskIcon from '@phosphor-icons/core/assets/duotone/list-checks-duotone.svg?raw'
-  import '../calendar/controls.css'
+  import '../../theme/controls.css'
   import Ph from '../common/Ph.svelte'
   import Select from '../common/Select.svelte'
   import EmptyState from '../common/EmptyState.svelte'
@@ -52,9 +52,10 @@
   import { openTask } from '../../lib/taskmail'
   import { portal } from '../../lib/portal'
   import { currentUIScale } from '../../theme/theme'
-  import { addCard, addTask, board, cardFocus, loadBoard, moveBoardCard, removeCard } from '../../stores/projects'
+  import { addCard, addTask, board, cardFocus, loadBoard, moveBoardCard, openCardUid, removeCard } from '../../stores/projects'
   import { emptyDraft, localZone, removeTask, saveTask, taskLists, taskSettings, tasks, toggleDone } from '../../stores/tasks'
   import { openContextMenu } from '../../stores/contextmenu'
+  import { menuHint } from '../../stores/shortcuts'
   import { errorMessage, toastError } from '../../stores/toast'
   import { popupIsOpen } from '../../lib/popups'
   import { dur, motion } from '../../lib/motion'
@@ -105,6 +106,7 @@
   $: manual = sort === 'manual'
   $: narrowing = filterActive(filter)
   $: selected = cards.find((c) => c.task.uid === selectedUid) ?? null
+  $: openCardUid.set(selected?.task.uid ?? null)
   $: overlay = width > 0 && width < narrowPanel
   $: rtl = typeof document !== 'undefined' && document.documentElement.dir === 'rtl'
   $: dropGone(cards)
@@ -274,7 +276,7 @@
         .map((c) => ({ label: $t('projects.card.moveTo').replace('{name}', c.name), action: () => void moveTo(card, c.id, Number.MAX_SAFE_INTEGER) })),
       'separator' as const,
       { label: $t('projects.card.openInTasks'), action: () => openTask(task.id) },
-      { label: $t('projects.card.remove'), action: () => void removeCard(card) },
+      { label: $t('projects.card.remove'), action: () => void removeCard(card), hint: menuHint('delete-message') },
       ...(task.readOnly ? [] : [{ label: $t('tasks.delete'), danger: true, action: () => void removeTask(task) }]),
     ])
   }
@@ -578,6 +580,7 @@
     if (settleTimer) {
       clearTimeout(settleTimer)
     }
+    openCardUid.set(null)
   })
 
   $: scale = drag?.started ? currentUIScale() : 1
@@ -638,12 +641,13 @@
     </div>
 
     {#if columns.length === 0}
-      <EmptyState title={$t('projects.board.noColumns')} detail={$t('projects.board.noColumnsDetail')}>
-        <Ph svg={columnsIcon} size={28} />
-        <button slot="action" type="button" class="cal-btn primary" on:click={() => (addingColumn = true)}>
-          <Ph svg={plusIcon} size={13} />{$t('projects.board.addColumn')}
-        </button>
-      </EmptyState>
+      <EmptyState
+        icon={columnsIcon}
+        title={$t('projects.board.noColumns')}
+        detail={$t('projects.board.noColumnsDetail')}
+        actionLabel={$t('projects.board.addColumn')}
+        onAction={() => (addingColumn = true)}
+      />
     {/if}
 
     <!-- svelte-ignore a11y-no-static-element-interactions -->
@@ -788,7 +792,7 @@
             <span class="text">{task.title || $t('tasks.untitled')}</span>
           </button>
         {:else}
-          <p class="none">{$t('projects.board.noTasks')}</p>
+          <EmptyState size="compact" title={$t('projects.board.noTasks')} />
         {/each}
       </div>
     </div>
@@ -1120,11 +1124,6 @@
     border-radius: 50%;
   }
 
-  .none {
-    margin: var(--space-2);
-    font-size: var(--fz-label);
-    color: var(--text-tertiary);
-  }
 
   .sr {
     position: absolute;

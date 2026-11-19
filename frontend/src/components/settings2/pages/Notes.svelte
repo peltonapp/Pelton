@@ -4,7 +4,7 @@
   // templates, pasted images and project notes, how a note opens and how
   // wide its text runs.
   import { onMount } from 'svelte'
-  import '../../calendar/controls.css'
+  import '../../../theme/controls.css'
   import Card from '../ui/Card.svelte'
   import Row from '../ui/Row.svelte'
   import Segmented from '../ui/Segmented.svelte'

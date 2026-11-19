@@ -79,14 +79,25 @@ const (
 	settingFlaggedCount     = "show_flagged_count"
 	settingViewsPlacement   = "views_placement"
 	// newer feature settings.
-	settingFlagColorSync       = "flag_color_sync"
-	settingShowOffline         = "show_offline_indicator"
-	settingShowUnsyncedFolder  = "show_unsynced_folder"
-	settingRestoreTabs         = "restore_reading_tabs"
-	settingPaletteProfiles     = "palette_profiles"
-	settingSwipeEnabled        = "swipe_enabled"
-	settingSwipeLeft           = "swipe_left_action"
-	settingSwipeRight          = "swipe_right_action"
+	settingFlagColorSync      = "flag_color_sync"
+	settingShowOffline        = "show_offline_indicator"
+	settingShowUnsyncedFolder = "show_unsynced_folder"
+	settingRestoreTabs        = "restore_reading_tabs"
+	settingPaletteProfiles    = "palette_profiles"
+	settingSwipeEnabled       = "swipe_enabled"
+	settingSwipeLeft          = "swipe_left_action"
+	settingSwipeRight         = "swipe_right_action"
+	// the new design's swipes: a short and a long one in each direction.
+	settingSwipeLeftShort  = "swipe_left_short"
+	settingSwipeLeftLong   = "swipe_left_long"
+	settingSwipeRightShort = "swipe_right_short"
+	settingSwipeRightLong  = "swipe_right_long"
+	// the quick buttons over a hovered row in the new design, and which ones
+	// in what order, comma separated.
+	settingRowActions    = "row_actions"
+	settingRowActionList = "row_action_list"
+	// how html mail is coloured in a dark theme: auto, adapt or original.
+	settingHTMLColors          = "html_colors"
 	settingVimMode             = "compose_vim_mode"
 	settingDownloadAtts        = "download_include_attachments"
 	settingDownloadPending     = "download_pending_since"
@@ -149,6 +160,10 @@ const (
 	// the views pinned to the middle of the rail, comma separated: "u:inbox"
 	// for a unified view, "v:12" for a saved one.
 	settingRailPins = "rail_pins"
+	// the order of the spaces in the navigation and the ones left out of it,
+	// both comma separated space keys. empty means the default order, all shown.
+	settingSpaceOrder   = "space_order"
+	settingHiddenSpaces = "hidden_spaces"
 	// how the panes are drawn in the new design: "hybrid", "flat" or "soft".
 	settingPaneStyle = "pane_style"
 	// where the sender picture goes in a list row and the reading header:
@@ -198,6 +213,9 @@ const (
 	// action done by mouse, and the sheet shown while the modifier is held.
 	settingCoachHints = "coach_hints"
 	settingCoachHold  = "coach_hold"
+	// the one-time tips of the new design, shown the first time a feature's
+	// context comes up.
+	settingShowTips = "show_tips"
 	// mark the dates a mail names in the reader, with a calendar preview on
 	// hover. On by default.
 	settingMailDates = "mail_dates"
@@ -339,6 +357,9 @@ type UIPrefsDTO struct {
 	// CoachHold shows the shortcuts that apply on screen while the platform
 	// modifier is held, in the new design.
 	CoachHold bool `json:"coachHold"`
+	// ShowTips shows a one-time tip the first time a feature's context comes
+	// up, in the new design.
+	ShowTips bool `json:"showTips"`
 	// HarvestAddresses keeps learning addresses from the mail that passes
 	// through, for compose autocomplete. Off leaves only synced contacts.
 	HarvestAddresses bool `json:"harvestAddresses"`
@@ -419,6 +440,20 @@ type UIPrefsDTO struct {
 	SwipeEnabled     bool   `json:"swipeEnabled"`
 	SwipeLeftAction  string `json:"swipeLeftAction"`
 	SwipeRightAction string `json:"swipeRightAction"`
+	// The new design's swipes act by distance: a short swipe and a long one in
+	// each direction, each an action id or "none".
+	SwipeLeftShort  string `json:"swipeLeftShort"`
+	SwipeLeftLong   string `json:"swipeLeftLong"`
+	SwipeRightShort string `json:"swipeRightShort"`
+	SwipeRightLong  string `json:"swipeRightLong"`
+	// RowActions shows quick buttons over a hovered row in the new design;
+	// RowActionList names them in order, comma separated, five at most.
+	RowActions    bool   `json:"rowActions"`
+	RowActionList string `json:"rowActionList"`
+	// HTMLColors is how html mail is coloured in a dark theme: "auto" adapts
+	// plain and lightly styled mail and keeps designed mail on a light sheet,
+	// "adapt" adapts all of it, "original" keeps every message as sent.
+	HTMLColors string `json:"htmlColors"`
 	// ComposeVimMode enables vim keybindings in the compose editor.
 	ComposeVimMode bool `json:"composeVimMode"`
 	// DownloadIncludeAttachments is the remembered default for the bulk range
@@ -475,6 +510,12 @@ type UIPrefsDTO struct {
 	// RailPins lists the views pinned to the middle of the rail, comma
 	// separated, in display order.
 	RailPins string `json:"railPins"`
+	// SpaceOrder lists the space keys in navigation order, comma separated.
+	// Keys it leaves out follow in their default order.
+	SpaceOrder string `json:"spaceOrder"`
+	// HiddenSpaces lists the space keys left out of the navigation, comma
+	// separated. Mail is never hidden.
+	HiddenSpaces string `json:"hiddenSpaces"`
 	// PaneStyle draws the panes in the new design: hybrid, flat or soft.
 	PaneStyle string `json:"paneStyle"`
 	// AvatarPlacement puts the sender picture in its own column, inline in the
@@ -702,6 +743,7 @@ func (a *App) GetUIPrefs() (UIPrefsDTO, error) {
 		ShowShortcutHints:   a.boolSetting(settingShortcutHints, true),
 		CoachHints:          a.boolSetting(settingCoachHints, true),
 		CoachHold:           a.boolSetting(settingCoachHold, true),
+		ShowTips:            a.boolSetting(settingShowTips, true),
 		HarvestAddresses:    a.harvestAddresses(),
 		ShowAccountEmail:    a.boolSetting(settingAccountEmail, false),
 		AlwaysLoadImages:    a.boolSetting(settingRemoteAlways, false),
@@ -733,6 +775,13 @@ func (a *App) GetUIPrefs() (UIPrefsDTO, error) {
 		SwipeEnabled:               a.boolSetting(settingSwipeEnabled, true),
 		SwipeLeftAction:            a.stringSetting(settingSwipeLeft, "delete"),
 		SwipeRightAction:           a.stringSetting(settingSwipeRight, "unread"),
+		SwipeLeftShort:             a.stringSetting(settingSwipeLeftShort, "archive"),
+		SwipeLeftLong:              a.stringSetting(settingSwipeLeftLong, "delete"),
+		SwipeRightShort:            a.stringSetting(settingSwipeRightShort, "read"),
+		SwipeRightLong:             a.stringSetting(settingSwipeRightLong, "snooze"),
+		RowActions:                 a.boolSetting(settingRowActions, true),
+		RowActionList:              a.stringSetting(settingRowActionList, "archive,delete,done,snooze,pin"),
+		HTMLColors:                 a.stringSetting(settingHTMLColors, "auto"),
 		ComposeVimMode:             a.boolSetting(settingVimMode, false),
 		DownloadIncludeAttachments: a.boolSetting(settingDownloadAtts, true),
 		AppVimMode:                 a.boolSetting(settingAppVimMode, false),
@@ -753,6 +802,8 @@ func (a *App) GetUIPrefs() (UIPrefsDTO, error) {
 		NavStyle:                   a.stringSetting(settingNavStyle, "rail"),
 		RailSide:                   a.stringSetting(settingRailSide, "left"),
 		RailPins:                   a.stringSetting(settingRailPins, ""),
+		SpaceOrder:                 a.stringSetting(settingSpaceOrder, ""),
+		HiddenSpaces:               a.stringSetting(settingHiddenSpaces, ""),
 		PaneStyle:                  a.stringSetting(settingPaneStyle, "hybrid"),
 		AvatarPlacement:            a.stringSetting(settingAvatarPlacement, "inline"),
 		ContactsView:               a.stringSetting(settingContactsView, "panes"),

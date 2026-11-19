@@ -7,6 +7,8 @@
   // once. colours come from the theme's tokens and follow it.
   import { createEventDispatcher, onDestroy, onMount } from 'svelte'
   import PieProgress from '../common/PieProgress.svelte'
+  import EmptyState from '../common/EmptyState.svelte'
+  import graphIcon from '@phosphor-icons/core/assets/duotone/graph-duotone.svg?raw'
   import { createLayout, layoutSettled, nodeAt, reheat, stepLayout, type Graph, type Layout } from '../../lib/notegraph'
   import { currentUIScale } from '../../theme/theme'
   import { prefs } from '../../stores/prefs'
@@ -402,7 +404,9 @@
     <span class="busy"><PieProgress label={$t('notes.graphSettling')} /></span>
   {/if}
   {#if graph.nodes.length === 0}
-    <p class="empty">{$t('notes.graphEmpty')}</p>
+    <div class="empty">
+      <EmptyState icon={graphIcon} title={$t('notes.graphEmpty')} detail={$t('notes.graphEmptyDetail')} />
+    </div>
   {/if}
 </div>
 
@@ -434,11 +438,6 @@
     position: absolute;
     inset: 0;
     display: flex;
-    align-items: center;
-    justify-content: center;
-    margin: 0;
-    color: var(--text-tertiary);
-    font-size: var(--fz-list);
     pointer-events: none;
   }
 </style>

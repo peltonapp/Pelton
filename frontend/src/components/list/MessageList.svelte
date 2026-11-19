@@ -12,6 +12,9 @@
   import MessageSkeleton from './MessageSkeleton.svelte'
   import EmptyState from '../common/EmptyState.svelte'
   import ErrorState from '../common/ErrorState.svelte'
+  import funnelIcon from '@phosphor-icons/core/assets/duotone/funnel-duotone.svg?raw'
+  import trayIcon from '@phosphor-icons/core/assets/duotone/tray-duotone.svg?raw'
+  import searchIcon from '@phosphor-icons/core/assets/duotone/magnifying-glass-duotone.svg?raw'
   import {
     IconMail,
     IconArrowBackUp,
@@ -100,6 +103,10 @@
   import { threadedOn, threadMessages, loadThread } from '../../stores/threads'
   import { listRows, threadAware, type ListRow } from '../../lib/threadrows'
   import { motion } from '../../lib/motion'
+  import { parseRowActions, rowActionView, type RowActionId } from '../../lib/rowactions'
+  import { runRowAction } from '../../lib/rowactionrun'
+  import { newestHistoryId, offerUndo } from '../../stores/undohistory'
+  import { noteAction } from '../../lib/coach'
   import {
     setSeen,
     getMessage,
@@ -927,6 +934,30 @@
     await setOffline(item, !item.offline)
   }
 
+  // the quick buttons over a hovered row, new design only, and out of the
+  // way while a selection is being built.
+  $: rowActionList = !classic && $prefs.rowActions && selectionCount === 0 ? parseRowActions($prefs.rowActionList) : []
+
+  // onRowAction runs a quick button or a swipe of the new design on its row
+  // alone, through the same functions as the action's shortcut. A swipe also
+  // offers its undo, since nothing on screen says what the gesture did. A
+  // button that took its row away hands the focus back to the list.
+  async function onRowAction(item: MessageSummary, id: RowActionId, via: 'button' | 'swipe'): Promise<void> {
+    if (via === 'button') {
+      noteAction(rowActionView(id, { seen: item.seen, flagged: item.flagged, pinned: false, muted: false, inSpam: false }).shortcut)
+    }
+    const hadFocus = listEl?.contains(document.activeElement) ?? false
+    const since = newestHistoryId()
+    await runRowAction(id, item)
+    if (via === 'swipe') {
+      offerUndo(since)
+    }
+    await tick()
+    if (hadFocus && listEl && !listEl.contains(document.activeElement)) {
+      listEl.focus()
+    }
+  }
+
   // performSwipe runs the configured action for a swipe direction on a row.
   function performSwipe(item: MessageSummary, dir: 'left' | 'right'): void {
     const action = (dir === 'left' ? $prefs.swipeLeftAction : $prefs.swipeRightAction) as SwipeAction
@@ -1306,25 +1337,38 @@
     {:else if $messageList.status === 'error'}
       <ErrorState message={$messageList.error} onRetry={() => loadList($selection)} />
     {:else if items.length === 0 && quickOn && loadedItems.length > 0}
-      <EmptyState title={$t('quickFilter.empty')} detail={$t('quickFilter.emptyDetail')}>
-        <IconMail size={28} stroke={1.4} />
-        <button slot="action" type="button" class="load-older-btn" on:click={resetQuickFilter}>{$t('quickFilter.clear')}</button>
-      </EmptyState>
+      <EmptyState
+        kind="filtered"
+        icon={funnelIcon}
+        title={$t('quickFilter.empty')}
+        detail={$t('quickFilter.emptyDetail')}
+        actionLabel={$t('quickFilter.clear')}
+        onAction={resetQuickFilter}
+      />
     {:else if items.length === 0 && inboxShown && splitKey !== ''}
-      <EmptyState title={$t('split.empty')} detail={$t('split.emptyDetail')}>
-        <IconMail size={28} stroke={1.4} />
-      </EmptyState>
+      <EmptyState icon={trayIcon} title={$t('split.empty')} detail={$t('split.emptyDetail')} />
     {:else if items.length === 0 && inboxShown}
       {#if inboxFollowUps.length === 0}
         <InboxZero />
       {/if}
-    {:else if items.length === 0}
+    {:else if items.length === 0 && classic}
       <EmptyState
-        title={$searchQuery || inSearch ? $t('messageList.empty.noMatch') : $t('messageList.empty.noMessages')}
-        detail={$searchQuery || inSearch ? $t('messageList.empty.tryDifferentSearch') : $t('messageList.empty.viewEmpty')}
+        title={$searchQuery ? $t('messageList.empty.noMatch') : $t('messageList.empty.noMessages')}
+        detail={$searchQuery ? $t('messageList.empty.tryDifferentSearch') : $t('messageList.empty.viewEmpty')}
       >
         <IconMail size={28} stroke={1.4} />
       </EmptyState>
+    {:else if items.length === 0 && (inSearch || $searchQuery)}
+      <EmptyState
+        kind="filtered"
+        icon={searchIcon}
+        title={$t('messageList.empty.noMatch')}
+        detail={$t('messageList.empty.searchDetail')}
+        actionLabel={$t('common.clearSearch')}
+        onAction={clearSearch}
+      />
+    {:else if items.length === 0}
+      <EmptyState icon={trayIcon} title={$t('messageList.empty.noMessages')} detail={$t('messageList.empty.folderDetail')} />
     {:else}
       {#if topPad > 0}
         <div class="spacer" style={`height:${topPad}px`} aria-hidden="true"></div>
@@ -1361,6 +1405,9 @@
             accountColor={mixedAccounts ? (accountColors[item.accountId] ?? '') : ''}
             selected={item.id === $openMessageId || index === activeIndex}
             checked={$selectedIds.has(item.id)}
+            actions={rowActionList}
+            active={index === activeIndex}
+            on:rowaction={(e) => void onRowAction(item, e.detail.id, e.detail.via)}
             on:click={(e) => onRowClick(e, item.id)}
             on:auxclick={(e) => onRowAux(e, item)}
             on:dblclick={() => void openMessageWindow(item.id, item.subject)}

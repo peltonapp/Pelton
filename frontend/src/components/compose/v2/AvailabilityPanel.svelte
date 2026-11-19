@@ -5,7 +5,7 @@
   // the times picked into the message as plain lines of text with the time
   // zone named. Nothing is sent anywhere; the calendar is only read.
   import { createEventDispatcher, onDestroy, onMount } from 'svelte'
-  import '../../calendar/controls.css'
+  import '../../../theme/controls.css'
   import Segmented from '../../settings2/ui/Segmented.svelte'
   import Select from '../../common/Select.svelte'
   import ToggleSwitch from '../../common/ToggleSwitch.svelte'

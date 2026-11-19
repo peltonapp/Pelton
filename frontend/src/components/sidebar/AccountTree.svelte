@@ -12,6 +12,7 @@
   import { openCreateFolder } from '../../stores/folderdialog'
   import { folderDragAccount, startFolderDrag, endFolderDrag } from '../../stores/sidebardrag'
   import { reorder, type ReorderDetail } from '../../lib/reorder'
+  import { maildragSpring } from '../../stores/maildrag'
   import { refreshSidebar } from '../../stores/accounts'
   import { missingPassword, askForPassword } from '../../stores/passwordprompt'
   import { failedSyncs, showSyncFailure } from '../../stores/syncfailures'
@@ -62,10 +63,17 @@
   // one of the two is the user's to fix. A missing password already has its own
   // mark, so this stands down for it rather than showing two (#322).
   $: syncFailure = needsPassword ? undefined : $failedSyncs.find((s) => s.accountId === account.id)
+
+  // mail held over a collapsed account opens it, so its folders can take the drop.
+  function springOpen(): void {
+    if (!expanded) {
+      toggleAccountCollapsed(account.id)
+    }
+  }
 </script>
 
 <section class="account" class:dimmed data-reorder-id={account.id}>
-  <div class="account-row">
+  <div class="account-row" use:maildragSpring={springOpen}>
     <button
       type="button"
       class="account-head"

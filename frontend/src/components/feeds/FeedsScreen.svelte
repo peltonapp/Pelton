@@ -12,7 +12,7 @@
   // spaces, it loads when first opened.
   import { createEventDispatcher, onDestroy, onMount, tick } from 'svelte'
   import { fade, fly } from 'svelte/transition'
-  import '../calendar/controls.css'
+  import '../../theme/controls.css'
   import FeedSidebar from './FeedSidebar.svelte'
   import FeedEntryList from './FeedEntryList.svelte'
   import FeedReader from './FeedReader.svelte'

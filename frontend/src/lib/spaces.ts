@@ -11,7 +11,11 @@ import notesIcon from '@phosphor-icons/core/assets/duotone/notebook-duotone.svg?
 import feedsIcon from '@phosphor-icons/core/assets/duotone/rss-duotone.svg?raw'
 import chatIcon from '@phosphor-icons/core/assets/duotone/chats-circle-duotone.svg?raw'
 import { derived, get } from 'svelte/store'
-import { prefs } from '../stores/prefs'
+import { IconAdjustmentsHorizontal, IconArrowDown, IconArrowLeft, IconArrowRight, IconArrowUp, IconEye, IconEyeOff } from '@tabler/icons-svelte'
+import { prefs, setHiddenSpaces, setSpaceOrder } from '../stores/prefs'
+import { openSettingsAt } from '../stores/settingsnav'
+import type { MenuEntry } from '../stores/contextmenu'
+import { applyShownOrder, canHide, hiddenSpaces, moveInList, moveShown, orderSpaces, serializeHidden, serializeOrder } from './spaceorder'
 import type { Space } from './types'
 import type { MailDropOptions } from '../stores/maildrag'
 import { contactSeed } from '../stores/contacts'
@@ -86,6 +90,9 @@ export function spaceDrop(key: Space): MailDropOptions {
         const tr = get(t)
         return get(space) === 'notes' && get(activeNote) ? tr('notes.drop.insert') : tr('notes.drop.new')
       }
+      if (key === 'contacts') {
+        return get(t)('contacts.drop.new')
+      }
       return ''
     },
   }
@@ -108,5 +115,128 @@ export function spaceEnabled(key: Space, p: { chatEnabled: boolean }): boolean {
   return key !== 'chat' || p.chatEnabled
 }
 
-/** The spaces to show, in display order. */
-export const visibleSpaces = derived(prefs, ($p) => spaces.filter((s) => spaceEnabled(s.key, $p)))
+const allKeys = spaces.map((s) => s.key)
+const byKey = new Map(spaces.map((s) => [s.key, s]))
+
+/** A space as the navigation lists it. */
+export interface NavEntry extends SpaceEntry {
+  /** Left out of the navigation by the user. */
+  hidden: boolean
+  /** Shown only because it is open while hidden. */
+  transient?: boolean
+}
+
+/** Every switched-on space in the user's order, hidden ones included and marked. */
+export const orderedSpaces = derived(prefs, ($p): NavEntry[] => {
+  const hidden = hiddenSpaces(allKeys, $p.hiddenSpaces)
+  return orderSpaces(allKeys, $p.spaceOrder)
+    .filter((key) => spaceEnabled(key, $p))
+    .map((key) => ({ ...(byKey.get(key) as SpaceEntry), hidden: hidden.has(key) }))
+})
+
+/** The spaces in the navigation: the user's order, without the hidden ones. */
+export const visibleSpaces = derived(orderedSpaces, ($o) => $o.filter((s) => !s.hidden))
+
+/**
+ * What the rail and the switchers draw: the visible spaces, plus a hidden one
+ * at its place in the order while it is open, so the open space always has an
+ * entry.
+ */
+export const navSpaces = derived([orderedSpaces, space], ([$o, $space]): NavEntry[] =>
+  $o.filter((s) => !s.hidden || s.key === $space).map((s) => (s.hidden ? { ...s, transient: true } : s)),
+)
+
+function currentOrder(): { order: Space[]; hidden: Set<Space> } {
+  const p = get(prefs)
+  return { order: orderSpaces(allKeys, p.spaceOrder), hidden: hiddenSpaces(allKeys, p.hiddenSpaces) }
+}
+
+function storeOrder(order: Space[]): void {
+  setSpaceOrder(serializeOrder(allKeys, order))
+}
+
+/** Leaves a space out of the navigation, or puts it back. Mail always stays. */
+export function setSpaceHidden(key: Space, hide: boolean): void {
+  if (hide && !canHide(key)) {
+    return
+  }
+  const { order, hidden } = currentOrder()
+  if (hide) {
+    hidden.add(key)
+  } else {
+    hidden.delete(key)
+  }
+  setHiddenSpaces(serializeHidden(order, hidden))
+}
+
+/** Moves a space past its neighbour among the spaces the navigation shows. */
+export function moveSpaceShown(key: Space, delta: number): void {
+  const { order, hidden } = currentOrder()
+  storeOrder(moveShown(order, hidden, key, delta))
+}
+
+// the spaces switched off keep their slots while the listed ones move, so a
+// move never passes one that is not on screen.
+function switchedOff(): Set<Space> {
+  const p = get(prefs)
+  return new Set(allKeys.filter((k) => !spaceEnabled(k, p)))
+}
+
+/** Moves a space past its neighbour in the settings list, hidden ones included. */
+export function moveSpaceListed(key: Space, delta: number): void {
+  const { order } = currentOrder()
+  const off = switchedOff()
+  storeOrder(applyShownOrder(order, off, moveInList(order.filter((k) => !off.has(k)), key, delta)))
+}
+
+/** Puts the spaces of the settings list in a new order, after a drag. */
+export function reorderListedSpaces(keys: string[]): void {
+  const known = keys.filter((k): k is Space => byKey.has(k as Space))
+  storeOrder(applyShownOrder(currentOrder().order, switchedOff(), known))
+}
+
+/** Puts the spaces the navigation shows in a new order, after a drag. */
+export function reorderShownSpaces(keys: string[]): void {
+  const { order, hidden } = currentOrder()
+  const known = keys.filter((k): k is Space => byKey.has(k as Space))
+  storeOrder(applyShownOrder(order, hidden, known))
+}
+
+/** Puts every space back in the default order, all of them shown. */
+export function resetSpaceNav(): void {
+  setSpaceOrder('')
+  setHiddenSpaces('')
+}
+
+/** The settings row where the navigation is customized. */
+export const navSettingsAnchor = 'layout#spaces'
+
+/**
+ * The right-click menu of a space in the navigation: hide or show it, move it
+ * along, and the way to the settings row. axis says which way the entries run,
+ * for the wording of the moves.
+ */
+export function spaceMenu(entry: NavEntry, axis: 'x' | 'y'): MenuEntry[] {
+  const tr = get(t)
+  const shown = get(visibleSpaces)
+  const at = shown.findIndex((s) => s.key === entry.key)
+  const out: MenuEntry[] = []
+  if (entry.transient) {
+    out.push({ label: tr('spaces.menu.show'), icon: IconEye, action: () => setSpaceHidden(entry.key, false) })
+  } else {
+    if (at > 0) {
+      out.push({ label: tr(axis === 'x' ? 'spaces.menu.moveLeft' : 'spaces.menu.moveUp'), icon: axis === 'x' ? IconArrowLeft : IconArrowUp, action: () => moveSpaceShown(entry.key, -1) })
+    }
+    if (at >= 0 && at < shown.length - 1) {
+      out.push({ label: tr(axis === 'x' ? 'spaces.menu.moveRight' : 'spaces.menu.moveDown'), icon: axis === 'x' ? IconArrowRight : IconArrowDown, action: () => moveSpaceShown(entry.key, 1) })
+    }
+    if (canHide(entry.key)) {
+      out.push({ label: tr('spaces.menu.hide'), icon: IconEyeOff, action: () => setSpaceHidden(entry.key, true) })
+    }
+  }
+  if (out.length > 0) {
+    out.push('separator')
+  }
+  out.push({ label: tr('spaces.menu.customize'), icon: IconAdjustmentsHorizontal, action: () => openSettingsAt(navSettingsAnchor) })
+  return out
+}

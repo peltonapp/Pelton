@@ -5,7 +5,7 @@
   import { createEventDispatcher, tick } from 'svelte'
   import backIcon from '@phosphor-icons/core/assets/duotone/arrow-left-duotone.svg?raw'
   import moreIcon from '@phosphor-icons/core/assets/regular/dots-three.svg?raw'
-  import '../calendar/controls.css'
+  import '../../theme/controls.css'
   import Ph from '../common/Ph.svelte'
   import PieProgress from '../common/PieProgress.svelte'
   import ProjectBoard from './ProjectBoard.svelte'

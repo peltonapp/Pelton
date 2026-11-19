@@ -8,6 +8,8 @@
   import { fade, fly } from 'svelte/transition'
   import { cubicOut } from 'svelte/easing'
   import Ph from '../common/Ph.svelte'
+  import EmptyState from '../common/EmptyState.svelte'
+  import PieProgress from '../common/PieProgress.svelte'
   import ContactSidebar from './ContactSidebar.svelte'
   import ContactList from './ContactList.svelte'
   import ContactGrid from './ContactGrid.svelte'
@@ -43,6 +45,8 @@
   import { revealMessage } from '../../stores/selection'
   import { prefs, setContactsView } from '../../stores/prefs'
   import { organizationCounts } from '../../lib/contactlist'
+  import { popupIsOpen } from '../../lib/popups'
+  import { isEditableTarget } from '../../lib/editable'
   import { dur, motion } from '../../lib/motion'
   import { t } from '../../lib/i18n'
   import type { Contact, ContactDraft, ContactsView, MessageSummary } from '../../lib/types'
@@ -134,6 +138,11 @@
         }
         input.focus()
         input.select()
+      },
+      sync: () => {
+        if (!$contactsLoading) {
+          void refreshContacts()
+        }
       },
     })
     return () => {
@@ -249,6 +258,16 @@
     if (event.key === 'Escape' && sideOpen) {
       event.stopPropagation()
       sideOpen = false
+    } else if (
+      event.key === 'Escape' &&
+      paneOpen &&
+      editing === null &&
+      (view === 'grid' || mode === 'narrow') &&
+      !popupIsOpen() &&
+      !isEditableTarget(event.target)
+    ) {
+      event.stopPropagation()
+      void dismissPane()
     }
   }
 
@@ -312,7 +331,11 @@
         {#if $duplicateGroups.length > 0}<span class="badge" aria-hidden="true">{$duplicateGroups.length}</span>{/if}
       </button>
       <button type="button" class="btn" on:click={refreshContacts} disabled={$contactsLoading}>
-        <span class="spin" class:on={$contactsLoading}><Ph svg={syncIcon} size={16} /></span>
+        {#if $contactsLoading}
+          <PieProgress size={16} label={$t('contacts.loading')} />
+        {:else}
+          <Ph svg={syncIcon} size={16} />
+        {/if}
         {#if mode !== 'narrow'}{$t('contacts.sync')}{/if}
       </button>
       <button type="button" class="btn primary" on:click={() => startCreate()} disabled={$addressBooks.length === 0}>
@@ -335,11 +358,14 @@
   {/if}
 
   {#if $addressBooks.length === 0 && ready}
-    <div class="empty">
-      <Ph svg={bookIcon} size={32} />
-      <p>{$t('contacts.noBooks')}</p>
-      <button type="button" class="btn primary" on:click={manageBooks}>{$t('contacts.addBook')}</button>
-    </div>
+    <EmptyState
+      kind="setup"
+      icon={bookIcon}
+      title={$t('contacts.noBooksTitle')}
+      detail={$t('contacts.noBooksDetail')}
+      actionLabel={$t('contacts.addBook')}
+      onAction={manageBooks}
+    />
   {:else if duplicatesOpen}
     <ContactDuplicates on:back={() => (duplicatesOpen = false)} />
   {:else}
@@ -349,9 +375,9 @@
       {/if}
 
       {#if view === 'grid'}
-        <ContactGrid on:select={(e) => select(e.detail)} />
+        <ContactGrid on:select={(e) => select(e.detail)} on:create={() => startCreate()} />
       {:else if mode !== 'narrow' || !paneOpen}
-        <ContactList on:select={(e) => select(e.detail)} />
+        <ContactList on:select={(e) => select(e.detail)} on:create={() => startCreate()} />
       {/if}
 
       {#if view === 'panes' && mode !== 'narrow'}
@@ -430,9 +456,9 @@
     display: flex;
     align-items: center;
     gap: var(--space-3);
-    padding: var(--space-2) var(--space-3);
+    min-height: calc(var(--control-height) + 2 * var(--space-3));
+    padding: var(--space-3) var(--space-4);
     border-bottom: var(--hairline) solid var(--border-default);
-    background: var(--surface-raised);
   }
 
   .title {
@@ -459,7 +485,7 @@
 
   .switch {
     display: inline-flex;
-    padding: 2px;
+    padding: var(--space-1);
     border: var(--hairline) solid var(--border-default);
     border-radius: var(--radius-control);
     background: var(--surface-sunken);
@@ -549,19 +575,6 @@
     cursor: default;
   }
 
-  .spin {
-    display: inline-flex;
-  }
-
-  .spin.on {
-    animation: spin 900ms linear infinite;
-  }
-
-  @keyframes spin {
-    to {
-      transform: rotate(360deg);
-    }
-  }
 
   .icon {
     display: inline-flex;
@@ -663,24 +676,6 @@
 
   .drawer.full {
     width: 100%;
-  }
-
-  .empty {
-    display: flex;
-    flex: 1;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    gap: var(--space-3);
-    padding: var(--space-5);
-    color: var(--text-tertiary);
-    font-size: var(--fz-body);
-    text-align: center;
-  }
-
-  .empty p {
-    margin: 0;
-    max-width: 360px;
   }
 
   @media (prefers-reduced-motion: reduce) {

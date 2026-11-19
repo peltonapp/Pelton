@@ -24,7 +24,7 @@
   import envelopeIcon from '@phosphor-icons/core/assets/duotone/envelope-simple-duotone.svg?raw'
   import eventIcon from '@phosphor-icons/core/assets/duotone/calendar-check-duotone.svg?raw'
   import warningIcon from '@phosphor-icons/core/assets/duotone/warning-duotone.svg?raw'
-  import '../calendar/controls.css'
+  import '../../theme/controls.css'
   import Ph from '../common/Ph.svelte'
   import Select from '../common/Select.svelte'
   import AnchoredPopover from '../common/AnchoredPopover.svelte'

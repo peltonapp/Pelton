@@ -1258,6 +1258,45 @@ export function removeImageAllow(kind: 'sender' | 'domain', value: string): Prom
   return App.RemoveImageAllow(kind, value)
 }
 
+/** How the reader shows one sender's mail; empty colors and 0 follow the global settings. */
+export interface SenderReading {
+  address: string
+  colors: '' | 'adapt' | 'original'
+  fontSize: number
+}
+
+/** listSenderReading returns every sender with a remembered reading choice. */
+export async function listSenderReading(): Promise<SenderReading[]> {
+  if (isDemoActive()) {
+    return []
+  }
+  return (await App.ListSenderReading()).map((r) => ({ address: r.address, colors: r.colors as SenderReading['colors'], fontSize: r.fontSize }))
+}
+
+/** setSenderColors remembers how html mail from a sender is coloured; '' forgets it. */
+export function setSenderColors(address: string, colors: SenderReading['colors']): Promise<void> {
+  if (isDemoActive()) {
+    return Promise.resolve()
+  }
+  return App.SetSenderColors(address, colors)
+}
+
+/** setSenderFontSize remembers the reader text size for a sender in px; 0 forgets it. */
+export function setSenderFontSize(address: string, size: number): Promise<void> {
+  if (isDemoActive()) {
+    return Promise.resolve()
+  }
+  return App.SetSenderFontSize(address, size)
+}
+
+/** resetSenderReading forgets every remembered sender choice and says how many there were. */
+export function resetSenderReading(): Promise<number> {
+  if (isDemoActive()) {
+    return Promise.resolve(0)
+  }
+  return App.ResetSenderReading()
+}
+
 // listVIPSenders returns the addresses the user has marked as VIP (#126).
 export function listVIPSenders(): Promise<string[]> {
   return App.ListVIPSenders()
@@ -1970,9 +2009,16 @@ export const SettingKeys = {
   coachHold: 'coach_hold',
   // the shortcut coach's counters: hints shown and keys used, per action.
   coachCounters: 'shortcut_coach',
+  showTips: 'show_tips',
+  // the one-time tips already shown, as a json list of tip ids.
+  tipsSeen: 'tips_seen',
+  // the what's new entries last looked at, as a release line and content hash.
+  lastSeenVersion: 'last_seen_version',
   harvestAddresses: 'harvest_addresses',
   accountEmail: 'show_account_email',
   onboarded: 'onboarding_complete',
+  // where a setup run stopped, so the next launch resumes at that step.
+  onboardingProgress: 'onboarding_progress',
   alwaysLoadImages: 'remote_images_always',
   avatarSource: 'avatar_source',
   avatarStyle: 'avatar_style',
@@ -2001,6 +2047,13 @@ export const SettingKeys = {
   swipeEnabled: 'swipe_enabled',
   swipeLeftAction: 'swipe_left_action',
   swipeRightAction: 'swipe_right_action',
+  swipeLeftShort: 'swipe_left_short',
+  swipeLeftLong: 'swipe_left_long',
+  swipeRightShort: 'swipe_right_short',
+  swipeRightLong: 'swipe_right_long',
+  rowActions: 'row_actions',
+  rowActionList: 'row_action_list',
+  htmlColors: 'html_colors',
   composeVimMode: 'compose_vim_mode',
   downloadIncludeAttachments: 'download_include_attachments',
   appVimMode: 'app_vim_mode',
@@ -2021,6 +2074,8 @@ export const SettingKeys = {
   navStyle: 'nav_style',
   railSide: 'rail_side',
   railPins: 'rail_pins',
+  spaceOrder: 'space_order',
+  hiddenSpaces: 'hidden_spaces',
   paneStyle: 'pane_style',
   avatarPlacement: 'avatar_placement',
   contactsView: 'contacts_view',

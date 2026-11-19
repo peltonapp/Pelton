@@ -14,7 +14,7 @@
   import overdueIcon from '@phosphor-icons/core/assets/duotone/hourglass-duotone.svg?raw'
   import nodateIcon from '@phosphor-icons/core/assets/duotone/circle-dashed-duotone.svg?raw'
   import doneIcon from '@phosphor-icons/core/assets/duotone/check-circle-duotone.svg?raw'
-  import '../calendar/controls.css'
+  import '../../theme/controls.css'
   import Ph from '../common/Ph.svelte'
   import AnchoredPopover from '../common/AnchoredPopover.svelte'
   import ColorSwatches from '../calendar/ColorSwatches.svelte'

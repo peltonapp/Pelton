@@ -162,6 +162,7 @@ export {
     SearchRequestDTO,
     SearchResultDTO,
     SenderOverviewDTO,
+    SenderReadingDTO,
     SettingResult,
     SieveCapsDTO,
     SieveSaveDTO,

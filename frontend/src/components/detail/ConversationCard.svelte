@@ -23,6 +23,8 @@
   import { dur, motion } from '../../lib/motion'
   import { t } from '../../lib/i18n'
   import type { MessageDetail, MessageSummary } from '../../lib/types'
+  import { choiceFor, senderReading } from '../../stores/senderreading'
+  import { countWords, readingMinutes, visibleText } from '../../lib/readingtime'
 
   /** The message as listed, which the closed line is drawn from. */
   export let message: MessageSummary
@@ -36,6 +38,14 @@
   export let fromMe: boolean = false
   /** The full message could not be loaded. */
   export let error: string = ''
+  /** Sets the body for the reading view: roomier lines. */
+  export let roomy: boolean = false
+
+  // the text size kept for this sender, or 0 for the global size.
+  $: senderSize = choiceFor($senderReading, message.fromAddress).fontSize
+  // how long the body takes to read, said only for a long one.
+  $: minutes = detail && textful ? readingMinutes(countWords(visibleText(detail))) : 0
+  $: readingLabel = minutes > 0 ? $t('reader.readingTime').replace('{n}', String(minutes)) : ''
 
   const dispatch = createEventDispatcher<{
     toggle: void
@@ -85,7 +95,7 @@
     <!-- svelte-ignore a11y-click-events-have-key-events a11y-no-static-element-interactions -->
     <div class="head" class:closable on:click={onHeadClick}>
       {#if detail}
-        <DetailHeader {detail} compact>
+        <DetailHeader {detail} compact readingTime={readingLabel}>
           <div slot="actions" class="actions">
             <button
               type="button"
@@ -126,7 +136,7 @@
         {#if detail.pgpState !== '' && detail.pgpState !== 'open'}
           <ProtectedNotice state={detail.pgpState} messageId={detail.id} on:opened={() => dispatch('reload')} />
         {:else if textful}
-          <MailBody {detail} collapseQuotes />
+          <MailBody {detail} collapseQuotes adaptive fontSize={senderSize} {roomy} />
         {:else}
           <p class="no-text">{$t('messageList.noText')}</p>
         {/if}

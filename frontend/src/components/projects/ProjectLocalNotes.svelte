@@ -9,7 +9,7 @@
   import backIcon from '@phosphor-icons/core/assets/duotone/caret-left-duotone.svg?raw'
   import trashIcon from '@phosphor-icons/core/assets/duotone/trash-duotone.svg?raw'
   import noteIcon from '@phosphor-icons/core/assets/duotone/note-pencil-duotone.svg?raw'
-  import '../calendar/controls.css'
+  import '../../theme/controls.css'
   import Ph from '../common/Ph.svelte'
   import PieProgress from '../common/PieProgress.svelte'
   import EmptyState from '../common/EmptyState.svelte'
@@ -194,9 +194,13 @@
       {#if !loaded}
         <div class="loading"><PieProgress label={$t('projects.loading')} /></div>
       {:else if notes.length === 0}
-        <EmptyState title={$t('projects.notes.emptyTitle')} detail={$t('projects.notes.emptyDetail')}>
-          <Ph svg={noteIcon} size={26} />
-        </EmptyState>
+        <EmptyState
+          icon={noteIcon}
+          title={$t('projects.notes.emptyTitle')}
+          detail={$t('projects.notes.emptyDetail')}
+          actionLabel={$t('projects.notes.new')}
+          onAction={() => void create()}
+        />
       {:else}
         <ul role="listbox" aria-label={$t('projects.tab.notes')}>
           {#each notes as note (note.id)}

@@ -19,7 +19,7 @@
   import envelopeIcon from '@phosphor-icons/core/assets/duotone/envelope-simple-duotone.svg?raw'
   import plusIcon from '@phosphor-icons/core/assets/regular/plus.svg?raw'
   import closeIcon from '@phosphor-icons/core/assets/regular/x.svg?raw'
-  import './controls.css'
+  import '../../theme/controls.css'
   import Modal from '../common/Modal.svelte'
   import Select from '../common/Select.svelte'
   import ToggleSwitch from '../common/ToggleSwitch.svelte'

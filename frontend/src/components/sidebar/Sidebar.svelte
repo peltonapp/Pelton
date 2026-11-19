@@ -12,6 +12,8 @@
   import Spinner from '../common/Spinner.svelte'
   import ErrorState from '../common/ErrorState.svelte'
   import EmptyState from '../common/EmptyState.svelte'
+  import PieProgress from '../common/PieProgress.svelte'
+  import mailboxIcon from '@phosphor-icons/core/assets/duotone/tray-duotone.svg?raw'
   import { sidebar, loadSidebar } from '../../stores/accounts'
   import { views, openViewEditor, editViewInEditor } from '../../stores/views'
   import { syncing } from '../../stores/outbox'
@@ -26,6 +28,7 @@
   import { tip } from '../../lib/tip'
   import { selection } from '../../stores/selection'
   import { reorder, type ReorderDetail } from '../../lib/reorder'
+  import { maildragScroll } from '../../stores/maildrag'
   import { reorderAccounts } from '../../lib/api'
   import { toastError, errorMessage } from '../../stores/toast'
   import type { View } from '../../lib/types'
@@ -112,13 +115,27 @@
     {/if}
   </div>
 
-  <div class="scroll">
+  <div class="scroll" use:maildragScroll>
     {#if $sidebar.status === 'loading' && !$sidebar.data}
-      <Spinner label={$t('sidebar.loading.mailboxes')} />
+      {#if $prefs.design === 'classic'}
+        <Spinner label={$t('sidebar.loading.mailboxes')} />
+      {:else}
+        <div class="loading"><PieProgress size={20} label={$t('sidebar.loading.mailboxes')} /></div>
+      {/if}
     {:else if $sidebar.status === 'error'}
       <ErrorState message={$sidebar.error} onRetry={loadSidebar} />
     {:else if $sidebar.data}
-      {#if $sidebar.data.accounts.length === 0}
+      {#if $sidebar.data.accounts.length === 0 && $prefs.design !== 'classic'}
+        <EmptyState
+          kind="setup"
+          icon={mailboxIcon}
+          title={$t('sidebar.empty.title')}
+          detail={$t('sidebar.empty.setupDetail')}
+          actionLabel={$t('addMailbox.cta')}
+          onAction={() => dispatch('addMailbox')}
+          shortcut="add-mailbox"
+        />
+      {:else if $sidebar.data.accounts.length === 0}
         <EmptyState
           title={$t('sidebar.empty.title')}
           detail={$t('sidebar.empty.detail')}
@@ -285,6 +302,12 @@
     min-height: 0;
     overflow-y: auto;
     padding: var(--space-3) var(--space-2);
+  }
+
+  .loading {
+    display: flex;
+    justify-content: center;
+    padding: var(--space-5);
   }
 
   .tabs {

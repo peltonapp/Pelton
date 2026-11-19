@@ -2,29 +2,30 @@
   // the empty inbox of the new design: a thin ring drawn closed and one line
   // under it. it stays quiet on purpose, an empty inbox is the normal state
   // after a run of done, not an event.
+  import EmptyState from '../common/EmptyState.svelte'
   import { t } from '../../lib/i18n'
 </script>
 
-<div class="zero" role="status">
-  <svg class="mark" viewBox="0 0 48 48" aria-hidden="true">
-    <circle class="track" cx="24" cy="24" r="20" />
-    <circle class="ring" cx="24" cy="24" r="20" pathLength="100" />
-    <path class="tick" d="M16 24.5 l5.5 5.5 L32 19" pathLength="100" />
-  </svg>
-  <p>{$t('inboxZero.line')}</p>
+<div class="zero">
+  <EmptyState title={$t('inboxZero.line')}>
+    <svg class="mark" viewBox="0 0 48 48" aria-hidden="true">
+      <circle class="track" cx="24" cy="24" r="20" />
+      <circle class="ring" cx="24" cy="24" r="20" pathLength="100" />
+      <path class="tick" d="M16 24.5 l5.5 5.5 L32 19" pathLength="100" />
+    </svg>
+  </EmptyState>
 </div>
 
 <style>
   .zero {
     display: flex;
     flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    gap: var(--space-4);
     height: 100%;
-    padding: var(--space-6);
-    color: var(--text-tertiary);
     animation: settle var(--motion-slow) var(--ease-out);
+  }
+
+  .zero :global(.icon) {
+    opacity: 1;
   }
 
   .mark {
@@ -55,12 +56,6 @@
     stroke-width: 1.75;
     stroke-dasharray: 100;
     animation: draw var(--motion-slow) var(--ease-out) var(--motion-fast) both;
-  }
-
-  p {
-    margin: 0;
-    font-size: var(--fz-label);
-    color: var(--text-secondary);
   }
 
   @keyframes draw {

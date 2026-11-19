@@ -21,7 +21,7 @@
   import prepareIcon from '@phosphor-icons/core/assets/duotone/clipboard-text-duotone.svg?raw'
   import { mailLinks, openMailLink } from '../../lib/maillink'
   import { openMeetingPrep } from '../../stores/meetingprep'
-  import './controls.css'
+  import '../../theme/controls.css'
   import Ph from '../common/Ph.svelte'
   import PieProgress from '../common/PieProgress.svelte'
   import AnchoredPopover from '../common/AnchoredPopover.svelte'

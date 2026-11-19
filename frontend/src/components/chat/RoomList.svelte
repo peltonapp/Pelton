@@ -9,6 +9,8 @@
   import lockIcon from '@phosphor-icons/core/assets/duotone/lock-simple-duotone.svg?raw'
   import Ph from '../common/Ph.svelte'
   import PieProgress from '../common/PieProgress.svelte'
+  import EmptyState from '../common/EmptyState.svelte'
+  import chatIcon from '@phosphor-icons/core/assets/duotone/chats-circle-duotone.svg?raw'
   import ChatAvatar from './ChatAvatar.svelte'
   import { chatRooms, refreshRooms, chatError } from '../../stores/chat'
   import { chatJoin, chatLeave } from '../../lib/api'
@@ -124,10 +126,27 @@
     {#if loading}
       <div class="note">
         <PieProgress label={$t('chat.space.loading')} />
-        <span>{$t('chat.space.loading')}</span>
       </div>
+    {:else if flat.length === 0 && (query || spaceFilter)}
+      <EmptyState
+        kind="filtered"
+        icon={searchIcon}
+        title={$t('chat.search.empty')}
+        detail={$t('chat.search.emptyDetail')}
+        actionLabel={$t('common.clearFilter')}
+        onAction={() => {
+          query = ''
+          spaceFilter = ''
+        }}
+      />
     {:else if flat.length === 0}
-      <p class="note">{query ? $t('chat.search.empty') : $t('chat.rooms.none')}</p>
+      <EmptyState
+        icon={chatIcon}
+        title={$t('chat.rooms.none')}
+        detail={$t('chat.rooms.noneDetail')}
+        actionLabel={$t('chat.new.title')}
+        onAction={() => dispatch('new')}
+      />
     {/if}
     {#each sections as section (section.key)}
       <h3 class="section">{$t(section.labelKey)}</h3>

@@ -21,6 +21,7 @@
   import templateIcon from '@phosphor-icons/core/assets/duotone/files-duotone.svg?raw'
   import kanbanIcon from '@phosphor-icons/core/assets/duotone/kanban-duotone.svg?raw'
   import Ph from '../common/Ph.svelte'
+  import EmptyState from '../common/EmptyState.svelte'
   import MiniMonth from '../calendar/MiniMonth.svelte'
   import { folderCounts, folderRows, type NoteScope } from '../../lib/notelist'
   import { noteTitle } from '../../lib/notemd'
@@ -295,7 +296,12 @@
           {/each}
         </ul>
         {#if rows.length === 0}
-          <p class="empty">{$t('notes.noFolders')}</p>
+          <EmptyState
+            size="compact"
+            title={$t('notes.noFolders')}
+            actionLabel={$t('notes.newFolder')}
+            onAction={() => dispatch('newFolder', '')}
+          />
         {/if}
       </div>
     </section>
@@ -583,11 +589,5 @@
 
   .drop-root.over {
     outline: var(--hairline) dashed var(--accent);
-  }
-
-  .empty {
-    margin: var(--space-2);
-    font-size: var(--fz-label);
-    color: var(--text-tertiary);
   }
 </style>

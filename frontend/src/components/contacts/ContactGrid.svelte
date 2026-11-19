@@ -3,15 +3,14 @@
   // contact under the same headers as the list; a card opens the contact in the
   // drawer the space slides in.
   import { createEventDispatcher } from 'svelte'
-  import Spinner from '../common/Spinner.svelte'
+  import ContactListEmpty from './ContactListEmpty.svelte'
   import ContactAvatar from './ContactAvatar.svelte'
   import ContactFilterBar from './ContactFilterBar.svelte'
-  import { contacts, contactsLoading } from '../../stores/contacts'
-  import { contactQuery, contactSort, selectedContactId, visibleContacts } from '../../stores/contactsview'
+  import { contactSort, selectedContactId, visibleContacts } from '../../stores/contactsview'
   import { displayName, sectionContacts } from '../../lib/contactlist'
   import { t } from '../../lib/i18n'
 
-  const dispatch = createEventDispatcher<{ select: number }>()
+  const dispatch = createEventDispatcher<{ select: number; create: void }>()
 
   $: sections = sectionContacts($visibleContacts, $contactSort, $t('contacts.sort.noOrganization'))
 </script>
@@ -19,10 +18,8 @@
 <div class="grid-pane">
   <ContactFilterBar />
   <div class="scroller">
-    {#if $contactsLoading && $contacts.length === 0}
-      <div class="note"><Spinner /></div>
-    {:else if $visibleContacts.length === 0}
-      <p class="note">{$contactQuery.trim() ? $t('contacts.noMatches') : $t('contacts.emptyBook')}</p>
+    {#if $visibleContacts.length === 0}
+      <ContactListEmpty on:create={() => dispatch('create')} />
     {:else}
       <div class="sections">
         {#each sections as section (section.key)}
@@ -169,17 +166,6 @@
 
   .line {
     color: var(--text-secondary);
-  }
-
-  .note {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    margin: 0;
-    padding: var(--space-5);
-    color: var(--text-tertiary);
-    font-size: var(--fz-body);
-    text-align: center;
   }
 
   @keyframes settle {

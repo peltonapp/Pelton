@@ -7,6 +7,8 @@
   import warningIcon from '@phosphor-icons/core/assets/duotone/warning-duotone.svg?raw'
   import Ph from '../common/Ph.svelte'
   import PieProgress from '../common/PieProgress.svelte'
+  import EmptyState from '../common/EmptyState.svelte'
+  import chatIcon from '@phosphor-icons/core/assets/duotone/chats-circle-duotone.svg?raw'
   import RoomList from './RoomList.svelte'
   import RoomView from './RoomView.svelte'
   import RoomInfo from './RoomInfo.svelte'
@@ -105,11 +107,11 @@
 <section class="chat" class:narrow bind:this={host} aria-label={$t('space.chat')}>
   {#if signedOut}
     <div class="signin">
-      <div class="signin-card">
-        <h2>{$t('chat.space.signInTitle')}</h2>
-        <p class="lead">{$t('chat.space.signInLead')}</p>
-        <ChatSignIn />
-      </div>
+      <EmptyState kind="setup" level={2} icon={chatIcon} title={$t('chat.space.signInTitle')} detail={$t('chat.space.signInLead')}>
+        <div slot="action" class="signin-card">
+          <ChatSignIn />
+        </div>
+      </EmptyState>
     </div>
   {:else}
     {#if $chatStatus.state === 'error'}
@@ -140,10 +142,14 @@
         <div class="empty">
           {#if firstLoad}
             <PieProgress size={20} label={$t('chat.space.loading')} />
-            <p>{$t('chat.space.loading')}</p>
           {:else}
-            <p>{$t('chat.space.pickRoom')}</p>
-            <button type="button" class="btn" on:click={() => (newChatOpen = true)}>{$t('chat.new.title')}</button>
+            <EmptyState
+              icon={chatIcon}
+              title={$t('chat.space.noRoomOpen')}
+              detail={$t('chat.space.pickRoom')}
+              actionLabel={$t('chat.new.title')}
+              onAction={() => (newChatOpen = true)}
+            />
           {/if}
         </div>
       {/if}
@@ -187,12 +193,7 @@
     flex-direction: column;
     align-items: center;
     justify-content: center;
-    gap: var(--space-3);
-    color: var(--text-tertiary);
-    font-size: var(--fz-body);
-  }
-  .empty p {
-    margin: 0;
+    min-height: 0;
   }
 
   .banner {
@@ -230,37 +231,14 @@
   .signin {
     flex: 1;
     display: flex;
-    align-items: flex-start;
-    justify-content: center;
-    padding: var(--space-6) var(--pane-pad);
+    flex-direction: column;
+    min-height: 0;
     overflow: auto;
   }
   .signin-card {
     width: min(var(--chat-signin-width), 100%);
-  }
-  .signin-card h2 {
-    margin: 0 0 var(--space-1);
-    font-size: var(--fz-title);
-    font-weight: var(--fw-semibold);
-  }
-  .lead {
-    margin: 0 0 var(--space-4);
-    color: var(--text-secondary);
-    font-size: var(--fz-body);
-  }
-
-  .btn {
-    height: var(--control-height);
-    padding: 0 var(--space-3);
-    border: var(--hairline) solid var(--border-default);
-    border-radius: var(--radius-control);
-    background: var(--surface-raised);
+    margin-top: var(--space-3);
     color: var(--text-primary);
-    font: inherit;
-    font-size: var(--fz-body);
-    cursor: var(--cursor-action);
-  }
-  .btn:hover {
-    background: var(--surface-hover);
+    text-align: start;
   }
 </style>

@@ -160,11 +160,6 @@
     border-style: dashed;
   }
 
-  .card:global(.maildrop-over) {
-    border-color: var(--accent);
-    box-shadow: 0 0 0 1px var(--accent);
-  }
-
   .top {
     display: flex;
     align-items: flex-start;

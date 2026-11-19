@@ -20,6 +20,7 @@ vi.mock('./api', async (importOriginal) => ({
 import { archive, bulkMarkFlagged, bulkMarkSeen, markColor, markFlagged, markSeen, moveToFolder, trashMessage } from './messageactions'
 import { clearHistory, history, redoLatest, undoLatest } from '../stores/undohistory'
 import { messageList } from '../stores/messages'
+import { toasts } from '../stores/toast'
 import { ready } from './async'
 import type { Folder, MessageSummary } from './types'
 
@@ -137,6 +138,17 @@ describe('moves and deletes', () => {
     api.moveMessage.mockResolvedValue(undo)
     await moveToFolder([message(1), message(2)], { id: 9, accountId: 1, name: 'Receipts', role: '' } as Folder)
     expect(get(history)[0]).toMatchObject({ kind: 'move', label: 'Moved to Receipts', count: 2 })
+  })
+
+  it('offers the move back from its toast', async () => {
+    api.moveMessage.mockResolvedValue(undo)
+    toasts.set([])
+    await moveToFolder([message(1)], { id: 9, accountId: 1, name: 'Receipts', role: '' } as Folder)
+    const toast = get(toasts).at(-1)
+    expect(toast?.action?.label).toBe('Undo')
+    toast?.action?.run()
+    await vi.waitFor(() => expect(api.restoreMessage).toHaveBeenCalled())
+    await vi.waitFor(() => expect(get(history)[0].state).toBe('undone'))
   })
 
   it('brings a deleted message back into the list and deletes it again on redo', async () => {

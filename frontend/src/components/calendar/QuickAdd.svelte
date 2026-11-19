@@ -14,8 +14,9 @@
   import mapPinIcon from '@phosphor-icons/core/assets/duotone/map-pin-duotone.svg?raw'
   import bellIcon from '@phosphor-icons/core/assets/duotone/bell-duotone.svg?raw'
   import infoIcon from '@phosphor-icons/core/assets/duotone/info-duotone.svg?raw'
-  import './controls.css'
+  import '../../theme/controls.css'
   import Ph from '../common/Ph.svelte'
+  import PieProgress from '../common/PieProgress.svelte'
   import Select from '../common/Select.svelte'
   import { parsePhrase, type ChronoLike, type PhraseResult, type PartKind } from '../../lib/eventphrase'
   import { loadChrono } from '../../lib/chronoload'
@@ -194,7 +195,7 @@
       {:else if !trimmed}
         <p class="quiet">{$t('quickAdd.hint')}</p>
       {:else if !special && !parsers}
-        <p class="quiet">{$t('calendar.loading')}</p>
+        <p class="quiet"><PieProgress label={$t('calendar.loading')} /></p>
       {:else}
         {#if special}
           {#if bundleNote}

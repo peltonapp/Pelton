@@ -5,7 +5,7 @@
 // source of truth.
 
 import { writable } from 'svelte/store'
-import type { QuickComposeStatus, UIPrefs, ThemePref, DensityPref, EditorMode, ViewsPlacement, CloseAction, LogLevel, SelectAllScope, SearchKind, SearchSortPref, DesignPref, LayoutMode, NavStyle, RailSide, PaneStyle, AvatarPlacement, ContactsView, ComposeOpenIn, ReaderWidth, AfterMove, AfterReplySend, FollowUpInterval, ProjectsView, NoteEditorMode, ChatNotifyMode } from '../lib/types'
+import type { QuickComposeStatus, UIPrefs, ThemePref, DensityPref, EditorMode, ViewsPlacement, CloseAction, LogLevel, SelectAllScope, SearchKind, SearchSortPref, DesignPref, LayoutMode, NavStyle, RailSide, PaneStyle, AvatarPlacement, ContactsView, ComposeOpenIn, ReaderWidth, AfterMove, AfterReplySend, FollowUpInterval, ProjectsView, NoteEditorMode, ChatNotifyMode, HtmlColors } from '../lib/types'
 import { getUIPrefs, setSetting, SettingKeys, systemColorScheme, setWindowTheme, getThemeApply, setQuickCompose } from '../lib/api'
 import { applyTheme, applyDensity, applyAccent, applyScale, applyReduceMotion, applyHandCursor, setThemeSchedule, applyUIFont, applyMonoFont, applyCorners, applyDesign, watchSystemTheme, setSystemSchemeOverride, resolveTheme } from '../theme/theme'
 import { applyUserTheme } from '../theme/usertheme'
@@ -32,6 +32,7 @@ const defaults: UIPrefs = {
   showShortcutHints: true,
   coachHints: true,
   coachHold: true,
+  showTips: true,
   harvestAddresses: true,
   showAccountEmail: false,
   alwaysLoadImages: false,
@@ -62,6 +63,13 @@ const defaults: UIPrefs = {
   swipeEnabled: true,
   swipeLeftAction: 'delete',
   swipeRightAction: 'unread',
+  swipeLeftShort: 'archive',
+  swipeLeftLong: 'delete',
+  swipeRightShort: 'read',
+  swipeRightLong: 'snooze',
+  rowActions: true,
+  rowActionList: 'archive,delete,done,snooze,pin',
+  htmlColors: 'auto',
   composeVimMode: false,
   downloadIncludeAttachments: true,
   appVimMode: false,
@@ -82,6 +90,8 @@ const defaults: UIPrefs = {
   navStyle: 'rail',
   railSide: 'left',
   railPins: '',
+  spaceOrder: '',
+  hiddenSpaces: '',
   paneStyle: 'hybrid',
   avatarPlacement: 'inline',
   contactsView: 'panes',
@@ -328,6 +338,18 @@ export function toggleRailPin(id: string): void {
     void setSetting(SettingKeys.railPins, railPins)
     return { ...p, railPins }
   })
+}
+
+/** Stores the order of the spaces in the navigation, as a comma list of keys. */
+export function setSpaceOrder(spaceOrder: string): void {
+  prefs.update((p) => ({ ...p, spaceOrder }))
+  void setSetting(SettingKeys.spaceOrder, spaceOrder)
+}
+
+/** Stores the spaces left out of the navigation, as a comma list of keys. */
+export function setHiddenSpaces(hiddenSpaces: string): void {
+  prefs.update((p) => ({ ...p, hiddenSpaces }))
+  void setSetting(SettingKeys.hiddenSpaces, hiddenSpaces)
 }
 
 /** Moves the rail to the left or right window edge. */
@@ -631,6 +653,33 @@ export function setSwipeLeftAction(action: string): void {
 export function setSwipeRightAction(action: string): void {
   prefs.update((p) => ({ ...p, swipeRightAction: action }))
   void setSetting(SettingKeys.swipeRightAction, action)
+}
+
+/** The four swipe slots of the new design. */
+export type SwipeSlot = 'swipeLeftShort' | 'swipeLeftLong' | 'swipeRightShort' | 'swipeRightLong'
+
+/** Sets what one swipe of the new design does: a row action id or 'none'. */
+export function setSwipeSlot(slot: SwipeSlot, action: string): void {
+  prefs.update((p) => ({ ...p, [slot]: action }))
+  void setSetting(SettingKeys[slot], action)
+}
+
+/** Turns the quick buttons over a hovered row on or off. */
+export function setRowActions(value: boolean): void {
+  prefs.update((p) => ({ ...p, rowActions: value }))
+  void setSetting(SettingKeys.rowActions, String(value))
+}
+
+/** Stores which quick buttons a row shows, in order, comma separated. */
+export function setRowActionList(value: string): void {
+  prefs.update((p) => ({ ...p, rowActionList: value }))
+  void setSetting(SettingKeys.rowActionList, value)
+}
+
+/** Sets how html mail is coloured in a dark theme. */
+export function setHtmlColors(value: HtmlColors): void {
+  prefs.update((p) => ({ ...p, htmlColors: value }))
+  void setSetting(SettingKeys.htmlColors, value)
 }
 
 // setComposeVimMode toggles vim keybindings in the compose editor.
@@ -1008,6 +1057,12 @@ export function setCoachHints(value: boolean): void {
 export function setCoachHold(value: boolean): void {
   prefs.update((p) => ({ ...p, coachHold: value }))
   void setSetting(SettingKeys.coachHold, String(value))
+}
+
+/** Turns the one-time tips on or off. */
+export function setShowTips(value: boolean): void {
+  prefs.update((p) => ({ ...p, showTips: value }))
+  void setSetting(SettingKeys.showTips, String(value))
 }
 
 // setHarvestAddresses toggles learning addresses from mail for autocomplete.

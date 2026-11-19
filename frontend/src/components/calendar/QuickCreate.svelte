@@ -5,7 +5,7 @@
   import { createEventDispatcher, onMount } from 'svelte'
   import clockIcon from '@phosphor-icons/core/assets/duotone/clock-duotone.svg?raw'
   import calendarIcon from '@phosphor-icons/core/assets/duotone/calendar-blank-duotone.svg?raw'
-  import './controls.css'
+  import '../../theme/controls.css'
   import Ph from '../common/Ph.svelte'
   import Select from '../common/Select.svelte'
   import AnchoredPopover from '../common/AnchoredPopover.svelte'
