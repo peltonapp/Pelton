@@ -619,6 +619,7 @@ func (a *App) newSyncEngine(client mailClient, accountID int64) *psync.Engine {
 	// and the list fills as mail arrives rather than staying empty until the
 	// whole folder is down.
 	engine.OnStored = a.announceStored
+	engine.ObserveRaw = a.observeIncoming
 	// the counts behind the progress bar. The account and server are captured
 	// here because the engine does not know them and the line names them.
 	email := a.accountEmail(accountID)

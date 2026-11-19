@@ -74,6 +74,34 @@ func cleanUserIDPart(s string) string {
 	}, strings.TrimSpace(s))
 }
 
+// Demote moves a key behind every other key in both rings, so a lookup by
+// address finds another key for the same address first. The key itself stays,
+// to read mail that was encrypted to it.
+func (s *PGPKeyStore) Demote(fingerprint string) error {
+	want := NormalizeFingerprint(fingerprint)
+	for _, file := range []string{secringFile, pubringFile} {
+		list, err := s.load(file)
+		if err != nil {
+			return err
+		}
+		var kept, moved openpgp.EntityList
+		for _, ent := range list {
+			if NormalizeFingerprint(Fingerprint(ent)) == want {
+				moved = append(moved, ent)
+			} else {
+				kept = append(kept, ent)
+			}
+		}
+		if len(moved) == 0 {
+			continue
+		}
+		if err := s.write(file, append(kept, moved...)); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 // Extend renews an own key that expires within AutoKeyRenewWithin, so it is
 // valid for AutoKeyLifetime from now. The user id self-signatures are replaced
 // by newer ones carrying the new expiry, which every program that refreshes

@@ -647,6 +647,9 @@ type UIPrefsDTO struct {
 	// ChatEnabled turns the Matrix chat space on. Off by default: nothing
 	// chat related runs or connects until it is on.
 	ChatEnabled bool `json:"chatEnabled"`
+	// AutoEncrypt is automatic encryption. Off by default: until it is on no
+	// key is made, no header added and nothing looked up.
+	AutoEncrypt bool `json:"autoEncrypt"`
 	// ChatSendReceipts sends public read receipts in chat; off keeps them
 	// private.
 	ChatSendReceipts bool `json:"chatSendReceipts"`
@@ -860,6 +863,7 @@ func (a *App) GetUIPrefs() (UIPrefsDTO, error) {
 		StatusClock:                a.boolSetting(settingStatusClock, true),
 		StatusUnread:               a.boolSetting(settingStatusUnread, true),
 		ChatEnabled:                a.boolSetting(settingChatEnabled, false),
+		AutoEncrypt:                a.boolSetting(settingAutoEncrypt, false),
 		ChatSendReceipts:           a.boolSetting(settingChatSendReceipts, true),
 		ChatSendTyping:             a.boolSetting(settingChatSendTyping, true),
 		ChatNotify:                 a.stringSetting(settingChatNotify, "mentions"),
@@ -952,6 +956,9 @@ func (a *App) SetSetting(key, value string) error {
 	}
 	if key == settingChatEnabled {
 		a.chatSettingChanged(value)
+	}
+	if key == settingAutoEncrypt || key == settingKeySourceAutocrypt {
+		a.loadAutoEncryptFlags()
 	}
 	if key == settingIndexDecrypted {
 		// rebuilt from scratch rather than re-indexed in place: switching this

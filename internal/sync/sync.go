@@ -71,6 +71,10 @@ type Engine struct {
 	// instead of showing nothing for several minutes. It is called with the
 	// folder and the ids stored since the last call.
 	OnStored func(folder storage.Folder, ids []int64)
+	// ObserveRaw, when set, is handed each newly stored message's raw bytes,
+	// the only moment they exist, for reading headers nothing else keeps. It
+	// runs on the sync goroutine, so it must return quickly.
+	ObserveRaw func(folder storage.Folder, raw []byte)
 }
 
 // FolderProgress is how far a folder's fetch has got. Total is what the plan

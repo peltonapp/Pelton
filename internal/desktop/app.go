@@ -282,6 +282,9 @@ type App struct {
 	// recipientConfirmer asks about recipients before-send scripts changed;
 	// nil asks through the window. Tests put an answer here.
 	recipientConfirmer scripting.Confirmer
+
+	// autoEnc is the state of automatic encryption. See autoencrypt.go.
+	autoEnc autoEncryptState
 }
 
 // locked reports whether the app lock is engaged. An App built without one,
@@ -431,6 +434,7 @@ func (a *App) startup(ctx context.Context) {
 
 	a.startBackgroundServices()
 	a.startScripts()
+	a.startAutoEncrypt()
 
 	// the notes folder, when the user has one: the mail reader and the other
 	// spaces list the notes about what they show.

@@ -343,6 +343,9 @@ func (a *App) confirmRecipients(ctx context.Context, scripts []string, before, a
 	name := strings.Join(scripts, ", ")
 	summary := fmt.Sprintf("Before-send scripts changed who %q goes to.\n\nWritten to:\n%s\n\nWould now go to:\n%s",
 		before.Subject, recipientsText(before), recipientsText(after))
+	if line := a.encryptionSummary(after); line != "" {
+		summary += "\n\n" + line
+	}
 	confirmer := a.recipientConfirmer
 	if confirmer == nil {
 		confirmer = &scriptConfirm{app: a}

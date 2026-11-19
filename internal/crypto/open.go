@@ -73,6 +73,20 @@ func IsProtected(raw []byte) bool {
 		bytes.Contains(body, []byte("-----BEGIN PGP SIGNED MESSAGE-----"))
 }
 
+// IsEncrypted reports whether a raw message is OpenPGP encrypted, as opposed
+// to only signed, with the same cheap structural check as IsProtected.
+func IsEncrypted(raw []byte) bool {
+	headers, body, found := splitHeaders(raw)
+	if !found {
+		return false
+	}
+	mediaType, params := parseContentType(headers)
+	if mediaType == "multipart/encrypted" && strings.EqualFold(params["protocol"], "application/pgp-encrypted") {
+		return true
+	}
+	return mediaType != "multipart/signed" && bytes.Contains(body, []byte("-----BEGIN PGP MESSAGE-----"))
+}
+
 // Open decrypts and verifies a received message.
 //
 // raw is the complete RFC 822 message. passphrase unlocks a private key when

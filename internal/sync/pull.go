@@ -166,6 +166,9 @@ func (e *Engine) storeMessage(ctx context.Context, folder storage.Folder, msg *p
 			e.log.Error("store pgp source", "uid", uid, "err", err)
 		}
 	}
+	if e.ObserveRaw != nil && len(msg.Raw) > 0 {
+		e.ObserveRaw(folder, msg.Raw)
+	}
 
 	// this is the only point in a sync that holds a message's sender and
 	// subject, which is what tracking down "the wrong mail arrived" or "one

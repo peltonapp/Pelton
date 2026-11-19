@@ -36,27 +36,47 @@ const (
 // the zero value for mail that is not protected, which is nearly all of it, so
 // the caller can apply it unconditionally.
 func (a *App) openProtected(m storage.Message) (body string, isHTML bool, state string, sig crypto.Signature) {
+	r := a.openProtectedWith(m, nil)
+	return r.body, r.isHTML, r.state, r.sig
+}
+
+// protectedResult is a protected message after opening. opened is nil unless
+// state is open.
+type protectedResult struct {
+	body   string
+	isHTML bool
+	state  string
+	sig    crypto.Signature
+	opened *crypto.Opened
+}
+
+// openProtectedWith is openProtected with extra public keys to check the
+// signature against; sig stays the verdict of the keyring alone.
+func (a *App) openProtectedWith(m storage.Message, extra [][]byte) protectedResult {
 	raw, err := a.store.MessagePGPSource(a.ctx, m.ID)
 	if err != nil {
 		// not protected, or cached before the source was kept.
-		return "", false, "", crypto.Signature{}
+		return protectedResult{}
 	}
 	keys, err := a.keyStore()
 	if err != nil {
-		return "", false, pgpStateFailed, crypto.Signature{}
+		return protectedResult{state: pgpStateFailed}
 	}
 
 	engine := crypto.NewPGP(keys)
-	opened, err := engine.Open(raw, a.anyPassphrase())
+	opened, err := engine.OpenWith(raw, a.anyPassphrase(), extra)
 	if err != nil {
-		return "", false, openFailureState(err), crypto.Signature{}
+		return protectedResult{state: openFailureState(err)}
 	}
 
+	r := protectedResult{state: pgpStateOpen, sig: opened.Signature, opened: opened}
 	plain, html := splitOpenedBody(opened.Body)
 	if html != "" {
-		return html, true, pgpStateOpen, opened.Signature
+		r.body, r.isHTML = html, true
+	} else {
+		r.body = plain
 	}
-	return plain, false, pgpStateOpen, opened.Signature
+	return r
 }
 
 // openFailureState maps a decryption failure to the state the ui acts on.
