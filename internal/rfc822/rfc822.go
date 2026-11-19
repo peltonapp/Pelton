@@ -12,8 +12,10 @@ import (
 	"bytes"
 	"fmt"
 	"io"
+	"slices"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/emersion/go-message"
 	"github.com/emersion/go-message/mail"
@@ -56,6 +58,8 @@ type Message struct {
 	// first was added by the receiving server and is the only trustworthy one.
 	ReplyTo     string
 	AuthResults []string
+	// Claims are the sender headers the sender passport keeps.
+	Claims Claims
 	// CharsetGuess names the encoding a body part was read as when the message
 	// declared none or declared one nothing knows. Empty for mail that was
 	// right about itself, which is nearly all of it.
@@ -64,6 +68,86 @@ type Message struct {
 	// only in one place and so does not promote above (a client's own
 	// X- headers, for instance).
 	Header mail.Header
+}
+
+// Claims are what a message says about how it was sent. The sender or any hop
+// can write them, so they are evidence to show, never a verdict.
+type Claims struct {
+	// ReturnPath and Sender are the bare addresses of those headers.
+	ReturnPath string
+	Sender     string
+	// Signers is the d= domain of each DKIM-Signature, lowercased, once each.
+	Signers []string
+	// ReceivedSPF and ARC are the first Received-SPF and
+	// ARC-Authentication-Results values, cut to claimCap.
+	ReceivedSPF string
+	ARC         string
+	// ReadReceiptTo is the Disposition-Notification-To address: the message
+	// asks for a read receipt there.
+	ReadReceiptTo string
+}
+
+// claimCap keeps a stored header value short: the detail panel shows the start
+// of it, and a hostile message could make it as long as it likes.
+const claimCap = 400
+
+// readClaims reads the sender headers out of a message header.
+func readClaims(h *mail.Header) Claims {
+	c := Claims{
+		ReturnPath:    bareAddr(h.Get("Return-Path")),
+		Sender:        bareAddr(addressList(h, "Sender")),
+		ReadReceiptTo: bareAddr(addressList(h, "Disposition-Notification-To")),
+	}
+	if v := headerValues(h, "Received-SPF"); len(v) > 0 {
+		c.ReceivedSPF = capText(v[0])
+	}
+	if v := headerValues(h, "ARC-Authentication-Results"); len(v) > 0 {
+		c.ARC = capText(v[0])
+	}
+	for _, sig := range headerValues(h, "DKIM-Signature") {
+		if d := dkimTag(sig, "d"); d != "" && !slices.Contains(c.Signers, d) {
+			c.Signers = append(c.Signers, d)
+		}
+	}
+	return c
+}
+
+// dkimTag returns one tag of a DKIM-Signature value, lowercased.
+func dkimTag(sig, name string) string {
+	for _, part := range strings.Split(sig, ";") {
+		key, value, ok := strings.Cut(part, "=")
+		if ok && strings.EqualFold(strings.TrimSpace(key), name) {
+			return strings.ToLower(strings.Join(strings.Fields(value), ""))
+		}
+	}
+	return ""
+}
+
+// bareAddr returns the address of a header value like "Name <a@b>" or
+// "<a@b>", lowercased; the first one when there are several.
+func bareAddr(v string) string {
+	s := strings.TrimSpace(v)
+	if open := strings.Index(s, "<"); open >= 0 {
+		if end := strings.Index(s[open:], ">"); end > 0 {
+			return strings.ToLower(strings.TrimSpace(s[open+1 : open+end]))
+		}
+	}
+	if comma := strings.Index(s, ","); comma >= 0 {
+		s = s[:comma]
+	}
+	return strings.ToLower(strings.TrimSpace(s))
+}
+
+func capText(s string) string {
+	s = strings.Join(strings.Fields(s), " ")
+	if len(s) <= claimCap {
+		return s
+	}
+	cut := claimCap
+	for cut > 0 && !utf8.RuneStart(s[cut]) {
+		cut--
+	}
+	return s[:cut]
 }
 
 // unnamedGuess marks text that had to be guessed at when the encoding actually
@@ -137,6 +221,7 @@ func parts(mr *mail.Reader, msg *Message) error {
 	msg.Header = mr.Header
 	msg.ReplyTo = addressList(&mr.Header, "Reply-To")
 	msg.AuthResults = headerValues(&mr.Header, "Authentication-Results")
+	msg.Claims = readClaims(&mr.Header)
 	msg.ListUnsubscribe = mr.Header.Get("List-Unsubscribe")
 	msg.ListUnsubscribePost = strings.Contains(strings.ToLower(mr.Header.Get("List-Unsubscribe-Post")), "one-click")
 	msg.ListID = charsetguess.Valid(strings.TrimSpace(mr.Header.Get("List-Id")))

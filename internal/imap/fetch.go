@@ -79,6 +79,8 @@ type Message struct {
 	// nothing downstream can go back for them.
 	ReplyTo     string
 	AuthResults []string
+	// Claims are the sender headers the sender passport keeps.
+	Claims rfc822.Claims
 	// CharsetGuess names what the body was read as when the message declared no
 	// charset or one nothing knows, and is empty for mail that was right about
 	// itself. It is kept so the reader can be told the text was guessed at.
@@ -341,6 +343,7 @@ func parseBody(raw []byte, msg *Message) error {
 	msg.ListID = parsed.ListID
 	msg.ReplyTo = parsed.ReplyTo
 	msg.AuthResults = parsed.AuthResults
+	msg.Claims = parsed.Claims
 	msg.InReplyTo = parsed.InReplyTo
 	msg.References = parsed.References
 	return nil

@@ -9,6 +9,7 @@ import (
 	"github.com/emersion/go-imap/v2"
 
 	pimap "github.com/peltonapp/Pelton/internal/imap"
+	"github.com/peltonapp/Pelton/internal/phishing"
 	"github.com/peltonapp/Pelton/internal/storage"
 )
 
@@ -39,6 +40,10 @@ type Engine struct {
 	client mailClient
 	store  *storage.DB
 	log    *slog.Logger
+	// AuthServ names the account's own receiving servers, whose
+	// Authentication-Results headers the sender passport trusts. The zero
+	// value trusts none, so every record is stored as untrusted.
+	AuthServ phishing.AuthServ
 	// ColorSync, when true, adopts server-side flag colors (Thunderbird $LabelN
 	// keywords) into the local cache during each folder sync.
 	ColorSync bool
