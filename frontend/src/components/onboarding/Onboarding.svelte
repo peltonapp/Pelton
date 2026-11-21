@@ -27,6 +27,7 @@
   import { popupIsOpen } from '../../lib/popups'
   import { toastError, errorMessage } from '../../stores/toast'
   import { shortcutLabel, t } from '../../lib/i18n'
+  import { loadImportDialog } from '../../lib/lazyload'
   import logo from '../../assets/images/icons/pelton-logo.png'
   import type { Account, DesignPref } from '../../lib/types'
 
@@ -363,7 +364,7 @@
 {/if}
 
 {#if showImport}
-  {#await import('../import/ImportDialog.svelte') then m}
+  {#await loadImportDialog() then m}
     <svelte:component this={m.default} on:close={() => (showImport = false)} />
   {/await}
 {/if}

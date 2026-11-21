@@ -1,5 +1,6 @@
 <script context="module" lang="ts">
   import type { ComponentType, SvelteComponent } from 'svelte'
+  import { withStrings } from './lib/lazyload'
 
   /** What a window shows: the app, or one of the windows of their own. */
   export type WindowView = 'main' | 'message' | 'compose' | 'outbox' | 'quick'
@@ -28,17 +29,22 @@
   export async function loadWindow(view: WindowView): Promise<WindowComponent> {
     switch (view) {
       case 'message':
-        return (await import('./MessageWindow.svelte')).default
+        return (await loadMessageWindow()).default
       case 'compose':
-        return (await import('./ComposeWindow.svelte')).default
+        return (await loadComposeWindow()).default
       case 'outbox':
-        return (await import('./OutboxWindow.svelte')).default
+        return (await loadOutboxWindow()).default
       case 'quick':
-        return (await import('./QuickComposeWindow.svelte')).default
+        return (await loadQuickComposeWindow()).default
       default:
         return (await import('./App.svelte')).default
     }
   }
+
+  const loadMessageWindow = withStrings(['composer'], () => import('./MessageWindow.svelte'))
+  const loadComposeWindow = withStrings(['composer'], () => import('./ComposeWindow.svelte'))
+  const loadOutboxWindow = withStrings(['outbox'], () => import('./OutboxWindow.svelte'))
+  const loadQuickComposeWindow = withStrings(['composer'], () => import('./QuickComposeWindow.svelte'))
 </script>
 
 <script lang="ts">
