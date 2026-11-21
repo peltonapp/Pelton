@@ -9,6 +9,8 @@
   import { searchAddresses } from '../../lib/api'
   import type { AddressBookEntry } from '../../lib/types'
   import { t } from '../../lib/i18n'
+  import { onDestroy } from 'svelte'
+  import { parseAddressList, splitAddressList } from '../../lib/mailcompose'
 
   export let value = ''
   export let label: string
@@ -16,7 +18,7 @@
   export let chipsEnabled = true
   export let autocompleteEnabled = true
 
-  const dispatch = createEventDispatcher<{ change: string, input: void }>()
+  const dispatch = createEventDispatcher<{ change: string }>()
 
   let draft = ''
 
@@ -26,17 +28,13 @@
   let highlight = -1
   let debounce: ReturnType<typeof setTimeout> | undefined
 
-  $: chips = value
-    .split(',')
-    .map((s) => s.trim())
-    .filter(Boolean)
+  $: chips = splitAddressList(value)
 
   function emit(next: string[]): void {
     dispatch('change', next.join(', '))
   }
 
   function onInput(): void {
-    dispatch('input')
     const q = draft.trim()
     if (debounce) {
       clearTimeout(debounce)
@@ -47,10 +45,18 @@
       return
     }
     debounce = setTimeout(async () => {
+      const request = ++searchSeq
       try {
         const found = await searchAddresses(q, 6)
-        // drop any already added as a chip.
-        suggestions = found.filter((e) => !chips.includes(e.email))
+        // a commit or a newer search while this one was out makes its answer
+        // stale: showing it would reopen the list over an empty field.
+        if (request !== searchSeq || draft.trim() !== q) {
+          return
+        }
+        // drop any already added as a chip, by address: a chip may carry a
+        // display name around it.
+        const added = new Set(parseAddressList(value).map((a) => a.email.toLowerCase()))
+        suggestions = found.filter((e) => !added.has(e.email.toLowerCase()))
         highlight = suggestions.length > 0 ? 0 : -1
       } catch {
         suggestions = []
@@ -58,10 +64,17 @@
     }, 140)
   }
 
+  // searchSeq numbers the searches so a late answer can be told from the
+  // current one.
+  let searchSeq = 0
+
   function closeSuggest(): void {
+    clearTimeout(debounce)
+    searchSeq++
     suggestions = []
     highlight = -1
   }
+  onDestroy(() => clearTimeout(debounce))
 
   function commit(): void {
     const token = draft.trim().replace(/[,;]+$/, '').trim()
@@ -270,6 +283,13 @@
   }
   .suggest-item.active {
     background: var(--surface-hover);
+  }
+  .s-name,
+  .s-addr {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
   .s-name {
     font-size: var(--fz-label);

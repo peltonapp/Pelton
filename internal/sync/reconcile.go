@@ -21,20 +21,20 @@ import (
 //     removed locally even if it was modified locally. a local delete that the
 //     server still has is pushed up (the user's delete intent is honoured while
 //     the message still exists on both sides).
-//   - flags: union/merge. the result is the bitwise OR of local and server
-//     flags, so if either side set \Seen or \Flagged it stays set. this means a
-//     local "mark unread" (clearing \Seen) is NOT propagated in this version,
-//     because union never clears a flag. that is a deliberate v1 limitation: it
-//     guarantees we never lose a "seen" state, at the cost of not syncing
-//     un-flagging. a future version can track per-flag change direction.
+//   - flags: per bit. with a pending local change, the bits it touched take the
+//     local value, set or cleared, and every other bit takes the server value.
+//     without one the server is authoritative.
 //
 // reconcile is pure: same inputs always give the same Decision.
 
 // LocalMessage is reconcile's view of a cached message.
 type LocalMessage struct {
-	UID           uint32
-	Flags         storage.Flag
-	PendingFlags  bool // local flag change not yet pushed
+	UID          uint32
+	Flags        storage.Flag
+	PendingFlags bool // local flag change not yet pushed
+	// PendingMask is the flag bits the pending change touched; 0 means \Seen and
+	// \Flagged.
+	PendingMask   storage.Flag
 	PendingDelete bool // local delete not yet pushed
 }
 
@@ -77,14 +77,26 @@ type Decision struct {
 	// Flags is the target flag set for the local store and any server push,
 	// meaningful for the flag-related actions.
 	Flags storage.Flag
+	// Clear is the flag bits to remove on the server, for ActionPushFlags.
+	Clear storage.Flag
 	// Conflict is true when both sides changed the same message since the last
 	// sync, recorded for reporting regardless of the action taken.
 	Conflict bool
 }
 
-// mergeFlags applies the union policy.
-func mergeFlags(local, server storage.Flag) storage.Flag {
-	return local | server
+// mergeFlags takes the local value for the bits in mask and the server value
+// for the rest.
+func mergeFlags(local, server, mask storage.Flag) storage.Flag {
+	return local&mask | server&^mask
+}
+
+// pendingMask is the bits a pending change owns: the recorded mask, or \Seen
+// and \Flagged when none was recorded.
+func pendingMask(l *LocalMessage) storage.Flag {
+	if l.PendingMask == 0 {
+		return storage.FlagSeen | storage.FlagFlagged
+	}
+	return l.PendingMask
 }
 
 // Reconcile decides what to do for a single message given the local and server
@@ -119,17 +131,16 @@ func reconcileBoth(local *LocalMessage, server *ServerMessage) Decision {
 	}
 
 	if local.PendingFlags {
-		merged := mergeFlags(local.Flags, server.Flags)
+		mask := pendingMask(local)
+		merged := mergeFlags(local.Flags, server.Flags, mask)
 		// without a stored baseline we cannot prove both sides changed, so we
-		// treat it as a conflict only when the server independently has a managed
-		// flag the local copy lacks. a pending change the server simply has not
-		// received yet (server flags are a subset of local) is not a conflict.
-		conflict := server.Flags&^local.Flags != 0
+		// treat it as a conflict only when the server differs on a bit the local
+		// change did not touch.
+		conflict := (server.Flags^local.Flags)&^mask != 0
 		if merged == server.Flags {
-			// server already has everything we wanted, nothing to push up.
 			return Decision{UID: local.UID, Action: ActionClearPending, Flags: merged, Conflict: conflict}
 		}
-		return Decision{UID: local.UID, Action: ActionPushFlags, Flags: merged, Conflict: conflict}
+		return Decision{UID: local.UID, Action: ActionPushFlags, Flags: merged, Clear: server.Flags &^ merged, Conflict: conflict}
 	}
 
 	// no pending local change: the server is authoritative for flags.

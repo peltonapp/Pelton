@@ -27,6 +27,7 @@ type mailClient interface {
 	// server rather than by bandwidth.
 	FetchMessages(uids []imap.UID, fn func(uid imap.UID, msg *pimap.Message, err error) error) error
 	AddFlags(uid imap.UID, flags ...imap.Flag) error
+	RemoveFlags(uid imap.UID, flags ...imap.Flag) error
 	DeleteMessages(uids ...imap.UID) error
 	MoveMessages(uids []imap.UID, mailbox string) error
 }
@@ -444,7 +445,7 @@ func (e *Engine) executePlan(ctx context.Context, folder storage.Folder, plan []
 			res.FlagUpdated++
 
 		case ActionPushFlags:
-			if err := e.pushFlags(ctx, localByUID[d.UID], d.Flags); err != nil {
+			if err := e.pushFlags(ctx, localByUID[d.UID], d.Flags, d.Clear); err != nil {
 				e.log.Error("push flags failed", "uid", d.UID, "err", err)
 				continue
 			}

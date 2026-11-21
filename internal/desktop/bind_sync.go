@@ -129,8 +129,34 @@ func (t *accountTransmitter) Transmit(ctx context.Context, m outbox.Message) err
 		psmtp.WithSentAppender(func(raw []byte) (string, error) {
 			return t.app.appendToSent(*account, raw)
 		}),
+		psmtp.WithBackground(func(fn func()) {
+			t.app.sentCopies.Add(1)
+			go func() {
+				defer t.app.sentCopies.Done()
+				fn()
+			}()
+		}),
 	)
 	return sender.Transmit(ctx, m)
+}
+
+// sentCopyWait bounds how long the copy to Sent waits for the account's other
+// imap work. Past it the copy is dropped with a warning rather than waiting on
+// a sync that may never let go.
+const sentCopyWait = 10 * time.Minute
+
+// lockWithin takes mu, giving up after d.
+func lockWithin(mu *sync.Mutex, d time.Duration) bool {
+	deadline := time.Now().Add(d)
+	for {
+		if mu.TryLock() {
+			return true
+		}
+		if time.Now().After(deadline) {
+			return false
+		}
+		time.Sleep(200 * time.Millisecond)
+	}
 }
 
 // appendToSent puts a copy of a message that has just been sent in the
@@ -152,18 +178,33 @@ func (a *App) appendToSent(account storage.Account, raw []byte) (string, error) 
 	}
 	// every other imap session in the package takes this, so a send during a
 	// sync waits its turn rather than opening a second login for the account.
-	syncMu.Lock()
+	// It runs after the message is marked sent, so the wait holds up nothing.
+	if !lockWithin(&syncMu, sentCopyWait) {
+		return "", fmt.Errorf("gave up after %s waiting for other mail work to finish", sentCopyWait)
+	}
 	defer syncMu.Unlock()
+	var folder string
+	err = a.withIMAPSession(cfg, func(client mailClient) error {
+		folder, err = client.AppendToSent(raw)
+		return err
+	})
+	return folder, err
+}
+
+// withIMAPSession runs fn against a session logged in with cfg and logs out
+// afterwards. It does not take syncMu: the callers that need to wait for a
+// sync take it themselves.
+func (a *App) withIMAPSession(cfg pimap.Config, fn func(mailClient) error) error {
 	client, err := a.connectIMAP(cfg)
 	if err != nil {
-		return "", err
+		return err
 	}
 	defer func() { _ = client.Close() }()
 	if err := client.Login(); err != nil {
-		return "", err
+		return err
 	}
 	defer func() { _ = client.Logout() }()
-	return client.AppendToSent(raw)
+	return fn(client)
 }
 
 // runInitialSyncAndIdle syncs every account once, then parks each on idle.
@@ -213,6 +254,7 @@ func (a *App) TriggerSync() error {
 	synced := 0
 	netFailed := false
 	syncable := 0
+	var otherErr error
 	for _, account := range accounts {
 		if account.Local {
 			continue
@@ -224,6 +266,8 @@ func (a *App) TriggerSync() error {
 			}
 			if isNetworkError(err) {
 				netFailed = true
+			} else if otherErr == nil {
+				otherErr = err
 			}
 			a.log.Error("sync account", "account", account.Email, "err", err)
 			continue
@@ -246,9 +290,31 @@ func (a *App) TriggerSync() error {
 		if netFailed {
 			return errOffline
 		}
+		// nor must any other failure: a folder the server no longer has read as
+		// a missing password (#484).
+		if otherErr != nil {
+			return otherErr
+		}
 		return errNoCredentials
 	}
 	return nil
+}
+
+// queueSync syncs account in the background, after any sync already running.
+// While one is still waiting its turn, another would only repeat it, so it is
+// not queued. syncAccount records a failure in the account's sync state itself.
+func (a *App) queueSync(account storage.Account) {
+	if _, waiting := a.queuedSyncs.LoadOrStore(account.ID, struct{}{}); waiting {
+		return
+	}
+	goSafe("syncing after a change", func() {
+		// cleared once this sync's turn comes, so a change from here on queues
+		// the next one rather than counting on this run to see it.
+		syncMu.Lock()
+		a.queuedSyncs.Delete(account.ID)
+		syncMu.Unlock()
+		_ = a.syncAccount(account)
+	})
 }
 
 // syncAccount syncs one account and records how it went, so a failure survives
@@ -297,6 +363,12 @@ func (a *App) syncAccountOnce(account storage.Account) error {
 	// existing rows, so without this the sync would be a silent no-op forever.
 	if err := a.ensureFolders(client, account.ID); err != nil {
 		return err
+	}
+	// a failed refresh keeps the tree it had; the mail is still worth syncing.
+	if changed, err := a.refreshFolders(client, account.ID); err != nil {
+		a.log.Error("refresh folder list", "account", account.ID, "err", err)
+	} else if changed {
+		a.emit(EventFoldersChanged, nil)
 	}
 
 	return a.syncFolders(client, account.ID)

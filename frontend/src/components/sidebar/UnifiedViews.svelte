@@ -5,6 +5,7 @@
   // list of view keys, since the views themselves are computed, not rows.
   import {
     IconInbox,
+    IconMail,
     IconFlag,
     IconSend,
     IconFile,
@@ -18,7 +19,9 @@
   import { selection, selectView } from '../../stores/selection'
   import { prefs } from '../../stores/prefs'
   import { reorder, type ReorderDetail } from '../../lib/reorder'
-  import { refreshSidebar } from '../../stores/accounts'
+  import { refreshSidebar, sidebar } from '../../stores/accounts'
+  import { openContextMenu } from '../../stores/contextmenu'
+  import { openEmptyAllTrash } from '../../stores/folderdialog'
   import { reorderUnifiedViews } from '../../lib/api'
   import { toastError, errorMessage } from '../../stores/toast'
   import { t } from '../../lib/i18n'
@@ -37,6 +40,7 @@
 
   const viewIcons: Record<string, typeof IconFolder> = {
     inbox: IconInbox,
+    unread: IconMail,
     flagged: IconFlag,
     sent: IconSend,
     drafts: IconFile,
@@ -51,6 +55,11 @@
   function badgeCount(view: UnifiedView, showFlagged: boolean): number {
     if (view.key === 'flagged') {
       return showFlagged ? view.totalCount : 0
+    }
+    // the unified inbox is the default view and its unread count is already
+    // on each account's inbox and the dock badge; a third copy is noise.
+    if (view.key === 'inbox') {
+      return 0
     }
     return view.key === 'drafts' ? view.totalCount : view.unreadCount
   }
@@ -68,6 +77,23 @@
   function choose(view: UnifiedView): void {
     selectView(view.key as ViewKey, viewLabel(view))
   }
+
+  // the unified Bin offers to empty the trash of every account at once, the
+  // way each account's own trash folder does.
+  function onContext(event: MouseEvent, view: UnifiedView): void {
+    if (view.key !== 'trash') {
+      return
+    }
+    const trashes = Object.values($sidebar.data?.foldersByAccount ?? {})
+      .flat()
+      .filter((f) => f.role === 'trash' && f.totalCount > 0)
+    if (trashes.length === 0) {
+      return
+    }
+    openContextMenu(event.clientX, event.clientY, [
+      { label: $t('folders.emptyTrash'), icon: IconTrash, danger: true, action: () => openEmptyAllTrash(trashes) },
+    ])
+  }
 </script>
 
 <nav class="views" aria-label={$t('sidebar.unifiedViews.ariaLabel')}>
@@ -81,6 +107,7 @@
         reorderable
         reorderId={view.key}
         on:select={() => choose(view)}
+        on:contextmenu={(e) => onContext(e.detail, view)}
       >
         <svelte:component this={viewIcons[view.key] ?? IconFolder} size={15} stroke={1.6} />
       </SidebarRow>

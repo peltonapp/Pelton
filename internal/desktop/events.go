@@ -1,10 +1,6 @@
 package desktop
 
-import (
-	"errors"
-
-	"github.com/wailsapp/wails/v2/pkg/runtime"
-)
+import "errors"
 
 // errStoreUnavailable is returned by bound methods when the store failed to open
 // at startup, so the ui can show a clear error instead of hanging.
@@ -58,6 +54,9 @@ const (
 	// EventViewsChanged fires when saved views or their eager-run counts change,
 	// so the sidebar can refresh view rows and badges without polling.
 	EventViewsChanged = "views:changed"
+	// EventFoldersChanged fires when a sync found mailboxes added or deleted on
+	// the server, so the sidebar can reload its folder tree.
+	EventFoldersChanged = "folders:changed"
 	// EventImportProgress fires while mail is being imported from files, and
 	// once more with Running false when the job ends.
 	EventImportProgress = "import:progress"
@@ -178,11 +177,12 @@ type AccountSyncStateEvent struct {
 	States []AccountSyncStateDTO `json:"states"`
 }
 
-// emit sends a runtime event if the context is set. It is a thin wrapper so call
-// sites stay terse and a nil context (before startup) is a safe no-op.
+// emit sends a runtime event once the app is running. It is a thin wrapper so
+// call sites stay terse and an emit before startup (or in a test) is a safe
+// no-op.
 func (a *App) emit(name string, payload any) {
-	if a.ctx == nil || !a.runtimeReady.Load() {
+	if a.wapp == nil || !a.runtimeReady.Load() {
 		return
 	}
-	runtime.EventsEmit(a.ctx, name, payload)
+	a.wapp.Event.Emit(name, payload)
 }

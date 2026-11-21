@@ -8,7 +8,7 @@ Pelton is a free, open source, privacy-focused email client for macOS, Windows a
 - Windows: `Pelton-<version>-windows-amd64-installer.exe` from releases (unsigned)
 - Fedora: `sudo dnf copr enable arnek/Pelton && sudo dnf install pelton`
 - Raw rpm: `Pelton-<version>-linux-fedora-x86_64.rpm` from releases
-- Source: Go + pnpm + wails CLI v2.13.0; `wails build`; on Linux `-tags webkit2_41` with gtk3-devel and webkit2gtk4.1-devel
+- Source: Go 1.27+ + pnpm; `make build`; no wails CLI needed; on Linux the tags are `production gtk3` with gtk3-devel and webkit2gtk4.1-devel
 
 ## Data locations
 
@@ -34,6 +34,10 @@ Off by default, Settings > External. Requires the user's own API key, stored in 
 ## Sync progress
 
 Status bar shows a progress bar while a sync or a backfill runs, counting message bodies. The total comes from the reconcile plan (what will be fetched), not from the mailbox size, and grows as folders open; before the first folder is reconciled the bar is indeterminate. Settings > Power > "Sync progress bar", on by default. With Settings > Power > "Verbose sync" on, the line also names the mailbox, the account and the imap host and port.
+
+## Status bar clock and unread count
+
+The left of the status bar shows how many messages in the Unified Inbox are unread (hidden at zero); clicking it opens the Unified Inbox. The right end shows the weekday, date and time, following Settings > Display > time format, and moves on at each full minute. Settings > Display > Status bar has a switch for each, both on by default.
 
 ## Text encoding
 

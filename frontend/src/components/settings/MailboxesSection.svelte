@@ -24,6 +24,7 @@
     removeAccountTrustedCertificate,
     chooseCAFile,
     setAccountCA,
+    setAccountColor,
     accountProxyPasswordStored,
     testAccountRoute,
     getProxyConfig,
@@ -31,6 +32,7 @@
   import CertificateReview from '../common/CertificateReview.svelte'
   import AccountRouteFields from '../common/AccountRouteFields.svelte'
   import { routeSummary } from '../../lib/proxyroute'
+  import { viewColors } from '../../lib/viewicons'
   import { refreshSidebar } from '../../stores/accounts'
   import { missingPassword, askForPassword, refreshMissingPasswords } from '../../stores/passwordprompt'
   import { errorMessage, toastError, toastSuccess, pushAction } from '../../stores/toast'
@@ -361,6 +363,8 @@
         pgpDefault: draft.pgpDefault,
         proxy: draft.proxy,
       })
+      await setAccountColor(draft.id, draft.color ?? '')
+      updated.color = draft.color ?? ''
       accounts = accounts.map((a) => (a.id === updated.id ? updated : a))
       if (passwordDraft !== '') {
         void refreshMissingPasswords()
@@ -670,6 +674,25 @@
       </section>
 
       <section class="group">
+        <h4>{$t('views.colorLabel')}</h4>
+        <div class="form">
+          <div class="swatches">
+            {#each viewColors as color (color.value)}
+              <button
+                type="button"
+                class="swatch"
+                class:on={(draft.color ?? '') === color.value}
+                style={`--sw:${color.css}`}
+                aria-label={color.value || $t('views.colorNone')}
+                on:click={() => draft && (draft.color = color.value)}
+              ></button>
+            {/each}
+          </div>
+          <p class="server-hint">{$t('mailboxes.colorHint')}</p>
+        </div>
+      </section>
+
+      <section class="group">
         <h4>{$t('mailboxes.section.encryption')}</h4>
         <div class="form">
           <span class="field">
@@ -935,6 +958,25 @@
   }
   .servers .field.narrow {
     flex: 0 0 88px;
+  }
+
+  .swatches {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-2);
+  }
+
+  .swatch {
+    width: 24px;
+    height: 24px;
+    border-radius: 999px;
+    border: 2px solid transparent;
+    background: var(--sw);
+    cursor: var(--cursor-action);
+  }
+
+  .swatch.on {
+    border-color: var(--text-primary);
   }
 
   .server-hint {

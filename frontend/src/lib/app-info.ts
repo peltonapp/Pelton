@@ -5,7 +5,6 @@
 export const APP = {
   name: 'Pelton',
   version: '0.1.0',
-  tagline: 'An open-source desktop mail client.',
   website: 'https://pelton.app',
   docs: 'https://docs.pelton.app',
   repo: 'https://github.com/peltonapp/Pelton',

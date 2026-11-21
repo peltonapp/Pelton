@@ -3,6 +3,7 @@ package desktop
 import (
 	"bytes"
 	"context"
+	"errors"
 	"log/slog"
 	"os"
 	"path/filepath"
@@ -13,6 +14,7 @@ import (
 	"github.com/ProtonMail/go-crypto/openpgp/armor"
 
 	"github.com/peltonapp/Pelton/internal/crypto"
+	"github.com/peltonapp/Pelton/internal/outbox"
 	"github.com/peltonapp/Pelton/internal/storage"
 )
 
@@ -281,51 +283,83 @@ func TestComposeProtectionStatusWithNoRecipients(t *testing.T) {
 // TestSealedDraftIsNotStoredInTheClear: the whole point of the draft sealing is
 // that the database does not hold the text of a message chosen to be encrypted.
 func TestSealedDraftIsNotStoredInTheClear(t *testing.T) {
-	app, db, accountID := pgpTestApp(t, []string{"me@example.com"}, []string{"a@example.com"})
-	ctx := context.Background()
-
-	req := ComposeRequest{
-		AccountID:  accountID,
-		Protection: protectionEncrypt,
-		To:         addr("a@example.com"),
-		Subject:    "quarterly numbers",
-		Text:       "not for the database",
-	}
-	id, err := app.SaveDraft(0, req)
-	if err != nil {
-		t.Fatalf("SaveDraft: %v", err)
-	}
-
-	raw, err := db.Get(ctx, draftsKey)
-	if err != nil {
-		t.Fatalf("read drafts setting: %v", err)
-	}
-	for _, secret := range []string{"quarterly numbers", "not for the database", "a@example.com"} {
-		if strings.Contains(raw, secret) {
-			t.Errorf("the stored draft still contains %q", secret)
-		}
-	}
-
-	// and it comes back, because the key is unlocked in this test.
-	drafts, err := app.ListDrafts()
-	if err != nil {
-		t.Fatalf("ListDrafts: %v", err)
-	}
-	var found bool
-	for _, d := range drafts {
-		if d.ID != id {
-			continue
-		}
-		found = true
-		if d.Locked {
-			t.Fatal("the draft came back locked with an unlocked key")
-		}
-		if d.Request.Subject != "quarterly numbers" || d.Request.Text != "not for the database" {
-			t.Errorf("draft round trip lost content: %+v", d.Request)
-		}
-	}
-	if !found {
-		t.Fatalf("draft %d is missing from the list", id)
+	for _, protection := range []string{protectionEncrypt, protectionSignEncrypt} {
+		t.Run(protection, func(t *testing.T) {
+			app, db, accountID := pgpTestApp(t, []string{"me@example.com"}, []string{"a@example.com"})
+			client := &fakeIMAP{}
+			useFake(t, app, accountID, client)
+			addFolder(t, app, accountID, "Drafts", `\Drafts`)
+			req := ComposeRequest{
+				AccountID:  accountID,
+				Protection: protection,
+				To:         addr("a@example.com"),
+				Text:       "not for the database",
+				InReplyTo:  "parent@example.com",
+				References: []string{"root@example.com", "parent@example.com"},
+			}
+			var id int64
+			for _, subject := range []string{"quarterly numbers", "revised quarterly numbers"} {
+				req.Subject = subject
+				id = saveDraft(t, app, id, req)
+				raw, err := db.Get(app.ctx, draftsKey)
+				if err != nil {
+					t.Fatalf("read drafts setting: %v", err)
+				}
+				for _, secret := range []string{subject, "not for the database", "a@example.com", "parent@example.com", "root@example.com"} {
+					if strings.Contains(raw, secret) {
+						t.Errorf("the stored draft still contains %q", secret)
+					}
+				}
+				drafts := listDrafts(t, app)
+				if len(drafts) != 1 || drafts[0].ID != id || drafts[0].Locked {
+					t.Fatalf("drafts = %+v, want one unlocked draft %d", drafts, id)
+				}
+				if drafts[0].Request.Subject != subject || drafts[0].Request.Text != "not for the database" {
+					t.Errorf("draft round trip lost content: %+v", drafts[0].Request)
+				}
+				assertDraftReplyRequest(t, drafts[0].Request)
+				opened, err := app.UnsealDraft(id, "")
+				if err != nil {
+					t.Fatalf("UnsealDraft: %v", err)
+				}
+				if opened.ID != id || opened.Locked || opened.Request.Subject != subject || opened.Request.Text != "not for the database" || opened.Request.Protection != protection {
+					t.Fatalf("unsealed draft = %+v, want draft %d with its content and protection", opened, id)
+				}
+				assertDraftReplyRequest(t, opened.Request)
+				req = opened.Request
+			}
+			if messageID, err := app.UploadDraft(id); !errors.Is(err, ErrProtectedDraftStaysLocal) || messageID != "" {
+				t.Fatalf("UploadDraft = %q, %v, want no Message-ID and ErrProtectedDraftStaysLocal", messageID, err)
+			}
+			settle(t)
+			if len(client.drafts) != 0 {
+				t.Fatalf("got %d uploads of an encrypted draft, want none", len(client.drafts))
+			}
+			opened, err := app.UnsealDraft(id, "")
+			if err != nil {
+				t.Fatalf("reopen after refused upload: %v", err)
+			}
+			assertDraftReplyRequest(t, opened.Request)
+			app.queue = outbox.NewQueue(db)
+			queuedID, err := app.SendMessage(opened.Request)
+			if err != nil {
+				t.Fatalf("SendMessage: %v", err)
+			}
+			queued, err := app.queue.List(app.ctx)
+			if err != nil {
+				t.Fatalf("list outbox: %v", err)
+			}
+			if len(queued) != 1 || queued[0].ID != queuedID {
+				t.Fatalf("outbox = %+v, want queued message %d", queued, queuedID)
+			}
+			header := draftReplyHeaders(t, queued[0].Raw)
+			if sentID := header.Get("Message-ID"); sentID == "" || sentID == "<parent@example.com>" {
+				t.Errorf("sent Message-ID = %q, want a fresh ID distinct from the parent", sentID)
+			}
+			if !strings.HasPrefix(header.Get("Content-Type"), "multipart/encrypted;") {
+				t.Errorf("outbox Content-Type = %q, want encrypted MIME", header.Get("Content-Type"))
+			}
+		})
 	}
 }
 

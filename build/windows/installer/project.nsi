@@ -7,8 +7,9 @@ Unicode true
 ## If they are defined here, "wails_tools.nsh" will not touch them. This allows to use this project.nsi manually
 ## from outside of Wails for debugging and development of the installer.
 ##
-## For development first make a wails nsis build to populate the "wails_tools.nsh":
-## > wails build --target windows/amd64 --nsis
+## For development first make an NSIS build to render "wails_tools.nsh" from
+## "wails_tools.nsh.tmpl":
+## > make build-win   (or NSIS=1 scripts/build.sh)
 ## Then you can call makensis on this file with specifying the path to your binary:
 ## For a AMD64 only installer:
 ## > makensis -DARG_WAILS_AMD64_BINARY=..\..\bin\app.exe
@@ -209,6 +210,32 @@ FunctionEnd
 
 !define PELTON_REG_KEY "Software\${INFO_COMPANYNAME}\${INFO_PRODUCTNAME}"
 
+; wails.writeUninstaller always writes the Apps and Features entry to HKLM,
+; which a per-user install has no rights to, so that install never showed up
+; there. These write it to SHCTX, which follows the install mode.
+!macro pelton.writeUninstaller
+    WriteUninstaller "$INSTDIR\uninstall.exe"
+
+    SetRegView 64
+    WriteRegStr SHCTX "${UNINST_KEY}" "Publisher" "${INFO_COMPANYNAME}"
+    WriteRegStr SHCTX "${UNINST_KEY}" "DisplayName" "${INFO_PRODUCTNAME}"
+    WriteRegStr SHCTX "${UNINST_KEY}" "DisplayVersion" "${INFO_PRODUCTVERSION}"
+    WriteRegStr SHCTX "${UNINST_KEY}" "DisplayIcon" "$INSTDIR\${PRODUCT_EXECUTABLE}"
+    WriteRegStr SHCTX "${UNINST_KEY}" "UninstallString" "$\"$INSTDIR\uninstall.exe$\""
+    WriteRegStr SHCTX "${UNINST_KEY}" "QuietUninstallString" "$\"$INSTDIR\uninstall.exe$\" /S"
+
+    ${GetSize} "$INSTDIR" "/S=0K" $0 $1 $2
+    IntFmt $0 "0x%08X" $0
+    WriteRegDWORD SHCTX "${UNINST_KEY}" "EstimatedSize" "$0"
+!macroend
+
+!macro pelton.deleteUninstaller
+    Delete "$INSTDIR\uninstall.exe"
+
+    SetRegView 64
+    DeleteRegKey SHCTX "${UNINST_KEY}"
+!macroend
+
 Section "-Core" SecCore
     ; leading "-" hides this from the components list and keeps it mandatory:
     ; the app itself and its file/protocol associations always install
@@ -235,7 +262,7 @@ Section "-Core" SecCore
     !insertmacro wails.associateFiles
     !insertmacro wails.associateCustomProtocols
 
-    !insertmacro wails.writeUninstaller
+    !insertmacro pelton.writeUninstaller
 SectionEnd
 
 Section "Start Menu Shortcut" SecStartMenuShortcut
@@ -290,5 +317,5 @@ Section "uninstall"
     ; strings pointing at an executable that is gone.
     DeleteRegKey HKCU "Software\Classes\AppUserModelId\${PELTON_AUMID}"
 
-    !insertmacro wails.deleteUninstaller
+    !insertmacro pelton.deleteUninstaller
 SectionEnd

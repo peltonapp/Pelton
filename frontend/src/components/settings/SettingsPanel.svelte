@@ -11,7 +11,10 @@
     IconFileExport,
     IconRefresh,
   } from '@tabler/icons-svelte'
-  import { createEventDispatcher, onMount } from 'svelte'
+  import { createEventDispatcher, onMount, tick } from 'svelte'
+  import { get } from 'svelte/store'
+  import { popupIsOpen } from '../../lib/popups'
+  import { recording } from '../../stores/shortcuts'
   import SegmentedSetting from './SegmentedSetting.svelte'
   import StepSlider from './StepSlider.svelte'
   import AccentPicker from './AccentPicker.svelte'
@@ -61,6 +64,8 @@
     setAvatarSource,
     setAvatarStyle,
     setMultiSelectEnabled,
+    setMarkReadOnOpen,
+    setOpenOnArrow,
     setSelectAllScope,
     setSearchSort,
     searchSortPref,
@@ -89,15 +94,20 @@
     setAutoSyncInterval,
     setVerboseSync,
     setSyncProgressBar,
+    setStatusClock,
+    setStatusUnread,
     setCloseAction,
+    setStartHidden,
     setSyncMessageLimit,
     setSyncAutoBackfill,
     setDefaultEditorMode,
     setComposeAutocomplete,
     setComposeChips,
+    setSignatureAboveQuote,
     setEmptyStateImage,
     setEmptyStateFullscreen,
     setMenuBarInApp,
+    setWindowMaterial,
     setMenuBarNativeMinimal,
     setMenuBarIcons,
     setTimeFormat,
@@ -114,7 +124,11 @@
     setCrashLogs,
   } from '../../stores/prefs'
   import peltonLogo from '../../assets/images/icons/pelton-logo.png'
-  import { isMac } from '../../lib/i18n'
+  import { isMac, isWindows } from '../../lib/i18n'
+
+  // the native window material's product name, which is not translated.
+  // Linux has none and gets no setting.
+  const materialName = isMac ? 'Liquid Glass' : isWindows ? 'Mica' : ''
   import { downloadRange, cancelDownload, openLocalesFolder, saveLocaleTemplate, getLogStatus, openLogFolder, deleteLogs } from '../../lib/api'
   import en from '../../lib/locales/en'
   import { downloadProgress } from '../../stores/progress'
@@ -190,6 +204,7 @@
     { cat: 'appearance', label: $t('onboarding.accentTitle'), kw: 'accent color' },
     { cat: 'appearance', label: $t('settingsPanel.label.density'), kw: '' },
     { cat: 'appearance', label: $t('settingsPanel.label.corners'), kw: 'rounded square' },
+    ...(materialName ? [{ cat: 'appearance', label: materialName, kw: 'glass mica material translucent transparent blur' }] : []),
     { cat: 'appearance', label: $t('settingsPanel.label.interfaceScale'), kw: 'zoom scale size' },
     { cat: 'appearance', label: $t('settingsPanel.toggle.reduceMotion'), kw: 'animation' },
     { cat: 'appearance', label: $t('settingsPanel.toggle.handCursor'), kw: 'cursor pointer mouse arrow hand' },
@@ -207,6 +222,8 @@
     { cat: 'list', label: $t('settingsPanel.label.previewLines'), kw: 'preview lines' },
     { cat: 'list', label: $t('settingsPanel.label.flaggedHighlight'), kw: 'flag highlight' },
     { cat: 'list', label: $t('settingsPanel.toggle.showMailboxEmail'), kw: 'account email' },
+    { cat: 'list', label: $t('settingsPanel.toggle.markReadOnOpen'), kw: 'mark read seen unread open automatically' },
+    { cat: 'list', label: $t('settingsPanel.toggle.openOnArrow'), kw: 'arrow keys keyboard open select navigate enter' },
     { cat: 'list', label: $t('settingsPanel.toggle.multiSelect'), kw: 'select multiple' },
     { cat: 'list', label: $t('settingsPanel.toggle.indentGuides'), kw: 'sidebar folders' },
     { cat: 'list', label: $t('settingsPanel.toggle.flaggedCount'), kw: 'sidebar flagged count' },
@@ -216,6 +233,8 @@
     { cat: 'list', label: $t('settingsPanel.label.generatedStyle'), kw: 'avatar style' },
     { cat: 'display', label: $t('onboarding.extras.fontSize'), kw: 'message font size' },
     { cat: 'display', label: $t('settingsPanel.label.timeFormat'), kw: 'clock 24 hour' },
+    { cat: 'display', label: $t('settingsPanel.toggle.statusClock'), kw: 'status bar clock time date' },
+    { cat: 'display', label: $t('settingsPanel.toggle.statusUnread'), kw: 'status bar unread count new mail' },
     { cat: 'display', label: $t('settingsPanel.label.bodyFont'), kw: 'font' },
     { cat: 'display', label: $t('settingsPanel.toggle.senderFonts'), kw: 'font email typeface sender' },
     { cat: 'list', label: $t('settingsPanel.label.selectAllScope'), kw: 'select all bulk selection' },
@@ -228,6 +247,7 @@
     { cat: 'composing', label: $t('settingsPanel.label.defaultEditor'), kw: 'editor html plain markdown' },
     { cat: 'composing', label: $t('settingsPanel.toggle.autocomplete'), kw: 'autocomplete recipients' },
     { cat: 'composing', label: $t('settingsPanel.toggle.chipRecipients'), kw: 'chips recipients' },
+    { cat: 'composing', label: $t('settingsPanel.toggle.signatureAboveQuote'), kw: 'signature footer reply quote above below' },
     { cat: 'composing', label: $t('onboarding.extras.vimEditor'), kw: 'vim' },
     { cat: 'composing', label: $t('settingsPanel.label.undoSendWindow'), kw: 'undo send delay' },
     { cat: 'signatures', label: $t('settingsPanel.category.signatures'), kw: 'signature footer' },
@@ -257,6 +277,7 @@
     { cat: 'power', label: $t('settingsPanel.toggle.verboseSync'), kw: 'sync status' },
     { cat: 'power', label: $t('settingsPanel.toggle.syncProgressBar'), kw: 'sync progress bar percent count' },
     { cat: 'power', label: $t('settingsPanel.label.closeAction'), kw: 'close button tray background quit exit' },
+    { cat: 'power', label: $t('settingsPanel.toggle.startHidden'), kw: 'start minimized hidden tray background launch login autostart' },
     { cat: 'power', label: $t('settingsPanel.label.syncMessageLimit'), kw: 'sync limit messages older initial download' },
     { cat: 'power', label: $t('settingsPanel.toggle.syncAutoBackfill'), kw: 'older mail backfill scroll load more' },
     { cat: 'power', label: $t('settingsPanel.toggle.offlineIndicator'), kw: 'offline' },
@@ -301,6 +322,16 @@
   function openResult(cat: string): void {
     active = cat
     settingsQuery = ''
+  }
+
+  // a new category starts at the top: scrolled to the bottom of a long one,
+  // a short one would otherwise open past its end, which on WebKitGTK can
+  // also leave the pane unpainted until it is scrolled.
+  let contentEl: HTMLDivElement | undefined
+  $: void scrollToTop(active, settingsQ)
+  async function scrollToTop(..._deps: unknown[]): Promise<void> {
+    await tick()
+    contentEl?.scrollTo({ top: 0 })
   }
 
   // auto-sync interval presets, in seconds (0 = off).
@@ -770,8 +801,10 @@
     setDensity(event.detail as DensityPref)
   }
 
+  // escape closes the panel, unless an open dropdown or a shortcut being
+  // recorded wants it first.
   function onKeydown(event: KeyboardEvent): void {
-    if (event.key === 'Escape') {
+    if (event.key === 'Escape' && !popupIsOpen() && !get(recording)) {
       dispatch('close')
     }
   }
@@ -831,7 +864,7 @@
       {/if}
     </nav>
 
-    <div class="content">
+    <div class="content" bind:this={contentEl}>
       {#if settingsQ !== ''}
         <section>
           <h3>{$t('settings.search')}</h3>
@@ -989,6 +1022,17 @@
             </div>
             <p class="hint">{$t('settingsPanel.hint.emptyStateFullscreen')}</p>
           </div>
+          {#if materialName}
+            <div class="toggle">
+              <span class="row-label">{materialName}</span>
+              <ToggleSwitch
+                checked={$prefs.windowMaterial}
+                label={materialName}
+                on:change={(e) => setWindowMaterial(e.detail)}
+              />
+            </div>
+            <p class="hint">{$t('settingsPanel.hint.windowMaterial')}</p>
+          {/if}
         </section>
       {:else if active === 'menubar'}
         <section>
@@ -1094,6 +1138,22 @@
               checked={$prefs.showAccountEmail}
               label={$t('settingsPanel.toggle.showMailboxEmail')}
               on:change={(e) => setShowAccountEmail(e.detail)}
+            />
+          </div>
+          <div class="toggle">
+            <span class="row-label">{$t('settingsPanel.toggle.markReadOnOpen')}</span>
+            <ToggleSwitch
+              checked={$prefs.markReadOnOpen}
+              label={$t('settingsPanel.toggle.markReadOnOpen')}
+              on:change={(e) => setMarkReadOnOpen(e.detail)}
+            />
+          </div>
+          <div class="toggle">
+            <span class="row-label">{$t('settingsPanel.toggle.openOnArrow')}</span>
+            <ToggleSwitch
+              checked={$prefs.openOnArrow}
+              label={$t('settingsPanel.toggle.openOnArrow')}
+              on:change={(e) => setOpenOnArrow(e.detail)}
             />
           </div>
           <div class="toggle" title={$t('settingsPanel.hint.multiSelect')}>
@@ -1481,6 +1541,24 @@
               on:change={(e) => setPaneLocked(e.detail)}
             />
           </div>
+          <h4 class="subhead">{$t('settingsPanel.heading.statusBar')}</h4>
+          <div class="toggle">
+            <span class="row-label">{$t('settingsPanel.toggle.statusClock')}</span>
+            <ToggleSwitch
+              checked={$prefs.statusClock}
+              label={$t('settingsPanel.toggle.statusClock')}
+              on:change={(e) => setStatusClock(e.detail)}
+            />
+          </div>
+          <div class="toggle">
+            <span class="row-label">{$t('settingsPanel.toggle.statusUnread')}</span>
+            <ToggleSwitch
+              checked={$prefs.statusUnread}
+              label={$t('settingsPanel.toggle.statusUnread')}
+              on:change={(e) => setStatusUnread(e.detail)}
+            />
+          </div>
+          <p class="hint">{$t('settingsPanel.hint.statusUnread')}</p>
         </section>
       {:else if active === 'gestures'}
         <section>
@@ -1527,6 +1605,15 @@
           <p class="hint">
             {$t('settingsPanel.hint.closeAction')}
           </p>
+          <div class="toggle">
+            <span class="row-label">{$t('settingsPanel.toggle.startHidden')}</span>
+            <ToggleSwitch
+              checked={$prefs.startHidden}
+              label={$t('settingsPanel.toggle.startHidden')}
+              on:change={(e) => setStartHidden(e.detail)}
+            />
+          </div>
+          <p class="hint">{isMac ? $t('settingsPanel.hint.startHiddenMac') : $t('settingsPanel.hint.startHidden')}</p>
           <div class="toggle" title={$t('settingsPanel.hint.lowPowerToggle')}>
             <span class="row-label">{$t('settingsPanel.toggle.lowPowerMode')}</span>
             <ToggleSwitch
@@ -1692,6 +1779,14 @@
           {#if !$prefs.composeChips}
             <p class="hint">{$t('settingsPanel.hint.plainRecipients')}</p>
           {/if}
+          <div class="toggle">
+            <span class="row-label">{$t('settingsPanel.toggle.signatureAboveQuote')}</span>
+            <ToggleSwitch
+              checked={$prefs.signatureAboveQuote}
+              label={$t('settingsPanel.toggle.signatureAboveQuote')}
+              on:change={(e) => setSignatureAboveQuote(e.detail)}
+            />
+          </div>
           <div class="toggle" title={$t('settingsPanel.hint.vimEditor')}>
             <span class="row-label">{$t('onboarding.extras.vimEditor')} <span class="badge-experimental">{$t('common.experimental')}</span></span>
             <ToggleSwitch

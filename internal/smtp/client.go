@@ -215,7 +215,13 @@ func dialVia(cfg Config, addr string, tlsCfg *tls.Config) (*gosmtp.Client, error
 
 // Authenticate runs SASL auth with the configured mechanism.
 func (c *Client) Authenticate() error {
-	auth, err := authClient(c.cfg)
+	cfg := c.cfg
+	// Some Exim setups advertise only LOGIN and answer AUTH PLAIN with 504.
+	if cfg.Auth == AuthAuto && cfg.OAuth2Token == "" &&
+		!c.raw.SupportsAuth("PLAIN") && c.raw.SupportsAuth("LOGIN") {
+		cfg.Auth = AuthLogin
+	}
+	auth, err := authClient(cfg)
 	if err != nil {
 		return err
 	}

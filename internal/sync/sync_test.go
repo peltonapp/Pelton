@@ -10,6 +10,10 @@ func local(uid uint32, flags storage.Flag, pendingFlags, pendingDelete bool) *Lo
 	return &LocalMessage{UID: uid, Flags: flags, PendingFlags: pendingFlags, PendingDelete: pendingDelete}
 }
 
+func localMasked(uid uint32, flags, mask storage.Flag) *LocalMessage {
+	return &LocalMessage{UID: uid, Flags: flags, PendingFlags: true, PendingMask: mask}
+}
+
 func server(uid uint32, flags storage.Flag) *ServerMessage {
 	return &ServerMessage{UID: uid, Flags: flags}
 }
@@ -69,21 +73,19 @@ func TestReconcile(t *testing.T) {
 			wantFlags:  storage.FlagSeen,
 		},
 		{
-			name:         "both changed flags, union merge is a conflict",
-			local:        local(10, storage.FlagSeen, true, false),
+			name:         "both changed different flags, both kept and a conflict",
+			local:        localMasked(10, storage.FlagSeen, storage.FlagSeen),
 			server:       server(10, storage.FlagFlagged),
 			wantAction:   ActionPushFlags,
 			wantFlags:    storage.FlagSeen | storage.FlagFlagged,
 			wantConflict: true,
 		},
 		{
-			name:       "pending flags already satisfied on server, just clear",
-			local:      local(10, storage.FlagSeen, true, false),
-			server:     server(10, storage.FlagSeen|storage.FlagFlagged),
-			wantAction: ActionClearPending,
-			wantFlags:  storage.FlagSeen | storage.FlagFlagged,
-			// server already has \Seen and more, but its set differs from ours so
-			// it still counts as a divergence/conflict.
+			name:         "pending flags already satisfied on server, just clear",
+			local:        localMasked(10, storage.FlagSeen, storage.FlagSeen),
+			server:       server(10, storage.FlagSeen|storage.FlagFlagged),
+			wantAction:   ActionClearPending,
+			wantFlags:    storage.FlagSeen | storage.FlagFlagged,
 			wantConflict: true,
 		},
 		{
@@ -116,15 +118,14 @@ func TestReconcile(t *testing.T) {
 	}
 }
 
-func TestMergeFlagsUnion(t *testing.T) {
-	got := mergeFlags(storage.FlagSeen, storage.FlagFlagged)
+func TestMergeFlagsPerBit(t *testing.T) {
+	got := mergeFlags(storage.FlagSeen, storage.FlagFlagged, storage.FlagSeen)
 	want := storage.FlagSeen | storage.FlagFlagged
 	if got != want {
 		t.Fatalf("mergeFlags = %d, want %d", got, want)
 	}
-	// union never clears: seen locally, unseen on server, stays seen.
-	if got := mergeFlags(storage.FlagSeen, 0); got != storage.FlagSeen {
-		t.Fatalf("mergeFlags dropped a flag: got %d", got)
+	if got := mergeFlags(0, storage.FlagSeen, storage.FlagSeen); got != 0 {
+		t.Fatalf("local clear lost: got %d", got)
 	}
 }
 

@@ -21,8 +21,12 @@ export interface ProviderPreset {
   // implicit TLS, and that is a fact about the provider, not about the number.
   imapTls?: TLSMode
   smtpTls?: TLSMode
-  // note is shown under the form (e.g. app-specific password guidance).
-  note?: string
+  // labelKey, when set, is the i18n key for a label that needs translating
+  // (brand names stay as label).
+  labelKey?: string
+  // noteKey is the i18n key of the note shown under the form (e.g.
+  // app-specific password guidance).
+  noteKey?: string
   // appPasswordUrl, when set, replaces the plain note with a warning box that
   // spells out that the provider's regular password will not work and links to
   // where an app-specific password is generated.
@@ -94,7 +98,7 @@ export const providerPresets: ProviderPreset[] = [
     smtpHost: 'smtp.mail.yahoo.com',
     smtpPort: 465,
     smtpTls: 'ssl',
-    note: 'Yahoo requires an app password generated in account security.',
+    noteKey: 'wizard.provider.yahoo.note',
   },
   {
     id: 'fastmail',
@@ -106,7 +110,7 @@ export const providerPresets: ProviderPreset[] = [
     smtpHost: 'smtp.fastmail.com',
     smtpPort: 465,
     smtpTls: 'ssl',
-    note: 'Fastmail requires an app password.',
+    noteKey: 'wizard.provider.fastmail.note',
   },
   {
     id: 'purelymail',
@@ -118,13 +122,14 @@ export const providerPresets: ProviderPreset[] = [
     smtpHost: 'smtp.purelymail.com',
     smtpPort: 465,
     smtpTls: 'ssl',
-    note: 'Use your Purelymail password, or an app password if you enabled 2FA.',
+    noteKey: 'wizard.provider.purelymail.note',
   },
   {
     id: 'custom',
     label: 'Other (IMAP / SMTP)',
+    labelKey: 'wizard.provider.custom.label',
     kind: 'password',
     custom: true,
-    note: 'We will try to auto-detect your server settings from your address.',
+    noteKey: 'wizard.provider.custom.note',
   },
 ]

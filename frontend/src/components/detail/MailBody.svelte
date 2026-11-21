@@ -7,9 +7,9 @@
   // plaintext renders in the mono font, with bare urls linkified. remote
   // images are blocked by the backend by default; a per-message affordance
   // asks the backend to re-render with remote content allowed.
-  import { onDestroy } from 'svelte'
+  import { onDestroy, tick } from 'svelte'
   import { get } from 'svelte/store'
-  import { BrowserOpenURL } from '../../../wailsjs/runtime/runtime'
+  import { openURL } from '../../lib/browser'
   import { IconPhoto, IconUserCheck, IconWorldCheck, IconMailCheck, IconShieldSearch, IconChevronDown, IconEyeOff } from '@tabler/icons-svelte'
   import { prefs } from '../../stores/prefs'
   import { getMessageHtml, trustSenderImages, allowDomainImages, allowRemoteForMessage, scanUrl } from '../../lib/api'
@@ -20,6 +20,7 @@
   import { errorMessage, toastError, toastSuccess } from '../../stores/toast'
   import { displayName, linkifySegments } from '../../lib/format'
   import { bodyFontStack } from '../../lib/fonts'
+  import { frameKeyRelay, relayedKey, replayKey } from '../../lib/framekeys'
   import { t } from '../../lib/i18n'
   import type { MessageDetail, Verdict } from '../../lib/types'
 
@@ -37,6 +38,9 @@
     lastId = detail.id
     remoteLoaded = detail.remoteAllowed
     frameHeight = 320
+    pixelsBlocked = false
+    pixelMenu = null
+    pixelDetails = false
   }
 
   $: senderLabel = displayName(detail.fromName, detail.fromAddress)
@@ -129,12 +133,18 @@
     const contextHandler = offerScan
       ? 'document.addEventListener("contextmenu",function(e){var a=e.target&&e.target.closest("a");if(!a)return;var href=(a.getAttribute("href")||"").trim();if(!/^https?:/i.test(href))return;e.preventDefault();window.parent.postMessage({peltonContextLink:href,x:e.clientX,y:e.clientY},"*")});'
       : ''
+    const hoverHandler =
+      'var lastHov="";function hov(h){if(h===lastHov)return;lastHov=h;window.parent.postMessage({peltonHoverLink:h},"*")}' +
+      'document.addEventListener("mouseover",function(e){var a=e.target&&e.target.closest&&e.target.closest("a");hov(a?(a.getAttribute("href")||"").trim():"")});' +
+      'document.documentElement.addEventListener("mouseleave",function(){hov("")});'
     const script =
       '<scr' +
       'ipt nonce="' +
       nonce +
       '">document.addEventListener("click",function(e){var a=e.target&&e.target.closest("a");if(!a)return;var href=(a.getAttribute("href")||"").trim();if(!href)return;e.preventDefault();if(/^(https?:|mailto:)/i.test(href)){window.parent.postMessage({peltonOpenUrl:href},"*")}});' +
       contextHandler +
+      hoverHandler +
+      frameKeyRelay +
       '</scr' +
       'ipt>'
     // data-pelton-ready marks the body as belonging to our own srcdoc, not
@@ -160,7 +170,17 @@
     return crypto.randomUUID().replace(/-/g, '')
   }
 
-  $: srcdoc = buildSrcdoc(detail.bodyHtmlSafe, remoteLoaded, $prefs.messageFontSize, $prefs.bodyFont, makeNonce(), canScan)
+  // one nonce per message: drawing a fresh one on every update made the
+  // document a new string each time, and the frame reloaded when a flag was
+  // toggled or the pane re-rendered for any other reason.
+  let nonce = makeNonce()
+  let nonceFor = -1
+  $: if (detail.id !== nonceFor) {
+    nonceFor = detail.id
+    nonce = makeNonce()
+  }
+
+  $: srcdoc = buildSrcdoc(detail.bodyHtmlSafe, remoteLoaded, $prefs.messageFontSize, $prefs.bodyFont, nonce, canScan)
 
   // plain-text bodies render in a <pre>, not the sandboxed iframe, so bare
   // urls need their own linkification: nothing upstream turns them into real
@@ -237,6 +257,7 @@
   // in case 'load' fires before contentDocument.body is actually populated
   // (observed to be unreliable timing on some webview engines).
   function onFrameLoad(): void {
+    hoverUrl = ''
     attachInteractivity()
   }
 
@@ -265,6 +286,30 @@
     scheduleAttach()
   }
 
+  let hoverUrl = ''
+
+  // showHover updates the status overlay with the address of the hovered link,
+  // or hides it for an empty href. mailto links show just the address. The
+  // overlay is anchored to the message pane, outside its scroll area.
+  function showHover(href: string): void {
+    const shown = /^mailto:/i.test(href) ? href.slice(7).split('?')[0] : /^https?:/i.test(href) ? href : ''
+    if (shown === hoverUrl) return
+    hoverUrl = shown
+    hoverSlide = 0
+    if (shown) void measureHover()
+  }
+
+  let hoverBox: HTMLDivElement | undefined
+  let hoverText: HTMLSpanElement | undefined
+  let hoverSlide = 0
+
+  // an address wider than the bar slides back and forth instead of being cut.
+  async function measureHover(): Promise<void> {
+    await tick()
+    if (!hoverBox || !hoverText) return
+    hoverSlide = Math.max(hoverText.offsetWidth - hoverBox.clientWidth, 0)
+  }
+
   // onWindowMessage receives the url from the click handler running inside
   // the iframe's own document (see the injected script in buildSrcdoc) and
   // opens it in the external browser. The source check makes sure this only
@@ -274,10 +319,19 @@
     if (event.source !== frame?.contentWindow) {
       return
     }
-    const data = event.data as { peltonOpenUrl?: unknown; peltonContextLink?: unknown; x?: unknown; y?: unknown } | null
+    const key = relayedKey(event.data)
+    if (key && frame) {
+      replayKey(frame, key)
+      return
+    }
+    const data = event.data as { peltonOpenUrl?: unknown; peltonContextLink?: unknown; peltonHoverLink?: unknown; x?: unknown; y?: unknown } | null
+    if (typeof data?.peltonHoverLink === 'string') {
+      showHover(data.peltonHoverLink)
+      return
+    }
     const href = data?.peltonOpenUrl
     if (typeof href === 'string' && /^(https?:|mailto:)/i.test(href)) {
-      BrowserOpenURL(href)
+      openURL(href)
       return
     }
     const link = data?.peltonContextLink
@@ -423,8 +477,13 @@
 
   async function loadRemote(includeTrackers = false): Promise<void> {
     try {
-      const html = await getMessageHtml(detail.id, true, includeTrackers)
-      setBodyHtml(html)
+      const id = detail.id
+      const html = await getMessageHtml(id, true, includeTrackers)
+      setBodyHtml(id, html)
+      // the reader may have moved on while the html was fetched
+      if (detail.id !== id) {
+        return
+      }
       remoteLoaded = true
       pixelsBlocked = !includeTrackers && trackers.length > 0
       pixelMenu = null
@@ -596,12 +655,69 @@
   <pre dir="auto" class="body-plain mono selectable" style={`font-size:${$prefs.messageFontSize}px`}>{#each plainSegments as segment}{#if segment.href}<a
         class="plain-link"
         href={segment.href}
-        on:click|preventDefault={() => BrowserOpenURL(segment.href ?? '')}
+        on:click|preventDefault={() => openURL(segment.href ?? '')}
         on:contextmenu={(e) => onPlainContext(e, segment.href ?? '')}
+        on:mouseenter={() => showHover(segment.href ?? '')}
+        on:mouseleave={() => showHover('')}
       >{segment.text}</a>{#if $linkVerdicts.has(segment.href ?? '')}<VerdictBadge verdict={$linkVerdicts.get(segment.href ?? '')!} size={12} />{/if}{:else}{segment.text}{/if}{/each}</pre>
 {/if}
 
+{#if hoverUrl}
+  <div class="link-hover mono" aria-hidden="true" bind:this={hoverBox}>
+    <span
+      class="link-hover-text"
+      class:sliding={hoverSlide > 0}
+      style={`--slide:-${hoverSlide}px;--slide-time:${Math.max(3, hoverSlide / 40)}s`}
+      bind:this={hoverText}>{hoverUrl}</span
+    >
+  </div>
+{/if}
+
 <style>
+  .link-hover {
+    position: absolute;
+    right: 0;
+    bottom: 0;
+    z-index: 30;
+    max-width: calc(100% - var(--space-6));
+    border: var(--hairline) solid var(--border-default);
+    border-right: none;
+    border-bottom: none;
+    border-top-left-radius: var(--radius-control);
+    background: var(--surface-overlay);
+    color: var(--text-secondary);
+    font-size: calc(var(--fz-meta) - 1px);
+    overflow: hidden;
+    white-space: nowrap;
+    pointer-events: none;
+  }
+
+  .link-hover-text {
+    display: inline-block;
+    padding: var(--space-1) var(--space-2);
+  }
+
+  .link-hover-text.sliding {
+    animation: link-slide var(--slide-time) ease-in-out 0.6s infinite alternate;
+  }
+
+  @keyframes link-slide {
+    0%,
+    15% {
+      transform: translateX(0);
+    }
+    85%,
+    100% {
+      transform: translateX(var(--slide));
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .link-hover-text.sliding {
+      animation: none;
+    }
+  }
+
   /* a warning-tinted banner, since blocked remote content is a privacy matter. */
   .remote-bar {
     display: flex;

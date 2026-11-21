@@ -193,3 +193,45 @@ func TestSanitizeDirectionDoesNotRescueBlockedElements(t *testing.T) {
 		t.Errorf("Sanitize() dropped the direction of the surviving paragraph: %q", got)
 	}
 }
+
+func TestSanitizeDataURLs(t *testing.T) {
+	for _, tt := range []struct {
+		name        string
+		html        string
+		allowRemote bool
+		keep        bool
+	}{
+		{"png image, remote blocked", `<img src="data:image/png;base64,iVBORw0KGgo=">`, false, true},
+		{"png image, remote allowed", `<img src="data:image/png;base64,iVBORw0KGgo=">`, true, true},
+		{"upper case media type", `<img src="data:IMAGE/PNG;base64,iVBORw0KGgo=">`, false, true},
+		{"html in img src", `<img src="data:text/html;base64,PHNjcmlwdD4=">`, false, false},
+		{"html in link", `<a href="data:text/html;base64,PHNjcmlwdD4=">x</a>`, true, false},
+		{"javascript link", `<a href="javascript:alert(1)">x</a>`, true, false},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			got := Sanitize(tt.html, tt.allowRemote, false)
+			if has := strings.Contains(strings.ToLower(got), "data:"); has != tt.keep {
+				t.Errorf("Sanitize(%q) = %q, data url kept = %v, want %v", tt.html, got, has, tt.keep)
+			}
+		})
+	}
+}
+
+func TestSanitizeStillBlocksRemoteImagesBesideDataImages(t *testing.T) {
+	got := Sanitize(`<img src="https://tracker.example/p.gif"><img src="data:image/png;base64,iVBORw0KGgo=">`, false, false)
+	if strings.Contains(got, "tracker.example") {
+		t.Errorf("remote image survived: %q", got)
+	}
+	if !strings.Contains(got, "data:image/png") {
+		t.Errorf("data image was dropped: %q", got)
+	}
+}
+
+func TestResolveCIDsThenSanitizeKeepsInlineImage(t *testing.T) {
+	html := `<img src="cid:Logo-Gray.png" alt="logo">`
+	resolved := ResolveCIDs(html, map[string]string{"logo-gray.png": "data:image/png;base64,iVBORw0KGgo="})
+	got := Sanitize(resolved, false, false)
+	if !strings.Contains(got, `src="data:image/png;base64,iVBORw0KGgo="`) {
+		t.Errorf("inline image did not survive: %q", got)
+	}
+}

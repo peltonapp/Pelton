@@ -1,6 +1,8 @@
 package desktop
 
 import (
+	"encoding/json"
+	"strings"
 	"testing"
 
 	"github.com/peltonapp/Pelton/internal/storage"
@@ -19,6 +21,17 @@ func TestSplitJoinAddrs(t *testing.T) {
 	}
 	if joinAddrs([]string{" a@x ", "", "b@y"}) != "a@x\nb@y" {
 		t.Errorf("joinAddrs did not trim and drop blanks: %q", joinAddrs([]string{" a@x ", "", "b@y"}))
+	}
+}
+
+func TestViewToDTOEmptyAddrsAreArrays(t *testing.T) {
+	b, err := json.Marshal(viewToDTO(storage.View{Name: "x"}))
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+	s := string(b)
+	if !strings.Contains(s, `"queryFrom":[]`) || !strings.Contains(s, `"queryTo":[]`) {
+		t.Errorf("empty address lists must encode as [], got %s", s)
 	}
 }
 

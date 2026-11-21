@@ -10,7 +10,6 @@ import (
 	pimap "github.com/peltonapp/Pelton/internal/imap"
 	psmtp "github.com/peltonapp/Pelton/internal/smtp"
 	"github.com/peltonapp/Pelton/internal/storage"
-	"github.com/wailsapp/wails/v2/pkg/runtime"
 )
 
 // maxCAFileSize bounds what the CA picker reads. A CA bundle is a few
@@ -210,9 +209,9 @@ func (a *App) RemoveAccountTrustedCertificate(accountID int64, fingerprint strin
 // contents once they parse. A cancelled dialog returns an empty result and no
 // error.
 func (a *App) ChooseCAFile() (CAFileDTO, error) {
-	path, err := runtime.OpenFileDialog(a.ctx, runtime.OpenDialogOptions{
+	path, err := a.openFileDialog(openDialogOptions{
 		Title: "Choose CA certificate",
-		Filters: []runtime.FileFilter{
+		Filters: []fileFilter{
 			{DisplayName: "Certificates (*.pem, *.crt, *.cer)", Pattern: "*.pem;*.crt;*.cer"},
 			{DisplayName: "All files", Pattern: "*.*"},
 		},

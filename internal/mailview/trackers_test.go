@@ -50,9 +50,29 @@ func TestScanRemoteImagesSignals(t *testing.T) {
 			tracker: true,
 		},
 		{
-			name:    "opaque id alone on a host is two weak signals",
+			// a newsletter's one hero image under a hashed name looks exactly
+			// like this, so the pair is noted but not called a tracker.
+			name:    "opaque id alone on a host is not enough",
 			html:    `<img src="https://cdn.example.com/i?c=Zm9vYmFyYmF6cXV1eDEyMw" width="500">`,
 			want:    []TrackerSignal{SignalOpaqueID, SignalLoneImage},
+			tracker: false,
+		},
+		{
+			name:    "opaque id on a hidden image",
+			html:    `<img src="https://cdn.example.com/i?c=Zm9vYmFyYmF6cXV1eDEyMw" style="display:none">`,
+			want:    []TrackerSignal{SignalHidden, SignalOpaqueID, SignalLoneImage},
+			tracker: true,
+		},
+		{
+			name:    "1px box set in the style",
+			html:    `<img src="https://example.com/p.png" style="width:1px;height:1px">`,
+			want:    []TrackerSignal{SignalTiny, SignalLoneImage},
+			tracker: true,
+		},
+		{
+			name:    "one tiny side and nothing else declared",
+			html:    `<img src="https://example.com/p.png" height="1">`,
+			want:    []TrackerSignal{SignalTiny, SignalLoneImage},
 			tracker: true,
 		},
 		{
@@ -101,6 +121,36 @@ func TestScanRemoteImagesSignals(t *testing.T) {
 				t.Errorf("LooksLikeTracker() = %t, want %t", scan.Images[0].LooksLikeTracker(), tt.tracker)
 			}
 		})
+	}
+}
+
+// Ordinary images that used to be called trackers. Each is the only image on
+// its host, the way a small newsletter often is, so nothing but the image
+// itself decides.
+func TestOrdinaryImagesAreNotTrackers(t *testing.T) {
+	cases := map[string]string{
+		"retina file name":        `<img src="https://cdn.example.com/img/logo@2x.png" width="200">`,
+		"retina percent encoded":  `<img src="https://cdn.example.com/img/hero%402x.jpg" width="600">`,
+		"line height in style":    `<img src="https://cdn.example.com/a.png" style="display:block;line-height:1;" width="600">`,
+		"border width in style":   `<img src="https://cdn.example.com/a.png" style="border-width:0;" width="600">`,
+		"max height in style":     `<img src="https://cdn.example.com/a.png" style="max-height:0;" width="600">`,
+		"divider line":            `<img src="https://cdn.example.com/rule.png" width="600" height="1">`,
+		"divider in style":        `<img src="https://cdn.example.com/rule.png" style="width:100%;height:1px">`,
+		"hashed hero image":       `<img src="https://cdn.example.com/u/7f3a9c2be41d8f6a0c55e2d913b7a4f0.jpg" width="600">`,
+		"mailchimp gallery image": `<img src="https://gallery.mailchimp.com/abc/images/hero.jpg" width="600">`,
+		// the mobile copy is hidden until a media query shows it, next to the
+		// desktop copy on the same host.
+		"responsive mobile image": `<img src="https://cdn.example.com/desktop.jpg" width="600">` +
+			`<img src="https://cdn.example.com/mobile.jpg" style="display:none;max-height:0;mso-hide:all" width="320">`,
+	}
+	for name, html := range cases {
+		scan := ScanRemoteImages(html)
+		if len(scan.Images) == 0 {
+			t.Fatalf("%s: found no images", name)
+		}
+		if len(scan.Trackers) != 0 {
+			t.Errorf("%s: called a tracker, signals %v", name, scan.Trackers[0].Signals)
+		}
 	}
 }
 
@@ -266,7 +316,6 @@ func TestScanOnARealisticNewsletter(t *testing.T) {
 		"beacon.example.net",
 		"ct.sendgrid.net",
 		"mail.example.org",
-		"lonely.example.org",
 	}
 	var got []string
 	for _, tr := range scan.Trackers {
@@ -275,8 +324,10 @@ func TestScanOnARealisticNewsletter(t *testing.T) {
 	if !slices.Equal(got, wantTrackers) {
 		t.Errorf("trackers = %v, want %v", got, wantTrackers)
 	}
-	if scan.OtherCount() != 4 {
-		t.Errorf("OtherCount() = %d, want 4", scan.OtherCount())
+	// lonely.example.org is one visible image under a hashed name: a hero
+	// picture as often as a pixel, so it stays an image.
+	if scan.OtherCount() != 5 {
+		t.Errorf("OtherCount() = %d, want 5", scan.OtherCount())
 	}
 }
 

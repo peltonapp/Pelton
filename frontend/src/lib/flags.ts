@@ -15,17 +15,14 @@
 //
 // The svgs come from flag-icons (MIT) and are bundled, never fetched.
 
-/** Every flag in the set, keyed by lowercase ISO 3166-1 alpha-2 code. */
-const files = import.meta.glob<string>('../../node_modules/flag-icons/flags/4x3/*.svg', {
-  eager: true,
-  query: '?url',
-  import: 'default',
-})
+import { flagUrl } from './flagurl'
 
-const byCountry: Record<string, string> = {}
-for (const [path, url] of Object.entries(files)) {
-  const code = path.slice(path.lastIndexOf('/') + 1, -4)
-  byCountry[code] = url
+const regionNames = new Intl.DisplayNames(['en'], { type: 'region', fallback: 'none' })
+
+// flag-icons carries a flag for every assigned ISO 3166-1 code, so a code the
+// platform can name has one.
+function hasFlag(code: string): boolean {
+  return /^[a-z]{2}$/.test(code) && regionNames.of(code.toUpperCase()) !== undefined
 }
 
 // the flag a language falls back to when the operating system names no region,
@@ -39,6 +36,7 @@ const defaultCountry: Record<string, string> = {
   es: 'es',
   it: 'it',
   pl: 'pl',
+  ru: 'ru',
   tr: 'tr',
   pt: 'pt',
   // ar has no entry and is given none: no single country's flag stands for the
@@ -59,10 +57,10 @@ export function flagFor(language: string): string | undefined {
   // the operating system would answer for whatever region the machine is in.
   if (tag.includes('-')) {
     const pinned = defaultCountry[tag]
-    return pinned ? byCountry[pinned] : undefined
+    return pinned && hasFlag(pinned) ? flagUrl(pinned) : undefined
   }
   const country = osRegionFor(tag) ?? defaultCountry[tag]
-  return country ? byCountry[country] : undefined
+  return country && hasFlag(country) ? flagUrl(country) : undefined
 }
 
 /**
@@ -76,5 +74,5 @@ function osRegionFor(language: string): string | undefined {
   if (base !== language || !region || region.length !== 2) {
     return undefined
   }
-  return byCountry[region] ? region : undefined
+  return hasFlag(region) ? region : undefined
 }

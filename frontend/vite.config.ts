@@ -1,6 +1,8 @@
 import {defineConfig} from 'vitest/config'
 import {svelte} from '@sveltejs/vite-plugin-svelte'
 import {fileURLToPath} from 'node:url'
+import fs from 'node:fs'
+import path from 'node:path'
 
 // @tabler/icons ships its full icon geometry as tabler-nodes-outline.json, but
 // the package's exports map only exposes ./icons/*, so the file is aliased here
@@ -32,9 +34,63 @@ const dropLegacyWoff = {
   },
 }
 
+// on the dev server a flag is a plain path rather than the build's url
+// template; flagurl.dev.ts says why.
+const flagUrlDev = {
+  name: 'flag-url-dev',
+  apply: 'serve' as const,
+  enforce: 'pre' as const,
+  async resolveId(this: { resolve: (s: string, i?: string, o?: object) => Promise<{ id: string } | null> }, source: string, importer?: string) {
+    if (!source.endsWith('/flagurl')) {
+      return null
+    }
+    const resolved = await this.resolve(source, importer, { skipSelf: true })
+    return resolved ? resolved.id.replace(/flagurl\.ts$/, 'flagurl.dev.ts') : null
+  },
+}
+
+// the pdf viewer's support files (cmaps, standard fonts, colour profiles and
+// image decoders) are fetched by pdf.js at runtime, so they ship as files under
+// /pdfjs/ rather than going through the module graph. quickjs is left out: it
+// only runs scripts embedded in a pdf, which the viewer never does.
+const pdfjsRoot = fileURLToPath(new URL('./node_modules/pdfjs-dist/', import.meta.url))
+const pdfjsDirs = ['cmaps', 'standard_fonts', 'iccs', 'wasm']
+const pdfjsSkip = (name: string) => name.startsWith('quickjs') || name.startsWith('LICENSE')
+const pdfjsAssets = {
+  name: 'pdfjs-assets',
+  configureServer(server: { middlewares: { use: (fn: (req: { url?: string }, res: { setHeader: (k: string, v: string) => void, end: (b: Buffer) => void }, next: () => void) => void) => void } }) {
+    server.middlewares.use((req, res, next) => {
+      const m = /^\/pdfjs\/([a-z_]+)\/([A-Za-z0-9_.-]+)$/.exec((req.url ?? '').split('?')[0])
+      if (!m || !pdfjsDirs.includes(m[1]) || pdfjsSkip(m[2])) {
+        next()
+        return
+      }
+      const file = path.join(pdfjsRoot, m[1], m[2])
+      if (!fs.existsSync(file)) {
+        next()
+        return
+      }
+      if (file.endsWith('.wasm')) {
+        res.setHeader('Content-Type', 'application/wasm')
+      }
+      res.end(fs.readFileSync(file))
+    })
+  },
+  generateBundle(this: { emitFile: (f: { type: 'asset', fileName: string, source: Uint8Array }) => string }) {
+    for (const dir of pdfjsDirs) {
+      for (const name of fs.readdirSync(path.join(pdfjsRoot, dir))) {
+        if (pdfjsSkip(name)) {
+          continue
+        }
+        this.emitFile({ type: 'asset', fileName: `pdfjs/${dir}/${name}`, source: fs.readFileSync(path.join(pdfjsRoot, dir, name)) })
+      }
+    }
+  },
+}
+
 // https://vitejs.dev/config/
 export default defineConfig({
-  plugins: [svelte(), dropLegacyWoff],
+  plugins: [svelte(), dropLegacyWoff, flagUrlDev, pdfjsAssets],
   resolve: {
     alias: {
       'tabler-nodes-outline': tablerNodesOutline,
@@ -57,5 +113,8 @@ export default defineConfig({
     globals: true,
     setupFiles: ['./src/test/setup.ts'],
     include: ['src/**/*.test.ts'],
+    alias: {
+      '@wailsio/runtime': fileURLToPath(new URL('./src/test/wailsruntime.ts', import.meta.url)),
+    },
   },
 })

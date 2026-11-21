@@ -31,6 +31,17 @@ export interface ReorderDetail {
 export interface ReorderOptions {
   /** Which way the items are laid out. Defaults to vertical. */
   axis?: 'x' | 'y'
+  /**
+   * Lets an item be torn off: released far enough across the axis (off a tab
+   * strip, say), it fires `reordertearoff` instead of reordering.
+   */
+  tearOff?: boolean
+}
+
+/** The detail of a `reordertearoff` event. */
+export interface TearOffDetail {
+  /** The data-reorder-id of the item that was torn off. */
+  id: string
 }
 
 /** The events the action adds to the element it is used on. */
@@ -38,7 +49,12 @@ interface ReorderAttributes {
   'on:reorder'?: (event: CustomEvent<ReorderDetail>) => void
   'on:reorderstart'?: (event: CustomEvent<void>) => void
   'on:reorderend'?: (event: CustomEvent<void>) => void
+  'on:reordertearoff'?: (event: CustomEvent<TearOffDetail>) => void
 }
+
+// how far across the axis an item has to travel to be torn off rather than
+// reordered.
+const tearOffDistance = 56
 
 // pointer travel before a press counts as a drag rather than a click.
 const dragThreshold = 4
@@ -102,6 +118,8 @@ export function reorder(
   // the pointer coordinate along the drag axis, and the item edges to compare
   // it against. Everything else is the same either way.
   const along = (event: MouseEvent): number => (horizontal ? event.clientX : event.clientY)
+  const across = (event: MouseEvent): number => (horizontal ? event.clientY : event.clientX)
+  const tearOff = options.tearOff ?? false
   const midpoint = (rect: DOMRect): number => (horizontal ? rect.left + rect.width / 2 : rect.top + rect.height / 2)
 
   let dragged: HTMLElement | null = null
@@ -112,6 +130,10 @@ export function reorder(
   let scroller: HTMLElement | null = null
   let scrollFrame = 0
   let pointer = 0
+  // where the press started across the axis, and whether the pointer is now
+  // far enough off it that letting go tears the item off.
+  let crossStart = 0
+  let tornOff = false
 
   // only the real items, so the placeholder never counts as one.
   function items(): HTMLElement[] {
@@ -140,6 +162,8 @@ export function reorder(
     dragged = item
     start = along(event)
     pointer = along(event)
+    crossStart = across(event)
+    tornOff = false
     scroller = nearestScroller(node, horizontal)
     window.addEventListener('mousemove', onMouseMove)
     window.addEventListener('mouseup', onMouseUp)
@@ -194,11 +218,25 @@ export function reorder(
 
   function onMouseMove(event: MouseEvent): void {
     pointer = along(event)
-    if (!active && Math.abs(pointer - start) < dragThreshold) {
+    const off = tearOff && Math.abs(across(event) - crossStart) > tearOffDistance
+    if (!active && !off && Math.abs(pointer - start) < dragThreshold) {
       return
     }
     if (!active) {
       begin()
+    }
+    tornOff = off
+    if (tornOff) {
+      // off the strip: no gap to drop into, and the item fades further to say
+      // it is leaving rather than moving.
+      placeholder?.remove()
+      if (dragged) {
+        dragged.style.opacity = '0.15'
+      }
+      return
+    }
+    if (dragged) {
+      dragged.style.opacity = '0.4'
     }
     update()
     startAutoScroll()
@@ -273,6 +311,13 @@ export function reorder(
       return
     }
     node.dispatchEvent(new CustomEvent('reorderend'))
+    const torn = tornOff
+    tornOff = false
+    if (commit && torn && item) {
+      const id = item.getAttribute(reorderIdAttr) ?? ''
+      node.dispatchEvent(new CustomEvent<TearOffDetail>('reordertearoff', { detail: { id } }))
+      return
+    }
     if (!commit || !item || index < 0) {
       return
     }

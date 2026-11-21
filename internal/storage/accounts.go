@@ -55,6 +55,9 @@ type Account struct {
 	// 'sign' to sign when the account has a key, 'auto' to sign and encrypt
 	// whenever every recipient has one.
 	PGPDefault string
+	// Color marks the account's mail in views that mix accounts (#486). Empty
+	// means none.
+	Color string
 	// PasswordPromptDismissed records that the user asked the missing-password
 	// prompt to stop interrupting for this account. The account still cannot
 	// sync; the ui marks it instead of asking. Storing a password clears it.
@@ -131,7 +134,7 @@ const accountColumns = `a.id, a.email, a.display_name, a.username, a.imap_host, 
        a.pgp_default, a.password_prompt_dismissed, a.local_label, a.use_local_label,
        a.trusted_certs, a.ca_pem,
        a.proxy_mode, a.proxy_scheme, a.proxy_host, a.proxy_port, a.proxy_username,
-       a.proxy_contacts_global, a.proxy_oauth_global`
+       a.proxy_contacts_global, a.proxy_oauth_global, a.color`
 
 // accountFrom joins an account to the active profile's section order. Every
 // query using accountColumns takes the layout profile id as its first argument.
@@ -285,6 +288,16 @@ func (d *DB) SetAccountPGPDefault(ctx context.Context, id int64, value string) e
 	return requireOneRow(res, ErrAccountNotFound)
 }
 
+// SetAccountColor stores the colour that marks an account's mail. Validating
+// the value is the caller's job.
+func (d *DB) SetAccountColor(ctx context.Context, id int64, color string) error {
+	res, err := d.sql.ExecContext(ctx, `UPDATE accounts SET color = ? WHERE id = ?`, color, id)
+	if err != nil {
+		return fmt.Errorf("storage: set account %d color: %w", id, err)
+	}
+	return requireOneRow(res, ErrAccountNotFound)
+}
+
 // SetAccountPasswordPromptDismissed records whether the missing-password prompt
 // should stay quiet for an account.
 func (d *DB) SetAccountPasswordPromptDismissed(ctx context.Context, id int64, dismissed bool) error {
@@ -372,7 +385,7 @@ func scanAccount(row rowScanner) (*Account, error) {
 		&a.PGPDefault, &dismissed, &a.LocalLabel, &useLabel,
 		&trusted, &a.CAPEM,
 		&a.Proxy.Mode, &a.Proxy.Scheme, &a.Proxy.Host, &a.Proxy.Port, &a.Proxy.Username,
-		&contacts, &oauth); err != nil {
+		&contacts, &oauth, &a.Color); err != nil {
 		return nil, err
 	}
 	a.Proxy.ContactsUseGlobal = contacts != 0

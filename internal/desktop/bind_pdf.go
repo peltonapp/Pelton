@@ -34,7 +34,8 @@ func (a *App) ExportMessagePrintView(id int64) error {
 	}
 
 	email, folderName := a.lookupContext(a.ctx, m.AccountID, m.FolderID)
-	body := a.renderHTML(m.BodyHTML, atts, a.remoteAutoAllow(m.FromAddress))
+	allowRemote := a.remoteAutoAllow(m.FromAddress)
+	body := a.renderHTML(m.BodyHTML, atts, allowRemote)
 	if body == "" {
 		body = "<pre>" + html.EscapeString(m.BodyPlain) + "</pre>"
 	}
@@ -47,7 +48,7 @@ func (a *App) ExportMessagePrintView(id int64) error {
 		Date:    formatDate(m.Date),
 		Account: email,
 		Folder:  folderName,
-	}, body)
+	}, body, allowRemote)
 
 	path := filepath.Join(os.TempDir(), fmt.Sprintf("pelton-message-%d.html", id))
 	if err := os.WriteFile(path, []byte(doc), 0o600); err != nil {
@@ -67,9 +68,24 @@ type printMeta struct {
 	Folder  string
 }
 
+// printCSP is the content security policy of the print view, the same one the
+// reading pane uses. The page opens in the system browser, outside the reading
+// pane's frame, and without a policy of its own anything the sanitizer lets
+// through (a css background url, say, which it keeps on purpose) would load
+// there even with remote content blocked. Nothing in the page may run script.
+func printCSP(allowRemote bool) string {
+	src := "data:"
+	if allowRemote {
+		src = "data: https: http:"
+	}
+	return "default-src 'none'; img-src " + src + "; media-src " + src +
+		"; style-src 'unsafe-inline'; font-src data:; script-src 'none'; form-action 'none'; base-uri 'none'"
+}
+
 // buildPrintDocument wraps the sanitized body in a minimal, print-friendly
-// document with a header table. The body is already sanitized by renderHTML.
-func buildPrintDocument(meta printMeta, body string) string {
+// document with a header table. The body is already sanitized by renderHTML;
+// allowRemote is whether it was rendered with remote content.
+func buildPrintDocument(meta printMeta, body string, allowRemote bool) string {
 	row := func(label, value string) string {
 		if strings.TrimSpace(value) == "" {
 			return ""
@@ -100,7 +116,8 @@ func buildPrintDocument(meta printMeta, body string) string {
   img{max-width:100%;height:auto;}
   @media print{body{margin:12mm;}}`
 
-	return "<!doctype html><html><head><meta charset=\"utf-8\"><title>" +
+	return "<!doctype html><html><head><meta charset=\"utf-8\">" +
+		"<meta http-equiv=\"Content-Security-Policy\" content=\"" + printCSP(allowRemote) + "\"><title>" +
 		html.EscapeString(meta.Subject) + "</title>" + open + css + closeTag + "</head><body>" +
 		"<h1>" + html.EscapeString(meta.Subject) + "</h1>" + header.String() + "<hr>" + body +
 		"</body></html>"
