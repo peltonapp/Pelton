@@ -4738,6 +4738,12 @@ export class UIPrefsDTO {
     "markReadOnOpen": boolean;
 
     /**
+     * MarkReadDelaySeconds is how long the vim keys have to rest on a message
+     * before it is marked read. 0 never marks it that way.
+     */
+    "markReadDelaySeconds": number;
+
+    /**
      * OpenOnArrow opens the message the arrow keys move to in the list, instead
      * of only highlighting it until Enter.
      */
@@ -5024,6 +5030,9 @@ export class UIPrefsDTO {
         }
         if (!("markReadOnOpen" in $$source)) {
             this["markReadOnOpen"] = false;
+        }
+        if (!("markReadDelaySeconds" in $$source)) {
+            this["markReadDelaySeconds"] = 0;
         }
         if (!("openOnArrow" in $$source)) {
             this["openOnArrow"] = false;

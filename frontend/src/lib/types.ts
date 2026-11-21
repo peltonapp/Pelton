@@ -584,6 +584,9 @@ export interface UIPrefs {
   statusUnread: boolean
   // markReadOnOpen marks a message read when it is opened (#517).
   markReadOnOpen: boolean
+  // markReadDelaySeconds is how long the vim keys have to rest on a message
+  // before it is marked read. 0 never marks it; Enter still does.
+  markReadDelaySeconds: number
   // openOnArrow opens the row the arrow keys move to, instead of waiting for Enter.
   openOnArrow: boolean
   // signatureAboveQuote puts a reply's footer above the quoted original (#512).
