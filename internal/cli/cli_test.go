@@ -61,16 +61,16 @@ func TestIDsFromStdin(t *testing.T) {
 
 func TestSafeName(t *testing.T) {
 	for in, want := range map[string]string{
-		"../../etc/passwd":      "passwd",
-		"/etc/passwd":           "passwd",
-		`..\..\windows\win.ini`: "win.ini",
-		"..":                    "attachment",
-		".":                     "attachment",
-		"":                      "attachment",
-		"a\x1b[2Jb.pdf":         "a_[2Jb.pdf",
-		"CON.txt":               "_CON.txt",
-		"report?.pdf":           "report_.pdf",
-		"trailing. ":            "trailing",
+		"../../etc/passwd":       "passwd",
+		"/etc/passwd":            "passwd",
+		`..\..\windows\win.ini`:  "win.ini",
+		"..":                     "attachment",
+		".":                      "attachment",
+		"":                       "attachment",
+		"a\x1b[2Jb.pdf":          "a_[2Jb.pdf",
+		"CON.txt":                "_CON.txt",
+		"report?.pdf":            "report_.pdf",
+		"trailing. ":             "trailing",
 		"evil" + rlo + "fdp.exe": "evil_fdp.exe",
 	} {
 		if got := safeName(in, "attachment"); got != want {
