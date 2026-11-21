@@ -3,6 +3,7 @@ import {svelte} from '@sveltejs/vite-plugin-svelte'
 import {fileURLToPath} from 'node:url'
 import fs from 'node:fs'
 import path from 'node:path'
+import {bundledOCRCodes} from './src/lib/ocrlanguages'
 
 // @tabler/icons ships its full icon geometry as tabler-nodes-outline.json, but
 // the package's exports map only exposes ./icons/*, so the file is aliased here
@@ -49,48 +50,65 @@ const flagUrlDev = {
   },
 }
 
-// the pdf viewer's support files (cmaps, standard fonts, colour profiles and
-// image decoders) are fetched by pdf.js at runtime, so they ship as files under
-// /pdfjs/ rather than going through the module graph. quickjs is left out: it
-// only runs scripts embedded in a pdf, which the viewer never does.
-const pdfjsRoot = fileURLToPath(new URL('./node_modules/pdfjs-dist/', import.meta.url))
-const pdfjsDirs = ['cmaps', 'standard_fonts', 'iccs', 'wasm']
-const pdfjsSkip = (name: string) => name.startsWith('quickjs') || name.startsWith('LICENSE')
-const pdfjsAssets = {
-  name: 'pdfjs-assets',
-  configureServer(server: { middlewares: { use: (fn: (req: { url?: string }, res: { setHeader: (k: string, v: string) => void, end: (b: Buffer) => void }, next: () => void) => void) => void } }) {
-    server.middlewares.use((req, res, next) => {
-      const m = /^\/pdfjs\/([a-z_]+)\/([A-Za-z0-9_.-]+)$/.exec((req.url ?? '').split('?')[0])
-      if (!m || !pdfjsDirs.includes(m[1]) || pdfjsSkip(m[2])) {
-        next()
-        return
+// files the pdf viewer and text recognition fetch at runtime, which ship as
+// plain files rather than going through the module graph:
+//   pdfjs/      pdf.js's cmaps, standard fonts, colour profiles and image
+//               decoders. quickjs is left out: it only runs scripts embedded in
+//               a pdf, which the viewer never does.
+//   tesseract/  the tesseract.js worker, its lstm-only cores (with and without
+//               simd) and the bundled language data.
+// the map is served path to file on disk, used by the dev server and the build.
+const nodeModules = fileURLToPath(new URL('./node_modules/', import.meta.url))
+function runtimeFiles(): Map<string, string> {
+  const files = new Map<string, string>()
+  const pdfjs = path.join(nodeModules, 'pdfjs-dist')
+  for (const dir of ['cmaps', 'standard_fonts', 'iccs', 'wasm']) {
+    for (const name of fs.readdirSync(path.join(pdfjs, dir))) {
+      if (!name.startsWith('quickjs') && !name.startsWith('LICENSE')) {
+        files.set(`pdfjs/${dir}/${name}`, path.join(pdfjs, dir, name))
       }
-      const file = path.join(pdfjsRoot, m[1], m[2])
-      if (!fs.existsSync(file)) {
+    }
+  }
+  files.set('tesseract/worker.min.js', path.join(nodeModules, 'tesseract.js', 'dist', 'worker.min.js'))
+  for (const core of ['tesseract-core-lstm.wasm.js', 'tesseract-core-simd-lstm.wasm.js']) {
+    files.set(`tesseract/core/${core}`, path.join(nodeModules, 'tesseract.js-core', core))
+  }
+  for (const code of bundledOCRCodes) {
+    files.set(`tesseract/lang/${code}.traineddata.gz`, path.join(nodeModules, '@tesseract.js-data', code, '4.0.0_best_int', `${code}.traineddata.gz`))
+  }
+  return files
+}
+
+const runtimeAssets = {
+  name: 'runtime-assets',
+  configureServer(server: { middlewares: { use: (fn: (req: { url?: string }, res: { setHeader: (k: string, v: string) => void, end: (b: Buffer) => void }, next: () => void) => void) => void } }) {
+    const files = runtimeFiles()
+    server.middlewares.use((req, res, next) => {
+      const file = files.get((req.url ?? '').split('?')[0].replace(/^\//, ''))
+      if (!file) {
         next()
         return
       }
       if (file.endsWith('.wasm')) {
         res.setHeader('Content-Type', 'application/wasm')
+      } else if (file.endsWith('.js')) {
+        res.setHeader('Content-Type', 'text/javascript')
+      } else {
+        res.setHeader('Content-Type', 'application/octet-stream')
       }
       res.end(fs.readFileSync(file))
     })
   },
   generateBundle(this: { emitFile: (f: { type: 'asset', fileName: string, source: Uint8Array }) => string }) {
-    for (const dir of pdfjsDirs) {
-      for (const name of fs.readdirSync(path.join(pdfjsRoot, dir))) {
-        if (pdfjsSkip(name)) {
-          continue
-        }
-        this.emitFile({ type: 'asset', fileName: `pdfjs/${dir}/${name}`, source: fs.readFileSync(path.join(pdfjsRoot, dir, name)) })
-      }
+    for (const [fileName, file] of runtimeFiles()) {
+      this.emitFile({ type: 'asset', fileName, source: fs.readFileSync(file) })
     }
   },
 }
 
 // https://vitejs.dev/config/
 export default defineConfig({
-  plugins: [svelte(), dropLegacyWoff, flagUrlDev, pdfjsAssets],
+  plugins: [svelte(), dropLegacyWoff, flagUrlDev, runtimeAssets],
   resolve: {
     alias: {
       'tabler-nodes-outline': tablerNodesOutline,
