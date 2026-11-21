@@ -19,7 +19,7 @@ function message(folderId: number): MessageDetail {
     bodyQuote: 'See you there.',
     messageId: '<plans@example.com>',
     references: '',
-  } as MessageDetail
+  } as unknown as MessageDetail
 }
 
 function replyTo(folderId: number, replyAll: boolean) {
