@@ -356,7 +356,9 @@
   {:else}
     <div class="bar">
       {#if !loading}
-        <span class="count">{$t('detail.attachments.pdfPages').replace('{count}', String(sizes.length))}</span>
+        <span class="count">
+          {sizes.length === 1 ? $t('detail.attachments.pdfPage') : $t('detail.attachments.pdfPages').replace('{count}', String(sizes.length))}
+        </span>
       {/if}
       {#if scanned.length > 0}
         {#if ocrState === 'running'}

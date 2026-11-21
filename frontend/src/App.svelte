@@ -156,6 +156,7 @@
   } from './stores/palette'
   import AccountPasswordDialog from './components/settings/AccountPasswordDialog.svelte'
   import DevOverlays from './components/dev/DevOverlays.svelte'
+  import peltonLogo from './assets/images/icons/pelton-logo.png'
   import {
     passwordPrompt,
     answerPasswordPrompt,
@@ -1518,7 +1519,11 @@
     style="--wails-draggable:drag"
     aria-hidden="true"
     on:dblclick={titleBarDoubleClick}
-  ></div>
+  >
+    <!-- the app mark sits where a native title bar would put the title, just
+         past the traffic lights -->
+    <img class="titlebar-logo" src={peltonLogo} alt="" draggable="false" />
+  </div>
 {/if}
 
 <div class="shell" class:with-topbar={showMenuBar || macTitlebar}>
@@ -1664,6 +1669,18 @@
     inset: 0 0 auto 0;
     height: var(--titlebar-lights);
     z-index: 700;
+  }
+
+  .titlebar-logo {
+    position: absolute;
+    left: var(--titlebar-inset);
+    top: 50%;
+    height: calc(16px / var(--ui-scale, 1));
+    width: auto;
+    transform: translateY(calc(-50% - var(--titlebar-nudge)));
+    opacity: 0.85;
+    pointer-events: none;
+    user-select: none;
   }
 
   /* the two zero-width tracks hold the resizer handles, which overhang via

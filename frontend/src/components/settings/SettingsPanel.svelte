@@ -11,7 +11,10 @@
     IconFileExport,
     IconRefresh,
   } from '@tabler/icons-svelte'
-  import { createEventDispatcher, onMount } from 'svelte'
+  import { createEventDispatcher, onMount, tick } from 'svelte'
+  import { get } from 'svelte/store'
+  import { popupIsOpen } from '../../lib/popups'
+  import { recording } from '../../stores/shortcuts'
   import SegmentedSetting from './SegmentedSetting.svelte'
   import StepSlider from './StepSlider.svelte'
   import AccentPicker from './AccentPicker.svelte'
@@ -63,6 +66,7 @@
     setAvatarStyle,
     setMultiSelectEnabled,
     setMarkReadOnOpen,
+    setOpenOnArrow,
     setSelectAllScope,
     setSearchSort,
     searchSortPref,
@@ -220,6 +224,7 @@
     { cat: 'list', label: $t('settingsPanel.label.flaggedHighlight'), kw: 'flag highlight' },
     { cat: 'list', label: $t('settingsPanel.toggle.showMailboxEmail'), kw: 'account email' },
     { cat: 'list', label: $t('settingsPanel.toggle.markReadOnOpen'), kw: 'mark read seen unread open automatically' },
+    { cat: 'list', label: $t('settingsPanel.toggle.openOnArrow'), kw: 'arrow keys keyboard open select navigate enter' },
     { cat: 'list', label: $t('settingsPanel.toggle.multiSelect'), kw: 'select multiple' },
     { cat: 'list', label: $t('settingsPanel.toggle.indentGuides'), kw: 'sidebar folders' },
     { cat: 'list', label: $t('settingsPanel.toggle.flaggedCount'), kw: 'sidebar flagged count' },
@@ -319,6 +324,16 @@
   function openResult(cat: string): void {
     active = cat
     settingsQuery = ''
+  }
+
+  // a new category starts at the top: scrolled to the bottom of a long one,
+  // a short one would otherwise open past its end, which on WebKitGTK can
+  // also leave the pane unpainted until it is scrolled.
+  let contentEl: HTMLDivElement | undefined
+  $: void scrollToTop(active, settingsQ)
+  async function scrollToTop(..._deps: unknown[]): Promise<void> {
+    await tick()
+    contentEl?.scrollTo({ top: 0 })
   }
 
   // auto-sync interval presets, in seconds (0 = off).
@@ -788,8 +803,10 @@
     setDensity(event.detail as DensityPref)
   }
 
+  // escape closes the panel, unless an open dropdown or a shortcut being
+  // recorded wants it first.
   function onKeydown(event: KeyboardEvent): void {
-    if (event.key === 'Escape') {
+    if (event.key === 'Escape' && !popupIsOpen() && !get(recording)) {
       dispatch('close')
     }
   }
@@ -849,7 +866,7 @@
       {/if}
     </nav>
 
-    <div class="content">
+    <div class="content" bind:this={contentEl}>
       {#if settingsQ !== ''}
         <section>
           <h3>{$t('settings.search')}</h3>
@@ -1131,6 +1148,14 @@
               checked={$prefs.markReadOnOpen}
               label={$t('settingsPanel.toggle.markReadOnOpen')}
               on:change={(e) => setMarkReadOnOpen(e.detail)}
+            />
+          </div>
+          <div class="toggle">
+            <span class="row-label">{$t('settingsPanel.toggle.openOnArrow')}</span>
+            <ToggleSwitch
+              checked={$prefs.openOnArrow}
+              label={$t('settingsPanel.toggle.openOnArrow')}
+              on:change={(e) => setOpenOnArrow(e.detail)}
             />
           </div>
           <div class="toggle" title={$t('settingsPanel.hint.multiSelect')}>

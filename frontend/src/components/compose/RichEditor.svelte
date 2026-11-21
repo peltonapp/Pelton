@@ -35,6 +35,10 @@
   // a counter bumped on every editor transaction so the toolbar's active-state
   // checks re-run reactively (tiptap mutates in place, so svelte needs a nudge).
   let revision = 0
+  // the content prop as last seen, so an outside change to it (a signature
+  // picked from the footer menu, a reopened draft) is told apart from the
+  // echo of the editor's own typing, which comes back equal to its html.
+  let lastContent = content
 
   onMount(() => {
     editor = new Editor({
@@ -55,6 +59,13 @@
       editor.commands.focus(markPosition(caretContent, editor) ?? 'start')
     }
   })
+
+  $: if (editor && content !== lastContent) {
+    lastContent = content
+    if (content !== editor.getHTML()) {
+      editor.commands.setContent(content, { emitUpdate: false })
+    }
+  }
 
   // markPosition finds caretMark in html parsed the way the editor parses its
   // content, so the position holds in the editor's own document.
