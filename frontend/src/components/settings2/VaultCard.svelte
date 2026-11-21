@@ -62,7 +62,7 @@
     }
     const v = { ...vault, ...change }
     try {
-      await updateMailVaultSettings({ id: v.id, name: v.name, autoLockMinutes: v.autoLockMinutes, notify: v.notify, hideLocked: v.hideLocked, allowScripts: v.allowScripts, allowMcp: v.allowMcp })
+      await updateMailVaultSettings({ id: v.id, name: v.name, autoLockMinutes: v.autoLockMinutes, notify: v.notify, hideLocked: v.hideLocked, allowScripts: v.allowScripts, allowMcp: v.allowMcp, allowCli: v.allowCli })
       await refreshMailVaults()
     } catch (err) {
       toastError(errorMessage(err))
@@ -163,6 +163,9 @@
     </Row>
     <Row id="mail-vault-mcp" label={$t('mailvault.settings.mcp')} hint={$t('mailvault.settings.switchHint')}>
       <ToggleSwitch checked={vault.allowMcp} label={$t('mailvault.settings.mcp')} on:change={(e) => void save({ allowMcp: e.detail })} />
+    </Row>
+    <Row id="mail-vault-cli" label={$t('cli.vault')} hint={$t('mailvault.settings.switchHint')}>
+      <ToggleSwitch checked={vault.allowCli} label={$t('cli.vault')} on:change={(e) => void save({ allowCli: e.detail })} />
     </Row>
     {#if changing}
       <form class="lock-form" on:submit|preventDefault={changePassphrase}>

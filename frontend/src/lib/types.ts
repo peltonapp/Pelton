@@ -3389,6 +3389,7 @@ export interface MailVault {
   hideLocked: boolean
   allowScripts: boolean
   allowMcp: boolean
+  allowCli: boolean
   retryAfterMs: number
 }
 
@@ -3408,4 +3409,5 @@ export interface MailVaultSettings {
   hideLocked: boolean
   allowScripts: boolean
   allowMcp: boolean
+  allowCli: boolean
 }

@@ -90,7 +90,7 @@ export const stringAreas: Record<StringArea, string[]> = {
   ],
   settings: [
     'about', 'addressBook', 'applock.settings', 'autoEncrypt', 'calendarSettings', 'chat.setup',
-    'chat.unlock', 'chatSettings', 'composing', 'encryption', 'external', 'feedSettings',
+    'chat.unlock', 'chatSettings', 'cli', 'composing', 'encryption', 'external', 'feedSettings',
     'iconPicker', 'imageAllowlist', 'import.tb.title', 'insights', 'language', 'list', 'mailboxes',
     'mcp', 'nightly.appName', 'notesSettings', 'notify', 'onboarding.accentTitle',
     'onboarding.extras', 'onboarding.flagopt', 'onboarding.font', 'preview', 'projects.settings',

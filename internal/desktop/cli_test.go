@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"reflect"
+	"regexp"
 	"runtime"
 	"strconv"
 	"strings"
@@ -401,6 +403,25 @@ func TestCLIRunsManualAutomations(t *testing.T) {
 		t.Fatal(err)
 	}
 	runCLI(t, paths, "", "run", "on send", "--dry-run").want(t, cli.ExitUsage)
+}
+
+func TestCLIAPINamesAreBound(t *testing.T) {
+	src, err := os.ReadFile(filepath.Join("..", "..", "frontend", "src", "lib", "cliapi.ts"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	names := regexp.MustCompile(`call(?:<[^>]*>)?\('(\w+)'`).FindAllStringSubmatch(string(src), -1)
+	if len(names) < 8 {
+		t.Fatalf("found %d calls, the pattern no longer matches the file", len(names))
+	}
+	for _, n := range names {
+		if _, ok := reflect.TypeFor[*App]().MethodByName(n[1]); !ok {
+			t.Errorf("cliapi.ts calls %s, which App does not bind", n[1])
+		}
+	}
+	if !strings.Contains(string(src), "'"+EventCLILog+"'") {
+		t.Error("cliapi.ts does not listen for EventCLILog")
+	}
 }
 
 func TestCLIStateDirMatchesStorage(t *testing.T) {

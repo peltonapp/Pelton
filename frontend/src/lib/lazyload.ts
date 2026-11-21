@@ -52,6 +52,9 @@ export const loadSettingsPanel = withStrings(['settings'], () => import('../comp
 /** loadSettingsScreen loads the New design's settings. */
 export const loadSettingsScreen = withStrings(['settings'], () => import('../components/settings2/SettingsScreen.svelte'))
 
+/** loadCliCard loads the New design's command line access settings. */
+export const loadCliCard = withStrings(['settings'], () => import('../components/settings2/CliCard.svelte'))
+
 /** loadOnboarding loads the first-run onboarding. */
 export const loadOnboarding = withStrings(['onboarding', 'wizard'], () => import('../components/onboarding/Onboarding.svelte'))
 
