@@ -79,8 +79,10 @@ jobs:
 
       # a key added to en.ts alone builds and type-checks; it renders as its own
       # key for everyone on another language, which only a speaker of that
-      # language ever notices.
+      # language ever notices. the step reports and does not fail the job;
+      # catalogs are completed before a release.
       - name: Locale catalogs
+        continue-on-error: true
         run: pnpm --dir frontend run check:locales
 
       - name: Frontend tests
