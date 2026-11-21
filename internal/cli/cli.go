@@ -228,12 +228,27 @@ func (e *env) call(command string, body, out any) error {
 	return json.Unmarshal(reply.Data, out)
 }
 
-// printJSON writes v for a program to read.
+// printJSON writes v for a program to read. The C1 controls and the
+// bidirectional overrides, which JSON allows raw, are escaped as well, so
+// the output is as safe in a terminal as the text form.
 func (e *env) printJSON(v any) error {
-	enc := json.NewEncoder(e.opts.Stdout)
+	var buf bytes.Buffer
+	enc := json.NewEncoder(&buf)
 	enc.SetEscapeHTML(false)
 	enc.SetIndent("", "  ")
-	return enc.Encode(v)
+	if err := enc.Encode(v); err != nil {
+		return err
+	}
+	var out strings.Builder
+	for _, r := range buf.String() {
+		if (r >= 0x80 && r <= 0x9f) || isBidiControl(r) {
+			fmt.Fprintf(&out, `\u%04x`, r)
+			continue
+		}
+		out.WriteRune(r)
+	}
+	_, err := io.WriteString(e.opts.Stdout, out.String())
+	return err
 }
 
 func (e *env) printf(format string, args ...any) {

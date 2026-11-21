@@ -14,9 +14,7 @@ import (
 // that are not UTF-8 become U+FFFD. With multiline, newlines and tabs stay;
 // without, they become spaces.
 func clean(s string, multiline bool) string {
-	if multiline {
-		s = strings.ReplaceAll(s, "\r\n", "\n")
-	}
+	s = strings.ReplaceAll(s, "\r\n", "\n")
 	var b strings.Builder
 	b.Grow(len(s))
 	for i := 0; i < len(s); {
