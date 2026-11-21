@@ -39,6 +39,7 @@
   import { accountLabel } from '../../lib/format'
   import type { Account, ProxyConfig, TLSMode, UntrustedCert } from '../../lib/types'
   import { t } from '../../lib/i18n'
+  import { loadAddMailboxWizard } from '../../lib/lazyload'
 
   let accounts: Account[] = []
   let loading = true
@@ -729,7 +730,7 @@
 {/if}
 
 {#if wizardOpen}
-  {#await import('../wizard/AddMailboxWizard.svelte') then m}
+  {#await loadAddMailboxWizard() then m}
     <svelte:component this={m.default} on:close={() => (wizardOpen = false)} on:added={onMailboxAdded} />
   {/await}
 {/if}
