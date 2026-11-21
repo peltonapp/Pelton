@@ -65,6 +65,7 @@
     setAvatarStyle,
     setMultiSelectEnabled,
     setMarkReadOnOpen,
+    setMarkReadDelay,
     setOpenOnArrow,
     setSelectAllScope,
     setSearchSort,
@@ -223,6 +224,7 @@
     { cat: 'list', label: $t('settingsPanel.label.flaggedHighlight'), kw: 'flag highlight' },
     { cat: 'list', label: $t('settingsPanel.toggle.showMailboxEmail'), kw: 'account email' },
     { cat: 'list', label: $t('settingsPanel.toggle.markReadOnOpen'), kw: 'mark read seen unread open automatically' },
+    { cat: 'list', label: $t('settingsPanel.label.markReadDelay'), kw: 'mark read seen unread vim keyboard delay wait seconds' },
     { cat: 'list', label: $t('settingsPanel.toggle.openOnArrow'), kw: 'arrow keys keyboard open select navigate enter' },
     { cat: 'list', label: $t('settingsPanel.toggle.multiSelect'), kw: 'select multiple' },
     { cat: 'list', label: $t('settingsPanel.toggle.indentGuides'), kw: 'sidebar folders' },
@@ -791,6 +793,14 @@
     { key: '3', label: $t('settingsPanel.previewLines.3') },
   ]
 
+  $: markReadDelayOptions = [
+    { key: '0', label: $t('settingsPanel.unit.off') },
+    { key: '1', label: $t('settingsPanel.unit.s1') },
+    { key: '2', label: $t('settingsPanel.unit.s2') },
+    { key: '3', label: $t('settingsPanel.unit.s3') },
+    { key: '5', label: $t('settingsPanel.unit.s5') },
+  ]
+
   $: snippetCapable = $prefs.rowTemplate === 'relaxed' || $prefs.rowTemplate === 'comfortable'
 
   function onTheme(event: CustomEvent<string>): void {
@@ -1148,6 +1158,14 @@
               on:change={(e) => setMarkReadOnOpen(e.detail)}
             />
           </div>
+          {#if $prefs.markReadOnOpen && $prefs.appVimMode}
+            <SegmentedSetting
+              label={$t('settingsPanel.label.markReadDelay')}
+              value={String($prefs.markReadDelaySeconds)}
+              options={markReadDelayOptions}
+              on:change={(e) => setMarkReadDelay(Number(e.detail))}
+            />
+          {/if}
           <div class="toggle">
             <span class="row-label">{$t('settingsPanel.toggle.openOnArrow')}</span>
             <ToggleSwitch
