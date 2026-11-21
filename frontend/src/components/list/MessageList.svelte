@@ -46,7 +46,6 @@
     loadOlder,
     backfillFailed,
     runSearch,
-    patchInList,
     removeFromList,
     restoreToList,
     emptyFilter,
@@ -74,7 +73,6 @@
   } from '../../stores/selectall'
   import { prefs, setSearchSort } from '../../stores/prefs'
   import {
-    setSeen,
     getMessage,
     removeOffline,
     archiveMessage,
@@ -97,6 +95,7 @@
   import { t } from '../../lib/i18n'
   import {
     markSeen,
+    markOpened,
     markFlagged,
     markColor,
     toggleSenderVIP,
@@ -358,14 +357,7 @@
     // the row that was opened is where a following shift-click measures from.
     anchorAt(item.id)
     openMessage(item.id)
-    if (!item.seen && $prefs.markReadOnOpen) {
-      patchInList(item.id, { seen: true })
-      try {
-        await setSeen(item.id, true)
-      } catch (err) {
-        toastError(errorMessage(err))
-      }
-    }
+    markOpened(item)
   }
 
   // onRowClick routes a click to either multi-selection (cmd/ctrl or shift, when
