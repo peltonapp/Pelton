@@ -59,14 +59,21 @@ func isPushRejected(err error) bool {
 	return errors.As(err, &p)
 }
 
-// pushFlags adds the merged flags on the server, then stores them and clears
-// the pending marker. The push only adds: flags is local | server, so a
-// managed flag missing from it was set by another client after the snapshot
-// and must stay. A local change made after the sync read state is kept and
-// stays pending; the next sync pushes it.
-func (e *Engine) pushFlags(ctx context.Context, folder storage.Folder, state storage.MessageState, flags storage.Flag) error {
-	if err := e.adapter.SetFlags(folderContext(ctx, folder), folder.RemoteID, state.RemoteID, flags); err != nil {
+// pushFlags adds the merged flags on the server, removes the cleared ones,
+// then stores them and clears the pending marker. remove holds only bits the
+// local change cleared (see reconcile.go); every other bit of flags is the
+// server's own, so nothing another client set is taken away. A local change
+// made after the sync read state is kept and stays pending; the next sync
+// pushes it.
+func (e *Engine) pushFlags(ctx context.Context, folder storage.Folder, state storage.MessageState, flags, remove storage.Flag) error {
+	fctx := folderContext(ctx, folder)
+	if err := e.adapter.SetFlags(fctx, folder.RemoteID, state.RemoteID, flags); err != nil {
 		return pushError(fmt.Errorf("sync: push flags for %q: %w", state.RemoteID, err))
+	}
+	if remove != 0 {
+		if err := e.adapter.RemoveFlags(fctx, folder.RemoteID, state.RemoteID, remove); err != nil {
+			return pushError(fmt.Errorf("sync: clear flags for %q: %w", state.RemoteID, err))
+		}
 	}
 	return e.resolvePending(ctx, state, flags)
 }
@@ -99,7 +106,7 @@ func (e *Engine) pushDeletes(ctx context.Context, folder storage.Folder, states 
 
 	if e.trashable(folder) {
 		if err := e.adapter.Move(ctx, folder.RemoteID, ids, e.TrashRemoteID); err != nil {
-			return pushError(fmt.Errorf("sync: move to trash on server: %w", err))
+			return pushError(fmt.Errorf("sync: move to trash %q on server: %w", e.TrashRemoteID, err))
 		}
 	} else if err := e.adapter.Delete(ctx, folder.RemoteID, ids); err != nil {
 		return pushError(fmt.Errorf("sync: delete on server: %w", err))

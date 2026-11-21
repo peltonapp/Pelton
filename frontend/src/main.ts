@@ -17,7 +17,9 @@ import './style.css'
 
 import { mount } from 'svelte'
 import App from './App.svelte'
-import { isDemoMode } from './lib/api'
+import MessageWindow from './MessageWindow.svelte'
+import ComposeWindow from './ComposeWindow.svelte'
+import { isDemoMode, windowMaterialActive } from './lib/api'
 import { setDemoActive } from './lib/demo'
 
 const target = document.getElementById('app')
@@ -38,7 +40,25 @@ await isDemoMode()
   .then(setDemoActive)
   .catch(() => {})
 
-const app = mount(App, { target })
+// a window created over a native material (Liquid Glass, Mica) shows it
+// through the chrome (style.css), so the class has to be on before the first
+// paint.
+await windowMaterialActive()
+  .then((on) => document.documentElement.classList.toggle('window-material', on))
+  .catch(() => {})
+
+// a message or a compose opened in a window of its own loads the same page
+// with ?window=message&id=N or ?window=compose&token=T, and gets that alone
+// instead of the app.
+const params = new URLSearchParams(window.location.search)
+const messageId = Number(params.get('id'))
+const composeToken = params.get('token') ?? ''
+const app =
+  params.get('window') === 'message' && messageId > 0
+    ? mount(MessageWindow, { target, props: { messageId } })
+    : params.get('window') === 'compose' && composeToken
+      ? mount(ComposeWindow, { target, props: { token: composeToken } })
+      : mount(App, { target })
 
 // remove the pre-mount splash now that svelte has taken over.
 document.getElementById('splash')?.remove()

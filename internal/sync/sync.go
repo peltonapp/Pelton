@@ -853,7 +853,7 @@ func (e *Engine) windowFloor(state FolderSyncState, servers []ServerMessage, cac
 
 // folderLooksInitialized is true once SyncInitialized is set, or when an
 // upgraded pre-migration folder already has local mail / numeric sync cursors
-// (sync_initialized defaults to 0 after migration 0037).
+// (sync_initialized defaults to 0 after migration 0041).
 func folderLooksInitialized(state FolderSyncState, cached int) bool {
 	if state.SyncInitialized {
 		return true
@@ -1014,7 +1014,7 @@ func (e *Engine) executePlan(ctx context.Context, folder storage.Folder, plan []
 			}
 
 		case ActionPushFlags:
-			if err := e.pushFlags(ctx, folder, localByID[d.RemoteID], d.Flags); err != nil {
+			if err := e.pushFlags(ctx, folder, localByID[d.RemoteID], d.Flags, d.Clear); err != nil {
 				e.log.Error("push flags failed", "remote_id", d.RemoteID, "err", err)
 				fail(err)
 				continue

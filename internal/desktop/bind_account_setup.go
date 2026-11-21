@@ -16,7 +16,6 @@ import (
 	"github.com/peltonapp/Pelton/internal/oauth"
 	psmtp "github.com/peltonapp/Pelton/internal/smtp"
 	"github.com/peltonapp/Pelton/internal/storage"
-	wailsruntime "github.com/wailsapp/wails/v2/pkg/runtime"
 )
 
 // oauthFlowTimeout bounds how long the interactive consent flow may take.
@@ -224,7 +223,7 @@ func (a *App) authorizeOAuth(client *http.Client, provider, clientID, clientSecr
 	defer cancel()
 
 	token, err := a.authorize(ctx, provider, clientID, clientSecret, email, func(url string) {
-		wailsruntime.BrowserOpenURL(a.ctx, url)
+		a.openURL(url)
 	})
 	if err != nil {
 		return credentials.Secret{}, err

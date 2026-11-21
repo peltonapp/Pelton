@@ -217,6 +217,15 @@ func TestAdapterMapsRemoteIDs(t *testing.T) {
 	if len(fake.removed) != 0 {
 		t.Errorf("SetFlags removed %v; the sync push must never remove flags", fake.removed)
 	}
+
+	// RemoveFlags sends -FLAGS for the managed flags only, so \Answered and
+	// keywords the user never touched stay on the server.
+	if err := adapter.RemoveFlags(ctx, "INBOX", "15", storage.FlagFlagged); err != nil {
+		t.Fatalf("RemoveFlags: %v", err)
+	}
+	if len(fake.removed) != 1 || fake.removed[0] != goimap.FlagFlagged {
+		t.Errorf("RemoveFlags got %v, want only \\Flagged", fake.removed)
+	}
 }
 
 // trackingFake reports the selected mailbox like *Client does.

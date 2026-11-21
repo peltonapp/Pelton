@@ -114,6 +114,11 @@ type Message struct {
 	// where the name does not travel back. Empty for mail that was right about
 	// itself, which is nearly all of it.
 	CharsetGuess string
+	// InReplyTo and References preserve parsed bare IDs, including order and
+	// duplicates. Nil means unknown metadata; a non-nil empty slice means the
+	// headers were fetched and contained no IDs.
+	InReplyTo  []string
+	References []string
 }
 
 // MessageAuth is the stored Authentication-Results verdict for one message.
@@ -567,7 +572,7 @@ UPDATE messages SET
   smime_status = ?, smime_signer = ?, smime_email = ?, smime_issuer = ?, smime_detail = ?,
   smime_certs = ?, smime_fingerprint = ?,
   reply_to = ?, auth_spf = ?, auth_dkim = ?, auth_dmarc = ?, auth_spf_domain = ?, auth_dkim_domain = ?,
-  charset_guess = ?, body_complete = 1, `+textRewritten+`
+  charset_guess = ?, in_reply_to = ?, [references] = ?, body_complete = 1, `+textRewritten+`
 WHERE id = ? AND body_complete = 0`,
 			m.UID, m.UID,
 			m.MessageID, m.Subject, m.FromAddress, m.FromName, m.FromName,
@@ -577,7 +582,7 @@ WHERE id = ? AND body_complete = 0`,
 			m.SMIME.Status, m.SMIME.Signer, m.SMIME.Email, m.SMIME.Issuer, m.SMIME.Detail,
 			orEmptyBlob(m.SMIME.Certs), m.SMIME.Fingerprint,
 			m.ReplyTo, m.Auth.SPF, m.Auth.DKIM, m.Auth.DMARC, m.Auth.SPFDomain, m.Auth.DKIMDomain,
-			m.CharsetGuess, id,
+			m.CharsetGuess, encodeThreadingIDs(m.InReplyTo), encodeThreadingIDs(m.References), id,
 		)
 		if err != nil {
 			return nil, fmt.Errorf("storage: update message body %d: %w", id, err)
@@ -638,8 +643,8 @@ INSERT INTO messages (
     smime_status, smime_signer, smime_email, smime_issuer, smime_detail,
     smime_certs, smime_fingerprint,
     reply_to, auth_spf, auth_dkim, auth_dmarc, auth_spf_domain, auth_dkim_domain,
-    charset_guess, body_complete
-) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+    charset_guess, body_complete, in_reply_to, [references]
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
 	res, err := ex.ExecContext(ctx, query,
 		m.AccountID, m.FolderID, m.UID, remoteID, m.MessageID, m.Subject, m.FromAddress,
 		m.FromName, m.ToAddresses, m.CcAddresses, formatTime(m.Date), uint8(m.Flags),
@@ -648,7 +653,7 @@ INSERT INTO messages (
 		m.SMIME.Status, m.SMIME.Signer, m.SMIME.Email, m.SMIME.Issuer, m.SMIME.Detail,
 		orEmptyBlob(m.SMIME.Certs), m.SMIME.Fingerprint,
 		m.ReplyTo, m.Auth.SPF, m.Auth.DKIM, m.Auth.DMARC, m.Auth.SPFDomain, m.Auth.DKIMDomain,
-		m.CharsetGuess, boolToInt(m.BodyComplete))
+		m.CharsetGuess, boolToInt(m.BodyComplete), encodeThreadingIDs(m.InReplyTo), encodeThreadingIDs(m.References))
 	if err != nil {
 		return 0, fmt.Errorf("storage: insert message uid %d: %w", m.UID, err)
 	}
@@ -1101,7 +1106,8 @@ SELECT id, account_id, folder_id, uid, remote_id, message_id, subject, from_addr
        snooze_hidden, offline, list_unsubscribe, list_unsubscribe_post,
        smime_status, smime_signer, smime_email, smime_issuer, smime_detail,
        smime_fingerprint, reply_to, auth_spf, auth_dkim, auth_dmarc, auth_spf_domain,
-       auth_dkim_domain, charset_guess, body_complete, search_state, text_rev`
+       auth_dkim_domain, charset_guess, body_complete, search_state, text_rev,
+       in_reply_to, [references]`
 
 const selectMessageByID = selectMessageColumns + `
 FROM messages WHERE id = ?`
@@ -1116,6 +1122,8 @@ func scanMessage(row rowScanner) (*Message, error) {
 		offline      int
 		unsubPost    int
 		bodyComplete int
+		inReplyTo    sql.NullString
+		references   sql.NullString
 	)
 	if err := row.Scan(&m.ID, &m.AccountID, &m.FolderID, &m.UID, &m.RemoteID, &m.MessageID,
 		&m.Subject, &m.FromAddress, &m.FromName, &m.ToAddresses, &m.CcAddresses,
@@ -1124,7 +1132,8 @@ func scanMessage(row rowScanner) (*Message, error) {
 		&m.ListUnsubscribe, &unsubPost,
 		&m.SMIME.Status, &m.SMIME.Signer, &m.SMIME.Email, &m.SMIME.Issuer,
 		&m.SMIME.Detail, &m.SMIME.Fingerprint, &m.ReplyTo, &m.Auth.SPF, &m.Auth.DKIM, &m.Auth.DMARC,
-		&m.Auth.SPFDomain, &m.Auth.DKIMDomain, &m.CharsetGuess, &bodyComplete, &m.SearchState, &m.TextRev); err != nil {
+		&m.Auth.SPFDomain, &m.Auth.DKIMDomain, &m.CharsetGuess, &bodyComplete, &m.SearchState, &m.TextRev,
+		&inReplyTo, &references); err != nil {
 		return nil, err
 	}
 	t, err := parseTime(date)
@@ -1138,6 +1147,8 @@ func scanMessage(row rowScanner) (*Message, error) {
 	m.Offline = offline != 0
 	m.ListUnsubscribePost = unsubPost != 0
 	m.BodyComplete = bodyComplete != 0
+	m.InReplyTo = decodeThreadingIDs(inReplyTo)
+	m.References = decodeThreadingIDs(references)
 	return &m, nil
 }
 

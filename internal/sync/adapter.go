@@ -99,7 +99,9 @@ type Fetched struct {
 	Size                                                                                 int64
 	ListUnsubscribePost                                                                  bool
 	AuthResults                                                                          []string
-	Attachments                                                                          []Attachment
+	// InReplyTo and References are bare message ids in header order.
+	InReplyTo, References []string
+	Attachments           []Attachment
 }
 
 // RemoteMailbox identifies a mailbox for ListMessages and ListChanges.
@@ -130,11 +132,12 @@ type Adapter interface {
 	// the engine goes on with the next batch.
 	Fetch(ctx context.Context, mailboxID string, remoteIDs []string) ([]Fetched, error)
 	// SetFlags adds flags to one message on the server and never removes
-	// any: the sync pushes the union of local and server flags, so a flag
-	// the server has that flags lacks was set by another client after the
-	// snapshot (see the policy in reconcile.go). The name is kept for the
-	// implementations outside this package.
+	// any. The name is kept for the implementations outside this package.
 	SetFlags(ctx context.Context, mailboxID, remoteID string, flags storage.Flag) error
+	// RemoveFlags removes flags from one message on the server. The sync
+	// sends only the bits a pending local change cleared (see the policy in
+	// reconcile.go).
+	RemoveFlags(ctx context.Context, mailboxID, remoteID string, flags storage.Flag) error
 	// Move moves the messages from sourceMailboxID to destMailboxID.
 	Move(ctx context.Context, sourceMailboxID string, remoteIDs []string, destMailboxID string) error
 	// Delete permanently removes the messages from the mailbox.

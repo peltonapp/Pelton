@@ -24,6 +24,7 @@
   import { prefs } from '../../stores/prefs'
   import { formatListDate, displayName, type TimeFormat } from '../../lib/format'
   import { flagColorHex } from '../../theme/flagcolors'
+  import { viewColorCss } from '../../lib/viewicons'
   import type { MessageSummary, RowTemplate, SwipeAction } from '../../lib/types'
   import { t } from '../../lib/i18n'
   import { vipSenders, bareAddress } from '../../stores/vip'
@@ -32,6 +33,9 @@
   export let selected: boolean = false
   // checked reflects membership in the bulk-selection set (modifier-click).
   export let checked: boolean = false
+  // accountColor marks which mailbox the message is from in a list that mixes
+  // them (#486); '' shows nothing.
+  export let accountColor: string = ''
 
   const dispatch = createEventDispatcher<{ swipe: 'left' | 'right' }>()
 
@@ -206,8 +210,9 @@
     class:unread
     class:checked
     class:bar-left={showBar}
+    class:account-mark={accountColor !== ''}
     class:settling
-    style={`transform:translateX(${offset}px);--bar-color:${barColor}`}
+    style={`transform:translateX(${offset}px);--bar-color:${barColor};--account-color:${viewColorCss(accountColor)}`}
     role="option"
     tabindex="-1"
     aria-selected={selected}
@@ -348,6 +353,17 @@
     left: 0;
     width: 3px;
     background: var(--bar-color);
+  }
+
+  /* the account's colour on the far edge, clear of the flagged bar. */
+  .row.account-mark::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    right: 0;
+    width: 3px;
+    background: var(--account-color);
   }
 
   .content {

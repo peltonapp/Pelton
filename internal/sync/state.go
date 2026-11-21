@@ -70,6 +70,7 @@ func localView(states []storage.MessageState) ([]LocalMessage, map[string]storag
 			RemoteID:      s.RemoteID,
 			Flags:         s.Flags,
 			PendingFlags:  s.PendingFlags,
+			PendingMask:   s.PendingMask,
 			PendingDelete: s.PendingDelete,
 		})
 		byID[s.RemoteID] = s

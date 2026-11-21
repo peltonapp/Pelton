@@ -15,7 +15,7 @@ const syncKeys = [
 
 describe('sync settings copy', () => {
   it('covers every language', () => {
-    expect(catalogs).toHaveLength(11)
+    expect(catalogs).toHaveLength(12)
   })
 
   it.each(catalogs)('%s: the message limit hint names the slider option, not a number', (_locale, cat) => {
@@ -53,6 +53,7 @@ describe('sync settings copy', () => {
     pt: /\bnunca\b/i,
     ar: /أبد/,
     'zh-CN': /从不|永不/,
+    ru: /никогда/i,
   }
 
   it.each(catalogs)('%s: new mail is not promised to never wait', (locale, cat) => {

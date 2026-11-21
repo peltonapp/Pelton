@@ -39,18 +39,21 @@ func TestSentCopyWaitsForTheAccountsOnlySession(t *testing.T) {
 	release := make(chan struct{})
 	recv(t, signalJob(rt.sched, syncsched.KindBodies, 0, release), 2*time.Second, "busy task never started")
 
-	sent := make(chan error, 1)
-	go func() {
-		sent <- (&accountTransmitter{app: app}).Transmit(context.Background(), outbox.Message{
-			AccountID: account.ID, EnvelopeFrom: "me@example.com",
-			Recipients: []string{"you@example.com"}, Raw: []byte("Subject: hi\r\n\r\nbody\r\n"),
-		})
-	}()
-	noRecv(t, sent, 200*time.Millisecond, "the Sent copy ran while the only session was busy")
-	close(release)
-	if err := recv(t, sent, 5*time.Second, "send never finished"); err != nil {
+	// the send itself does not wait for the copy.
+	if err := (&accountTransmitter{app: app}).Transmit(context.Background(), outbox.Message{
+		AccountID: account.ID, EnvelopeFrom: "me@example.com",
+		Recipients: []string{"you@example.com"}, Raw: []byte("Subject: hi\r\n\r\nbody\r\n"),
+	}); err != nil {
 		t.Fatalf("Transmit: %v", err)
 	}
+	copied := make(chan struct{})
+	go func() {
+		app.sentCopies.Wait()
+		close(copied)
+	}()
+	noRecv(t, copied, 200*time.Millisecond, "the Sent copy ran while the only session was busy")
+	close(release)
+	recv(t, copied, 5*time.Second, "the Sent copy never finished")
 	if len(client.appended) != 1 || dials.Load() != 1 {
 		t.Fatalf("appended %d copies over %d dials, want 1 over 1", len(client.appended), dials.Load())
 	}

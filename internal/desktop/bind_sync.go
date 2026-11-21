@@ -561,6 +561,22 @@ func (a *App) syncListedAccounts(include func(storage.Account) bool, manual bool
 	return nil
 }
 
+// queueSync syncs account in the background, after any sync already running.
+// While one is still waiting its turn, another would only repeat it, so it is
+// not queued. syncAccount records a failure in the account's sync state itself.
+func (a *App) queueSync(account storage.Account) {
+	if _, waiting := a.queuedSyncs.LoadOrStore(account.ID, struct{}{}); waiting {
+		return
+	}
+	goSafe("syncing after a change", func() {
+		// cleared as this sync starts, so a change from here on queues the
+		// next one rather than counting on this run to see it. The pass's
+		// tasks join any of the account's queued ones with the same key.
+		a.queuedSyncs.Delete(account.ID)
+		_ = a.syncAccount(account, false)
+	})
+}
+
 // syncAccount syncs one account and records how it went, so a failure survives
 // the run it happened in. Every caller goes through here rather than
 // syncAccountOnce, since an unrecorded failure is the bug (#322). manual is

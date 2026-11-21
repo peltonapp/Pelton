@@ -57,6 +57,10 @@ type fakeIMAP struct {
 	// succeeds without one.
 	appended   [][]byte
 	failAppend error
+	// drafts is every ReplaceDraft call, in order, and removedDrafts the
+	// Message-IDs RemoveDraft was given.
+	drafts        []draftCall
+	removedDrafts []string
 	// failMove makes MOVE fail, for the paths that have to leave the local cache
 	// alone when the server says no.
 	failMove error
@@ -72,6 +76,25 @@ type fakeIMAP struct {
 	failNoop error
 	// failSelect makes SELECT of the named mailboxes fail.
 	failSelect map[string]error
+	// permanentFlags is the PERMANENTFLAGS every SELECT reports.
+	permanentFlags []imap.Flag
+	// flagOps records each STORE as "+flag" or "-flag", in order.
+	flagOps []string
+}
+
+type draftCall struct {
+	mailbox, messageID string
+	raw                []byte
+}
+
+func (f *fakeIMAP) ReplaceDraft(mailbox string, raw []byte, messageID string) error {
+	f.drafts = append(f.drafts, draftCall{mailbox, messageID, raw})
+	return nil
+}
+
+func (f *fakeIMAP) RemoveDraft(_, messageID string) error {
+	f.removedDrafts = append(f.removedDrafts, messageID)
+	return nil
 }
 
 type movedMessage struct {
@@ -98,7 +121,7 @@ func (f *fakeIMAP) Select(mailbox string) (*pimap.Mailbox, error) {
 	if err := f.failSelect[mailbox]; err != nil {
 		return nil, err
 	}
-	return &pimap.Mailbox{Name: mailbox}, nil
+	return &pimap.Mailbox{Name: mailbox, PermanentFlags: f.permanentFlags}, nil
 }
 
 // SelectedMailbox reports none, so every command selects its mailbox.
@@ -145,8 +168,19 @@ func (f *fakeIMAP) FetchHeaders([]imap.UID, *imap.FetchOptions) ([]pimap.Message
 	return nil, nil
 }
 
-func (f *fakeIMAP) AddFlags(imap.UID, ...imap.Flag) error    { return nil }
-func (f *fakeIMAP) RemoveFlags(imap.UID, ...imap.Flag) error { return nil }
+func (f *fakeIMAP) AddFlags(_ imap.UID, flags ...imap.Flag) error {
+	for _, fl := range flags {
+		f.flagOps = append(f.flagOps, "+"+string(fl))
+	}
+	return nil
+}
+
+func (f *fakeIMAP) RemoveFlags(_ imap.UID, flags ...imap.Flag) error {
+	for _, fl := range flags {
+		f.flagOps = append(f.flagOps, "-"+string(fl))
+	}
+	return nil
+}
 
 func (f *fakeIMAP) Move(uid imap.UID, mailbox string) error {
 	if f.failMove != nil {
@@ -237,16 +271,16 @@ func TestArchiveMessageKeepsTheRowWhenTheServerRefuses(t *testing.T) {
 	}
 }
 
-// Undo searches the folder the message went to by Message-ID because the move
-// gave it a new uid, and moves whatever it finds back to where it came from.
-func TestUnarchiveMessageMovesTheFoundUIDBack(t *testing.T) {
+// Undo searches the folder the message was moved to by Message-ID, because the
+// move gave it a new uid, and moves whatever it finds back to where it came from.
+func TestRestoreMessageMovesTheFoundUIDBack(t *testing.T) {
 	a, db, ctx := moveTestApp(t)
 	inbox, archive, _ := moveTestAccount(t, db, ctx, true)
 	client := &fakeIMAP{searchResult: []imap.UID{7}}
 	useFake(t, a, inbox.AccountID, client)
 
-	if err := a.UnarchiveMessage("<one@example.com>", archive.ID, inbox.ID); err != nil {
-		t.Fatalf("UnarchiveMessage: %v", err)
+	if err := a.RestoreMessage("<one@example.com>", archive.ID, inbox.ID); err != nil {
+		t.Fatalf("RestoreMessage: %v", err)
 	}
 
 	if len(client.selected) != 1 || client.selected[0] != archive.IMAPPath {
@@ -259,14 +293,14 @@ func TestUnarchiveMessageMovesTheFoundUIDBack(t *testing.T) {
 
 // A message the server cannot find must say so rather than reporting a restore
 // that did not happen.
-func TestUnarchiveMessageFailsWhenTheServerHasNoMatch(t *testing.T) {
+func TestRestoreMessageFailsWhenTheServerHasNoMatch(t *testing.T) {
 	a, db, ctx := moveTestApp(t)
 	inbox, archive, _ := moveTestAccount(t, db, ctx, true)
 	client := &fakeIMAP{}
 	useFake(t, a, inbox.AccountID, client)
 
-	if err := a.UnarchiveMessage("<one@example.com>", archive.ID, inbox.ID); err == nil {
-		t.Fatal("UnarchiveMessage returned no error though the search found nothing")
+	if err := a.RestoreMessage("<one@example.com>", archive.ID, inbox.ID); err == nil {
+		t.Fatal("RestoreMessage returned no error though the search found nothing")
 	}
 	if len(client.moved) != 0 {
 		t.Errorf("moved %+v though there was nothing to restore", client.moved)
@@ -306,8 +340,8 @@ func TestUndoMoveSearchesTheDestinationFolder(t *testing.T) {
 			client := &fakeIMAP{searchResult: []imap.UID{tc.uid}}
 			useFake(t, a, accountID, client)
 
-			if err := a.UnarchiveMessage("<one@example.com>", folders["Projects"].ID, folders["INBOX"].ID); err != nil {
-				t.Fatalf("UnarchiveMessage: %v", err)
+			if err := a.RestoreMessage("<one@example.com>", folders["Projects"].ID, folders["INBOX"].ID); err != nil {
+				t.Fatalf("RestoreMessage: %v", err)
 			}
 			if len(client.selected) != 1 || client.selected[0] != "Projects" {
 				t.Errorf("selected %v, want just Projects", client.selected)
@@ -491,8 +525,8 @@ func TestUndoMoveDropsTheMovedCopy(t *testing.T) {
 		}
 	}
 
-	if err := a.UnarchiveMessage("<one@example.com>", archive.ID, inbox.ID); err != nil {
-		t.Fatalf("UnarchiveMessage: %v", err)
+	if err := a.RestoreMessage("<one@example.com>", archive.ID, inbox.ID); err != nil {
+		t.Fatalf("RestoreMessage: %v", err)
 	}
 	if _, err := db.GetMessage(ctx, copyID); err == nil {
 		t.Error("the moved copy is still listed in the archive")
@@ -581,8 +615,8 @@ func TestUndoMovesTheCopyCOPYUIDNamed(t *testing.T) {
 	if err != nil || len(atts) != 1 {
 		t.Fatalf("attachments of the moved copy: %v %v", atts, err)
 	}
-	if err := a.UnarchiveMessage("<one@example.com>", archive.ID, inbox.ID); err != nil {
-		t.Fatalf("UnarchiveMessage: %v", err)
+	if err := a.RestoreMessage("<one@example.com>", archive.ID, inbox.ID); err != nil {
+		t.Fatalf("RestoreMessage: %v", err)
 	}
 	if got := client.moved[len(client.moved)-1].uid; got != 7 {
 		t.Fatalf("undo moved uid %d, want 7 from COPYUID", got)
@@ -616,8 +650,8 @@ func TestUndoReportsACOPYUIDCopyThatIsGone(t *testing.T) {
 	if _, err := a.ArchiveMessage(moved); err != nil {
 		t.Fatalf("ArchiveMessage: %v", err)
 	}
-	if err := a.UnarchiveMessage("<one@example.com>", archive.ID, inbox.ID); err == nil {
-		t.Fatal("UnarchiveMessage reported success though nothing moved")
+	if err := a.RestoreMessage("<one@example.com>", archive.ID, inbox.ID); err == nil {
+		t.Fatal("RestoreMessage reported success though nothing moved")
 	}
 	if len(client.moved) != 1 || client.moved[0].uid != 3 {
 		t.Errorf("moved %+v, want only the archive of uid 3", client.moved)
@@ -636,8 +670,8 @@ func TestUndoWithoutCOPYUIDAndNoStoredCopy(t *testing.T) {
 	a, db, inbox, archive, _ := undoRig(t)
 	client := &fakeIMAP{searchResult: []imap.UID{4, 8}}
 	useFake(t, a, inbox.AccountID, client)
-	if err := a.UnarchiveMessage("<one@example.com>", archive.ID, inbox.ID); err != nil {
-		t.Fatalf("UnarchiveMessage: %v", err)
+	if err := a.RestoreMessage("<one@example.com>", archive.ID, inbox.ID); err != nil {
+		t.Fatalf("RestoreMessage: %v", err)
 	}
 	if len(client.moved) != 1 || client.moved[0].uid != 8 || client.moved[0].dest != inbox.IMAPPath {
 		t.Fatalf("moved %+v, want uid 8 back to %s", client.moved, inbox.IMAPPath)
@@ -656,8 +690,8 @@ func TestUndoKeepsRowsOfAnotherUIDValidity(t *testing.T) {
 	client.searchResult = []imap.UID{7}
 	useFake(t, a, inbox.AccountID, &client.fakeIMAP)
 	a.newIMAPClient = func(pimap.Config) (mailClient, error) { return client, nil }
-	if err := a.UnarchiveMessage("<one@example.com>", archive.ID, inbox.ID); err != nil {
-		t.Fatalf("UnarchiveMessage: %v", err)
+	if err := a.RestoreMessage("<one@example.com>", archive.ID, inbox.ID); err != nil {
+		t.Fatalf("RestoreMessage: %v", err)
 	}
 	if _, err := db.GetMessage(a.ctx, rows[7]); err != nil {
 		t.Fatalf("a row of the old UIDVALIDITY was dropped: %v", err)
@@ -679,8 +713,8 @@ func TestUndoRefusesAMoveAcrossAccounts(t *testing.T) {
 	}
 	client := &fakeIMAP{searchResult: []imap.UID{7}}
 	useFake(t, a, inbox.AccountID, client)
-	if err := a.UnarchiveMessage("<one@example.com>", foreign.ID, inbox.ID); err == nil {
-		t.Fatal("UnarchiveMessage moved a message from another account's folder")
+	if err := a.RestoreMessage("<one@example.com>", foreign.ID, inbox.ID); err == nil {
+		t.Fatal("RestoreMessage moved a message from another account's folder")
 	}
 	if len(client.selected) != 0 || len(client.moved) != 0 {
 		t.Fatalf("the server was asked (selected %v, moved %v), want nothing", client.selected, client.moved)

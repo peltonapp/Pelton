@@ -23,7 +23,7 @@ func TestFolderHasOlderOnServerFloorID(t *testing.T) {
 }
 
 // The engine before the remote-id window only writes sync_floor_uid. Clearing
-// it must also clear the id floor it mirrored (migrated from it by 0037), or
+// it must also clear the id floor it mirrored (migrated from it by 0041), or
 // AnyFolderHasOlder stays true and "load older" is offered for nothing.
 func TestSetFolderSyncFloorUIDMaintainsFloorID(t *testing.T) {
 	t.Parallel()

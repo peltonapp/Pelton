@@ -3,6 +3,8 @@ package desktop
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
+	"slices"
 
 	"github.com/peltonapp/Pelton/internal/credentials"
 	pimap "github.com/peltonapp/Pelton/internal/imap"
@@ -176,6 +178,22 @@ func (a *App) resetAccountThrottle(accountID int64) {
 	if s := a.accountShared(accountID); s != nil {
 		s.resetThrottle()
 	}
+}
+
+// accountColors are the colours an account can be marked with, matching the
+// palette the frontend offers (viewicons.ts). The empty string is none.
+var accountColors = []string{"", "red", "orange", "amber", "green", "teal", "blue", "indigo", "purple", "pink"}
+
+// SetAccountColor sets the colour that marks an account's mail in views that
+// mix accounts (#486).
+func (a *App) SetAccountColor(accountID int64, color string) error {
+	if err := a.ready(); err != nil {
+		return err
+	}
+	if !slices.Contains(accountColors, color) {
+		return fmt.Errorf("unknown account color %q", color)
+	}
+	return a.store.SetAccountColor(a.ctx, accountID, color)
 }
 
 // SetAccountPassword stores a login password for an account, replacing whatever

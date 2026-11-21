@@ -33,7 +33,7 @@ func TestMigrationsApplyFromMainAndFresh(t *testing.T) {
 		if err != nil {
 			t.Fatalf("%s: applied migrations: %v", name, err)
 		}
-		for v := 37; v <= 42; v++ {
+		for v := 37; v <= 45; v++ {
 			if _, ok := applied[v]; !ok {
 				t.Errorf("%s: migration %d not applied", name, v)
 			}

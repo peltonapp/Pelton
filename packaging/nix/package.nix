@@ -1,12 +1,11 @@
 {
   lib,
   stdenv,
-  buildGo127Module,
+  buildGoModule,
   fetchPnpmDeps,
   pnpmConfigHook,
   pnpm_10,
   nodejs_22,
-  wails,
   gnumake,
   pkg-config,
   gtk3,
@@ -19,8 +18,7 @@
   version ? "2026.4",
 }:
 
-# go.mod needs Go 1.27; nixpkgs still defaults to 1.26.
-buildGo127Module (finalAttrs: {
+buildGoModule (finalAttrs: {
   pname = "pelton";
   inherit version src;
 
@@ -28,20 +26,13 @@ buildGo127Module (finalAttrs: {
 
   proxyVendor = true;
 
-  vendorHash = "sha256-/gjV5hvshkPTXTjXpVUQ7Q+dmulhW0hwkxG9xo3aHlI=";
-
-  overrideModAttrs = {
-    preBuild = ''
-      make build-nix VERSION=${finalAttrs.version}
-    '';
-  };
+  vendorHash = "sha256-vWQAz/aiuv2gIAooxK1MXY8kBibCfqy1C3VKFDasYrU=";
 
   nativeBuildInputs = [
     pkg-config
     pnpmConfigHook
     pnpm_10
     nodejs_22
-    wails
     gnumake
   ]
   ++ lib.optionals stdenv.hostPlatform.isLinux [
@@ -62,7 +53,7 @@ buildGo127Module (finalAttrs: {
       src = "${finalAttrs.src}/frontend";
       pnpm = pnpm_10;
       fetcherVersion = 3;
-      hash = "sha256-fXHExroJWNty/ySEKtVBO7dc9/ua8nFH9Gdtm4771XY=";
+      hash = "sha256-3e1a4MrssmLVNNGejdjOwPWJwy97886eB41M3V/Fc+U=";
     };
     pnpmRoot = "frontend";
   };

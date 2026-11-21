@@ -1,61 +1,97 @@
 package desktop
 
 import (
+	"encoding/json"
+	"fmt"
 	"strconv"
 	"strings"
+	"sync/atomic"
 
 	"github.com/peltonapp/Pelton/internal/storage"
+	"github.com/wailsapp/wails/v3/pkg/services/notifications"
 )
 
-// Native OS notifications for new mail (#126). Delivery is per platform:
-// UserNotifications on macOS so the alert carries the app's own icon (#143),
-// go-toast on Windows so the toast carries Pelton's name, icon and a click that
-// opens the message (#170), and beeep on Linux for a dbus notification.
+// Native OS notifications for new mail (#126), through the Wails notification
+// service on every platform: UserNotifications on macOS, so the alert carries
+// the app's own icon (#143); a toast on Windows, under Pelton's name and the
+// exe's icon (#170); and a dbus notification on Linux. A click on one opens the
+// message it was about, wherever the platform reports clicks back.
 // Notifications only fire for INBOX so sent/archived mail moved by a sync never
 // notifies.
 
-// notifyAppName is the application name notifications are posted under. On
-// Linux it is the dbus app_name; on Windows it is the AppUserModelID, which is
-// also what the toast prints under itself. beeep defaults it to the literal
-// string "DefaultAppName", which is what Pelton's notifications used to be
-// labelled with everywhere (#170).
-const notifyAppName = "Pelton"
-
 // notification is one OS notification waiting to be delivered. The message id
-// travels with it so a platform that can report a click back (Windows) knows
-// which message the click was about.
+// travels with it so a click can open that message.
 type notification struct {
 	title     string
 	body      string
 	messageID int64
 }
 
-// notifyArgPrefix marks a notification's activation argument as a message id.
-// The OS hands the string back verbatim on a click, so a prefix keeps a second
-// kind of notification, if there ever is one, from being read as a message.
-const notifyArgPrefix = "message:"
+// notifyDataMessageID is the key of the message id in a notification's data.
+// The OS hands the data back on a click.
+const notifyDataMessageID = "messageId"
 
-// notifyArgs encodes which message a notification is about into the string the
-// OS hands back when it is clicked; notifyMessageID reads it back. The two
-// halves live together because nothing else checks they agree: get them out of
-// step and every click quietly opens nothing.
-func notifyArgs(messageID int64) string {
-	return notifyArgPrefix + strconv.FormatInt(messageID, 10)
+// notifySeq makes notification ids unique within a run.
+var notifySeq atomic.Int64
+
+// notifyMessageID reads a message id back out of a clicked notification's
+// data. ok is false for anything else, including a summary notification, which
+// names no message. The data has been through JSON on some platforms, so the
+// id can come back as any of the shapes a number takes there.
+func notifyMessageID(data map[string]any) (int64, bool) {
+	var id int64
+	switch v := data[notifyDataMessageID].(type) {
+	case int64:
+		id = v
+	case int:
+		id = int64(v)
+	case float64:
+		id = int64(v)
+	case json.Number:
+		id, _ = v.Int64()
+	case string:
+		id, _ = strconv.ParseInt(v, 10, 64)
+	}
+	return id, id > 0
 }
 
-// notifyMessageID reads a message id back out of an activation argument. ok is
-// false for anything else, including an empty string, which is what a click on
-// a toast from an older version arrives as.
-func notifyMessageID(args string) (int64, bool) {
-	rest, found := strings.CutPrefix(args, notifyArgPrefix)
-	if !found {
-		return 0, false
+// deliverNotification posts one notification. Without the service (tests, or
+// a dev build outside an .app on macOS) it does nothing. On macOS the first one asks for permission; after that the
+// stored answer is used without asking again. The sound is off on purpose:
+// what Pelton should make a noise about is its own question (#240).
+func (a *App) deliverNotification(n notification) error {
+	if a.notifier == nil || !a.notifyReady.Load() {
+		return nil
 	}
-	id, err := strconv.ParseInt(rest, 10, 64)
-	if err != nil || id <= 0 {
-		return 0, false
+	if ok, err := a.notifier.RequestNotificationAuthorization(); err != nil || !ok {
+		return fmt.Errorf("pelton: notifications not allowed: %v", err)
 	}
-	return id, true
+	data := map[string]any{}
+	if n.messageID > 0 {
+		data[notifyDataMessageID] = n.messageID
+	}
+	return a.notifier.SendNotification(notifications.NotificationOptions{
+		ID:    "pelton-" + strconv.FormatInt(notifySeq.Add(1), 10),
+		Title: n.title,
+		Body:  n.body,
+		Data:  data,
+		Sound: &notifications.NotificationSound{Silent: true},
+	})
+}
+
+// onNotificationResponse runs when a notification is clicked. A click on one
+// about a message opens that message; any other click still asked for Pelton,
+// so it brings the window up.
+func (a *App) onNotificationResponse(result notifications.NotificationResult) {
+	if result.Error != nil {
+		a.log.Warn("notification response", "err", result.Error)
+		return
+	}
+	if id, ok := notifyMessageID(result.Response.UserInfo); ok {
+		a.openFromNotification(id)
+		return
+	}
+	a.showWindow()
 }
 
 // notifyStrings holds the localizable text of a new-mail notification. Like the
@@ -67,20 +103,22 @@ type notifyStrings struct {
 	vipNewMail  string // title when the sender is a VIP
 	noSubject   string // shown in place of an empty subject
 	fromUnknown string // shown in place of an empty sender
+	summary     string // body of the one notification standing in for a burst, with %d for the count
 }
 
 var notifyLocales = map[string]notifyStrings{
-	"en":    {newMail: "New mail", vipNewMail: "New mail from a VIP", noSubject: "(no subject)", fromUnknown: "Unknown sender"},
-	"de":    {newMail: "Neue Nachricht", vipNewMail: "Neue Nachricht von einem VIP", noSubject: "(kein Betreff)", fromUnknown: "Unbekannter Absender"},
-	"fr":    {newMail: "Nouveau message", vipNewMail: "Nouveau message d'un VIP", noSubject: "(sans objet)", fromUnknown: "Expéditeur inconnu"},
-	"nl":    {newMail: "Nieuw bericht", vipNewMail: "Nieuw bericht van een VIP", noSubject: "(geen onderwerp)", fromUnknown: "Onbekende afzender"},
-	"es":    {newMail: "Nuevo mensaje", vipNewMail: "Nuevo mensaje de un VIP", noSubject: "(sin asunto)", fromUnknown: "Remitente desconocido"},
-	"it":    {newMail: "Nuova email", vipNewMail: "Nuova email da un VIP", noSubject: "(nessun oggetto)", fromUnknown: "Mittente sconosciuto"},
-	"pl":    {newMail: "Nowa wiadomość", vipNewMail: "Nowa wiadomość od VIP-a", noSubject: "(bez tematu)", fromUnknown: "Nieznany nadawca"},
-	"tr":    {newMail: "Yeni posta", vipNewMail: "Bir VIP'ten yeni posta", noSubject: "(konu yok)", fromUnknown: "Bilinmeyen gönderici"},
-	"pt":    {newMail: "Correio novo", vipNewMail: "Correio novo de um VIP", noSubject: "(sem assunto)", fromUnknown: "Remetente desconhecido"},
-	"ar":    {newMail: "بريد جديد", vipNewMail: "بريد جديد من جهة مهمة", noSubject: "(بلا موضوع)", fromUnknown: "مرسل غير معروف"},
-	"zh-CN": {newMail: "新邮件", vipNewMail: "来自 VIP 的新邮件", noSubject: "（无主题）", fromUnknown: "未知发件人"},
+	"en":    {newMail: "New mail", vipNewMail: "New mail from a VIP", noSubject: "(no subject)", fromUnknown: "Unknown sender", summary: "%d new messages"},
+	"de":    {newMail: "Neue Nachricht", vipNewMail: "Neue Nachricht von einem VIP", noSubject: "(kein Betreff)", fromUnknown: "Unbekannter Absender", summary: "%d neue Nachrichten"},
+	"fr":    {newMail: "Nouveau message", vipNewMail: "Nouveau message d'un VIP", noSubject: "(sans objet)", fromUnknown: "Expéditeur inconnu", summary: "%d nouveaux messages"},
+	"nl":    {newMail: "Nieuw bericht", vipNewMail: "Nieuw bericht van een VIP", noSubject: "(geen onderwerp)", fromUnknown: "Onbekende afzender", summary: "%d nieuwe berichten"},
+	"es":    {newMail: "Nuevo mensaje", vipNewMail: "Nuevo mensaje de un VIP", noSubject: "(sin asunto)", fromUnknown: "Remitente desconocido", summary: "%d mensajes nuevos"},
+	"it":    {newMail: "Nuova email", vipNewMail: "Nuova email da un VIP", noSubject: "(nessun oggetto)", fromUnknown: "Mittente sconosciuto", summary: "%d nuove email"},
+	"pl":    {newMail: "Nowa wiadomość", vipNewMail: "Nowa wiadomość od VIP-a", noSubject: "(bez tematu)", fromUnknown: "Nieznany nadawca", summary: "Nowe wiadomości: %d"},
+	"ru":    {newMail: "Новая почта", vipNewMail: "Новая почта от VIP-отправителя", noSubject: "(без темы)", fromUnknown: "Неизвестный отправитель", summary: "Новых писем: %d"},
+	"tr":    {newMail: "Yeni posta", vipNewMail: "Bir VIP'ten yeni posta", noSubject: "(konu yok)", fromUnknown: "Bilinmeyen gönderici", summary: "%d yeni posta"},
+	"pt":    {newMail: "Correio novo", vipNewMail: "Correio novo de um VIP", noSubject: "(sem assunto)", fromUnknown: "Remetente desconhecido", summary: "%d mensagens novas"},
+	"ar":    {newMail: "بريد جديد", vipNewMail: "بريد جديد من جهة مهمة", noSubject: "(بلا موضوع)", fromUnknown: "مرسل غير معروف", summary: "رسائل جديدة: %d"},
+	"zh-CN": {newMail: "新邮件", vipNewMail: "来自 VIP 的新邮件", noSubject: "（无主题）", fromUnknown: "未知发件人", summary: "%d 封新邮件"},
 }
 
 // notifyStringsFor returns the notification text table for lang, falling back to
@@ -108,6 +146,7 @@ func (a *App) notifyNewMail(folder storage.Folder, ids []int64) {
 	}
 
 	s := notifyStringsFor(a.stringSetting(settingLanguage, "en"))
+	var pending []notification
 	for _, id := range ids {
 		if a.ctx.Err() != nil {
 			return
@@ -130,8 +169,26 @@ func (a *App) notifyNewMail(folder storage.Folder, ids []int64) {
 		if vip {
 			title = s.vipNewMail
 		}
-		a.sendNotification(notification{title: title, body: notifyBody(m, s), messageID: m.ID})
+		pending = append(pending, notification{title: title, body: notifyBody(m, s), messageID: m.ID})
 	}
+	for _, n := range collapseNotifications(pending, s) {
+		a.sendNotification(n)
+	}
+}
+
+// notifyBurstLimit is the most notifications one sync of a folder raises one
+// by one. Past it, a single summary stands in for all of them, so opening
+// Pelton after a while away does not bring a flood of alerts.
+const notifyBurstLimit = 3
+
+// collapseNotifications returns list as is, or one summary notification when
+// it holds more than notifyBurstLimit. The summary names no message, so a
+// click on it only shows the window.
+func collapseNotifications(list []notification, s notifyStrings) []notification {
+	if len(list) <= notifyBurstLimit {
+		return list
+	}
+	return []notification{{title: s.newMail, body: fmt.Sprintf(s.summary, len(list))}}
 }
 
 // notifyBody builds the notification body: sender then subject, each falling

@@ -65,8 +65,12 @@
     openCrashReport,
     titleBarDoubleClick,
     setUnreadBadge,
+    quitApp,
+    hideApp,
+    isFullscreen,
+    toggleFullscreen as toggleWindowFullscreen,
   } from './lib/api'
-  import { BrowserOpenURL } from '../wailsjs/runtime/runtime'
+  import { openURL } from './lib/browser'
   import { liabilityAccepted } from './lib/liability'
   import { setDemoActive } from './lib/demo'
   import { recordArchived } from './stores/undoarchive'
@@ -77,8 +81,8 @@
   import { loadViews, editingView, closeViewEditor, openViewEditor, views as savedViews } from './stores/views'
   import { selectSavedView } from './stores/selection'
   import { isMac } from './lib/i18n'
-  import { Quit, Hide, WindowIsFullscreen, WindowFullscreen, WindowUnfullscreen } from '../wailsjs/runtime/runtime'
-  import { matchShortcut, comboHasModifier, type ShortcutAction } from './lib/shortcuts'
+  import { matchShortcut, comboHasModifier, isFunctionKeyCombo, type ShortcutAction } from './lib/shortcuts'
+  import { cyclePane, focusPane as focusPaneArea } from './lib/panes'
   import { bindings, recording, initShortcuts } from './stores/shortcuts'
   import { initMenuBar } from './stores/menubar'
   import { triggerUndo } from './stores/undosend'
@@ -108,7 +112,17 @@
   import { snoozeTarget } from './stores/snooze'
   import { previewTarget } from './stores/preview'
   import { openMove, openMoveMany } from './stores/move'
-  import { selectedIds, clearSelection } from './stores/listselect'
+  import {
+    selectedIds,
+    clearSelection,
+    anchorAt,
+    ensureAnchor,
+    selectRange,
+    rangeCursor,
+    startVisual,
+    endVisual,
+    inVisual,
+  } from './stores/listselect'
   import { selectFolder, selectView, revealMessage } from './stores/selection'
   import { setTheme, setThemeId } from './stores/prefs'
   import { openCreateFolder, openRenameFolder, openDeleteFolder, openEmptyTrash } from './stores/folderdialog'
@@ -128,8 +142,10 @@
     bulkSetOffline,
     bulkTrash,
     bulkArchive,
+    exportEml,
     reportArchiveExport,
     dropDeleted,
+    toggleSpam,
   } from './lib/messageactions'
   import { buildCommands, mailCommands, type CommandContext, type MessageOp, type FolderOp } from './lib/commands'
   import { catalogByAction } from './lib/menuactions'
@@ -145,6 +161,7 @@
   } from './stores/palette'
   import AccountPasswordDialog from './components/settings/AccountPasswordDialog.svelte'
   import DevOverlays from './components/dev/DevOverlays.svelte'
+  import peltonLogo from './assets/images/icons/pelton-logo.png'
   import {
     passwordPrompt,
     passwordPromptSyncFollows,
@@ -243,7 +260,7 @@
     if (!isMac) {
       return
     }
-    fullscreen = await WindowIsFullscreen().catch(() => false)
+    fullscreen = await isFullscreen().catch(() => false)
   }
 
   // the native Mail menu's message actions are only usable while a message is
@@ -626,6 +643,17 @@
     exportMessagePrintView(id).catch((err) => toastError(errorMessage(err)))
   }
 
+  // export the currently open message as an .eml file, or tell the user to open
+  // one first.
+  function exportOpenEml(): void {
+    const id = get(visibleMessageId)
+    if (id === null) {
+      toastInfo(get(t)('app.toast.exportOpenFirst'))
+      return
+    }
+    void exportEml([id])
+  }
+
   // currentMessage resolves the message on screen so the message-level shortcuts
   // can act on it: the active tab's, or the one picked in the list.
   //
@@ -741,7 +769,7 @@
             break
           }
           if (detail.unsubscribe.kind === 'link') {
-            BrowserOpenURL(detail.unsubscribe.target)
+            openURL(detail.unsubscribe.target)
             break
           }
           await unsubscribeMessage(msg.id)
@@ -759,6 +787,11 @@
           }
           break
         }
+        case 'toggle-spam':
+          if (await toggleSpam(msg)) {
+            closeTab(msg.id)
+          }
+          break
       }
     } catch (err) {
       toastError(errorMessage(err))
@@ -774,6 +807,7 @@
     | 'open-mailboxes'
     | 'open-contacts'
     | 'hide-window'
+    | 'export-eml'
 
   // dispatch maps an action (from a shortcut or a menu item) to its handler.
   function dispatchAction(action: MenuAction): void {
@@ -787,6 +821,9 @@
         break
       case 'export-pdf':
         exportPdf()
+        break
+      case 'export-eml':
+        exportOpenEml()
         break
       case 'preferences':
         settingsCategory = null
@@ -822,6 +859,7 @@
       case 'download-offline':
       case 'delete-message':
       case 'archive':
+      case 'toggle-spam':
       case 'unsubscribe':
         void messageAction(action)
         break
@@ -842,6 +880,21 @@
         break
       case 'prev-profile':
         void switchRelative(-1)
+        break
+      case 'next-pane':
+        cyclePane(1)
+        break
+      case 'prev-pane':
+        cyclePane(-1)
+        break
+      case 'focus-sidebar':
+        focusPaneArea('sidebar')
+        break
+      case 'focus-list':
+        focusPaneArea('list')
+        break
+      case 'focus-reader':
+        focusPaneArea('reader')
         break
       case 'undo':
         if (!triggerUndo() && !triggerUndoDelete() && !triggerUndoArchive()) {
@@ -864,15 +917,15 @@
         void toggleFullscreen()
         break
       case 'hide-window':
-        // Hide, not WindowHide: on macOS ordering the window out strands it,
-        // because wails has no reopen handler for the dock icon to trigger.
-        Hide()
+        // the app, not just the window: on macOS ordering the window out
+        // strands it, and an app hidden whole comes back from the dock icon.
+        hideApp()
         break
       case 'close-window':
         closeFrontmost()
         break
       case 'quit':
-        Quit()
+        quitApp()
         break
       case 'command-palette':
         togglePalette()
@@ -1161,11 +1214,7 @@
   }
 
   async function toggleFullscreen(): Promise<void> {
-    if (await WindowIsFullscreen()) {
-      WindowUnfullscreen()
-    } else {
-      WindowFullscreen()
-    }
+    await toggleWindowFullscreen()
   }
 
   function handleMenu(action: string): void {
@@ -1186,9 +1235,10 @@
 
   // in-app vim navigation: when enabled, plain h/j/k/l (and gg/G) move around
   // the message list and open/close the reading pane, mirroring mutt-style
-  // navigation instead of just the compose editor. it never fires in a text
-  // field, while a dialog/panel is open, or with a modifier held (so cmd+j
-  // etc. still reach the normal shortcut path).
+  // navigation instead of just the compose editor. v starts a visual selection
+  // the motions extend, and shift plus an arrow extends one directly. it never
+  // fires in a text field, while a dialog/panel is open, or with cmd, ctrl or
+  // alt held (so cmd+j etc. still reach the normal shortcut path).
   let lastVimKey = ''
   let lastVimKeyAt = 0
 
@@ -1196,15 +1246,40 @@
     return get(messageList).data?.items ?? []
   }
 
-  function vimMove(delta: number): void {
+  // vimCursorIndex is the row motions start from: the range cursor while one is
+  // out, the open message otherwise.
+  function vimCursorIndex(items: { id: number }[]): number {
+    const id = get(rangeCursor) ?? get(openMessageId)
+    return id === null ? -1 : items.findIndex((m) => m.id === id)
+  }
+
+  // vimCursorTo moves the cursor to a row. Extending carries the selection
+  // along from the anchor and leaves the reading pane alone, so a range does
+  // not open and mark read every message it passes. A plain move opens the row
+  // and makes it the anchor, so a selection started from it includes it.
+  function vimCursorTo(items: { id: number }[], index: number, extend: boolean): void {
+    const id = items[index].id
+    if (extend) {
+      rangeCursor.set(id)
+      selectRange(items.map((m) => m.id), id)
+    } else {
+      rangeCursor.set(null)
+      openMessageId.set(id)
+      anchorAt(id)
+    }
+  }
+
+  function vimMove(delta: number, extend: boolean): void {
     const items = vimNavList()
     if (items.length === 0) {
       return
     }
-    const currentId = get(openMessageId)
-    const idx = currentId === null ? -1 : items.findIndex((m) => m.id === currentId)
+    const idx = vimCursorIndex(items)
+    if (extend && idx !== -1) {
+      ensureAnchor(items[idx].id)
+    }
     const next = idx === -1 ? (delta > 0 ? 0 : items.length - 1) : Math.min(Math.max(idx + delta, 0), items.length - 1)
-    openMessageId.set(items[next].id)
+    vimCursorTo(items, next, extend)
   }
 
   function vimJump(toLast: boolean): void {
@@ -1212,7 +1287,35 @@
     if (items.length === 0) {
       return
     }
-    openMessageId.set(toLast ? items[items.length - 1].id : items[0].id)
+    vimCursorTo(items, toLast ? items.length - 1 : 0, inVisual())
+  }
+
+  // vimVisual toggles visual selection at the cursor, putting the cursor on the
+  // first row when it is nowhere yet.
+  function vimVisual(): void {
+    if (inVisual()) {
+      endVisual()
+      return
+    }
+    const items = vimNavList()
+    if (items.length === 0) {
+      return
+    }
+    const { id } = items[Math.max(vimCursorIndex(items), 0)]
+    rangeCursor.set(id)
+    startVisual(items.map((m) => m.id), id)
+  }
+
+  // vimEscape unwinds one layer at a time: visual mode first, keeping what it
+  // selected, then the selection, then the reading pane.
+  function vimEscape(): void {
+    if (inVisual()) {
+      endVisual()
+    } else if (get(selectedIds).size > 0) {
+      clearSelection()
+    } else {
+      openMessageId.set(null)
+    }
   }
 
   function anyDialogOpen(): boolean {
@@ -1237,29 +1340,43 @@
   }
 
   function tryVimNav(event: KeyboardEvent): boolean {
-    if (!$prefs.appVimMode || event.metaKey || event.ctrlKey || event.altKey || event.shiftKey) {
+    if (!$prefs.appVimMode || event.metaKey || event.ctrlKey || event.altKey) {
       return false
     }
     if (isEditableTarget(event.target) || inSidebar(event.target) || anyDialogOpen()) {
       return false
     }
+    // shift is part of G itself; with anything else it can only be extending
+    // the selection.
+    if (event.shiftKey && event.key !== 'G') {
+      return tryVimExtend(event)
+    }
     const now = Date.now()
     switch (event.key) {
       case 'j':
-        vimMove(1)
+        vimMove(1, inVisual())
         break
       case 'k':
-        vimMove(-1)
+        vimMove(-1, inVisual())
         break
       case 'l':
       case 'Enter':
         if (get(openMessageId) === null) {
-          vimMove(1)
+          vimMove(1, inVisual())
         }
         break
       case 'h':
-      case 'Escape':
         openMessageId.set(null)
+        break
+      case 'Escape':
+        vimEscape()
+        break
+      case 'v':
+        if (!$prefs.multiSelectEnabled) {
+          lastVimKey = ''
+          return false
+        }
+        vimVisual()
         break
       case 'g':
         if (lastVimKey === 'g' && now - lastVimKeyAt < 500) {
@@ -1277,6 +1394,20 @@
         lastVimKey = ''
         return false
     }
+    lastVimKey = ''
+    return true
+  }
+
+  // tryVimExtend handles shift plus an arrow, which extends the selection
+  // without entering visual mode. A binding the user put on the same keys wins.
+  function tryVimExtend(event: KeyboardEvent): boolean {
+    if ((event.key !== 'ArrowDown' && event.key !== 'ArrowUp') || !$prefs.multiSelectEnabled) {
+      return false
+    }
+    if (matchShortcut(event, $bindings) !== null) {
+      return false
+    }
+    vimMove(event.key === 'ArrowDown' ? 1 : -1, true)
     lastVimKey = ''
     return true
   }
@@ -1310,7 +1441,7 @@
     const action = matchShortcut(event, $bindings)
     if (action) {
       // a modifier-less custom binding must not hijack typing in a field.
-      if (!comboHasModifier($bindings[action]) && isEditableTarget(event.target)) {
+      if (!comboHasModifier($bindings[action]) && !isFunctionKeyCombo($bindings[action]) && isEditableTarget(event.target)) {
         return
       }
       event.preventDefault()
@@ -1433,7 +1564,11 @@
     style="--wails-draggable:drag"
     aria-hidden="true"
     on:dblclick={titleBarDoubleClick}
-  ></div>
+  >
+    <!-- the app mark sits where a native title bar would put the title, just
+         past the traffic lights -->
+    <img class="titlebar-logo" src={peltonLogo} alt="" draggable="false" />
+  </div>
 {/if}
 
 <div class="shell" class:with-topbar={showMenuBar || macTitlebar}>
@@ -1577,6 +1712,18 @@
     inset: 0 0 auto 0;
     height: var(--titlebar-lights);
     z-index: 700;
+  }
+
+  .titlebar-logo {
+    position: absolute;
+    left: var(--titlebar-inset);
+    top: 50%;
+    height: calc(16px / var(--ui-scale, 1));
+    width: auto;
+    transform: translateY(calc(-50% - var(--titlebar-nudge)));
+    opacity: 0.85;
+    pointer-events: none;
+    user-select: none;
   }
 
   /* the two zero-width tracks hold the resizer handles, which overhang via

@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- SignPath artifact configuration "installer": the NSIS installer that
+     release.yml builds around the already signed Pelton.exe, Authenticode
+     signed. Paste into the SignPath project under this slug; SignPath reads it
+     from there, not from this file. -->
+<artifact-configuration xmlns="http://signpath.io/artifact-configuration/v1">
+  <zip-file>
+    <pe-file path="Pelton-amd64-installer.exe">
+      <authenticode-sign />
+    </pe-file>
+  </zip-file>
+</artifact-configuration>

@@ -1,8 +1,9 @@
 name: Release builds
 
 # Builds Pelton and attaches the installers to the release for a version tag.
-# All builds are unsigned (no Apple notarization, no Windows code signing) -
-# see README/CI notes for what that means for users.
+# The Windows exe and installer are code signed through SignPath once it is set
+# up (see the windows job); the other builds are unsigned (no Apple
+# notarization) - see README/CI notes for what that means for users.
 #
 # The builds run on the *tag push*, not on publish, so the assets are already
 # sitting on the draft by the time anyone looks at it: pushing v1.2.3 has
@@ -14,8 +15,8 @@ name: Release builds
 # pushes to a live dnf repo real users install from. That must not happen while
 # the release is still an unpublished draft.
 #
-# workflow_dispatch takes an optional tag: with one it builds and uploads into
-# that tag's existing release (repairing a draft whose build failed, or one
+# workflow_dispatch takes an optional tag: with one it builds that tag's code
+# and uploads into its existing release (repairing a draft whose build failed, or one
 # tagged before this workflow existed), without one it only exercises the build
 # steps and uploads nothing.
 on:
@@ -30,12 +31,16 @@ on:
         description: "Existing tag to build and upload into, e.g. v2026.3.3. Empty builds without uploading."
         required: false
         default: ""
+      windows_only:
+        description: "Rebuild only the Windows files, e.g. to sign a release made before signing was set up"
+        type: boolean
+        default: false
 
 permissions:
   contents: write
 
 env:
-  GO_VERSION: "1.27.1"
+  GO_VERSION: "1.27"
   # The release these installers belong to, empty when the run is only
   # exercising the build steps. Job-level `if:` cannot read env, so the same
   # condition is spelled out on the jobs that need it.
@@ -71,22 +76,30 @@ jobs:
           gh release create "$RELEASE_TAG" --repo "$GITHUB_REPOSITORY" --draft --title "$RELEASE_TAG" --notes ""
 
   # ---------------------------------------------------------------------------
-  # macOS: Apple Silicon only. Intel builds were dropped (no runner coverage
-  # to keep validating them, and the target audience has moved to arm64).
+  # macOS: Apple Silicon, plus an Intel build. The Intel one is cross-compiled
+  # on the same Apple Silicon runner (go, clang and the macOS SDK all target
+  # x86_64 from there) and is untested: nobody on the project has an Intel Mac
+  # to try it on, which is why it was dropped once and why the release notes
+  # say so.
   # ---------------------------------------------------------------------------
   macos:
     needs: draft
-    if: github.event_name != 'release'
+    if: github.event_name != 'release' && !inputs.windows_only
     strategy:
       fail-fast: false
       matrix:
         include:
           - arch: arm64
-            runner: macos-14
+            runner: macos-15
             label: applesilicon
+          - arch: amd64
+            runner: macos-15
+            label: intel
     runs-on: ${{ matrix.runner }}
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ inputs.tag || github.ref }}
 
       - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
         with:
@@ -101,9 +114,6 @@ jobs:
           cache: pnpm
           cache-dependency-path: frontend/pnpm-lock.yaml
 
-      - name: Install wails CLI
-        run: go install github.com/wailsapp/wails/v2/cmd/wails@$(go list -m -f '{{.Version}}' github.com/wailsapp/wails/v2)
-
       - name: Install dependencies
         run: |
           go mod download
@@ -113,22 +123,13 @@ jobs:
         id: version
         run: echo "version=${RELEASE_TAG:-dev}" >> "$GITHUB_OUTPUT"
 
-      # Stamp info.productVersion so the bundle's Info.plist
+      # build.sh also stamps the version into the bundle's Info.plist
       # (CFBundleVersion / CFBundleShortVersionString, i.e. Finder's Get
-      # Info) matches the app instead of the checked-in dev placeholder.
-      # Without this, every release reported the same bundle version and a
-      # stale app copy was indistinguishable from the new one (#83).
-      - name: Stamp product version
-        run: |
-          ver="${{ steps.version.outputs.version }}"
-          jq --arg v "${ver#v}" '.info.productVersion = $v' wails.json > wails.json.tmp
-          mv wails.json.tmp wails.json
-
+      # Info), so a stale app copy can be told apart from the new one (#83).
       - name: Build (${{ matrix.arch }})
         env:
-          CGO_CFLAGS: -mmacosx-version-min=13.0
-          CGO_LDFLAGS: -mmacosx-version-min=13.0
-        run: wails build -platform darwin/${{ matrix.arch }} -ldflags "-X main.version=${{ steps.version.outputs.version }}"
+          VERSION: ${{ steps.version.outputs.version }}
+        run: scripts/build.sh
 
       # Best-effort: the Liquid Glass dynamic icon needs actool from a recent
       # enough Xcode (macOS 26 / Xcode 26). If the hosted runner's Xcode is
@@ -187,15 +188,31 @@ jobs:
             --clobber
 
   # ---------------------------------------------------------------------------
-  # Windows amd64, packaged with Wails' built-in NSIS installer support (free,
-  # no signing). windows-latest ships NSIS preinstalled.
+  # Windows amd64, packaged with Wails' built-in NSIS installer support.
+  # windows-latest ships NSIS preinstalled.
+  #
+  # Code signing goes through SignPath Foundation, free for open source: the
+  # exe is signed first, the installer is rebuilt around the signed exe, and
+  # then the installer itself is signed. It only runs for a release tag and
+  # once the SIGNPATH_* repository variables and the SIGNPATH_API_TOKEN secret
+  # exist, so an unconfigured fork or a dry run still builds, unsigned. The
+  # SignPath artifact configurations it names (exe, installer) are kept in
+  # .signpath/artifact-configurations. The uninstaller the installer writes is
+  # not signed: NSIS can only sign it mid-compile, which a remote signing
+  # service cannot do.
   # ---------------------------------------------------------------------------
   windows:
     needs: draft
     if: github.event_name != 'release'
     runs-on: windows-latest
+    permissions:
+      contents: write
+      # SignPath downloads the unsigned artifacts through the job's token.
+      actions: read
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ inputs.tag || github.ref }}
 
       - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
         with:
@@ -209,9 +226,6 @@ jobs:
           node-version: "20"
           cache: pnpm
           cache-dependency-path: frontend/pnpm-lock.yaml
-
-      - name: Install wails CLI
-        run: go install github.com/wailsapp/wails/v2/cmd/wails@$(go list -m -f '{{.Version}}' github.com/wailsapp/wails/v2)
 
       - name: Install NSIS
         shell: pwsh
@@ -233,27 +247,114 @@ jobs:
         shell: bash
         run: echo "version=${RELEASE_TAG:-dev}" >> "$GITHUB_OUTPUT"
 
-      # Stamp info.productVersion into the exe's version resources and the
-      # NSIS installer metadata, same reasoning as the macOS job (#83).
-      # NSIS VIProductVersion/VIFileVersion and the exe manifest require a
-      # 4-part numeric version; the bundled Windows templates append ".0" to
-      # info.productVersion, so pad it to exactly 3 numeric parts here. That
-      # keeps SemVer tags working ("1.0.9" -> "1.0.9.0") and fixes CalVer tags
-      # with fewer parts ("2026.3" -> "2026.3.0" -> "2026.3.0.0").
-      - name: Stamp product version
-        shell: bash
-        run: |
-          ver="${{ steps.version.outputs.version }}"
-          v="${ver#v}"
-          num="${v%%-*}"
-          IFS='.' read -ra parts <<< "$num"
-          while [ "${#parts[@]}" -lt 3 ]; do parts+=("0"); done
-          pv="${parts[0]}.${parts[1]}.${parts[2]}"
-          jq --arg v "$pv" '.info.productVersion = $v' wails.json > wails.json.tmp
-          mv wails.json.tmp wails.json
-
+      # build.sh stamps the version into the exe's version resources and the
+      # NSIS installer metadata, same reasoning as the macOS job (#83), padded
+      # to the numeric x.y.z Windows requires ("2026.3" -> "2026.3.0").
       - name: Build + NSIS installer
-        run: wails build -platform windows/amd64 -nsis -ldflags "-X main.version=${{ steps.version.outputs.version }}"
+        shell: bash
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+          NSIS: "1"
+        run: scripts/build.sh
+
+      # Releases are signed with release-signing only, and builds without a tag
+      # with test-signing only. The code signing policy promises the release
+      # certificate goes on tagged releases and nothing else, and a release
+      # never ships with the untrusted test certificate.
+      - name: Decide whether to sign
+        id: signing
+        shell: bash
+        env:
+          ORG: ${{ vars.SIGNPATH_ORGANIZATION_ID }}
+          POLICY: ${{ vars.SIGNPATH_SIGNING_POLICY_SLUG }}
+        run: |
+          if [ -z "$RELEASE_TAG" ]; then want=test-signing; else want=release-signing; fi
+          if [ -n "$ORG" ] && [ "$POLICY" = "$want" ]; then
+            echo "sign=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "sign=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Upload the exe for signing
+        id: unsigned-exe
+        if: steps.signing.outputs.sign == 'true'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: windows-exe-unsigned
+          path: build/bin/Pelton.exe
+          if-no-files-found: error
+
+      - name: Sign the exe
+        if: steps.signing.outputs.sign == 'true'
+        uses: signpath/github-action-submit-signing-request@f6d04783b4569d051e0c80105fe66e82819d0092 # v3.0
+        with:
+          api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
+          organization-id: ${{ vars.SIGNPATH_ORGANIZATION_ID }}
+          project-slug: ${{ vars.SIGNPATH_PROJECT_SLUG }}
+          signing-policy-slug: ${{ vars.SIGNPATH_SIGNING_POLICY_SLUG }}
+          artifact-configuration-slug: exe
+          github-artifact-id: ${{ steps.unsigned-exe.outputs.artifact-id }}
+          wait-for-completion: true
+          output-artifact-directory: signed/exe
+
+      # build.sh left the rendered NSIS project behind, so makensis runs it
+      # again the way build.sh does, only around the signed exe.
+      - name: Rebuild the installer around the signed exe
+        if: steps.signing.outputs.sign == 'true'
+        shell: pwsh
+        run: |
+          Copy-Item signed/exe/Pelton.exe build/bin/Pelton.exe -Force
+          Push-Location build/windows/installer
+          makensis "-DARG_WAILS_AMD64_BINARY=$env:GITHUB_WORKSPACE\build\bin\Pelton.exe" project.nsi
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          Pop-Location
+
+      - name: Upload the installer for signing
+        id: unsigned-installer
+        if: steps.signing.outputs.sign == 'true'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: windows-installer-unsigned
+          path: build/bin/Pelton-amd64-installer.exe
+          if-no-files-found: error
+
+      - name: Sign the installer
+        if: steps.signing.outputs.sign == 'true'
+        uses: signpath/github-action-submit-signing-request@f6d04783b4569d051e0c80105fe66e82819d0092 # v3.0
+        with:
+          api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
+          organization-id: ${{ vars.SIGNPATH_ORGANIZATION_ID }}
+          project-slug: ${{ vars.SIGNPATH_PROJECT_SLUG }}
+          signing-policy-slug: ${{ vars.SIGNPATH_SIGNING_POLICY_SLUG }}
+          artifact-configuration-slug: installer
+          github-artifact-id: ${{ steps.unsigned-installer.outputs.artifact-id }}
+          wait-for-completion: true
+          output-artifact-directory: signed/installer
+
+      # The test certificate is self-signed, so Windows reports it as untrusted;
+      # only the release certificate has to come out Valid.
+      - name: Check the signatures
+        if: steps.signing.outputs.sign == 'true'
+        shell: pwsh
+        env:
+          POLICY: ${{ vars.SIGNPATH_SIGNING_POLICY_SLUG }}
+        run: |
+          Copy-Item signed/installer/Pelton-amd64-installer.exe build/bin/Pelton-amd64-installer.exe -Force
+          foreach ($file in "build/bin/Pelton.exe", "build/bin/Pelton-amd64-installer.exe") {
+            $sig = Get-AuthenticodeSignature $file
+            Write-Output "$file`: $($sig.Status) by $($sig.SignerCertificate.Subject)"
+            if ($null -eq $sig.SignerCertificate -or $sig.Status -eq 'HashMismatch') { exit 1 }
+            if ($env:POLICY -eq 'release-signing' -and $sig.Status -ne 'Valid') { exit 1 }
+          }
+
+      - name: Keep the signed builds
+        if: steps.signing.outputs.sign == 'true' && env.RELEASE_TAG == ''
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: windows-signed
+          path: |
+            build/bin/Pelton.exe
+            build/bin/Pelton-amd64-installer.exe
 
       - name: Rename installer
         shell: bash
@@ -262,8 +363,8 @@ jobs:
       # the exe the installer wraps, shipped on its own for a portable install
       # (#377). Pelton is a single executable, so the installer only adds the
       # shortcuts and the uninstall entry; the same build runs from wherever it
-      # is put, including a usb stick. Same binary, same signature-less state,
-      # so this costs a copy rather than a second build.
+      # is put, including a usb stick. Same binary, signed or not alike, so
+      # this costs a copy rather than a second build.
       - name: Stage portable exe
         shell: bash
         run: cp "build/bin/Pelton.exe" "build/bin/Pelton-${{ steps.version.outputs.version }}-windows-amd64-portable.exe"
@@ -286,10 +387,12 @@ jobs:
   # ---------------------------------------------------------------------------
   linux:
     needs: draft
-    if: github.event_name != 'release'
+    if: github.event_name != 'release' && !inputs.windows_only
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ inputs.tag || github.ref }}
 
       - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
         with:
@@ -309,9 +412,6 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.1-dev build-essential pkg-config rpm
 
-      - name: Install wails CLI
-        run: go install github.com/wailsapp/wails/v2/cmd/wails@$(go list -m -f '{{.Version}}' github.com/wailsapp/wails/v2)
-
       - name: Install nfpm
         run: go install github.com/goreleaser/nfpm/v2/cmd/nfpm@latest
 
@@ -329,7 +429,9 @@ jobs:
           echo "pkg_version=${raw#v}" >> "$GITHUB_OUTPUT"
 
       - name: Build
-        run: wails build -platform linux/amd64 -tags webkit2_41 -ldflags "-X main.version=${{ steps.version.outputs.version }}"
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: scripts/build.sh
 
       - name: Stage raw binary
         run: cp "build/bin/Pelton" "build/bin/Pelton-${{ steps.version.outputs.version }}-linux-amd64"
@@ -372,6 +474,8 @@ jobs:
     if: github.event_name == 'release'
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ inputs.tag || github.ref }}
 
       - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
         with:
@@ -391,9 +495,8 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.1-dev build-essential pkg-config rpm python3-pip
 
-      - name: Install wails CLI + copr-cli
+      - name: Install copr-cli
         run: |
-          go install github.com/wailsapp/wails/v2/cmd/wails@$(go list -m -f '{{.Version}}' github.com/wailsapp/wails/v2)
           pip install --user copr-cli
           echo "$HOME/.local/bin" >> "$GITHUB_PATH"
 
@@ -409,7 +512,9 @@ jobs:
           echo "rpm_version=${raw#v}" >> "$GITHUB_OUTPUT"
 
       - name: Build
-        run: wails build -platform linux/amd64 -tags webkit2_41 -ldflags "-X main.version=${{ steps.version.outputs.rpm_version }}"
+        env:
+          VERSION: ${{ steps.version.outputs.rpm_version }}
+        run: scripts/build.sh
 
       - name: Assemble source tarball
         env:
@@ -470,9 +575,12 @@ jobs:
   # sandbox needs to run `vite build` and `go build` offline.
   # ---------------------------------------------------------------------------
   flatpak-source:
+    if: ${{ !inputs.windows_only }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ inputs.tag || github.ref }}
 
       - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
         with:
@@ -489,7 +597,7 @@ jobs:
 
       - name: Resolve version
         id: version
-        run: echo "version=${GITHUB_REF_NAME:-0.0.0-dev}" >> "$GITHUB_OUTPUT"
+        run: echo "version=${RELEASE_TAG:-0.0.0-dev}" >> "$GITHUB_OUTPUT"
 
       - name: Assemble vendored tarball
         env:
@@ -550,9 +658,10 @@ jobs:
   # It only needs flatpak-source. The installers were uploaded by the tag-push
   # run and have been sitting on the draft since; the vendored tarball is the
   # one asset that appears on publish, so it is the only one worth waiting for.
-  # Naming the build jobs here as well would not add a guarantee and would cost
-  # the job entirely: they are skipped on the release event, and a skipped
-  # dependency skips everything that needs it.
+  # The build jobs are named too, for a rebuild started by hand with a tag:
+  # there the files change after publishing, so the digests are refreshed once
+  # the uploads are done. On the release event they are skipped, which is why
+  # the condition starts with always().
   #
   # pelton.app/thanks reads the digest out of the release notes, not out of the
   # asset. Release downloads redirect to a host that sends no CORS headers, so a
@@ -560,12 +669,16 @@ jobs:
   # body happily. The file stays for humans and for `sha256sum -c`.
   # ---------------------------------------------------------------------------
   checksums:
-    needs: flatpak-source
-    if: github.event_name == 'release'
+    needs: [flatpak-source, macos, windows, linux]
+    if: >-
+      always()
+      && !contains(needs.*.result, 'failure')
+      && !contains(needs.*.result, 'cancelled')
+      && (github.event_name == 'release' || inputs.tag != '')
     runs-on: ubuntu-latest
     env:
       GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      TAG: ${{ github.event.release.tag_name }}
+      TAG: ${{ github.event.release.tag_name || inputs.tag }}
     steps:
       - name: Hash every published asset
         run: |

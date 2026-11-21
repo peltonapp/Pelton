@@ -3,6 +3,7 @@ package imap
 import (
 	"errors"
 	"fmt"
+	"io"
 	"net"
 	"slices"
 	"strings"
@@ -39,6 +40,13 @@ type testOptions struct {
 	noCopyUID bool
 	// subjects seeds one message per subject.
 	subjects []string
+	// dedupAppend makes every APPEND after the first store nothing and report
+	// uid 1, as Gmail does for a message whose Message-ID the mailbox already
+	// holds.
+	dedupAppend bool
+	// noAppendUID makes APPEND answer without APPENDUID, as a server without
+	// UIDPLUS does. The in-memory server always sends it.
+	noAppendUID bool
 }
 
 // newTestServer starts an in-memory imap server on localhost and returns a
@@ -61,7 +69,7 @@ func newTestServer(t *testing.T, opts testOptions) (*Client, *wireLog) {
 	srv := imapserver.New(&imapserver.Options{
 		NewSession: func(*imapserver.Conn) (imapserver.Session, *imapserver.GreetingData, error) {
 			session := mem.NewSession()
-			if opts.failSearch || opts.failStoreAfter > 0 || opts.noCopyUID {
+			if opts.failSearch || opts.failStoreAfter > 0 || opts.noCopyUID || opts.dedupAppend || opts.noAppendUID {
 				session = &brokenSession{Session: session, opts: opts}
 			}
 			return session, nil, nil
@@ -182,8 +190,9 @@ func (w *wireLog) hasBareExpunge() bool {
 // server stops cooperating half way through a delete.
 type brokenSession struct {
 	imapserver.Session
-	opts   testOptions
-	stores int
+	opts    testOptions
+	stores  int
+	appends int
 }
 
 func (s *brokenSession) Search(kind imapserver.NumKind, criteria *imap.SearchCriteria, options *imap.SearchOptions) (*imap.SearchData, error) {
@@ -207,6 +216,23 @@ func (s *brokenSession) Copy(numSet imap.NumSet, dest string) (*imap.CopyData, e
 		return nil, nil
 	}
 	return data, err
+}
+
+func (s *brokenSession) Append(mailbox string, r imap.LiteralReader, options *imap.AppendOptions) (*imap.AppendData, error) {
+	s.appends++
+	data := &imap.AppendData{UID: 1, UIDValidity: 1}
+	if !s.opts.dedupAppend || s.appends == 1 {
+		var err error
+		if data, err = s.Session.Append(mailbox, r, options); err != nil {
+			return nil, err
+		}
+	} else if _, err := io.Copy(io.Discard, r); err != nil {
+		return nil, err
+	}
+	if s.opts.noAppendUID {
+		return nil, nil
+	}
+	return data, nil
 }
 
 // mailboxSubjects returns the subjects a mailbox holds, in uid order. It

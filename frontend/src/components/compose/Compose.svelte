@@ -1,12 +1,20 @@
+<script module lang="ts">
+  // pending is each session's draft save (local save, then server upload) still
+  // in flight. It outlives the pane (save and close returns before the upload
+  // does), and the next save, send or discard waits on it so it reads the draft
+  // id and Message-ID that save stored rather than making a second copy.
+  const pending = new Map<number, Promise<void>>()
+</script>
+
 <script lang="ts">
   // a single compose pane. it edits one session: addresses, subject, the body in
   // the chosen editor mode, and attachments. the floating pane can be minimized
   // to its title bar or expanded to fill the window. markdown mode gets a
   // formatting toolbar and a github-style live preview. send enqueues to the
-  // outbox (with the undo-send window when enabled); save stores a local draft.
+  // outbox (with the undo-send window when enabled); save stores a local draft
+  // and uploads a copy to the server Drafts folder.
   import { formatWeekdayTime, type TimeFormat } from '../../lib/format'
   import { onMount, tick } from 'svelte'
-  import { marked } from 'marked'
   import {
     IconX,
     IconSend,
@@ -14,6 +22,7 @@
     IconMinus,
     IconArrowsDiagonal,
     IconArrowsDiagonalMinimize2,
+    IconAppWindow,
     IconTrash,
     IconChevronDown,
     IconClock,
@@ -22,30 +31,36 @@
     IconCalendarWeek,
   } from '@tabler/icons-svelte'
   import AddressFields from './AddressFields.svelte'
+  import MarkdownPreview from './MarkdownPreview.svelte'
   import EditorModeSwitch from './EditorModeSwitch.svelte'
+  import { caretMark, convertEditorBody } from '../../lib/richtext'
+  import { withSignatureBlock } from '../../lib/signatureblock'
   import Select from '../common/Select.svelte'
   import EditorToolbar from './EditorToolbar.svelte'
   import AttachmentPicker from './AttachmentPicker.svelte'
   import DateTimePicker from '../common/DateTimePicker.svelte'
   import { currentUIScale } from '../../theme/theme'
-  import { updateCompose, closeCompose, closeRequest, setComposeFullscreenDefault, type ComposeSession } from '../../stores/compose'
+  import { updateCompose, closeCompose, closeRequest, getSession, restoreSession, setComposeFullscreenDefault, composeInWindow, type ComposeSession } from '../../stores/compose'
+  import { openComposeWindow } from '../../lib/api'
+  import { isDemoActive } from '../../lib/demo'
   import { signatures, signatureById, getAccountSignatures } from '../../stores/signatures'
   import type { Signature } from '../../lib/types'
   import { sidebar } from '../../stores/accounts'
-  import { sendMessage, saveDraft, deleteDraft } from '../../lib/api'
+  import { sendMessage, saveDraft, deleteDraft, uploadDraft, removeServerDraft } from '../../lib/api'
   import { loadOutbox } from '../../stores/outbox'
   import { scheduleUndo } from '../../stores/undosend'
   import { prefs } from '../../stores/prefs'
   import { shortcutTitle, bindings } from '../../stores/shortcuts'
   import { comboMatches } from '../../lib/shortcuts'
   import { bodyFontStack } from '../../lib/fonts'
-  import { buildRequest, hasRecipients } from '../../lib/mailcompose'
+  import { buildRequest, hasRecipients, parseAddressList } from '../../lib/mailcompose'
   import ProtectionPicker from './ProtectionPicker.svelte'
   import { composeProtectionStatus } from '../../lib/api'
   import type { ProtectionStatus } from '../../lib/types'
   import { atTime, addDays, nextWeekday } from '../../lib/datepresets'
-  import { errorMessage, toastError, toastSuccess } from '../../stores/toast'
+  import { errorMessage, toastError, toastInfo, toastSuccess } from '../../stores/toast'
   import type CodeMirrorEditor from './CodeMirrorEditor.svelte'
+  import type RichEditorView from './RichEditor.svelte'
 
   // the mail body font setting flows into the editors as a css variable so
   // what you type looks like what recipients without their own fonts see
@@ -68,10 +83,13 @@
   let statusFor = ''
   // suggestedApplied keeps the account default from overriding a choice the
   // user made: it is a starting point, once, not a correction.
-  let suggestedApplied = false
+  // A saved draft keeps the protection it was saved with.
+  let suggestedApplied = session.saved
   let preview = false
   let confirmClose = false
-  let editorGrabFocus = false
+  // savedAs is the draft as last saved, so closing it unchanged asks nothing.
+  // A session that opens as a saved draft starts out saved.
+  let savedAs = session.saved ? draftState(session) : ''
 
   // send-later dropdown state: caret toggles the menu, presets are built fresh
   // each time it opens so "tomorrow" is always relative to now. the menu is
@@ -199,21 +217,18 @@
 
   // the rich editor (tiptap) is code-split: it only loads when the session is in
   // wysiwyg mode, keeping prosemirror out of the main bundle.
-  let RichEditor: typeof import('./RichEditor.svelte').default | null = null
+  let RichEditor: typeof RichEditorView | null = null
+  let richEditor: RichEditorView | null = null
   $: if (session.mode === 'wysiwyg' && !RichEditor) {
     void import('./RichEditor.svelte').then((m) => (RichEditor = m.default))
   }
 
   $: accounts = $sidebar.data?.accounts ?? []
-  $: previewHtml = marked.parse(session.body || '', { async: false }) as string
 
-  // withBlock inserts a signature block into a body: headers go to the top,
-  // footers to the bottom after the standard "-- " delimiter.
+  // withBlock inserts a signature block into the body (see signatureblock.ts),
+  // above a reply's quote when the user asked for that.
   function withBlock(body: string, sig: Signature): string {
-    if (sig.kind === 'header') {
-      return `${sig.content}\n\n${body}`
-    }
-    return `${body.replace(/\s*$/, '')}\n\n-- \n${sig.content}`
+    return withSignatureBlock(body, sig, session.mode, $prefs.signatureAboveQuote ? (session.quote ?? '') : '')
   }
 
   // on first open, insert the account's default header/footer once. drafts and
@@ -225,8 +240,6 @@
     } else if (session.subject.trim().length == 0) {
       const input = document.querySelector<HTMLInputElement>(`#subject-${session.id}`)
       input?.focus()
-    } else {
-      editorGrabFocus = true
     }
 
     if (session.signaturesApplied) {
@@ -265,11 +278,52 @@
     updateCompose(session.id, { body: withBlock(session.body, sig) })
   }
 
+  // where the next editor to mount puts its caret, so switching modes or
+  // leaving the preview carries on where the writing stopped. textCaret is an
+  // offset into the body, richCaret the body with caretMark at the caret.
+  // Either one also makes that editor take focus. A message that opens with
+  // its recipient and subject filled in, a reply above all, starts in the
+  // body, at the top; otherwise onMount puts the caret in the first empty field.
+  const startInBody = session.to.trim() !== '' && session.subject.trim() !== ''
+  let textCaret: number | null = startInBody && session.mode !== 'wysiwyg' ? 0 : null
+  let richCaret: string | null = startInBody && session.mode === 'wysiwyg' ? session.body : null
+
+  // bodyWithCaret is the body with caretMark where the caret is, or null when
+  // there is no caret to read.
+  function bodyWithCaret(): string | null {
+    if (session.mode === 'wysiwyg') {
+      return richEditor ? richEditor.contentWithCaret() : null
+    }
+    const offset = preview ? textCaret : editor ? editor.caretOffset() : null
+    return offset === null ? null : session.body.slice(0, offset) + caretMark + session.body.slice(offset)
+  }
+
   function setMode(event: CustomEvent<EditorMode>): void {
-    if (event.detail !== 'markdown') {
+    const mode = event.detail
+    const body = convertEditorBody(session.body, session.mode, mode)
+    const marked = bodyWithCaret()
+    const landed = marked === null ? null : convertEditorBody(marked, session.mode, mode)
+    richCaret = mode === 'wysiwyg' ? (landed ?? body) : null
+    textCaret = mode === 'wysiwyg' ? null : Math.max(0, landed?.indexOf(caretMark) ?? 0)
+    if (mode !== 'markdown') {
       preview = false
     }
-    updateCompose(session.id, { mode: event.detail })
+    updateCompose(session.id, { mode, body })
+  }
+
+  function togglePreview(): void {
+    if (!preview) {
+      textCaret = editor ? editor.caretOffset() : null
+    }
+    preview = !preview
+  }
+
+  // setBody takes an edit from the editor. The carried caret is spent by then,
+  // so an editor remounted later does not jump back to it.
+  function setBody(body: string): void {
+    textCaret = null
+    richCaret = null
+    updateCompose(session.id, { body })
   }
 
   function toggleFullscreen(): void {
@@ -281,6 +335,17 @@
 
   function toggleMinimize(): void {
     updateCompose(session.id, { minimized: !session.minimized })
+  }
+
+  // popOut moves this compose into a window of its own (#573), with every
+  // field as it is, and drops the pane here once the window has it.
+  async function popOut(): Promise<void> {
+    try {
+      await openComposeWindow(session)
+      closeCompose(session.id)
+    } catch (err) {
+      toastError(errorMessage(err))
+    }
   }
 
   // applyFormat applies the requested markdown formatting to the CodeMirror
@@ -327,14 +392,15 @@
     }
     sending = true
     try {
-      const snapshot: ComposeSession = { ...session }
-      const req = buildRequest(session)
+      const current = await settled()
+      const snapshot: ComposeSession = { ...current }
+      const req = buildRequest(current)
       if (scheduledAt) {
         req.sendAt = scheduledAt.toISOString()
       }
       const id = await sendMessage(req)
-      if (session.draftId) {
-        await deleteDraft(session.draftId)
+      if (current.draftId) {
+        await deleteDraft(current.draftId)
       }
       await loadOutbox()
       closeCompose(session.id)
@@ -375,41 +441,86 @@
     await send()
   }
 
-  async function save(): Promise<void> {
-    try {
-      const id = await saveDraft(session.draftId, buildRequest(session))
-      updateCompose(session.id, { draftId: id })
+  // settled waits for this session's save in flight and returns the session as
+  // it stands afterwards, carrying the draft id and Message-ID it stored.
+  async function settled(): Promise<ComposeSession> {
+    await pending.get(session.id)
+    return getSession(session.id) ?? session
+  }
+
+  // save stores the draft locally, runs saved (the pane closing, for save and
+  // close), and puts a copy in the server Drafts folder. It is queued behind
+  // the session's save already in flight before anything awaits.
+  function save(saved?: () => void): Promise<void> {
+    const id = session.id
+    const run = (pending.get(id) ?? Promise.resolve()).then(async () => {
+      const current = getSession(id) ?? session
+      const draftId = await saveDraft(current.draftId, buildRequest(current))
+      updateCompose(id, { draftId })
+      savedAs = draftState(current)
       toastSuccess($t('compose.toast.draftSaved'))
+      saved?.()
+      await upload(current, draftId)
+    })
+    const done = run.catch((err) => toastError(errorMessage(err)))
+    pending.set(id, done)
+    void done.then(() => {
+      if (pending.get(id) === done) {
+        pending.delete(id)
+      }
+    })
+    return done
+  }
+
+  // upload replaces the draft's server copy. An encrypted draft is not uploaded,
+  // and a plaintext copy an earlier save left there is removed.
+  async function upload(current: ComposeSession, draftId: number): Promise<void> {
+    if (current.protection === 'encrypt' || current.protection === 'signencrypt') {
+      toastInfo($t('compose.toast.draftLocalOnly'))
+      if (current.draftMessageId) {
+        await removeServerDraft(current.accountId, current.draftMessageId)
+        updateCompose(current.id, { draftMessageId: '' })
+      }
+      return
+    }
+    try {
+      updateCompose(current.id, { draftMessageId: await uploadDraft(draftId) })
     } catch (err) {
-      toastError(errorMessage(err))
+      toastError($t('compose.toast.draftUploadFailed').replace('{error}', errorMessage(err)))
+      // a pane that save and close already shut comes back, since nothing
+      // could open a draft kept only on this device.
+      if (!getSession(current.id)) {
+        restoreSession({ ...current, draftId })
+      }
     }
   }
 
-  // hasContent decides whether closing needs a save/discard prompt: any
-  // recipient, subject or body text counts, but a session that was only ever
-  // opened and never touched should close silently.
   // recipientList is every address currently typed in, which is what the
   // status is about.
   $: recipientList = [session.to, session.cc, session.bcc]
-    .join(',')
-    .split(/[,;]/)
-    .map((part) => {
-      const match = part.match(/<([^>]+)>/)
-      return (match ? match[1] : part).trim().toLowerCase()
-    })
+    .flatMap(parseAddressList)
+    .map((a) => a.email.toLowerCase())
     .filter((email) => email.includes('@'))
 
-  $: void refreshProtection(session.accountId, recipientList.join(','))
+  $: void refreshProtection(session.accountId, recipientList)
 
   // refreshProtection asks the backend what is possible. A failure leaves the
   // controls as they were rather than pretending nothing can be protected.
-  async function refreshProtection(accountId: number, key: string): Promise<void> {
+  // The answer depends on the sending account's own keys as much as on the
+  // recipients, so both make up the key a reply is matched against.
+  async function refreshProtection(accountId: number, recipients: string[]): Promise<void> {
+    const key = JSON.stringify([accountId, recipients])
     if (key === statusFor && protectionStatus !== null) {
       return
     }
     statusFor = key
     try {
-      const status = await composeProtectionStatus(accountId, recipientList)
+      const status = await composeProtectionStatus(accountId, recipients)
+      // a newer account or recipient list was asked for while this was in
+      // flight; its answer, not this one, decides what the controls may offer.
+      if (key !== statusFor) {
+        return
+      }
       protectionStatus = status as unknown as ProtectionStatus
       if (!suggestedApplied) {
         suggestedApplied = true
@@ -428,13 +539,17 @@
     }
   }
 
+  // hasContent decides whether closing needs a save/discard prompt: any
+  // recipient, subject or body text counts, but a session that was only ever
+  // opened and never touched should close silently.
   function hasContent(): boolean {
     return (
       session.to.trim().length > 0 ||
       session.cc.trim().length > 0 ||
       session.bcc.trim().length > 0 ||
       session.subject.trim().length > 0 ||
-      session.body.trim().length > 0
+      session.body.trim().length > 0 ||
+      session.attachments.length > 0
     )
   }
 
@@ -445,33 +560,30 @@
     requestClose()
   }
 
+  // draftState is what a save would store, minus the server link it gains after.
+  function draftState(s: ComposeSession): string {
+    return JSON.stringify({ ...buildRequest(s), draftMessageId: '' })
+  }
+
   function requestClose(): void {
-    if (hasContent()) {
+    if (hasContent() && draftState(session) !== savedAs) {
       confirmClose = true
       return
     }
     closeCompose(session.id)
   }
 
-  async function saveAndClose(): Promise<void> {
-    try {
-      await saveDraft(session.draftId, buildRequest(session))
-      toastSuccess($t('compose.toast.draftSaved'))
-      closeCompose(session.id)
-    } catch (err) {
-      toastError(errorMessage(err))
-    }
+  function saveAndClose(): Promise<void> {
+    return save(() => closeCompose(session.id))
   }
 
+  // discardAndClose drops the edits since the last save. A saved draft stays,
+  // locally and on the server, and a pane never saved has nothing stored. A
+  // save still running finishes first, so its failed upload does not bring the
+  // discarded pane back.
   async function discardAndClose(): Promise<void> {
     confirmClose = false
-    try {
-      if (session.draftId) {
-        await deleteDraft(session.draftId)
-      }
-    } catch (err) {
-      toastError(errorMessage(err))
-    }
+    await settled()
     closeCompose(session.id)
   }
 </script>
@@ -483,25 +595,35 @@
   class="compose"
   class:fullscreen={session.fullscreen}
   class:minimized={session.minimized}
+  class:in-window={$composeInWindow}
   data-compose-id={session.id}
   role="dialog"
   aria-label={$t('compose.dialog.ariaLabel')}
   on:keydown|capture={onSendKey}
 >
   <!-- svelte-ignore a11y-click-events-have-key-events a11y-no-static-element-interactions -->
-  <header class="head" on:dblclick={toggleMinimize}>
+  <header class="head" on:dblclick={() => !$composeInWindow && toggleMinimize()}>
     <span class="title">{session.subject || $t('compose.title.untitled')}</span>
-    <div class="win">
-      <button type="button" class="win-btn" aria-label={$t('compose.window.minimize')} title={$t('compose.window.minimize')} on:click={toggleMinimize}>
-        <IconMinus size={15} stroke={1.8} />
-      </button>
-      <button type="button" class="win-btn" aria-label={session.fullscreen ? $t('compose.window.restore') : $t('compose.window.fullscreen')} title={session.fullscreen ? $t('compose.window.restore') : $t('compose.window.fullscreen')} on:click={toggleFullscreen}>
-        {#if session.fullscreen}
-          <IconArrowsDiagonalMinimize2 size={15} stroke={1.8} />
-        {:else}
-          <IconArrowsDiagonal size={15} stroke={1.8} />
+    <!-- a quick second click on a window button must not also count as a
+         double-click on the bar -->
+    <div class="win" on:dblclick|stopPropagation role="presentation">
+      {#if !$composeInWindow}
+        <button type="button" class="win-btn" aria-label={$t('compose.window.minimize')} title={$t('compose.window.minimize')} on:click={toggleMinimize}>
+          <IconMinus size={15} stroke={1.8} />
+        </button>
+        <button type="button" class="win-btn" aria-label={session.fullscreen ? $t('compose.window.restore') : $t('compose.window.fullscreen')} title={session.fullscreen ? $t('compose.window.restore') : $t('compose.window.fullscreen')} on:click={toggleFullscreen}>
+          {#if session.fullscreen}
+            <IconArrowsDiagonalMinimize2 size={15} stroke={1.8} />
+          {:else}
+            <IconArrowsDiagonal size={15} stroke={1.8} />
+          {/if}
+        </button>
+        {#if !isDemoActive()}
+          <button type="button" class="win-btn" aria-label={$t('messageList.menu.openInWindow')} title={$t('messageList.menu.openInWindow')} on:click={() => void popOut()}>
+            <IconAppWindow size={15} stroke={1.8} />
+          </button>
         {/if}
-      </button>
+      {/if}
       <button
         type="button"
         class="win-btn"
@@ -555,17 +677,18 @@
         {#if RichEditor}
           <svelte:component
             this={RichEditor}
+            bind:this={richEditor}
             content={session.body}
-            grabFocus={editorGrabFocus}
-            on:change={(e) => updateCompose(session.id, { body: e.detail })}
+            caretContent={richCaret}
+            on:change={(e) => setBody(e.detail)}
           />
         {:else}
           <div class="editor-loading">{$t('compose.editor.loading')}</div>
         {/if}
       {:else if session.mode === 'markdown'}
-        <EditorToolbar {preview} on:format={(e) => applyFormat(e.detail)} on:togglePreview={() => (preview = !preview)} />
+        <EditorToolbar {preview} on:format={(e) => applyFormat(e.detail)} on:togglePreview={togglePreview} />
         {#if preview}
-          <div class="preview selectable">{@html previewHtml}</div>
+          <MarkdownPreview markdown={session.body} font={composeFont ?? ''} />
         {:else if CMEditor}
           <svelte:component
             this={CMEditor}
@@ -573,8 +696,8 @@
             content={session.body}
             placeholder={$t('compose.editor.placeholderMarkdown')}
             vimEnabled={$prefs.composeVimMode}
-            grabFocus={editorGrabFocus}
-            on:change={(e) => updateCompose(session.id, { body: e.detail })}
+            caret={textCaret}
+            on:change={(e) => setBody(e.detail)}
           />
         {:else}
           <div class="editor-loading">{$t('compose.editor.loading')}</div>
@@ -587,11 +710,11 @@
           placeholder={$t('compose.editor.placeholderPlain')}
           vimEnabled={$prefs.composeVimMode}
           mono
-          grabFocus={editorGrabFocus}
-          on:change={(e) => updateCompose(session.id, { body: e.detail })}
+          caret={textCaret}
+          on:change={(e) => setBody(e.detail)}
         />
       {:else}
-        <div class="editor-loading">Loading editor…</div>
+        <div class="editor-loading">{$t('compose.editor.loading')}</div>
       {/if}
     </div>
 
@@ -623,7 +746,7 @@
         status={protectionStatus}
         on:change={(e) => updateCompose(session.id, { protection: e.detail })}
       />
-      <button type="button" class="save" on:click={save}>
+      <button type="button" class="save" on:click={() => save()}>
         <IconDeviceFloppy size={15} stroke={1.6} />
         {$t('action.saveDraft')}
       </button>
@@ -703,6 +826,20 @@
     height: auto;
     max-height: none;
     z-index: 130;
+  }
+
+  /* in a compose window the one compose is the window: edge to edge, below
+     the macOS traffic lights, with no corner to float in. */
+  .compose.in-window {
+    position: fixed;
+    inset: 0;
+    top: var(--titlebar-lights);
+    width: auto;
+    height: auto;
+    max-height: none;
+    border-radius: 0;
+    border: none;
+    box-shadow: none;
   }
 
   /* minimized collapses to just the title bar. */
@@ -793,19 +930,6 @@
     flex-direction: column;
   }
 
-  .preview {
-    flex: 1;
-    width: 100%;
-    min-height: 0;
-    background: transparent;
-    color: var(--text-primary);
-    font-family: var(--compose-font, inherit);
-    font-size: var(--fz-body);
-    line-height: 1.55;
-    overflow-y: auto;
-    padding: var(--space-3) var(--space-4);
-  }
-
   /* shown briefly while the rich editor chunk loads. */
   .editor-loading {
     flex: 1;
@@ -816,38 +940,11 @@
     font-size: var(--fz-label);
   }
 
-  /* a light github-style rendered preview. */
-  .preview :global(h1),
-  .preview :global(h2),
-  .preview :global(h3) {
-    margin: var(--space-3) 0 var(--space-2);
-  }
-
-  .preview :global(a) {
-    color: var(--link);
-  }
-
-  .preview :global(pre),
-  .preview :global(code) {
-    font-family: var(--font-mono);
-    background: var(--surface-sunken);
-    border-radius: var(--radius-control);
-  }
-
-  .preview :global(pre) {
-    padding: var(--space-3);
-    overflow-x: auto;
-  }
-
-  .preview :global(blockquote) {
-    margin: 0 0 var(--space-2);
-    padding-inline-start: var(--space-3);
-    border-inline-start: 2px solid var(--border-strong);
-    color: var(--text-secondary);
-  }
-
+  /* a narrow pane wraps the controls onto a second row rather than squeezing
+     their labels. */
   .foot {
     display: flex;
+    flex-wrap: wrap;
     align-items: center;
     gap: var(--space-2);
     padding: var(--space-3) var(--space-4);
@@ -878,6 +975,7 @@
     color: var(--text-primary);
     cursor: var(--cursor-action);
     font-size: var(--fz-label);
+    white-space: nowrap;
   }
 
   .send:hover:not(:disabled),

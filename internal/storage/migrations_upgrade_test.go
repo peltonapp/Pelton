@@ -13,8 +13,12 @@ import (
 	"testing"
 )
 
-// Upgrade of a populated main database (v36) through 0037-0042. Timings on
-// 150k messages are measured by hand, not here.
+// Upgrade of a populated main database (through 0040) through 0041-0045.
+// Timings on 150k messages are measured by hand, not here.
+
+// mainVersion is the newest migration of the main branch the sync core was
+// merged onto.
+const mainVersion = 40
 
 type upgradeFixture struct {
 	account, folder int64 // gmail INBOX
@@ -41,12 +45,13 @@ func upInt(t *testing.T, ex execer, q string, args ...any) int64 {
 	return n.Int64
 }
 
-// seedV36 fills a v36 database with the shapes main writes: several accounts
-// and delimiters, non-ASCII and case-only folder names, uid 0 and uint32 max,
-// pending/snoozed/flagged rows, empty bodies, attachments and the tables that
-// point at messages. The newest messages are deleted so sqlite_sequence sits
-// above max(id), as it does after any expunge.
-func seedV36(t *testing.T, db *DB) upgradeFixture {
+// seedMain fills a mainVersion database with the shapes main writes: several
+// accounts and delimiters, non-ASCII and case-only folder names, uid 0 and
+// uint32 max, pending/snoozed/flagged rows with their pending mask, threading
+// ids, empty bodies, attachments, spam origins, account colours and the
+// tables that point at messages. The newest messages are deleted so
+// sqlite_sequence sits above max(id), as it does after any expunge.
+func seedMain(t *testing.T, db *DB) upgradeFixture {
 	t.Helper()
 	tx, err := db.sql.Begin()
 	if err != nil {
@@ -122,6 +127,10 @@ func seedV36(t *testing.T, db *DB) upgradeFixture {
 		upExec(t, tx, `INSERT INTO attachments (message_id, filename, disk_path) VALUES (?, 'x', 'x')`, msg(gmail, inbox, 100000+i, "gone", "gone", i))
 	}
 	upExec(t, tx, `DELETE FROM messages WHERE uid BETWEEN 100000 AND 100003`)
+	upExec(t, tx, `UPDATE messages SET pending_flag_mask = 2 WHERE pending_flags = 1 AND id % 2 = 0`)
+	upExec(t, tx, `UPDATE messages SET in_reply_to = '["p' || id || '@x"]', [references] = '["r@x","p' || id || '@x"]' WHERE id % 3 = 0`)
+	upExec(t, tx, `UPDATE accounts SET color = 'teal' WHERE id = ?`, gmail)
+	upExec(t, tx, `INSERT INTO spam_origins (account_id, message_id, folder_id, marked_at) VALUES (?, '<s@x>', ?, ?)`, gmail, inbox, now)
 	fx.seq = upInt(t, tx, `SELECT seq FROM sqlite_sequence WHERE name = 'messages'`)
 	upExec(t, tx, `INSERT OR REPLACE INTO settings (key, profile_id, value, updated_at) VALUES ('search_indexed_max_id', 1, ?, ?)`, fx.seq, now)
 	upExec(t, tx, `INSERT INTO views (name, query_text, account_id, created_at, updated_at, profile_id) VALUES ('Faktury', 'faktura', ?, ?, ?, 1)`, gmail, now, now)
@@ -135,13 +144,13 @@ func seedV36(t *testing.T, db *DB) upgradeFixture {
 	return fx
 }
 
-// fingerprint hashes every user table over the columns it had at v36, so data
+// fingerprint hashes every user table over the columns it had on main, so data
 // copied by a rebuild or kept by ADD COLUMN compares equal.
 func fingerprint(t *testing.T, db *DB, cols map[string][]string) map[string]string {
 	t.Helper()
 	out := map[string]string{}
 	for table, cs := range cols {
-		q := fmt.Sprintf(`SELECT quote(%s) FROM %q ORDER BY rowid`, strings.Join(cs, `)||'|'||quote(`), table)
+		q := fmt.Sprintf(`SELECT quote("%s") FROM %q ORDER BY rowid`, strings.Join(cs, `")||'|'||quote("`), table)
 		rows, err := db.sql.Query(q)
 		if err != nil {
 			t.Fatalf("fingerprint %s: %v", table, err)
@@ -221,7 +230,7 @@ var upgradeChecks = map[int][]struct {
 	query string
 	want  int64
 }{
-	37: {
+	41: {
 		{`SELECT count(*) FROM folders WHERE remote_id != imap_path OR state_token != '' OR sync_initialized != 0`, 0},
 		{`SELECT count(*) FROM folders WHERE sync_floor_id != CASE WHEN sync_floor_uid > 0 THEN CAST(sync_floor_uid AS TEXT) ELSE '' END`, 0},
 		{`SELECT count(*) FROM folders WHERE sync_floor_id = '18'`, 1},
@@ -233,17 +242,17 @@ var upgradeChecks = map[int][]struct {
 		{`SELECT count(*) FROM messages WHERE body_complete != 1`, 0},
 		{`SELECT count(*) FROM messages WHERE search_state != 2`, 0},
 	},
-	39: {{`SELECT count(*) FROM accounts WHERE sync_max_parallel IS NOT NULL`, 0}},
-	40: {{`SELECT count(*) FROM sqlite_master WHERE name = 'idx_messages_folder_body_date'`, 1}},
-	41: {{`SELECT count(*) FROM folders WHERE last_full_sync_at IS NOT NULL`, 0}},
-	42: {{`SELECT count(*) FROM sqlite_master WHERE name = 'idx_messages_search_stale_stub'`, 1}},
+	42: {{`SELECT count(*) FROM accounts WHERE sync_max_parallel IS NOT NULL`, 0}},
+	43: {{`SELECT count(*) FROM sqlite_master WHERE name = 'idx_messages_folder_body_date'`, 1}},
+	44: {{`SELECT count(*) FROM folders WHERE last_full_sync_at IS NOT NULL`, 0}},
+	45: {{`SELECT count(*) FROM sqlite_master WHERE name = 'idx_messages_search_stale_stub'`, 1}},
 }
 
 func TestMigrationUpgradeFromMain(t *testing.T) {
 	ctx := context.Background()
-	db := openDBThrough(t, 36)
-	fx := seedV36(t, db)
-	checkUpgradeHealth(t, db, "v36")
+	db := openDBThrough(t, mainVersion)
+	fx := seedMain(t, db)
+	checkUpgradeHealth(t, db, "main")
 	cols := userColumns(t, db)
 	before := fingerprint(t, db, cols)
 	fts := map[string]string{}
@@ -256,7 +265,7 @@ func TestMigrationUpgradeFromMain(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, m := range migrations {
-		if m.version <= 36 {
+		if m.version <= mainVersion {
 			continue
 		}
 		if err := db.applyMigration(ctx, m); err != nil {
@@ -420,14 +429,14 @@ func TestMigrationUpgradeReclaimsSpace(t *testing.T) {
 			old := reclaimMinFree
 			reclaimMinFree = tc.minFree
 			t.Cleanup(func() { reclaimMinFree = old })
-			db := openDBThrough(t, 36)
-			seedV36(t, db)
+			db := openDBThrough(t, mainVersion)
+			seedMain(t, db)
 			if tc.disk != nil {
 				oldDisk := diskFree
 				t.Cleanup(func() { diskFree = oldDisk })
 				rebuilt := false
 				diskFree = func(string) (uint64, bool) {
-					if !rebuilt { // the check before 0037
+					if !rebuilt { // the check before 0041
 						rebuilt = true
 						return 1 << 50, true
 					}
@@ -452,20 +461,20 @@ func TestMigrationUpgradeReclaimsSpace(t *testing.T) {
 	}
 }
 
-// A disk without room for the rebuild stops the upgrade before 0037 with a
-// readable error and leaves the database at 36.
+// A disk without room for the rebuild stops the upgrade before 0041 with a
+// readable error and leaves the database at main's version.
 func TestMigrationUpgradeRefusesFullDisk(t *testing.T) {
-	db := openDBThrough(t, 36)
-	seedV36(t, db)
+	db := openDBThrough(t, mainVersion)
+	seedMain(t, db)
 	old := diskFree
 	t.Cleanup(func() { diskFree = old })
 	diskFree = func(string) (uint64, bool) { return 4096, true }
 	err := db.RunMigrations(context.Background())
-	if err == nil || !strings.Contains(err.Error(), "not enough free disk space") || !strings.Contains(err.Error(), "0037_remote_ids.sql") {
+	if err == nil || !strings.Contains(err.Error(), "not enough free disk space") || !strings.Contains(err.Error(), "0041_remote_ids.sql") {
 		t.Fatalf("err = %v, want a readable disk-space error", err)
 	}
-	if n := upInt(t, db.sql, `SELECT max(id) FROM schema_migrations`); n != 36 {
-		t.Errorf("schema at %d after refusal, want 36", n)
+	if n := upInt(t, db.sql, `SELECT max(id) FROM schema_migrations`); n != mainVersion {
+		t.Errorf("schema at %d after refusal, want %d", n, mainVersion)
 	}
 	diskFree = func(string) (uint64, bool) { return 0, false } // unknown: just run
 	if err := db.RunMigrations(context.Background()); err != nil {

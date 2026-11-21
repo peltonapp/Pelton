@@ -47,7 +47,7 @@ func TestMigrationNames(t *testing.T) {
 		{name: "rows without names", setup: `UPDATE schema_migrations SET name = NULL`},
 		{name: "same names"},
 		{name: "other branch's 0037", wantErr: true,
-			setup: `INSERT INTO schema_migrations (id, applied_at, name) VALUES (37, 'x', '0037_spam_origins.sql')`},
+			setup: `INSERT INTO schema_migrations (id, applied_at, name) VALUES (37, 'x', '0037_remote_ids.sql')`},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -86,20 +86,36 @@ func TestMigrationNames(t *testing.T) {
 	}
 }
 
-// A main/nightly database that ran #521's 0037_spam_origins.sql before names
-// were recorded has row 37 with no name. It must be refused, not taken for our
-// 0037, and the refusal must leave the database as it was.
+// A main database through 0040 recorded no names; those rows are trusted and
+// named, and the newer migrations run on top.
+func TestMigrationNamesMainWithoutNames(t *testing.T) {
+	ctx := context.Background()
+	db := openDBThrough(t, lastUnnamedMigration)
+	upExec(t, db.sql, `UPDATE schema_migrations SET name = NULL`)
+	if err := db.RunMigrations(ctx); err != nil {
+		t.Fatal(err)
+	}
+	if n := upInt(t, db.sql, `SELECT count(*) FROM schema_migrations WHERE name IS NULL`); n != 0 {
+		t.Errorf("%d migrations left unnamed", n)
+	}
+	if n := upInt(t, db.sql, `SELECT count(*) FROM pragma_table_info('folders') WHERE name = 'remote_id'`); n != 1 {
+		t.Error("remote ids migration did not run")
+	}
+}
+
+// A row above lastUnnamedMigration without a name and without our schema was
+// written by a build we do not know. It must be refused, and the refusal must
+// leave the database as it was.
 func TestMigrationNamesUnnamedAboveLastUnnamed(t *testing.T) {
 	ctx := context.Background()
-	db := openDBThrough(t, 36)
+	db := openDBThrough(t, lastUnnamedMigration)
 	upExec(t, db.sql, `UPDATE schema_migrations SET name = NULL`)
-	upExec(t, db.sql, `CREATE TABLE spam_origins (id INTEGER PRIMARY KEY, address TEXT NOT NULL)`)
-	upExec(t, db.sql, `INSERT INTO schema_migrations (id, applied_at, name) VALUES (37, 'x', NULL)`)
+	upExec(t, db.sql, `INSERT INTO schema_migrations (id, applied_at, name) VALUES (41, 'x', NULL)`)
 	before := schemaOf(t, db)
 
 	err := db.RunMigrations(ctx)
-	if err == nil || !strings.Contains(err.Error(), "migration 37 without a name") {
-		t.Fatalf("err = %v, want a refusal of the unnamed 37", err)
+	if err == nil || !strings.Contains(err.Error(), "migration 41 without a name") {
+		t.Fatalf("err = %v, want a refusal of the unnamed 41", err)
 	}
 	if schemaOf(t, db) != before {
 		t.Error("schema changed by a refused start")
@@ -107,7 +123,7 @@ func TestMigrationNamesUnnamedAboveLastUnnamed(t *testing.T) {
 	if n := upInt(t, db.sql, `SELECT count(*) FROM schema_migrations WHERE name IS NOT NULL`); n != 0 {
 		t.Errorf("%d migrations were named before the refusal", n)
 	}
-	if n := upInt(t, db.sql, `SELECT count(*) FROM schema_migrations WHERE id > 37`); n != 0 {
+	if n := upInt(t, db.sql, `SELECT count(*) FROM schema_migrations WHERE id > 41`); n != 0 {
 		t.Errorf("%d migrations applied past the refusal", n)
 	}
 }
@@ -168,10 +184,10 @@ func testEarlierDraftRefused(t *testing.T, drop []string, unnamed bool) {
 	for _, q := range drop {
 		upExec(t, db.sql, q)
 	}
-	want := "earlier draft of migration 37"
+	want := "earlier draft of migration 41"
 	if unnamed {
 		upExec(t, db.sql, `UPDATE schema_migrations SET name = NULL`)
-		want = "migration 37 without a name"
+		want = "migration 41 without a name"
 	}
 	before := schemaOf(t, db)
 

@@ -41,6 +41,8 @@ export interface Account {
   // how this account starts a new message: '' unprotected, 'sign', or 'auto'
   // to sign and encrypt whenever every recipient has a key.
   pgpDefault: string
+  // marks this account's mail in lists that mix accounts (#486); '' is none.
+  color?: string
   // the user told the missing-password prompt to stop asking about this
   // account. It still cannot sync; the ui marks it instead of interrupting.
   passwordPromptDismissed: boolean
@@ -254,7 +256,11 @@ export interface PhishingReport {
   links?: string[]
 }
 
+/** MessageDetail includes rendered content and bare RFC identifiers for replies. */
 export interface MessageDetail extends MessageSummary {
+  messageId: string
+  inReplyTo: string[]
+  references: string[]
   toAddresses: string
   ccAddresses: string
   bodyPlain: string
@@ -371,6 +377,9 @@ export interface ComposeRequest {
   // 'signencrypt'. The send refuses rather than falling back to plaintext when
   // it cannot do what was asked.
   protection: string
+  // draftMessageId is the Message-ID of this draft's copy in the server Drafts
+  // folder, '' until it has been uploaded.
+  draftMessageId: string
 }
 
 // ProtectionStatus is what the compose window needs to offer the pgp controls
@@ -539,6 +548,9 @@ export interface UIPrefs {
   menuBarInApp: boolean
   menuBarNativeMinimal: boolean
   menuBarIcons: boolean
+  // windowMaterial puts the window over a native material (Liquid Glass on
+  // macOS, Mica on Windows) from the next launch on.
+  windowMaterial: boolean
   // timeFormat picks the clock for rendered times: auto (locale), 12, or 24.
   timeFormat: string
   // reduceMotion disables ui transitions and animations.
@@ -576,9 +588,17 @@ export interface UIPrefs {
   // unread count of the unified inbox (#488).
   statusClock: boolean
   statusUnread: boolean
+  // markReadOnOpen marks a message read when it is opened (#517).
+  markReadOnOpen: boolean
+  // openOnArrow opens the row the arrow keys move to, instead of waiting for Enter.
+  openOnArrow: boolean
+  // signatureAboveQuote puts a reply's footer above the quoted original (#512).
+  signatureAboveQuote: boolean
   // closeAction is what the window's close button does: 'background' keeps
   // Pelton running and syncing with the window hidden, 'quit' exits.
   closeAction: CloseAction
+  // startHidden keeps the window hidden at launch (#483).
+  startHidden: boolean
   // syncMessageLimit caps how many of a folder's newest message bodies the
   // first sync fetches. 0 means no limit.
   syncMessageLimit: number
@@ -995,7 +1015,7 @@ export type FolderRole =
   | 'normal'
 
 // unified view keys mirror the backend view constants.
-export type ViewKey = 'inbox' | 'flagged' | 'sent' | 'drafts' | 'archive' | 'junk' | 'trash'
+export type ViewKey = 'inbox' | 'unread' | 'flagged' | 'sent' | 'drafts' | 'archive' | 'junk' | 'trash'
 
 // pgp status mirrors mailview.PGPStatus.
 export type PGPStatus = 'none' | 'signed' | 'encrypted'

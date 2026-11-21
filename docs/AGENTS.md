@@ -8,7 +8,7 @@ Pelton is a free, open source, privacy-focused email client for macOS, Windows a
 - Windows: `Pelton-<version>-windows-amd64-installer.exe` from releases (unsigned)
 - Fedora: `sudo dnf copr enable arnek/Pelton && sudo dnf install pelton`
 - Raw rpm: `Pelton-<version>-linux-fedora-x86_64.rpm` from releases
-- Source: Go + pnpm + wails CLI v2.13.0; `wails build`; on Linux `-tags webkit2_41` with gtk3-devel and webkit2gtk4.1-devel
+- Source: Go 1.27+ + pnpm; `make build`; no wails CLI needed; on Linux the tags are `production gtk3` with gtk3-devel and webkit2gtk4.1-devel
 
 ## Data locations
 

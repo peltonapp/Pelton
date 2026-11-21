@@ -9,7 +9,7 @@
   import { prefs } from '../../stores/prefs'
   import { formatFullDate, displayName, type TimeFormat } from '../../lib/format'
   import { unsubscribeMessage, checkSMIMERevocation } from '../../lib/api'
-  import { BrowserOpenURL } from '../../../wailsjs/runtime/runtime'
+  import { openURL } from '../../lib/browser'
   import { errorMessage, toastError, toastSuccess } from '../../stores/toast'
   import { t } from '../../lib/i18n'
   import { vipSenders, bareAddress, addVIP, removeVIP } from '../../stores/vip'
@@ -25,10 +25,12 @@
   let revocation: SMIMERevocation | undefined
   let checkedId = 0
 
-  $: if (detail.smime.status !== '' && detail.id !== checkedId) {
+  $: if (detail.id !== checkedId) {
     checkedId = detail.id
     revocation = undefined
-    void loadRevocation(detail.id)
+    if (detail.smime.status !== '') {
+      void loadRevocation(detail.id)
+    }
   }
 
   // a failed check is not a verdict, so a rejection leaves the badge as the
@@ -70,7 +72,11 @@
   // otherwise an unsubscribe-looking link scraped from the (already
   // sanitized) body as a browser-link fallback.
   $: unsub = detail.unsubscribe ?? bodyUnsubscribeLink(detail.bodyHtmlSafe)
-  $: done = detail.unsubscribe?.done ?? false
+  // doneHere remembers an unsubscribe carried out on this message, since the
+  // message record itself is not updated until the next load and any other
+  // change to it (a flag, loaded images) would otherwise bring the button back.
+  let doneHere = false
+  $: done = doneHere || (detail.unsubscribe?.done ?? false)
 
   // a mis-click must not silently POST anywhere: the first click arms the
   // button, the second within the window carries it out.
@@ -78,10 +84,14 @@
   let confirmTimer = 0
   let working = false
 
-  // reset the confirm state when another message opens.
-  $: if (detail.id) {
+  // reset the confirm state when another message opens, and only then: the
+  // same message re-rendering mid-request must not clear a running one.
+  let confirmFor = -1
+  $: if (detail.id !== confirmFor) {
+    confirmFor = detail.id
     confirming = false
     working = false
+    doneHere = false
   }
 
   const unsubWords = /unsubscrib|abmelden|abbestellen|d[eé]sabonn|desuscrib|afmeld/i
@@ -116,13 +126,13 @@
     clearTimeout(confirmTimer)
     confirming = false
     if (unsub.kind === 'link') {
-      BrowserOpenURL(unsub.target)
+      openURL(unsub.target)
       return
     }
     working = true
     try {
       await unsubscribeMessage(detail.id)
-      done = true
+      doneHere = true
       toastSuccess($t('detail.unsubscribe.done'))
     } catch (err) {
       toastError(errorMessage(err))

@@ -148,11 +148,12 @@ func pagingInbox(t *testing.T, c *pagingIMAP) (*App, storage.Account, storage.Fo
 // stored, and reading every row on each poll was most of their time.
 func rowCount(t *testing.T, a *App, folderID int64) int {
 	t.Helper()
-	n, _, err := a.store.FolderCounts(a.ctx, folderID)
+	// every row, pending deletes included: FolderCounts leaves those out.
+	states, err := a.store.ListMessageStates(a.ctx, folderID)
 	if err != nil {
 		t.Error(err)
 	}
-	return n
+	return len(states)
 }
 
 // A list task over a 2000-message folder runs one page per unit (50, then

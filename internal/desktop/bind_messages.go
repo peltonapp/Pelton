@@ -13,8 +13,8 @@ import (
 
 	"github.com/peltonapp/Pelton/internal/desktop/syncsched"
 	"github.com/peltonapp/Pelton/internal/mailview"
+	"github.com/peltonapp/Pelton/internal/messageid"
 	"github.com/peltonapp/Pelton/internal/storage"
-	"github.com/wailsapp/wails/v2/pkg/runtime"
 )
 
 // ListMessagesRequest selects the page to read. Kind is "folder", "view" or
@@ -248,8 +248,30 @@ func (a *App) messageDetailFromStored(id int64, m *storage.Message) (MessageDeta
 	// else is blocked until the user asks.
 	autoAllow := a.remoteAutoAllow(m.FromAddress) || a.remoteMessageAllowed(m)
 
+	parentID, _ := messageid.Normalize(m.MessageID)
+	inReplyTo := []string{}
+	for _, value := range m.InReplyTo {
+		id, ok := messageid.Normalize(value)
+		if !ok {
+			// Filtering could turn an ambiguous field into a single-parent fallback.
+			inReplyTo = []string{}
+			break
+		}
+		inReplyTo = append(inReplyTo, id)
+	}
+	references := []string{}
+	// Dropping a bad entry is deliberate: the ordered list loses only that ancestor.
+	// In-Reply-To is cleared whole: RFC 5322 section 3.6.4 uses it only with one ID.
+	for _, value := range m.References {
+		if id, ok := messageid.Normalize(value); ok {
+			references = append(references, id)
+		}
+	}
 	detail := MessageDetailDTO{
 		MessageSummaryDTO: summary,
+		MessageID:         parentID,
+		InReplyTo:         inReplyTo,
+		References:        references,
 		ToAddresses:       m.ToAddresses,
 		CcAddresses:       m.CcAddresses,
 		BodyPlain:         m.BodyPlain,
@@ -387,7 +409,7 @@ func (a *App) trackerDTOs(html string) []TrackingPixelDTO {
 func (a *App) inlineDataURLs(atts []storage.Attachment) map[string]string {
 	out := make(map[string]string)
 	for _, att := range atts {
-		if att.ContentID == "" {
+		if att.ContentID == "" || !strings.HasPrefix(strings.ToLower(att.ContentType), "image/") {
 			continue
 		}
 		rc, err := a.store.OpenAttachment(att.DiskPath)
@@ -399,7 +421,7 @@ func (a *App) inlineDataURLs(atts []storage.Attachment) map[string]string {
 		if err != nil {
 			continue
 		}
-		id := trimAngles(att.ContentID)
+		id := strings.ToLower(trimAngles(att.ContentID))
 		out[id] = fmt.Sprintf("data:%s;base64,%s", att.ContentType, base64.StdEncoding.EncodeToString(data))
 	}
 	return out
@@ -435,9 +457,10 @@ func (a *App) updateFlag(id int64, flag storage.Flag, on bool) error {
 	if err := a.store.MarkFlagsPending(a.ctx, id, flags); err != nil {
 		return err
 	}
-	// the Flagged view lists a message once however many folders hold it, so
-	// every copy has to follow, or unflagging one would leave another showing.
-	if flag == storage.FlagFlagged {
+	// the Flagged and Unread views list a message once however many folders
+	// hold it, so every copy has to follow, or unflagging or reading one would
+	// leave another showing.
+	if flag == storage.FlagFlagged || flag == storage.FlagSeen {
 		if err := a.store.MarkCopiesFlagPending(a.ctx, m.AccountID, id, m.MessageID, flag, on); err != nil {
 			return err
 		}
@@ -519,7 +542,7 @@ func (a *App) SaveAttachment(messageID, attachmentID int64) (string, error) {
 		return "", fmt.Errorf("pelton: attachment %d not found", attachmentID)
 	}
 
-	dest, err := runtime.SaveFileDialog(a.ctx, runtime.SaveDialogOptions{
+	dest, err := a.saveFileDialog(saveDialogOptions{
 		DefaultFilename: target.Filename,
 		Title:           "Save attachment",
 	})
@@ -639,12 +662,25 @@ func trimSuffixByte(s string, b byte) string {
 	return s
 }
 
+func looksBinary(s string) bool {
+	if strings.IndexByte(s, 0) >= 0 {
+		return true
+	}
+	ctrl := 0
+	for _, r := range s {
+		if r < 0x20 && r != '\n' && r != '\r' && r != '\t' {
+			ctrl++
+		}
+	}
+	return ctrl*50 > len(s)
+}
+
 // quoteText is the message as text for a reply or forward to quote: the text
 // part when there is one, and otherwise the html rendered down to text. An
 // html-only message has no text part at all, which is why replying to one used
-// to quote nothing (#239).
+// to quote nothing (#239). A text part holding binary data is not a text part.
 func quoteText(plain, html string) string {
-	if strings.TrimSpace(plain) != "" {
+	if strings.TrimSpace(plain) != "" && !looksBinary(plain) {
 		return plain
 	}
 	return mailview.TextForQuote(html)

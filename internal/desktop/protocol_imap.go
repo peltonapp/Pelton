@@ -107,11 +107,18 @@ func (p imapProtocol) transmit(ctx context.Context, account storage.Account, m o
 		psmtp.WithSentAppender(func(raw []byte) (string, error) {
 			return t.app.appendToSent(account, raw)
 		}),
+		psmtp.WithBackground(func(fn func()) {
+			t.app.sentCopies.Add(1)
+			go func() {
+				defer t.app.sentCopies.Done()
+				fn()
+			}()
+		}),
 	)
 	return sender.Transmit(ctx, m)
 }
 
-func (p imapProtocol) moveMessage(m *storage.Message, source, dest storage.Folder, account storage.Account) (ArchiveUndoDTO, error) {
+func (p imapProtocol) moveMessage(m *storage.Message, source, dest storage.Folder, account storage.Account, kw *keywordChange) (ArchiveUndoDTO, error) {
 	a := p.a
 	var (
 		undo     ArchiveUndoDTO
@@ -120,8 +127,12 @@ func (p imapProtocol) moveMessage(m *storage.Message, source, dest storage.Folde
 	err := a.runNow(a.ctx, account, syncsched.KindMove, source.ID, func(_ context.Context, client mailClient) error {
 		unlock := a.lockMutations(account.ID)
 		defer unlock()
-		if _, err := client.Select(source.IMAPPath); err != nil {
+		mbox, err := client.Select(source.IMAPPath)
+		if err != nil {
 			return fmt.Errorf("move: select %q: %w", source.IMAPPath, err)
+		}
+		if kw != nil {
+			a.storeKeywords(client, mbox, imap.UID(m.UID), *kw)
 		}
 		// The raw source has to be fetched before the move: afterwards the
 		// message has a new uid in another mailbox. A failure here never
@@ -157,7 +168,7 @@ func (p imapProtocol) moveMessage(m *storage.Message, source, dest storage.Folde
 // UID the server named for it at move time (COPYUID), else by its rfc
 // Message-ID: the highest UID carrying it in from. When the COPYUID copy is
 // gone by now, nothing is moved and the undo reports it.
-func (p imapProtocol) moveBack(rfcMessageID string, from, dest storage.Folder, account storage.Account) error {
+func (p imapProtocol) moveBack(rfcMessageID string, from, dest storage.Folder, account storage.Account, kw *keywordChange) error {
 	a := p.a
 	if rfcMessageID == "" {
 		return fmt.Errorf("pelton: this message cannot be moved back (no Message-ID)")
@@ -175,6 +186,9 @@ func (p imapProtocol) moveBack(rfcMessageID string, from, dest storage.Folder, a
 		}
 		uid := a.movedUIDs.take(from.ID, rfcMessageID, box.UIDValidity)
 		if m := asUIDMover(client); uid != 0 && m != nil {
+			if kw != nil {
+				a.storeKeywords(client, box, uid, *kw)
+			}
 			// A UID MOVE of a UID that is gone (another client expunged
 			// it) is an OK that moves nothing. The UID was recorded from
 			// this server's COPYUID, so a move that did happen names its
@@ -196,6 +210,9 @@ func (p imapProtocol) moveBack(rfcMessageID string, from, dest storage.Folder, a
 				return err
 			}
 			uid = uids[len(uids)-1]
+		}
+		if kw != nil {
+			a.storeKeywords(client, box, uid, *kw)
 		}
 		if err := client.Move(uid, dest.IMAPPath); err != nil {
 			return err

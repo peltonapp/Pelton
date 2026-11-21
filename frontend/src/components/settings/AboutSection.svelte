@@ -7,7 +7,7 @@
   import { createEventDispatcher } from 'svelte'
   import Modal from '../common/Modal.svelte'
   import { IconBrandGithub, IconBug, IconLicense, IconScale, IconRefresh, IconUsers, IconWorld, IconBook2, IconFolderOpen, IconClipboard } from '@tabler/icons-svelte'
-  import { BrowserOpenURL } from '../../../wailsjs/runtime/runtime'
+  import { openURL } from '../../lib/browser'
   import { APP } from '../../lib/app-info'
   import { appVersion, checkForUpdates, defaultMailClientStatus, setDefaultMailClient, isNightly, getDiagnostics, openLogFolder, type UpdateCheckResult } from '../../lib/api'
   import nightlyLogo from '../../assets/images/icons/pelton-nightly-logo.png'
@@ -152,7 +152,7 @@
   }
 
   function open(url: string): void {
-    BrowserOpenURL(url)
+    openURL(url)
   }
 
 </script>
@@ -167,7 +167,7 @@
     <span class="name">{nightly ? $t('nightly.appName') : APP.name}</span>
     <button type="button" class="version" on:click={toggleViewportInfo}>{version.startsWith('v') ? version : `v${version}`}</button>
   </div>
-  <p class="tagline">{APP.tagline}</p>
+  <p class="tagline">{$t('about.tagline')}</p>
   {#if nightly}
     <p class="nightly-note">{$t('common.statusBar.nightlyTitle')}</p>
   {/if}

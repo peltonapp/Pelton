@@ -414,28 +414,37 @@ func (a *Adapter) Fetch(ctx context.Context, mailboxID string, remoteIDs []strin
 }
 
 // SetFlags adds the managed flags set in flags to one message (+FLAGS) and
-// removes nothing: the engine pushes the union of local and server flags, so
-// a managed flag absent from flags was set by another client since the
-// snapshot, and a -FLAGS would erase it. Flags the adapter does not manage
-// are untouched. Nothing set means no command.
+// removes nothing. Flags the adapter does not manage are untouched. Nothing
+// set means no command.
 func (a *Adapter) SetFlags(ctx context.Context, mailboxID, remoteID string, flags storage.Flag) error {
+	return a.storeFlags(ctx, mailboxID, remoteID, flags, a.c.AddFlags)
+}
+
+// RemoveFlags removes the managed flags set in flags from one message
+// (-FLAGS). Flags the adapter does not manage are untouched. Nothing set means
+// no command.
+func (a *Adapter) RemoveFlags(ctx context.Context, mailboxID, remoteID string, flags storage.Flag) error {
+	return a.storeFlags(ctx, mailboxID, remoteID, flags, a.c.RemoveFlags)
+}
+
+func (a *Adapter) storeFlags(ctx context.Context, mailboxID, remoteID string, flags storage.Flag, store func(goimap.UID, ...goimap.Flag) error) error {
 	uid, err := parseUID(remoteID)
 	if err != nil {
 		return err
 	}
-	var add []goimap.Flag
+	var imapFlags []goimap.Flag
 	for _, m := range managedFlags {
 		if flags.Has(m.bit) {
-			add = append(add, m.flag)
+			imapFlags = append(imapFlags, m.flag)
 		}
 	}
-	if len(add) == 0 {
+	if len(imapFlags) == 0 {
 		return nil
 	}
 	if _, err := a.selectBox(mailboxID, psync.ExpectedGeneration(ctx, mailboxID)); err != nil {
 		return refused(err)
 	}
-	return refused(a.c.AddFlags(uid, add...))
+	return refused(store(uid, imapFlags...))
 }
 
 // refusedError is a server's NO or BAD to a command; errors.Is matches it
@@ -667,6 +676,8 @@ func messageToFetched(msg *Message) psync.Fetched {
 		Size:                msg.Size,
 		ListUnsubscribePost: msg.ListUnsubscribePost,
 		AuthResults:         msg.AuthResults,
+		InReplyTo:           msg.InReplyTo,
+		References:          msg.References,
 		Attachments:         fetchedAttachments(msg.Attachments),
 	}
 }

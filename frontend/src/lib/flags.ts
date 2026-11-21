@@ -36,6 +36,7 @@ const defaultCountry: Record<string, string> = {
   es: 'es',
   it: 'it',
   pl: 'pl',
+  ru: 'ru',
   tr: 'tr',
   pt: 'pt',
   // ar has no entry and is given none: no single country's flag stands for the

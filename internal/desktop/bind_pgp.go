@@ -9,8 +9,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/wailsapp/wails/v2/pkg/runtime"
-
 	"github.com/peltonapp/Pelton/internal/credentials"
 	"github.com/peltonapp/Pelton/internal/crypto"
 )
@@ -131,9 +129,9 @@ func (a *App) ImportPGPKey() ([]PGPKeyDTO, error) {
 	if err != nil {
 		return nil, err
 	}
-	path, err := runtime.OpenFileDialog(a.ctx, runtime.OpenDialogOptions{
+	path, err := a.openFileDialog(openDialogOptions{
 		Title: "Import PGP key",
-		Filters: []runtime.FileFilter{
+		Filters: []fileFilter{
 			{DisplayName: "PGP keys (*.asc, *.gpg, *.pgp, *.key)", Pattern: "*.asc;*.gpg;*.pgp;*.key"},
 			{DisplayName: "All files", Pattern: "*.*"},
 		},
@@ -200,7 +198,7 @@ func (a *App) ExportPGPKey(fingerprint string, includePrivate bool) (string, err
 	if includePrivate {
 		suffix = "private"
 	}
-	dest, err := runtime.SaveFileDialog(a.ctx, runtime.SaveDialogOptions{
+	dest, err := a.saveFileDialog(saveDialogOptions{
 		Title:           "Export PGP key",
 		DefaultFilename: fmt.Sprintf("%s-%s.asc", shortFingerprint(fingerprint), suffix),
 	})

@@ -12,6 +12,7 @@
     IconFlag,
     IconFlagFilled,
     IconPrinter,
+    IconFileExport,
     IconInfoCircle,
     IconCode,
     IconShieldSearch,
@@ -35,6 +36,7 @@
     delete: void
     toggleFlag: void
     print: void
+    exportEml: void
     info: void
     source: void
     scan: void
@@ -63,7 +65,7 @@
   <IconButton label={$t('action.archive')} title={$shortcutTitle($t('action.archive'), 'archive')} on:click={() => dispatch('archive')}>
     <IconArchive size={18} stroke={1.6} />
   </IconButton>
-  <IconButton label={flagLabel} title={$shortcutTitle(flagLabel, 'flag')} active={flagged} on:click={() => dispatch('toggleFlag')}>
+  <IconButton label={flagLabel} title={$shortcutTitle(flagLabel, 'flag')} active={flagged} toggle on:click={() => dispatch('toggleFlag')}>
     {#if flagged}
       <IconFlagFilled size={18} />
     {:else}
@@ -98,6 +100,9 @@
     on:click={() => dispatch('print')}
   >
     <IconPrinter size={18} stroke={1.6} />
+  </IconButton>
+  <IconButton label={$t('menu.exportEml')} on:click={() => dispatch('exportEml')}>
+    <IconFileExport size={18} stroke={1.6} />
   </IconButton>
   <IconButton label={$t('detail.toolbar.messageInfo')} on:click={() => dispatch('info')}>
     <IconInfoCircle size={18} stroke={1.6} />

@@ -123,7 +123,11 @@
       return
     }
     const edge = event.shiftKey ? items[0] : items[items.length - 1]
-    if (document.activeElement === edge) {
+    const current = document.activeElement
+    // focus on the dialog itself (where it starts) or anywhere outside the
+    // controls counts as an edge too, or shift+tab from the start walks out.
+    const atEdge = current === edge || current === dialog || !items.includes(current as HTMLElement)
+    if (atEdge) {
       event.preventDefault()
       ;(event.shiftKey ? items[items.length - 1] : items[0]).focus()
     }

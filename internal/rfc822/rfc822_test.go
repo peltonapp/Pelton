@@ -1,10 +1,103 @@
 package rfc822
 
 import (
+	"fmt"
+	"reflect"
 	"strings"
 	"testing"
 	"unicode/utf8"
 )
+
+func TestParseThreadingHeaders(t *testing.T) {
+	longIDs := make([]string, 25)
+	longTokens := make([]string, 25)
+	for i := range longIDs {
+		longIDs[i] = fmt.Sprintf("ancestor%d@example.com", i)
+		longTokens[i] = "<" + longIDs[i] + ">"
+	}
+	cases := []struct {
+		name       string
+		value      string
+		inReplyTo  []string
+		references []string
+	}{
+		{"folded comments", "(root (nested)) <a@example.com>\r\n\t<b@example.com> (tail)", []string{"a@example.com", "b@example.com"}, []string{"a@example.com", "b@example.com"}},
+		{"escaped comments", `(root \(escaped\) \\ (nested)) <a@example.com>`, []string{"a@example.com"}, []string{"a@example.com"}},
+		{"case and duplicates", "<A@Example.COM> <A@Example.COM>", []string{"A@Example.COM", "A@Example.COM"}, []string{"A@Example.COM", "A@Example.COM"}},
+		{"duplicate parents", "<a@example.com> <a@example.com>", []string{"a@example.com", "a@example.com"}, []string{"a@example.com", "a@example.com"}},
+		{"Normalize domain literals", "<a@[]> <a@[IPv6:2001:db8::1]>", []string{"a@[]", "a@[IPv6:2001:db8::1]"}, []string{"a@[]", "a@[IPv6:2001:db8::1]"}},
+		{"invalid IRT not filtered", "<a@example.com> <bad>", []string{}, []string{"a@example.com"}},
+		{"References recovers closed token", "<a@x> <bad> <b@x>", []string{}, []string{"a@x", "b@x"}},
+		{"junk clears recovery", "<a@x> junk <b@x>", []string{}, []string{}},
+		{"unmatched bracket clears recovery", "<a@x> <b@x", []string{}, []string{}},
+		{"nested brackets clear recovery", "<a@x> <<b@x>>", []string{}, []string{}},
+		{"unterminated comment clears recovery", "<a@x> (tail", []string{}, []string{}},
+		{"internal whitespace", "<a@ example.com>", []string{}, []string{}},
+		{"internal folding", "<a@\r\n\texample.com>", []string{}, []string{}},
+		{"control injection", "<a@x>\x00", []string{}, []string{}},
+		{"oversized ID", "<" + strings.Repeat("a", 977) + "@x>", []string{}, []string{}},
+		{"non-ASCII not rewritten", "<a@éxample.com>", []string{}, []string{}},
+		{"encoded words not decoded", "=?UTF-8?Q?<a@x>?=", []string{}, []string{}},
+		{"incoming lists not capped", strings.Join(longTokens, " "), longIDs, longIDs},
+		{"empty", "", []string{}, []string{}},
+		{"comments only", "(no ancestry)", []string{}, []string{}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			raw := "In-Reply-To: " + tc.value + "\r\nReferences: " + tc.value + "\r\n\r\nreadable body\r\n"
+			assertThreadingParsers(t, raw, tc.inReplyTo, tc.references)
+		})
+	}
+	t.Run("absent", func(t *testing.T) {
+		assertThreadingParsers(t, "Subject: Hi\r\n\r\nreadable body\r\n", []string{}, []string{})
+	})
+}
+
+func TestParseRepeatedThreadingHeaders(t *testing.T) {
+	cases := []struct {
+		name       string
+		headers    string
+		references []string
+	}{
+		{"different IRT IDs", "In-Reply-To: <a@example.com>\r\nIn-Reply-To: <b@example.com>\r\n", []string{}},
+		{"same IRT ID", "In-Reply-To: <a@example.com>\r\nIn-Reply-To: <a@example.com>\r\n", []string{}},
+		{"empty second IRT", "In-Reply-To: <a@example.com>\r\nIn-Reply-To:\r\n", []string{}},
+		{"empty first IRT", "In-Reply-To:\r\nIn-Reply-To: <a@example.com>\r\n", []string{}},
+		{"References wire order", "References: <a@example.com>\r\nreferences: <b@example.com>\r\n", []string{"a@example.com", "b@example.com"}},
+		{"References duplicates", "References: <a@example.com>\r\nReferences: <a@example.com>\r\n", []string{"a@example.com", "a@example.com"}},
+		{"References empty field", "References:\r\nReferences: <b@example.com>\r\n", []string{"b@example.com"}},
+		{"References recover per field", "References: <a@x> junk\r\nReferences: <b@x> <bad> <c@x>\r\n", []string{"b@x", "c@x"}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			assertThreadingParsers(t, tc.headers+"\r\nreadable body\r\n", []string{}, tc.references)
+		})
+	}
+}
+
+func assertThreadingParsers(t *testing.T, raw string, inReplyTo, references []string) {
+	t.Helper()
+	for _, parser := range []struct {
+		name  string
+		parse func([]byte) (*Message, error)
+	}{{"Parse", Parse}, {"ParseBody", ParseBody}} {
+		t.Run(parser.name, func(t *testing.T) {
+			msg, err := parser.parse([]byte(raw))
+			if err != nil {
+				t.Fatalf("parse: %v", err)
+			}
+			if !reflect.DeepEqual(msg.InReplyTo, inReplyTo) {
+				t.Errorf("InReplyTo = %#v, want %#v", msg.InReplyTo, inReplyTo)
+			}
+			if !reflect.DeepEqual(msg.References, references) {
+				t.Errorf("References = %#v, want %#v", msg.References, references)
+			}
+			if strings.TrimSpace(msg.Text) != "readable body" {
+				t.Errorf("body = %q, want readable body", msg.Text)
+			}
+		})
+	}
+}
 
 // multipart/related inside multipart/mixed is the shape a real message with an
 // inline image and a real attachment arrives in, and it is what the imap path
@@ -260,5 +353,147 @@ func TestParseAddressWithRawHighBytesIsValidUTF8(t *testing.T) {
 	}
 	if !utf8.ValidString(msg.From) {
 		t.Fatalf("from is not valid utf-8: %q", msg.From)
+	}
+}
+
+// An image part marked Content-Disposition: inline is what Vaultwarden and most
+// transactional mail send for a logo. The mail reader hands it over as an
+// inline part, which used to be read as text and dropped.
+func TestParseKeepsInlineDispositionImages(t *testing.T) {
+	raw := "From: a@example.com\r\n" +
+		"MIME-Version: 1.0\r\n" +
+		"Content-Type: multipart/mixed; boundary=outer\r\n" +
+		"\r\n" +
+		"--outer\r\n" +
+		"Content-Type: multipart/related; boundary=rel\r\n" +
+		"\r\n" +
+		"--rel\r\n" +
+		"Content-Type: text/html; charset=utf-8\r\n" +
+		"\r\n" +
+		"<img src=\"cid:logo-gray.png\">\r\n" +
+		"--rel\r\n" +
+		"Content-Type: image/png; name=\"logo-gray.png\"\r\n" +
+		"Content-Disposition: inline; filename=\"logo-gray.png\"\r\n" +
+		"Content-ID: <Logo-Gray.png>\r\n" +
+		"Content-Transfer-Encoding: base64\r\n" +
+		"\r\n" +
+		"aGVsbG8=\r\n" +
+		"--rel\r\n" +
+		"Content-Type: image/png\r\n" +
+		"Content-ID: <second.png>\r\n" +
+		"Content-Transfer-Encoding: base64\r\n" +
+		"\r\n" +
+		"d29ybGQ=\r\n" +
+		"--rel--\r\n" +
+		"--outer--\r\n"
+
+	msg, err := Parse([]byte(raw))
+	if err != nil {
+		t.Fatalf("parse: %v", err)
+	}
+	if msg.Text != "" {
+		t.Errorf("an image part leaked into the text body: %q", msg.Text)
+	}
+	if !strings.Contains(msg.HTML, "cid:logo-gray.png") {
+		t.Errorf("html = %q", msg.HTML)
+	}
+	if len(msg.Attachments) != 2 {
+		t.Fatalf("got %d attachments, want 2", len(msg.Attachments))
+	}
+	first := msg.Attachments[0]
+	if first.ContentID != "Logo-Gray.png" || first.Filename != "logo-gray.png" || first.ContentType != "image/png" || string(first.Content) != "hello" {
+		t.Errorf("first attachment = %+v", first)
+	}
+	if second := msg.Attachments[1]; second.ContentID != "second.png" || string(second.Content) != "world" {
+		t.Errorf("second attachment = %+v", second)
+	}
+}
+
+func TestParseAppleMailRichLinkImageIsNotTextBody(t *testing.T) {
+	jpeg := "/9j/4AAQSkZJRgABAQEASABIAAD/2wBDAP8="
+	raw := "From: a@icloud.com\r\n" +
+		"MIME-Version: 1.0 (Mac OS X Mail 16.0)\r\n" +
+		"Content-Type: multipart/alternative; boundary=alt\r\n" +
+		"\r\n" +
+		"--alt\r\n" +
+		"Content-Type: multipart/mixed; boundary=mix\r\n" +
+		"\r\n" +
+		"--mix\r\n" +
+		"Content-Disposition: inline; filename=preview.jpeg\r\n" +
+		"Content-Id: <preview@icloud.com>\r\n" +
+		"Content-Transfer-Encoding: base64\r\n" +
+		"\r\n" +
+		jpeg + "\r\n" +
+		"--mix\r\n" +
+		"Content-Type: text/plain; charset=us-ascii\r\n" +
+		"Content-Transfer-Encoding: 7bit\r\n" +
+		"\r\n" +
+		"Have a look https://example.com/\r\n" +
+		"--mix--\r\n" +
+		"--alt\r\n" +
+		"Content-Type: multipart/related; type=\"text/html\"; boundary=rel\r\n" +
+		"\r\n" +
+		"--rel\r\n" +
+		"Content-Type: text/html; charset=us-ascii\r\n" +
+		"\r\n" +
+		"<html><body>Have a look <img src=\"cid:preview@icloud.com\"></body></html>\r\n" +
+		"--rel\r\n" +
+		"Content-Type: image/jpeg;\r\n" +
+		"\tname=preview.jpeg\r\n" +
+		"Content-Disposition: inline;\r\n" +
+		"\tfilename=preview.jpeg\r\n" +
+		"Content-Id: <preview@icloud.com>\r\n" +
+		"Content-Transfer-Encoding: base64\r\n" +
+		"\r\n" +
+		jpeg + "\r\n" +
+		"--rel--\r\n" +
+		"--alt--\r\n"
+
+	msg, err := Parse([]byte(raw))
+	if err != nil {
+		t.Fatalf("parse: %v", err)
+	}
+	if msg.Text != "Have a look https://example.com/" {
+		t.Errorf("text = %q", msg.Text)
+	}
+	if !strings.Contains(msg.HTML, "cid:preview@icloud.com") {
+		t.Errorf("html = %q", msg.HTML)
+	}
+	if len(msg.Attachments) != 2 {
+		t.Errorf("got %d attachments, want 2", len(msg.Attachments))
+	}
+}
+
+func TestParseBinaryPartNeverBecomesTextBody(t *testing.T) {
+	cases := map[string]string{
+		"image first":     "Content-Type: image/jpeg\r\nContent-Disposition: inline\r\n",
+		"mixed case type": "Content-Type: Image/JPEG; name=x.jpg\r\nContent-Disposition: INLINE\r\n",
+		"malformed type":  "Content-Type: image/jpeg; name=\"x.jpg\r\nContent-Disposition: inline\r\n",
+		"no content type": "Content-Disposition: inline; filename=x.jpg\r\nContent-Id: <x@y>\r\n",
+		"mislabelled":     "Content-Type: text/plain\r\nContent-Disposition: inline\r\n",
+	}
+	for name, headers := range cases {
+		t.Run(name, func(t *testing.T) {
+			raw := "From: a@icloud.com\r\n" +
+				"MIME-Version: 1.0\r\n" +
+				"Content-Type: multipart/mixed; boundary=b\r\n" +
+				"\r\n" +
+				"--b\r\n" +
+				headers +
+				"Content-Transfer-Encoding: base64\r\n" +
+				"\r\n" +
+				"/9j/4AAQSkZJRgABAQEASABIAAD/2wBDAP8=\r\n" +
+				"--b--\r\n"
+			msg, err := Parse([]byte(raw))
+			if err != nil {
+				t.Fatalf("parse: %v", err)
+			}
+			if msg.Text != "" {
+				t.Errorf("binary leaked into text body: %q", msg.Text)
+			}
+			if len(msg.Attachments) != 1 {
+				t.Errorf("got %d attachments, want 1", len(msg.Attachments))
+			}
+		})
 	}
 }

@@ -39,6 +39,10 @@ type mailClient interface {
 	// AppendToSent puts a copy of a message that has just been sent in the
 	// account's Sent folder, and reports which folder it used.
 	AppendToSent(raw []byte) (string, error)
+	// ReplaceDraft and RemoveDraft keep the server copy of a draft in step
+	// with the local one, matched by its Message-ID.
+	ReplaceDraft(mailbox string, raw []byte, messageID string) error
+	RemoveDraft(mailbox, messageID string) error
 
 	FetchMessages(uids []imap.UID, fn func(uid imap.UID, msg *pimap.Message, err error) error) error
 	FetchRawMessage(uid imap.UID) ([]byte, error)

@@ -73,11 +73,19 @@ func TestEveryAccountDialGoesThroughThePool(t *testing.T) {
 		name string
 		run  func() error
 	}{
+		{"export source", func() error {
+			m, err := db.GetMessage(ctx, messageID)
+			if err != nil {
+				return err
+			}
+			_ = a.fetchEMLSources([]*storage.Message{m})
+			return nil
+		}},
 		{"discover folders", func() error { return a.discoverFolders(*fresh) }},
 		{"source", func() error { _, err := a.GetMessageSource(messageID); return err }},
 		{"colour", func() error { a.pushColorKeyword(messageID, 2); return nil }},
 		{"archive", func() error { _, err := a.ArchiveMessage(messageID); return err }},
-		{"undo", func() error { return a.UnarchiveMessage("<one@example.com>", archive.ID, inbox.ID) }},
+		{"undo", func() error { return a.RestoreMessage("<one@example.com>", archive.ID, inbox.ID) }},
 		{"create folder", func() error {
 			_, err := a.CreateFolder(CreateFolderRequest{AccountID: accountID, Name: "Projects"})
 			return err
@@ -98,6 +106,11 @@ func TestEveryAccountDialGoesThroughThePool(t *testing.T) {
 			return a.runDownload(ctx, tasks, pin, true, len(tasks))
 		}},
 		{"sync", func() error { return a.syncAccount(*account, true) }},
+		// last: it queues a sync of the account.
+		{"remove server draft", func() error {
+			makeFolderWithDelim(t, db, accountID, "Drafts", "Drafts", nil, "drafts", "/")
+			return a.RemoveServerDraft(accountID, "<draft@example.com>")
+		}},
 	} {
 		if err := step.run(); err != nil {
 			t.Fatalf("%s: %v", step.name, err)

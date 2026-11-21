@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/peltonapp/Pelton/internal/crypto"
+	pimap "github.com/peltonapp/Pelton/internal/imap"
 	"github.com/peltonapp/Pelton/internal/mailview"
 	"github.com/peltonapp/Pelton/internal/storage"
 )
@@ -48,6 +49,8 @@ type AccountDTO struct {
 	// PGPDefault is how this account starts a new message: '' unprotected,
 	// 'sign', or 'auto' to sign and encrypt whenever every recipient has a key.
 	PGPDefault string `json:"pgpDefault"`
+	// Color marks the account's mail in views that mix accounts; '' is none.
+	Color string `json:"color"`
 	// PasswordPromptDismissed is true when the user told the missing-password
 	// prompt to stop asking for this account. The ui marks the mailbox instead
 	// of interrupting.
@@ -182,10 +185,16 @@ type AttachmentDTO struct {
 // offer "load remote images".
 type MessageDetailDTO struct {
 	MessageSummaryDTO
-	ToAddresses  string `json:"toAddresses"`
-	CcAddresses  string `json:"ccAddresses"`
-	BodyPlain    string `json:"bodyPlain"`
-	BodyHTMLSafe string `json:"bodyHtmlSafe"`
+	// MessageID is the bare RFC Message-ID, empty when missing or invalid.
+	MessageID string `json:"messageId"`
+	// InReplyTo lists bare parent IDs; unavailable ancestry is an empty list.
+	InReplyTo []string `json:"inReplyTo"`
+	// References lists bare ancestor IDs; unavailable ancestry is an empty list.
+	References   []string `json:"references"`
+	ToAddresses  string   `json:"toAddresses"`
+	CcAddresses  string   `json:"ccAddresses"`
+	BodyPlain    string   `json:"bodyPlain"`
+	BodyHTMLSafe string   `json:"bodyHtmlSafe"`
 	// BodyQuote is the message as plain text for a reply or forward to quote.
 	// It is BodyPlain when the message has a text part, and the html rendered
 	// down to text when it does not, which is the case BodyPlain is empty for
@@ -284,6 +293,7 @@ func toAccountDTO(a storage.Account) AccountDTO {
 		ExportSubfolders:   a.ExportSubfolders,
 		ExportNameTemplate: a.ExportNameTemplate,
 		PGPDefault:         a.PGPDefault,
+		Color:              a.Color,
 
 		PasswordPromptDismissed: a.PasswordPromptDismissed,
 		SyncMaxParallel:         a.SyncMaxParallel,
@@ -354,7 +364,7 @@ func folderRole(f storage.Folder) string {
 			return roleArchive
 		}
 	}
-	switch strings.ToUpper(f.IMAPPath) {
+	switch strings.ToUpper(pimap.StripInboxNamespace(f.IMAPPath, f.Delimiter)) {
 	case storage.FolderInbox:
 		return roleInbox
 	case strings.ToUpper(storage.FolderSent):

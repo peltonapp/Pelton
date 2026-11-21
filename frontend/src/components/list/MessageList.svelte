@@ -2,8 +2,8 @@
   // column 2: the message list. it loads the page for the current selection,
   // runs fts5 search, and owns keyboard navigation (up/down to move, enter to
   // open). opening a message marks it seen optimistically. when multi-select is
-  // enabled, cmd/ctrl-click toggles rows and shift-click selects a range, with a
-  // selection toolbar for bulk mark/flag/delete. loading, empty and error states
+  // enabled, cmd/ctrl-click or space toggles rows and shift-click or shift+up/down
+  // selects a range, with a selection toolbar for bulk mark/flag/delete. loading, empty and error states
   // are all explicit so the pane is never blank.
   import { tick, onMount } from 'svelte'
   import MessageRow from './MessageRow.svelte'
@@ -32,7 +32,11 @@
     IconStar,
     IconStarFilled,
     IconLayoutColumns,
+    IconAppWindow,
     IconArchive,
+    IconFileExport,
+    IconAlertTriangle,
+    IconMailCheck,
   } from '@tabler/icons-svelte'
   import { selection, searchQuery, openMessageId, openMessage } from '../../stores/selection'
   import {
@@ -54,6 +58,8 @@
     selectedIds,
     clearSelection,
     anchorAt,
+    ensureAnchor,
+    rangeCursor,
     selectOnly,
     toggleSelect,
     selectRange,
@@ -72,14 +78,18 @@
     getMessage,
     removeOffline,
     archiveMessage,
+    openDraft,
+    openMessageWindow,
   } from '../../lib/api'
-  import { openReply, openForward } from '../../stores/compose'
+  import { openReply, openForward, openDraftSession } from '../../stores/compose'
+  import { sidebar } from '../../stores/accounts'
   import { openSnooze, openSnoozeMany } from '../../stores/snooze'
   import { openMove, openMoveMany } from '../../stores/move'
   import { recordDeleted } from '../../stores/undodelete'
   import { recordArchived } from '../../stores/undoarchive'
   import { openContextMenu, type MenuEntry } from '../../stores/contextmenu'
-  import { menuHint, shortcutTitle } from '../../stores/shortcuts'
+  import { bindings, menuHint, shortcutTitle } from '../../stores/shortcuts'
+  import { matchShortcut } from '../../lib/shortcuts'
   import { openInTab } from '../../stores/tabs'
   import { errorMessage, toastError } from '../../stores/toast'
   import { isVIPAddress } from '../../stores/vip'
@@ -98,7 +108,10 @@
     bulkSetOffline,
     bulkArchive,
     bulkTrash,
+    exportEml,
     reportArchiveExport,
+    spamState,
+    toggleSpam,
   } from '../../lib/messageactions'
 
   // the meta-bar title. built-in unified views are localized by key (matching the
@@ -114,7 +127,13 @@
   }
 
   let listEl: HTMLDivElement
+  // highlightId is the row the keyboard highlight sits on; activeIndex is its
+  // position in the current list. Keeping the id rather than the index means a
+  // sync or a flag change that rewrites the list leaves the highlight where
+  // the user put it.
+  let highlightId: number | null = null
   let activeIndex = -1
+  $: activeIndex = highlightId === null ? -1 : items.findIndex((m) => m.id === highlightId)
 
   // virtualization. the list can hold thousands of rows, so we only render the
   // window around the viewport plus a little overscan, padding the rest with
@@ -180,16 +199,22 @@
     }
   }
 
+  let searchFilter: SearchFilter = emptyFilter
   let lastKey = ''
   $: if ($selection && selectionKey($selection) !== lastKey) {
     lastKey = selectionKey($selection)
-    activeIndex = -1
+    // the search bar drops its chips with the folder, so the filter they
+    // stood for must go too, or the next search still carries it.
+    searchFilter = emptyFilter
     clearSelection()
     resetScroll()
     void loadList($selection)
   }
 
   $: items = $messageList.data?.items ?? []
+  // each account's colour (#486), shown only while the list mixes accounts.
+  $: accountColors = Object.fromEntries(($sidebar.data?.accounts ?? []).map((a) => [a.id, a.color ?? '']))
+  $: mixedAccounts = items.some((m) => m.accountId !== items[0].accountId)
   // a result set pages too: a broad query matches far more than one page, and
   // stopping at the first page is what made a match ranked below it look like
   // no match at all.
@@ -252,19 +277,30 @@
   // keep the keyboard-nav highlight in sync with whichever message is open,
   // however it got opened (click, Enter, or the in-app vim motions), so a
   // stale arrow-key position never leaves two rows looking selected at once.
-  $: if ($openMessageId !== null) {
-    // -1 is a real result: changing from search results back to the mailbox can
-    // leave the open message outside the new list, so its old numeric position
-    // must not highlight whichever row replaced it.
-    activeIndex = items.findIndex((m) => m.id === $openMessageId)
+  // While app vim mode extends a range its cursor leaves the open message
+  // behind, and the highlight goes with the cursor.
+  $: cursorId = $rangeCursor ?? $openMessageId
+  let lastCursorId: number | null = null
+  $: if (cursorId !== lastCursorId) {
+    lastCursorId = cursorId
+    if (cursorId !== null) {
+      highlightId = cursorId
+    }
+  }
+
+  // a range cursor is moved from App.svelte, which cannot scroll this list.
+  $: void followRangeCursor($rangeCursor)
+  async function followRangeCursor(id: number | null): Promise<void> {
+    if (id === null) {
+      return
+    }
+    await tick()
+    await scrollActiveIntoView()
   }
 
   // search handling. the list shows ranked results when there is a query or an
   // active date filter, and the selection's normal list otherwise.
-  let searchFilter: SearchFilter = emptyFilter
-
   function applySearch(query: string, filter: SearchFilter): void {
-    activeIndex = -1
     clearSelection()
     resetScroll()
     if (query === '' && !filterActive(filter)) {
@@ -279,9 +315,10 @@
     applySearch(event.detail.trim(), searchFilter)
   }
 
+  // the search bar sends the filter right before the query, so the query
+  // event runs the search for both.
   function onFilter(event: CustomEvent<SearchFilter>): void {
     searchFilter = event.detail
-    applySearch($searchQuery.trim(), searchFilter)
   }
 
   // a sort picked from the search bar is remembered for this kind of search and
@@ -296,19 +333,32 @@
     applySearch($searchQuery.trim(), searchFilter)
   }
 
-  // open marks the message seen if needed and shows it in the detail pane. a
-  // plain open also clears any multi-selection.
+  // open marks the message seen if needed (and wanted) and shows it in the detail pane. a
+  // plain open also clears any multi-selection. A draft Pelton saved on this
+  // device opens in the composer instead; any other draft is only read.
   async function open(index: number): Promise<void> {
     const item = items[index]
     if (!item) {
       return
     }
-    activeIndex = index
+    const folder = $sidebar.data?.foldersByAccount[item.accountId]?.find((f) => f.id === item.folderId)
+    if (folder?.role === 'drafts') {
+      try {
+        const draft = await openDraft(item.id)
+        if (draft.id !== 0) {
+          openDraftSession(draft)
+          return
+        }
+      } catch (err) {
+        toastError(errorMessage(err))
+      }
+    }
+    highlightId = item.id
     clearSelection()
     // the row that was opened is where a following shift-click measures from.
     anchorAt(item.id)
     openMessage(item.id)
-    if (!item.seen) {
+    if (!item.seen && $prefs.markReadOnOpen) {
       patchInList(item.id, { seen: true })
       try {
         await setSeen(item.id, true)
@@ -320,27 +370,35 @@
 
   // onRowClick routes a click to either multi-selection (cmd/ctrl or shift, when
   // enabled) or opening the message.
-  function onRowClick(event: MouseEvent, index: number): void {
+  // the row is found by message id rather than its position when it was drawn,
+  // so a list that changed under the pointer (a sync landing) cannot turn the
+  // click into a different message.
+  function onRowClick(event: MouseEvent, id: number): void {
+    const index = items.findIndex((m) => m.id === id)
     const item = items[index]
     if (!item) {
       return
     }
     if ($prefs.multiSelectEnabled && (event.metaKey || event.ctrlKey)) {
       toggleSelect(item.id)
-      activeIndex = index
+      highlightId = item.id
       return
     }
     if ($prefs.multiSelectEnabled && event.shiftKey) {
       selectRange(items.map((m) => m.id), item.id)
-      activeIndex = index
+      highlightId = item.id
       return
     }
     void open(index)
   }
 
-  // keyboard navigation over the rows.
+  // keyboard navigation over the rows. In app vim mode, escape and
+  // shift+up/down belong to the vim motions in App.svelte, which keep their own
+  // cursor. Space and shift+up/down also stand aside for a binding the user put
+  // on them, which the global handler then runs alone.
   async function onKeydown(event: KeyboardEvent): Promise<void> {
-    if (event.key === 'Escape' && selectionCount > 0) {
+    const vim = $prefs.appVimMode
+    if (event.key === 'Escape' && selectionCount > 0 && !vim) {
       clearAll()
       return
     }
@@ -355,17 +413,41 @@
       await selectAllInList(items.map((m) => m.id))
       return
     }
-    if (event.key === 'ArrowDown') {
+    if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+      const extend = event.shiftKey && $prefs.multiSelectEnabled
+      if (extend && (vim || matchShortcut(event, $bindings) !== null)) {
+        return
+      }
       event.preventDefault()
-      activeIndex = Math.min(activeIndex + 1, items.length - 1)
-      await scrollActiveIntoView()
-    } else if (event.key === 'ArrowUp') {
-      event.preventDefault()
-      activeIndex = Math.max(activeIndex - 1, 0)
+      if (extend && activeIndex >= 0) {
+        ensureAnchor(items[activeIndex].id)
+      }
+      const next = event.key === 'ArrowDown' ? Math.min(activeIndex + 1, items.length - 1) : Math.max(activeIndex - 1, 0)
+      const id = items[next].id
+      highlightId = id
+      await tick()
+      // a plain move makes the row the anchor, so a range started from it
+      // includes it, the way a click does. With the setting on it also opens
+      // the row, the way a click does.
+      if (extend) {
+        selectRange(items.map((m) => m.id), id)
+      } else if ($prefs.openOnArrow) {
+        await open(activeIndex)
+      } else {
+        anchorAt(id)
+      }
       await scrollActiveIntoView()
     } else if (event.key === 'Enter' && activeIndex >= 0) {
       event.preventDefault()
       await open(activeIndex)
+    } else if (
+      event.key === ' ' &&
+      $prefs.multiSelectEnabled &&
+      activeIndex >= 0 &&
+      matchShortcut(event, $bindings) === null
+    ) {
+      event.preventDefault()
+      toggleSelect(items[activeIndex].id)
     }
   }
 
@@ -504,8 +586,10 @@
         void remove(item)
         break
       case 'read':
+        void markSeen(item, true)
+        break
       case 'unread':
-        void toggleSeen(item)
+        void markSeen(item, false)
         break
       case 'flag':
         void toggleFlag(item)
@@ -548,6 +632,7 @@
         anyOnline
           ? { label: $t('messageList.bulk.downloadCount').replace('{n}', n), icon: IconDownload, action: () => void bulkSetOfflineCopies(true) }
           : { label: $t('messageList.bulk.removeOfflineCount').replace('{n}', n), icon: IconDownloadOff, action: () => void bulkSetOfflineCopies(false) },
+        { label: $t('messageList.bulk.exportEmlCount').replace('{n}', n), icon: IconFileExport, action: () => void exportEml(selectedItems.map((m) => m.id)) },
         'separator',
         { label: $t('messageList.bulk.deleteCount').replace('{n}', n), icon: IconTrash, danger: true, hint: menuHint('delete-message'), action: () => void bulkDelete() },
       ]
@@ -564,6 +649,7 @@
     const entries: MenuEntry[] = [
       { label: $t('messageList.menu.open'), icon: IconMail, action: () => open(items.indexOf(item)) },
       { label: $t('messageList.menu.openInTab'), icon: IconLayoutColumns, action: () => openInTab(item.id, item.subject) },
+      { label: $t('messageList.menu.openInWindow'), icon: IconAppWindow, action: () => void openMessageWindow(item.id, item.subject) },
       { label: $t('action.reply'), icon: IconArrowBackUp, hint: menuHint('reply'), action: () => void replyTo(item, false) },
       { label: $t('shortcut.replyAll'), icon: IconArrowBackUp, hint: menuHint('reply-all'), action: () => void replyTo(item, true) },
       { label: $t('action.forward'), icon: IconArrowForwardUp, hint: menuHint('forward'), action: () => void forward(item) },
@@ -581,13 +667,28 @@
       'separator',
       { label: $t('messageList.menu.snooze'), icon: IconClockPause, hint: menuHint('snooze'), action: () => openSnooze(item.id, item.subject) },
       { label: $t('messageList.menu.moveTo'), icon: IconFolderSymlink, hint: menuHint('move-to'), action: () => openMove(item) },
+      ...spamEntry(item),
       item.offline
         ? { label: $t('messageList.menu.removeOffline'), icon: IconDownloadOff, hint: menuHint('remove-offline'), action: () => void toggleOffline(item) }
         : { label: $t('shortcut.downloadOffline'), icon: IconDownload, hint: menuHint('download-offline'), action: () => void toggleOffline(item) },
+      { label: $t('menu.exportEml'), icon: IconFileExport, action: () => void exportEml([item.id]) },
       'separator',
       { label: $t('action.delete'), icon: IconTrash, danger: true, hint: menuHint('delete-message'), action: () => void remove(item) },
     ]
     openContextMenu(event.clientX, event.clientY, entries)
+  }
+
+  // spamEntry is the context menu's spam item: "not spam" inside the spam folder,
+  // "mark as spam" elsewhere, and nothing for an account without a spam folder.
+  function spamEntry(item: MessageSummary): MenuEntry[] {
+    switch (spamState(item)) {
+      case 'spam':
+        return [{ label: $t('spam.notSpam'), icon: IconMailCheck, hint: menuHint('toggle-spam'), action: () => void toggleSpam(item) }]
+      case 'markable':
+        return [{ label: $t('spam.mark'), icon: IconAlertTriangle, hint: menuHint('toggle-spam'), action: () => void toggleSpam(item) }]
+      default:
+        return []
+    }
   }
 
   // middle-click opens a message in a tab, the way it opens a link in a browser.
@@ -685,6 +786,9 @@
       <button type="button" class="act" title={$shortcutTitle($t('messageList.menu.moveTo'), 'move-to')} on:click={bulkMove}>
         <IconFolderSymlink size={16} stroke={1.7} />
       </button>
+      <button type="button" class="act" title={$t('messageList.bulk.exportEml')} aria-label={$t('messageList.bulk.exportEml')} on:click={() => exportEml(selectedItems.map((m) => m.id))}>
+        <IconFileExport size={16} stroke={1.7} />
+      </button>
       <button type="button" class="act danger" title={$shortcutTitle($t('action.delete'), 'delete-message')} on:click={bulkDelete}>
         <IconTrash size={16} stroke={1.7} />
       </button>
@@ -773,10 +877,12 @@
         <div id={`msg-${item.id}`}>
           <MessageRow
             message={item}
+            accountColor={mixedAccounts ? (accountColors[item.accountId] ?? '') : ''}
             selected={item.id === $openMessageId || index === activeIndex}
             checked={$selectedIds.has(item.id)}
-            on:click={(e) => onRowClick(e, index)}
+            on:click={(e) => onRowClick(e, item.id)}
             on:auxclick={(e) => onRowAux(e, item)}
+            on:dblclick={() => void openMessageWindow(item.id, item.subject)}
             on:contextmenu={(e) => onContext(e, item)}
             on:swipe={(e) => performSwipe(item, e.detail)}
           />

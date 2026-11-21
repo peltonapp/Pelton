@@ -80,7 +80,7 @@ const ChannelNightly = "nightly"
 
 // DefaultPath returns the database path for a normal build, inside the user
 // config directory: os.UserConfigDir()/Pelton/pelton.db. When the PELTON_DEV
-// environment variable is set (the `make run`/`wails dev` loop sets it), it
+// environment variable is set (the `make run` loop sets it), it
 // uses Pelton-dev instead, so a local dev/test run never touches a real
 // install's accounts, cache or settings.
 func DefaultPath() (string, error) {
@@ -418,7 +418,7 @@ func (d *DB) reclaimSpace(ctx context.Context) {
 // recording names. A row above it without a name was written by a build we do
 // not know (a branch that reused our number before names existed), so it is
 // trusted only when the schema shows our migration ran.
-const lastUnnamedMigration = 36
+const lastUnnamedMigration = 40
 
 // migrationFingerprints proves, for a version above lastUnnamedMigration, that
 // the schema has the current version of our migration: the query returns a
@@ -428,15 +428,14 @@ const lastUnnamedMigration = 36
 // A fingerprint must hold for the newest schema: a later migration that
 // drops what it checks must change it.
 //
-// 37 checks search_state and text_rev, which earlier drafts of 0037 did not
-// have.
+// 41 checks search_state and text_rev, which earlier drafts of the remote ids
+// migration did not have.
 var migrationFingerprints = map[int]string{
-	37: `SELECT count(*) = 2 FROM pragma_table_info('messages') WHERE name IN ('search_state', 'text_rev')`,
-	38: `SELECT count(*) FROM pragma_table_info('messages') WHERE name = 'body_complete'`,
-	39: `SELECT count(*) FROM pragma_table_info('accounts') WHERE name = 'sync_max_parallel'`,
-	40: `SELECT count(*) FROM sqlite_master WHERE type = 'index' AND name = 'idx_messages_folder_body_date'`,
-	41: `SELECT count(*) FROM pragma_table_info('folders') WHERE name = 'last_full_sync_at'`,
-	42: `SELECT count(*) FROM sqlite_master WHERE type = 'index' AND name = 'idx_messages_search_stale_stub'`,
+	41: `SELECT count(*) = 2 FROM pragma_table_info('messages') WHERE name IN ('search_state', 'text_rev')`,
+	42: `SELECT count(*) FROM pragma_table_info('accounts') WHERE name = 'sync_max_parallel'`,
+	43: `SELECT count(*) FROM sqlite_master WHERE type = 'index' AND name = 'idx_messages_folder_body_date'`,
+	44: `SELECT count(*) FROM pragma_table_info('folders') WHERE name = 'last_full_sync_at'`,
+	45: `SELECT count(*) FROM sqlite_master WHERE type = 'index' AND name = 'idx_messages_search_stale_stub'`,
 }
 
 // checkMigrationNames refuses a database whose applied migration carries

@@ -86,9 +86,10 @@ You will probably run into SmartScreen not allowing you to run Pelton. It might 
 ![Windows SmartScreen warning: "Windows protected your PC", with "More info" highlighted](../assets/screenshots/screenshot-windows-smartscreen-more-info.png){ width=350 }
 
 ???+ info "Why is SmartScreen not allowing Pelton to run?"
-    SmartScreen flags any app it doesn't yet recognize as coming from a trusted publisher. Code-signing
-    certificates that satisfy SmartScreen cost money every year, and enough people need to run the app before
-    SmartScreen starts trusting it automatically.
+    SmartScreen warns about any app it doesn't yet recognize. Pelton's Windows builds are code signed through
+    the [SignPath Foundation](https://signpath.org), which tells Windows who published them, but SmartScreen
+    builds trust in a new certificate gradually: enough people need to run the app before the warning goes
+    away on its own. See the [code signing policy](https://github.com/peltonapp/Pelton#-code-signing-policy).
 
 Click `More info`, then click `Run anyway`:
 

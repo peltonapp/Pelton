@@ -121,6 +121,8 @@ func storeFetched(ctx context.Context, store *storage.DB, log *slog.Logger, fold
 		BodyPlain:    msg.Text,
 		BodyHTML:     msg.HTML,
 		SizeBytes:    msg.Size,
+		InReplyTo:    msg.InReplyTo,
+		References:   msg.References,
 		CharsetGuess: msg.CharsetGuess,
 
 		ListUnsubscribe:     msg.ListUnsubscribe,

@@ -115,9 +115,10 @@ func (nopAdapter) ListMessages(context.Context, psync.RemoteMailbox) ([]psync.He
 func (nopAdapter) Fetch(context.Context, string, []string) ([]psync.Fetched, error) {
 	return nil, nil
 }
-func (nopAdapter) SetFlags(context.Context, string, string, storage.Flag) error { return nil }
-func (nopAdapter) Move(context.Context, string, []string, string) error         { return nil }
-func (nopAdapter) Delete(context.Context, string, []string) error               { return nil }
+func (nopAdapter) SetFlags(context.Context, string, string, storage.Flag) error    { return nil }
+func (nopAdapter) RemoveFlags(context.Context, string, string, storage.Flag) error { return nil }
+func (nopAdapter) Move(context.Context, string, []string, string) error            { return nil }
+func (nopAdapter) Delete(context.Context, string, []string) error                  { return nil }
 func (nopAdapter) CreateMailbox(context.Context, string, string) (psync.Mailbox, error) {
 	return psync.Mailbox{}, nil
 }

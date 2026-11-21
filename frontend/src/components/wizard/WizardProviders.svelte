@@ -27,7 +27,7 @@
     {#each providerPresets as preset (preset.id)}
       <button type="button" class="tile" on:click={() => dispatch('pick', preset)}>
         <svelte:component this={icons[preset.id] ?? IconMail} size={22} stroke={1.5} />
-        <span class="label">{preset.label}</span>
+        <span class="label">{preset.labelKey ? $t(preset.labelKey) : preset.label}</span>
         {#if preset.kind === 'oauth'}
           <span class="tag">{$t('wizard.provider.signIn')}</span>
         {/if}

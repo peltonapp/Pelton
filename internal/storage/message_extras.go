@@ -109,8 +109,8 @@ func (d *DB) ReviveSnoozed(ctx context.Context, id int64) error {
 	res, err := d.sql.ExecContext(ctx,
 		`UPDATE messages
 		 SET snooze_until = '', snooze_hidden = 0,
-		     flags = flags & ~?, pending_flags = 1
-		 WHERE id = ?`, uint8(FlagSeen), id)
+		     flags = flags & ~?, pending_flag_mask = pending_flag_mask | ?, pending_flags = 1
+		 WHERE id = ?`, uint8(FlagSeen), uint8(FlagSeen), id)
 	if err != nil {
 		return fmt.Errorf("storage: revive snoozed message %d: %w", id, err)
 	}

@@ -1,0 +1,26 @@
+# yaml-language-server: $schema=https://aka.ms/winget-manifest.installer.1.12.0.schema.json
+
+PackageIdentifier: peltonapp.Pelton
+PackageVersion: 2026.4.6
+InstallerType: nullsoft
+UpgradeBehavior: install
+Protocols:
+- mailto
+ProductCode: Arne K.Pelton
+ReleaseDate: 2026-10-26
+Installers:
+- Architecture: x64
+  Scope: user
+  InstallerUrl: https://github.com/peltonapp/Pelton/releases/download/v2026.4.6/Pelton-v2026.4.6-windows-amd64-installer.exe
+  InstallerSha256: E1DDD09D719B65167895E0154973396CB05179B38AFD3C4AF0928B24103BD53E
+  InstallerSwitches:
+    Custom: /CurrentUser
+- Architecture: x64
+  Scope: machine
+  InstallerUrl: https://github.com/peltonapp/Pelton/releases/download/v2026.4.6/Pelton-v2026.4.6-windows-amd64-installer.exe
+  InstallerSha256: E1DDD09D719B65167895E0154973396CB05179B38AFD3C4AF0928B24103BD53E
+  InstallerSwitches:
+    Custom: /AllUsers
+  ElevationRequirement: elevatesSelf
+ManifestType: installer
+ManifestVersion: 1.12.0

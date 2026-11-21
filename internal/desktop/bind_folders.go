@@ -105,7 +105,7 @@ func (a *App) CreateFolder(req CreateFolderRequest) (FolderDTO, error) {
 	}
 
 	var folder storage.Folder
-	err = a.protocolFor(*account).createFolder(a.ctx, *account, parent, name, path, func(remoteID string) error {
+	storeFolder := func(remoteID string) error {
 		if remoteID == "" {
 			remoteID = path
 		}
@@ -121,7 +121,14 @@ func (a *App) CreateFolder(req CreateFolderRequest) (FolderDTO, error) {
 		}
 		_, err := a.store.CreateFolder(a.ctx, &folder)
 		return err
-	})
+	}
+	// the Local Folders account has no server, so the change is only the
+	// local row.
+	if account.Local {
+		err = storeFolder("")
+	} else {
+		err = a.protocolFor(*account).createFolder(a.ctx, *account, parent, name, path, storeFolder)
+	}
 	if err != nil {
 		return FolderDTO{}, err
 	}
@@ -167,7 +174,7 @@ func (a *App) RenameFolder(id int64, name string) error {
 	// The new path comes from the stored path and delimiter, never from a
 	// fresh LIST: a failed or partial LIST must not move the folder.
 	newPath := renamedPath(folder.IMAPPath, name, delim)
-	return a.protocolFor(*account).renameFolder(a.ctx, *account, *folder, name, newPath, func() error {
+	storeRename := func() error {
 		// a driver whose remote id is not the path keeps the stored path; IMAP
 		// rewrites it.
 		if a.protocolFor(*account).renameKeepsPath(*folder, remoteID) {
@@ -186,7 +193,12 @@ func (a *App) RenameFolder(id int64, name string) error {
 			}
 		}
 		return a.store.RenameFolder(a.ctx, id, name, newPath)
-	})
+	}
+	// the Local Folders account has no server, so the change is only local.
+	if account.Local {
+		return storeRename()
+	}
+	return a.protocolFor(*account).renameFolder(a.ctx, *account, *folder, name, newPath, storeRename)
 }
 
 // DeleteFolder deletes a mailbox on the server and drops it, its descendants and
@@ -217,7 +229,7 @@ func (a *App) DeleteFolder(id int64) error {
 	}
 	deepestFirst := slices.Clone(targets)
 	slices.Reverse(deepestFirst)
-	if err := a.protocolFor(*account).deleteFolders(a.ctx, *account, deepestFirst, func() error {
+	dropLocal := func() error {
 		for _, target := range slices.Backward(targets) {
 			if _, err := a.store.PurgeFolderMessages(a.ctx, target.AccountID, target.ID); err != nil {
 				return err
@@ -227,7 +239,14 @@ func (a *App) DeleteFolder(id int64) error {
 			}
 		}
 		return nil
-	}); err != nil {
+	}
+	// the Local Folders account has no server, so the change is only local.
+	if account.Local {
+		err = dropLocal()
+	} else {
+		err = a.protocolFor(*account).deleteFolders(a.ctx, *account, deepestFirst, dropLocal)
+	}
+	if err != nil {
 		return err
 	}
 	goSafe("counting unread mail", a.refreshViewCounts)
@@ -259,6 +278,13 @@ func (a *App) EmptyTrash(folderID int64) (int, error) {
 	if folderRole(*folder) != roleTrash {
 		return 0, errNotTrash
 	}
+	account, err := a.store.GetAccount(a.ctx, folder.AccountID)
+	if err != nil {
+		return 0, err
+	}
+	if account.Local {
+		return a.emptyLocalFolder(*folder)
+	}
 
 	marked, err := a.store.MarkFolderDeletePending(a.ctx, folderID)
 	if err != nil {
@@ -271,10 +297,6 @@ func (a *App) EmptyTrash(folderID int64) (int, error) {
 	goSafe("counting unread mail", a.refreshViewCounts)
 	// The server expunge is a normal-lane generator, a page of messages per
 	// unit. What it does not get to stays pending for the next sync.
-	account, err := a.store.GetAccount(a.ctx, folder.AccountID)
-	if err != nil {
-		return marked, nil
-	}
 	_ = a.enqueuePooled(a.ctx, *account, poolTask{
 		Kind: syncsched.KindEmptyTrash, FolderID: folder.ID,
 		Key: folderKey(syncsched.KindEmptyTrash, folder.ID),
@@ -349,6 +371,30 @@ func (a *App) expungePendingPage(ctx context.Context, account storage.Account, f
 		return syncsched.ErrAgain
 	}
 	return nil
+}
+
+// emptyLocalFolder deletes every message in a Local Folders folder outright,
+// the way DeleteMessage does for a single imported message: there is no server
+// to confirm a pending deletion.
+func (a *App) emptyLocalFolder(folder storage.Folder) (int, error) {
+	messages, err := a.store.ListMessages(a.ctx, folder.ID, 0)
+	if err != nil {
+		return 0, err
+	}
+	deleted := 0
+	for _, m := range messages {
+		if err := a.store.DeleteAttachmentFilesForMessage(m.AccountID, m.ID); err != nil {
+			return deleted, err
+		}
+		if err := a.store.DeleteMessage(a.ctx, m.ID); err != nil {
+			return deleted, err
+		}
+		deleted++
+	}
+	if deleted > 0 {
+		goSafe("counting unread mail", a.refreshViewCounts)
+	}
+	return deleted, nil
 }
 
 // subtreeFolders returns the folder and everything nested under it, shallowest

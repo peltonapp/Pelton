@@ -11,7 +11,7 @@
   import WizardProviders from './WizardProviders.svelte'
   import Spinner from '../common/Spinner.svelte'
   import ToggleSwitch from '../common/ToggleSwitch.svelte'
-  import { BrowserOpenURL } from '../../../wailsjs/runtime/runtime'
+  import { openURL } from '../../lib/browser'
   import CertificateReview from '../common/CertificateReview.svelte'
   import AccountRouteFields from '../common/AccountRouteFields.svelte'
   import { blankAccountProxy } from '../../lib/proxyroute'
@@ -495,8 +495,8 @@
       {:else if step === 'provider'}
         <WizardProviders on:pick={pick} />
       {:else if step === 'config'}
-        <h3>{preset?.label}</h3>
-        {#if preset?.note}<p class="note">{preset.note}</p>{/if}
+        <h3>{preset?.labelKey ? $t(preset.labelKey) : preset?.label}</h3>
+        {#if preset?.noteKey}<p class="note">{$t(preset.noteKey)}</p>{/if}
 
         <label class="field">
           <span>{$t('wizard.field.email')}</span>
@@ -545,7 +545,7 @@
         {#if preset?.appPasswordUrl}
           <div class="app-password-warning">
             <span>{preset?.id === 'gmail' ? $t('wizard.gmail.appPasswordWarning') : $t('wizard.appPassword.warning')}</span>
-            <button type="button" class="app-password-link" on:click={() => BrowserOpenURL(preset?.appPasswordUrl ?? '')}>
+            <button type="button" class="app-password-link" on:click={() => openURL(preset?.appPasswordUrl ?? '')}>
               {$t('wizard.appPassword.link')}
             </button>
           </div>
@@ -634,7 +634,7 @@
               {#each googleSetup as s}
                 <li>
                   <span>{$t(s.text)}</span>
-                  <button type="button" class="app-password-link" on:click={() => BrowserOpenURL(s.url)}>
+                  <button type="button" class="app-password-link" on:click={() => openURL(s.url)}>
                     {$t(s.link)}
                   </button>
                 </li>

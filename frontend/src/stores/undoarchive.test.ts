@@ -1,16 +1,16 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { MessageSummary } from '../lib/types'
 
-vi.mock('../lib/api', () => ({ unarchiveMessage: vi.fn().mockResolvedValue(undefined) }))
+vi.mock('../lib/api', () => ({ restoreMessage: vi.fn().mockResolvedValue(undefined) }))
 
-import { unarchiveMessage } from '../lib/api'
+import { restoreMessage } from '../lib/api'
 import { recordArchived, recordArchivedBatch, triggerUndoArchive } from './undoarchive'
 
 const summary = { id: 1 } as MessageSummary
 
 describe('undo of a move', () => {
   beforeEach(() => {
-    vi.mocked(unarchiveMessage).mockClear()
+    vi.mocked(restoreMessage).mockClear()
   })
 
   it('looks for the message in the folder the action put it in', () => {
@@ -18,19 +18,19 @@ describe('undo of a move', () => {
 
     expect(triggerUndoArchive()).toBe(true)
 
-    expect(unarchiveMessage).toHaveBeenCalledWith('<a@x>', 9, 2)
+    expect(restoreMessage).toHaveBeenCalledWith('<a@x>', 9, 2)
   })
 
   it('undoes a batch from the last move to the first', async () => {
     recordArchivedBatch([
-      { summary, messageId: '<dup@x>', fromFolderId: 9, originalFolderId: 2 },
-      { summary, messageId: '<dup@x>', fromFolderId: 9, originalFolderId: 3 },
+      { summary, messageId: '<dup@x>', destFolderId: 9, originalFolderId: 2 },
+      { summary, messageId: '<dup@x>', destFolderId: 9, originalFolderId: 3 },
     ])
 
     expect(triggerUndoArchive()).toBe(true)
-    await vi.waitFor(() => expect(unarchiveMessage).toHaveBeenCalledTimes(2))
+    await vi.waitFor(() => expect(restoreMessage).toHaveBeenCalledTimes(2))
 
-    expect(vi.mocked(unarchiveMessage).mock.calls).toEqual([
+    expect(vi.mocked(restoreMessage).mock.calls).toEqual([
       ['<dup@x>', 9, 3],
       ['<dup@x>', 9, 2],
     ])
@@ -51,7 +51,7 @@ describe('undo confirmation copy', () => {
 
   it('never names the archive folder, in any language', () => {
     const entries = Object.entries(catalogs)
-    expect(entries.length).toBe(11)
+    expect(entries.length).toBe(12)
     for (const [file, { default: cat }] of entries) {
       // a stem of the localized folder name catches inflected forms
       // ("Arşiv'den", "l'archive"); Arabic drops its article first.

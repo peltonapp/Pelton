@@ -19,6 +19,9 @@ function detail(id: number, over: Partial<MessageDetail> = {}): MessageDetail {
     folderId: 1,
     accountEmail: 'me@example.com',
     folderName: 'INBOX',
+    messageId: '',
+    inReplyTo: [],
+    references: [],
     subject: 'Hello',
     fromName: 'Ada',
     fromAddress: 'ada@example.com',
@@ -251,5 +254,53 @@ describe('setBodyHtml', () => {
     setBodyHtml(1, '<p>first with images</p>')
 
     expect(get(messageDetail).data?.bodyHtmlSafe).toBe('<p>second</p>')
+  })
+})
+
+describe('loadMessage order', () => {
+  // the bug: open A, then B; A's load is slower and lands last. The pane
+  // showed A while B was selected, and clicking B again did nothing.
+  it('keeps the message opened last when an earlier load finishes after it', async () => {
+    const a = deferred<MessageDetail>()
+    const b = deferred<MessageDetail>()
+    fetchMessage.mockReturnValueOnce(a.promise).mockReturnValueOnce(b.promise)
+
+    const loadA = loadMessage(1)
+    const loadB = loadMessage(2)
+    b.resolve(detail(2, { bodyComplete: true }))
+    await loadB
+    a.resolve(detail(1, { bodyComplete: true }))
+    await loadA
+
+    expect(get(messageDetail).data?.id).toBe(2)
+    expect(get(messageDetail).status).toBe('ready')
+  })
+
+  it('ignores a late failure of a load that was superseded', async () => {
+    const a = deferred<MessageDetail>()
+    const b = deferred<MessageDetail>()
+    fetchMessage.mockReturnValueOnce(a.promise).mockReturnValueOnce(b.promise)
+
+    const loadA = loadMessage(1)
+    const loadB = loadMessage(2)
+    b.resolve(detail(2, { bodyComplete: true }))
+    await loadB
+    a.reject(new Error('gone'))
+    await loadA
+
+    expect(get(messageDetail).status).toBe('ready')
+    expect(get(messageDetail).data?.id).toBe(2)
+  })
+
+  it('does not fill a cleared pane with a load still on its way', async () => {
+    const a = deferred<MessageDetail>()
+    fetchMessage.mockReturnValueOnce(a.promise)
+
+    const loadA = loadMessage(1)
+    clearMessage()
+    a.resolve(detail(1, { bodyComplete: true }))
+    await loadA
+
+    expect(get(messageDetail).status).toBe('idle')
   })
 })

@@ -170,7 +170,7 @@ func TestWindowFloor(t *testing.T) {
 			want:   "",
 		},
 		{
-			// migration 0037 leaves sync_initialized=0 on existing folders; local
+			// migration 0041 leaves sync_initialized=0 on existing folders; local
 			// messages mean this is not a first sync and must not re-floor.
 			name:   "upgraded folder with local messages is not re-floored",
 			state:  FolderSyncState{SyncInitialized: false, LastSeenUID: 100},
@@ -315,6 +315,11 @@ type fakeAdapter struct {
 	onFetch func(id string)
 	// listCalls counts ListMessages invocations (tests).
 	listCalls int
+	// flags, when set, is the server's flag set per remote id; SetFlags and
+	// RemoveFlags change it the way a STORE would. flagRemovals records the
+	// ids RemoveFlags was called for.
+	flags        map[string]storage.Flag
+	flagRemovals []string
 }
 
 func (a *fakeAdapter) Addr() string { return "imap.example.com:993" }
@@ -339,7 +344,7 @@ func (a *fakeAdapter) ListMessages(_ context.Context, _ RemoteMailbox) ([]Header
 	}
 	out := make([]Header, 0, len(ids))
 	for _, id := range ids {
-		h := Header{RemoteID: id}
+		h := Header{RemoteID: id, Flags: a.flags[id]}
 		if n, err := strconv.ParseUint(id, 10, 32); err == nil {
 			h.LegacyUID = uint32(n)
 		}
@@ -373,7 +378,7 @@ func (a *fakeAdapter) Fetch(ctx context.Context, _ string, remoteIDs []string) (
 			a.onFetch(id)
 		}
 		a.fetched = append(a.fetched, id)
-		f := Fetched{RemoteID: id, Subject: "test"}
+		f := Fetched{RemoteID: id, Subject: "test", Flags: a.flags[id]}
 		if n, err := strconv.ParseUint(id, 10, 32); err == nil {
 			f.LegacyUID = uint32(n)
 		}
@@ -385,8 +390,19 @@ func (a *fakeAdapter) Fetch(ctx context.Context, _ string, remoteIDs []string) (
 	return out, nil
 }
 
-func (a *fakeAdapter) SetFlags(_ context.Context, _, remoteID string, _ storage.Flag) error {
+func (a *fakeAdapter) SetFlags(_ context.Context, _, remoteID string, flags storage.Flag) error {
 	a.flagPushes = append(a.flagPushes, remoteID)
+	if a.flags != nil {
+		a.flags[remoteID] |= flags
+	}
+	return nil
+}
+
+func (a *fakeAdapter) RemoveFlags(_ context.Context, _, remoteID string, flags storage.Flag) error {
+	a.flagRemovals = append(a.flagRemovals, remoteID)
+	if a.flags != nil {
+		a.flags[remoteID] &^= flags
+	}
 	return nil
 }
 
@@ -643,7 +659,7 @@ func TestSyncFolderDoesNotCapAnExistingCache(t *testing.T) {
 	}
 }
 
-// After migration 0037, existing folders keep sync_initialized=0. A folder that
+// After migration 0041, existing folders keep sync_initialized=0. A folder that
 // already has local messages must not be treated as a first sync and re-capped
 // by InitialLimit.
 func TestSyncFolderDoesNotReFloorUpgradedFolder(t *testing.T) {

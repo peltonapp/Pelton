@@ -47,11 +47,13 @@ type mailProtocol interface {
 	// transmit sends one queued outbox message for the account.
 	transmit(ctx context.Context, account storage.Account, m outbox.Message) error
 	// moveMessage moves a cached message to dest on the server, then drops the
-	// local row (the core of archive and move). The driver takes the account
+	// local row (the core of archive, move and the spam marks). A non-nil kw
+	// is stored on the message before the move. The driver takes the account
 	// lock itself, so callers must not hold it.
-	moveMessage(m *storage.Message, source, dest storage.Folder, account storage.Account) (ArchiveUndoDTO, error)
-	// moveBack undoes a move: from is where the action put the message.
-	moveBack(rfcMessageID string, from, dest storage.Folder, account storage.Account) error
+	moveMessage(m *storage.Message, source, dest storage.Folder, account storage.Account, kw *keywordChange) (ArchiveUndoDTO, error)
+	// moveBack undoes a move: from is where the action put the message. A
+	// non-nil kw is stored on it before it moves back.
+	moveBack(rfcMessageID string, from, dest storage.Folder, account storage.Account, kw *keywordChange) error
 	// source fetches a message's raw RFC 822 source.
 	source(m storage.Message, folder storage.Folder, account storage.Account) (string, error)
 	// setColor reflects a colour change onto the server. Failures are logged only.
