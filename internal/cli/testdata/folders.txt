@@ -1,0 +1,2 @@
+ID  ACCOUNT  ROLE   PATH
+3   1        inbox  INBOX

@@ -1,6 +1,6 @@
 # Pelton - email client (Wails v3 + Svelte)
 
-.PHONY: build build-mac build-win build-linux build-nix dmg run nice-potatoes run-nightly app-dev dev bindings clean tidy deps licenses icon disclaimer sync-docs
+.PHONY: build cli build-mac build-win build-linux build-nix dmg run nice-potatoes run-nightly app-dev dev bindings clean tidy deps licenses icon disclaimer sync-docs
 
 # version string injected into the binary. it prefers the latest git tag (with a
 # short commit suffix on untagged commits) and falls back to "dev". it is wired
@@ -21,9 +21,15 @@ WAILS3 := go run -tags gtk3 github.com/wailsapp/wails/v3/cmd/wails3@$(WAILS_VERS
 GO_TAGS := goolm
 
 # production build for this OS into build/bin (the .app on macOS). see
-# scripts/build.sh.
-build:
+# scripts/build.sh. The pelton command line tool comes along in build/bin/cli.
+build: cli
 	scripts/build.sh
+
+# the pelton command line tool on its own, into build/bin/cli. The app binary
+# answers the same commands on macOS and Linux; this one is for Windows and for
+# using the tool without a full build.
+cli:
+	go build -trimpath -ldflags "-s -w -X main.version=$(VERSION)" -o build/bin/cli/pelton$(shell go env GOEXE) ./cmd/pelton
 
 # compile the macOS Liquid Glass app icon (build/darwin/pelton.icon) into the
 # built .app via actool. needs a one-time `sudo xcodebuild -runFirstLaunch`.

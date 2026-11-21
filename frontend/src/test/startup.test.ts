@@ -120,6 +120,8 @@ const lazyModules = [
   'components/vault/VaultCreateDialog.svelte',
   'components/vault/VaultConsentDialog.svelte',
   'components/settings2/VaultCard.svelte',
+  'components/settings2/CliCard.svelte',
+  'lib/cliapi.ts',
   'stores/mailvault.ts',
   'lib/mailvaultapi.ts',
 ]

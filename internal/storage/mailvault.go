@@ -46,6 +46,7 @@ type MailVault struct {
 	HideLocked      bool
 	AllowScripts    bool
 	AllowMCP        bool
+	AllowCLI        bool
 	Failures        int
 	RetryAt         time.Time
 	State           string
@@ -74,6 +75,8 @@ const (
 	VaultAudienceScripts
 	// VaultAudienceMCP is an MCP client.
 	VaultAudienceMCP
+	// VaultAudienceCLI is the pelton command.
+	VaultAudienceCLI
 )
 
 type vaultAudienceKey struct{}
@@ -288,7 +291,7 @@ const notVaultedM = `m.folder_id NOT IN (SELECT folder_id FROM mail_vault_folder
 const selectMailVault = `
 SELECT id, uid, name, created_at, pass_salt, pass_time, pass_memory, pass_threads, pass_box,
        rec_salt, rec_time, rec_memory, rec_threads, rec_box, public_key, private_box, link_key,
-       auto_lock_minutes, notify, hide_locked, allow_scripts, allow_mcp, failures, retry_at,
+       auto_lock_minutes, notify, hide_locked, allow_scripts, allow_mcp, allow_cli, failures, retry_at,
        state, job_total
 FROM mail_vaults`
 
@@ -296,7 +299,7 @@ func scanMailVault(row rowScanner) (*MailVault, error) {
 	var (
 		v                        MailVault
 		created, retry           string
-		hide, scripts, mcp       int
+		hide, scripts, mcp, cli  int
 		pt, pm, pth, rt, rm, rth int64
 	)
 	mat := &v.Material
@@ -304,13 +307,13 @@ func scanMailVault(row rowScanner) (*MailVault, error) {
 		&mat.Passphrase.Salt, &pt, &pm, &pth, &mat.Passphrase.Box,
 		&mat.Recovery.Salt, &rt, &rm, &rth, &mat.Recovery.Box,
 		&mat.PublicKey, &mat.PrivateBox, &mat.LinkKey,
-		&v.AutoLockMinutes, &v.Notify, &hide, &scripts, &mcp, &v.Failures, &retry,
+		&v.AutoLockMinutes, &v.Notify, &hide, &scripts, &mcp, &cli, &v.Failures, &retry,
 		&v.State, &v.JobTotal); err != nil {
 		return nil, err
 	}
 	mat.Passphrase.KDF = mailvault.KDFParams{Time: uint32(pt), MemoryKiB: uint32(pm), Threads: uint8(pth)}
 	mat.Recovery.KDF = mailvault.KDFParams{Time: uint32(rt), MemoryKiB: uint32(rm), Threads: uint8(rth)}
-	v.HideLocked, v.AllowScripts, v.AllowMCP = hide != 0, scripts != 0, mcp != 0
+	v.HideLocked, v.AllowScripts, v.AllowMCP, v.AllowCLI = hide != 0, scripts != 0, mcp != 0, cli != 0
 	if t, err := parseTime(created); err == nil {
 		v.CreatedAt = t
 	}
@@ -479,9 +482,10 @@ func (d *DB) ListMailVaultMembers(ctx context.Context, vaultID int64) ([]MailVau
 // UpdateMailVaultSettings stores a vault's settings.
 func (d *DB) UpdateMailVaultSettings(ctx context.Context, v MailVault) error {
 	res, err := d.sql.ExecContext(ctx, `
-UPDATE mail_vaults SET name = ?, auto_lock_minutes = ?, notify = ?, hide_locked = ?, allow_scripts = ?, allow_mcp = ?
+UPDATE mail_vaults SET name = ?, auto_lock_minutes = ?, notify = ?, hide_locked = ?, allow_scripts = ?, allow_mcp = ?,
+    allow_cli = ?
 WHERE id = ?`, v.Name, max(v.AutoLockMinutes, 0), notifyMode(v.Notify), boolToInt(v.HideLocked),
-		boolToInt(v.AllowScripts), boolToInt(v.AllowMCP), v.ID)
+		boolToInt(v.AllowScripts), boolToInt(v.AllowMCP), boolToInt(v.AllowCLI), v.ID)
 	if err != nil {
 		return fmt.Errorf("storage: update vault %d: %w", v.ID, err)
 	}

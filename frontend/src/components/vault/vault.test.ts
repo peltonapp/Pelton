@@ -33,7 +33,7 @@ Element.prototype.animate ??= function () {
 function vault(patch: Partial<MailVault> = {}): MailVault {
   return {
     id: 1, name: 'Private', locked: true, state: 'ready', pending: 0, sealed: 3, members: [{ accountId: 1, folderId: 2 }],
-    folderIds: [2], autoLockMinutes: 15, notify: 'generic', hideLocked: false, allowScripts: false, allowMcp: false, retryAfterMs: 0,
+    folderIds: [2], autoLockMinutes: 15, notify: 'generic', hideLocked: false, allowScripts: false, allowMcp: false, allowCli: false, retryAfterMs: 0,
     ...patch,
   }
 }

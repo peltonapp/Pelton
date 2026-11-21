@@ -397,7 +397,7 @@ func TestUnlockedVaultIsOpenOnlyToItsAudience(t *testing.T) {
 	if err == nil && len(found.Messages) != 1 {
 		t.Fatalf("search over an unlocked vault found %d", len(found.Messages))
 	}
-	if hits := a.searchMailVaults(SearchRequestDTO{Query: strings.ToLower(vaultMarkBody)}, 10); len(hits) != 1 {
+	if hits := a.searchMailVaults(a.mailCtx(), SearchRequestDTO{Query: strings.ToLower(vaultMarkBody)}, 10); len(hits) != 1 {
 		t.Fatalf("vault search found %d", len(hits))
 	}
 	for _, name := range []string{"SenderOverview", "ListNewsletters", "InsightsPeople", "QueryAttachments", "ListPromises"} {

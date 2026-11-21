@@ -22,7 +22,7 @@ import { mailVaults } from '../../stores/mailvault'
 function vault(patch: Partial<MailVault> = {}): MailVault {
   return {
     id: 3, name: 'Private', locked: false, state: 'ready', pending: 0, sealed: 12, members: [{ accountId: 1, folderId: 0 }],
-    folderIds: [4, 5], autoLockMinutes: 15, notify: 'generic', hideLocked: false, allowScripts: false, allowMcp: false, retryAfterMs: 0,
+    folderIds: [4, 5], autoLockMinutes: 15, notify: 'generic', hideLocked: false, allowScripts: false, allowMcp: false, allowCli: false, retryAfterMs: 0,
     ...patch,
   }
 }
@@ -46,8 +46,9 @@ describe('VaultCard', () => {
     const mcp = screen.getByRole('switch', { name: 'MCP clients may read this vault' })
     expect(scripts).not.toBeChecked()
     expect(mcp).not.toBeChecked()
+    expect(screen.getByRole('switch', { name: 'The pelton command may read this vault' })).not.toBeChecked()
     await userEvent.click(scripts)
-    await waitFor(() => expect(api.updateMailVaultSettings).toHaveBeenCalledWith(expect.objectContaining({ id: 3, allowScripts: true, allowMcp: false })))
+    await waitFor(() => expect(api.updateMailVaultSettings).toHaveBeenCalledWith(expect.objectContaining({ id: 3, allowScripts: true, allowMcp: false, allowCli: false })))
     expect(screen.getByText(/protects this device, not the server/)).toBeInTheDocument()
   })
 

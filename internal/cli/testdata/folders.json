@@ -1,0 +1,9 @@
+[
+  {
+    "id": 3,
+    "accountId": 1,
+    "name": "INBOX",
+    "path": "INBOX",
+    "role": "inbox"
+  }
+]

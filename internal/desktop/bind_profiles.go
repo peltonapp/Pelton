@@ -279,6 +279,9 @@ func (a *App) SwitchProfile(id int64) error {
 	// here rather than left on the old profile's values.
 	a.applyLogSettings()
 	a.RebuildMenu()
+	if err := a.applyCLIToken(); err != nil {
+		a.log.Error("command line token", "err", err)
+	}
 
 	a.emit(EventProfileChanged, nil)
 	goSafe("starting the profile's mail sync", a.runInitialSyncAndIdle)

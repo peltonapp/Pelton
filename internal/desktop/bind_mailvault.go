@@ -35,6 +35,7 @@ type MailVaultDTO struct {
 	HideLocked      bool                 `json:"hideLocked"`
 	AllowScripts    bool                 `json:"allowScripts"`
 	AllowMCP        bool                 `json:"allowMcp"`
+	AllowCLI        bool                 `json:"allowCli"`
 	RetryAfterMs    int64                `json:"retryAfterMs"`
 }
 
@@ -75,6 +76,7 @@ type MailVaultSettingsDTO struct {
 	HideLocked      bool   `json:"hideLocked"`
 	AllowScripts    bool   `json:"allowScripts"`
 	AllowMCP        bool   `json:"allowMcp"`
+	AllowCLI        bool   `json:"allowCli"`
 }
 
 // errMailVaultLocked is returned for a change that needs the vault unlocked.
@@ -110,7 +112,7 @@ func (a *App) mailVaultDTO(v *storage.MailVault) (MailVaultDTO, error) {
 	dto := MailVaultDTO{
 		ID: v.ID, Name: v.Name, Locked: !a.mailVaultUnlocked(v.ID), State: v.State,
 		AutoLockMinutes: v.AutoLockMinutes, Notify: v.Notify, HideLocked: v.HideLocked,
-		AllowScripts: v.AllowScripts, AllowMCP: v.AllowMCP,
+		AllowScripts: v.AllowScripts, AllowMCP: v.AllowMCP, AllowCLI: v.AllowCLI,
 		Members: []MailVaultMemberDTO{}, FolderIDs: []int64{},
 	}
 	if wait := time.Until(v.RetryAt); wait > 0 {
@@ -275,7 +277,8 @@ func (a *App) LockAllMailVaults() {
 }
 
 // UpdateMailVaultSettings stores a vault's name, auto-lock time,
-// notification mode, sidebar visibility and the scripts and MCP switches.
+// notification mode, sidebar visibility and the scripts, MCP and command line
+// switches.
 func (a *App) UpdateMailVaultSettings(s MailVaultSettingsDTO) error {
 	if err := a.ready(); err != nil {
 		return err
@@ -285,7 +288,7 @@ func (a *App) UpdateMailVaultSettings(s MailVaultSettingsDTO) error {
 		return err
 	}
 	v.Name, v.AutoLockMinutes, v.Notify = strings.TrimSpace(s.Name), max(s.AutoLockMinutes, 0), s.Notify
-	v.HideLocked, v.AllowScripts, v.AllowMCP = s.HideLocked, s.AllowScripts, s.AllowMCP
+	v.HideLocked, v.AllowScripts, v.AllowMCP, v.AllowCLI = s.HideLocked, s.AllowScripts, s.AllowMCP, s.AllowCLI
 	if err := a.store.UpdateMailVaultSettings(a.ctx, *v); err != nil {
 		return err
 	}
