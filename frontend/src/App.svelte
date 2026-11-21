@@ -50,7 +50,39 @@
   import { initProgress } from './stores/progress'
   import { composeSessions, openCompose, openComposeWith, initComposePrefs, openReply, openForward, requestComposeClose, setForcedComposeMode, updateCompose } from './stores/compose'
   import { routeComposeSessions } from './stores/composeroute'
-  import { loadAttachmentsBrowser, loadClassicCompose, loadComposer, loadMenuBarEditor, loadDatePeek, loadEncryptionIndicator, loadInviteCard, loadPromiseStrip, warmUp } from './lib/lazyload'
+  import {
+    loadAccountPasswordDialog,
+    loadAddMailboxWizard,
+    loadAttachmentsBrowser,
+    loadAutomationsOverlay,
+    loadAutomationsSpace,
+    loadCalendarScreen,
+    loadChatSpace,
+    loadClassicCompose,
+    loadComposer,
+    loadContactsSpace,
+    loadDatePeek,
+    loadEncryptionIndicator,
+    loadFeedsScreen,
+    loadInviteCard,
+    loadMeetingPrep,
+    loadMenuBarEditor,
+    loadNewsletterManager,
+    loadNightlyDialog,
+    loadNotesScreen,
+    loadOnboarding,
+    loadProjectsScreen,
+    loadPromiseStrip,
+    loadSettingsPanel,
+    loadSettingsScreen,
+    loadSetup,
+    loadShareToChatDialog,
+    loadSyncFailureDialog,
+    loadTasksScreen,
+    loadVaultDialogs,
+    loadVerificationDialog,
+    warmUp,
+  } from './lib/lazyload'
   import ComposeTabLayer from './components/compose/ComposeTabLayer.svelte'
   import { openSnooze, openSnoozeMany } from './stores/snooze'
   import { patchInList } from './stores/messages'
@@ -264,8 +296,8 @@
     settingsDesign = $prefs.design
     const load: Promise<{ default: ComponentType }> =
       $prefs.design === 'classic'
-        ? import('./components/settings/SettingsPanel.svelte')
-        : import('./components/settings2/SettingsScreen.svelte')
+        ? loadSettingsPanel()
+        : loadSettingsScreen()
     settingsPanel = load.catch((err) => {
       settingsPanel = null
       settingsOpen = false
@@ -2387,7 +2419,7 @@
         <Resizer disabled={locked} label={$t('app.pane.resizeSidebar')} on:resize={resizeSidebar} on:end={commitPanes} />
         {#if $mailScreen === 'newsletters'}
           <div class="screen">
-            {#await import('./components/newsletters/NewsletterManager.svelte') then m}
+            {#await loadNewsletterManager() then m}
               <svelte:component this={m.default} on:close={closeMailScreen} />
             {/await}
           </div>
@@ -2430,7 +2462,7 @@
       </div>
     {:else if $space === 'contacts'}
       <div class="space-host" role="main" aria-label={$t(`space.${$space}`)}>
-        {#await import('./components/contacts/ContactsSpace.svelte') then m}
+        {#await loadContactsSpace() then m}
           <svelte:component
             this={m.default}
             on:compose={(e) => { openSpace('mail'); startComposeTo(e.detail) }}
@@ -2439,19 +2471,19 @@
       </div>
     {:else if $space === 'calendar'}
       <div class="space-host" role="main" aria-label={$t(`space.${$space}`)}>
-        {#await import('./components/calendar/CalendarScreen.svelte') then m}
+        {#await loadCalendarScreen() then m}
           <svelte:component this={m.default} />
         {/await}
       </div>
     {:else if $space === 'tasks'}
       <div class="space-host" role="main" aria-label={$t(`space.${$space}`)}>
-        {#await import('./components/tasks/TasksScreen.svelte') then m}
+        {#await loadTasksScreen() then m}
           <svelte:component this={m.default} />
         {/await}
       </div>
     {:else if $space === 'projects'}
       <div class="space-host" role="main" aria-label={$t(`space.${$space}`)}>
-        {#await import('./components/projects/ProjectsScreen.svelte') then m}
+        {#await loadProjectsScreen() then m}
           <svelte:component
             this={m.default}
             on:compose={(e) => { openSpace('mail'); startComposeTo(e.detail.email, '', e.detail.projectId) }}
@@ -2460,25 +2492,25 @@
       </div>
     {:else if $space === 'notes'}
       <div class="space-host" role="main" aria-label={$t(`space.${$space}`)}>
-        {#await import('./components/notes/NotesScreen.svelte') then m}
+        {#await loadNotesScreen() then m}
           <svelte:component this={m.default} />
         {/await}
       </div>
     {:else if $space === 'feeds'}
       <div class="space-host" role="main" aria-label={$t(`space.${$space}`)}>
-        {#await import('./components/feeds/FeedsScreen.svelte') then m}
+        {#await loadFeedsScreen() then m}
           <svelte:component this={m.default} on:compose={(e) => shareFromFeeds(e.detail)} />
         {/await}
       </div>
     {:else if $space === 'chat' && chatWanted}
       <div class="space-host" role="main" aria-label={$t(`space.${$space}`)}>
-        {#await import('./components/chat/ChatSpace.svelte') then m}
+        {#await loadChatSpace() then m}
           <svelte:component this={m.default} />
         {/await}
       </div>
     {:else if $space === 'automations'}
       <div class="space-host" role="main" aria-label={$t(`space.${$space}`)}>
-        {#await import('./components/automations/AutomationsSpace.svelte') then m}
+        {#await loadAutomationsSpace() then m}
           <svelte:component this={m.default} />
         {/await}
       </div>
@@ -2530,7 +2562,7 @@
      so they cost nothing at startup. compose is split too, and loaded once the
      window has settled so it is ready before it is first opened. -->
 {#if automationsOpen && classic}
-  {#await import('./components/automations/AutomationsOverlay.svelte') then m}
+  {#await loadAutomationsOverlay() then m}
     <svelte:component this={m.default} on:close={() => (automationsOpen = false)} />
   {/await}
 {/if}
@@ -2562,7 +2594,7 @@
 
 <!-- the nightly-build warning, above everything else and shown every launch. -->
 {#if nightlyOpen}
-  {#await import('./components/common/NightlyDialog.svelte') then m}
+  {#await loadNightlyDialog() then m}
     <svelte:component this={m.default} on:accepted={() => (nightlyOpen = false)} />
   {/await}
 {/if}
@@ -2576,11 +2608,11 @@
 
 <!-- onboarding is code-split too: shown only on first run or when re-run. -->
 {#if onboardingOpen && onboardingClassic}
-  {#await import('./components/onboarding/Onboarding.svelte') then m}
+  {#await loadOnboarding() then m}
     <svelte:component this={m.default} on:finish={finishOnboarding} on:added={onboardingAddedMailbox} />
   {/await}
 {:else if onboardingOpen}
-  {#await import('./components/onboarding/Setup.svelte') then m}
+  {#await loadSetup() then m}
     <svelte:component
       this={m.default}
       rerun={onboardingRerun}
@@ -2600,7 +2632,7 @@
 {/if}
 
 {#if wizardOpen}
-  {#await import('./components/wizard/AddMailboxWizard.svelte') then m}
+  {#await loadAddMailboxWizard() then m}
     <svelte:component this={m.default} on:close={() => (wizardOpen = false)} on:added={onMailboxAdded} />
   {/await}
 {/if}
@@ -2618,7 +2650,7 @@
 {/if}
 
 {#if !classic && $meetingPrepTarget}
-  {#await import('./components/calendar/MeetingPrep.svelte') then m}
+  {#await loadMeetingPrep() then m}
     <svelte:component
       this={m.default}
       target={$meetingPrepTarget}
@@ -2667,7 +2699,7 @@
 {/await}
 
 {#if $vaultDialog}
-  {#await import('./components/vault/VaultDialogs.svelte') then m}
+  {#await loadVaultDialogs() then m}
     <svelte:component this={m.default} />
   {/await}
 {/if}
@@ -2678,19 +2710,19 @@
 {/if}
 
 {#if chatWanted}
-  {#await import('./components/chat/ShareToChatDialog.svelte') then m}
+  {#await loadShareToChatDialog() then m}
     <svelte:component this={m.default} />
   {/await}
-  {#await import('./components/chat/VerificationDialog.svelte') then m}
+  {#await loadVerificationDialog() then m}
     <svelte:component this={m.default} />
   {/await}
 {/if}
 
-{#await import('./components/settings/AccountPasswordDialog.svelte') then m}
+{#await loadAccountPasswordDialog() then m}
   <svelte:component this={m.default} account={$passwordPrompt} onDone={answerPasswordPrompt} />
 {/await}
 
-{#await import('./components/common/SyncFailureDialog.svelte') then m}
+{#await loadSyncFailureDialog() then m}
   <svelte:component this={m.default} />
 {/await}
 

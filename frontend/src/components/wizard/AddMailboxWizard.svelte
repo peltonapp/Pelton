@@ -44,6 +44,7 @@
   import { classifyConnectionError, type ConnectionProblem } from '../../lib/connectionError'
   import type { AddAccountRequest, Account, Discovered, Folder, TLSMode, UntrustedCert } from '../../lib/types'
   import { t } from '../../lib/i18n'
+  import { loadImportDialog } from '../../lib/lazyload'
 
   const dispatch = createEventDispatcher<{ close: void; added: Account; done: Account }>()
 
@@ -1077,7 +1078,7 @@
 </div>
 
 {#if showImport}
-  {#await import('../import/ImportDialog.svelte') then m}
+  {#await loadImportDialog() then m}
     <svelte:component this={m.default} on:close={() => (showImport = false)} />
   {/await}
 {/if}

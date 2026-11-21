@@ -3,6 +3,9 @@ import {svelte} from '@sveltejs/vite-plugin-svelte'
 import {fileURLToPath} from 'node:url'
 import fs from 'node:fs'
 import path from 'node:path'
+import vm from 'node:vm'
+import type {Plugin} from 'vite'
+import {areaOf} from './src/lib/stringareas.ts'
 
 // @tabler/icons ships its full icon geometry as tabler-nodes-outline.json, but
 // the package's exports map only exposes ./icons/*, so the file is aliased here
@@ -78,6 +81,71 @@ const bootErrors = {
   },
 }
 
+// each catalog in src/lib/locales is served split into the areas of
+// src/lib/stringareas.ts. virtual:strings/<locale> holds the core strings and a
+// loader for every other area, virtual:strings/<locale>/<area> one area's
+// strings. Under vitest all English text is core, so a component test renders
+// without loading anything first.
+const localesDir = fileURLToPath(new URL('./src/lib/locales/', import.meta.url))
+const stringsPrefix = 'virtual:strings/'
+
+const splitCache = new Map<string, {mtime: number, areas: Map<string, Record<string, string>>}>()
+
+function splitCatalog(locale: string): Map<string, Record<string, string>> {
+  const file = path.join(localesDir, `${locale}.ts`)
+  const mtime = fs.statSync(file).mtimeMs
+  const cached = splitCache.get(locale)
+  if (cached?.mtime === mtime) {
+    return cached.areas
+  }
+  const source = fs.readFileSync(file, 'utf8')
+  const start = /^const \w+: Record<string, string> = \{$/m.exec(source)
+  if (!start) {
+    throw new Error(`string-chunks: ${locale}.ts does not open with its catalog object`)
+  }
+  const body = source.slice(start.index + start[0].length - 1, source.lastIndexOf('}') + 1)
+  const catalog = vm.runInNewContext(`(${body})`) as Record<string, string>
+  const areas = new Map<string, Record<string, string>>()
+  for (const [key, text] of Object.entries(catalog)) {
+    const area = process.env.VITEST && locale === 'en' ? 'core' : (areaOf(key) ?? 'core')
+    if (!areas.has(area)) {
+      areas.set(area, {})
+    }
+    areas.get(area)![key] = text
+  }
+  splitCache.set(locale, {mtime, areas})
+  return areas
+}
+
+const stringChunks: Plugin = {
+  name: 'string-chunks',
+  resolveId(source) {
+    return source.startsWith(stringsPrefix) ? `\0${source}` : null
+  },
+  load(id) {
+    if (!id.startsWith(`\0${stringsPrefix}`)) {
+      return null
+    }
+    const [locale, area] = id.slice(stringsPrefix.length + 1).split('/')
+    this.addWatchFile(path.join(localesDir, `${locale}.ts`))
+    const areas = splitCatalog(locale)
+    if (area) {
+      return `export default ${JSON.stringify(areas.get(area) ?? {})}`
+    }
+    const loaders = [...areas.keys()]
+      .filter((a) => a !== 'core')
+      .map((a) => `${JSON.stringify(a)}: () => import(${JSON.stringify(`${stringsPrefix}${locale}/${a}`)})`)
+    return `export const core = ${JSON.stringify(areas.get('core') ?? {})}\nexport const areas = {${loaders.join(',')}}\n`
+  },
+  handleHotUpdate({file, server}) {
+    if (file.startsWith(localesDir)) {
+      server.moduleGraph.invalidateAll()
+      server.ws.send({type: 'full-reload'})
+      return []
+    }
+  },
+}
+
 const pdfjsAssets = {
   name: 'pdfjs-assets',
   configureServer(server: { middlewares: { use: (fn: (req: { url?: string }, res: { setHeader: (k: string, v: string) => void, end: (b: Buffer) => void }, next: () => void) => void) => void } }) {
@@ -112,7 +180,7 @@ const pdfjsAssets = {
 
 // https://vitejs.dev/config/
 export default defineConfig({
-  plugins: [svelte(), dropLegacyWoff, flagUrlDev, pdfjsAssets, bootErrors],
+  plugins: [svelte(), stringChunks, dropLegacyWoff, flagUrlDev, pdfjsAssets, bootErrors],
   resolve: {
     alias: {
       'tabler-nodes-outline': tablerNodesOutline,

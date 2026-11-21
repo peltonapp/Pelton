@@ -13,6 +13,7 @@
   import '../../theme/controls.css'
   import { refreshSidebar } from '../../stores/accounts'
   import { t } from '../../lib/i18n'
+  import { loadImportDialog } from '../../lib/lazyload'
   import type { Account } from '../../lib/types'
 
   /** The mailboxes there are already. */
@@ -52,7 +53,7 @@
 </button>
 
 {#if showImport}
-  {#await import('../import/ImportDialog.svelte') then m}
+  {#await loadImportDialog() then m}
     <svelte:component this={m.default} on:close={closeImport} />
   {/await}
 {/if}
