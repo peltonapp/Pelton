@@ -1,6 +1,7 @@
 package desktop
 
 import (
+	"context"
 	"strings"
 	"time"
 
@@ -38,8 +39,8 @@ func (a *App) unlockedVaultFolders() []int64 {
 }
 
 // searchMailVaults returns up to limit messages of unlocked vaults that the
-// request matches, newest first.
-func (a *App) searchMailVaults(req SearchRequestDTO, limit int) []storage.Message {
+// request matches and ctx's audience may see, newest first.
+func (a *App) searchMailVaults(ctx context.Context, req SearchRequestDTO, limit int) []storage.Message {
 	if req.notesWanted() || limit <= 0 {
 		return nil
 	}
@@ -65,7 +66,6 @@ func (a *App) searchMailVaults(req SearchRequestDTO, limit int) []storage.Messag
 		m.before = time.Unix(req.BeforeUnix, 0)
 	}
 	var out []storage.Message
-	ctx := a.mailCtx()
 	for offset := 0; offset < mailVaultSearchScan; offset += mailVaultSearchPage {
 		page, err := a.store.QueryMessages(ctx, storage.MessageQuery{FolderIDs: folders, Limit: mailVaultSearchPage, Offset: offset})
 		if err != nil || len(page) == 0 {

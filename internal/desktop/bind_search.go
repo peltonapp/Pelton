@@ -1,6 +1,7 @@
 package desktop
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -379,20 +380,34 @@ func (a *App) Search(req SearchRequestDTO) (SearchResultDTO, error) {
 	if err := a.ready(); err != nil {
 		return empty, err
 	}
+	kept, total, err := a.searchMessages(a.mailCtx(), req)
+	if err != nil || kept == nil {
+		return empty, err
+	}
+	out, err := a.buildSummaries(a.ctx, kept)
+	if err != nil {
+		return empty, err
+	}
+	return SearchResultDTO{Messages: out, Total: total}, nil
+}
+
+// searchMessages is Search returning the stored messages, with the vault
+// mail ctx's audience may see. A request that asks for nothing returns nil.
+func (a *App) searchMessages(ctx context.Context, req SearchRequestDTO) ([]storage.Message, int, error) {
 	if a.index == nil {
-		return empty, errSearchUnavailable
+		return nil, 0, errSearchUnavailable
 	}
 	q, ok := req.searchQuery(req.Limit)
 	if !ok {
-		return empty, nil
+		return nil, 0, nil
 	}
 	if err := a.restrictToNotes(&q, req); err != nil {
-		return empty, err
+		return nil, 0, err
 	}
 
 	res, err := a.index.Search(q)
 	if err != nil {
-		return empty, err
+		return nil, 0, err
 	}
 
 	// hits are ranked; fetch each full message so rows render like the normal
@@ -409,7 +424,7 @@ func (a *App) Search(req SearchRequestDTO) (SearchResultDTO, error) {
 	}
 	byID, err := a.store.MessagesByID(a.ctx, ids)
 	if err != nil {
-		return empty, err
+		return nil, 0, err
 	}
 	kept := make([]storage.Message, 0, len(ids))
 	for _, id := range ids {
@@ -419,13 +434,9 @@ func (a *App) Search(req SearchRequestDTO) (SearchResultDTO, error) {
 	}
 	total := int(res.Total)
 	if req.Offset == 0 {
-		vault := a.searchMailVaults(req, max(req.Limit, 1))
+		vault := a.searchMailVaults(ctx, req, max(req.Limit, 1))
 		kept = append(kept, vault...)
 		total += len(vault)
 	}
-	out, err := a.buildSummaries(a.ctx, kept)
-	if err != nil {
-		return empty, err
-	}
-	return SearchResultDTO{Messages: out, Total: total}, nil
+	return kept, total, nil
 }

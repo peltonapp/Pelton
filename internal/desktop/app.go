@@ -18,6 +18,8 @@ import (
 
 	"github.com/peltonapp/Pelton/internal/applock"
 	"github.com/peltonapp/Pelton/internal/certtrust"
+	"github.com/peltonapp/Pelton/internal/cliproto"
+	"github.com/peltonapp/Pelton/internal/cliserver"
 	"github.com/peltonapp/Pelton/internal/configsync"
 	pimap "github.com/peltonapp/Pelton/internal/imap"
 	"github.com/peltonapp/Pelton/internal/logging"
@@ -223,6 +225,15 @@ type App struct {
 	mcpScriptLimits *mcpserver.ScriptLimiter
 	// proposalMu serializes changes to the stored script proposals.
 	proposalMu sync.Mutex
+
+	// cliMu guards cli, the socket the pelton command talks to (cli.go).
+	// cliConfirmer asks about a command line send or permanent delete; nil
+	// asks in the window, tests put an answer here. cliPathsOverride moves
+	// the socket and token out of the state folder, for tests.
+	cliMu            sync.Mutex
+	cli              *cliserver.Server
+	cliConfirmer     scripting.Confirmer
+	cliPathsOverride cliproto.Paths
 
 	// mailto holds a mailto: draft the app was launched with (or received from a
 	// second launch) until the frontend consumes it. See mailto.go.
@@ -445,6 +456,7 @@ func (a *App) startup(ctx context.Context) {
 	a.startScripts()
 	goSafe("promise clock", a.runPromiseClock)
 	a.startAutoEncrypt()
+	a.startCLI()
 
 	// the notes folder, when the user has one: the mail reader and the other
 	// spaces list the notes about what they show.
@@ -492,6 +504,7 @@ func (a *App) shutdown() {
 	a.saveGeometry()
 	a.lockMailVaults()
 	a.stopTray()
+	a.stopCLI()
 	a.stopMCP()
 	a.stopChat()
 	a.stopScripts()

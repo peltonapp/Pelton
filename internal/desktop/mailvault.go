@@ -59,6 +59,7 @@ type openMailVault struct {
 	keys     *mailvault.Keys
 	scripts  bool
 	mcp      bool
+	cli      bool
 	autoLock time.Duration
 	cache    map[string]*mailvault.MessageKey
 	order    []string
@@ -97,6 +98,12 @@ func mcpCtx(ctx context.Context) context.Context {
 	return storage.WithVaultAudience(ctx, storage.VaultAudienceMCP)
 }
 
+// cliCtx marks ctx as a read of the pelton command, which sees an unlocked
+// vault only when the vault allows the command line.
+func cliCtx(ctx context.Context) context.Context {
+	return storage.WithVaultAudience(ctx, storage.VaultAudienceCLI)
+}
+
 // inMailVault reports whether a folder is in a vault, locked or not. A
 // failure to tell counts as yes.
 func (a *App) inMailVault(folderID int64) bool {
@@ -132,6 +139,8 @@ func (g mailVaultGate) Visible(vaultID int64, audience storage.VaultAudience) bo
 		return o.scripts
 	case storage.VaultAudienceMCP:
 		return o.mcp
+	case storage.VaultAudienceCLI:
+		return o.cli
 	}
 	return false
 }
@@ -254,7 +263,7 @@ func (a *App) openMailVaultKeys(v *storage.MailVault, keys *mailvault.Keys) {
 		old.wipe()
 	}
 	st.open[v.ID] = &openMailVault{
-		keys: keys, scripts: v.AllowScripts, mcp: v.AllowMCP,
+		keys: keys, scripts: v.AllowScripts, mcp: v.AllowMCP, cli: v.AllowCLI,
 		autoLock: time.Duration(v.AutoLockMinutes) * time.Minute,
 		cache:    map[string]*mailvault.MessageKey{},
 	}
@@ -268,7 +277,7 @@ func (a *App) applyMailVaultSettings(v *storage.MailVault) {
 	st.mu.Lock()
 	defer st.mu.Unlock()
 	if o := st.open[v.ID]; o != nil {
-		o.scripts, o.mcp = v.AllowScripts, v.AllowMCP
+		o.scripts, o.mcp, o.cli = v.AllowScripts, v.AllowMCP, v.AllowCLI
 		o.autoLock = time.Duration(v.AutoLockMinutes) * time.Minute
 	}
 }
