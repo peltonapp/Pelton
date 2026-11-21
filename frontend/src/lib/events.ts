@@ -110,6 +110,7 @@ export interface DownloadProgressEvent {
 /** Payload of the attachment save progress event: bytes and files done out of the total. */
 export interface AttachmentProgressEvent {
   running: boolean
+  attachmentId: number
   filename: string
   bytesDone: number
   bytesTotal: number

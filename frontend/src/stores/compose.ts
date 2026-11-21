@@ -6,6 +6,7 @@
 import { writable, get } from 'svelte/store'
 import type { Address, Draft, EditorMode, MessageDetail, ComposeAttachment } from '../lib/types'
 import { getSetting, setSetting } from '../lib/api'
+import { sidebar } from './accounts'
 import { formatAddress, formatAddressList, parseAddressList, renderBody } from '../lib/mailcompose'
 import { formatFullDate } from '../lib/format'
 import { escapeHtml, textToHtml } from '../lib/richtext'
@@ -161,7 +162,14 @@ export function openComposeWith(accountId: number, mode: EditorMode, prefill: Ma
 // body and threading references come from the original message.
 export function openReply(detail: MessageDetail, mode: EditorMode, replyAll: boolean): number {
   const session = blankSession(detail.accountId, mode)
-  session.to = formatAddress({ name: detail.fromName, email: detail.fromAddress })
+  // replying to all from Sent means writing to the people the message went to,
+  // not back to yourself (#485). The folder's role carries the user's override
+  // and the server's \Sent attribute, so no folder name is matched here.
+  const folder = get(sidebar).data?.foldersByAccount[detail.accountId]?.find((f) => f.id === detail.folderId)
+  session.to =
+    replyAll && folder?.role === 'sent'
+      ? formatAddressList(parseAddressList(detail.toAddresses))
+      : formatAddress({ name: detail.fromName, email: detail.fromAddress })
   if (replyAll && detail.ccAddresses) {
     session.cc = formatAddressList(parseAddressList(detail.ccAddresses))
     session.showCc = true
