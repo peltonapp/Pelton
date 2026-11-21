@@ -40,6 +40,7 @@ type SentAppender func(raw []byte) (string, error)
 type Sender struct {
 	cfg        Config
 	appendSent SentAppender
+	background func(func())
 	log        *slog.Logger
 }
 
@@ -52,6 +53,12 @@ func WithSentAppender(appender SentAppender) SenderOption {
 	return func(s *Sender) { s.appendSent = appender }
 }
 
+// WithBackground sets how the append-to-Sent step is started once a message is
+// delivered. The default runs it on a goroutine of its own.
+func WithBackground(start func(func())) SenderOption {
+	return func(s *Sender) { s.background = start }
+}
+
 // WithLogger sets the sender's logger.
 func WithLogger(log *slog.Logger) SenderOption {
 	return func(s *Sender) { s.log = log }
@@ -59,31 +66,40 @@ func WithLogger(log *slog.Logger) SenderOption {
 
 // NewSender builds a Sender for one account's submission config.
 func NewSender(cfg Config, opts ...SenderOption) *Sender {
-	s := &Sender{cfg: cfg, log: slog.New(slog.DiscardHandler)}
+	s := &Sender{cfg: cfg, log: slog.New(slog.DiscardHandler), background: func(fn func()) { go fn() }}
 	for _, opt := range opts {
 		opt(s)
 	}
 	return s
 }
 
-// Transmit dials, authenticates, sends the message, then appends it to Sent.
-// The append is non-fatal: the mail is already delivered, so an append failure
-// is logged as a warning and Transmit still returns success.
+// Transmit dials, authenticates and sends the message, then starts the append
+// to Sent in the background and returns. The message counts as sent once the
+// server has accepted it: the copy to Sent can wait on other mail work for a
+// long time, and holding the outbox until then left delivered mail showing as
+// "sending" and the rest of the queue stuck behind it. It also meant a restart
+// in the meantime queued the delivered message again. An append failure is
+// only logged.
 func (s *Sender) Transmit(ctx context.Context, m outbox.Message) error {
 	client, err := Dial(s.cfg)
 	if err != nil {
 		return err
 	}
-	defer client.Close()
 
 	if err := client.Authenticate(); err != nil {
+		_ = client.Close()
 		return err
 	}
 	if err := client.Send(ctx, m.EnvelopeFrom, m.Recipients, m.Raw); err != nil {
+		_ = client.Close()
 		return err
 	}
+	if err := client.Close(); err != nil {
+		s.log.Debug("smtp quit after a delivered message", "err", err)
+	}
 
-	s.appendToSent(m.Raw)
+	raw := m.Raw
+	s.background(func() { s.appendToSent(raw) })
 	return nil
 }
 

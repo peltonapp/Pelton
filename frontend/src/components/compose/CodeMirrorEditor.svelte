@@ -15,6 +15,9 @@
   export let vimEnabled = false
   // mono uses a monospace font (for the plaintext editor); markdown keeps the ui font.
   export let mono = false
+  // caret, when set, makes the editor take focus on mount with the caret at
+  // this offset into content.
+  export let caret: number | null = null
 
   const dispatch = createEventDispatcher<{ change: string }>()
 
@@ -80,6 +83,10 @@
 
   onMount(() => {
     view = new EditorView({ state: makeState(content), parent: el })
+    if (caret !== null) {
+      view.dispatch({ selection: { anchor: Math.min(caret, view.state.doc.length) }, scrollIntoView: true })
+      view.focus()
+    }
   })
   onDestroy(() => {
     view?.destroy()
@@ -99,6 +106,11 @@
 
   export function focusEditor(): void {
     view?.focus()
+  }
+
+  // caretOffset is where the caret sits in the document.
+  export function caretOffset(): number {
+    return view ? view.state.selection.main.head : 0
   }
 
   // wrapSelection surrounds the selection (or a placeholder) with token, used by

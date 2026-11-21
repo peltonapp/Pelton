@@ -9,20 +9,23 @@ import (
 	"github.com/peltonapp/Pelton/internal/storage"
 )
 
-// pushFlags stores the merged flags locally, adds them on the server and clears
-// the pending marker.
+// pushFlags stores the merged flags locally, adds them on the server, removes
+// the cleared ones and clears the pending marker.
 //
-// the server push is additive (STORE +FLAGS), never a full replace, so flags we
-// do not model (\Answered, \Draft, keywords) are left untouched. combined with
-// the union merge policy this means we only ever set flags on the server, never
-// clear them, see the policy note in reconcile.go.
-func (e *Engine) pushFlags(ctx context.Context, state storage.MessageState, flags storage.Flag) error {
+// the server push is STORE +FLAGS and -FLAGS, never a full replace, so flags we
+// do not model (\Answered, \Draft, keywords) are left untouched.
+func (e *Engine) pushFlags(ctx context.Context, state storage.MessageState, flags, remove storage.Flag) error {
 	if err := e.store.SetMessageFlags(ctx, state.ID, flags); err != nil {
 		return fmt.Errorf("sync: store merged flags for uid %d: %w", state.UID, err)
 	}
 	if imapFlags := storageFlagsToImap(flags); len(imapFlags) > 0 {
 		if err := e.client.AddFlags(imap.UID(state.UID), imapFlags...); err != nil {
 			return fmt.Errorf("sync: push flags for uid %d: %w", state.UID, err)
+		}
+	}
+	if imapFlags := storageFlagsToImap(remove); len(imapFlags) > 0 {
+		if err := e.client.RemoveFlags(imap.UID(state.UID), imapFlags...); err != nil {
+			return fmt.Errorf("sync: clear flags for uid %d: %w", state.UID, err)
 		}
 	}
 	if err := e.store.ClearFlagsPending(ctx, state.ID); err != nil {
@@ -70,7 +73,7 @@ func (e *Engine) pushDeletes(ctx context.Context, folder storage.Folder, states 
 	// flagged.
 	if e.trashable(folder) {
 		if err := e.client.MoveMessages(uids, e.TrashPath); err != nil {
-			return fmt.Errorf("sync: move to trash on server: %w", err)
+			return fmt.Errorf("sync: move to trash %q on server: %w", e.TrashPath, err)
 		}
 	} else if err := e.client.DeleteMessages(uids...); err != nil {
 		return fmt.Errorf("sync: delete on server: %w", err)

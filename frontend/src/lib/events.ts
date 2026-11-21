@@ -1,9 +1,14 @@
 // events.ts is the typed contract for the wails runtime events the backend emits
-// (see events.go). it wraps EventsOn so subscribers get a typed payload and a
+// (see events.go). it wraps Events.On so subscribers get a typed payload and a
 // single unsubscribe function, and keeps the event-name strings in one place.
 
-import { EventsOn } from '../../wailsjs/runtime/runtime'
+import { Events } from '@wailsio/runtime'
 import type { AccountSyncState } from './types'
+
+// EventsOn subscribes to a backend event and hands the callback its payload.
+function EventsOn<T>(name: string, cb: (data: T) => void): () => void {
+  return Events.On(name, (ev) => cb(ev.data as T))
+}
 
 // event names, matching the go constants exactly.
 export const EventNames = {
@@ -19,10 +24,12 @@ export const EventNames = {
   updateAvailable: 'update:available',
   mailtoCompose: 'mailto:compose',
   viewsChanged: 'views:changed',
+  foldersChanged: 'folders:changed',
   profileChanged: 'profile:changed',
   importProgress: 'import:progress',
   agentProposals: 'agent:proposals',
   openMessage: 'message:open',
+  composeCloseRequest: 'compose:close-request',
 } as const
 
 // payloads, mirroring the go event structs.
@@ -219,6 +226,12 @@ export function onViewsChanged(cb: () => void): Unsubscribe {
   return EventsOn(EventNames.viewsChanged, () => cb())
 }
 
+// onFoldersChanged fires when a sync found mailboxes added or deleted on the
+// server.
+export function onFoldersChanged(cb: () => void): Unsubscribe {
+  return EventsOn(EventNames.foldersChanged, () => cb())
+}
+
 // onProfileChanged fires when the app switches profile, or when the profile it
 // is in is edited. Everything the ui holds is scoped to a profile, so the
 // subscriber reloads rather than patching.
@@ -236,4 +249,10 @@ export function onAgentProposals(cb: () => void): Unsubscribe {
 // shown. Today that is a clicked new-mail notification on Windows.
 export function onOpenMessage(cb: (e: OpenMessageEvent) => void): Unsubscribe {
   return EventsOn(EventNames.openMessage, (e: OpenMessageEvent) => cb(e))
+}
+
+// onComposeCloseRequest fires in a compose window whose close button was
+// pressed, so the compose closes the way its own close button does.
+export function onComposeCloseRequest(cb: () => void): Unsubscribe {
+  return EventsOn(EventNames.composeCloseRequest, () => cb())
 }

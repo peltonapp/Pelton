@@ -1,0 +1,92 @@
+name: Nix package
+
+# Builds the Nix package whenever something its pinned hashes cover changes.
+#
+# packaging/nix/package.nix pins two fixed-output hashes: vendorHash for the Go
+# modules and the pnpm deps hash for the frontend lockfile. Neither is checked
+# anywhere else, so a dependency bump left them stale without a word and the
+# flake stopped building for whoever used it next (the Go hash had been stale
+# since #476 before anyone noticed).
+#
+# On a mismatch the job does not stop at the first one: it puts in the hash Nix
+# computed and builds again, so a pull request that moves both hashes gets both
+# answers in one run. It then fails with the lines to change, since a hash only
+# Nix can compute is the kind of thing that should be fixed in the pull request
+# rather than after it.
+
+on:
+  pull_request:
+    branches: [main, "release/**"]
+    paths:
+      - go.mod
+      - go.sum
+      - frontend/package.json
+      - frontend/pnpm-lock.yaml
+      - flake.nix
+      - flake.lock
+      - packaging/nix/**
+      - .github/workflows/nix.yml
+  push:
+    branches: [main]
+    paths:
+      - go.mod
+      - go.sum
+      - frontend/package.json
+      - frontend/pnpm-lock.yaml
+      - flake.nix
+      - flake.lock
+      - packaging/nix/**
+      - .github/workflows/nix.yml
+  workflow_dispatch:
+
+concurrency:
+  group: nix-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Nix build
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - uses: cachix/install-nix-action@448cde739abec1eaf0646249e3d25bb8d9bc7702 # v31.11.2
+
+      - name: Build, collecting every stale hash
+        run: |
+          stale=""
+          for attempt in 1 2 3; do
+            if nix build -L --no-link .#pelton 2> build.log; then
+              break
+            fi
+            # || true: under bash -e a grep that finds nothing would end the
+            # step here, before the log of a failure that is not a stale hash
+            # is printed below.
+            specified=$(grep -oE 'specified: +sha256-[A-Za-z0-9+/=]+' build.log | head -1 | grep -oE 'sha256-.*' || true)
+            got=$(grep -oE 'got: +sha256-[A-Za-z0-9+/=]+' build.log | head -1 | grep -oE 'sha256-.*' || true)
+            if [ -z "$specified" ] || [ -z "$got" ]; then
+              tail -n 80 build.log
+              echo "::error::The Nix build failed for a reason other than a stale hash."
+              exit 1
+            fi
+            drv=$(grep -oE "hash mismatch in fixed-output derivation '[^']+'" build.log | head -1 | sed -E "s/.*-([^-]+(-[^-]+)?)\.drv'/\1/")
+            echo "::error file=packaging/nix/package.nix::Stale hash for ${drv}: replace ${specified} with ${got}"
+            stale="${stale}${specified} -> ${got}\n"
+            sed -i "s|${specified}|${got}|" packaging/nix/package.nix
+          done
+          if [ -n "$stale" ]; then
+            {
+              echo "### Stale Nix hashes"
+              echo
+              echo "Replace these in \`packaging/nix/package.nix\`:"
+              echo
+              echo '```'
+              printf "$stale"
+              echo '```'
+            } >> "$GITHUB_STEP_SUMMARY"
+            exit 1
+          fi

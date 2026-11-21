@@ -5,6 +5,7 @@ import {
   displayName,
   formatBytes,
   formatRelative,
+  formatStatusClock,
   initials,
   linkifySegments,
 } from './format'
@@ -26,6 +27,12 @@ describe('formatBytes', () => {
     expect(formatBytes(1024 * 1024 * 2.25)).toBe('2.3 MB')
   })
 
+  it('moves up a unit instead of showing 1024 of the smaller one', () => {
+    expect(formatBytes(1024 * 1024 - 1)).toBe('1 MB')
+    expect(formatBytes(1024 * 1024 * 1024 - 1)).toBe('1 GB')
+    expect(formatBytes(1023)).toBe('1023 B')
+  })
+
   it('stops at GB rather than inventing a larger unit', () => {
     expect(formatBytes(1024 ** 4)).toBe('1024 GB')
   })
@@ -33,6 +40,14 @@ describe('formatBytes', () => {
   it('treats zero and negatives as no bytes', () => {
     expect(formatBytes(0)).toBe('0 B')
     expect(formatBytes(-5)).toBe('0 B')
+  })
+})
+
+describe('formatStatusClock', () => {
+  it('shows midnight as 00 on the 24 hour clock', () => {
+    const text = formatStatusClock(new Date(2026, 0, 1, 0, 5), '24')
+    expect(text).toContain('00:05')
+    expect(text).not.toContain('24:05')
   })
 })
 

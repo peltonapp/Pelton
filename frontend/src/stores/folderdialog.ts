@@ -14,6 +14,8 @@ export interface FolderDialogRequest {
   accountId: number
   /** The folder being renamed or deleted; the parent when creating a subfolder. */
   folder: Folder | null
+  /** Every trash folder at once, when emptying from the unified Bin. */
+  folders?: Folder[]
 }
 
 export const folderDialog = writable<FolderDialogRequest | null>(null)
@@ -43,6 +45,11 @@ export function openDeleteFolder(folder: Folder): void {
  */
 export function openEmptyTrash(folder: Folder): void {
   folderDialog.set({ mode: 'empty', accountId: folder.accountId, folder })
+}
+
+/** Opens the same confirmation for the trash of every account, from the unified Bin. */
+export function openEmptyAllTrash(folders: Folder[]): void {
+  folderDialog.set({ mode: 'empty', accountId: 0, folder: null, folders })
 }
 
 /**

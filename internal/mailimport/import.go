@@ -213,6 +213,8 @@ func (im *Importer) storeMessage(ctx context.Context, accountID int64, folder st
 		FolderID:            folder.ID,
 		UID:                 uid,
 		MessageID:           parsed.MessageID,
+		InReplyTo:           parsed.InReplyTo,
+		References:          parsed.References,
 		Subject:             parsed.Subject,
 		FromAddress:         parsed.From,
 		ToAddresses:         parsed.To,

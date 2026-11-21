@@ -3,8 +3,6 @@ package desktop
 import (
 	"errors"
 
-	wailsruntime "github.com/wailsapp/wails/v2/pkg/runtime"
-
 	"github.com/peltonapp/Pelton/internal/logging"
 	"github.com/peltonapp/Pelton/internal/storage"
 )
@@ -105,6 +103,10 @@ const (
 	// in-app bar (no native menu is created there at all).
 	settingMenuBarInApp         = "menu_bar_in_app"
 	settingMenuBarNativeMinimal = "menu_bar_native_minimal"
+	// the native window material: Liquid Glass on macOS, Mica on Windows. read
+	// when the window is created, so a change applies at the next launch. see
+	// material.go.
+	settingWindowMaterial = "window_material"
 	// icons in the in-app menu bar's dropdowns; off keeps the classic
 	// text-only native look.
 	settingMenuBarIcons = "menu_bar_icons"
@@ -142,6 +144,14 @@ const (
 	// settingSyncProgress shows a progress bar with real message counts while a
 	// sync or a backfill runs, rather than a spinner (#313).
 	settingSyncProgress = "sync_progress_bar"
+	// the clock and the unread count in the status bar (#488). On by default.
+	settingStatusClock  = "status_clock"
+	settingStatusUnread = "status_unread"
+	// opening a message marks it read (#517). On by default.
+	settingMarkReadOnOpen = "mark_read_on_open"
+	settingOpenOnArrow    = "open_on_arrow"
+	// a reply's footer goes above the quoted original (#512). Off by default.
+	settingSignatureAboveQuote = "signature_above_quote"
 	// what the window's close button does: "background" (default) or "quit".
 	// See close.go.
 	settingCloseAction = "close_button_action"
@@ -354,6 +364,10 @@ type UIPrefsDTO struct {
 	// native macOS menu to the app menu, dropping the duplicated submenus.
 	MenuBarInApp         bool `json:"menuBarInApp"`
 	MenuBarNativeMinimal bool `json:"menuBarNativeMinimal"`
+	// WindowMaterial is the stored native material preference (Liquid Glass
+	// on macOS, Mica on Windows); whether the running window has it is
+	// WindowMaterialActive.
+	WindowMaterial bool `json:"windowMaterial"`
 	// MenuBarIcons shows icons next to the in-app menu bar's dropdown items.
 	MenuBarIcons bool `json:"menuBarIcons"`
 	// TimeFormat picks the clock for rendered times: auto (locale), 12, or 24.
@@ -387,9 +401,23 @@ type UIPrefsDTO struct {
 	// progress bar next to it, counting message bodies rather than mailboxes.
 	VerboseSync     bool `json:"verboseSync"`
 	SyncProgressBar bool `json:"syncProgressBar"`
+	// StatusClock shows the date and time in the status bar, StatusUnread the
+	// unread count of the unified inbox.
+	StatusClock  bool `json:"statusClock"`
+	StatusUnread bool `json:"statusUnread"`
+	// MarkReadOnOpen marks a message read when it is opened in the list.
+	MarkReadOnOpen bool `json:"markReadOnOpen"`
+	// OpenOnArrow opens the message the arrow keys move to in the list, instead
+	// of only highlighting it until Enter.
+	OpenOnArrow bool `json:"openOnArrow"`
+	// SignatureAboveQuote puts a reply's footer between the reply and the
+	// quoted original instead of below the quote.
+	SignatureAboveQuote bool `json:"signatureAboveQuote"`
 	// CloseAction is what the window's close button does: "background" keeps
 	// Pelton running and syncing with the window hidden, "quit" exits.
 	CloseAction string `json:"closeAction"`
+	// StartHidden keeps the window hidden at launch (#483).
+	StartHidden bool `json:"startHidden"`
 	// SyncMessageLimit caps how many of a folder's newest messages the first
 	// sync fetches; older mail stays on the server until it is asked for. 0
 	// means no limit. SyncAutoBackfill fetches the next batch automatically on
@@ -480,6 +508,7 @@ func (a *App) GetUIPrefs() (UIPrefsDTO, error) {
 		ThemeID:                    a.stringSetting(settingThemeID, ""),
 		MenuBarInApp:               a.boolSetting(settingMenuBarInApp, false),
 		MenuBarNativeMinimal:       a.boolSetting(settingMenuBarNativeMinimal, false),
+		WindowMaterial:             a.boolSetting(settingWindowMaterial, false),
 		MenuBarIcons:               a.boolSetting(settingMenuBarIcons, false),
 		TimeFormat:                 a.stringSetting(settingTimeFormat, "auto"),
 		ReduceMotion:               a.boolSetting(settingReduceMotion, false),
@@ -494,7 +523,13 @@ func (a *App) GetUIPrefs() (UIPrefsDTO, error) {
 		NotifyNewMail:              a.boolSetting(settingNotifyNewMail, false),
 		VerboseSync:                a.boolSetting(settingVerboseSync, false),
 		SyncProgressBar:            a.boolSetting(settingSyncProgress, true),
+		StatusClock:                a.boolSetting(settingStatusClock, true),
+		StatusUnread:               a.boolSetting(settingStatusUnread, true),
+		MarkReadOnOpen:             a.boolSetting(settingMarkReadOnOpen, true),
+		OpenOnArrow:                a.boolSetting(settingOpenOnArrow, false),
+		SignatureAboveQuote:        a.boolSetting(settingSignatureAboveQuote, false),
 		CloseAction:                a.stringSetting(settingCloseAction, closeActionBackground),
+		StartHidden:                a.startHiddenEnabled(),
 		SyncMessageLimit:           a.syncMessageLimit(),
 		SyncAutoBackfill:           a.boolSetting(settingSyncAutoBackfill, true),
 		StartupSelection:           a.stringSetting(settingStartupSelection, defaultStartupSelection),
@@ -542,6 +577,11 @@ func (a *App) SetSetting(key, value string) error {
 	if key == settingCharsetFallback {
 		a.applyCharsetFallback()
 	}
+	if key == settingStartHidden {
+		if err := a.writeStartHidden(value == "true"); err != nil {
+			return err
+		}
+	}
 	if key == settingUnreadBadge || key == settingLanguage {
 		a.applyUnreadBadge()
 	}
@@ -559,11 +599,11 @@ func (a *App) SetSetting(key, value string) error {
 func (a *App) applyNativeTheme(theme string) {
 	switch theme {
 	case "dark":
-		wailsruntime.WindowSetDarkTheme(a.ctx)
+		a.setNativeTheme(nativeThemeDark)
 	case "light":
-		wailsruntime.WindowSetLightTheme(a.ctx)
+		a.setNativeTheme(nativeThemeLight)
 	default:
-		wailsruntime.WindowSetSystemDefaultTheme(a.ctx)
+		a.setNativeTheme(nativeThemeSystem)
 	}
 }
 

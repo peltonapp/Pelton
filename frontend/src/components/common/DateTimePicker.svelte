@@ -7,7 +7,8 @@
   // parsing/formatting untouched.
   import { formatDateTimeMedium, type TimeFormat } from '../../lib/format'
   import { prefs } from '../../stores/prefs'
-  import { tick, createEventDispatcher } from 'svelte'
+  import { tick, createEventDispatcher, onDestroy } from 'svelte'
+  import { popPopup, pushPopup } from '../../lib/popups'
   import { IconCalendar, IconChevronLeft, IconChevronRight } from '@tabler/icons-svelte'
   import { currentUIScale } from '../../theme/theme'
   import { t } from '../../lib/i18n'
@@ -308,8 +309,7 @@
         selectDay(focused)
         break
       case 'Escape':
-        event.preventDefault()
-        close()
+        // the panel's own handler takes it
         break
     }
   }
@@ -333,6 +333,31 @@
       open = true
       view = 'days'
       void positionPanel()
+    }
+  }
+
+  // the open panel registers as a popup, so the dialog around it leaves
+  // Escape to it instead of closing itself and throwing the edits away.
+  let registered = false
+  $: syncPopup(open)
+  function syncPopup(isOpen: boolean): void {
+    if (isOpen && !registered) {
+      pushPopup()
+      registered = true
+    } else if (!isOpen && registered) {
+      popPopup()
+      registered = false
+    }
+  }
+  onDestroy(() => syncPopup(false))
+
+  // Escape anywhere in the panel closes only the panel, wherever the focus
+  // sits: on the month arrows and the time fields as much as in the day grid.
+  function onPanelKeydown(event: KeyboardEvent): void {
+    if (event.key === 'Escape') {
+      event.preventDefault()
+      event.stopPropagation()
+      close()
     }
   }
 
@@ -367,7 +392,8 @@
   {#if open}
     <!-- svelte-ignore a11y-click-events-have-key-events a11y-no-static-element-interactions -->
     <div class="scrim" on:click={close}></div>
-    <div class="panel" bind:this={panelEl} style={`left:${panelLeft}px; top:${panelTop}px`}>
+    <!-- svelte-ignore a11y-no-static-element-interactions -->
+    <div class="panel" bind:this={panelEl} style={`left:${panelLeft}px; top:${panelTop}px`} on:keydown={onPanelKeydown}>
       <div class="nav">
         <button
           type="button"

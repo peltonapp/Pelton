@@ -16,7 +16,6 @@ import (
 	psmtp "github.com/peltonapp/Pelton/internal/smtp"
 	"github.com/peltonapp/Pelton/internal/storage"
 	goimap "github.com/emersion/go-imap/v2"
-	wailsruntime "github.com/wailsapp/wails/v2/pkg/runtime"
 )
 
 // oauthFlowTimeout bounds how long the interactive consent flow may take.
@@ -224,7 +223,7 @@ func (a *App) authorizeOAuth(client *http.Client, provider, clientID, clientSecr
 	defer cancel()
 
 	token, err := a.authorize(ctx, provider, clientID, clientSecret, email, func(url string) {
-		wailsruntime.BrowserOpenURL(a.ctx, url)
+		a.openURL(url)
 	})
 	if err != nil {
 		return credentials.Secret{}, err
@@ -347,7 +346,7 @@ func (a *App) discoverFolders(account storage.Account) error {
 	if err != nil {
 		return err
 	}
-	return a.createFolderTree(account.ID, folders)
+	return a.createFolderTree(account.ID, folders, nil)
 }
 
 // ensureFolders discovers the folder tree over an already-connected client when
@@ -365,18 +364,22 @@ func (a *App) ensureFolders(client mailClient, accountID int64) error {
 	if err != nil {
 		return err
 	}
-	return a.createFolderTree(accountID, serverFolders)
+	return a.createFolderTree(accountID, serverFolders, nil)
 }
 
 // createFolderTree inserts folders parent-first so each child can resolve its
 // parent id from the path above it, splitting on the server's delimiter.
-func (a *App) createFolderTree(accountID int64, folders []pimap.Folder) error {
+// byPath holds the folders already stored, by path, so a new folder can hang
+// under one of them; nil means there are none.
+func (a *App) createFolderTree(accountID int64, folders []pimap.Folder, byPath map[string]int64) error {
 	// shallowest first so parents exist before their children.
 	sort.SliceStable(folders, func(i, j int) bool {
 		return depth(folders[i]) < depth(folders[j])
 	})
 
-	byPath := make(map[string]int64)
+	if byPath == nil {
+		byPath = make(map[string]int64)
+	}
 	for _, f := range folders {
 		if f.HasAttr(goimap.MailboxAttrNonExistent) {
 			continue

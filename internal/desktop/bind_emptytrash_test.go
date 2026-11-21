@@ -87,6 +87,31 @@ func TestEmptyTrashMarksEveryMessage(t *testing.T) {
 	}
 }
 
+func TestEmptyTrashDeletesLocalFolderMessages(t *testing.T) {
+	a := newTrashTestApp(t)
+	local, err := a.store.EnsureLocalAccount(a.ctx)
+	if err != nil {
+		t.Fatalf("ensure local account: %v", err)
+	}
+	trash := seedFolder(t, a, local.ID, "Trash", "Trash", nil, 3)
+
+	got, err := a.EmptyTrash(trash.ID)
+	if err != nil {
+		t.Fatalf("EmptyTrash: %v", err)
+	}
+	if got != 3 {
+		t.Errorf("deleted %d messages, want 3", got)
+	}
+
+	states, err := a.store.ListMessageStates(a.ctx, trash.ID)
+	if err != nil {
+		t.Fatalf("ListMessageStates: %v", err)
+	}
+	if len(states) != 0 {
+		t.Errorf("%d messages left in the local trash, want none", len(states))
+	}
+}
+
 // Emptying is unrecoverable, so pointing it at anything but a trash folder has
 // to fail outright rather than deleting whatever it was given.
 func TestEmptyTrashRefusesOtherFolders(t *testing.T) {

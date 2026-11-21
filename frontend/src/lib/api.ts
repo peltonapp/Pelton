@@ -9,8 +9,8 @@
 // real messages under the same ids the samples use, so anything that reaches
 // the backend in demo mode acts on somebody's actual mailbox.
 
-import * as App from '../../wailsjs/go/desktop/App'
-import { desktop } from '../../wailsjs/go/models'
+import * as App from '../../bindings/github.com/peltonapp/Pelton/internal/desktop/app'
+import * as desktop from '../../bindings/github.com/peltonapp/Pelton/internal/desktop/models'
 import {
   isDemoActive,
   demoAccounts,
@@ -95,6 +95,12 @@ export function isDemoMode(): Promise<boolean> {
 // isn't pointed at a real install.
 export function isDevMode(): Promise<boolean> {
   return App.IsDevMode()
+}
+
+// windowMaterialActive reports whether the window was created over a native
+// material (Liquid Glass, Mica), so the ui can let it show through.
+export function windowMaterialActive(): Promise<boolean> {
+  return App.WindowMaterialActive()
 }
 
 // isNightly reports whether this is an automated nightly build cut from the dev
@@ -507,12 +513,13 @@ export function undoDelete(id: number): Promise<void> {
   return App.UndoDelete(id)
 }
 
-// ArchiveUndo is what undo-archive needs: the message's stable rfc Message-ID and
-// the folder it came from. messageId is empty when the message had no Message-ID
-// (undo not possible then).
+// ArchiveUndo is what undo needs after a move: the message's stable rfc
+// Message-ID, the folder it came from and the folder it went to. messageId is
+// empty when the message had no Message-ID (undo not possible then).
 export interface ArchiveUndo {
   messageId: string
   originalFolderId: number
+  destFolderId: number
   // the .eml copy the account's export-on-archive option wrote, '' when the
   // option is off. exportError explains why no copy was written when one was
   // expected: the archive itself still succeeded.
@@ -599,30 +606,51 @@ export function unsealDraft(id: number, passphrase: string): Promise<desktop.Dra
   return App.UnsealDraft(id, passphrase)
 }
 
+// noUndo is what demo mode answers a move with: nothing to undo.
+const noUndo: ArchiveUndo = { messageId: '', originalFolderId: 0, destFolderId: 0, exportPath: '', exportError: '' }
+
 // archiveMessage moves a message to its account's Archive folder on the server,
 // returning the info needed to undo it.
 export function archiveMessage(id: number): Promise<ArchiveUndo> {
   if (isDemoActive()) {
-    return Promise.resolve({ messageId: '', originalFolderId: 0, exportPath: '', exportError: '' })
+    return Promise.resolve(noUndo)
   }
   return App.ArchiveMessage(id)
 }
 
-// unarchiveMessage moves an archived message back to its original folder,
-// locating it by rfc Message-ID.
-export function unarchiveMessage(messageId: string, originalFolderId: number): Promise<void> {
+// restoreMessage undoes a move: it finds the message in fromFolderId by rfc
+// Message-ID and moves it back to toFolderId.
+export function restoreMessage(messageId: string, fromFolderId: number, toFolderId: number): Promise<void> {
   if (isDemoActive()) {
     return Promise.resolve()
   }
-  return App.UnarchiveMessage(messageId, originalFolderId)
+  return App.RestoreMessage(messageId, fromFolderId, toFolderId)
 }
 
 // moveMessage moves a message to any folder of its account, returning undo info.
 export function moveMessage(id: number, destFolderId: number): Promise<ArchiveUndo> {
   if (isDemoActive()) {
-    return Promise.resolve({ messageId: '', originalFolderId: 0, exportPath: '', exportError: '' })
+    return Promise.resolve(noUndo)
   }
   return App.MoveMessage(id, destFolderId)
+}
+
+// markSpam moves a message to its account's spam folder, tagging it $Junk where
+// the server keeps keywords, and returns undo info.
+export function markSpam(id: number): Promise<ArchiveUndo> {
+  if (isDemoActive()) {
+    return Promise.resolve(noUndo)
+  }
+  return App.MarkSpam(id)
+}
+
+// markNotSpam moves a message out of the spam folder, back to where it was
+// marked from or else the inbox, tagging it $NotJunk, and returns undo info.
+export function markNotSpam(id: number): Promise<ArchiveUndo> {
+  if (isDemoActive()) {
+    return Promise.resolve(noUndo)
+  }
+  return App.MarkNotSpam(id)
 }
 
 // SearchRequest is a ranked search over cached mail: free text plus an optional
@@ -740,6 +768,34 @@ export function deleteDraft(id: number): Promise<void> {
     return Promise.resolve()
   }
   return App.DeleteDraft(id)
+}
+
+// uploadDraft puts a saved local draft into the account's server Drafts folder,
+// replacing its previous copy there, and returns the Message-ID it used ('' for a
+// local-only account). Encrypted drafts are refused: they stay on this device.
+export function uploadDraft(id: number): Promise<string> {
+  if (isDemoActive()) {
+    return Promise.resolve('')
+  }
+  return App.UploadDraft(id)
+}
+
+// openDraft looks up the local draft behind a message in a Drafts folder. A
+// draft with id 0 means Pelton on this device did not save that message.
+export function openDraft(messageId: number): Promise<Draft> {
+  if (isDemoActive()) {
+    return Promise.resolve({ id: 0, savedAt: '', request: {} as ComposeRequest, locked: false, accountId: 0, protection: '' })
+  }
+  return App.OpenDraft(messageId)
+}
+
+// removeServerDraft deletes a draft's copy from the server Drafts folder. An
+// empty messageId is a no-op.
+export function removeServerDraft(accountId: number, messageId: string): Promise<void> {
+  if (isDemoActive()) {
+    return Promise.resolve()
+  }
+  return App.RemoveServerDraft(accountId, messageId)
 }
 
 // listOutbox returns the current outbox contents.
@@ -914,6 +970,25 @@ export function exportMessagePrintView(id: number): Promise<void> {
   return App.ExportMessagePrintView(id)
 }
 
+// exportMessageEml asks where to save one message and writes it as an .eml
+// file, returning the path written ('' when the user cancelled).
+export function exportMessageEml(id: number): Promise<string> {
+  if (isDemoActive()) {
+    return Promise.resolve('')
+  }
+  return App.ExportMessageEML(id)
+}
+
+// exportMessagesEml asks for a folder and writes one .eml file per message into
+// it. dir is '' when the user cancelled; failed counts messages that could not
+// be exported and firstError says why the first one failed.
+export function exportMessagesEml(ids: number[]): Promise<desktop.EmlExportDTO> {
+  if (isDemoActive()) {
+    return Promise.resolve(new desktop.EmlExportDTO({ dir: '', exported: 0, failed: 0, firstError: '' }))
+  }
+  return App.ExportMessagesEML(ids)
+}
+
 // LicenseEntry is one third-party dependency's license record.
 export interface LicenseEntry {
   group: string
@@ -948,7 +1023,7 @@ export function discoverConfig(email: string): Promise<Discovered> {
 
 // listOAuthProviders returns supported oauth provider keys mapped to labels.
 export function listOAuthProviders(): Promise<Record<string, string>> {
-  return App.ListOAuthProviders()
+  return App.ListOAuthProviders() as Promise<Record<string, string>>
 }
 
 // testConnection verifies imap credentials by logging in. It resolves with the
@@ -983,6 +1058,12 @@ export function chooseCAFile(): Promise<CAFile> {
 // setAccountCA stores the CA an account trusts, empty to remove it.
 export function setAccountCA(accountId: number, pem: string): Promise<void> {
   return App.SetAccountCA(accountId, pem)
+}
+
+// setAccountColor sets the colour marking an account's mail in mixed views;
+// '' removes it.
+export function setAccountColor(accountId: number, color: string): Promise<void> {
+  return App.SetAccountColor(accountId, color)
 }
 
 // addPasswordAccount creates a password-authenticated account (stores the
@@ -1207,11 +1288,61 @@ export function closeWindow(): void {
   void App.CloseWindow()
 }
 
+// closeCurrentWindow closes a message window it is called from; from the main
+// window it does what closeWindow does.
+export function closeCurrentWindow(): void {
+  void App.CloseCurrentWindow()
+}
+
+// openMessageWindow shows a message in a window of its own, or brings forward
+// the one it is already open in. Nothing to open in demo mode, where the ids
+// belong to samples.
+export function openMessageWindow(id: number, title: string): Promise<void> {
+  if (isDemoActive()) {
+    return Promise.resolve()
+  }
+  return App.OpenMessageWindow(id, title)
+}
+
+// openComposeWindow moves a compose pane's state into a window of its own,
+// which picks it up with takeComposeSession.
+export function openComposeWindow(session: unknown): Promise<void> {
+  return App.OpenComposeWindow(JSON.stringify(session))
+}
+
+// takeComposeSession returns the compose pane a compose window was opened
+// for, once, or null when there is none (the window was reloaded).
+export async function takeComposeSession<T>(token: string): Promise<T | null> {
+  const raw = await App.TakeComposeSession(token)
+  return raw ? (JSON.parse(raw) as T) : null
+}
+
 // titleBarDoubleClick runs the system's title-bar double-click action (zoom,
 // minimise or nothing). Needed because the app draws its own title bar on
 // macOS, so the window server never sees the click.
 export function titleBarDoubleClick(): void {
   void App.TitleBarDoubleClick()
+}
+
+// quitApp exits the app, as the Quit menu item does.
+export function quitApp(): void {
+  void App.QuitApp()
+}
+
+// hideApp hides the app the way the close button does when it keeps Pelton
+// running: on macOS the Dock icon brings it back.
+export function hideApp(): void {
+  void App.HideApp()
+}
+
+// isFullscreen reports whether the window is fullscreen.
+export function isFullscreen(): Promise<boolean> {
+  return App.IsFullscreen()
+}
+
+// toggleFullscreen enters or leaves fullscreen.
+export function toggleFullscreen(): Promise<void> {
+  return App.ToggleFullscreen()
 }
 
 // setUnreadBadge puts the unread count on the dock icon on macOS, and the unread
@@ -1319,6 +1450,7 @@ export const SettingKeys = {
   themeId: 'theme_id',
   menuBarInApp: 'menu_bar_in_app',
   menuBarNativeMinimal: 'menu_bar_native_minimal',
+  windowMaterial: 'window_material',
   menuBarIcons: 'menu_bar_icons',
   menuBarLayout: 'menu_bar_layout',
   paletteUsage: 'palette_usage',
@@ -1337,7 +1469,13 @@ export const SettingKeys = {
   notifyNewMail: 'notify_new_mail',
   verboseSync: 'verbose_sync',
   syncProgressBar: 'sync_progress_bar',
+  statusClock: 'status_clock',
+  statusUnread: 'status_unread',
+  markReadOnOpen: 'mark_read_on_open',
+  openOnArrow: 'open_on_arrow',
+  signatureAboveQuote: 'signature_above_quote',
   closeAction: 'close_button_action',
+  startHidden: 'start_hidden',
   syncMessageLimit: 'sync_message_limit',
   syncAutoBackfill: 'sync_auto_backfill',
   startupSelection: 'startup_selection',

@@ -13,6 +13,7 @@ import {
   IconX,
   IconPencil,
   IconFileTypePdf,
+  IconFileExport,
   IconRefresh,
   IconPlus,
   IconMailbox,
@@ -22,6 +23,7 @@ import {
   IconMail,
   IconFlag,
   IconArchive,
+  IconAlertTriangle,
   IconTrash,
   IconMaximize,
   IconBatteryEco,
@@ -59,6 +61,7 @@ export type MenuActionId =
   | 'open-mailboxes'
   | 'open-contacts'
   | 'hide-window'
+  | 'export-eml'
 
 // MenuActionDef describes one assignable action: how it labels and renders, and
 // the constraints the bar applies (message-required, danger styling, platform).
@@ -91,6 +94,7 @@ export const menuActionCatalog: MenuActionDef[] = [
   { action: 'quit', labelKey: 'menu.quit', iconName: 'power', icon: IconPower, hint: isMac ? 'mod+q' : undefined },
   { action: 'compose', labelKey: 'menu.compose', iconName: 'pencil', icon: IconPencil },
   { action: 'export-pdf', labelKey: 'menu.exportPdf', iconName: 'file-type-pdf', icon: IconFileTypePdf },
+  { action: 'export-eml', labelKey: 'menu.exportEml', iconName: 'file-export', icon: IconFileExport },
   { action: 'close-window', labelKey: 'menu.closeWindow', iconName: 'x', icon: IconX, hint: isMac ? 'mod+w' : undefined },
   { action: 'sync', labelKey: 'menu.sync', iconName: 'refresh', icon: IconRefresh },
   { action: 'add-mailbox', labelKey: 'menu.addMailbox', iconName: 'plus', icon: IconPlus },
@@ -108,6 +112,7 @@ export const menuActionCatalog: MenuActionDef[] = [
   { action: 'snooze', labelKey: 'shortcut.snooze', iconName: 'alarm-snooze', icon: IconAlarmSnooze, needsMessage: true },
   { action: 'download-offline', labelKey: 'shortcut.downloadOffline', iconName: 'download', icon: IconDownload, needsMessage: true },
   { action: 'archive', labelKey: 'menu.archive', iconName: 'archive', icon: IconArchive, needsMessage: true },
+  { action: 'toggle-spam', labelKey: 'shortcut.toggleSpam', iconName: 'alert-triangle', icon: IconAlertTriangle, needsMessage: true },
   { action: 'delete-message', labelKey: 'menu.deleteMessage', iconName: 'trash', icon: IconTrash, needsMessage: true, danger: true },
   { action: 'unsubscribe', labelKey: 'shortcut.unsubscribe', iconName: 'mail-x', icon: IconMailX, needsMessage: true },
   { action: 'new-view', labelKey: 'views.new', iconName: 'bookmark-plus', icon: IconBookmarkPlus },
@@ -216,7 +221,7 @@ export function defaultMenuLayout(): MenuBarLayout {
         id: 'file',
         builtin: true,
         labelKey: 'menu.file',
-        items: [action('compose'), sep('file', 0), action('export-pdf'), sep('file', 1), action('close-window')],
+        items: [action('compose'), sep('file', 0), action('export-pdf'), action('export-eml'), sep('file', 1), action('close-window')],
       },
       {
         id: 'mailbox',

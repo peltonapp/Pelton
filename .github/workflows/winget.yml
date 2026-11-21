@@ -1,0 +1,34 @@
+name: Publish to winget
+
+# Opens a pull request at microsoft/winget-pkgs for every published release,
+# built from the version already in winget with the new installer's URL and
+# hash. The action can only update a package that exists, so the first version
+# went in by hand from packaging/winget.
+#
+# Off until the WINGET_PUBLISH repo variable is "true". The pull requests come
+# from the peltonapp/winget-pkgs fork. WINGET_TOKEN is a classic token with
+# public_repo and workflow scope from an account that can push to it.
+
+on:
+  release:
+    types: [released]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Published release to send to winget, e.g. v2026.4.6"
+        required: true
+
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    if: vars.WINGET_PUBLISH == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: vedantmgoyal9/winget-releaser@b7370d4d152efdce803a26cc6ca9eee58cb2ad54 # v2
+        with:
+          identifier: peltonapp.Pelton
+          release-tag: ${{ inputs.tag || github.event.release.tag_name }}
+          installers-regex: '-windows-amd64-installer\.exe$'
+          token: ${{ secrets.WINGET_TOKEN }}

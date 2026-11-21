@@ -4,9 +4,12 @@
 // turns the references into the actual threading headers.
 
 import { writable, get } from 'svelte/store'
-import type { EditorMode, MessageDetail, ComposeAttachment } from '../lib/types'
+import type { Address, Draft, EditorMode, MessageDetail, ComposeAttachment } from '../lib/types'
 import { getSetting, setSetting } from '../lib/api'
 import { sidebar } from './accounts'
+import { formatAddress, formatAddressList, parseAddressList, renderBody } from '../lib/mailcompose'
+import { formatFullDate } from '../lib/format'
+import { escapeHtml, textToHtml } from '../lib/richtext'
 
 // the compose pane remembers whether the user last worked fullscreen or in the
 // small floating size, so new panes open at that size. persisted in the backend
@@ -53,6 +56,13 @@ export interface ComposeSession {
   references: string[]
   // draftId is non-zero when this session is editing a saved local draft.
   draftId: number
+  // draftMessageId is the Message-ID of the copy uploaded to the server Drafts
+  // folder, '' until the first upload. A later save replaces that copy.
+  draftMessageId: string
+  // saved marks a session that opens as a saved draft (opened from Drafts, or
+  // brought back after its upload failed): closing it unchanged asks nothing,
+  // and the account's default protection does not override what it was saved with.
+  saved: boolean
   // window state for the floating pane: fullscreen expands it to fill the
   // window; minimized collapses it to its title bar (gmail-style).
   fullscreen: boolean
@@ -65,11 +75,26 @@ export interface ComposeSession {
   // against the keys actually available, and the user can change it per
   // message.
   protection: string
+  // quote is the quoted original a reply opened with, so a footer can go above
+  // it (#512). Unset for anything that is not a reply.
+  quote?: string
 }
 
 export const composeSessions = writable<ComposeSession[]>([])
 
+// composeInWindow is set in a compose window (#573), where the one compose
+// fills the window and the pane's own size controls have nothing to do.
+export const composeInWindow = writable(false)
+
 let nextId = 1
+
+// adoptSession takes over a pane moved here from another window, with every
+// field as it was, and returns its new id.
+export function adoptSession(session: ComposeSession): number {
+  const adopted: ComposeSession = { ...session, references: [...session.references], id: nextId++, minimized: false, fullscreen: false }
+  composeSessions.update((list) => [...list, adopted])
+  return adopted.id
+}
 
 // blankSession builds an empty session for a given account and editor mode.
 function blankSession(accountId: number, mode: EditorMode): ComposeSession {
@@ -88,6 +113,8 @@ function blankSession(accountId: number, mode: EditorMode): ComposeSession {
     inReplyTo: '',
     references: [],
     draftId: 0,
+    draftMessageId: '',
+    saved: false,
     fullscreen: defaultFullscreen,
     minimized: false,
     signaturesApplied: false,
@@ -139,13 +166,17 @@ export function openReply(detail: MessageDetail, mode: EditorMode, replyAll: boo
   // not back to yourself (#485). The folder's role carries the user's override
   // and the server's \Sent attribute, so no folder name is matched here.
   const folder = get(sidebar).data?.foldersByAccount[detail.accountId]?.find((f) => f.id === detail.folderId)
-  session.to = replyAll && folder?.role === 'sent' ? detail.toAddresses : detail.fromAddress
+  session.to =
+    replyAll && folder?.role === 'sent'
+      ? formatAddressList(parseAddressList(detail.toAddresses))
+      : formatAddress({ name: detail.fromName, email: detail.fromAddress })
   if (replyAll && detail.ccAddresses) {
-    session.cc = detail.ccAddresses
+    session.cc = formatAddressList(parseAddressList(detail.ccAddresses))
     session.showCc = true
   }
   session.subject = withPrefix(detail.subject, 'Re:')
   session.body = quoteBody(detail, mode)
+  session.quote = session.body.replace(/^(\n|<p><\/p>)+/, '')
   session.inReplyTo = messageIdRef(detail)
   session.references = buildReferences(detail)
   composeSessions.update((list) => [...list, session])
@@ -161,13 +192,76 @@ export function openForward(detail: MessageDetail, mode: EditorMode): number {
   return session.id
 }
 
+// openDraftSession opens a saved local draft for editing. The editor mode is not
+// stored with a draft, so it is read back from the parts: no html is plaintext,
+// html that the text renders to is markdown, anything else is rich text. A
+// draft already open is brought back rather than opened in a second pane.
+export function openDraftSession(draft: Draft): number {
+  const open = bringBack(draft.id)
+  if (open) {
+    return open
+  }
+  const req = draft.request
+  let mode: EditorMode = 'wysiwyg'
+  if (!req.html) {
+    mode = 'plaintext'
+  } else if (renderBody('markdown', req.text).html === req.html) {
+    mode = 'markdown'
+  }
+  const session = blankSession(draft.accountId, mode)
+  Object.assign(session, {
+    to: formatAddressList(req.to),
+    cc: formatAddressList(req.cc),
+    bcc: formatAddressList(req.bcc),
+    showCc: (req.cc ?? []).length > 0,
+    showBcc: (req.bcc ?? []).length > 0,
+    subject: req.subject,
+    body: mode === 'wysiwyg' ? req.html : req.text,
+    attachments: req.attachments ?? [],
+    inReplyTo: req.inReplyTo ?? '',
+    references: [...(req.references ?? [])],
+    protection: req.protection,
+    draftId: draft.id,
+    draftMessageId: req.draftMessageId ?? '',
+    saved: true,
+    signaturesApplied: true,
+  })
+  composeSessions.update((list) => [...list, session])
+  return session.id
+}
+
+// restoreSession brings back the pane of a saved draft that closed before its
+// upload failed, still saved and linked to its local draft and server copy. A
+// pane already editing that draft is brought back instead of opening a second.
+export function restoreSession(session: ComposeSession): number {
+  const open = bringBack(session.draftId)
+  if (open) {
+    return open
+  }
+  const restored: ComposeSession = { ...session, references: [...session.references], id: nextId++, saved: true, minimized: false }
+  composeSessions.update((list) => [...list, restored])
+  return restored.id
+}
+
+// bringBack un-minimises the pane editing a draft and returns its id, or 0 when
+// none is open.
+function bringBack(draftId: number): number {
+  const open = get(composeSessions).find((s) => s.draftId === draftId)
+  if (!open) {
+    return 0
+  }
+  updateCompose(open.id, { minimized: false })
+  return open.id
+}
+
 // reopenSession brings a sent-but-undone message back into a fresh compose pane,
-// preserving every edited field. draftId is reset because the original local
-// draft was already removed on send, so a save here starts a new one.
+// preserving every edited field. draftId and draftMessageId are reset because
+// the send already removed the local draft and its server copy, so a save here
+// starts a new one.
 export function reopenSession(session: ComposeSession): number {
   // a reopened message already has whatever signature it was sent with, so do not
   // auto-insert defaults again.
-  const restored: ComposeSession = { ...session, id: nextId++, draftId: 0, signaturesApplied: true }
+  const restored: ComposeSession = { ...session, references: [...session.references], id: nextId++, draftId: 0, draftMessageId: '', saved: false, signaturesApplied: true }
   composeSessions.update((list) => [...list, restored])
   return restored.id
 }
@@ -207,15 +301,20 @@ function withPrefix(subject: string, prefix: string): string {
   return `${prefix} ${trimmed}`
 }
 
-// quoteBody builds a quoted reply body. plaintext and markdown both quote with
-// "> "; html mode is the stubbed editor so it also gets the plain quote.
+// quoteBody builds a quoted reply body. plaintext and markdown quote with "> ";
+// the rich editor reads html, so it gets the quote as a blockquote, nested
+// where the original quoted further.
 //
 // bodyQuote, not bodyPlain: an html-only message has no text part, so quoting
 // bodyPlain produced an empty reply (#239). The backend renders the html down
 // to text for this field, and falls back to it only when there is no text part
 // to prefer.
-function quoteBody(detail: MessageDetail, _mode: EditorMode): string {
-  const attribution = `On ${detail.date}, ${detail.fromName || detail.fromAddress} wrote:`
+function quoteBody(detail: MessageDetail, mode: EditorMode): string {
+  const date = formatFullDate(detail.date) || detail.date
+  const attribution = `On ${date}, ${detail.fromName || detail.fromAddress} wrote:`
+  if (mode === 'wysiwyg') {
+    return `<p></p><p>${escapeHtml(attribution)}</p><blockquote>${textToHtml(detail.bodyQuote)}</blockquote>`
+  }
   const quoted = detail.bodyQuote
     .split('\n')
     .map((line) => `> ${line}`)
@@ -223,29 +322,31 @@ function quoteBody(detail: MessageDetail, _mode: EditorMode): string {
   return `\n\n${attribution}\n${quoted}\n`
 }
 
-// forwardBody builds a forwarded message body with a header block.
-function forwardBody(detail: MessageDetail, _mode: EditorMode): string {
+// forwardBody builds a forwarded message body with a header block, as html in
+// the rich editor.
+function forwardBody(detail: MessageDetail, mode: EditorMode): string {
   const header = [
     '---------- Forwarded message ----------',
     `From: ${detail.fromName || ''} <${detail.fromAddress}>`,
-    `Date: ${detail.date}`,
+    `Date: ${formatFullDate(detail.date) || detail.date}`,
     `Subject: ${detail.subject}`,
     `To: ${detail.toAddresses}`,
   ].join('\n')
+  if (mode === 'wysiwyg') {
+    return `<p></p>${textToHtml(header)}${textToHtml(detail.bodyQuote)}`
+  }
   return `\n\n${header}\n\n${detail.bodyQuote}\n`
 }
 
-// messageIdRef would be the original Message-ID for threading. the detail dto
-// does not expose it directly today, so we leave it empty and rely on the
-// backend, which has the stored Message-ID, to fill threading on send.
-// TODO(backend): expose the original Message-ID in MessageDetailDTO so replies
-// thread precisely from the frontend reference too.
-function messageIdRef(_detail: MessageDetail): string {
-  return ''
+function messageIdRef(detail: MessageDetail): string {
+  return detail.messageId ?? ''
 }
 
-// buildReferences returns the reference chain for threading. empty for the same
-// reason as messageIdRef above.
-function buildReferences(_detail: MessageDetail): string[] {
-  return []
+function buildReferences(detail: MessageDetail): string[] {
+  const parent = messageIdRef(detail)
+  if (!parent) return []
+  const references = detail.references ?? []
+  const inReplyTo = detail.inReplyTo ?? []
+  const ancestors = references.length ? references : inReplyTo.length === 1 ? inReplyTo : []
+  return [...ancestors, parent]
 }

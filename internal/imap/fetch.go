@@ -2,6 +2,7 @@ package imap
 
 import (
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/emersion/go-imap/v2"
@@ -18,6 +19,21 @@ type Mailbox struct {
 	UIDNext     imap.UID
 	// UIDValidity invalidates cached UIDs when it changes.
 	UIDValidity uint32
+	// PermanentFlags is what the server said a STORE can keep in this mailbox.
+	// It holds \* when any keyword may be created.
+	PermanentFlags []imap.Flag
+}
+
+// KeepsKeyword reports whether a STORE of keyword would stick in this mailbox:
+// the server either lists it in PERMANENTFLAGS or allows new keywords (\*).
+// Keywords are compared case-insensitively, as RFC 3501 says they are.
+func (m *Mailbox) KeepsKeyword(keyword imap.Flag) bool {
+	for _, f := range m.PermanentFlags {
+		if f == imap.FlagWildcard || strings.EqualFold(string(f), string(keyword)) {
+			return true
+		}
+	}
+	return false
 }
 
 // MessageHeader is the envelope-level summary used for listings.
@@ -65,6 +81,10 @@ type Message struct {
 	// charset or one nothing knows, and is empty for mail that was right about
 	// itself. It is kept so the reader can be told the text was guessed at.
 	CharsetGuess string
+	// InReplyTo and References preserve parsed bare IDs in wire order,
+	// including duplicates. Both are non-nil when absent or invalid.
+	InReplyTo  []string
+	References []string
 }
 
 // Attachment holds attachment metadata and its decoded content. It is the
@@ -82,10 +102,11 @@ func (c *Client) Select(mailbox string) (*Mailbox, error) {
 		return nil, fmt.Errorf("imap: select %q: %w", mailbox, err)
 	}
 	m := &Mailbox{
-		Name:        mailbox,
-		NumMessages: data.NumMessages,
-		UIDNext:     data.UIDNext,
-		UIDValidity: data.UIDValidity,
+		Name:           mailbox,
+		NumMessages:    data.NumMessages,
+		UIDNext:        data.UIDNext,
+		UIDValidity:    data.UIDValidity,
+		PermanentFlags: data.PermanentFlags,
 	}
 	// recorded from the response we already hold rather than read back off the
 	// client afterwards, which is racy. See Client.selected.
@@ -317,5 +338,7 @@ func parseBody(raw []byte, msg *Message) error {
 	msg.ListUnsubscribePost = parsed.ListUnsubscribePost
 	msg.ReplyTo = parsed.ReplyTo
 	msg.AuthResults = parsed.AuthResults
+	msg.InReplyTo = parsed.InReplyTo
+	msg.References = parsed.References
 	return nil
 }

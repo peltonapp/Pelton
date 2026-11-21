@@ -16,8 +16,16 @@ import (
 type MessageQuery struct {
 	FolderIDs    []int64
 	RequireFlags Flag
+	// ExcludeFlags keeps rows with any of these bits out, which is how the
+	// unified Unread view asks for mail without the seen flag.
+	ExcludeFlags Flag
 	Limit        int
 	Offset       int
+	// OneCopy lists a message once when its Message-ID sits in several of the
+	// folders of one account, which is how gmail labels look over imap: a
+	// starred inbox message is in INBOX, All Mail, Starred and Important. The
+	// first stored copy is the one listed.
+	OneCopy bool
 }
 
 // QueryMessages returns the page of messages matching q, newest first. It is the
@@ -85,7 +93,7 @@ LIMIT ? OFFSET ?`
 	parts := make([]string, 0, len(q.FolderIDs))
 	args := make([]any, 0, len(q.FolderIDs)*3+2)
 	for _, id := range q.FolderIDs {
-		where, folderArgs := messageWhere(MessageQuery{FolderIDs: []int64{id}, RequireFlags: q.RequireFlags})
+		where, folderArgs := folderWhere(q, []int64{id})
 		parts = append(parts, `SELECT * FROM (`+selectMessageColumns+`
 FROM messages WHERE `+where+`
 ORDER BY date DESC, uid DESC LIMIT ?)`)
@@ -146,11 +154,13 @@ func (d *DB) CountMessages(ctx context.Context, q MessageQuery) (int, error) {
 }
 
 // FolderCounts returns the total and unread message counts for a single folder.
-// Unread means the \Seen flag bit is not set.
+// Unread means the \Seen flag bit is not set. Rows the list hides (awaiting
+// expunge after a delete, or snoozed away) are left out, so the badge agrees
+// with the list.
 func (d *DB) FolderCounts(ctx context.Context, folderID int64) (total, unread int, err error) {
 	const query = `
 SELECT COUNT(*), COALESCE(SUM(CASE WHEN flags & ? = 0 THEN 1 ELSE 0 END), 0)
-FROM messages WHERE folder_id = ?`
+FROM messages WHERE folder_id = ? AND pending_delete = 0 AND snooze_hidden = 0`
 	if err := d.sql.QueryRowContext(ctx, query, uint8(FlagSeen), folderID).Scan(&total, &unread); err != nil {
 		return 0, 0, fmt.Errorf("storage: folder counts %d: %w", folderID, err)
 	}
@@ -165,7 +175,9 @@ func (d *DB) UnreadCount(ctx context.Context, folderIDs []int64) (int, error) {
 	}
 	placeholders, args := inClause(folderIDs)
 	args = append([]any{uint8(FlagSeen)}, args...)
-	query := `SELECT COUNT(*) FROM messages WHERE flags & ? = 0 AND folder_id IN (` + placeholders + `)`
+	// rows the list hides (awaiting expunge after a delete, or snoozed away)
+	// must not count either, or a badge says 3 over an empty folder.
+	query := `SELECT COUNT(*) FROM messages WHERE flags & ? = 0 AND pending_delete = 0 AND snooze_hidden = 0 AND folder_id IN (` + placeholders + `)`
 	var n int
 	if err := d.sql.QueryRowContext(ctx, query, args...).Scan(&n); err != nil {
 		return 0, fmt.Errorf("storage: unread count: %w", err)
@@ -202,7 +214,14 @@ LIMIT 1`
 // messageWhere builds the shared WHERE clause and its args for QueryMessages and
 // CountMessages so the two never drift apart.
 func messageWhere(q MessageQuery) (string, []any) {
-	placeholders, args := inClause(q.FolderIDs)
+	return folderWhere(q, q.FolderIDs)
+}
+
+// folderWhere is messageWhere narrowed to folderIDs, for the per folder reads of
+// a unified page. OneCopy still looks for other copies across all of q's
+// folders, so a page picks the same copy whichever folder it reads.
+func folderWhere(q MessageQuery, folderIDs []int64) (string, []any) {
+	placeholders, args := inClause(folderIDs)
 	// pending_delete rows are awaiting server expunge; hide them from the list so
 	// a local delete disappears immediately and reappears nowhere. snooze_hidden
 	// rows are snoozed-and-hidden; they stay out of the list until the snooze fires
@@ -212,6 +231,26 @@ func messageWhere(q MessageQuery) (string, []any) {
 		// every requested flag bit must be set: (flags & mask) = mask.
 		where += " AND (flags & ?) = ?"
 		args = append(args, uint8(q.RequireFlags), uint8(q.RequireFlags))
+	}
+	if q.ExcludeFlags != 0 {
+		where += " AND (flags & ?) = 0"
+		args = append(args, uint8(q.ExcludeFlags))
+	}
+	if q.OneCopy {
+		all, allArgs := inClause(q.FolderIDs)
+		other := "o.pending_delete = 0 AND o.snooze_hidden = 0 AND o.folder_id IN (" + all + ")"
+		if q.RequireFlags != 0 {
+			other += " AND (o.flags & ?) = ?"
+			allArgs = append(allArgs, uint8(q.RequireFlags), uint8(q.RequireFlags))
+		}
+		if q.ExcludeFlags != 0 {
+			other += " AND (o.flags & ?) = 0"
+			allArgs = append(allArgs, uint8(q.ExcludeFlags))
+		}
+		where += ` AND (message_id = '' OR NOT EXISTS (
+SELECT 1 FROM messages o WHERE o.account_id = messages.account_id
+AND o.message_id = messages.message_id AND o.id < messages.id AND ` + other + `))`
+		args = append(args, allArgs...)
 	}
 	return where, args
 }

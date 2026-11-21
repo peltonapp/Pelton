@@ -76,6 +76,7 @@ const defaults: UIPrefs = {
   menuBarInApp: false,
   menuBarNativeMinimal: false,
   menuBarIcons: false,
+  windowMaterial: false,
   timeFormat: 'auto',
   reduceMotion: false,
   handCursor: false,
@@ -89,7 +90,13 @@ const defaults: UIPrefs = {
   notifyNewMail: false,
   verboseSync: false,
   syncProgressBar: true,
+  statusClock: true,
+  statusUnread: true,
+  markReadOnOpen: true,
+  openOnArrow: false,
+  signatureAboveQuote: false,
   closeAction: 'background',
+  startHidden: false,
   syncMessageLimit: 50,
   syncAutoBackfill: true,
   startupSelection: 'view:inbox',
@@ -457,6 +464,13 @@ export function setThemeDarkTimes(start: string, end: string): void {
 // setMenuBarInApp shows the in-app menu bar on macOS. setMenuBarNativeMinimal
 // reduces the native macOS menu to the app menu while the in-app bar is on;
 // the backend rebuilds the native menu when either setting is written.
+// setWindowMaterial stores the native window material preference (Liquid
+// Glass on macOS, Mica on Windows). The window takes it at the next launch.
+export function setWindowMaterial(value: boolean): void {
+  prefs.update((p) => ({ ...p, windowMaterial: value }))
+  void setSetting(SettingKeys.windowMaterial, String(value))
+}
+
 export function setMenuBarInApp(value: boolean): void {
   prefs.update((p) => ({ ...p, menuBarInApp: value }))
   void setSetting(SettingKeys.menuBarInApp, String(value))
@@ -530,11 +544,47 @@ export function setSyncProgressBar(value: boolean): void {
   void setSetting(SettingKeys.syncProgressBar, String(value))
 }
 
+// setStatusClock shows or hides the date and time in the status bar.
+export function setStatusClock(value: boolean): void {
+  prefs.update((p) => ({ ...p, statusClock: value }))
+  void setSetting(SettingKeys.statusClock, String(value))
+}
+
+// setStatusUnread shows or hides the unread count in the status bar.
+export function setStatusUnread(value: boolean): void {
+  prefs.update((p) => ({ ...p, statusUnread: value }))
+  void setSetting(SettingKeys.statusUnread, String(value))
+}
+
+// setMarkReadOnOpen picks whether opening a message marks it read.
+export function setMarkReadOnOpen(value: boolean): void {
+  prefs.update((p) => ({ ...p, markReadOnOpen: value }))
+  void setSetting(SettingKeys.markReadOnOpen, String(value))
+}
+
+// setOpenOnArrow picks whether the arrow keys open the row they move to.
+export function setOpenOnArrow(value: boolean): void {
+  prefs.update((p) => ({ ...p, openOnArrow: value }))
+  void setSetting(SettingKeys.openOnArrow, String(value))
+}
+
+// setSignatureAboveQuote picks whether a reply's footer goes above the quote.
+export function setSignatureAboveQuote(value: boolean): void {
+  prefs.update((p) => ({ ...p, signatureAboveQuote: value }))
+  void setSetting(SettingKeys.signatureAboveQuote, String(value))
+}
+
 // setCloseAction picks what the window's close button does. The backend reads
 // the setting on each close, so the change takes effect without a restart.
 export function setCloseAction(value: CloseAction): void {
   prefs.update((p) => ({ ...p, closeAction: value }))
   void setSetting(SettingKeys.closeAction, value)
+}
+
+// setStartHidden picks whether Pelton launches with its window hidden.
+export function setStartHidden(value: boolean): void {
+  prefs.update((p) => ({ ...p, startHidden: value }))
+  void setSetting(SettingKeys.startHidden, String(value))
 }
 
 // setSyncMessageLimit caps how many of a folder's newest messages a first sync

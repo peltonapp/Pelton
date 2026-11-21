@@ -3,6 +3,7 @@ package sync
 import (
 	"context"
 	"path/filepath"
+	"slices"
 	"testing"
 
 	"github.com/emersion/go-imap/v2"
@@ -215,6 +216,9 @@ type fakeClient struct {
 	// commands counts fetch commands rather than messages, which is what a
 	// round trip to the server costs.
 	commands int
+	// flags is the server's flag set per uid; AddFlags and RemoveFlags change it
+	// the way a STORE would.
+	flags map[uint32][]imap.Flag
 }
 
 func (c *fakeClient) Select(string) (*pimap.Mailbox, error) {
@@ -228,14 +232,14 @@ func (c *fakeClient) Select(string) (*pimap.Mailbox, error) {
 func (c *fakeClient) FetchAllFlags() ([]pimap.MessageHeader, error) {
 	out := make([]pimap.MessageHeader, 0, len(c.uids))
 	for _, uid := range c.uids {
-		out = append(out, pimap.MessageHeader{UID: imap.UID(uid)})
+		out = append(out, pimap.MessageHeader{UID: imap.UID(uid), Flags: slices.Clone(c.flags[uid])})
 	}
 	return out, nil
 }
 
 func (c *fakeClient) FetchMessage(uid imap.UID) (*pimap.Message, error) {
 	c.fetched = append(c.fetched, uint32(uid))
-	return &pimap.Message{UID: uid, Subject: "test"}, nil
+	return &pimap.Message{UID: uid, Subject: "test", Flags: slices.Clone(c.flags[uint32(uid)])}, nil
 }
 
 func (c *fakeClient) Addr() string { return "imap.example.com:993" }
@@ -257,7 +261,25 @@ func (c *fakeClient) FetchMessages(uids []imap.UID, fn func(imap.UID, *pimap.Mes
 	return nil
 }
 
-func (c *fakeClient) AddFlags(imap.UID, ...imap.Flag) error { return nil }
+func (c *fakeClient) AddFlags(uid imap.UID, flags ...imap.Flag) error {
+	if c.flags == nil {
+		c.flags = map[uint32][]imap.Flag{}
+	}
+	for _, f := range flags {
+		if !slices.Contains(c.flags[uint32(uid)], f) {
+			c.flags[uint32(uid)] = append(c.flags[uint32(uid)], f)
+		}
+	}
+	return nil
+}
+
+func (c *fakeClient) RemoveFlags(uid imap.UID, flags ...imap.Flag) error {
+	c.flags[uint32(uid)] = slices.DeleteFunc(c.flags[uint32(uid)], func(f imap.Flag) bool {
+		return slices.Contains(flags, f)
+	})
+	return nil
+}
+
 func (c *fakeClient) DeleteMessages(uids ...imap.UID) error {
 	c.deleted = append(c.deleted, uids...)
 	return nil

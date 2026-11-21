@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- SignPath artifact configuration "exe": the Pelton.exe that release.yml
+     uploads, Authenticode signed. Paste into the SignPath project under this
+     slug; SignPath reads it from there, not from this file. -->
+<artifact-configuration xmlns="http://signpath.io/artifact-configuration/v1">
+  <zip-file>
+    <pe-file path="Pelton.exe">
+      <authenticode-sign />
+    </pe-file>
+  </zip-file>
+</artifact-configuration>
