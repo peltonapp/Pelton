@@ -1,6 +1,6 @@
 # Pelton - email client (Wails v3 + Svelte)
 
-.PHONY: build build-mac build-win build-linux build-nix dmg run nice-potatoes run-nightly app-dev dev bindings clean tidy deps licenses icon disclaimer sync-docs e2e e2e-manual e2e-app e2e-channel
+.PHONY: build build-mac build-win build-linux build-nix dmg run nice-potatoes run-nightly app-dev dev bindings clean tidy deps licenses icon disclaimer sync-docs e2e e2e-manual e2e-app e2e-channel e2e-unported
 
 # version string injected into the binary. it prefers the latest git tag (with a
 # short commit suffix on untagged commits) and falls back to "dev". it is wired
@@ -94,13 +94,20 @@ dev: run
 
 # playwright suite against Stalwart in Docker. see e2e/README.md for the
 # prerequisites (Docker, trusted test CA, free ports).
-e2e:
+e2e: e2e-unported
 	e2e/run.sh
+
+# the e2e harness drives the app through the Wails v2 dev server (wails dev
+# and its browser IPC), which Wails v3 does not have. Until it is ported every
+# e2e target stops here.
+e2e-unported:
+	@echo "make e2e: the end-to-end suite still drives Wails v2 (wails dev) and has not been ported to Wails v3; it cannot run on this build" >&2
+	@exit 1
 
 # same Stalwart, accounts and (smaller) seed as e2e, then the app instead of
 # Playwright, so the mailboxes can be added and tried by hand. Quitting Pelton
 # tears Stalwart down and wipes the Pelton-e2e-manual data directory.
-e2e-manual:
+e2e-manual: e2e-unported
 	e2e/manual.sh
 
 # the app as e2e/run.sh and e2e/manual.sh start it: wails dev built as channel
@@ -114,7 +121,7 @@ e2e-manual:
 # Dependencies install from the lockfiles only (--frozen-lockfile).
 E2E_CHANNEL ?= e2e
 E2E_DEVSERVER_PORT ?= 34125
-e2e-app: e2e-channel
+e2e-app: e2e-unported e2e-channel
 	go mod download
 	cd frontend && pnpm install --frozen-lockfile
 	@# wails dev runs frontend:install (a plain pnpm install) when package.json.md5
