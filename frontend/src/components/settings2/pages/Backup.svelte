@@ -21,6 +21,6 @@
 
 <Card title={$t('settingsPanel.category.importExport')} bare>
   <div class="s2-section" data-setting="import-export">
-    <ImportExportSection />
+    <ImportExportSection guided />
   </div>
 </Card>
