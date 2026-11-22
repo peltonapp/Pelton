@@ -10,11 +10,17 @@
 // twice. readonly_test.go fingerprints a profile before and after an import and
 // fails on any difference, down to the modification times.
 //
-// Everything it produces lands in Pelton's Local Folders account, which sync
-// never touches, so imported mail is never uploaded anywhere either. The
+// Imported mail lands in Pelton's Local Folders account, which sync never
+// touches, unless the user chose to upload it into a folder of one of their
+// own accounts; that upload goes through an Uploader the caller supplies. The
 // package only reads paths the caller was given by the user; it never scans the
 // home directory on its own except to look for Thunderbird profiles in their
-// known locations, and it opens no network connection at all.
+// known locations, and it opens no network connection itself.
+//
+// The guided import (Runner) reads a MailSource (a Thunderbird profile, Apple
+// Mail's folder, or picked files), records how far it got in an import job so
+// it can resume after a restart, and checks every message against a delivery
+// ledger so running it again adds nothing.
 package mailimport
 
 import (
