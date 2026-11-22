@@ -11,7 +11,6 @@
 
 import * as App from '../../bindings/github.com/peltonapp/Pelton/internal/desktop/app'
 import * as desktop from '../../bindings/github.com/peltonapp/Pelton/internal/desktop/models'
-import * as mailimport from '../../bindings/github.com/peltonapp/Pelton/internal/mailimport/models'
 import type { NewsletterSender, InsightsStorage, InsightsVolume, InsightsPeople } from './mailstats'
 import {
   isDemoActive,
@@ -1895,7 +1894,7 @@ export function scanImportSource(kind: ImportSourceKind, paths: string[]): Promi
 
 // estimateImport says how many messages a plan brings over and their size.
 export function estimateImport(plan: ImportPlan): Promise<ImportEstimate> {
-  return App.EstimateImport(new mailimport.Plan(plan)) as unknown as Promise<ImportEstimate>
+  return App.EstimateImport(plan as BoundPlan) as unknown as Promise<ImportEstimate>
 }
 
 // importTargets lists the accounts mail can be uploaded into, with their folders.
@@ -1905,8 +1904,11 @@ export function importTargets(): Promise<ImportTarget[]> {
 
 // startImportJob starts a guided import and returns its id; watch onGuidedImport.
 export function startImportJob(plan: ImportPlan): Promise<number> {
-  return App.StartImportJob(new mailimport.Plan(plan))
+  return App.StartImportJob(plan as BoundPlan)
 }
+
+// BoundPlan is the generated binding's plan type; a plain plan has its shape.
+type BoundPlan = Parameters<typeof App.StartImportJob>[0]
 
 // pauseImportJob stops a running import so it can be resumed later.
 export function pauseImportJob(id: number): Promise<void> {
