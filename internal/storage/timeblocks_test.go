@@ -3,6 +3,7 @@ package storage
 import (
 	"context"
 	"errors"
+	"path/filepath"
 	"testing"
 	"time"
 )
@@ -18,7 +19,7 @@ func TestTimeBlockRoundTrip(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	b := TimeBlock{Title: "Write report", Start: at(9, 0), End: at(10, 30), TaskUID: "task-1",
+	b := TimeBlock{Title: "Write report", TitleOwn: true, Start: at(9, 0), End: at(10, 30), TaskUID: "task-1",
 		MessageID: 7, MessageHeader: "abc@example.org", CalendarID: cals[0].ID, EventUID: "ev-1", EventTitle: "generic"}
 	if _, err := db.CreateTimeBlock(ctx, &b); err != nil {
 		t.Fatal(err)
@@ -51,15 +52,96 @@ func TestTimeBlockRoundTrip(t *testing.T) {
 	}
 }
 
+// Only a title the user typed is stored; one copied from a mail or a task is
+// dropped on the way in, so the row never holds it.
+func TestTimeBlockStoresOnlyOwnTitles(t *testing.T) {
+	db := newTestDB(t)
+	ctx := context.Background()
+	copied := TimeBlock{Title: "Invoice 42 from Ada", Start: at(9, 0), End: at(10, 0), MessageID: 3, MessageHeader: "m@x"}
+	if _, err := db.CreateTimeBlock(ctx, &copied); err != nil {
+		t.Fatal(err)
+	}
+	got, _ := db.GetTimeBlock(ctx, copied.ID)
+	if got.Title != "" || got.TitleOwn {
+		t.Fatalf("copied title stored: %+v", got)
+	}
+	got.Title = "Pay it"
+	got.TitleOwn = true
+	if err := db.UpdateTimeBlock(ctx, got); err != nil {
+		t.Fatal(err)
+	}
+	if again, _ := db.GetTimeBlock(ctx, copied.ID); again.Title != "Pay it" || !again.TitleOwn {
+		t.Errorf("own title = %+v", again)
+	}
+	got.Title, got.TitleOwn = "Invoice 42 from Ada", false
+	if err := db.UpdateTimeBlock(ctx, got); err != nil {
+		t.Fatal(err)
+	}
+	if again, _ := db.GetTimeBlock(ctx, copied.ID); again.Title != "" {
+		t.Errorf("a title not the user's own was kept: %q", again.Title)
+	}
+}
+
+// 0119 clears the titles copied from mail into blocks made before it and
+// keeps the ones on blocks with nothing to copy from.
+func TestOwnTitleMigrationClearsCopiedTitles(t *testing.T) {
+	ctx := context.Background()
+	db, err := Open(filepath.Join(t.TempDir(), "partial.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	if err := db.ensureMigrationsTable(ctx); err != nil {
+		t.Fatal(err)
+	}
+	migrations, err := loadMigrations()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, m := range migrations {
+		if m.version <= 118 {
+			if err := db.applyMigration(ctx, m); err != nil {
+				t.Fatal(err)
+			}
+		}
+	}
+	for _, q := range []string{
+		`INSERT INTO time_blocks (id, title, start_at, end_at, message_id, message_header) VALUES (1, 'Invoice from Ada', 'a', 'b', 7, 'x@y')`,
+		`INSERT INTO time_blocks (id, title, start_at, end_at, task_uid) VALUES (2, 'Renamed', 'a', 'b', 't1')`,
+		`INSERT INTO time_blocks (id, title, start_at, end_at) VALUES (3, 'Deep work', 'a', 'b')`,
+	} {
+		if _, err := db.sql.ExecContext(ctx, q); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := db.RunMigrations(ctx); err != nil {
+		t.Fatal(err)
+	}
+	want := map[int64]struct {
+		title string
+		own   int
+	}{1: {"", 0}, 2: {"", 0}, 3: {"Deep work", 1}}
+	for id, w := range want {
+		var title string
+		var own int
+		if err := db.sql.QueryRowContext(ctx, `SELECT title, title_own FROM time_blocks WHERE id = ?`, id).Scan(&title, &own); err != nil {
+			t.Fatal(err)
+		}
+		if title != w.title || own != w.own {
+			t.Errorf("block %d: title %q own %d, want %q %d", id, title, own, w.title, w.own)
+		}
+	}
+}
+
 func TestListTimeBlocksByOverlap(t *testing.T) {
 	db := newTestDB(t)
 	ctx := context.Background()
 	for _, b := range []TimeBlock{
-		{Title: "before", Start: at(7, 0), End: at(8, 0)},
-		{Title: "touching start", Start: at(8, 0), End: at(9, 0)},
-		{Title: "inside", Start: at(9, 30), End: at(10, 0)},
-		{Title: "across end", Start: at(11, 30), End: at(12, 30)},
-		{Title: "after", Start: at(12, 0), End: at(13, 0)},
+		{Title: "before", TitleOwn: true, Start: at(7, 0), End: at(8, 0)},
+		{Title: "touching start", TitleOwn: true, Start: at(8, 0), End: at(9, 0)},
+		{Title: "inside", TitleOwn: true, Start: at(9, 30), End: at(10, 0)},
+		{Title: "across end", TitleOwn: true, Start: at(11, 30), End: at(12, 30)},
+		{Title: "after", TitleOwn: true, Start: at(12, 0), End: at(13, 0)},
 	} {
 		if _, err := db.CreateTimeBlock(ctx, &b); err != nil {
 			t.Fatal(err)
@@ -82,7 +164,7 @@ func TestTaskTimeBlocksDoneAndUnlink(t *testing.T) {
 	db := newTestDB(t)
 	ctx := context.Background()
 	past := TimeBlock{Start: at(8, 0), End: at(9, 0), TaskUID: "t"}
-	future := TimeBlock{Start: at(14, 0), End: at(15, 0), TaskUID: "t", Title: "Own title"}
+	future := TimeBlock{Start: at(14, 0), End: at(15, 0), TaskUID: "t", Title: "Own title", TitleOwn: true}
 	other := TimeBlock{Start: at(14, 0), End: at(15, 0), TaskUID: "u"}
 	for _, b := range []*TimeBlock{&past, &future, &other} {
 		if _, err := db.CreateTimeBlock(ctx, b); err != nil {

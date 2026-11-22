@@ -227,6 +227,7 @@ func (a *App) lockMailVault(id int64) {
 	if last {
 		a.removeMailVaultTemp()
 	}
+	goSafe("renaming the busy events of vault mail", func() { a.scrubBlocksForVault(a.ctx, false) })
 	a.emitMailVault(id)
 }
 
@@ -415,6 +416,7 @@ func (a *App) sealMailVault(v *storage.MailVault) {
 			break
 		}
 	}
+	a.scrubBlocksForVault(a.ctx, true)
 	a.scrubAfterMailVault()
 	if err := a.store.SetMailVaultState(a.ctx, v.ID, storage.MailVaultReady, pending+sealed); err != nil {
 		a.log.Error("finish sealing", "err", err)

@@ -114,7 +114,8 @@ describe('deleting a task with time blocks', () => {
     ask?.resolve(true)
     await done
     expect(api.deleteTask).toHaveBeenCalledWith(1)
-    expect(api.releaseTaskTimeBlocks).toHaveBeenCalledWith('a', 'Pay rent', true)
+    expect(api.releaseTaskTimeBlocks).toHaveBeenCalledWith('a', true)
+    expect(api.releaseTaskTimeBlocks.mock.invocationCallOrder[0]).toBeLessThan(api.deleteTask.mock.invocationCallOrder[0])
   })
 
   it('keeps the blocks when asked to, and never asks for a task without blocks ahead', async () => {
@@ -123,7 +124,7 @@ describe('deleting a task with time blocks', () => {
     await vi.waitFor(() => expect(get(confirmRequest)).not.toBeNull())
     get(confirmRequest)?.resolve(false)
     await done
-    expect(api.releaseTaskTimeBlocks).toHaveBeenCalledWith('a', 'Pay rent', false)
+    expect(api.releaseTaskTimeBlocks).toHaveBeenCalledWith('a', false)
 
     vi.clearAllMocks()
     api.deleteTask.mockResolvedValue({ removed: [], queued: false })

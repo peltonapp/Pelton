@@ -345,17 +345,18 @@ func (a *App) mailOf(b *storage.TimeBlock) blockMail {
 	if b.MessageID == 0 && b.MessageHeader == "" {
 		return blockMail{}
 	}
-	if b.MessageID != 0 {
-		if _, err := a.store.MessageVault(a.ctx, b.MessageID); errors.Is(err, storage.ErrMessageNotFound) && b.MessageHeader != "" {
-			if ref, err := a.store.FindMessageByHeaderID(a.mailCtx(), b.MessageHeader); err == nil {
-				b.MessageID = ref.ID
-				if err := a.store.UpdateTimeBlock(a.ctx, b); err != nil {
-					a.log.Warn("time block: relink mail", "block", b.ID, "err", err)
-				}
-			}
-		}
-	}
 	vault, err := a.store.MessageVault(a.ctx, b.MessageID)
+	if errors.Is(err, storage.ErrMessageNotFound) && b.MessageHeader != "" {
+		ref, findErr := a.store.FindMessageByHeaderID(a.mailCtx(), b.MessageHeader)
+		if findErr != nil {
+			return a.headerMail(b.MessageHeader)
+		}
+		b.MessageID = ref.ID
+		if err := a.store.UpdateTimeBlock(a.ctx, b); err != nil {
+			a.log.Warn("time block: relink mail", "block", b.ID, "err", err)
+		}
+		vault, err = a.store.MessageVault(a.ctx, b.MessageID)
+	}
 	switch {
 	case errors.Is(err, storage.ErrMessageNotFound):
 		return blockMail{}
@@ -369,13 +370,46 @@ func (a *App) mailOf(b *storage.TimeBlock) blockMail {
 	return blockMail{inVault: vault != 0, msg: m}
 }
 
-// shownTitle is the title a block shows: its own, its task's, or its mail's
-// subject; empty while the mail is masked.
+// headerMail says whether a mail known only by its Message-ID is in a vault,
+// and masks it while that vault is locked or cannot be told.
+func (a *App) headerMail(header string) blockMail {
+	vault, err := a.store.HeaderVault(a.ctx, header)
+	switch {
+	case err != nil:
+		return blockMail{inVault: true, masked: true}
+	case vault != 0:
+		return blockMail{inVault: true, masked: !a.mailVaultUnlocked(vault)}
+	}
+	return blockMail{}
+}
+
+// sourceOf is what a block's title may come from: its mail, and the mail its
+// task was made from, so a task made from vault mail is masked like that mail.
+func (a *App) sourceOf(b *storage.TimeBlock, task TaskDTO) blockMail {
+	out := a.mailOf(b)
+	for _, link := range task.MailLinks {
+		if header := midHeader(link); header != "" {
+			m := a.headerMail(header)
+			out.inVault = out.inVault || m.inVault
+			out.masked = out.masked || m.masked
+		}
+	}
+	return out
+}
+
+// derivedTitle is the title a block without one of its own shows: its
+// task's, or its mail's subject; empty while the mail is masked.
+func derivedTitle(task TaskDTO, mail blockMail) string {
+	return shownTitle(storage.TimeBlock{}, task, mail)
+}
+
+// shownTitle is the title a block shows: the user's own, its task's, or its
+// mail's subject; empty while the mail is masked.
 func shownTitle(b storage.TimeBlock, task TaskDTO, mail blockMail) string {
 	switch {
 	case mail.masked:
 		return ""
-	case b.Title != "":
+	case b.TitleOwn && b.Title != "":
 		return b.Title
 	case task.Title != "":
 		return task.Title
@@ -386,31 +420,41 @@ func shownTitle(b storage.TimeBlock, task TaskDTO, mail blockMail) string {
 }
 
 // eventSummary is what a block's calendar event is called: the generic title
-// unless the block or the setting says to use the block's own. The title of a
-// block for a vault mail goes into the event only when the block itself asks
-// for it, and never while the vault is locked.
+// unless the block or the setting says to use the block's own. A title that
+// comes from vault mail goes into the event only when the block itself asks
+// for it, and never while the vault is locked; one the user typed follows
+// the setting.
 func eventSummary(b storage.TimeBlock, shown string, mail blockMail, s TimeBlockSettingsDTO) string {
-	generic := strings.TrimSpace(s.EventTitle)
-	if generic == "" {
-		generic = defaultBlockEventTitle
+	generic := genericEventTitle(s)
+	if b.TitleOwn && b.Title != "" {
+		shown = b.Title
+	} else if mail.masked {
+		return generic
 	}
-	if shown == "" || mail.masked {
+	if shown == "" {
 		return generic
 	}
 	switch b.EventTitle {
 	case blockEventTitleOwn:
 		return shown
 	case blockEventTitleFollow:
-		if s.IncludeTitle && !mail.inVault {
+		if s.IncludeTitle && (!mail.inVault || b.TitleOwn) {
 			return shown
 		}
 	}
 	return generic
 }
 
+func genericEventTitle(s TimeBlockSettingsDTO) string {
+	if generic := strings.TrimSpace(s.EventTitle); generic != "" {
+		return generic
+	}
+	return defaultBlockEventTitle
+}
+
 func (a *App) blockDTO(b storage.TimeBlock, bc *blockContext) TimeBlockDTO {
-	mail := a.mailOf(&b)
 	task := bc.tasks[b.TaskUID]
+	mail := a.sourceOf(&b, task)
 	dto := TimeBlockDTO{
 		ID:         b.ID,
 		Title:      shownTitle(b, task, mail),
@@ -456,6 +500,7 @@ func (a *App) ListTimeBlocks(from, to string) ([]TimeBlockDTO, error) {
 	if err := a.reconcileBlocks(a.ctx); err != nil {
 		a.log.Warn("time blocks: compare with calendar events", "err", err)
 	}
+	a.scrubBlocksForVault(a.ctx, false)
 	rows, err := a.store.ListTimeBlocks(a.ctx, start, end)
 	if err != nil {
 		return nil, err
@@ -530,6 +575,17 @@ func parseBlockTimes(start, end string) (time.Time, time.Time, error) {
 	return s.UTC().Truncate(time.Second), e.UTC().Truncate(time.Second), nil
 }
 
+// setOwnTitle keeps a title only when the user typed it: empty, or the same
+// as what the block shows of its mail or task, leaves it without one, so
+// nothing taken from them is stored.
+func setOwnTitle(b *storage.TimeBlock, title, derived string) {
+	title = strings.TrimSpace(title)
+	b.Title, b.TitleOwn = title, title != "" && title != derived
+	if !b.TitleOwn {
+		b.Title = ""
+	}
+}
+
 func validEventTitle(mode string) string {
 	if mode == blockEventTitleGeneric || mode == blockEventTitleOwn {
 		return mode
@@ -561,6 +617,10 @@ func (a *App) CreateTimeBlocks(reqs []TimeBlockRequest) ([]TimeBlockDTO, error) 
 }
 
 func (a *App) createBlocks(reqs []TimeBlockRequest) ([]TimeBlockDTO, error) {
+	bc, err := a.newBlockContext()
+	if err != nil {
+		return nil, err
+	}
 	blocks := make([]storage.TimeBlock, 0, len(reqs))
 	for _, req := range reqs {
 		start, end, err := parseBlockTimes(req.Start, req.End)
@@ -568,7 +628,7 @@ func (a *App) createBlocks(reqs []TimeBlockRequest) ([]TimeBlockDTO, error) {
 			return nil, err
 		}
 		b := storage.TimeBlock{
-			Title: strings.TrimSpace(req.Title), Start: start, End: end, TaskUID: strings.TrimSpace(req.TaskUID),
+			Start: start, End: end, TaskUID: strings.TrimSpace(req.TaskUID),
 			Done: req.Done, CalendarID: req.CalendarID, EventTitle: validEventTitle(req.EventTitle),
 		}
 		if req.MessageID != 0 {
@@ -577,15 +637,9 @@ func (a *App) createBlocks(reqs []TimeBlockRequest) ([]TimeBlockDTO, error) {
 				return nil, err
 			}
 			b.MessageID, b.MessageHeader = m.ID, strings.Trim(strings.TrimSpace(m.MessageID), "<>")
-			if a.inMailVaultMessage(m.ID) {
-				b.Title = ""
-			}
 		}
+		setOwnTitle(&b, req.Title, derivedTitle(bc.tasks[b.TaskUID], a.sourceOf(&b, bc.tasks[b.TaskUID])))
 		blocks = append(blocks, b)
-	}
-	bc, err := a.newBlockContext()
-	if err != nil {
-		return nil, err
 	}
 	out := make([]TimeBlockDTO, 0, len(blocks))
 	for i := range blocks {
@@ -625,11 +679,11 @@ func (a *App) UpdateTimeBlock(req TimeBlockRequest) (TimeBlockDTO, error) {
 	if err != nil {
 		return TimeBlockDTO{}, err
 	}
-	title := strings.TrimSpace(req.Title)
-	if title == shownTitle(storage.TimeBlock{}, bc.tasks[b.TaskUID], a.mailOf(b)) && b.Title == "" {
-		title = ""
+	task := bc.tasks[b.TaskUID]
+	if mail := a.sourceOf(b, task); !mail.masked {
+		setOwnTitle(b, req.Title, derivedTitle(task, mail))
 	}
-	b.Title, b.Start, b.End, b.Done, b.EventTitle = title, start, end, req.Done, validEventTitle(req.EventTitle)
+	b.Start, b.End, b.Done, b.EventTitle = start, end, req.Done, validEventTitle(req.EventTitle)
 	if req.CalendarID != b.CalendarID {
 		if b.CalendarID != 0 && b.EventUID != "" && b.LinkState != storage.BlockLinkEventGone {
 			if err := a.deleteBlockEvent(a.ctx, b); err != nil {
@@ -791,7 +845,7 @@ func (a *App) pushBlockEvent(ctx context.Context, b *storage.TimeBlock, bc *bloc
 	if cal.ReadOnly || !cal.HoldsEvents() {
 		return errCalendarReadOnly
 	}
-	mail := a.mailOf(b)
+	mail := a.sourceOf(b, bc.tasks[b.TaskUID])
 	summary := eventSummary(*b, shownTitle(*b, bc.tasks[b.TaskUID], mail), mail, bc.settings)
 	start := ical.DateTime{Wall: b.Start.UTC(), UTC: true}
 	end := ical.DateTime{Wall: b.End.UTC(), UTC: true}
@@ -905,6 +959,62 @@ func (a *App) reconcileBlocks(ctx context.Context) error {
 	return nil
 }
 
+// scrubBlocksForVault keeps the mail of a vault out of its time blocks. A
+// block made for vault mail, or for a task made from it, keeps no title but
+// one the user typed, and its busy event is renamed to the generic title when
+// that title came from the mail. With sealing, the mail has just moved into a
+// vault, so a block that asked for its mail's title in the event asks no
+// more. It returns how many events were renamed.
+func (a *App) scrubBlocksForVault(ctx context.Context, sealing bool) int {
+	blocks, err := a.store.SourcedTimeBlocks(ctx)
+	if err != nil || len(blocks) == 0 {
+		return 0
+	}
+	bc, err := a.newBlockContext()
+	if err != nil {
+		a.log.Warn("time blocks: scrub for vault", "err", err)
+		return 0
+	}
+	renamed := 0
+	for i := range blocks {
+		b := &blocks[i]
+		task := bc.tasks[b.TaskUID]
+		mail := a.sourceOf(b, task)
+		if !mail.inVault {
+			continue
+		}
+		next := *b
+		if !next.TitleOwn {
+			next.Title = ""
+		}
+		if sealing && !next.TitleOwn && next.EventTitle == blockEventTitleOwn {
+			next.EventTitle = blockEventTitleFollow
+		}
+		if next.Title != b.Title || next.EventTitle != b.EventTitle {
+			if err := a.store.UpdateTimeBlock(ctx, &next); err != nil {
+				a.log.Warn("time blocks: scrub for vault", "block", b.ID, "err", err)
+				continue
+			}
+		}
+		if next.CalendarID == 0 || next.EventUID == "" || next.LinkState != storage.BlockLinkOK {
+			continue
+		}
+		ev, err := a.blockEvent(ctx, &next)
+		if err != nil || ev == nil {
+			continue
+		}
+		if ev.obj.First().Summary != eventSummary(next, shownTitle(next, task, mail), mail, bc.settings) {
+			a.writeBlockEvent(ctx, &next, bc)
+			renamed++
+		}
+	}
+	if renamed > 0 {
+		a.log.Info("time blocks: busy events renamed for mail in a vault", "count", renamed)
+		a.emit(EventTimeBlocksChanged, nil)
+	}
+	return renamed
+}
+
 // --- tasks ------------------------------------------------------------------------
 
 // blocksFollowTask marks a task's blocks done when it is completed, and the
@@ -923,13 +1033,22 @@ func (a *App) blocksFollowTask(ctx context.Context, uid string, wasDone, done bo
 	}
 }
 
-// ReleaseTaskTimeBlocks is asked when a task is deleted: with deleteFuture,
+// ReleaseTaskTimeBlocks is asked before a task is deleted: with deleteFuture,
 // its blocks that have not started go (with their events) and the rest stay;
-// otherwise every block stays. Blocks that stay keep the task's title and
-// forget the task.
-func (a *App) ReleaseTaskTimeBlocks(uid, title string, deleteFuture bool) error {
+// otherwise every block stays. Blocks that stay forget the task and take its
+// title as their own, unless the task was made from mail in a vault, whose
+// subject is never stored here.
+func (a *App) ReleaseTaskTimeBlocks(uid string, deleteFuture bool) error {
 	if err := a.ready(); err != nil {
 		return err
+	}
+	bc, err := a.newBlockContext()
+	if err != nil {
+		return err
+	}
+	title := ""
+	if task, ok := bc.tasks[uid]; ok && !a.sourceOf(&storage.TimeBlock{}, task).inVault {
+		title = task.Title
 	}
 	rows, err := a.store.TaskTimeBlocks(a.ctx, []string{uid})
 	if err != nil {
@@ -1154,15 +1273,6 @@ func (a *App) BlockTimeForMessages(ids []int64, at string) ([]TimeBlockDTO, erro
 			slot := slots[0].Span
 			busy = append(busy, slot)
 			reqs = append(reqs, TimeBlockRequest{MessageID: id, Start: slot.Start.Format(time.RFC3339), End: slot.End.Format(time.RFC3339), CalendarID: calendarID})
-		}
-	}
-	for i := range reqs {
-		m, err := a.store.GetMessage(a.mailCtx(), reqs[i].MessageID)
-		if err != nil {
-			return nil, err
-		}
-		if !a.inMailVaultMessage(m.ID) {
-			reqs[i].Title = stripSubjectPrefixes(m.Subject)
 		}
 	}
 	return a.createBlocks(reqs)

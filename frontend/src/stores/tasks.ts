@@ -256,10 +256,10 @@ export async function removeTask(task: Task): Promise<RemovedTask[] | null> {
   const before = get(tasks)
   tasks.update((list) => list.filter((x) => x.id !== task.id && !(x.listId === task.listId && x.parent === task.uid)))
   try {
-    const result = await deleteTask(task.id)
     if (dropFuture !== null) {
-      await releaseTaskTimeBlocks(task.uid, task.title, dropFuture)
+      await releaseTaskTimeBlocks(task.uid, dropFuture)
     }
+    const result = await deleteTask(task.id)
     await loadTasks()
     const tr = get(t)
     pushActions('success', tr('tasks.deleted'), [{ label: tr('tasks.undo'), run: () => void undoRemove(result.removed) }], 8000)

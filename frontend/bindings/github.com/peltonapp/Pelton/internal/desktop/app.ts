@@ -3758,13 +3758,14 @@ export function RejectScriptProposal(id: number): $CancellablePromise<void> {
 }
 
 /**
- * ReleaseTaskTimeBlocks is asked when a task is deleted: with deleteFuture,
+ * ReleaseTaskTimeBlocks is asked before a task is deleted: with deleteFuture,
  * its blocks that have not started go (with their events) and the rest stay;
- * otherwise every block stays. Blocks that stay keep the task's title and
- * forget the task.
+ * otherwise every block stays. Blocks that stay forget the task and take its
+ * title as their own, unless the task was made from mail in a vault, whose
+ * subject is never stored here.
  */
-export function ReleaseTaskTimeBlocks(uid: string, title: string, deleteFuture: boolean): $CancellablePromise<void> {
-    return $Call.ByID(1014457153, uid, title, deleteFuture);
+export function ReleaseTaskTimeBlocks(uid: string, deleteFuture: boolean): $CancellablePromise<void> {
+    return $Call.ByID(1014457153, uid, deleteFuture);
 }
 
 /**

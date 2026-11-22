@@ -77,7 +77,7 @@ func TestTimeBlockLifecycleFollowsTask(t *testing.T) {
 		t.Errorf("end before start = %v", err)
 	}
 
-	if err := a.ReleaseTaskTimeBlocks(task.Task.UID, "Write the report", true); err != nil {
+	if err := a.ReleaseTaskTimeBlocks(task.Task.UID, true); err != nil {
 		t.Fatal(err)
 	}
 	if b := listBlocks(t, a, "2030-01-07"); len(b) != 0 {
@@ -95,10 +95,10 @@ func TestReleaseTaskTimeBlocksKeeps(t *testing.T) {
 	if _, err := a.createBlock(TimeBlockRequest{TaskUID: task.Task.UID, Start: s, End: e}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := a.DeleteTask(task.Task.ID, false); err != nil {
+	if err := a.ReleaseTaskTimeBlocks(task.Task.UID, false); err != nil {
 		t.Fatal(err)
 	}
-	if err := a.ReleaseTaskTimeBlocks(task.Task.UID, "Call the bank", false); err != nil {
+	if _, err := a.DeleteTask(task.Task.ID, false); err != nil {
 		t.Fatal(err)
 	}
 	got := listBlocks(t, a, "2030-01-07")

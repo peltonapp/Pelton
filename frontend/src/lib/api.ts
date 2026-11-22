@@ -3180,9 +3180,9 @@ export function listTaskPlans(): Promise<TaskPlan[]> {
   return App.ListTaskPlans().then((list) => (list ?? []) as unknown as TaskPlan[])
 }
 
-/** releaseTaskTimeBlocks keeps or deletes the future blocks of a task being deleted. */
-export function releaseTaskTimeBlocks(uid: string, title: string, deleteFuture: boolean): Promise<void> {
-  return App.ReleaseTaskTimeBlocks(uid, title, deleteFuture)
+/** releaseTaskTimeBlocks keeps or deletes the future blocks of a task about to be deleted. */
+export function releaseTaskTimeBlocks(uid: string, deleteFuture: boolean): Promise<void> {
+  return App.ReleaseTaskTimeBlocks(uid, deleteFuture)
 }
 
 /** findFreeSlots proposes times for a block, for a task or a length in minutes. */
