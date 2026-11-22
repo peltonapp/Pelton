@@ -559,19 +559,39 @@ func (a *App) syncListedAccounts(include func(storage.Account) bool, manual bool
 	return nil
 }
 
-// queueSync syncs account in the background, after any sync already running.
-// While one is still waiting its turn, another would only repeat it, so it is
-// not queued. syncAccount records a failure in the account's sync state itself.
+// queueSync syncs account in the background after a change (a draft saved
+// or removed on the server). Changes coalesce: while a pass runs, any number
+// of further changes add one more pass after it, never one each.
+// syncAccount records a failure in the account's sync state itself.
 func (a *App) queueSync(account storage.Account) {
-	if _, waiting := a.queuedSyncs.LoadOrStore(account.ID, struct{}{}); waiting {
+	a.changeSyncsMu.Lock()
+	if a.changeSyncs == nil {
+		a.changeSyncs = make(map[int64]bool)
+	}
+	if _, running := a.changeSyncs[account.ID]; running {
+		a.changeSyncs[account.ID] = true
+		a.changeSyncsMu.Unlock()
 		return
 	}
+	a.changeSyncs[account.ID] = false
+	a.changeSyncsMu.Unlock()
 	goSafe("syncing after a change", func() {
-		// cleared as this sync starts, so a change from here on queues the
-		// next one rather than counting on this run to see it. The pass's
-		// tasks join any of the account's queued ones with the same key.
-		a.queuedSyncs.Delete(account.ID)
-		_ = a.syncAccount(account, false)
+		for {
+			if a.changeSyncForTest != nil {
+				a.changeSyncForTest(account)
+			} else {
+				_ = a.syncAccount(account, false)
+			}
+			a.changeSyncsMu.Lock()
+			again := a.changeSyncs[account.ID]
+			if !again {
+				delete(a.changeSyncs, account.ID)
+				a.changeSyncsMu.Unlock()
+				return
+			}
+			a.changeSyncs[account.ID] = false
+			a.changeSyncsMu.Unlock()
+		}
 	})
 }
 

@@ -90,9 +90,11 @@ type App struct {
 	// draftsMu serializes draft changes: the drafts live in one settings value
 	// and every change is a load, modify, write.
 	draftsMu sync.Mutex
-	// queuedSyncs holds the ids of accounts with a queueSync not started yet,
-	// so a burst of changes queues one sync rather than one each.
-	queuedSyncs sync.Map
+	// changeSyncs holds the accounts with a sync after a change running
+	// (queueSync); the value is true when another change came in meanwhile
+	// and one more pass is due. changeSyncsMu guards it.
+	changeSyncsMu sync.Mutex
+	changeSyncs   map[int64]bool
 	// rejectedLogins holds the accounts whose credentials the server refused,
 	// which is not something the keyring can tell us: the password is stored,
 	// it is simply wrong. It is in memory on purpose, since the only way to
@@ -231,6 +233,8 @@ type App struct {
 	syncStateMu   sync.Mutex
 	syncStateRuns int
 
+	// changeSyncForTest, when set, replaces the pass queueSync runs. Tests only.
+	changeSyncForTest func(account storage.Account)
 	// fullReconcileForTest, when set, replaces execFullReconcile. Tests only.
 	fullReconcileForTest func(ctx context.Context, account storage.Account, folder storage.Folder) error
 	// onDemandFetchForTest, when set, replaces the protocol fetch inside

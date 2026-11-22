@@ -457,6 +457,38 @@ func TestDraftRemovalsGoThroughThePool(t *testing.T) {
 	}
 }
 
+// Autosave uploads a draft every few seconds. The syncs those changes ask
+// for coalesce: while one runs, any number of saves add a single pass after
+// it, not one pass each.
+func TestDraftSavesCoalesceTheirSyncs(t *testing.T) {
+	app, accountID, _ := draftTestApp(t)
+	release := make(chan struct{})
+	var mu sync.Mutex
+	passes := 0
+	app.changeSyncForTest = func(storage.Account) {
+		mu.Lock()
+		passes++
+		first := passes == 1
+		mu.Unlock()
+		if first {
+			<-release
+		}
+	}
+	id := saveDraft(t, app, 0, ComposeRequest{AccountID: accountID, Subject: "draft"})
+	for range 5 {
+		if _, err := app.UploadDraft(id); err != nil {
+			t.Fatalf("UploadDraft: %v", err)
+		}
+	}
+	close(release)
+	settle(t, app)
+	mu.Lock()
+	defer mu.Unlock()
+	if passes != 2 {
+		t.Fatalf("%d sync passes for 5 saves during a pass, want 2 (the running one and one after it)", passes)
+	}
+}
+
 // Reading drafts can renumber and write them back, so it waits for a change
 // already under way rather than writing over it.
 func TestReadingDraftsWaitsForADraftChange(t *testing.T) {
