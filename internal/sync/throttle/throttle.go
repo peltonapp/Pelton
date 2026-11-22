@@ -4,6 +4,9 @@
 //
 // The rules:
 //
+//   - Connection refused. A new session refused for a connection limit the
+//     server does not name drops N to 1 at once and holds it there for
+//     FallbackHold before the first probe.
 //   - Refusals. FailThreshold throttle errors, each less than StreakWindow
 //     after the one before, halve effective N. A success between them does
 //     not end the streak: at a connection limit the sessions already open
@@ -63,6 +66,11 @@ var ProbeBackoff = []time.Duration{
 	24 * time.Minute,
 	60 * time.Minute,
 }
+
+// FallbackHold is how long an account stays on a single connection after
+// the server refused an extra one without naming its limit, before the
+// first probe. Probes then follow the last ProbeBackoff step.
+const FallbackHold = time.Hour
 
 // Kind is what an outcome says about the server's capacity.
 type Kind int
@@ -189,6 +197,17 @@ func (s *State) refused(sig Signal, eff int, now time.Time) int {
 		s.step = min(s.step+1, len(ProbeBackoff)-1)
 		s.schedule(now)
 		return changed(s.ceiling, eff)
+	}
+	if sig.Dial && sig.ConnLimit && sig.Limit == 0 && eff > 1 {
+		// The server refused one more connection without naming its limit:
+		// fall back to a single connection and stay there for FallbackHold
+		// before the first probe, rather than finding the limit by refusals.
+		s.fails = 0
+		s.probe, s.connected = 0, false
+		s.ceiling = 1
+		s.step = len(ProbeBackoff) - 1
+		s.nextProbe = now.Add(FallbackHold)
+		return changed(1, eff)
 	}
 	if s.fails > 0 && now.Sub(s.lastFail) > StreakWindow {
 		s.fails = 0

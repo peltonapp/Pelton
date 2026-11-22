@@ -288,3 +288,43 @@ func TestServerThrottleEndsAProbeOnAnySession(t *testing.T) {
 		}
 	}
 }
+
+// A new session refused for a connection limit the server does not name
+// drops the account to one connection at once, and it stays there for
+// FallbackHold however many successes follow; then a probe may raise it.
+func TestConnectionRefusalFallsBackToOne(t *testing.T) {
+	var s State
+	now := time.Unix(1_000_000, 0)
+	refused := Signal{Kind: Refused, Dial: true, ConnLimit: true}
+	if got := s.Step(refused, 3, 3, now); got != 1 {
+		t.Fatalf("refusal at 3 went to %d, want 1", got)
+	}
+	if s.Ceiling() != 1 {
+		t.Fatalf("ceiling %d, want 1", s.Ceiling())
+	}
+	ok := Signal{Kind: OK}
+	for i := range 20 {
+		if got := s.Step(ok, 1, 3, now.Add(time.Duration(i)*time.Minute)); got != 0 {
+			t.Fatalf("raised to %d %d min after the fallback, before FallbackHold", got, i)
+		}
+	}
+	if got := s.Step(ok, 1, 3, now.Add(FallbackHold)); got != 2 {
+		t.Fatalf("after FallbackHold a success gave %d, want a probe at 2", got)
+	}
+	// a refused probe waits the longest backoff again, not a minute.
+	if got := s.Step(refused, 2, 3, now.Add(FallbackHold+time.Second)); got != 1 {
+		t.Fatalf("refused probe went to %d, want 1", got)
+	}
+	if want := now.Add(FallbackHold + time.Second + ProbeBackoff[len(ProbeBackoff)-1]); !s.NextProbe().Equal(want) {
+		t.Fatalf("next probe %v, want %v", s.NextProbe(), want)
+	}
+}
+
+// A refusal that names the limit goes to that limit, not to one.
+func TestNamedLimitRefusalKeepsTheNamedLimit(t *testing.T) {
+	var s State
+	now := time.Unix(1_000_000, 0)
+	if got := s.Step(Signal{Kind: Refused, Dial: true, ConnLimit: true, Limit: 2}, 3, 3, now); got != 2 {
+		t.Fatalf("refusal naming 2 went to %d, want 2", got)
+	}
+}

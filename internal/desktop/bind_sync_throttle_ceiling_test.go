@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/peltonapp/Pelton/internal/sync/pool"
+	syncthrottle "github.com/peltonapp/Pelton/internal/sync/throttle"
 )
 
 // limitServer is a fake IMAP server that takes at most limit connections of
@@ -157,13 +158,11 @@ func near(got, want, tol time.Duration) bool {
 
 const tooMany = "imap: login: NO [ALERT] Too many simultaneous connections. (Failure)"
 
-// A server that takes one connection is learnt once. After that, a second
-// connection is tried only when a probe is due, 1, 3, 9, 24 and 60 minutes
-// after the last failed one and every 60 minutes from then on, and each
-// probe costs one refused LOGIN. Before the ceiling, the throttle doubled N
-// back after every three good tasks and was refused again within seconds:
-// about a hundred refused LOGINs in a few minutes, which gets an address
-// banned by fail2ban.
+// A server that takes one connection is learnt once: the first refusal drops
+// the account to a single connection. After that, a second connection is
+// tried only when a probe is due, FallbackHold after the refusal and every
+// 60 minutes from then on, and each probe costs one refused LOGIN. Retrying
+// every few tasks gets an address banned by fail2ban.
 func TestThrottleProbesALimitedServerRarely(t *testing.T) {
 	h := newCeilingHarness(t, 4, 1, tooMany)
 	h.run(2*time.Hour + 40*time.Minute)
@@ -172,7 +171,7 @@ func TestThrottleProbesALimitedServerRarely(t *testing.T) {
 	if len(starts) == 0 || starts[0] > 5*time.Second {
 		t.Fatalf("the limit was never hit at start: bursts %v", starts)
 	}
-	wantGaps := []time.Duration{1 * time.Minute, 3 * time.Minute, 9 * time.Minute, 24 * time.Minute, 60 * time.Minute, 60 * time.Minute}
+	wantGaps := []time.Duration{syncthrottle.FallbackHold, 60 * time.Minute}
 	if len(starts) != len(wantGaps)+1 {
 		t.Fatalf("got %d bursts of refusals at %v, want %d", len(starts), starts, len(wantGaps)+1)
 	}
@@ -201,7 +200,7 @@ func TestThrottleProbesClimbWhenTheServerAllowsMore(t *testing.T) {
 	raisedAt := h.now.Sub(h.start)
 	h.srv.setLimit(3)
 	h.changes = nil
-	h.run(40 * time.Minute)
+	h.run(syncthrottle.FallbackHold)
 	if len(h.refused) != refusedBefore {
 		t.Fatalf("%d refused LOGINs after the server raised its limit", len(h.refused)-refusedBefore)
 	}
@@ -225,7 +224,7 @@ func TestThrottleProbesClimbWhenTheServerAllowsMore(t *testing.T) {
 // are forgotten, and the server is learnt again from the new N.
 func TestThrottleSettingsChangeResetsCeilingAndBackoff(t *testing.T) {
 	h := newCeilingHarness(t, 4, 1, tooMany)
-	h.run(30 * time.Minute) // probes at +1, +4 and +13 min failed: backoff at 24 min
+	h.run(30 * time.Minute) // fell back to one connection: no probe for FallbackHold
 	if c := h.acc.throttleCeiling(); c != 1 {
 		t.Fatalf("ceiling = %d, want 1", c)
 	}
@@ -245,10 +244,11 @@ func TestThrottleSettingsChangeResetsCeilingAndBackoff(t *testing.T) {
 		t.Fatalf("effective N after a new N = %d, want 3", got)
 	}
 	h.refused = nil
+	resetAt := h.now.Sub(h.start)
 	h.run(3 * time.Minute)
 	starts, _ := bursts(h.refused)
-	if len(starts) != 2 || !near(starts[1]-starts[0], time.Minute, 5*time.Second) {
-		t.Fatalf("after the reset, refusals at %v, want the start and a probe 1 min later", starts)
+	if len(starts) != 1 || starts[0]-resetAt > 5*time.Second {
+		t.Fatalf("after the reset, refusals at %v, want the server learnt again at once and then left alone", starts)
 	}
 }
 
@@ -296,7 +296,7 @@ func TestThrottleRecoversBelowTheCeilingByOne(t *testing.T) {
 // even when the backoff schedule would allow one.
 func TestThrottleHonoursTheSuggestedBackoff(t *testing.T) {
 	h := newCeilingHarness(t, 2, 1, "imap: login: NO Request is throttled. Suggested Backoff Time: 300000 milliseconds")
-	h.run(20 * time.Minute)
+	h.run(syncthrottle.FallbackHold + 10*time.Minute)
 	starts, _ := bursts(h.refused)
 	if len(starts) < 2 {
 		t.Fatalf("refusals at %v, want a probe", starts)
@@ -377,9 +377,9 @@ func TestThrottleProbeNeedsALoginThroughTheDialer(t *testing.T) {
 	}
 }
 
-// Dials started before a shrink are refused after it. Those sessions were
-// above the new N, so their refusals are no news: counted, N 8 went to 4 and
-// on to 2 and 1 on the refusals of the same burst of dials.
+// Dials started before a shrink are refused after it. The first refusal
+// drops N 8 to the single-connection fallback; the rest of the burst were
+// above the new N, so their refusals are no news and change nothing.
 func TestThrottleIgnoresRefusalsOfDialsAboveN(t *testing.T) {
 	p := pool.New(8)
 	acc := &accountSessions{pool: p, userN: 8}
@@ -422,11 +422,8 @@ func TestThrottleIgnoresRefusalsOfDialsAboveN(t *testing.T) {
 			t.Fatal("a dial over the limit succeeded")
 		}
 	}
-	// Two refusals within N 8 halve it to 4; the next two dials are above 4;
-	// two more refusals within 4 (ceiling 4 itself) halve it to 2, ceiling 3;
-	// the last one, at 2, starts a new streak.
-	if n, c := p.Effective(), acc.throttleCeiling(); n != 2 || c != 3 {
-		t.Fatalf("N %d ceiling %d, want 2 3", n, c)
+	if n, c := p.Effective(), acc.throttleCeiling(); n != 1 || c != 1 {
+		t.Fatalf("N %d ceiling %d, want 1 1", n, c)
 	}
 }
 

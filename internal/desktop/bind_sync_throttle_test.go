@@ -166,9 +166,9 @@ func TestThrottleCountsFailedDials(t *testing.T) {
 	}
 }
 
-// One refused connection counts once. The dialer counts it, and the list
-// that waited for the session reports the same error back: counted there
-// too, a single "too many connections" halved N.
+// A refused connection drops the account to a single connection, once: the
+// dialer counts it, and the list that waited for the session reports the
+// same error back without lowering anything further.
 func TestRefusedDialCountsOnce(t *testing.T) {
 	a := newHoldTestApp(t)
 	id, fid := seedHoldAccount(t, a, "a@example.test")
@@ -184,8 +184,9 @@ func TestRefusedDialCountsOnce(t *testing.T) {
 	if _, _, err := a.imapListPage(a.ctx, account, *folder, a.stubPager(id)); err == nil {
 		t.Fatal("the list succeeded without a connection")
 	}
-	if got := mustAccountSync(t, a, id).pool.Effective(); got != 4 {
-		t.Fatalf("effective N after one refused connection = %d, want 4", got)
+	rt := mustAccountSync(t, a, id)
+	if n, c := rt.pool.Effective(), rt.shared.throttleCeiling(); n != 1 || c != 1 {
+		t.Fatalf("after one refused connection: N %d ceiling %d, want 1 1", n, c)
 	}
 }
 
