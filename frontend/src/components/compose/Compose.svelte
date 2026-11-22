@@ -88,8 +88,9 @@
   let preview = false
   let confirmClose = false
   // savedAs is the draft as last saved, so closing it unchanged asks nothing.
-  // A session that opens as a saved draft starts out saved.
-  let savedAs = session.saved ? draftState(session) : ''
+  // A session that opens as a saved draft starts out saved, and any other
+  // starts at its prefilled state, so an untouched reply closes silently.
+  let savedAs = draftState(session)
 
   // send-later dropdown state: caret toggles the menu, presets are built fresh
   // each time it opens so "tomorrow" is always relative to now. the menu is
@@ -256,11 +257,21 @@
       if (footer) {
         body = withBlock(body, footer)
       }
-      updateCompose(session.id, { body, signaturesApplied: true })
+      updateOpened({ body, signaturesApplied: true })
     } catch {
-      updateCompose(session.id, { signaturesApplied: true })
+      updateOpened({ signaturesApplied: true })
     }
   })
+
+  // updateOpened applies a change the app makes itself to the session, and
+  // moves the saved baseline along with it while the user has not edited.
+  function updateOpened(patch: Partial<ComposeSession>): void {
+    const untouched = draftState(getSession(session.id) ?? session) === savedAs
+    updateCompose(session.id, patch)
+    if (untouched) {
+      savedAs = draftState(getSession(session.id) ?? session)
+    }
+  }
 
   // insertSignature lets the user drop a different block into the body from the
   // compose footer menu (the "change in compose" path).
@@ -525,7 +536,7 @@
       if (!suggestedApplied) {
         suggestedApplied = true
         if (status.suggested !== 'none') {
-          updateCompose(session.id, { protection: status.suggested })
+          updateOpened({ protection: status.suggested })
         }
       }
       // the recipient list changed and encryption is no longer possible: drop
