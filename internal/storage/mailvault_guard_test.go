@@ -33,6 +33,8 @@ var vaultOptOuts = map[string]string{
 	"insertMessage":          "the insert path; sealed rows reach it emptied by insertSealed",
 	"InsertMessage":          "routes a vaulted folder through insertSealed",
 	"sealedState":            "folder and vault ids only, read by the gates",
+	"HeaderVault":            "folder and vault ids only, for keeping vault mail out of time blocks",
+	"sealedHeaderVault":      "a count by keyed hash, for keeping vault mail out of time blocks",
 	"sealExisting":           "the sealing job",
 	"unsealOne":              "the unsealing job, behind the gate",
 	"UnsealPending":          "ids of one vault, behind the gate",

@@ -25,6 +25,7 @@ import { taskSeed } from '../stores/tasks'
 import { openSpace, space } from '../stores/space'
 import { mailDropHint } from '../components/calendar/maildrop'
 import { createTasksFromMail } from './taskmail'
+import { blockTimeForMail } from './timeblockmail'
 import { pickProjectFor } from './projectpicker'
 import { dropMailOnNotes } from './notemail'
 import { activeNote } from '../stores/notes'
@@ -58,7 +59,9 @@ export function spaceDrop(key: Space): MailDropOptions {
         contactSeed.set({ name: first.fromName, email: first.fromAddress })
         openSpace('contacts')
       }
-      if (key === 'calendar' && first) {
+      if (key === 'calendar' && first && info.alt) {
+        void blockTimeForMail(items.map((m) => m.id))
+      } else if (key === 'calendar' && first) {
         calendarSeed.set({ messageIds: items.map((m) => m.id), at: null, mode: 'time', shift: info.shift })
         openSpace('calendar')
       }
@@ -76,9 +79,9 @@ export function spaceDrop(key: Space): MailDropOptions {
         pickProjectFor(items.map((m) => m.id))
       }
     },
-    hint: (items, shift) => {
+    hint: (items, shift, alt) => {
       if (key === 'calendar') {
-        return mailDropHint(items.length, shift, false)
+        return mailDropHint(items.length, shift, false, alt)
       }
       if (key === 'tasks') {
         const tr = get(t)

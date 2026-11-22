@@ -289,6 +289,7 @@ func (s *scriptCalendar) UpdateTask(ctx context.Context, id int64, ch spaces.Tas
 			Start: dto.Start, TimeZone: dto.TimeZone, Status: dto.Status, Percent: dto.Percent, Priority: dto.Priority,
 			RRule: dto.RRule, Reminders: dto.Reminders, Parent: dto.Parent, Categories: dto.Categories,
 			MailLinks: dto.MailLinks, Contacts: dto.Contacts, EventUIDs: dto.EventUIDs, SortOrder: dto.SortOrder,
+			Estimate: dto.Estimate,
 		}
 		if ch.Title != nil {
 			req.Title = *ch.Title

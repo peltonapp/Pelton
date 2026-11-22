@@ -78,6 +78,11 @@ export type ShortcutAction =
   | 'focus-reader'
   // opens the calendar's quick add, from the calendar or any other space.
   | 'calendar-quick-add'
+  // lays today's due tasks out as proposed time blocks.
+  | 'plan-day'
+  // blocks time for the open mail or task: in the next free time for mail,
+  // with Find time for a task.
+  | 'block-time'
   // switching between the spaces of the new design.
   | 'go-mail'
   | 'go-calendar'
@@ -303,6 +308,9 @@ export const shortcuts: Shortcut[] = [
   // q is the key other calendars open quick add with, and nothing else here
   // uses it; like every bare letter it never fires from inside a text field.
   { action: 'calendar-quick-add', combo: 'q', labelKey: 'shortcut.calendarQuickAdd' },
+  // p for plan and w for work, the Shift letters the spaces left free.
+  { action: 'plan-day', combo: 'mod+shift+p', labelKey: 'shortcut.planDay', newDesignOnly: true },
+  { action: 'block-time', combo: 'mod+shift+w', labelKey: 'shortcut.blockTime', newDesignOnly: true },
   // letters rather than digits: mod+1 to 9 go to a space by its place in the
   // navigation, and a digit with Shift or Alt types a symbol that would not
   // match.

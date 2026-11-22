@@ -106,6 +106,12 @@ import type {
   RemovedTask,
   TaskMailMark,
   TaskSettings,
+  TaskPlan,
+  TimeBlock,
+  TimeBlockRequest,
+  TimeBlockSettings,
+  FreeSlot,
+  DayPlan,
   Feed,
   FeedCandidate,
   FeedEntry,
@@ -3136,6 +3142,77 @@ export function getTaskSettings(): Promise<TaskSettings> {
 /** setTaskSettings saves the task preferences. */
 export function setTaskSettings(settings: TaskSettings): Promise<void> {
   return App.SetTaskSettings(new desktop.TaskSettingsDTO(settings))
+}
+
+/** listTimeBlocks returns the time blocks overlapping [from, to), both rfc3339, by start. */
+export function listTimeBlocks(from: string, to: string): Promise<TimeBlock[]> {
+  if (isDemoActive()) {
+    return Promise.resolve([])
+  }
+  return App.ListTimeBlocks(from, to).then((list) => (list ?? []) as unknown as TimeBlock[])
+}
+
+/** createTimeBlocks makes blocks, writing each to its calendar when it names one. */
+export function createTimeBlocks(reqs: TimeBlockRequest[]): Promise<TimeBlock[]> {
+  return App.CreateTimeBlocks(reqs.map((r) => new desktop.TimeBlockRequest(r))).then((list) => (list ?? []) as unknown as TimeBlock[])
+}
+
+/** updateTimeBlock changes a block's title, times, done state and calendar. */
+export function updateTimeBlock(req: TimeBlockRequest): Promise<TimeBlock> {
+  return App.UpdateTimeBlock(new desktop.TimeBlockRequest(req)) as unknown as Promise<TimeBlock>
+}
+
+/** deleteTimeBlocks deletes blocks, and their calendar events. */
+export function deleteTimeBlocks(ids: number[]): Promise<void> {
+  return App.DeleteTimeBlocks(ids)
+}
+
+/** settleTimeBlockLink settles a block out of step with its event: follow, rewrite or forget. */
+export function settleTimeBlockLink(id: number, action: 'follow' | 'rewrite' | 'forget'): Promise<TimeBlock> {
+  return App.SettleTimeBlockLink(id, action) as unknown as Promise<TimeBlock>
+}
+
+/** listTaskPlans returns how much time each task with blocks has planned. */
+export function listTaskPlans(): Promise<TaskPlan[]> {
+  if (isDemoActive()) {
+    return Promise.resolve([])
+  }
+  return App.ListTaskPlans().then((list) => (list ?? []) as unknown as TaskPlan[])
+}
+
+/** releaseTaskTimeBlocks keeps or deletes the future blocks of a task about to be deleted. */
+export function releaseTaskTimeBlocks(uid: string, deleteFuture: boolean): Promise<void> {
+  return App.ReleaseTaskTimeBlocks(uid, deleteFuture)
+}
+
+/** findFreeSlots proposes times for a block, for a task or a length in minutes. */
+export function findFreeSlots(taskId: number, minutes: number, from = ''): Promise<FreeSlot[]> {
+  return App.FindFreeSlots(new desktop.SlotRequest({ taskId, minutes, from })).then((list) => (list ?? []) as unknown as FreeSlot[])
+}
+
+/** blockTimeForTask blocks the first free time for a task. */
+export function blockTimeForTask(taskId: number, minutes: number): Promise<TimeBlock> {
+  return App.BlockTimeForTask(taskId, minutes) as unknown as Promise<TimeBlock>
+}
+
+/** blockTimeForMessages makes a block for each mail: from at (rfc3339) on, or in the next free time. */
+export function blockTimeForMessages(ids: number[], at = ''): Promise<TimeBlock[]> {
+  return App.BlockTimeForMessages(ids, at).then((list) => (list ?? []) as unknown as TimeBlock[])
+}
+
+/** planDay lays the tasks due on day (2006-01-02, empty for today) into its free time as proposals. */
+export function planDay(day = ''): Promise<DayPlan> {
+  return App.PlanDay(day) as unknown as Promise<DayPlan>
+}
+
+/** getTimeBlockSettings returns the time blocking preferences. */
+export function getTimeBlockSettings(): Promise<TimeBlockSettings> {
+  return App.GetTimeBlockSettings() as unknown as Promise<TimeBlockSettings>
+}
+
+/** setTimeBlockSettings saves the time blocking preferences. */
+export function setTimeBlockSettings(settings: TimeBlockSettings): Promise<void> {
+  return App.SetTimeBlockSettings(new desktop.TimeBlockSettingsDTO(settings))
 }
 
 /** listProjects returns every project in its manual order, with its tile counts. */

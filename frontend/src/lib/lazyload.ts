@@ -73,6 +73,9 @@ export const loadAutomationsOverlay = withStrings(['automations'], () => import(
 /** loadCalendarScreen loads the calendar space. */
 export const loadCalendarScreen = withStrings(['calendar'], () => import('../components/calendar/CalendarScreen.svelte'))
 
+/** loadMyDayPanel loads the My Day panel beside the mail, with the calendar's time grid. */
+export const loadMyDayPanel = withStrings(['calendar'], () => import('../components/myday/MyDayPanel.svelte'))
+
 /** loadMeetingPrep loads the preparation sheet for a meeting. */
 export const loadMeetingPrep = withStrings(['calendar'], () => import('../components/calendar/MeetingPrep.svelte'))
 

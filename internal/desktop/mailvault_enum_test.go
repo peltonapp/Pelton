@@ -269,6 +269,7 @@ func vaultProbes(f *vaultFixture) map[string]func() (any, error) {
 		"ArchiveMessages":                func() (any, error) { return wrap(a.ArchiveMessages([]int64{f.sealedID})) },
 		"DeleteMessages":                 func() (any, error) { return wrap(a.DeleteMessages([]int64{f.sealedID})) },
 		"AddMailToProject":               func() (any, error) { return wrap(a.AddMailToProject(0, []int64{f.sealedID}, "")) },
+		"BlockTimeForMessages":           func() (any, error) { return wrap(a.BlockTimeForMessages([]int64{f.sealedID}, "2030-01-07T09:00:00Z")) },
 		"GetMessageHTMLBlockingTrackers": func() (any, error) { return wrap(a.GetMessageHTMLBlockingTrackers(f.sealedID)) },
 		"GetSenderPassport":              func() (any, error) { return wrap(a.GetSenderPassport(f.sealedID)) },
 		"GetPrivacyShield":               func() (any, error) { return wrap(a.GetPrivacyShield(f.sealedID)) },
