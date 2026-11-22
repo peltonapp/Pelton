@@ -240,14 +240,22 @@ func (d *DB) RunMigrations(ctx context.Context) error {
 		return err
 	}
 
-	rebuilt := false
+	upgrade := len(applied) > 0
+	rebuilt, snapshotted := false, false
 	for _, m := range migrations {
 		if _, ok := applied[m.version]; ok {
 			continue
 		}
 		if isRebuild(m) {
-			if err := d.checkRebuildSpace(ctx, m); err != nil {
+			takeSnapshot := upgrade && !snapshotted && d.path != ""
+			if err := d.checkRebuildSpace(ctx, m, takeSnapshot); err != nil {
 				return err
+			}
+			if takeSnapshot {
+				if err := d.writePreUpgradeSnapshot(ctx, m); err != nil {
+					return err
+				}
+				snapshotted = true
 			}
 		}
 		if err := d.applyMigration(ctx, m); err != nil {
@@ -257,6 +265,9 @@ func (d *DB) RunMigrations(ctx context.Context) error {
 	}
 	if rebuilt {
 		d.reclaimSpace(ctx)
+	}
+	if !snapshotted {
+		d.expirePreUpgradeSnapshot()
 	}
 	d.recoverCacheStaging(ctx)
 	// settings, signatures and saved views belong to a profile, so the store has
@@ -358,8 +369,9 @@ func (d *DB) usedBytes(ctx context.Context) (used, free int64, err error) {
 // into the WAL before the checkpoint, so it needs about twice the database's
 // used size free. Failing midway would roll back after minutes of work and
 // fail the same way at every start with a bare "disk full"; this says why.
-// Where free space cannot be read the rebuild just runs.
-func (d *DB) checkRebuildSpace(ctx context.Context, m migration) error {
+// Where free space cannot be read the rebuild just runs. With snapshot the
+// pre-upgrade copy (about the used size) has to fit as well.
+func (d *DB) checkRebuildSpace(ctx context.Context, m migration, snapshot bool) error {
 	used, _, err := d.usedBytes(ctx)
 	if err != nil {
 		return fmt.Errorf("storage: read database size before migration %d: %w", m.version, err)
@@ -369,13 +381,73 @@ func (d *DB) checkRebuildSpace(ctx context.Context, m migration) error {
 	if !ok {
 		return nil
 	}
-	if need := uint64(2 * used); free < need {
+	need := uint64(2 * used)
+	if snapshot {
+		need += uint64(used)
+		// an older pre-upgrade copy is replaced, so its space counts as free.
+		if fi, err := os.Stat(d.PreUpgradeSnapshotPath()); err == nil {
+			free += uint64(fi.Size())
+		}
+	}
+	if free < need {
 		return fmt.Errorf("storage: not enough free disk space to upgrade the database: "+
 			"migration %d (%s) needs about %d MB free in %s, but only %d MB is; "+
 			"free up disk space and start Pelton again",
 			m.version, m.name, need>>20, dir, free>>20)
 	}
 	return nil
+}
+
+// preUpgradeSnapshotKeep is how long the pre-upgrade copy is kept once no
+// upgrade needs it any more. A var for tests.
+var preUpgradeSnapshotKeep = 30 * 24 * time.Hour
+
+// snapshotNow is the clock the snapshot expiry reads. A var for tests.
+var snapshotNow = time.Now
+
+// PreUpgradeSnapshotPath is where the copy of the database taken before a
+// table rebuild lives: next to the database, with ".pre-upgrade" appended.
+// There is at most one: a later rebuild replaces it, and it is deleted on the
+// first start more than 30 days after it was written. Restoring it means
+// replacing the database file with it while Pelton is closed.
+func (d *DB) PreUpgradeSnapshotPath() string {
+	return d.path + ".pre-upgrade"
+}
+
+// writePreUpgradeSnapshot copies the database aside before migration m
+// rebuilds a table, replacing any older copy. A copy that cannot be written
+// stops the upgrade: the rebuild cannot be undone, so it never runs without
+// one.
+func (d *DB) writePreUpgradeSnapshot(ctx context.Context, m migration) error {
+	path := d.PreUpgradeSnapshotPath()
+	if err := os.Remove(path); err != nil && !errors.Is(err, os.ErrNotExist) {
+		return fmt.Errorf("storage: could not back up the database before upgrading it "+
+			"(migration %d, %s): remove the old copy %s: %w", m.version, m.name, path, err)
+	}
+	if err := d.Snapshot(ctx, path); err != nil {
+		_ = os.Remove(path)
+		return fmt.Errorf("storage: could not back up the database before upgrading it "+
+			"(migration %d, %s) to %s; free up disk space and start Pelton again: %w",
+			m.version, m.name, path, err)
+	}
+	slog.Info("storage: database backed up before upgrade", "path", path, "migration", m.name)
+	return nil
+}
+
+// expirePreUpgradeSnapshot deletes the pre-upgrade copy once it is older
+// than preUpgradeSnapshotKeep. A failure is only logged.
+func (d *DB) expirePreUpgradeSnapshot() {
+	if d.path == "" {
+		return
+	}
+	path := d.PreUpgradeSnapshotPath()
+	fi, err := os.Stat(path)
+	if err != nil || snapshotNow().Sub(fi.ModTime()) < preUpgradeSnapshotKeep {
+		return
+	}
+	if err := os.Remove(path); err != nil {
+		slog.Warn("storage: remove old pre-upgrade copy", "path", path, "err", err)
+	}
 }
 
 // reclaimSpace runs after a table rebuild. The old copy of the table is left
