@@ -2,10 +2,7 @@ package sync
 
 import (
 	"context"
-	"slices"
 	"testing"
-
-	"github.com/emersion/go-imap/v2"
 
 	"github.com/peltonapp/Pelton/internal/storage"
 )
@@ -13,35 +10,35 @@ import (
 func TestSyncPushesFlagRemoval(t *testing.T) {
 	tests := []struct {
 		name       string
-		serverHas  []imap.Flag
+		serverHas  storage.Flag
 		localAfter storage.Flag
-		wantServer []imap.Flag
+		wantServer storage.Flag
 	}{
 		{
 			name:       "unflag",
-			serverHas:  []imap.Flag{imap.FlagSeen, imap.FlagFlagged},
+			serverHas:  storage.FlagSeen | storage.FlagFlagged,
 			localAfter: storage.FlagSeen,
-			wantServer: []imap.Flag{imap.FlagSeen},
+			wantServer: storage.FlagSeen,
 		},
 		{
 			name:       "mark unread",
-			serverHas:  []imap.Flag{imap.FlagSeen, imap.FlagFlagged},
+			serverHas:  storage.FlagSeen | storage.FlagFlagged,
 			localAfter: storage.FlagFlagged,
-			wantServer: []imap.Flag{imap.FlagFlagged},
+			wantServer: storage.FlagFlagged,
 		},
 		{
-			name:       "unflag keeps flags pelton does not model",
-			serverHas:  []imap.Flag{imap.FlagFlagged, imap.FlagAnswered, "$Label1"},
+			name:       "clear both",
+			serverHas:  storage.FlagSeen | storage.FlagFlagged,
 			localAfter: 0,
-			wantServer: []imap.Flag{imap.FlagAnswered, "$Label1"},
+			wantServer: 0,
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			ctx := context.Background()
 			db, folder := newSyncTestFolder(t)
-			client := &fakeClient{uids: []uint32{1}, flags: map[uint32][]imap.Flag{1: slices.Clone(tt.serverHas)}}
-			engine := NewEngine(client, db, nil)
+			adapter := &fakeAdapter{ids: fakeIDs(1), flags: map[string]storage.Flag{"1": tt.serverHas}}
+			engine := NewEngine(adapter, db, nil)
 
 			if _, err := engine.SyncFolder(ctx, folder); err != nil {
 				t.Fatalf("initial sync: %v", err)
@@ -59,12 +56,8 @@ func TestSyncPushesFlagRemoval(t *testing.T) {
 				t.Fatalf("second sync: %v", err)
 			}
 
-			got := slices.Clone(client.flags[1])
-			slices.Sort(got)
-			want := slices.Clone(tt.wantServer)
-			slices.Sort(want)
-			if !slices.Equal(got, want) {
-				t.Fatalf("server flags = %v, want %v", got, want)
+			if got := adapter.flags["1"]; got != tt.wantServer {
+				t.Fatalf("server flags = %d, want %d", got, tt.wantServer)
 			}
 			m, err := db.GetMessage(ctx, id)
 			if err != nil {
@@ -89,8 +82,8 @@ func TestSyncPushesFlagRemoval(t *testing.T) {
 func TestSyncKeepsServerChangesToFlagsNotTouchedLocally(t *testing.T) {
 	ctx := context.Background()
 	db, folder := newSyncTestFolder(t)
-	client := &fakeClient{uids: []uint32{1}, flags: map[uint32][]imap.Flag{1: {imap.FlagFlagged}}}
-	engine := NewEngine(client, db, nil)
+	adapter := &fakeAdapter{ids: fakeIDs(1), flags: map[string]storage.Flag{"1": storage.FlagFlagged}}
+	engine := NewEngine(adapter, db, nil)
 
 	if _, err := engine.SyncFolder(ctx, folder); err != nil {
 		t.Fatalf("initial sync: %v", err)
@@ -99,7 +92,7 @@ func TestSyncKeepsServerChangesToFlagsNotTouchedLocally(t *testing.T) {
 	id := states[0].ID
 
 	// another client marks the message read while the user unflags it here.
-	client.flags[1] = []imap.Flag{imap.FlagFlagged, imap.FlagSeen}
+	adapter.flags["1"] = storage.FlagFlagged | storage.FlagSeen
 	if err := db.MarkFlagsPending(ctx, id, 0); err != nil {
 		t.Fatalf("mark pending: %v", err)
 	}
@@ -107,8 +100,8 @@ func TestSyncKeepsServerChangesToFlagsNotTouchedLocally(t *testing.T) {
 		t.Fatalf("second sync: %v", err)
 	}
 
-	if got := client.flags[1]; !slices.Equal(got, []imap.Flag{imap.FlagSeen}) {
-		t.Fatalf("server flags = %v, want only \\Seen", got)
+	if got := adapter.flags["1"]; got != storage.FlagSeen {
+		t.Fatalf("server flags = %d, want only \\Seen", got)
 	}
 	m, _ := db.GetMessage(ctx, id)
 	if m.Flags != storage.FlagSeen {
@@ -118,7 +111,7 @@ func TestSyncKeepsServerChangesToFlagsNotTouchedLocally(t *testing.T) {
 
 func TestReconcilePendingMaskDecidesWhichSideWins(t *testing.T) {
 	pending := func(flags, mask storage.Flag) *LocalMessage {
-		return &LocalMessage{UID: 1, Flags: flags, PendingFlags: true, PendingMask: mask}
+		return &LocalMessage{RemoteID: "1", Flags: flags, PendingFlags: true, PendingMask: mask}
 	}
 	tests := []struct {
 		name      string
@@ -136,7 +129,7 @@ func TestReconcilePendingMaskDecidesWhichSideWins(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := Reconcile(tt.local, &ServerMessage{UID: 1, Flags: tt.server})
+			got := Reconcile(tt.local, &ServerMessage{RemoteID: "1", Flags: tt.server})
 			if got.Action != tt.wantAct || got.Flags != tt.wantFlags || got.Clear != tt.wantClear {
 				t.Fatalf("got action %v flags %d clear %d, want %v %d %d",
 					got.Action, got.Flags, got.Clear, tt.wantAct, tt.wantFlags, tt.wantClear)

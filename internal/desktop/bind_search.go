@@ -1,6 +1,7 @@
 package desktop
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -71,11 +72,23 @@ func (a *App) backfillSearch() {
 	_ = a.indexNewMessages()
 }
 
-// indexNewMessages indexes every message past the stored watermark in batches,
-// advancing the watermark as it goes. It is safe to call repeatedly (after each
-// sync); the mutex keeps concurrent passes from racing on the watermark.
-// Indexing is keyed by message id, so a rewound watermark replaces documents
-// rather than duplicating them.
+// indexNewMessages brings the index up to date in two stages, and is safe to
+// call repeatedly (after each sync and each stored body batch); the mutex
+// keeps concurrent passes from racing on the watermark.
+//
+//  1. Every row past the stored watermark, in id order. A stub (no body yet)
+//     goes in by its headers and preview, so old mail outside the sync
+//     window is still found by subject or sender.
+//  2. Rows at or below the watermark whose index entry is behind their
+//     text (storage.ListMessagesForReindex): a complete row whose body is
+//     not indexed yet (search_state < full: a body that landed after its
+//     stub was indexed, in any order, a list refresh or repair that changed
+//     it, or a run that died before its index write), and a stub not indexed
+//     (a list refresh changed its headers). Bleve replaces the document by
+//     id, so the old text leaves the index.
+//
+// search_state is written only after the index write succeeded, so a failed
+// or interrupted pass is redone by the next one from the data alone.
 func (a *App) indexNewMessages() error {
 	if a.index == nil {
 		return nil
@@ -91,29 +104,71 @@ func (a *App) indexNewMessages() error {
 			return err
 		}
 		if len(msgs) == 0 {
-			return nil
+			break
 		}
-
-		docs := make([]search.Doc, 0, len(msgs))
-		for _, m := range msgs {
-			doc := toSearchDoc(m)
-			doc.Body = a.searchBody(m)
-			docs = append(docs, doc)
-			if m.ID > watermark {
-				watermark = m.ID
-			}
-		}
-		if err := a.index.IndexBatch(docs); err != nil {
-			a.log.Error("index message batch", "err", err)
+		if err := a.indexBatch(msgs); err != nil {
 			return err
 		}
+		watermark = max(watermark, msgs[len(msgs)-1].ID)
 		if err := a.store.Set(a.ctx, settingSearchWatermark, strconv.FormatInt(watermark, 10)); err != nil {
 			a.log.Error("persist search watermark", "err", err)
 		}
 		if len(msgs) < searchBatchSize {
+			break
+		}
+	}
+
+	var after int64
+	for {
+		msgs, err := a.store.ListMessagesForReindex(a.ctx, after, watermark, searchBatchSize)
+		if err != nil {
+			a.log.Error("read filled messages for search index", "err", err)
+			return err
+		}
+		if len(msgs) == 0 {
+			return nil
+		}
+		if err := a.indexBatch(msgs); err != nil {
+			return err
+		}
+		after = msgs[len(msgs)-1].ID
+		if len(msgs) < searchBatchSize {
 			return nil
 		}
 	}
+}
+
+// indexBatch writes msgs to the index in one Bleve batch and then records
+// what each row now has indexed: headers for a stub, the full body
+// otherwise.
+func (a *App) indexBatch(msgs []storage.Message) error {
+	docs := make([]search.Doc, 0, len(msgs))
+	// What each row was when it was read: a row a fill or repair rewrote
+	// meanwhile has a newer text_rev, keeps its state (RecordSearchState) and
+	// is indexed again.
+	var full, headers []storage.IndexRead
+	for _, m := range msgs {
+		doc := toSearchDoc(m)
+		doc.Body = a.searchBody(m)
+		docs = append(docs, doc)
+		if m.BodyComplete {
+			full = append(full, m.IndexRead())
+		} else {
+			headers = append(headers, m.IndexRead())
+		}
+	}
+	if err := a.index.IndexBatch(docs); err != nil {
+		a.log.Error("index message batch", "err", err)
+		return err
+	}
+	// a state that fails to persist only means the row is indexed again.
+	if err := a.store.RecordSearchState(a.ctx, full, storage.SearchFull); err != nil {
+		a.log.Error("record search state", "err", err)
+	}
+	if err := a.store.RecordSearchState(a.ctx, headers, storage.SearchHeaders); err != nil {
+		a.log.Error("record search state", "err", err)
+	}
+	return nil
 }
 
 // reindexMessages replaces the index entries of messages whose stored text
@@ -127,20 +182,18 @@ func (a *App) reindexMessages(ids []int64) {
 	a.searchMu.Lock()
 	defer a.searchMu.Unlock()
 
-	docs := make([]search.Doc, 0, len(ids))
+	msgs := make([]storage.Message, 0, len(ids))
 	for _, id := range ids {
 		m, err := a.store.GetMessage(a.ctx, id)
 		if err != nil {
 			a.log.Error("read repaired message for search index", "id", id, "err", err)
 			continue
 		}
-		doc := toSearchDoc(*m)
-		doc.Body = a.searchBody(*m)
-		docs = append(docs, doc)
+		msgs = append(msgs, *m)
 	}
-	if err := a.index.IndexBatch(docs); err != nil {
-		a.log.Error("index repaired messages", "err", err)
-	}
+	// indexBatch logs a failure; the next pass picks the rows up again from
+	// their search_state.
+	_ = a.indexBatch(msgs)
 }
 
 // searchWatermark reads the highest indexed message id, defaulting to 0 (index
@@ -207,7 +260,8 @@ func (a *App) searchBody(m storage.Message) string {
 	if strings.TrimSpace(body) == "" {
 		body = mailview.PlainText(m.BodyHTML)
 	}
-	if !a.boolSetting(settingIndexDecrypted, false) {
+	// a stub's body_plain is the list preview; there is nothing to decrypt.
+	if !m.BodyComplete || !a.boolSetting(settingIndexDecrypted, false) {
 		return body
 	}
 	opened, _, state, _ := a.openProtected(m)
@@ -334,6 +388,15 @@ func (a *App) Search(req SearchRequestDTO) (SearchResultDTO, error) {
 	out := make([]MessageSummaryDTO, 0, len(res.Hits))
 	for _, h := range res.Hits {
 		m, err := a.store.GetMessage(a.ctx, h.ID)
+		if errors.Is(err, storage.ErrMessageNotFound) {
+			// deleted since it was indexed; nothing removes documents when
+			// mail is deleted, so drop the stale one now. Ids are never
+			// reused (AUTOINCREMENT), so it can only cost Total.
+			if derr := a.index.Delete(h.ID); derr != nil {
+				a.log.Warn("drop deleted message from search index", "id", h.ID, "err", derr)
+			}
+			continue
+		}
 		if err != nil {
 			continue
 		}

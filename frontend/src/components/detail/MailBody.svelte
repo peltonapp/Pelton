@@ -17,6 +17,7 @@
   import { openContextMenu } from '../../stores/contextmenu'
   import { virusTotal, linkVerdicts, putLinkVerdict, scanEnabled } from '../../stores/virustotal'
   import VerdictBadge from '../common/VerdictBadge.svelte'
+  import Spinner from '../common/Spinner.svelte'
   import { errorMessage, toastError, toastSuccess } from '../../stores/toast'
   import { displayName, linkifySegments } from '../../lib/format'
   import { bodyFontStack } from '../../lib/fonts'
@@ -32,7 +33,9 @@
   // because the sender/domain is trusted (or the global override is on).
   let remoteLoaded = detail.remoteAllowed
 
-  // reset the remote-loaded affordance when a different message opens.
+  // reset the remote-loaded affordance when a different message opens. Each
+  // message also gets its own frame (see the {#key} below), which stays hidden
+  // until its document has loaded.
   let lastId = -1
   $: if (detail.id !== lastId) {
     lastId = detail.id
@@ -41,6 +44,12 @@
     pixelsBlocked = false
     pixelMenu = null
     pixelDetails = false
+    startFrameLoad()
+  }
+  // the same message can refresh in place with remote content now allowed: a
+  // stub whose sender only matches the trust list once the full body is stored.
+  $: if (detail.remoteAllowed) {
+    remoteLoaded = true
   }
 
   $: senderLabel = displayName(detail.fromName, detail.fromAddress)
@@ -164,23 +173,58 @@
     return `<!doctype html><html dir="auto"><head><meta charset="utf-8">${cspMeta}${open}${css}${close}</head><body dir="auto" data-pelton-ready="1">${html}${script}</body></html>`
   }
 
-  // nonce is regenerated per message so a stale nonce from a previous render
-  // can never be replayed against a new one.
+  // the nonce is regenerated whenever the document it guards changes: another
+  // message, a new body (remote images loaded, the full body replacing a stub)
+  // or remote content switching on. A stale nonce is then never reused against
+  // different content. It stays the same while none of those change, so a
+  // refresh with the same body (marking it read) builds the same srcdoc and
+  // does not reload the frame.
   function makeNonce(): string {
     return crypto.randomUUID().replace(/-/g, '')
   }
 
-  // one nonce per message: drawing a fresh one on every update made the
-  // document a new string each time, and the frame reloaded when a flag was
-  // toggled or the pane re-rendered for any other reason.
-  let nonce = makeNonce()
-  let nonceFor = -1
-  $: if (detail.id !== nonceFor) {
-    nonceFor = detail.id
-    nonce = makeNonce()
+  // the nonce changes only with the message, its body or its remote state, so
+  // toggling a flag or another re-render does not reload the frame.
+  let lastNonce = ''
+  let nonceFor: { id: number; body: string; remote: boolean } | null = null
+  function nonceOf(id: number, body: string, remote: boolean): string {
+    if (!nonceFor || nonceFor.id !== id || nonceFor.body !== body || nonceFor.remote !== remote) {
+      nonceFor = { id, body, remote }
+      lastNonce = makeNonce()
+    }
+    return lastNonce
+  }
+  $: currentNonce = nonceOf(detail.id, detail.bodyHtmlSafe, remoteLoaded)
+
+  $: srcdoc = buildSrcdoc(detail.bodyHtmlSafe, remoteLoaded, $prefs.messageFontSize, $prefs.bodyFont, currentNonce, canScan)
+
+  // frameLoaded is false from the moment another message opens until its
+  // frame's document has loaded; the frame is hidden meanwhile, so the pane
+  // never shows the previous message's body under the new header. A spinner
+  // appears once the load takes long enough to notice, and the frame is shown
+  // anyway after frameLoadGiveUpMs in case the load is never reported.
+  const frameSpinnerDelayMs = 150
+  const frameLoadGiveUpMs = 3000
+  let frameLoaded = false
+  let frameSlow = false
+  let frameSpinnerTimer: ReturnType<typeof setTimeout> | undefined
+  let frameGiveUpTimer: ReturnType<typeof setTimeout> | undefined
+
+  function startFrameLoad(): void {
+    clearTimeout(frameSpinnerTimer)
+    clearTimeout(frameGiveUpTimer)
+    frameLoaded = false
+    frameSlow = false
+    frameSpinnerTimer = setTimeout(() => (frameSlow = true), frameSpinnerDelayMs)
+    frameGiveUpTimer = setTimeout(frameDidLoad, frameLoadGiveUpMs)
   }
 
-  $: srcdoc = buildSrcdoc(detail.bodyHtmlSafe, remoteLoaded, $prefs.messageFontSize, $prefs.bodyFont, nonce, canScan)
+  function frameDidLoad(): void {
+    clearTimeout(frameSpinnerTimer)
+    clearTimeout(frameGiveUpTimer)
+    frameLoaded = true
+    frameSlow = false
+  }
 
   // plain-text bodies render in a <pre>, not the sandboxed iframe, so bare
   // urls need their own linkification: nothing upstream turns them into real
@@ -244,6 +288,8 @@
     if (!body) {
       return
     }
+    // our own document is in place, whether or not 'load' was reported.
+    frameDidLoad()
     measure()
     resizeObserver = new ResizeObserver(() => measure())
     resizeObserver.observe(body)
@@ -257,6 +303,7 @@
   // in case 'load' fires before contentDocument.body is actually populated
   // (observed to be unreliable timing on some webview engines).
   function onFrameLoad(): void {
+    frameDidLoad()
     hoverUrl = ''
     attachInteractivity()
   }
@@ -446,6 +493,8 @@
   window.addEventListener('message', onWindowMessage)
 
   onDestroy(() => {
+    clearTimeout(frameSpinnerTimer)
+    clearTimeout(frameGiveUpTimer)
     resizeObserver?.disconnect()
     cancelAnimationFrame(readyPollHandle)
     window.removeEventListener('message', onWindowMessage)
@@ -476,11 +525,11 @@
   }
 
   async function loadRemote(includeTrackers = false): Promise<void> {
+    const id = detail.id
     try {
-      const id = detail.id
       const html = await getMessageHtml(id, true, includeTrackers)
       setBodyHtml(id, html)
-      // the reader may have moved on while the html was fetched
+      // another message opened while this loaded: its remote state is its own.
       if (detail.id !== id) {
         return
       }
@@ -639,15 +688,23 @@
 {/if}
 
 {#if detail.isHtml}
-  <iframe
-    class="body-frame"
-    title={$t('detail.mailBody.iframeTitle')}
-    sandbox="allow-same-origin allow-scripts allow-popups allow-top-navigation-by-user-activation"
-    bind:this={frame}
-    on:load={onFrameLoad}
-    style={`height:${frameHeight}px`}
-    {srcdoc}
-  ></iframe>
+  {#if !frameLoaded && frameSlow}
+    <Spinner inline label={$t('detail.loadingMessage')} />
+  {/if}
+  <!-- a new frame per message: swapping one frame's srcdoc could leave WebKit
+       painting the previous message's document under the new header. -->
+  {#key detail.id}
+    <iframe
+      class="body-frame"
+      class:loading={!frameLoaded}
+      title={$t('detail.mailBody.iframeTitle')}
+      sandbox="allow-same-origin allow-scripts allow-popups allow-top-navigation-by-user-activation"
+      bind:this={frame}
+      on:load={onFrameLoad}
+      style={`height:${frameHeight}px`}
+      {srcdoc}
+    ></iframe>
+  {/key}
 {:else}
   <!-- dir="auto" for the same reason as the html document above: a plain-text
        message written right to left reads that way, whatever the interface is
@@ -929,6 +986,11 @@
        around/before the html mail content in dark mode. */
     background: #ffffff;
     zoom: calc(1 / var(--ui-scale, 1));
+  }
+
+  /* the frame's document is still loading: keep the space, show nothing. */
+  .body-frame.loading {
+    visibility: hidden;
   }
 
   .body-plain {

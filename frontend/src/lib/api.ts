@@ -180,6 +180,9 @@ export function updateAccount(req: {
   exportSubfolders: string
   exportNameTemplate: string
   pgpDefault: string
+  // null follows the global setting and clears a stored override, so it is
+  // required: leaving it out would reset the account to the default.
+  syncMaxParallel: number | null
   proxy: AccountProxy
 }): Promise<Account> {
   return App.UpdateAccount(new desktop.UpdateAccountRequest(req))
@@ -1501,6 +1504,8 @@ export const SettingKeys = {
   startHidden: 'start_hidden',
   syncMessageLimit: 'sync_message_limit',
   syncAutoBackfill: 'sync_auto_backfill',
+  syncMaxParallel: 'sync_max_parallel',
+  syncFullReconcileDays: 'sync_full_reconcile_days',
   startupSelection: 'startup_selection',
   lastSelection: 'last_selection',
   liabilityAccepted: 'liability_accepted',

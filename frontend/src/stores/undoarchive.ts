@@ -18,6 +18,7 @@ interface ArchivedMessage {
   summary: MessageSummary
   messageId: string
   originalFolderId: number
+  // the folder the action put the message in.
   destFolderId: number
 }
 
@@ -61,7 +62,11 @@ export function triggerUndoArchive(): boolean {
   archived.set(stack.slice(0, -1))
   void (async () => {
     let failure = ''
-    for (const entry of last) {
+    // last to first: the server finds each copy by Message-ID and takes the
+    // highest UID, so two messages sharing one Message-ID (a mailing list
+    // copy and the sent copy, say) only go back to their own folders when
+    // the newest move is undone first.
+    for (const entry of [...last].reverse()) {
       try {
         await restoreMessage(entry.messageId, entry.destFolderId, entry.originalFolderId)
       } catch (err) {

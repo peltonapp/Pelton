@@ -197,7 +197,7 @@ func (a *App) recordAgentAction(tool string, messageID int64, summary string, ca
 // compose form. An agent supplies bare addresses, so there is no name to carry.
 func proposalAddresses(list string) []AddressDTO {
 	var out []AddressDTO
-	for _, part := range strings.Split(list, ",") {
+	for part := range strings.SplitSeq(list, ",") {
 		if part = strings.TrimSpace(part); part != "" {
 			out = append(out, AddressDTO{Email: part})
 		}

@@ -4,6 +4,7 @@
 
 import { Events } from '@wailsio/runtime'
 import type { AccountSyncState } from './types'
+import type { SyncPhase } from './syncstatus'
 
 // EventsOn subscribes to a backend event and hands the callback its payload.
 function EventsOn<T>(name: string, cb: (data: T) => void): () => void {
@@ -14,6 +15,8 @@ function EventsOn<T>(name: string, cb: (data: T) => void): () => void {
 export const EventNames = {
   mailNew: 'mail:new',
   mailRepaired: 'mail:repaired',
+  mailUpdated: 'mail:updated',
+  mailBodyFailed: 'mail:bodyFailed',
   syncProgress: 'sync:progress',
   syncState: 'sync:state',
   accountSyncState: 'sync:accounts',
@@ -67,8 +70,20 @@ export interface SyncProgressEvent {
   // mailboxes rather than messages.
   foldersDone: number
   foldersTotal: number
+  phase?: SyncPhase
 }
 
+/** Payload of mail:updated: the id of a message row that changed in place, such as a stub that gained its body. */
+export interface MailUpdatedEvent {
+  messageId: number
+}
+
+/** Payload of mail:bodyFailed: the id of a message whose body could not be fetched after every retry. */
+export interface MailBodyFailedEvent {
+  messageId: number
+}
+
+/** Payload of the sync state event: whether background sync is running, and the error that ended it, if any. */
 export interface SyncStateEvent {
   running: boolean
   error: string
@@ -81,6 +96,7 @@ export interface AccountSyncStateEvent {
   states: AccountSyncState[]
 }
 
+/** Payload of the bulk download progress event: counts, percent and ETA of a running download. */
 export interface DownloadProgressEvent {
   running: boolean
   done: number
@@ -91,6 +107,7 @@ export interface DownloadProgressEvent {
   error: string
 }
 
+/** Payload of the attachment save progress event: bytes and files done out of the total. */
 export interface AttachmentProgressEvent {
   running: boolean
   attachmentId: number
@@ -164,6 +181,16 @@ export function onMailNew(cb: (e: MailNewEvent) => void): Unsubscribe {
 // list and any open message show the fixed text without a reload.
 export function onMailRepaired(cb: (e: MailRepairedEvent) => void): Unsubscribe {
   return EventsOn(EventNames.mailRepaired, (e: MailRepairedEvent) => cb(e))
+}
+
+/** Subscribes to mail:updated; returns the unsubscribe function. */
+export function onMailUpdated(cb: (e: MailUpdatedEvent) => void): Unsubscribe {
+  return EventsOn(EventNames.mailUpdated, (e: MailUpdatedEvent) => cb(e))
+}
+
+/** Subscribes to mail:bodyFailed; returns the unsubscribe function. */
+export function onMailBodyFailed(cb: (e: MailBodyFailedEvent) => void): Unsubscribe {
+  return EventsOn(EventNames.mailBodyFailed, (e: MailBodyFailedEvent) => cb(e))
 }
 
 // onSyncProgress fires per folder as a sync runs.

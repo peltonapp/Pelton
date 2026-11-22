@@ -1,6 +1,7 @@
 package desktop
 
 import (
+	"context"
 	"encoding/base64"
 	"errors"
 	"fmt"
@@ -8,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/peltonapp/Pelton/internal/desktop/syncsched"
 	"github.com/peltonapp/Pelton/internal/smtp"
 	"github.com/peltonapp/Pelton/internal/storage"
 )
@@ -583,13 +585,8 @@ func (a *App) UploadDraft(id int64) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	cfg, err := a.resolveIMAP(*account)
-	if err != nil {
-		return "", err
-	}
-	// no syncMu: a sync can hold it for minutes, and saving a draft must not
-	// wait for that. A second short login is the cheaper cost.
-	if err := a.withIMAPSession(cfg, func(client mailClient) error {
+	// a fast-lane task: it does not wait behind a long sync.
+	if err := a.runNow(a.ctx, *account, syncsched.KindSentCopy, 0, func(_ context.Context, client mailClient) error {
 		return client.ReplaceDraft(mailbox, raw, messageID)
 	}); err != nil {
 		return "", err
@@ -642,12 +639,7 @@ func (a *App) RemoveServerDraft(accountID int64, messageID string) error {
 	if err != nil {
 		return err
 	}
-	cfg, err := a.resolveIMAP(*account)
-	if err != nil {
-		return err
-	}
-	// no syncMu, for the same reason as UploadDraft.
-	if err := a.withIMAPSession(cfg, func(client mailClient) error {
+	if err := a.runNow(a.ctx, *account, syncsched.KindMove, 0, func(_ context.Context, client mailClient) error {
 		return client.RemoveDraft(mailbox, messageID)
 	}); err != nil {
 		return err

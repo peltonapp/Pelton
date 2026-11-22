@@ -342,8 +342,8 @@ func scanMailDir(dir, prefix string) []MboxFile {
 		name := e.Name()
 		path := filepath.Join(dir, name)
 		if e.IsDir() {
-			if strings.HasSuffix(name, ".sbd") {
-				out = append(out, scanMailDir(path, join(prefix, strings.TrimSuffix(name, ".sbd")))...)
+			if before, ok := strings.CutSuffix(name, ".sbd"); ok {
+				out = append(out, scanMailDir(path, join(prefix, before))...)
 			}
 			continue
 		}

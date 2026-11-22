@@ -73,6 +73,12 @@ export class AccountDTO {
     "passwordPromptDismissed": boolean;
 
     /**
+     * SyncMaxParallel is the account's own parallel-sync limit, or null when
+     * it follows the global setting.
+     */
+    "syncMaxParallel": number | null;
+
+    /**
      * TrustedCerts are the fingerprints of certificates the user accepted for
      * this mailbox, formatted for reading. CASubjects name the certificates in
      * the CA it trusts, empty when it has none.
@@ -147,6 +153,9 @@ export class AccountDTO {
         if (!("passwordPromptDismissed" in $$source)) {
             this["passwordPromptDismissed"] = false;
         }
+        if (!("syncMaxParallel" in $$source)) {
+            this["syncMaxParallel"] = null;
+        }
         if (!("trustedCerts" in $$source)) {
             this["trustedCerts"] = [];
         }
@@ -164,18 +173,18 @@ export class AccountDTO {
      * Creates a new AccountDTO instance from a string or object.
      */
     static createFrom($$source: any = {}): AccountDTO {
-        const $$createField20_0 = $$createType0;
         const $$createField21_0 = $$createType0;
-        const $$createField22_0 = $$createType1;
+        const $$createField22_0 = $$createType0;
+        const $$createField23_0 = $$createType1;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("trustedCerts" in $$parsedSource) {
-            $$parsedSource["trustedCerts"] = $$createField20_0($$parsedSource["trustedCerts"]);
+            $$parsedSource["trustedCerts"] = $$createField21_0($$parsedSource["trustedCerts"]);
         }
         if ("caSubjects" in $$parsedSource) {
-            $$parsedSource["caSubjects"] = $$createField21_0($$parsedSource["caSubjects"]);
+            $$parsedSource["caSubjects"] = $$createField22_0($$parsedSource["caSubjects"]);
         }
         if ("proxy" in $$parsedSource) {
-            $$parsedSource["proxy"] = $$createField22_0($$parsedSource["proxy"]);
+            $$parsedSource["proxy"] = $$createField23_0($$parsedSource["proxy"]);
         }
         return new AccountDTO($$parsedSource as Partial<AccountDTO>);
     }
@@ -2431,6 +2440,12 @@ export class MessageDetailDTO {
      */
     "charsetGuess": string;
 
+    /**
+     * BodyComplete is false while the row is still a list stub whose preview
+     * may be shown before the full body arrives.
+     */
+    "bodyComplete": boolean;
+
     /** Creates a new MessageDetailDTO instance. */
     constructor($$source: Partial<MessageDetailDTO> = {}) {
         if (!("id" in $$source)) {
@@ -2546,6 +2561,9 @@ export class MessageDetailDTO {
         }
         if (!("charsetGuess" in $$source)) {
             this["charsetGuess"] = "";
+        }
+        if (!("bodyComplete" in $$source)) {
+            this["bodyComplete"] = false;
         }
 
         Object.assign(this, $$source);
@@ -4767,13 +4785,28 @@ export class UIPrefsDTO {
     "startHidden": boolean;
 
     /**
-     * SyncMessageLimit caps how many of a folder's newest messages the first
-     * sync fetches; older mail stays on the server until it is asked for. 0
-     * means no limit. SyncAutoBackfill fetches the next batch automatically on
-     * reaching the end of the list; off puts it behind a button instead.
+     * SyncMessageLimit is the sync window: how many of a folder's newest
+     * messages are kept with their bodies. Older ones stay on the server until
+     * asked for; raising it fetches the newly admitted ones. 0 means no limit.
+     * SyncAutoBackfill fetches the next batch automatically on reaching the end
+     * of the list; off puts it behind a button instead.
      */
     "syncMessageLimit": number;
     "syncAutoBackfill": boolean;
+
+    /**
+     * SyncMaxParallel is how many IMAP sessions one account may use at once,
+     * IDLE included. Clamped to 1–10 (the ui offers 2–10). Sending does not
+     * use one.
+     */
+    "syncMaxParallel": number;
+
+    /**
+     * SyncFullReconcileDays is how many days a folder may go without a full
+     * reconcile before it is re-checked in the background; 0 means only
+     * manual Sync does, for folders not checked in a day.
+     */
+    "syncFullReconcileDays": number;
 
     /**
      * StartupSelection is what the sidebar selects on launch: "view:<key>" for a
@@ -5052,6 +5085,12 @@ export class UIPrefsDTO {
         if (!("syncAutoBackfill" in $$source)) {
             this["syncAutoBackfill"] = false;
         }
+        if (!("syncMaxParallel" in $$source)) {
+            this["syncMaxParallel"] = 0;
+        }
+        if (!("syncFullReconcileDays" in $$source)) {
+            this["syncFullReconcileDays"] = 0;
+        }
         if (!("startupSelection" in $$source)) {
             this["startupSelection"] = "";
         }
@@ -5298,6 +5337,15 @@ export class UpdateAccountRequest {
     "pgpDefault": string;
 
     /**
+     * SyncMaxParallel overrides the global parallel-sync setting for this
+     * account (clamped to 1-5). Null follows the global setting: it clears a
+     * stored override, which is how the editor's "use default" saves. A
+     * request that leaves the field out keeps the stored override, so a ui
+     * that does not send it cannot clear it by saving something else.
+     */
+    "syncMaxParallel": number | null;
+
+    /**
      * Proxy is the route the mailbox's connections take (#457).
      */
     "proxy": AccountProxyDTO;
@@ -5355,6 +5403,9 @@ export class UpdateAccountRequest {
         if (!("pgpDefault" in $$source)) {
             this["pgpDefault"] = "";
         }
+        if (!("syncMaxParallel" in $$source)) {
+            this["syncMaxParallel"] = null;
+        }
         if (!("proxy" in $$source)) {
             this["proxy"] = (new AccountProxyDTO());
         }
@@ -5366,10 +5417,10 @@ export class UpdateAccountRequest {
      * Creates a new UpdateAccountRequest instance from a string or object.
      */
     static createFrom($$source: any = {}): UpdateAccountRequest {
-        const $$createField17_0 = $$createType1;
+        const $$createField18_0 = $$createType1;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("proxy" in $$parsedSource) {
-            $$parsedSource["proxy"] = $$createField17_0($$parsedSource["proxy"]);
+            $$parsedSource["proxy"] = $$createField18_0($$parsedSource["proxy"]);
         }
         return new UpdateAccountRequest($$parsedSource as Partial<UpdateAccountRequest>);
     }

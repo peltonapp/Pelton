@@ -411,8 +411,10 @@ export function DefaultMailClientStatus(): $CancellablePromise<$models.DefaultMa
 /**
  * DeleteAccount removes an account entirely: its keyring secret, its cached mail
  * (folders, messages and attachment rows cascade in the db) and its attachment
- * files on disk. Deleting the keyring secret also lets any running idle loop for
- * the account exit cleanly, since it stops on a missing-credentials error.
+ * files on disk. First it hard-cancels that account only: its worker (IDLE),
+ * scheduler tasks and IMAP sessions stop, and nothing can start
+ * sync work for it again. Other accounts keep running. If the row cannot be
+ * deleted, a worker the account had is started again.
  */
 export function DeleteAccount(id: number): $CancellablePromise<void> {
     return $Call.ByID(1278365736, id);
@@ -608,9 +610,9 @@ export function DismissPasswordPrompt(accountID: number): $CancellablePromise<vo
 }
 
 /**
- * DownloadMessageOffline pins a message for offline availability. Sync already
- * caches the body; this records the deliberate keep signal that drives the
- * downloaded indicator.
+ * DownloadMessageOffline keeps a message available offline. A message that so
+ * far has only its list entry gets its body fetched first; pinning a row with
+ * no body would show it as downloaded while there is nothing to read.
  */
 export function DownloadMessageOffline(id: number): $CancellablePromise<void> {
     return $Call.ByID(1176395672, id);
@@ -620,7 +622,8 @@ export function DownloadMessageOffline(id: number): $CancellablePromise<void> {
  * DownloadRange downloads every message from startDateRFC3339 to today that is
  * not already cached, across all accounts and folders, and pins them offline for
  * fast local search. includeAttachments controls whether attachment bytes are
- * persisted. Progress (percent + eta) is emitted for the status bar.
+ * persisted for messages not yet in the cache; a cached stub always gets its
+ * attachments. Progress (percent + eta) is emitted for the status bar.
  */
 export function DownloadRange(startDateRFC3339: string, includeAttachments: boolean): $CancellablePromise<void> {
     return $Call.ByID(5650659, startDateRFC3339, includeAttachments);
@@ -1564,9 +1567,9 @@ export function RestoreMessage(rfcMessageID: string, fromFolderID: number, toFol
 
 /**
  * ResumePendingDownload restarts a bulk download that was still running when
- * the app last closed. planDownload/planAccount already skip anything cached,
- * so replaying the same range only fetches whatever the previous run had not
- * gotten to yet. Called once from startup; a no-op if nothing was pending.
+ * the app last closed. planDownload/planAccount already skip anything that has
+ * its body, so replaying the same range only fetches whatever the previous run
+ * had not gotten to yet. Called once from startup; a no-op if nothing was pending.
  */
 export function ResumePendingDownload(): $CancellablePromise<void> {
     return $Call.ByID(548967280);
@@ -2036,11 +2039,8 @@ export function SnoozeMessage(id: number, untilRFC3339: string, hideNow: boolean
 }
 
 /**
- * StartAccountSync runs the first sync of an account and parks it on idle, in
- * the background. The wizard calls it after the folder choice, which is why
- * adding an account no longer starts syncing on its own. Calling it for an
- * account that is already syncing is harmless: syncAccount serializes on the
- * same lock every other sync uses.
+ * StartAccountSync runs the first sync of an account and parks it on idle,
+ * replacing any existing worker for that account.
  */
 export function StartAccountSync(accountID: number): $CancellablePromise<void> {
     return $Call.ByID(1507504286, accountID);

@@ -703,6 +703,7 @@
 {#if showWizard}
   <AddMailboxWizard
     offerImport={false}
+    skipFolderPicker
     on:close={() => (showWizard = false)}
     on:added={onMailboxAdded}
   />
