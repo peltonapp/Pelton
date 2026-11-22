@@ -289,6 +289,24 @@ func TestLowPowerModeQueuesNoReconcile(t *testing.T) {
 	noRecv(t, got, 200*time.Millisecond, "low-power mode queued a full check")
 }
 
+// An account that could not reach its server on its last sync is offline:
+// no full check is queued for it until a sync gets through again.
+func TestOfflineAccountQueuesNoReconcile(t *testing.T) {
+	a, account, folders := reconcileTestApp(t, storage.Folder{Name: "INBOX", IMAPPath: "INBOX"})
+	got := reconcileRecorder(t, a, account.ID)
+	if err := a.store.RecordSyncFailure(a.ctx, account.ID, syncFailNetwork, "dial tcp: lookup imap.example.com: no such host"); err != nil {
+		t.Fatal(err)
+	}
+	a.enqueueFullReconcile(a.ctx, account, folders)
+	noRecv(t, got, 200*time.Millisecond, "an offline account queued a full check")
+
+	if err := a.store.RecordSyncOK(a.ctx, account.ID); err != nil {
+		t.Fatal(err)
+	}
+	a.enqueueFullReconcile(a.ctx, account, folders)
+	recv(t, got, 2*time.Second, "no full check once the account was back online")
+}
+
 // A failed check is not a failed sync: the account's sync state stays ok.
 func TestFailedReconcileLeavesTheSyncStateAlone(t *testing.T) {
 	a, account, folders := reconcileTestApp(t, storage.Folder{Name: "INBOX", IMAPPath: "INBOX"})

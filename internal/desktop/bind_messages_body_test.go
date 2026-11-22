@@ -211,6 +211,7 @@ func TestGetMessageBodyFetchOutcome(t *testing.T) {
 		// -1 means the first plus one per retry delay.
 		attempts int
 		stored   bool
+		lowPower bool
 	}{{
 		// A fetch that fails a few times and then works stores the body
 		// without the reader ever seeing the failures.
@@ -260,12 +261,33 @@ func TestGetMessageBodyFetchOutcome(t *testing.T) {
 			return &psync.MessageError{RemoteIDs: []string{stubRemoteID}, Err: errors.New("malformed MIME")}
 		},
 		event: EventMailBodyFailed, attempts: 1,
+	}, {
+		// Offline, a retry only costs a failed lookup: the pane is told at
+		// once and offers Try again.
+		name: "OfflineFailsWithoutRetries",
+		fetch: func(*bodyRetryHarness, *onDemandBodyAdapter, int, context.Context, storage.Folder, []string) error {
+			return errors.New("dial tcp: lookup imap.example.com: no such host")
+		},
+		event: EventMailBodyFailed, attempts: 1,
+	}, {
+		// Low-power mode makes no automatic network trips either.
+		name:     "LowPowerFailsWithoutRetries",
+		lowPower: true,
+		fetch: func(*bodyRetryHarness, *onDemandBodyAdapter, int, context.Context, storage.Folder, []string) error {
+			return authErr
+		},
+		event: EventMailBodyFailed, attempts: 1,
 	}} {
 		t.Run(tc.name, func(t *testing.T) {
 			adapter := &onDemandBodyAdapter{}
 			h := newBodyRetryHarness(t, func(h *bodyRetryHarness, attempt int, jobCtx context.Context, f storage.Folder, remoteIDs []string) error {
 				return tc.fetch(h, adapter, attempt, jobCtx, f, remoteIDs)
 			})
+			if tc.lowPower {
+				if err := h.app.store.SetBool(h.app.ctx, settingLowPower, true); err != nil {
+					t.Fatal(err)
+				}
+			}
 
 			events := h.open(t)
 			if len(events) != 1 || events[0] != tc.event {

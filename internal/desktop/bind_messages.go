@@ -122,7 +122,8 @@ var errBodyNotStored = errors.New("pelton: fetch finished without storing the me
 // ended: mail:updated once the body is stored, mail:bodyFailed once every
 // attempt failed. The pane's spinner waits for one of the two. A fetch
 // dropped from a full fast lane did not fail and costs no retry; a message
-// that cannot be read fails at once; a mailbox being removed or a profile
+// that cannot be read fails at once, and so does any failure while offline (no
+// DNS, no route) or in low-power mode; a mailbox being removed or a profile
 // switch ends it quietly.
 func (a *App) fetchBodyForPane(id int64) {
 	delays := a.bodyRetryDelays
@@ -159,6 +160,15 @@ func (a *App) fetchBodyForPane(id int64) {
 			}
 		}
 		if errors.Is(err, errMessageUnreadable) {
+			break
+		}
+		// no automatic network traffic offline or in low-power mode: the
+		// pane offers Try again instead, unless the body landed meanwhile.
+		if isOfflineError(err) || a.lowPowerMode() {
+			if a.bodyStored(id) == nil {
+				a.emit(EventMailUpdated, MailUpdatedEvent{MessageID: id})
+				return
+			}
 			break
 		}
 		dropped := errors.Is(err, syncsched.ErrDropped)

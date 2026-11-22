@@ -69,9 +69,10 @@ func (a *App) enqueueDueReconcile(ctx context.Context, account storage.Account) 
 // The account's checks run one after another, never side by side: a check
 // that fails on the connection or the login drops the rest, so a bad
 // password or a server that is down costs one failed login, not one per
-// folder.
+// folder. An account whose last sync failed for the network (offline)
+// queues none either.
 func (a *App) enqueueFullReconcile(ctx context.Context, account storage.Account, folders []storage.Folder) {
-	if len(folders) == 0 || a.lowPowerMode() {
+	if len(folders) == 0 || a.lowPowerMode() || a.accountOffline(account.ID) {
 		return
 	}
 	st := a.accountStateFor(account.ID)
@@ -92,6 +93,21 @@ func (a *App) enqueueFullReconcile(ctx context.Context, account storage.Account,
 		rt.mu.Unlock()
 	}
 	a.startNextCheck(account, rt)
+}
+
+// accountOffline reports whether the account's last sync failed because the
+// server could not be reached.
+func (a *App) accountOffline(accountID int64) bool {
+	states, err := a.store.AccountSyncStates(a.ctx)
+	if err != nil {
+		return false
+	}
+	for _, s := range states {
+		if s.AccountID == accountID {
+			return s.Failing() && s.Reason == syncFailNetwork
+		}
+	}
+	return false
 }
 
 // startNextCheck queues the account's next waiting folder check, unless one
