@@ -127,6 +127,7 @@
   import { assistantToastKey } from './lib/assistantScripts'
   import { selectScript } from './stores/scripts'
   import { refreshMessage } from './stores/message'
+  import { refreshCard } from './stores/threads'
   import { markBodyFetchFailed, clearBodyFetchFailed } from './stores/bodyfetch'
   import { loadViews, editingView, closeViewEditor, openViewEditor, views as savedViews } from './stores/views'
   import { selectSavedView } from './stores/selection'
@@ -894,6 +895,7 @@
         if (open === e.messageId) {
           void refreshMessage(e.messageId)
         }
+        void refreshCard(e.messageId)
       }),
     )
     unsubscribers.push(

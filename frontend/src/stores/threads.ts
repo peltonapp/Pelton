@@ -65,6 +65,22 @@ export async function loadCard(id: number): Promise<MessageDetail> {
   return detail
 }
 
+/**
+ * refreshCard reads a cached card again, after its body arrived: a card that
+ * showed a stub's preview then shows the whole message.
+ */
+export async function refreshCard(id: number): Promise<void> {
+  if (!get(cardDetails).has(id)) {
+    return
+  }
+  try {
+    const detail = await getMessage(id)
+    cardDetails.update((m) => (m.has(id) ? new Map(m).set(id, detail) : m))
+  } catch {
+    // the card keeps what it showed; opening it again reads it anew.
+  }
+}
+
 /** invalidateThreads drops every cached thread and card. */
 export function invalidateThreads(): void {
   generation++
