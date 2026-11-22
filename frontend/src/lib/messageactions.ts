@@ -31,6 +31,7 @@ import { askConfirm } from '../stores/confirm'
 import { isVIPAddress, addVIP, removeVIP } from '../stores/vip'
 import { errorMessage, toastError, toastSuccess } from '../stores/toast'
 import { sidebar } from '../stores/accounts'
+import { prefs } from '../stores/prefs'
 import { t } from './i18n'
 import { get } from 'svelte/store'
 
@@ -41,6 +42,13 @@ export async function markSeen(item: MessageSummary, seen: boolean): Promise<voi
     await setSeen(item.id, seen)
   } catch (err) {
     toastError(errorMessage(err))
+  }
+}
+
+/** Marks a message read because the user opened it, if they want opening to do that. */
+export function markOpened(item: MessageSummary): void {
+  if (!item.seen && get(prefs).markReadOnOpen) {
+    void markSeen(item, true)
   }
 }
 

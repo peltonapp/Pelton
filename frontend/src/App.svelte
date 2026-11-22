@@ -125,6 +125,7 @@
   import { editViewInEditor } from './stores/views'
   import {
     markSeen,
+    markOpened,
     markFlagged,
     markColor,
     toggleSenderVIP,
@@ -1315,11 +1316,18 @@
         vimMove(-1, inVisual())
         break
       case 'l':
-      case 'Enter':
+      case 'Enter': {
         if (get(openMessageId) === null) {
           vimMove(1, inVisual())
         }
+        // the list marks a message read on Enter only while it has focus, and
+        // the motions work without it. Enter has to mean the same either way.
+        const msg = event.key === 'Enter' && !inVisual() ? currentMessage() : null
+        if (msg) {
+          markOpened(msg)
+        }
         break
+      }
       case 'h':
         openMessageId.set(null)
         break
