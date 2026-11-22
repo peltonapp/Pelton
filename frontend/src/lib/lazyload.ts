@@ -43,6 +43,9 @@ export const loadTrustLine = withStrings(['passport'], () => import('../componen
 /** loadImportDialog loads the dialog that imports mail from another client. */
 export const loadImportDialog = withStrings(['import'], () => import('../components/import/ImportDialog.svelte'))
 
+/** loadGuidedImport loads the New design's guided import from another program. */
+export const loadGuidedImport = withStrings(['import'], () => import('../components/import/GuidedImport.svelte'))
+
 /** loadAddMailboxWizard loads the wizard that adds a mailbox. */
 export const loadAddMailboxWizard = withStrings(['wizard'], () => import('../components/wizard/AddMailboxWizard.svelte'))
 

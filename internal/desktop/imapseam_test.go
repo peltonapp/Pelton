@@ -73,6 +73,7 @@ type fakeIMAP struct {
 	// message is what FetchMessage answers, and fetchedUIDs records each call.
 	message     *pimap.Message
 	fetchedUIDs []imap.UID
+	appends     []appendCall
 }
 
 type draftCall struct {
@@ -82,6 +83,18 @@ type draftCall struct {
 
 func (f *fakeIMAP) ReplaceDraft(mailbox string, raw []byte, messageID string) error {
 	f.drafts = append(f.drafts, draftCall{mailbox, messageID, raw})
+	return nil
+}
+
+type appendCall struct {
+	mailbox string
+	raw     []byte
+	flags   []imap.Flag
+	date    time.Time
+}
+
+func (f *fakeIMAP) AppendMessage(mailbox string, raw []byte, flags []imap.Flag, date time.Time) error {
+	f.appends = append(f.appends, appendCall{mailbox, raw, flags, date})
 	return nil
 }
 

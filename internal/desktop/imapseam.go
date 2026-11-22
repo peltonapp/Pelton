@@ -38,6 +38,9 @@ type mailClient interface {
 	// with the local one, matched by its Message-ID.
 	ReplaceDraft(mailbox string, raw []byte, messageID string) error
 	RemoveDraft(mailbox, messageID string) error
+	// AppendMessage stores an imported message in a folder with its flags
+	// and arrival date.
+	AppendMessage(mailbox string, raw []byte, flags []imap.Flag, date time.Time) error
 
 	FetchMessage(uid imap.UID) (*pimap.Message, error)
 	FetchMessages(uids []imap.UID, fn func(uid imap.UID, msg *pimap.Message, err error) error) error

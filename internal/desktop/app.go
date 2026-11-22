@@ -304,6 +304,10 @@ type App struct {
 	// mailVault is which mail vaults are unlocked and their keys. See
 	// mailvault.go.
 	mailVault mailVaultState
+
+	// guided is the guided import that is running, if any. See
+	// bind_migrate.go.
+	guided guidedImportState
 }
 
 // locked reports whether the app lock is engaged. An App built without one,
