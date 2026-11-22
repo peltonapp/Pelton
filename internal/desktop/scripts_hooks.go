@@ -140,6 +140,7 @@ func (a *App) runScriptClock() {
 		case now := <-t.C:
 			a.scriptEventsStarting(last, now)
 			a.scriptTasksDue(last, now)
+			a.scriptBlocksAt(last, now)
 			last = now
 		}
 	}
