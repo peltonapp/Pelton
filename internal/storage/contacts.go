@@ -62,7 +62,12 @@ type ContactValue struct {
 	Label string
 }
 
-const addressBookColumns = `id, coalesce(account_id, 0), name, url, collection_path,
+// Local reports whether the book lives only in this database: it has no
+// server, so it is never synced and edits are stored here alone. Imported
+// address books are local.
+func (b AddressBook) Local() bool { return b.URL == "" }
+
+const addressBookColumns =`id, coalesce(account_id, 0), name, url, collection_path,
        username, sync_token, read_only, last_sync_at, last_error, position, created_at`
 
 // CreateAddressBook inserts an address book and returns its new id.
