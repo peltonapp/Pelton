@@ -488,12 +488,10 @@ func (a *App) runAutoSyncPass() error {
 	return a.syncListedAccounts(a.autoSyncAccount, false)
 }
 
-// autoSyncAccount reports whether timed auto-sync should touch this account.
+// autoSyncAccount reports whether timed auto-sync should touch this account:
+// every account with a server.
 func (a *App) autoSyncAccount(account storage.Account) bool {
-	if account.Local {
-		return false
-	}
-	return a.protocolFor(account).needsTimedSync(account.ID)
+	return !account.Local
 }
 
 // syncListedAccounts syncs every remote account include accepts (all when nil).
@@ -622,116 +620,6 @@ func (a *App) syncAccountCtx(ctx context.Context, account storage.Account, manua
 // user's Sync) puts them in the top class, a timed sync in the ordinary ones.
 func (a *App) syncAccountOnceCtx(ctx context.Context, account storage.Account, manual bool) error {
 	return a.protocolFor(account).manualSync(ctx, account, manual)
-}
-
-// syncFolders runs the sync engine over each stored folder of an account,
-// emitting a progress event per folder and a new-mail event when one gained
-// messages.
-func (a *App) syncFolders(ctx context.Context, adapter psync.Adapter, accountID int64) error {
-	all, err := a.store.ListFolders(ctx, accountID)
-	if err != nil {
-		return err
-	}
-	// folders the user unchecked are skipped here rather than inside the engine,
-	// so they never reach a SELECT and never cost a round trip. They are also
-	// left out of the progress total, since counting folders that are not being
-	// synced makes the bar lie (#173).
-	folders := make([]storage.Folder, 0, len(all))
-	for _, f := range all {
-		// a container the server marks \Noselect holds no mail and cannot be
-		// selected, so syncing one fails every single time. It is kept as a row
-		// because the tree needs it as a parent, but it is not synced.
-		if !f.SyncExcluded && folderSelectable(f) {
-			folders = append(folders, f)
-		}
-	}
-	engine := a.newSyncEngine(adapter, accountID)
-	email := a.accountEmail(accountID)
-	server := ""
-	if adapter != nil {
-		server = adapter.Addr()
-	}
-	run := a.startSyncRun(ctx, accountID, email, server, len(folders))
-	// an early return (cancelled run) would otherwise leave the ui's line for
-	// this account running forever.
-	defer run.abort()
-
-	// a driver that locks per folder lets ReleaseLock yield between body
-	// batches. The lock is this account's only; other accounts never wait on
-	// it. IMAP sync runs as scheduler tasks and does not come through here.
-	lockPerFolder := false
-	lock := a.accountLock(accountID)
-	if acc, err := a.store.GetAccount(a.ctx, accountID); err == nil && a.protocolFor(*acc).lockPerFolder() {
-		lockPerFolder = true
-	}
-
-	newTotal := 0
-	// a folder that fails does not stop the others: mail the rest of the account
-	// can still fetch is worth having. But the failure is carried out of here,
-	// because reporting the account as synced when a folder did not sync is what
-	// makes a mailbox go quiet with nothing to show for it.
-	var failedFolders []string
-	var firstFolderErr error
-	for _, f := range folders {
-		if err := ctx.Err(); err != nil {
-			return err
-		}
-		run.enter(f.Name)
-		if lockPerFolder {
-			lock.Lock()
-		}
-		var res psync.FolderSyncResult
-		err := a.listFolderOnce(ctx, accountID, f.ID, func() error {
-			r, err := engine.SyncFolder(ctx, f)
-			res.New += r.New
-			res.NewIDs = append(res.NewIDs, r.NewIDs...)
-			res.RepairedIDs = append(res.RepairedIDs, r.RepairedIDs...)
-			if psync.IsSoftError(err) {
-				// unreadable messages stay stubs and a refused push stays
-				// pending; the folder synced, so its new mail is announced.
-				a.log.Warn("sync folder", "folder", f.Name, "err", err)
-				return nil
-			}
-			return err
-		})
-		if lockPerFolder {
-			lock.Unlock()
-		}
-		if err != nil {
-			if ctx.Err() != nil {
-				return ctx.Err()
-			}
-			a.log.Error("sync folder", "folder", f.Name, "err", err)
-			failedFolders = append(failedFolders, f.Name)
-			if firstFolderErr == nil {
-				firstFolderErr = err
-			}
-			run.folderDone()
-			continue
-		}
-		if res.New > 0 {
-			newTotal += res.New
-			a.emit(EventMailNew, MailNewEvent{AccountID: accountID, FolderID: f.ID, Count: res.New})
-			goSafe("announcing new mail", func() { a.notifyNewMail(f, res.NewIDs) })
-		}
-		a.afterRepairs(f, res.RepairedIDs)
-		run.folderDone()
-	}
-	// an empty folder name is how the ui knows the run is over and clears its
-	// line; the counts ride along so a finished bar reads full rather than
-	// snapping back to nothing.
-	run.finish(len(folders))
-
-	// index the freshly synced mail so it becomes searchable. run it off the sync
-	// path so the search backfill never holds up the next sync.
-	if newTotal > 0 {
-		goSafe("indexing new mail", func() { _ = a.indexNewMessages() })
-		goSafe("counting unread mail", a.refreshViewCounts)
-		if !a.lowPowerMode() {
-			goSafe("collecting addresses", a.harvestAddressBook)
-		}
-	}
-	return folderSyncError(failedFolders, len(folders), firstFolderErr)
 }
 
 // folderSyncError turns the folders that failed in one run into the error the

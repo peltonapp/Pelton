@@ -4,7 +4,6 @@ import (
 	"context"
 	"strings"
 	"testing"
-	"time"
 )
 
 func TestRemoteIDsNeedingBodyNewestUsesBodyIndex(t *testing.T) {
@@ -34,33 +33,5 @@ func TestRemoteIDsNeedingBodyNewestUsesBodyIndex(t *testing.T) {
 	}
 	if strings.Contains(joined, "TEMP B-TREE") {
 		t.Fatalf("plan sorts in a temp b-tree:\n%s", joined)
-	}
-}
-
-func TestMessageDatesByRemoteID(t *testing.T) {
-	t.Parallel()
-	ctx := context.Background()
-	db, accountID, f := newBodyTestFolder(t)
-	d1 := time.Date(2026, 1, 2, 3, 4, 5, 0, time.UTC)
-	d2 := time.Date(2026, 2, 3, 4, 5, 6, 0, time.UTC)
-	for _, m := range []Message{
-		{AccountID: accountID, FolderID: f.ID, UID: 1, RemoteID: "e1", Date: d1},
-		{AccountID: accountID, FolderID: f.ID, UID: 2, RemoteID: "e2", Date: d2},
-	} {
-		msg := m
-		if _, err := db.InsertMessage(ctx, &msg); err != nil {
-			t.Fatal(err)
-		}
-	}
-	got, err := db.MessageDatesByRemoteID(ctx, f.ID, []string{"e2", "e1", "missing"})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(got) != 2 || !got["e1"].Equal(d1) || !got["e2"].Equal(d2) {
-		t.Fatalf("dates = %v", got)
-	}
-	empty, err := db.MessageDatesByRemoteID(ctx, f.ID, nil)
-	if err != nil || len(empty) != 0 {
-		t.Fatalf("nil ids: %v, %v", empty, err)
 	}
 }

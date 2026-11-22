@@ -193,17 +193,6 @@ func (d *DB) SetFolderParent(ctx context.Context, id int64, parent *int64) error
 	return requireOneRow(res, ErrFolderNotFound)
 }
 
-// DeleteAccountFolders removes every folder for an account, staging attachment
-// files so a transaction failure can restore them. Address books are untouched.
-func (d *DB) DeleteAccountFolders(ctx context.Context, accountID int64) error {
-	return d.withStagedAccountCache(ctx, accountID, func(tx *sql.Tx) error {
-		if _, err := tx.ExecContext(ctx, `DELETE FROM folders WHERE account_id = ?`, accountID); err != nil {
-			return fmt.Errorf("storage: delete folders for account %d: %w", accountID, err)
-		}
-		return nil
-	})
-}
-
 // GetFolder returns one folder by id, or ErrFolderNotFound.
 func (d *DB) GetFolder(ctx context.Context, id int64) (*Folder, error) {
 	const query = `

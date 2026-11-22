@@ -110,17 +110,15 @@ func (r *rig) blockAll(t *testing.T, n int) chan struct{} {
 // At N=1 the starvation rule lets one normal task through after each fast one.
 func TestFastLaneBeforeNormalAndClassOrder(t *testing.T) {
 	tests := []struct {
-		name   string
-		policy Policy
-		want   string
+		name string
+		want string
 	}{
-		{"classes", PolicyClasses, "fast1 manual fast2 stubs bodies trash offline check"},
-		{"fifo", PolicyFIFO, "fast1 check fast2 bodies offline trash stubs manual"},
+		{"classes", "fast1 manual fast2 stubs bodies trash offline check"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			synctest.Test(t, func(t *testing.T) {
-				r := newRig(t, 1, Options{Policy: tt.policy})
+				r := newRig(t, 1, Options{})
 				gate := r.blockAll(t, 1)
 				r.s.Enqueue(r.task("check", KindFullCheck, 1, nil))
 				r.s.Enqueue(r.task("bodies", KindBodies, 2, nil))
@@ -437,14 +435,19 @@ func TestPerFolderRules(t *testing.T) {
 
 func TestBodiesWaitForQueuedListOfTheirFolderOnly(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
-		r := newRig(t, 1, Options{Policy: PolicyFIFO})
-		gate := r.blockAll(t, 1)
+		r := newRig(t, 2, Options{})
+		holdList := make(chan struct{})
+		r.s.Enqueue(r.task("listX", KindListStubs, 1, holdList))
+		synctest.Wait()
 		r.s.Enqueue(r.task("bodiesX", KindBodies, 1, nil))
 		r.s.Enqueue(r.task("bodiesY", KindBodies, 2, nil))
-		r.s.Enqueue(r.task("listX", KindListStubs, 1, nil))
-		close(gate)
 		synctest.Wait()
-		if got := strings.Join(r.order()[1:], " "); got != "bodiesY listX bodiesX" {
+		if got := strings.Join(r.order(), " "); got != "listX bodiesY" {
+			t.Fatalf("while X lists: order %s, want Y's bodies only", got)
+		}
+		close(holdList)
+		synctest.Wait()
+		if got := strings.Join(r.order(), " "); got != "listX bodiesY bodiesX" {
 			t.Fatalf("order %s", got)
 		}
 	})
@@ -1085,67 +1088,6 @@ func TestSessionsNeverExceedN(t *testing.T) {
 	}
 }
 
-// TestListenWatcherHoldsNoSession: a watcher on its own connection (JMAP
-// WebSocket) takes no worker; its events queue a fast task that any free
-// worker runs, and its health is reported.
-func TestListenWatcherHoldsNoSession(t *testing.T) {
-	synctest.Test(t, func(t *testing.T) {
-		r := newRig(t, 1, Options{})
-		events := make(chan struct{})
-		fail := make(chan error)
-		var health []bool
-		var newMail atomic.Int32
-		r.s.EnablePush(Push[*conn]{
-			Listen: func(ctx context.Context, up, changed func()) error {
-				up()
-				for {
-					select {
-					case <-ctx.Done():
-						return ctx.Err()
-					case err := <-fail:
-						return err
-					case <-events:
-						changed()
-					}
-				}
-			},
-			NewMail: func() Task[*conn] {
-				return Task[*conn]{Kind: KindNewMail, Key: "changes", Run: func(context.Context, *conn) error {
-					newMail.Add(1)
-					return nil
-				}}
-			},
-			RetryWait: func(error) time.Duration { return time.Minute },
-			OnHealth:  func(h bool) { health = append(health, h) },
-		})
-		synctest.Wait()
-		if st := r.s.Stats(); st.Workers != 0 || !st.PushHealthy || r.srv.dials.Load() != 0 {
-			t.Fatalf("stats %+v dials %d: the watcher must hold no pooled session", st, r.srv.dials.Load())
-		}
-		gate := r.blockAll(t, 1) // N=1 busy: the event waits for the end of that task
-		events <- struct{}{}
-		synctest.Wait()
-		if newMail.Load() != 0 {
-			t.Fatal("push event ran sync work inline")
-		}
-		close(gate)
-		synctest.Wait()
-		if newMail.Load() != 1 {
-			t.Fatalf("new-mail tasks %d, want 1", newMail.Load())
-		}
-		fail <- errors.New("socket closed")
-		synctest.Wait()
-		if r.s.PushHealthy() {
-			t.Fatal("push still healthy after the socket closed")
-		}
-		time.Sleep(time.Minute)
-		synctest.Wait()
-		if !slices.Equal(health, []bool{true, false, true}) {
-			t.Fatalf("health %v, want up, down, up again after the retry wait", health)
-		}
-	})
-}
-
 func TestTunablesPerProvider(t *testing.T) {
 	r := newRig(t, 1, Options{Tunables: Tunables{MaxBodyCount: 500}})
 	if got := r.s.Tunables(); got.MaxBodyCount != 500 || got.BodyCount != DefaultBodyCount || got.BodyBytes != DefaultBodyBytes || got.ListPage != ListPage {
@@ -1502,7 +1444,6 @@ func TestIdleRetriesAfterSessionsFull(t *testing.T) {
 		s := New(context.Background(), prov, Options{})
 		defer s.Stop(context.Background())
 		var parks atomic.Int32
-		var downs atomic.Int32
 		s.EnablePush(Push[*conn]{
 			Park: func(ctx context.Context, _ *conn, wake <-chan struct{}) (bool, error) {
 				parks.Add(1)
@@ -1513,11 +1454,6 @@ func TestIdleRetriesAfterSessionsFull(t *testing.T) {
 				return false, nil
 			},
 			RetryWait: func(error) time.Duration { return time.Hour },
-			OnHealth: func(h bool) {
-				if !h {
-					downs.Add(1)
-				}
-			},
 		})
 		synctest.Wait()
 		time.Sleep(time.Second)
@@ -1527,8 +1463,8 @@ func TestIdleRetriesAfterSessionsFull(t *testing.T) {
 		if parks.Load() != 1 {
 			t.Fatal("IDLE did not come back soon after a refused session")
 		}
-		if got := s.Stats().PushHealthy; !got || downs.Load() != 0 {
-			t.Fatalf("healthy %v, downs %d: a refused session is not a push failure", got, downs.Load())
+		if !s.Stats().Idle {
+			t.Fatal("IDLE holds no session after the refusal: a refused session is not a push failure")
 		}
 	})
 }

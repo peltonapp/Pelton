@@ -207,35 +207,6 @@ func TestForceFullIgnoresCursorAndStampsFullSync(t *testing.T) {
 	}
 }
 
-func TestFullListPagePauseOnlyForForceFull(t *testing.T) {
-	t.Parallel()
-	for _, force := range []bool{false, true} {
-		ctx := context.Background()
-		db, folder := newSyncTestFolder(t)
-		engine, _ := newPagedEngine(db, &fakeAdapter{ids: []string{"e4", "e3", "e2", "e1"}, listMeta: true, stateToken: "s1"}, 2, true)
-		engine.ForceFull = force
-		engine.PauseCheck = func() bool { return true }
-
-		_, err := engine.SyncFolderStubs(ctx, folder, 0)
-		f := folderToken(t, db, folder)
-		if !force {
-			if err != nil {
-				t.Fatalf("first full list must not yield: %v", err)
-			}
-			continue
-		}
-		if !errors.Is(err, ErrSoftPaused) {
-			t.Fatalf("ForceFull err = %v, want ErrSoftPaused", err)
-		}
-		if f.StateToken != "" || !f.LastFullSyncAt.IsZero() {
-			t.Fatalf("paused reconcile wrote cursor %q / full sync %v", f.StateToken, f.LastFullSyncAt)
-		}
-		if has := remoteIDsPresent(t, db, folder.ID); !has["e4"] || !has["e3"] {
-			t.Fatalf("page stubs %v, want the first page kept", has)
-		}
-	}
-}
-
 func TestListMetaOnlyForMessagesBecomingStubs(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()

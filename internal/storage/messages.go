@@ -678,16 +678,6 @@ func (d *DB) GetMessage(ctx context.Context, id int64) (*Message, error) {
 	return m, nil
 }
 
-// CountBodyComplete returns how many of a folder's stored rows have a body.
-func (d *DB) CountBodyComplete(ctx context.Context, folderID int64) (int, error) {
-	var n int
-	if err := d.sql.QueryRowContext(ctx,
-		`SELECT COUNT(*) FROM messages WHERE folder_id = ? AND body_complete != 0`, folderID).Scan(&n); err != nil {
-		return 0, fmt.Errorf("storage: count bodies for folder %d: %w", folderID, err)
-	}
-	return n, nil
-}
-
 // MessageIDByRemoteID returns the local id of the message stored under remoteID
 // in a folder, or ErrMessageNotFound.
 func (d *DB) MessageIDByRemoteID(ctx context.Context, folderID int64, remoteID string) (int64, error) {
@@ -776,49 +766,6 @@ func (d *DB) RemoteIDsNeedingBody(ctx context.Context, folderID int64, remoteIDs
 		need = append(need, id)
 	}
 	return need, nil
-}
-
-// MessageDatesByRemoteID returns the stored date of each listed remote id in a
-// folder. Ids with no row are left out. Only the date column is read, so it
-// stays cheap for a folder with tens of thousands of messages.
-func (d *DB) MessageDatesByRemoteID(ctx context.Context, folderID int64, remoteIDs []string) (map[string]time.Time, error) {
-	out := make(map[string]time.Time, len(remoteIDs))
-	const chunkSize = 80
-	for i := 0; i < len(remoteIDs); i += chunkSize {
-		chunk := remoteIDs[i:min(i+chunkSize, len(remoteIDs))]
-		args := make([]any, 0, len(chunk)+1)
-		args = append(args, folderID)
-		placeholders := make([]string, len(chunk))
-		for k, id := range chunk {
-			placeholders[k] = "?"
-			args = append(args, id)
-		}
-		rows, err := d.sql.QueryContext(ctx,
-			`SELECT remote_id, date FROM messages WHERE folder_id = ? AND remote_id IN (`+strings.Join(placeholders, ",")+`)`,
-			args...)
-		if err != nil {
-			return nil, fmt.Errorf("storage: message dates for folder %d: %w", folderID, err)
-		}
-		for rows.Next() {
-			var id, raw string
-			if err := rows.Scan(&id, &raw); err != nil {
-				rows.Close()
-				return nil, fmt.Errorf("storage: scan message date: %w", err)
-			}
-			at, err := parseTime(raw)
-			if err != nil {
-				rows.Close()
-				return nil, err
-			}
-			out[id] = at
-		}
-		if err := rows.Err(); err != nil {
-			rows.Close()
-			return nil, fmt.Errorf("storage: iterate message dates: %w", err)
-		}
-		rows.Close()
-	}
-	return out, nil
 }
 
 // MessageIDsByRemoteID returns the row id of each listed remote id in a

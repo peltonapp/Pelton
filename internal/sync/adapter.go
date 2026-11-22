@@ -171,16 +171,6 @@ type ColorSource interface {
 	Colors(mailboxID string) map[string]int
 }
 
-// PagedLister is an optional Adapter capability. ListMessagesPaged returns the
-// same snapshot as ListMessages, and calls onPage with each page of headers as
-// soon as it is read, newest first, so the engine can store list stubs early.
-// An error from onPage stops the list and is returned. A page delivered before
-// a later failure is real server mail; the returned snapshot is only complete
-// when err is nil.
-type PagedLister interface {
-	ListMessagesPaged(ctx context.Context, box RemoteMailbox, onPage func([]Header) error) (headers []Header, stateToken, generation string, err error)
-}
-
 // ChunkFetcher is an optional Adapter capability for a message too large to
 // fetch in one piece. FetchChunk returns up to length bytes of the source
 // from offset in Raw, with the message's flags and envelope fields; fewer

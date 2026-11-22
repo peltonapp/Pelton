@@ -11,16 +11,6 @@ import (
 	"time"
 )
 
-// Policy is how the normal lane orders its tasks.
-type Policy int
-
-const (
-	// PolicyClasses runs the highest class first, FIFO within a class.
-	PolicyClasses Policy = iota
-	// PolicyFIFO runs normal tasks in arrival order.
-	PolicyFIFO
-)
-
 // Provider hands out what a worker holds while it runs tasks: a logged-in
 // IMAP connection (pool.Sessions) or a JMAP request token. Limit is the
 // current cap (effective N after the auto-adjust); the scheduler starts no
@@ -56,8 +46,6 @@ type Options struct {
 	// Broken reports whether a task error leaves the session unusable, so it
 	// is closed and the next task dials. Nil treats every error as broken.
 	Broken func(error) bool
-	// Policy orders the normal lane.
-	Policy Policy
 	// Log, when set, gets a debug line with the queue lengths per lane.
 	Log *slog.Logger
 	// Group, when set, is shared with the account's other schedulers: a
@@ -66,7 +54,7 @@ type Options struct {
 	Group *Group
 }
 
-// Push watches the server for changes. Exactly one of Park and Listen is set.
+// Push watches the server for changes.
 //
 // Park (IMAP IDLE) waits on a pooled session, which counts toward N. At N>=2
 // that worker keeps IDLE and serves only the fast lane, and its slot stays
@@ -74,18 +62,12 @@ type Options struct {
 // session works the normal lane, checks new mail every CheckEvery between
 // tasks, and parks when the lane is empty.
 //
-// Listen (JMAP WebSocket or EventSource) runs on its own connection outside
-// the pool and holds no worker; the fast lane is served by free workers.
-//
 // A change never runs sync work in the watcher: it queues NewMail, a small
 // fast-lane task.
 type Push[S any] struct {
 	// Park waits in IDLE on s until wake closes, ctx ends or the server
 	// reports a change (changed true).
 	Park func(ctx context.Context, s S, wake <-chan struct{}) (changed bool, err error)
-	// Listen blocks on its own connection until ctx ends or it fails. It
-	// calls up once connected and changed on every push event.
-	Listen func(ctx context.Context, up, changed func()) error
 	// NewMail is the fast task queued after a change. Nil queues nothing.
 	// It is called on no lock of the scheduler and may read the store.
 	NewMail func() Task[S]
@@ -94,9 +76,6 @@ type Push[S any] struct {
 	// RetryWait is how long to wait after the watcher failed with err. Nil
 	// waits 15 s.
 	RetryWait func(err error) time.Duration
-	// OnHealth, when set, is told when push comes up or goes down, so the
-	// runtime can skip or resume timed sync. It runs on no lock.
-	OnHealth func(healthy bool)
 }
 
 // UsesPoolSession reports whether the watcher holds one of the N sessions.
@@ -106,7 +85,6 @@ func (p Push[S]) UsesPoolSession() bool { return p.Park != nil }
 type Stats struct {
 	Fast, Normal, Running, Workers int
 	Idle                           bool // a worker holds a Park watcher's session
-	PushHealthy                    bool
 }
 
 // Scheduler runs one account's tasks. See the package doc.
@@ -198,8 +176,6 @@ type idleState[S any] struct {
 	worker      *worker
 	wake        chan struct{} // non-nil while parked
 	lastNewMail time.Time
-	healthy     bool
-	listenStop  context.CancelFunc
 }
 
 // worker is one worker goroutine. held is set while it holds a session
@@ -356,62 +332,7 @@ func (s *Scheduler[S]) EnablePush(cfg Push[S]) {
 		return
 	}
 	s.idle = &idleState[S]{cfg: cfg, lastNewMail: time.Now()}
-	if cfg.Park == nil && cfg.Listen != nil {
-		ctx, stop := context.WithCancel(s.ctx)
-		s.idle.listenStop = stop
-		s.wg.Go(func() { s.listen(ctx) })
-		return
-	}
 	s.dispatchLocked()
-}
-
-// listen runs a Listen watcher outside the pool until stop, with a wait
-// after every failure.
-func (s *Scheduler[S]) listen(ctx context.Context) {
-	cfg := s.idle.cfg
-	for ctx.Err() == nil {
-		err := cfg.Listen(ctx, func() { s.setHealth(true) }, func() {
-			if cfg.NewMail != nil {
-				s.Enqueue(cfg.NewMail())
-			}
-		})
-		s.setHealth(false)
-		if ctx.Err() != nil || errors.Is(err, ErrIdleUnsupported) {
-			return
-		}
-		wait := cfg.RetryWait(err)
-		if s.opts.Log != nil {
-			s.opts.Log.Debug("push failed, retrying later", "account", s.opts.AccountID, "wait", wait, "err", err)
-		}
-		t := time.NewTimer(wait)
-		select {
-		case <-ctx.Done():
-			t.Stop()
-			return
-		case <-t.C:
-		}
-	}
-}
-
-// PushHealthy reports whether the watcher is up now.
-func (s *Scheduler[S]) PushHealthy() bool {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	return s.idle != nil && s.idle.healthy
-}
-
-func (s *Scheduler[S]) setHealth(h bool) {
-	s.mu.Lock()
-	if s.idle == nil || s.idle.healthy == h {
-		s.mu.Unlock()
-		return
-	}
-	s.idle.healthy = h
-	fn := s.idle.cfg.OnHealth
-	s.mu.Unlock()
-	if fn != nil {
-		fn(h)
-	}
 }
 
 // Stopped reports whether Stop, Abort or the parent context ended the scheduler.
@@ -430,7 +351,6 @@ func (s *Scheduler[S]) Stats() Stats {
 		// A worker given the IDLE role may still be dialing: Idle waits
 		// for its session, as documented.
 		Workers: s.workers, Idle: s.idle != nil && s.idle.worker != nil && s.idle.worker.held,
-		PushHealthy: s.idle != nil && s.idle.healthy,
 	}
 }
 
@@ -489,9 +409,6 @@ func (s *Scheduler[S]) drop() {
 	}
 	s.fast, s.normal = nil, nil
 	s.wakeIdleLocked()
-	if s.idle != nil && s.idle.listenStop != nil {
-		s.idle.listenStop()
-	}
 	s.mu.Unlock()
 	for _, e := range queued {
 		e.done(ErrStopped)
@@ -723,8 +640,8 @@ func (s *Scheduler[S]) wakeIdleLocked() {
 // pick decides the next task for a worker, removes it from its lane and
 // marks it running. The fast lane goes first, except that after n fast tasks
 // in a row one eligible normal task goes next, so the normal lane never
-// starves. n is the effective pool size. The normal lane's order is the
-// Policy (nextNormalLocked). allowNormal is false for the IDLE worker at
+// starves. n is the effective pool size. The normal lane runs the highest
+// class first, FIFO within a class (nextNormalLocked). allowNormal is false for the IDLE worker at
 // N>=2, which serves only the fast lane; no worker takes a normal task while
 // the normal-lane tasks fill their slots (normalSlotsLocked).
 //
@@ -830,9 +747,6 @@ func (s *Scheduler[S]) nextNormalSkipLocked(skip map[*entry[S]]bool) *entry[S] {
 	for _, e := range s.normal {
 		if skip[e] || !s.eligibleLocked(e) {
 			continue
-		}
-		if s.opts.Policy == PolicyFIFO {
-			return e
 		}
 		if best == nil || e.class > best.class {
 			best = e
@@ -1002,17 +916,14 @@ func (s *Scheduler[S]) work(w *worker, e *entry[S]) {
 					s.noteFullLocked(seen)
 					s.mu.Unlock()
 				} else {
-					s.setHealth(false)
 					s.idleFailed(err)
 				}
 				s.exit(w)
 				return
 			}
-			s.setHealth(true)
 			changed, err := s.idle.cfg.Park(s.ctx, sess, wake)
 			s.unpark(wake)
 			if err != nil {
-				s.setHealth(false)
 				release(true)
 				if s.ctx.Err() == nil {
 					s.idleFailed(err)

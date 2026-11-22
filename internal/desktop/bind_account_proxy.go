@@ -250,12 +250,7 @@ func (a *App) TestAccountRoute(req RouteTestRequest) error {
 		{"SMTP", req.SMTPHost, req.SMTPPort},
 	}
 	if req.AccountID != 0 {
-		account, err := a.store.GetAccount(a.ctx, req.AccountID)
-		if err != nil {
-			return err
-		}
-		servers, err = a.protocolFor(*account).routeServers(*account, servers)
-		if err != nil {
+		if _, err := a.store.GetAccount(a.ctx, req.AccountID); err != nil {
 			return err
 		}
 	}

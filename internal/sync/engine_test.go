@@ -75,9 +75,6 @@ func TestEngineAbsorbsArrivalsDuringBodyFill(t *testing.T) {
 	engine := NewEngine(adapter, db, nil)
 	engine.FetchBatchSize = 1
 
-	var releases int
-	engine.ReleaseLock = func() { releases++ }
-
 	sawNewStub := make(chan struct{}, 1)
 	engine.OnStored = func(_ storage.Folder, ids []int64) {
 		if len(ids) == 0 {
@@ -99,9 +96,6 @@ func TestEngineAbsorbsArrivalsDuringBodyFill(t *testing.T) {
 
 	if _, err := engine.SyncFolder(ctx, folder); err != nil {
 		t.Fatalf("sync: %v", err)
-	}
-	if releases == 0 {
-		t.Fatal("ReleaseLock never called between body batches")
 	}
 	select {
 	case <-sawNewStub:

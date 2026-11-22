@@ -112,7 +112,7 @@ func (a *App) CreateFolder(req CreateFolderRequest) (FolderDTO, error) {
 		folder = storage.Folder{
 			AccountID: req.AccountID,
 			Name:      name,
-			IMAPPath:  a.protocolFor(*account).createdPath(path, remoteID),
+			IMAPPath:  path,
 			RemoteID:  remoteID,
 			Delimiter: delim,
 		}
@@ -167,20 +167,10 @@ func (a *App) RenameFolder(id int64, name string) error {
 		return err
 	}
 
-	remoteID := folder.RemoteID
-	if remoteID == "" {
-		remoteID = folder.IMAPPath
-	}
 	// The new path comes from the stored path and delimiter, never from a
 	// fresh LIST: a failed or partial LIST must not move the folder.
 	newPath := renamedPath(folder.IMAPPath, name, delim)
 	storeRename := func() error {
-		// a driver whose remote id is not the path keeps the stored path; IMAP
-		// rewrites it.
-		if a.protocolFor(*account).renameKeepsPath(*folder, remoteID) {
-			return a.store.RenameFolder(a.ctx, id, name, folder.IMAPPath)
-		}
-
 		// the server moved the children along with the parent, so their stored
 		// paths have to follow. do the subtree first: if the process dies
 		// between the two, a stale parent path is recoverable by renaming again,

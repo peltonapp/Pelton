@@ -9,6 +9,15 @@ import (
 	"github.com/peltonapp/Pelton/internal/storage"
 )
 
+func seedLocalStub(t *testing.T, db *storage.DB, folder storage.Folder, remoteID string) {
+	t.Helper()
+	if _, err := db.UpsertMessageListMeta(context.Background(), &storage.Message{
+		AccountID: folder.AccountID, FolderID: folder.ID, RemoteID: remoteID, Subject: "local-" + remoteID,
+	}); err != nil {
+		t.Fatalf("seed %q: %v", remoteID, err)
+	}
+}
+
 // chunkAdapter serves one large source by range.
 type chunkAdapter struct {
 	*fakeAdapter

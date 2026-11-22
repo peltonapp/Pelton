@@ -207,7 +207,7 @@ var (
 	ErrStopped = errors.New("syncsched: scheduler stopped")
 	// ErrDropped is the Done error of an on-demand task dropped from a full fast lane.
 	ErrDropped = errors.New("syncsched: dropped from a full fast lane")
-	// ErrIdleUnsupported is what Push.Park or Push.Listen returns when the
+	// ErrIdleUnsupported is what Push.Park returns when the
 	// server has no push. The scheduler then stops trying.
 	ErrIdleUnsupported = errors.New("syncsched: server does not support idle")
 )

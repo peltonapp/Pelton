@@ -51,12 +51,6 @@ type Engine struct {
 	// not start the next batch. The batch already in flight is never cancelled.
 	// Nil means never pause. This is cooperative: it does not abort the context.
 	PauseCheck func() bool
-	// ReleaseLock, when set, is called between body-fetch batches so the caller
-	// can drop a process-wide sync mutex. A long body backfill must not freeze
-	// watch / TriggerSync: one SQLite writer is fine; holding syncMu across
-	// thousands of downloads is not. The callback must re-acquire before
-	// returning. Nil for IMAP, where the connection must stay exclusive.
-	ReleaseLock func()
 	// OnProgress, when set, is told how far the current folder has got: how many
 	// message bodies this sync intends to fetch from it and how many are in.
 	OnProgress func(p FolderProgress)
@@ -470,35 +464,17 @@ func (e *Engine) syncFolderFull(ctx context.Context, folder storage.Folder, stat
 		headers      []Header
 		stateToken   string
 		generation   string
-		pageStored   map[string]struct{}
 		stubFailures int
 	)
 	if snap != nil {
 		headers, stateToken, generation = snap.headers, snap.stateToken, snap.generation
-	} else if pl, ok := e.adapter.(PagedLister); ok && e.FullList && backfill == 0 {
-		// FullList without a backfill clears the floor (windowFloor), so every
-		// listed id is a row reconcile would store anyway; inserting it per page
-		// cannot land mail below a floor. A backfill lowers the floor by a page
-		// instead, even with FullList set (scroll backfill), so it and runs
-		// without FullList (IMAP-style windows) take the plain ListMessages path.
-		pageStored = make(map[string]struct{})
-		headers, stateToken, generation, err = pl.ListMessagesPaged(ctx, listBox, e.pageStubWriter(ctx, folder, localStates, pageStored, &stubFailures))
 	} else {
 		headers, stateToken, generation, err = e.adapter.ListMessages(ctx, listBox)
 	}
 	if err != nil {
-		// Page stubs already stored stay: they are real server mail, and the
-		// next successful list reconciles deletes and flags. Nothing is
-		// deleted and the state token does not advance on a partial list.
+		// Nothing is deleted and the state token does not advance on a
+		// failed list.
 		return res, fmt.Errorf("sync: list messages in %q: %w", folder.IMAPPath, err)
-	}
-	if len(pageStored) > 0 {
-		// Reconcile must see the page stubs as local so it neither inserts
-		// them again nor treats them as new.
-		localStates, err = e.states.ListMessageStates(ctx, folder.ID)
-		if err != nil {
-			return res, fmt.Errorf("sync: reload local states for folder %q: %w", folder.IMAPPath, err)
-		}
 	}
 
 	folder, reset, err := e.handleGeneration(ctx, folder, storedGeneration(state.StoredUIDValidity), generation)
@@ -509,11 +485,9 @@ func (e *Engine) syncFolderFull(ctx context.Context, folder storage.Folder, stat
 	// The raw column, so a floor derived from sync_floor_uid gets written.
 	storedFloorID := folder.SyncFloorID
 	if reset {
-		// A generation change purges the folder, page stubs included, and the
-		// plan below stores every listed id again from the new snapshot. No
-		// row from the old generation survives. (A paged adapter may report no
-		// generation, so this only matters for one that grows one.)
-		pageStored = nil
+		// A generation change purges the folder, and the plan below stores
+		// every listed id again from the new snapshot. No row from the old
+		// generation survives.
 		state.SyncFloorID = ""
 		state.SyncFloorUID = 0
 		state.LastSeenUID = 0
@@ -545,7 +519,7 @@ func (e *Engine) syncFolderFull(ctx context.Context, folder storage.Folder, stat
 	outcome := e.executePlan(ctx, folder, plan, localByID, headersByRemoteID(headers), &planRes)
 	stubFailures += outcome.stubFailures
 	planErr := outcome.err()
-	res.ToFetch = withPageStubs(outcome.toFetch, headers, pageStored)
+	res.ToFetch = outcome.toFetch
 	res.unstubbed = outcome.unstubbed
 	res.Deleted = planRes.Deleted
 	res.FlagUpdated = planRes.FlagUpdated
@@ -649,8 +623,7 @@ func (e *Engine) syncFolderDelta(ctx context.Context, folder storage.Folder, sta
 
 // fetchNew downloads the bodies of the given remote ids, newest first, in
 // batches chosen by the engine and handed to the adapter. Between batches it
-// releases the caller's sync lock (when ReleaseLock is set) and absorbs any
-// mail that arrived since the list snapshot so new stubs land without waiting
+// absorbs any mail that arrived since the list snapshot so new stubs land without waiting
 // for the rest of the body campaign. Only ids in insertable may become new
 // rows (see fetchBatch); arrivals without a stub join it.
 func (e *Engine) fetchNew(ctx context.Context, folder storage.Folder, remoteIDs []string, insertable map[string]struct{}, res *FolderSyncResult) error {
@@ -689,13 +662,10 @@ func (e *Engine) fetchNew(ctx context.Context, folder storage.Folder, remoteIDs 
 			return newSoftPaused(queue)
 		}
 
-		// After each batch: drop the caller's sync lock so watch / refresh can
-		// run, then pick up any headers that arrived while we were downloading.
+		// After each batch, pick up any headers that arrived while we were
+		// downloading.
 		if len(queue) == 0 {
 			break
-		}
-		if e.ReleaseLock != nil {
-			e.ReleaseLock()
 		}
 		if e.AbsorbArrivals {
 			arrived, unstubbed, removed := e.absorbArrivals(ctx, &folder)
@@ -1110,66 +1080,6 @@ func headersByRemoteID(headers []Header) map[string]Header {
 	out := make(map[string]Header, len(headers))
 	for _, h := range headers {
 		out[h.RemoteID] = h
-	}
-	return out
-}
-
-// pageStubWriter returns the onPage callback for a paged full list. It stores
-// and announces stubs only for ids with no local row (insert-only: flags and
-// deletes wait for reconcile on the complete snapshot) and records them in
-// stored; failed counts stubs that did not store. A forced full list stops at a
-// page boundary when PauseCheck asks. It runs on the list call's goroutine.
-func (e *Engine) pageStubWriter(ctx context.Context, folder storage.Folder, localStates []storage.MessageState, stored map[string]struct{}, failed *int) func([]Header) error {
-	local := make(map[string]struct{}, len(localStates))
-	for _, s := range localStates {
-		if s.RemoteID != "" {
-			local[s.RemoteID] = struct{}{}
-		}
-	}
-	return func(page []Header) error {
-		fresh := make([]string, 0, len(page))
-		byID := make(map[string]Header, len(page))
-		for _, h := range page {
-			if _, ok := local[h.RemoteID]; ok || !h.HasListMeta {
-				continue
-			}
-			local[h.RemoteID] = struct{}{}
-			fresh = append(fresh, h.RemoteID)
-			byID[h.RemoteID] = h
-		}
-		ids, n := e.storeListStubs(ctx, folder, fresh, byID)
-		*failed += n
-		for _, rid := range fresh {
-			stored[rid] = struct{}{}
-		}
-		e.announce(folder, ids)
-		if e.ForceFull && e.pauseRequested() {
-			return ErrSoftPaused
-		}
-		return ctx.Err()
-	}
-}
-
-// withPageStubs adds ids stored by a paged list back into toFetch in snapshot
-// order. Reconcile sees those rows as local, so it no longer lists them, but
-// they still need bodies.
-func withPageStubs(toFetch []string, headers []Header, pageStored map[string]struct{}) []string {
-	if len(pageStored) == 0 {
-		return toFetch
-	}
-	want := make(map[string]struct{}, len(toFetch)+len(pageStored))
-	for _, id := range toFetch {
-		want[id] = struct{}{}
-	}
-	for id := range pageStored {
-		want[id] = struct{}{}
-	}
-	out := make([]string, 0, len(want))
-	for _, h := range headers {
-		if _, ok := want[h.RemoteID]; ok {
-			out = append(out, h.RemoteID)
-			delete(want, h.RemoteID)
-		}
 	}
 	return out
 }

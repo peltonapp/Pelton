@@ -15,7 +15,6 @@ import (
 	"github.com/peltonapp/Pelton/internal/outbox"
 	psmtp "github.com/peltonapp/Pelton/internal/smtp"
 	"github.com/peltonapp/Pelton/internal/storage"
-	psync "github.com/peltonapp/Pelton/internal/sync"
 )
 
 var _ mailProtocol = imapProtocol{}
@@ -30,10 +29,6 @@ func (p imapProtocol) olderStep(ctx context.Context, account storage.Account, fo
 
 func (p imapProtocol) onDemandBodies(ctx context.Context, account storage.Account, folder storage.Folder, remoteIDs []string) error {
 	return p.a.execIMAPOnDemandBodies(ctx, account, folder, remoteIDs)
-}
-
-func (p imapProtocol) bodyBatch(ctx context.Context, account storage.Account, folder storage.Folder) error {
-	return p.a.imapBodyBatch(ctx, account, folder)
 }
 
 func (p imapProtocol) planDownload(ctx context.Context, account storage.Account, folders []storage.Folder, since time.Time) ([]dlTask, []int64, error) {
@@ -77,10 +72,6 @@ func (p imapProtocol) watch(ctx context.Context, account storage.Account) {
 	rt.sched.EnablePush(p.a.imapPush(account))
 }
 
-func (p imapProtocol) needsTimedSync(int64) bool { return true }
-
-func (p imapProtocol) lockPerFolder() bool { return false }
-
 func (p imapProtocol) limitNeedsBodies(ctx context.Context, f storage.Folder, newLimit int) bool {
 	hasOlder, err := p.a.store.FolderHasOlderOnServer(ctx, f.ID)
 	if err != nil {
@@ -88,12 +79,6 @@ func (p imapProtocol) limitNeedsBodies(ctx context.Context, f storage.Folder, ne
 		return false
 	}
 	return hasOlder || newLimit == 0
-}
-
-func (p imapProtocol) withListEngine(ctx context.Context, account storage.Account, fn func(*psync.Engine) error) error {
-	return p.a.withIMAPSession(ctx, account, func(client mailClient) error {
-		return fn(p.a.newSyncEngine(pimap.NewAdapter(client), account.ID))
-	})
 }
 
 func (p imapProtocol) transmit(ctx context.Context, account storage.Account, m outbox.Message) error {
@@ -498,11 +483,6 @@ func (p imapProtocol) checkPassword(account storage.Account, password string) Pa
 	return PasswordCheckDTO{OK: true}
 }
 
-// routeServers is the servers the request names: imap and smtp.
-func (p imapProtocol) routeServers(_ storage.Account, requested []routeServer) ([]routeServer, error) {
-	return requested, nil
-}
-
 // discoverFolders lists the mailboxes and creates the folder rows, as the
 // account's first task: nothing else of the account starts until it ends.
 func (p imapProtocol) discoverFolders(ctx context.Context, account storage.Account) error {
@@ -524,9 +504,3 @@ func (p imapProtocol) folderPath(parent storage.Folder, name string) (string, er
 	}
 	return parent.IMAPPath + parent.Delimiter + name, nil
 }
-
-// createdPath is the path stored for a folder the server created.
-func (p imapProtocol) createdPath(path, _ string) string { return path }
-
-// renameKeepsPath is false: imap rewrites the path of a renamed folder.
-func (p imapProtocol) renameKeepsPath(storage.Folder, string) bool { return false }

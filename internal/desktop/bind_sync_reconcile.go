@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/peltonapp/Pelton/internal/desktop/syncsched"
+	pimap "github.com/peltonapp/Pelton/internal/imap"
 	"github.com/peltonapp/Pelton/internal/storage"
 	psync "github.com/peltonapp/Pelton/internal/sync"
 )
@@ -399,9 +400,9 @@ func (a *App) fullCheckUnit(ctx context.Context, account storage.Account, folder
 		res  psync.StubSyncResult
 		more bool
 	)
-	err = a.protocolFor(account).withListEngine(ctx, account, func(e *psync.Engine) error {
+	err = a.withIMAPSession(ctx, account, func(client mailClient) error {
 		var err error
-		res, more, err = a.reconcileList(ctx, e, account.ID, folder, c)
+		res, more, err = a.reconcileList(ctx, a.newSyncEngine(pimap.NewAdapter(client), account.ID), account.ID, folder, c)
 		return err
 	})
 	if rt := a.accountSync(account.ID); rt != nil {
