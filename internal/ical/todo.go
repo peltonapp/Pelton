@@ -48,6 +48,9 @@ type Todo struct {
 	// too. Zero means none.
 	SortOrder int
 	Alarms    []Alarm
+	// Estimate is how long the task is expected to take, from
+	// ESTIMATED-DURATION, zero for no estimate.
+	Estimate time.Duration
 }
 
 // Contact is a CONTACT: a name, and the address it points at through its
@@ -108,6 +111,11 @@ func ParseTodo(c *Component) (*Todo, error) {
 	t.Percent = clampInt(atoi(c.Text("PERCENT-COMPLETE")), 0, 100)
 	t.Sequence = atoi(c.Text("SEQUENCE"))
 	t.SortOrder = atoi(c.Text("X-APPLE-SORT-ORDER"))
+	if p := c.Prop("ESTIMATED-DURATION"); p != nil {
+		if d, err := ParseDuration(p.Value); err == nil && d > 0 {
+			t.Estimate = d
+		}
+	}
 	for _, p := range c.PropsNamed("CATEGORIES") {
 		for _, cat := range splitList(p.Value) {
 			if cat = strings.TrimSpace(unescapeText(cat)); cat != "" {
@@ -205,6 +213,11 @@ func (t *Todo) Apply() *Component {
 	setInt(c, "PRIORITY", t.Priority)
 	setInt(c, "PERCENT-COMPLETE", t.Percent)
 	setInt(c, "X-APPLE-SORT-ORDER", t.SortOrder)
+	if t.Estimate > 0 {
+		c.Set("ESTIMATED-DURATION", FormatDuration(t.Estimate))
+	} else {
+		c.Remove("ESTIMATED-DURATION")
+	}
 	if t.Sequence > 0 {
 		c.Set("SEQUENCE", strconv.Itoa(t.Sequence))
 	}

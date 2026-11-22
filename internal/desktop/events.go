@@ -100,6 +100,9 @@ const (
 	// EventFollowUpsChanged fires when a follow-up reminder is set, comes due,
 	// is answered or is cancelled, so the reminder lists reload.
 	EventFollowUpsChanged = "followups:changed"
+	// EventTimeBlocksChanged fires when a time block was made, moved, changed
+	// or deleted, or followed its calendar event. Subscribers refetch.
+	EventTimeBlocksChanged = "timeblocks:changed"
 	// EventFocusChanged fires when focus mode starts, ends or changes its end
 	// time, with the FocusDTO as payload.
 	EventFocusChanged = "focus:changed"
