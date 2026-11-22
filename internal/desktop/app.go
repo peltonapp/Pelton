@@ -333,6 +333,7 @@ func (a *App) startup(ctx context.Context) {
 	a.applyLogSettings()
 	a.applyCharsetFallback()
 	a.queue = outbox.NewQueue(store)
+	a.copyKeyringSecrets()
 	a.loadProxy()
 	close(a.storeReady)
 

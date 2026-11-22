@@ -44,6 +44,7 @@ var backupSkipSettings = map[string]bool{
 	settingRemoteDomains:   true,
 	draftsKey:              true,
 	settingThemesSeeded:    true,
+	settingKeyringCopied:   true,
 }
 
 // whitelistBackup is the trusted-sender allowlist as exported.
