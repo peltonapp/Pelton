@@ -15,6 +15,7 @@ import (
 	"github.com/emersion/go-imap/v2"
 	"github.com/microcosm-cc/bluemonday"
 
+	"github.com/peltonapp/Pelton/internal/desktop/syncsched"
 	"github.com/peltonapp/Pelton/internal/scripting"
 	"github.com/peltonapp/Pelton/internal/storage"
 )
@@ -159,11 +160,16 @@ func (a *App) scriptMailArrived(ids []int64, firstSync bool) {
 	}
 }
 
-// firstScriptSync reports whether this is the account's first full sync of
-// the session, and records that it happened.
+// firstScriptSync reports whether the account's first pass of the session is
+// still going: mail arriving in it is catch-up for the scripts.
 func (a *App) firstScriptSync(accountID int64) bool {
-	_, seen := a.scriptState.synced.LoadOrStore(accountID, true)
-	return !seen
+	_, done := a.scriptState.synced.Load(accountID)
+	return !done
+}
+
+// firstPassDone records that the account's first pass of the session ended.
+func (a *App) firstPassDone(accountID int64) {
+	a.scriptState.synced.Store(accountID, true)
 }
 
 // scriptMoved reports a message that moved; it is a snapshot from before the
@@ -578,25 +584,13 @@ func (s *scriptMail) Copy(_ context.Context, id int64, folder string) error {
 	if err != nil {
 		return err
 	}
-	cfg, err := a.resolveIMAP(*account)
-	if err != nil {
-		return err
-	}
-	syncMu.Lock()
-	defer syncMu.Unlock()
-	client, err := a.connectIMAP(cfg)
-	if err != nil {
-		return err
-	}
-	defer client.Close()
-	if err := client.Login(); err != nil {
-		return err
-	}
-	defer client.Logout()
-	if _, err := client.Select(source.IMAPPath); err != nil {
-		return fmt.Errorf("copy: select %q: %w", source.IMAPPath, err)
-	}
-	return client.CopyMessages([]imap.UID{imap.UID(m.UID)}, dest.IMAPPath)
+	err = a.runNow(a.ctx, *account, syncsched.KindMove, source.ID, func(_ context.Context, client mailClient) error {
+		if _, err := client.Select(source.IMAPPath); err != nil {
+			return fmt.Errorf("copy: select %q: %w", source.IMAPPath, err)
+		}
+		return client.CopyMessages([]imap.UID{imap.UID(m.UID)}, dest.IMAPPath)
+	})
+	return offlineOrErr(err)
 }
 
 func (s *scriptMail) Archive(ctx context.Context, id int64) error {

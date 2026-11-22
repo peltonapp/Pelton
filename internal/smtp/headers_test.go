@@ -116,3 +116,19 @@ func TestBuiltFromHeaderIsOneAddress(t *testing.T) {
 		}
 	}
 }
+
+func TestDomainOf(t *testing.T) {
+	tests := []struct{ email, want string }{
+		{"me@example.com", "example.com"},
+		{"first@second@example.com", "example.com"},
+		{"@example.com", "example.com"},
+		{"me@", fallbackDomain},
+		{"example.com", fallbackDomain},
+		{"", fallbackDomain},
+	}
+	for _, tt := range tests {
+		if got := domainOf(tt.email); got != tt.want {
+			t.Errorf("domainOf(%q) = %q, want %q", tt.email, got, tt.want)
+		}
+	}
+}

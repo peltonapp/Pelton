@@ -12,6 +12,7 @@ import (
 
 	"github.com/emersion/go-imap/v2"
 
+	"github.com/peltonapp/Pelton/internal/desktop/syncsched"
 	pimap "github.com/peltonapp/Pelton/internal/imap"
 	"github.com/peltonapp/Pelton/internal/storage"
 )
@@ -222,7 +223,7 @@ func (a *App) localAttachment(att storage.Attachment) (*storage.Attachment, erro
 	if err != nil {
 		return nil, err
 	}
-	content, err := a.fetchPart(*account, folder.IMAPPath, m.UID, att)
+	content, err := a.fetchPart(*account, *folder, m.UID, att)
 	if err != nil {
 		return nil, err
 	}
@@ -232,32 +233,29 @@ func (a *App) localAttachment(att storage.Attachment) (*storage.Attachment, erro
 // fetchPart fetches one message and returns the content of the part that
 // matches att: the part at the same position among the message's stored
 // attachments when the counts agree, else the first with the same name.
-func (a *App) fetchPart(account storage.Account, mailbox string, uid uint32, att storage.Attachment) ([]byte, error) {
-	cfg, err := a.resolveIMAP(account)
-	if err != nil {
-		return nil, err
-	}
+func (a *App) fetchPart(account storage.Account, folder storage.Folder, uid uint32, att storage.Attachment) ([]byte, error) {
 	stored, err := a.store.ListAttachments(a.mailCtx(), att.MessageID)
 	if err != nil {
 		return nil, err
 	}
-	syncMu.Lock()
-	defer syncMu.Unlock()
-	client, err := a.connectIMAP(cfg)
+	var msg *pimap.Message
+	err = a.runNow(a.ctx, account, syncsched.KindAttachment, folder.ID, func(_ context.Context, client mailClient) error {
+		if _, err := client.Select(folder.IMAPPath); err != nil {
+			return err
+		}
+		return client.FetchMessages([]imap.UID{imap.UID(uid)}, func(_ imap.UID, m *pimap.Message, err error) error {
+			if err != nil {
+				return err
+			}
+			msg = m
+			return nil
+		})
+	})
 	if err != nil {
-		return nil, err
+		return nil, offlineOrErr(err)
 	}
-	defer client.Close()
-	if err := client.Login(); err != nil {
-		return nil, err
-	}
-	defer client.Logout()
-	if _, err := client.Select(mailbox); err != nil {
-		return nil, err
-	}
-	msg, err := client.FetchMessage(imap.UID(uid))
-	if err != nil {
-		return nil, err
+	if msg == nil {
+		return nil, errAttachmentGone
 	}
 	part := matchPart(msg.Attachments, stored, att)
 	if part == nil {

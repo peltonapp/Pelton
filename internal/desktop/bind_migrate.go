@@ -15,6 +15,7 @@ import (
 
 	"github.com/emersion/go-imap/v2"
 
+	"github.com/peltonapp/Pelton/internal/desktop/syncsched"
 	"github.com/peltonapp/Pelton/internal/mailimport"
 	"github.com/peltonapp/Pelton/internal/scripting"
 	"github.com/peltonapp/Pelton/internal/storage"
@@ -669,10 +670,13 @@ func (a *App) importAutomation(ctx context.Context, name, description, trigger s
 	return err
 }
 
-// imapUploader appends to one account over its own connection, so a long
-// upload never holds up sync.
+// imapUploader appends to one account through its session pool: each
+// command is a task of its own, so an upload counts against the account's
+// connection cap and its throttle like sync does, and sync work gets a
+// session between two messages.
 type imapUploader struct {
-	client mailClient
+	a       *App
+	account storage.Account
 }
 
 func (a *App) openUploader(accountID int64) (*imapUploader, func(), error) {
@@ -680,51 +684,51 @@ func (a *App) openUploader(accountID int64) (*imapUploader, func(), error) {
 	if err != nil {
 		return nil, nil, err
 	}
-	cfg, err := a.resolveIMAP(*account)
-	if err != nil {
-		return nil, nil, err
-	}
-	client, err := a.connectIMAP(cfg)
-	if err != nil {
-		return nil, nil, err
-	}
-	if err := client.Login(); err != nil {
-		client.Close()
-		return nil, nil, err
-	}
-	return &imapUploader{client: client}, func() {
-		_ = client.Logout()
-		_ = client.Close()
-	}, nil
+	return &imapUploader{a: a, account: *account}, func() {}, nil
 }
 
-func (u *imapUploader) Delimiter(context.Context) (string, error) {
-	folders, err := u.client.ListFolders()
-	if err != nil {
-		return "", err
-	}
-	for _, f := range folders {
-		if f.Delimiter != 0 {
-			return string(f.Delimiter), nil
+// run runs fn as one upload task on a pooled session of the account.
+func (u *imapUploader) run(ctx context.Context, fn func(mailClient) error) error {
+	return u.a.runPooled(ctx, u.account, poolTask{
+		Kind: syncsched.KindUpload,
+		Run:  func(_ context.Context, c mailClient) error { return fn(c) },
+	})
+}
+
+func (u *imapUploader) Delimiter(ctx context.Context) (string, error) {
+	delim := "/"
+	err := u.run(ctx, func(c mailClient) error {
+		folders, err := c.ListFolders()
+		if err != nil {
+			return err
 		}
-	}
-	return "/", nil
-}
-
-func (u *imapUploader) EnsureMailbox(_ context.Context, name string) error {
-	folders, err := u.client.ListFolders()
-	if err != nil {
-		return err
-	}
-	for _, f := range folders {
-		if f.Name == name {
-			return nil
+		for _, f := range folders {
+			if f.Delimiter != 0 {
+				delim = string(f.Delimiter)
+				break
+			}
 		}
-	}
-	return u.client.CreateFolder(name)
+		return nil
+	})
+	return delim, err
 }
 
-func (u *imapUploader) Append(_ context.Context, mailbox string, raw []byte, flags storage.Flag, date time.Time) error {
+func (u *imapUploader) EnsureMailbox(ctx context.Context, name string) error {
+	return u.run(ctx, func(c mailClient) error {
+		folders, err := c.ListFolders()
+		if err != nil {
+			return err
+		}
+		for _, f := range folders {
+			if f.Name == name {
+				return nil
+			}
+		}
+		return c.CreateFolder(name)
+	})
+}
+
+func (u *imapUploader) Append(ctx context.Context, mailbox string, raw []byte, flags storage.Flag, date time.Time) error {
 	var out []imap.Flag
 	if flags.Has(storage.FlagSeen) {
 		out = append(out, imap.FlagSeen)
@@ -738,5 +742,5 @@ func (u *imapUploader) Append(_ context.Context, mailbox string, raw []byte, fla
 	if flags.Has(storage.FlagForwarded) {
 		out = append(out, imap.Flag("$Forwarded"))
 	}
-	return u.client.AppendMessage(mailbox, raw, out, date)
+	return u.run(ctx, func(c mailClient) error { return c.AppendMessage(mailbox, raw, out, date) })
 }

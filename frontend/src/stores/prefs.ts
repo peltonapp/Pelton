@@ -12,6 +12,7 @@ import { applyUserTheme } from '../theme/usertheme'
 import { uiFontStack, monoFontStack } from '../lib/fonts'
 import { setLocale } from '../lib/i18n'
 import { refreshWindowFrame } from './windowframe'
+import { SYNC_PARALLEL_DEFAULT, clampSyncParallel } from '../lib/syncparallel'
 
 // defaults match the backend defaults so the ui renders sanely even before the
 // first load resolves.
@@ -124,6 +125,7 @@ const defaults: UIPrefs = {
   menuBarNativeMinimal: false,
   menuBarIcons: false,
   windowMaterial: false,
+  ocrLanguages: '',
   timeFormat: 'auto',
   reduceMotion: false,
   handCursor: false,
@@ -163,8 +165,10 @@ const defaults: UIPrefs = {
   appLockIdleMinutes: 5,
   appLockOnLaunch: true,
   appLockHideNotifications: true,
-  syncMessageLimit: 50,
+  syncMessageLimit: 100,
   syncAutoBackfill: true,
+  syncMaxParallel: SYNC_PARALLEL_DEFAULT,
+  syncFullReconcileDays: 7,
   startupSelection: 'view:inbox',
   logToFile: false,
   logLevel: 'info',
@@ -825,9 +829,6 @@ export function setThemeDarkTimes(start: string, end: string): void {
   void setSetting(SettingKeys.themeDarkEnd, end)
 }
 
-// setMenuBarInApp shows the in-app menu bar on macOS. setMenuBarNativeMinimal
-// reduces the native macOS menu to the app menu while the in-app bar is on;
-// the backend rebuilds the native menu when either setting is written.
 // setWindowMaterial stores the native window material preference (Liquid
 // Glass on macOS, Mica on Windows). The window takes it at the next launch.
 export function setWindowMaterial(value: boolean): void {
@@ -835,6 +836,16 @@ export function setWindowMaterial(value: boolean): void {
   void setSetting(SettingKeys.windowMaterial, String(value))
 }
 
+// setOCRLanguages picks the pdf viewer's tesseract languages, "+" joined,
+// where "" follows the ui language.
+export function setOCRLanguages(value: string): void {
+  prefs.update((p) => ({ ...p, ocrLanguages: value }))
+  void setSetting(SettingKeys.ocrLanguages, value)
+}
+
+// setMenuBarInApp shows the in-app menu bar on macOS. setMenuBarNativeMinimal
+// reduces the native macOS menu to the app menu while the in-app bar is on;
+// the backend rebuilds the native menu when either setting is written.
 export function setMenuBarInApp(value: boolean): void {
   prefs.update((p) => ({ ...p, menuBarInApp: value }))
   void setSetting(SettingKeys.menuBarInApp, String(value))
@@ -1029,12 +1040,30 @@ export function setAppLockHideNotifications(value: boolean): void {
   void setSetting(SettingKeys.appLockHideNotifications, String(value))
 }
 
-// setSyncMessageLimit caps how many of a folder's newest messages a first sync
-// fetches. It only applies to folders that have not synced yet, so lowering it
-// never discards mail that is already cached.
+// setSyncMessageLimit sets how many of each folder's newest message bodies are
+// kept locally (0 = all). Raising it fetches the extra bodies in the
+// background; lowering it never discards mail that is already cached.
 export function setSyncMessageLimit(value: number): void {
   prefs.update((p) => ({ ...p, syncMessageLimit: value }))
   void setSetting(SettingKeys.syncMessageLimit, String(value))
+}
+
+// setSyncMaxParallel sets how many connections one mailbox may use at once,
+// the one listening for new mail included. User input is clamped to the
+// ui's 2–10; the backend accepts 1–10 and clamps again on write.
+export function setSyncMaxParallel(value: number): void {
+  const n = clampSyncParallel(value)
+  prefs.update((p) => ({ ...p, syncMaxParallel: n }))
+  void setSetting(SettingKeys.syncMaxParallel, String(n))
+}
+
+// setSyncFullReconcileDays sets how many days a folder may go without a full
+// check before startup re-checks it in the background. 0 leaves it to manual
+// Sync. Values outside 0–365 are clamped; the backend clamps again on write.
+export function setSyncFullReconcileDays(value: number): void {
+  const n = Math.min(365, Math.max(0, value))
+  prefs.update((p) => ({ ...p, syncFullReconcileDays: n }))
+  void setSetting(SettingKeys.syncFullReconcileDays, String(n))
 }
 
 // setSyncAutoBackfill toggles fetching the next batch of older mail

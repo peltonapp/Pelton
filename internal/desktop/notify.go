@@ -426,6 +426,10 @@ func notifyBody(m *storage.Message, s notifyStrings) string {
 // and notify_other.go.
 func (a *App) sendNotification(n notification) {
 	n = a.maskForLock(n)
+	if a.notificationForTest != nil {
+		a.notificationForTest(n)
+		return
+	}
 	if err := a.deliverNotification(n); err != nil {
 		a.log.Warn("notify", "err", err)
 	}

@@ -10,7 +10,7 @@ import (
 func newProfileTestDB(t *testing.T) *DB {
 	t.Helper()
 	ctx := context.Background()
-	db, err := Open(filepath.Join(t.TempDir(), "test.db"))
+	db, err := openMigrated(filepath.Join(t.TempDir(), "test.db"))
 	if err != nil {
 		t.Fatalf("open: %v", err)
 	}
@@ -50,6 +50,7 @@ func use(t *testing.T, db *DB, p Profile) {
 // The migration has to leave every existing install as one profile holding
 // everything it already had.
 func TestMigrationCreatesTheMainProfile(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	db := newProfileTestDB(t)
 
@@ -73,6 +74,7 @@ func TestMigrationCreatesTheMainProfile(t *testing.T) {
 }
 
 func TestMainProfileCannotBeDeleted(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	db := newProfileTestDB(t)
 
@@ -100,6 +102,7 @@ func TestMainProfileCannotBeDeleted(t *testing.T) {
 
 // The whole point of profiles: a setting changed in one is not the other's.
 func TestSettingsAreSeparatePerProfile(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	db := newProfileTestDB(t)
 	work := addProfile(t, db, "Work", Profile{})
@@ -133,6 +136,7 @@ func TestSettingsAreSeparatePerProfile(t *testing.T) {
 // Sharing is the other half: a shared area reads and writes main's rows, so a
 // change shows up in both.
 func TestSharedSettingsWriteThroughToMain(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	db := newProfileTestDB(t)
 	work := addProfile(t, db, "Work", Profile{ShareSettings: true})
@@ -164,6 +168,7 @@ func TestSharedSettingsWriteThroughToMain(t *testing.T) {
 }
 
 func TestAccountsAreScopedToTheProfile(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	db := newProfileTestDB(t)
 
@@ -208,6 +213,7 @@ func TestAccountsAreScopedToTheProfile(t *testing.T) {
 // One account visible in two profiles is the reason everything lives in one
 // database: its mail is cached and synced once.
 func TestAnAccountCanBeInTwoProfiles(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	db := newProfileTestDB(t)
 
@@ -231,6 +237,7 @@ func TestAnAccountCanBeInTwoProfiles(t *testing.T) {
 }
 
 func TestDeleteProfileLeavesTheAccountsAlone(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	db := newProfileTestDB(t)
 
@@ -275,6 +282,7 @@ func TestDeleteProfileLeavesTheAccountsAlone(t *testing.T) {
 }
 
 func TestOnlyOneProfileIsActive(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	db := newProfileTestDB(t)
 	work := addProfile(t, db, "Work", Profile{})
@@ -302,6 +310,7 @@ func TestOnlyOneProfileIsActive(t *testing.T) {
 // "Copy from" is a snapshot: editing the copy afterwards must not touch the
 // original, which is what makes it different from sharing.
 func TestCopySettingsIsASnapshot(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	db := newProfileTestDB(t)
 	if err := db.Set(ctx, "density", "compact"); err != nil {
@@ -332,6 +341,7 @@ func TestCopySettingsIsASnapshot(t *testing.T) {
 }
 
 func TestSignaturesAndViewsFollowTheProfile(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	db := newProfileTestDB(t)
 
@@ -364,6 +374,7 @@ func TestSignaturesAndViewsFollowTheProfile(t *testing.T) {
 }
 
 func TestSharedSignaturesAndViewsAreVisible(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	db := newProfileTestDB(t)
 

@@ -288,7 +288,7 @@
             {:else if step === 'list'}
               <ListStep />
             {:else if step === 'mailbox'}
-              <AddMailboxWizard embedded offerImport={false} on:added={onMailboxAdded} on:done={() => go('done', 1)} />
+              <AddMailboxWizard embedded offerImport={false} skipFolderPicker on:added={onMailboxAdded} on:done={() => go('done', 1)} />
               <button type="button" class="import" on:click={() => (showImport = true)}>
                 <Ph svg={importIcon} size={18} />
                 <span class="import-text">

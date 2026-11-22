@@ -9,7 +9,7 @@ import (
 func newFolderTestDB(t *testing.T) (*DB, int64) {
 	t.Helper()
 	ctx := context.Background()
-	db, err := Open(filepath.Join(t.TempDir(), "test.db"))
+	db, err := openMigrated(filepath.Join(t.TempDir(), "test.db"))
 	if err != nil {
 		t.Fatalf("open: %v", err)
 	}
@@ -28,6 +28,7 @@ func newFolderTestDB(t *testing.T) (*DB, int64) {
 // existed, and every one discovered later, has to keep syncing. Only an
 // explicit uncheck changes that.
 func TestFoldersSyncByDefault(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	db, accountID := newFolderTestDB(t)
 
@@ -46,6 +47,7 @@ func TestFoldersSyncByDefault(t *testing.T) {
 }
 
 func TestSetFolderSyncExcluded(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	db, accountID := newFolderTestDB(t)
 
@@ -92,6 +94,7 @@ func TestSetFolderSyncExcluded(t *testing.T) {
 // TestExcludingKeepsCachedMail pins the promise the ui makes: unchecking a
 // folder stops it being updated, it does not throw away what is already there.
 func TestExcludingKeepsCachedMail(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	db, accountID := newFolderTestDB(t)
 

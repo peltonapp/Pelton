@@ -40,21 +40,21 @@ func parseMailto(raw string) MailtoDraft {
 
 	path := rest
 	query := ""
-	if i := strings.IndexByte(rest, '?'); i >= 0 {
-		path = rest[:i]
-		query = rest[i+1:]
+	if before, after, ok := strings.Cut(rest, "?"); ok {
+		path = before
+		query = after
 	}
 
 	var draft MailtoDraft
 	tos := decodeAddressList(path)
 
-	for _, pair := range strings.Split(query, "&") {
+	for pair := range strings.SplitSeq(query, "&") {
 		if pair == "" {
 			continue
 		}
 		key, value := pair, ""
-		if eq := strings.IndexByte(pair, '='); eq >= 0 {
-			key, value = pair[:eq], pair[eq+1:]
+		if before, after, ok := strings.Cut(pair, "="); ok {
+			key, value = before, after
 		}
 		// RFC 6068 field names are case-insensitive; the value keeps its own
 		// case once decoded.
@@ -85,7 +85,7 @@ func decodeAddressList(path string) []string {
 		return nil
 	}
 	var out []string
-	for _, part := range strings.Split(path, ",") {
+	for part := range strings.SplitSeq(path, ",") {
 		if a := strings.TrimSpace(unescape(part)); a != "" {
 			out = append(out, a)
 		}
@@ -96,7 +96,7 @@ func decodeAddressList(path string) []string {
 // splitAddresses splits an already-decoded comma-separated address string.
 func splitAddresses(s string) []string {
 	var out []string
-	for _, part := range strings.Split(s, ",") {
+	for part := range strings.SplitSeq(s, ",") {
 		if a := strings.TrimSpace(part); a != "" {
 			out = append(out, a)
 		}

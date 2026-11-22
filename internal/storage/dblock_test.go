@@ -74,12 +74,10 @@ func TestConcurrentWritersQueueRatherThanFail(t *testing.T) {
 	errs := make(chan error, writers)
 	var wg sync.WaitGroup
 	for i := range writers {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+		wg.Go(func() {
 			_, err := db.CreateAccount(ctx, &Account{Email: string(rune('a'+i)) + "@example.com"})
 			errs <- err
-		}()
+		})
 	}
 	wg.Wait()
 	close(errs)

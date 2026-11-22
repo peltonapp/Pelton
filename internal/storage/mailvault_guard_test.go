@@ -31,6 +31,9 @@ var vaultGuards = []string{
 var vaultOptOuts = map[string]string{
 	// the vault's own machinery.
 	"insertMessage":          "the insert path; sealed rows reach it emptied by insertSealed",
+	"fillSealed":             "fills a vaulted stub with emptied columns and seals the content",
+	"upsertListMeta":         "a vaulted folder's new stub goes through insertListSealed, a sealed row refreshes list state only",
+	"replaceMessageBody":     "routes a vaulted folder's fill through fillSealed inside the write transaction",
 	"InsertMessage":          "routes a vaulted folder through insertSealed",
 	"sealedState":            "folder and vault ids only, read by the gates",
 	"sealExisting":           "the sealing job",
@@ -43,8 +46,8 @@ var vaultOptOuts = map[string]string{
 	"purgeDerived":           "deletes what other tables copied out of a message being sealed",
 
 	// writes keyed by a row, folder or thread the caller already holds.
-	"SetMessageFlags": "write by id", "DeleteMessage": "write by id",
-	"MarkFlagsPending": "write by id", "ClearFlagsPending": "write by id",
+	"DeleteMessage":         "write by id",
+	"MarkFlagsPending":      "write by id",
 	"MarkCopiesFlagPending": "flag write by Message-ID; a sealed row's id is a keyed hash",
 	"MarkDeletePending":     "write by id", "MarkFolderDeletePending": "write by folder",
 	"ClearDeletePending": "write by id", "PurgeFolderMessages": "delete by folder",
@@ -56,10 +59,21 @@ var vaultOptOuts = map[string]string{
 	"MessagesNeedingRefetch": "ids and uids for the charset repair", "NextLocalUID": "the next uid of a local folder",
 	"RepairMessageText": "write by id that refuses sealed rows (vault_id = 0)",
 	"mergeThread":       "renumbers thread ids, no content",
+	"rethread":          "thread ids of one row a fill holds; a sealed fill passes the row with keyed hashes",
 
 	// sync state: ids, uids, flags and pins, never content.
 	"ListMessageStates": "uids and flags for sync", "FolderFlagColors": "uids and colors for sync",
 	"FolderPinStates": "uids and pins for sync", "DueSnoozes": "ids of due snoozes; readers go through GetMessage",
+	"AdoptServerFlags": "flag write by remote id for sync", "ResolvePendingFlags": "flag write by id after a push",
+	"DeleteCachedMessage": "delete by id", "FolderHasMessages": "existence of rows in one folder for sync",
+	"MessageBodyStates": "body state by remote id for sync", "MessageIDByRemoteID": "id by remote id for sync",
+	"MessageIDsByRemoteID": "ids by remote id for sync", "MessageNeedsBody": "body state of one row for sync",
+	"MessageSizesByRemoteID": "sizes by remote id for sync", "MessageStatesByRemoteID": "uids and flags by remote id for sync",
+	"RemoteIDsNeedingBody": "remote ids of stubs for the body pass", "remoteIDsNeedingBodyNewestQuery": "builder for RemoteIDsNeedingBody",
+	"bodyFillTarget": "id and body state of the row a fill writes", "RecordSearchState": "search state write by id",
+	"recoverStagingRoot":     "ids of rows whose attachment files were staged",
+	"reindexBatch":           "read for ListMessagesForReindex, which drops every row of a vault folder and every sealed row",
+	"ListMessagesForReindex": "drops every row of a vault folder and every sealed row: vault mail is never indexed",
 
 	// threading of legacy rows: sealed rows are threaded on insert with keyed hashes and an empty subject.
 	"BackfillThreads": "threads rows inserted before threading existed", "unthreadedRows": "rows with thread_id 0",

@@ -245,13 +245,14 @@ func (a *App) TestAccountRoute(req RouteTestRequest) error {
 	if dial == nil {
 		dial = (&net.Dialer{Timeout: 20 * time.Second}).DialContext
 	}
-	servers := []struct {
-		name string
-		host string
-		port int
-	}{
+	servers := []routeServer{
 		{"IMAP", req.IMAPHost, req.IMAPPort},
 		{"SMTP", req.SMTPHost, req.SMTPPort},
+	}
+	if req.AccountID != 0 {
+		if _, err := a.store.GetAccount(a.ctx, req.AccountID); err != nil {
+			return err
+		}
 	}
 	for _, s := range servers {
 		if s.host == "" {

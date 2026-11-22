@@ -17,8 +17,10 @@
   import { recording } from '../../stores/shortcuts'
   import SegmentedSetting from './SegmentedSetting.svelte'
   import StepSlider from './StepSlider.svelte'
+  import { clampSyncParallel, syncParallelOptions } from '../../lib/syncparallel'
   import AccentPicker from './AccentPicker.svelte'
   import TechToggles from './TechToggles.svelte'
+  import OCRSettings from './OCRSettings.svelte'
   import ToastPositionPicker from './ToastPositionPicker.svelte'
   import ShortcutSettings from './ShortcutSettings.svelte'
   import SignaturesSection from './SignaturesSection.svelte'
@@ -100,6 +102,8 @@
     setCloseAction,
     setStartHidden,
     setSyncMessageLimit,
+    setSyncMaxParallel,
+    setSyncFullReconcileDays,
     setSyncAutoBackfill,
     setDefaultEditorMode,
     setComposeAutocomplete,
@@ -245,6 +249,7 @@
     { cat: 'display', label: $t('settingsPanel.label.monoFont'), kw: 'font monospace code' },
     { cat: 'display', label: $t('settingsPanel.label.charsetFallback'), kw: 'encoding charset unicode gibberish mojibake utf8 latin' },
     { cat: 'display', label: $t('settings.lockPanes'), kw: 'panes layout lock' },
+    { cat: 'display', label: $t('settingsPanel.ocr.heading'), kw: 'ocr scan scanned pdf tesseract text recognition language' },
     { cat: 'composing', label: $t('settingsPanel.label.defaultEditor'), kw: 'editor html plain markdown' },
     { cat: 'composing', label: $t('settingsPanel.toggle.autocomplete'), kw: 'autocomplete recipients' },
     { cat: 'composing', label: $t('settingsPanel.toggle.chipRecipients'), kw: 'chips recipients' },
@@ -279,7 +284,9 @@
     { cat: 'power', label: $t('settingsPanel.toggle.syncProgressBar'), kw: 'sync progress bar percent count' },
     { cat: 'power', label: $t('settingsPanel.label.closeAction'), kw: 'close button tray background quit exit' },
     { cat: 'power', label: $t('settingsPanel.toggle.startHidden'), kw: 'start minimized hidden tray background launch login autostart' },
-    { cat: 'power', label: $t('settingsPanel.label.syncMessageLimit'), kw: 'sync limit messages older initial download' },
+    { cat: 'power', label: $t('settingsPanel.label.syncMaxParallel'), kw: 'parallel connections sync concurrent pool' },
+    { cat: 'power', label: $t('settingsPanel.label.syncFullReconcileDays'), kw: 'full check reconcile verify days sync' },
+    { cat: 'power', label: $t('settingsPanel.label.syncMessageLimit'), kw: 'sync limit messages older initial download bodies' },
     { cat: 'power', label: $t('settingsPanel.toggle.syncAutoBackfill'), kw: 'older mail backfill scroll load more' },
     { cat: 'power', label: $t('settingsPanel.toggle.offlineIndicator'), kw: 'offline' },
     { cat: 'power', label: $t('settingsPanel.toggle.flagColorSync'), kw: 'flag color sync' },
@@ -364,6 +371,22 @@
 
   function onSyncMessageLimit(event: CustomEvent<string>): void {
     setSyncMessageLimit(Number(event.detail))
+  }
+
+  function onSyncMaxParallel(event: CustomEvent<string>): void {
+    setSyncMaxParallel(Number(event.detail))
+  }
+
+  $: syncFullReconcileOptions = [
+    { key: '1', label: '1' },
+    { key: '3', label: '3' },
+    { key: '7', label: '7' },
+    { key: '14', label: '14' },
+    { key: '30', label: '30' },
+    { key: '0', label: $t('settingsPanel.syncFullReconcile.manual') },
+  ]
+  function onSyncFullReconcileDays(event: CustomEvent<string>): void {
+    setSyncFullReconcileDays(Number(event.detail))
   }
 
   // what the window's close button does.
@@ -1570,6 +1593,8 @@
             />
           </div>
           <p class="hint">{$t('settingsPanel.hint.statusUnread')}</p>
+          <h4 class="subhead">{$t('settingsPanel.ocr.heading')}</h4>
+          <OCRSettings />
         </section>
       {:else if active === 'gestures'}
         <section>
@@ -1668,6 +1693,15 @@
             {$t('settingsPanel.hint.syncProgressBarDetail')}
           </p>
           <StepSlider
+            label={$t('settingsPanel.label.syncMaxParallel')}
+            value={String(clampSyncParallel($prefs.syncMaxParallel))}
+            options={syncParallelOptions}
+            on:change={onSyncMaxParallel}
+          />
+          <p class="hint">
+            {$t('settingsPanel.hint.syncMaxParallel')}
+          </p>
+          <StepSlider
             label={$t('settingsPanel.label.syncMessageLimit')}
             value={String($prefs.syncMessageLimit)}
             options={syncLimitOptions}
@@ -1675,6 +1709,15 @@
           />
           <p class="hint">
             {$t('settingsPanel.hint.syncMessageLimit')}
+          </p>
+          <StepSlider
+            label={$t('settingsPanel.label.syncFullReconcileDays')}
+            value={String($prefs.syncFullReconcileDays)}
+            options={syncFullReconcileOptions}
+            on:change={onSyncFullReconcileDays}
+          />
+          <p class="hint">
+            {$t('settingsPanel.hint.syncFullReconcileDays')}
           </p>
           <div class="toggle" title={$t('settingsPanel.hint.syncAutoBackfill')}>
             <span class="row-label">{$t('settingsPanel.toggle.syncAutoBackfill')}</span>

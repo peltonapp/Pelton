@@ -203,6 +203,15 @@ export function AddOAuthAccount(req: $models.AddAccountRequest): $CancellablePro
 }
 
 /**
+ * AddOCRLanguage asks for a tesseract language file (.traineddata, optionally
+ * gzipped) and copies it into the ocr folder. Returns its code, or "" if the
+ * user canceled. A file with the same code replaces the old one.
+ */
+export function AddOCRLanguage(): $CancellablePromise<string> {
+    return $Call.ByID(2447172345);
+}
+
+/**
  * AddPasswordAccount creates a password-authenticated account: it stores the
  * metadata, files the password in the keyring, discovers the folder tree and
  * runs an initial sync.
@@ -1360,8 +1369,10 @@ export function DeleteAIProvider(id: string): $CancellablePromise<void> {
 /**
  * DeleteAccount removes an account entirely: its keyring secret, its cached mail
  * (folders, messages and attachment rows cascade in the db) and its attachment
- * files on disk. Deleting the keyring secret also lets any running idle loop for
- * the account exit cleanly, since it stops on a missing-credentials error.
+ * files on disk. First it hard-cancels that account only: its worker (IDLE),
+ * scheduler tasks and IMAP sessions stop, and nothing can start
+ * sync work for it again. Other accounts keep running. If the row cannot be
+ * deleted, a worker the account had is started again.
  */
 export function DeleteAccount(id: number): $CancellablePromise<void> {
     return $Call.ByID(1278365736, id);
@@ -1744,9 +1755,9 @@ export function DismissStillSending(sender: string): $CancellablePromise<void> {
 }
 
 /**
- * DownloadMessageOffline pins a message for offline availability. Sync already
- * caches the body; this records the deliberate keep signal that drives the
- * downloaded indicator.
+ * DownloadMessageOffline keeps a message available offline. A message that so
+ * far has only its list entry gets its body fetched first; pinning a row with
+ * no body would show it as downloaded while there is nothing to read.
  */
 export function DownloadMessageOffline(id: number): $CancellablePromise<void> {
     return $Call.ByID(1176395672, id);
@@ -1756,7 +1767,8 @@ export function DownloadMessageOffline(id: number): $CancellablePromise<void> {
  * DownloadRange downloads every message from startDateRFC3339 to today that is
  * not already cached, across all accounts and folders, and pins them offline for
  * fast local search. includeAttachments controls whether attachment bytes are
- * persisted. Progress (percent + eta) is emitted for the status bar.
+ * persisted for messages not yet in the cache; a cached stub always gets its
+ * attachments. Progress (percent + eta) is emitted for the status bar.
  */
 export function DownloadRange(startDateRFC3339: string, includeAttachments: boolean): $CancellablePromise<void> {
     return $Call.ByID(5650659, startDateRFC3339, includeAttachments);
@@ -2814,6 +2826,15 @@ export function ListOAuthProviders(): $CancellablePromise<{ [_ in string]?: stri
 }
 
 /**
+ * ListOCRLanguages returns the codes of the language files the user added.
+ */
+export function ListOCRLanguages(): $CancellablePromise<string[]> {
+    return $Call.ByID(2208958617).then(($result: any) => {
+        return $$createType38($result);
+    });
+}
+
+/**
  * ListOccurrences returns the occurrences overlapping [from, to), both
  * rfc3339, sorted by start. calendarIDs limits them to those calendars; empty
  * means every visible calendar.
@@ -3358,6 +3379,13 @@ export function OpenMessageWindow(id: number, title: string): $CancellablePromis
 }
 
 /**
+ * OpenOCRFolder shows the ocr folder in the system file manager.
+ */
+export function OpenOCRFolder(): $CancellablePromise<void> {
+    return $Call.ByID(1452344790);
+}
+
+/**
  * OpenOutboxWindow shows the send activity in its own window, or brings the
  * one already open forward.
  */
@@ -3567,6 +3595,15 @@ export function ReadICSFiles(paths: string[]): $CancellablePromise<$models.ICSFi
 }
 
 /**
+ * ReadOCRLanguage returns a user-added language file for tesseract to load.
+ */
+export function ReadOCRLanguage(code: string): $CancellablePromise<string> {
+    return $Call.ByID(3311324412, code).then(($result: any) => {
+        return $Create.ByteSlice($result);
+    });
+}
+
+/**
  * ReadOutboxLog returns the send activity of this run, oldest first. It is
  * kept in memory only and is empty after a restart.
  */
@@ -3705,6 +3742,13 @@ export function RemoveMailVault(id: number): $CancellablePromise<void> {
  */
 export function RemoveNoteFromProject(rel: string, projectID: number): $CancellablePromise<void> {
     return $Call.ByID(2642488179, rel, projectID);
+}
+
+/**
+ * RemoveOCRLanguage deletes a language file the user added.
+ */
+export function RemoveOCRLanguage(code: string): $CancellablePromise<void> {
+    return $Call.ByID(3747166912, code);
 }
 
 /**
@@ -3963,9 +4007,9 @@ export function ResumeImportJob(id: number): $CancellablePromise<void> {
 
 /**
  * ResumePendingDownload restarts a bulk download that was still running when
- * the app last closed. planDownload/planAccount already skip anything cached,
- * so replaying the same range only fetches whatever the previous run had not
- * gotten to yet. Called once from startup; a no-op if nothing was pending.
+ * the app last closed. planDownload/planAccount already skip anything that has
+ * its body, so replaying the same range only fetches whatever the previous run
+ * had not gotten to yet. Called once from startup; a no-op if nothing was pending.
  */
 export function ResumePendingDownload(): $CancellablePromise<void> {
     return $Call.ByID(548967280);
@@ -5037,11 +5081,8 @@ export function SplitCounts(req: $models.ListMessagesRequest): $CancellablePromi
 }
 
 /**
- * StartAccountSync runs the first sync of an account and parks it on idle, in
- * the background. The wizard calls it after the folder choice, which is why
- * adding an account no longer starts syncing on its own. Calling it for an
- * account that is already syncing is harmless: syncAccount serializes on the
- * same lock every other sync uses.
+ * StartAccountSync runs the first sync of an account and parks it on idle,
+ * replacing any existing worker for that account.
  */
 export function StartAccountSync(accountID: number): $CancellablePromise<void> {
     return $Call.ByID(1507504286, accountID);

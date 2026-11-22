@@ -21,6 +21,12 @@ const (
 	// cached with an encoding nothing could read, conversations were regrouped,
 	// or messages became answered or forwarded.
 	EventMailRepaired = "mail:repaired"
+	// EventMailUpdated fires when a message row changes in place, such as a stub
+	// gaining its full body after a background fetch.
+	EventMailUpdated = "mail:updated"
+	// EventMailBodyFailed fires when the body of a message opened in the reading
+	// pane could not be fetched, after every retry, so the pane stops waiting.
+	EventMailBodyFailed = "mail:bodyFailed"
 	// EventSyncProgress fires as folders are synced so the ui can show progress.
 	EventSyncProgress = "sync:progress"
 	// EventSyncState fires when background sync starts or stops, with any error.
@@ -275,6 +281,20 @@ type SyncProgressEvent struct {
 	// the "mailbox 3 of 12" part of the line.
 	FoldersDone  int `json:"foldersDone"`
 	FoldersTotal int `json:"foldersTotal"`
+	// Phase is "stubs" while the named folder is listed, "bodies" while bodies
+	// are fetched, and "verify" on the background folder check's own line.
+	Phase string `json:"phase"`
+}
+
+// MailUpdatedEvent is the payload for EventMailUpdated. The reading pane reloads
+// when the open message gains a body that was fetched in the background.
+type MailUpdatedEvent struct {
+	MessageID int64 `json:"messageId"`
+}
+
+// MailBodyFailedEvent is the payload for EventMailBodyFailed.
+type MailBodyFailedEvent struct {
+	MessageID int64 `json:"messageId"`
 }
 
 // SyncStateEvent is the payload for EventSyncState. Error is empty on success.
@@ -293,6 +313,9 @@ type AccountSyncStateEvent struct {
 // call sites stay terse and an emit before startup (or in a test) is a safe
 // no-op.
 func (a *App) emit(name string, payload any) {
+	if a.emitForTest != nil {
+		a.emitForTest(name, payload)
+	}
 	if a.wapp == nil || !a.runtimeReady.Load() {
 		return
 	}

@@ -136,6 +136,7 @@ func linkHashes(link []byte, ids []string) []string {
 func sealedRowFrom(m *Message, t *vaultTarget) Message {
 	row := Message{
 		ID: m.ID, AccountID: m.AccountID, FolderID: m.FolderID, UID: m.UID,
+		RemoteID: m.RemoteID, BodyComplete: m.BodyComplete,
 		Date: m.Date, Flags: m.Flags, HasAttachments: m.HasAttachments, SizeBytes: m.SizeBytes,
 		FlagColor: m.FlagColor, SnoozeUntil: m.SnoozeUntil, SnoozeHidden: m.SnoozeHidden,
 		Offline: m.Offline, Pinned: m.Pinned, VaultID: t.id,
@@ -252,6 +253,105 @@ func (d *DB) insertSealed(ctx context.Context, tx *sql.Tx, m *Message, atts []In
 	}
 	m.ID, m.VaultID, m.ThreadID = id, t.id, row.ThreadID
 	return id, written, nil
+}
+
+// fillSealed completes the stub id of a vaulted folder inside tx. The row
+// keeps only sync and list state, and the fetched content goes into
+// mail_vault_sealed, so a fill never leaves a body in clear, whether the stub
+// was sealed when it was listed or the folder joined the vault since.
+func (d *DB) fillSealed(ctx context.Context, tx *sql.Tx, id int64, m *Message, flags Flag, atts []IncomingAttachment, t *vaultTarget) ([]string, error) {
+	mk, err := mailvault.NewMessageKey(t.pub, t.uid)
+	if err != nil {
+		return nil, err
+	}
+	defer mk.Wipe()
+
+	full := *m
+	full.ID = id
+	full.Flags = flags
+	full.HasAttachments = len(atts) > 0
+	full.BodyComplete = true
+	row := sealedRowFrom(&full, t)
+	res, err := tx.ExecContext(ctx, `
+UPDATE messages SET
+  uid = CASE WHEN ? != 0 THEN ? ELSE uid END,
+  message_id = ?, subject = '', from_address = '', from_name = '', to_addresses = '', cc_addresses = '',
+  date = CASE WHEN ? != '' THEN ? ELSE date END, flags = ?,
+  body_plain = '', body_html = '', has_attachments = ?, size_bytes = ?,
+  list_unsubscribe = '', list_unsubscribe_post = 0,
+  smime_status = '', smime_signer = '', smime_email = '', smime_issuer = '', smime_detail = '',
+  smime_certs = X'', smime_fingerprint = '',
+  reply_to = '', auth_spf = '', auth_dkim = '', auth_dmarc = '', auth_spf_domain = '', auth_dkim_domain = '',
+  charset_guess = '', in_reply_to = ?, [references] = ?, thread_subject = '', mail_kind = 0, list_id = '',
+  vault_id = ?, body_complete = 1, `+textRewritten+`
+WHERE id = ? AND body_complete = 0`,
+		m.UID, m.UID, row.MessageID, formatTime(m.Date), formatTime(m.Date), uint8(flags),
+		boolToInt(full.HasAttachments), m.SizeBytes,
+		encodeThreadingIDs(row.InReplyTo), encodeThreadingIDs(row.References), t.id, id)
+	if err != nil {
+		return nil, fmt.Errorf("storage: update sealed message %d: %w", id, err)
+	}
+	if n, err := res.RowsAffected(); err != nil {
+		return nil, fmt.Errorf("storage: update sealed message %d: %w", id, err)
+	} else if n != 1 {
+		return nil, ErrMessageBodyComplete
+	}
+	if err := rethread(ctx, tx, &row); err != nil {
+		return nil, err
+	}
+	if err := purgeDerived(ctx, tx, &full); err != nil {
+		return nil, err
+	}
+
+	env := envelopeFrom(m)
+	var written []string
+	for i, in := range atts {
+		meta := sealedAttachment{Filename: sanitizeFilename(in.Filename), ContentType: in.ContentType,
+			ContentID: in.ContentID, Size: in.Size}
+		att := &Attachment{MessageID: id}
+		if in.Content != nil {
+			data, err := io.ReadAll(in.Content)
+			if err != nil {
+				return written, fmt.Errorf("storage: read attachment: %w", err)
+			}
+			meta.Size = int64(len(data))
+			rel, err := d.writeSealedFile(m.AccountID, id, i, mk, data)
+			mailvault.Wipe(data)
+			if err != nil {
+				return written, err
+			}
+			written = append(written, rel)
+			att.DiskPath = rel
+		}
+		if err := insertAttachment(ctx, tx, att); err != nil {
+			return written, err
+		}
+		env.Attachments = append(env.Attachments, meta)
+	}
+	if err := insertSealedRow(ctx, tx, id, t.id, mk, env, sealedBody{Plain: m.BodyPlain, HTML: m.BodyHTML}, m.PGPSource); err != nil {
+		return written, err
+	}
+	m.VaultID = t.id
+	return written, nil
+}
+
+// insertListSealed stores a new list stub of a vaulted folder: the row holds
+// list state only, and the envelope and the preview are sealed.
+func insertListSealed(ctx context.Context, tx *sql.Tx, stub *Message, t *vaultTarget) (int64, error) {
+	mk, err := mailvault.NewMessageKey(t.pub, t.uid)
+	if err != nil {
+		return 0, err
+	}
+	defer mk.Wipe()
+	row := sealedRowFrom(stub, t)
+	id, err := insertMessage(ctx, tx, &row)
+	if err != nil {
+		return 0, err
+	}
+	if err := insertSealedRow(ctx, tx, id, t.id, mk, envelopeFrom(stub), sealedBody{Plain: stub.BodyPlain}, nil); err != nil {
+		return 0, err
+	}
+	return id, nil
 }
 
 func insertSealedRow(ctx context.Context, ex execer, id, vaultID int64, mk *mailvault.MessageKey, env sealedEnvelope, body sealedBody, source []byte) error {

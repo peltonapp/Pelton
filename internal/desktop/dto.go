@@ -55,6 +55,9 @@ type AccountDTO struct {
 	// prompt to stop asking for this account. The ui marks the mailbox instead
 	// of interrupting.
 	PasswordPromptDismissed bool `json:"passwordPromptDismissed"`
+	// SyncMaxParallel is the account's own parallel-sync limit, or null when
+	// it follows the global setting.
+	SyncMaxParallel *int `json:"syncMaxParallel"`
 	// TrustedCerts are the fingerprints of certificates the user accepted for
 	// this mailbox, formatted for reading. CASubjects name the certificates in
 	// the CA it trusts, empty when it has none.
@@ -261,6 +264,9 @@ type MessageDetailDTO struct {
 	// folder has synced.
 	ReplyIDs   []int64 `json:"replyIds"`
 	ForwardIDs []int64 `json:"forwardIds"`
+	// BodyComplete is false while the row is still a list stub whose preview
+	// may be shown before the full body arrives.
+	BodyComplete bool `json:"bodyComplete"`
 }
 
 // TrackingPixelDTO is one remote image the scan thinks exists to report the
@@ -322,6 +328,7 @@ func toAccountDTO(a storage.Account) AccountDTO {
 		Color:              a.Color,
 
 		PasswordPromptDismissed: a.PasswordPromptDismissed,
+		SyncMaxParallel:         a.SyncMaxParallel,
 
 		TrustedCerts: displayPins(a.TrustedCerts),
 		CASubjects:   caSubjects(a.CAPEM),
@@ -375,6 +382,8 @@ func folderRole(f storage.Folder) string {
 	}
 	for _, attr := range f.Attributes {
 		switch strings.ToLower(strings.TrimPrefix(attr, "\\")) {
+		case "inbox":
+			return roleInbox
 		case "sent":
 			return roleSent
 		case "drafts":

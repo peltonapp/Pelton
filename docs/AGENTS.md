@@ -4,7 +4,7 @@ Pelton is a free, open source, privacy-focused email client for macOS, Windows a
 
 ## Install
 
-- macOS: .dmg per release at https://github.com/peltonapp/Pelton/releases (unsigned; right-click Open or `xattr -cr /Applications/Pelton.app`)
+- macOS 13 or newer: .dmg per release at https://github.com/peltonapp/Pelton/releases (unsigned; right-click Open or `xattr -cr /Applications/Pelton.app`)
 - Windows: `Pelton-<version>-windows-amd64-installer.exe` from releases (unsigned)
 - Fedora: `sudo dnf copr enable arnek/Pelton && sudo dnf install pelton`
 - Raw rpm: `Pelton-<version>-linux-fedora-x86_64.rpm` from releases
@@ -33,7 +33,11 @@ Off by default, Settings > External. Requires the user's own API key, stored in 
 
 ## Sync progress
 
-Status bar shows a progress bar while a sync or a backfill runs, counting message bodies. The total comes from the reconcile plan (what will be fetched), not from the mailbox size, and grows as folders open; before the first folder is reconciled the bar is indeterminate. Settings > Power > "Sync progress bar", on by default. With Settings > Power > "Verbose sync" on, the line also names the mailbox, the account and the imap host and port.
+Status bar shows a progress bar while a sync or a backfill runs, counting message bodies. The total comes from the reconcile plan (what will be fetched), not from the mailbox size, and grows as folders open; before the first folder is reconciled the bar is indeterminate. Settings > Power > "Sync progress bar", on by default. With Settings > Power > "Verbose sync" on, the line also names the mailbox, the account and the imap host and port. The background full check is not a running sync: the Sync button stops after the change pass, and the line reads "Checking folders (n/m)" without the spinner or the bar.
+
+## Sync settings
+
+Settings > Sync & power. "Messages to sync per folder": how many of the newest messages are kept per folder, default 100; only these get list rows and full bodies, and "All" keeps every message newest first. Older mail is fetched from the server at the end of the list (automatically, or with "Load older mail" when auto-fetch is off) or by raising the limit; opening a listed message whose body is not downloaded yet fetches it. "Parallel sync connections": the UI offers 2 to 10, default 3, counting every connection a mailbox opens, including the one that listens for new mail; a mailbox can override it in its editor, and the app lowers it by itself when the server refuses a connection. Sending never waits for these connections. "Full folder check every (days)": default 7, 1/3/7/14/30 or "Manual only" (0); startup and push syncs ask the server only for changes (IMAP CONDSTORE), a folder whose last full check is older than this is re-listed in full in the background at the lowest priority, and manual Sync queues the full check only for folders not checked in the last 24 hours. With 1 connection new mail waits for the current batch, never for the whole background download. Settings > Accounts shows a connection line per mailbox: `IMAP · host:port`.
 
 ## Status bar clock and unread count
 

@@ -30,7 +30,7 @@ func TestSyncIntoAVaultKeepsHeadersSealed(t *testing.T) {
 		[]storage.MailVaultMember{{AccountID: folder.AccountID, FolderID: folder.ID}}); err != nil {
 		t.Fatal(err)
 	}
-	engine := NewEngine(&trustClient{fakeClient: fakeClient{uids: []uint32{5}}, raw: []byte(raw)}, db, nil)
+	engine := NewEngine(newTrustAdapter(raw, 5), db, nil)
 	engine.AuthServ = phishing.ServerFor("me@gmail.com", "imap.gmail.com", "smtp.gmail.com")
 	observed := 0
 	engine.ObserveRaw = func(storage.Folder, []byte) { observed++ }

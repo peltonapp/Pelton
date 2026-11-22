@@ -46,6 +46,9 @@ export interface Account {
   // the user told the missing-password prompt to stop asking about this
   // account. It still cannot sync; the ui marks it instead of interrupting.
   passwordPromptDismissed: boolean
+  // this account's own parallel sync connection limit (the ui offers 2-10, the backend accepts 1-10), or null/absent
+  // when it follows the global setting.
+  syncMaxParallel?: number | null
   // fingerprints of server certificates the user accepted for this mailbox,
   // formatted for reading, and the subjects of the CA it trusts (#446).
   trustedCerts: string[]
@@ -381,6 +384,9 @@ export interface MessageDetail extends MessageSummary {
   // message appears once its Sent folder has synced.
   replyIds: number[]
   forwardIds: number[]
+  // bodyComplete is false while the row is still a stub and the reading pane
+  // may be showing a preview before the full body arrives.
+  bodyComplete?: boolean
 }
 
 /**
@@ -1140,6 +1146,9 @@ export interface UIPrefs {
   // windowMaterial puts the window over a native material (Liquid Glass on
   // macOS, Mica on Windows) from the next launch on.
   windowMaterial: boolean
+  // ocrLanguages is the "+" joined tesseract language list the pdf viewer
+  // reads with; empty follows the ui language.
+  ocrLanguages: string
   // timeFormat picks the clock for rendered times: auto (locale), 12, or 24.
   timeFormat: string
   // reduceMotion disables ui transitions and animations.
@@ -1232,12 +1241,18 @@ export interface UIPrefs {
   appLockIdleMinutes: number
   appLockOnLaunch: boolean
   appLockHideNotifications: boolean
-  // syncMessageLimit caps how many of a folder's newest messages the first sync
-  // fetches; older mail stays on the server until asked for. 0 means no limit.
+  // syncMessageLimit caps how many of a folder's newest message bodies the
+  // first sync fetches. 0 means no limit.
   syncMessageLimit: number
   // syncAutoBackfill fetches the next batch of older mail automatically on
   // reaching the end of the list. Off puts it behind a button instead.
   syncAutoBackfill: boolean
+  // syncMaxParallel is how many IMAP sessions one mailbox may use at once
+  // (ui 2–10, backend 1–10, default 3), the IDLE one included. Sending does not count.
+  syncMaxParallel: number
+  // syncFullReconcileDays is how many days a folder may go without a full
+  // check against the server before startup re-checks it; 0 = manual Sync only.
+  syncFullReconcileDays: number
   // what the sidebar selects on launch: 'view:<key>' for a unified view,
   // 'folder:<id>' for one account folder, or 'last' to restore the previous
   // session. A target that no longer exists falls back to the unified inbox.

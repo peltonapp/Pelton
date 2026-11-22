@@ -59,7 +59,7 @@ type KeyLookupLogEntry struct {
 // as new ones arrive.
 const keyLookupLogKeep = 1000
 
-func unix(t time.Time) int64 {
+func unixSeconds(t time.Time) int64 {
 	if t.IsZero() {
 		return 0
 	}
@@ -112,7 +112,7 @@ ON CONFLICT(addr) DO UPDATE SET
     prefer_encrypt = excluded.prefer_encrypt,
     gossip_timestamp = excluded.gossip_timestamp,
     gossip_key = excluded.gossip_key`,
-		p.Addr, unix(p.LastSeen), unix(p.AutocryptTimestamp), p.PublicKey, p.PreferEncrypt, unix(p.GossipTimestamp), p.GossipKey)
+		p.Addr, unixSeconds(p.LastSeen), unixSeconds(p.AutocryptTimestamp), p.PublicKey, p.PreferEncrypt, unixSeconds(p.GossipTimestamp), p.GossipKey)
 	if err != nil {
 		return fmt.Errorf("storage: save autocrypt peer %s: %w", p.Addr, err)
 	}
@@ -192,7 +192,7 @@ func (d *DB) SaveCachedKey(ctx context.Context, c CachedKey) error {
 	_, err := d.sql.ExecContext(ctx, `
 INSERT INTO key_lookup_cache (addr, source, public_key, fetched_at) VALUES (?, ?, ?, ?)
 ON CONFLICT(addr, source) DO UPDATE SET public_key = excluded.public_key, fetched_at = excluded.fetched_at`,
-		c.Addr, c.Source, c.Key, unix(c.FetchedAt))
+		c.Addr, c.Source, c.Key, unixSeconds(c.FetchedAt))
 	if err != nil {
 		return fmt.Errorf("storage: cache key for %s: %w", c.Addr, err)
 	}
@@ -207,7 +207,7 @@ INSERT INTO contact_key_history (addr, fingerprint, source, first_seen) VALUES (
 ON CONFLICT(addr, fingerprint) DO UPDATE SET
     source = CASE WHEN excluded.first_seen < first_seen THEN excluded.source ELSE source END,
     first_seen = MIN(first_seen, excluded.first_seen)`,
-		addr, fingerprint, source, unix(at))
+		addr, fingerprint, source, unixSeconds(at))
 	if err != nil {
 		return fmt.Errorf("storage: record key for %s: %w", addr, err)
 	}
@@ -268,7 +268,7 @@ INSERT INTO contact_keys (addr, fingerprint, source, accepted_at, verified, pref
 ON CONFLICT(addr) DO UPDATE SET
     fingerprint = excluded.fingerprint, source = excluded.source, accepted_at = excluded.accepted_at,
     verified = excluded.verified, preference = excluded.preference`,
-		c.Addr, c.Fingerprint, c.Source, unix(c.AcceptedAt), verified, c.Preference)
+		c.Addr, c.Fingerprint, c.Source, unixSeconds(c.AcceptedAt), verified, c.Preference)
 	if err != nil {
 		return fmt.Errorf("storage: save contact key for %s: %w", c.Addr, err)
 	}
@@ -310,7 +310,7 @@ func (d *DB) ForgetContactKeys(ctx context.Context, addr string) error {
 func (d *DB) AddKeyLookupLog(ctx context.Context, e KeyLookupLogEntry) error {
 	if _, err := d.sql.ExecContext(ctx,
 		`INSERT INTO key_lookup_log (at, source, addr, outcome) VALUES (?, ?, ?, ?)`,
-		unix(e.At), e.Source, e.Addr, e.Outcome); err != nil {
+		unixSeconds(e.At), e.Source, e.Addr, e.Outcome); err != nil {
 		return fmt.Errorf("storage: log key lookup: %w", err)
 	}
 	if _, err := d.sql.ExecContext(ctx,

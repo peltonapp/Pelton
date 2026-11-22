@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/peltonapp/Pelton/internal/storage"
+	"github.com/peltonapp/Pelton/internal/storage/storagetest"
 )
 
 // newTestQueue opens a real migrated store in a temp dir and seeds one account,
@@ -16,7 +17,7 @@ func newTestQueue(t *testing.T) (*Queue, int64) {
 	t.Helper()
 	ctx := context.Background()
 
-	db, err := storage.Open(filepath.Join(t.TempDir(), "test.db"))
+	db, err := storagetest.Open(filepath.Join(t.TempDir(), "test.db"))
 	if err != nil {
 		t.Fatalf("open store: %v", err)
 	}
