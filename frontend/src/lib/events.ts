@@ -93,6 +93,7 @@ export interface DownloadProgressEvent {
 
 export interface AttachmentProgressEvent {
   running: boolean
+  attachmentId: number
   filename: string
   bytesDone: number
   bytesTotal: number

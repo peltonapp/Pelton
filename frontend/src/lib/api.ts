@@ -103,6 +103,28 @@ export function windowMaterialActive(): Promise<boolean> {
   return App.WindowMaterialActive()
 }
 
+// the tesseract language files the user added, by code (bind_ocr.go).
+export async function listOCRLanguages(): Promise<string[]> {
+  return (await App.ListOCRLanguages()) ?? []
+}
+
+export function addOCRLanguage(): Promise<string> {
+  return App.AddOCRLanguage()
+}
+
+export function removeOCRLanguage(code: string): Promise<void> {
+  return App.RemoveOCRLanguage(code)
+}
+
+// readOCRLanguage returns a user-added language file as base64.
+export function readOCRLanguage(code: string): Promise<string> {
+  return App.ReadOCRLanguage(code)
+}
+
+export function openOCRFolder(): Promise<void> {
+  return App.OpenOCRFolder()
+}
+
 // isNightly reports whether this is an automated nightly build cut from the dev
 // branch. Nightlies are untested and keep their own separate data directory, so
 // the ui warns about it at every launch and marks the status bar.
@@ -1451,6 +1473,7 @@ export const SettingKeys = {
   menuBarInApp: 'menu_bar_in_app',
   menuBarNativeMinimal: 'menu_bar_native_minimal',
   windowMaterial: 'window_material',
+  ocrLanguages: 'ocr_languages',
   menuBarIcons: 'menu_bar_icons',
   menuBarLayout: 'menu_bar_layout',
   paletteUsage: 'palette_usage',

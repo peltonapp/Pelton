@@ -128,6 +128,7 @@ func (a *App) copyAttachmentProgress(att storage.Attachment, dest string, fileIn
 	defer out.Close()
 
 	pw := &progressWriter{
+		id:       att.ID,
 		total:    att.SizeBytes,
 		filename: att.Filename,
 		fileIdx:  fileIndex,
@@ -144,6 +145,7 @@ func (a *App) copyAttachmentProgress(att storage.Attachment, dest string, fileIn
 // throttles to at most one event per ~64 KiB so a stream of tiny writes does not
 // flood the event bus.
 type progressWriter struct {
+	id       int64
 	total    int64
 	written  int64
 	lastEmit int64
@@ -159,12 +161,13 @@ func (w *progressWriter) Write(p []byte) (int, error) {
 	if w.written-w.lastEmit >= 64<<10 || w.written == w.total {
 		w.lastEmit = w.written
 		w.emit(EventAttachmentProgress, AttachmentProgressEvent{
-			Running:    true,
-			Filename:   w.filename,
-			BytesDone:  w.written,
-			BytesTotal: w.total,
-			FilesDone:  w.fileIdx,
-			FilesTotal: w.files,
+			Running:      true,
+			AttachmentID: w.id,
+			Filename:     w.filename,
+			BytesDone:    w.written,
+			BytesTotal:   w.total,
+			FilesDone:    w.fileIdx,
+			FilesTotal:   w.files,
 		})
 	}
 	return n, nil
