@@ -170,7 +170,7 @@
     <ul class="tasks">
       {#each open as task (task.id)}
         <!-- svelte-ignore a11y-no-noninteractive-element-interactions -->
-        <li class:overdue={isOverdue(task, now)} on:pointerdown={(e) => !(e.target instanceof HTMLButtonElement) && armTaskDrag(e, task, blockMinutes(task))}>
+        <li class:overdue={isOverdue(task, now)} on:pointerdown={(e) => !(e.target as HTMLElement).closest('button') && armTaskDrag(e, task, blockMinutes(task))}>
           <span class="grip" aria-hidden="true"><Ph svg={gripIcon} size={12} /></span>
           <div class="what">
             <span class="name">{task.title || $t('tasks.untitled')}</span>
