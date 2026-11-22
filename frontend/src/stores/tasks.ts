@@ -11,6 +11,8 @@ import {
   listTaskLists,
   listTaskMailMarks,
   listTasks,
+  listTaskPlans,
+  releaseTaskTimeBlocks,
   resolveTaskConflict,
   restoreTasks,
   setTaskDone,
@@ -21,6 +23,7 @@ import {
 import { onCalendarChanged, type Unsubscribe } from '../lib/events'
 import { badgeCount, type TaskScope } from '../lib/tasklogic'
 import { errorMessage, pushActions, toastError, toastInfo } from './toast'
+import { askConfirm } from './confirm'
 import { t } from '../lib/i18n'
 import type { RemovedTask, Task, TaskDraft, TaskList, TaskSaveResult, TaskSettings } from '../lib/types'
 
@@ -108,6 +111,7 @@ export function emptyDraft(listId: number): TaskDraft {
     contacts: [],
     eventUids: [],
     sortOrder: 0,
+    estimate: 0,
     force: false,
   }
 }
@@ -135,6 +139,7 @@ export function draftOf(task: Task): TaskDraft {
     contacts: task.contacts.map((c) => ({ ...c })),
     eventUids: [...task.eventUids],
     sortOrder: task.sortOrder,
+    estimate: task.estimate ?? 0,
     force: false,
   }
 }
@@ -247,10 +252,14 @@ export async function moveTaskDue(task: Task, due: string): Promise<boolean> {
  * what was deleted, or null when it did not go through.
  */
 export async function removeTask(task: Task): Promise<RemovedTask[] | null> {
+  const dropFuture = await askAboutBlocks(task)
   const before = get(tasks)
   tasks.update((list) => list.filter((x) => x.id !== task.id && !(x.listId === task.listId && x.parent === task.uid)))
   try {
     const result = await deleteTask(task.id)
+    if (dropFuture !== null) {
+      await releaseTaskTimeBlocks(task.uid, task.title, dropFuture)
+    }
     await loadTasks()
     const tr = get(t)
     pushActions('success', tr('tasks.deleted'), [{ label: tr('tasks.undo'), run: () => void undoRemove(result.removed) }], 8000)
@@ -260,6 +269,31 @@ export async function removeTask(task: Task): Promise<RemovedTask[] | null> {
     toastError(errorMessage(err))
     return null
   }
+}
+
+// a task with time blocks still ahead asks whether they go with it. null
+// means it has no blocks at all, so there is nothing to keep or delete.
+async function askAboutBlocks(task: Task): Promise<boolean | null> {
+  let plan
+  try {
+    plan = (await listTaskPlans()).find((p) => p.taskUid === task.uid)
+  } catch {
+    return null
+  }
+  if (!plan) {
+    return null
+  }
+  if (plan.future === 0) {
+    return false
+  }
+  const tr = get(t)
+  return askConfirm({
+    title: (plan.future === 1 ? tr('tasks.blocks.deleteOne') : tr('tasks.blocks.deleteMany')).replace('{n}', String(plan.future)),
+    body: tr('tasks.blocks.deleteBody'),
+    confirmLabel: tr('tasks.blocks.deleteConfirm'),
+    cancelLabel: tr('tasks.blocks.keep'),
+    danger: true,
+  })
 }
 
 /** Brings deleted tasks back. */

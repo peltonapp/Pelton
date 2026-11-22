@@ -92,6 +92,7 @@ function task(id: number, title: string, due: string): Task {
     contacts: [],
     eventUids: [],
     sortOrder: 0,
+    estimate: 0,
     created: '',
     readOnly: false,
     pending: false,

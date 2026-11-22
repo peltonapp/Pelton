@@ -14112,6 +14112,12 @@ export class TimeBlockDTO {
     "calendarId": number;
 
     /**
+     * EventUID is the UID of that event, so the calendar can draw the block
+     * in its place instead of twice.
+     */
+    "eventUid": string;
+
+    /**
      * EventTitle is how the event is named: "" follows the setting,
      * "generic" or "title".
      */
@@ -14167,6 +14173,9 @@ export class TimeBlockDTO {
         }
         if (!("calendarId" in $$source)) {
             this["calendarId"] = 0;
+        }
+        if (!("eventUid" in $$source)) {
+            this["eventUid"] = "";
         }
         if (!("eventTitle" in $$source)) {
             this["eventTitle"] = "";

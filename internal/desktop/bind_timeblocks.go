@@ -100,6 +100,9 @@ type TimeBlockDTO struct {
 	// CalendarID is the calendar the block is written to, 0 for a block kept
 	// on this device only.
 	CalendarID int64 `json:"calendarId"`
+	// EventUID is the UID of that event, so the calendar can draw the block
+	// in its place instead of twice.
+	EventUID string `json:"eventUid"`
 	// EventTitle is how the event is named: "" follows the setting,
 	// "generic" or "title".
 	EventTitle string `json:"eventTitle"`
@@ -419,6 +422,7 @@ func (a *App) blockDTO(b storage.TimeBlock, bc *blockContext) TimeBlockDTO {
 		Masked:     mail.masked,
 		Done:       b.Done,
 		CalendarID: b.CalendarID,
+		EventUID:   b.EventUID,
 		EventTitle: b.EventTitle,
 		LinkState:  b.LinkState,
 	}

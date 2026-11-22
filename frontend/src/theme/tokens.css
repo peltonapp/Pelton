@@ -142,6 +142,8 @@
      a month cell or the all-day lane, the width of an event's color edge, and
      the event popover and editor. the hour height follows the density below. */
   --cal-sidebar-width: 236px;
+  /* the plan pane of tasks beside the day and week views. */
+  --cal-plan-width: 264px;
   --cal-gutter: 56px;
   --cal-lane-height: 20px;
   --cal-edge: 3px;

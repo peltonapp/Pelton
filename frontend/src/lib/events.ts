@@ -48,6 +48,7 @@ export const EventNames = {
   mailVault: 'mailvault:changed',
   calendarSync: 'calendar:sync',
   calendarChanged: 'calendar:changed',
+  timeBlocksChanged: 'timeblocks:changed',
   calendarReminder: 'calendar:reminder',
   icsOpen: 'calendar:open-files',
   taskReminder: 'tasks:reminder',
@@ -507,6 +508,11 @@ export function onMailVault(cb: (e: { id: number; locked: boolean; removed: bool
 /** onCalendarSync fires as calendars sync, and once more when the run ends. */
 export function onCalendarSync(cb: (e: CalendarSyncEvent) => void): Unsubscribe {
   return EventsOn(EventNames.calendarSync, (e: CalendarSyncEvent) => cb(e))
+}
+
+/** onTimeBlocksChanged fires when a time block was made, changed or deleted. Subscribers refetch. */
+export function onTimeBlocksChanged(cb: () => void): Unsubscribe {
+  return EventsOn(EventNames.timeBlocksChanged, () => cb())
 }
 
 /** onCalendarChanged fires when events or calendars changed, from a sync or an edit. */

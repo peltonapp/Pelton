@@ -27,7 +27,8 @@
   import { startChat, stopChat } from './stores/chat'
   import { popupIsOpen } from './lib/popups'
   import { openMenuFromKeyboard } from './lib/keymenu'
-  import { calendarFocus, calendarImport, calendarQuickAdd } from './stores/calendar'
+  import { blockMailRequest, calendarFocus, calendarImport, calendarQuickAdd, planMyDay } from './stores/calendar'
+  import { blockTimeForMail } from './lib/timeblockmail'
   import { formatTime } from './lib/calformat'
   import type { TimeFormat } from './lib/format'
   import { frameIntegrated } from './stores/windowframe'
@@ -519,6 +520,23 @@
       return
     }
     void createTasksFromMail(ids)
+  }
+
+  // blocks the next free time to deal with the open mail, or each selected one.
+  function blockTimeForOpenMail(): void {
+    const ids = selectedMessages.length > 1 ? selectedMessages.map((m) => m.id) : [currentMessage()?.id].filter((id): id is number => id !== undefined)
+    if (ids.length === 0) {
+      toastInfo(get(t)('app.toast.openMessageFirst'))
+      return
+    }
+    void blockTimeForMail(ids)
+  }
+
+  $: if ($blockMailRequest) {
+    blockMailRequest.set(false)
+    if (!classic) {
+      blockTimeForOpenMail()
+    }
   }
 
   // files the open conversation, or the selected ones, under a project.
@@ -1461,6 +1479,18 @@
       case 'go-tasks':
         if (!classic) {
           openSpace('tasks')
+        }
+        break
+      case 'plan-day':
+        if (!classic) {
+          planMyDay()
+        }
+        break
+      case 'block-time':
+        // the calendar and tasks take it themselves; in mail it blocks time
+        // for the open or selected mail.
+        if (!classic && $space === 'mail') {
+          blockTimeForOpenMail()
         }
         break
       case 'go-notes':
