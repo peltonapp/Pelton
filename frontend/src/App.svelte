@@ -68,6 +68,7 @@
     loadInviteCard,
     loadMeetingPrep,
     loadMenuBarEditor,
+    loadMyDayPanel,
     loadNewsletterManager,
     loadNightlyDialog,
     loadNotesScreen,
@@ -192,7 +193,6 @@
   } from './stores/listselect'
   import { selectFolder, selectView, revealMessage } from './stores/selection'
   import { setTheme, setThemeId, setMyDayPanel } from './stores/prefs'
-  import MyDayPanel from './components/myday/MyDayPanel.svelte'
   import { myDayFits } from './lib/myday'
   import { openCreateFolder, openRenameFolder, openDeleteFolder, openEmptyTrash } from './stores/folderdialog'
   import { setFolderPinned, listThemes } from './lib/api'
@@ -761,7 +761,7 @@
       loadEncryptionIndicator,
       loadDatePeek,
       ...(get(prefs).design === 'classic' ? [] : [loadInviteCard]),
-      ...(get(prefs).design === 'classic' ? [] : [loadPromiseStrip]),
+      ...(get(prefs).design === 'classic' ? [] : [loadPromiseStrip, loadMyDayPanel]),
     ])
     void initShortcuts()
     void initCoach().then((stop) => unsubscribers.push(stop))
@@ -2487,7 +2487,9 @@
         </div>
         {/if}
         {#if showMyDay}
-          <MyDayPanel on:close={() => setMyDayPanel(false)} />
+          {#await loadMyDayPanel() then m}
+            <svelte:component this={m.default} on:close={() => setMyDayPanel(false)} />
+          {/await}
         {/if}
       </div>
     {:else if $space === 'contacts'}

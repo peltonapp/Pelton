@@ -537,10 +537,8 @@ func validEventTitle(mode string) string {
 	return blockEventTitleFollow
 }
 
-// CreateTimeBlock makes a block, and writes it to its calendar when it names
-// one. A block for a mail in a vault keeps no title of the mail's: its title
-// is read from the mail while the vault is open.
-func (a *App) CreateTimeBlock(req TimeBlockRequest) (TimeBlockDTO, error) {
+// createBlock makes one block, the way CreateTimeBlocks does.
+func (a *App) createBlock(req TimeBlockRequest) (TimeBlockDTO, error) {
 	if err := a.ready(); err != nil {
 		return TimeBlockDTO{}, err
 	}
@@ -551,8 +549,10 @@ func (a *App) CreateTimeBlock(req TimeBlockRequest) (TimeBlockDTO, error) {
 	return out[0], nil
 }
 
-// CreateTimeBlocks makes several blocks at once, which is how a day plan is
-// accepted. Nothing is made when one of them is not valid.
+// CreateTimeBlocks makes blocks, writing each to its calendar when it names
+// one; accepting a day plan makes them all at once. Nothing is made when one
+// of them is not valid. A block for a mail in a vault keeps no title of the
+// mail's: its title is read from the mail while the vault is open.
 func (a *App) CreateTimeBlocks(reqs []TimeBlockRequest) ([]TimeBlockDTO, error) {
 	if err := a.ready(); err != nil {
 		return nil, err
@@ -648,21 +648,9 @@ func (a *App) UpdateTimeBlock(req TimeBlockRequest) (TimeBlockDTO, error) {
 	return a.blockDTO(*b, bc), nil
 }
 
-// DeleteTimeBlock deletes a block and, when it is written to a calendar, its
-// event there. A block whose event is already gone just goes.
-func (a *App) DeleteTimeBlock(id int64) error {
-	if err := a.ready(); err != nil {
-		return err
-	}
-	if err := a.deleteBlock(a.ctx, id); err != nil {
-		return err
-	}
-	a.emit(EventTimeBlocksChanged, nil)
-	return nil
-}
-
-// DeleteTimeBlocks deletes several blocks, which is how an accepted plan is
-// undone.
+// DeleteTimeBlocks deletes blocks and, for each written to a calendar, its
+// event there; a block whose event is already gone just goes. Undoing an
+// accepted plan deletes all its blocks at once.
 func (a *App) DeleteTimeBlocks(ids []int64) error {
 	if err := a.ready(); err != nil {
 		return err
@@ -966,9 +954,8 @@ func (a *App) ReleaseTaskTimeBlocks(uid, title string, deleteFuture bool) error 
 
 // busyBetween is everything that keeps [from, to) busy: the occurrences of
 // the visible calendars (an event marked free, a cancelled one, and an
-// all-day one not marked busy keep nothing busy) and every block, the
-// excluded ones left out.
-func (a *App) busyBetween(from, to time.Time, exclude map[int64]bool) ([]timeblock.Span, error) {
+// all-day one not marked busy keep nothing busy) and every block.
+func (a *App) busyBetween(from, to time.Time) ([]timeblock.Span, error) {
 	occs, err := a.ListOccurrences(from.Format(time.RFC3339), to.Format(time.RFC3339), nil)
 	if err != nil {
 		return nil, err
@@ -979,9 +966,7 @@ func (a *App) busyBetween(from, to time.Time, exclude map[int64]bool) ([]timeblo
 		return nil, err
 	}
 	for _, b := range blocks {
-		if !exclude[b.ID] {
-			busy = append(busy, timeblock.Span{Start: b.Start, End: b.End})
-		}
+		busy = append(busy, timeblock.Span{Start: b.Start, End: b.End})
 	}
 	return busy, nil
 }
@@ -1102,7 +1087,7 @@ func (a *App) taskBlockLength(task TaskDTO, s TimeBlockSettingsDTO) (time.Durati
 func (a *App) freeSlots(s TimeBlockSettingsDTO, from time.Time, length time.Duration, due time.Time) ([]timeblock.Slot, error) {
 	r := a.blockRules(s)
 	horizon := from.AddDate(0, 0, s.SearchDays+1)
-	busy, err := a.busyBetween(from.AddDate(0, 0, -1), horizon, nil)
+	busy, err := a.busyBetween(from.AddDate(0, 0, -1), horizon)
 	if err != nil {
 		return nil, err
 	}
@@ -1128,7 +1113,7 @@ func (a *App) BlockTimeForTask(taskID int64, minutes int) (TimeBlockDTO, error) 
 	if err != nil {
 		return TimeBlockDTO{}, err
 	}
-	return a.CreateTimeBlock(TimeBlockRequest{
+	return a.createBlock(TimeBlockRequest{
 		TaskUID: task.UID, Start: slots[0].Start, End: slots[0].End, CalendarID: a.defaultBlockCalendar(a.blockSettings()),
 	})
 }
@@ -1157,7 +1142,7 @@ func (a *App) BlockTimeForMessages(ids []int64, at string) ([]TimeBlockDTO, erro
 	} else {
 		from := time.Now()
 		r := a.blockRules(s)
-		busy, err := a.busyBetween(from.AddDate(0, 0, -1), from.AddDate(0, 0, s.SearchDays+1), nil)
+		busy, err := a.busyBetween(from.AddDate(0, 0, -1), from.AddDate(0, 0, s.SearchDays+1))
 		if err != nil {
 			return nil, err
 		}
@@ -1229,7 +1214,7 @@ func (a *App) PlanDay(day string) (DayPlanDTO, error) {
 		byUID[t.UID] = t
 		plan = append(plan, timeblock.PlanTask{ID: t.UID, Due: due, Priority: t.Priority, Need: min(need, maxBlockMinutes*time.Minute)})
 	}
-	busy, err := a.busyBetween(start.AddDate(0, 0, -1), end.AddDate(0, 0, 1), nil)
+	busy, err := a.busyBetween(start.AddDate(0, 0, -1), end.AddDate(0, 0, 1))
 	if err != nil {
 		return DayPlanDTO{}, err
 	}

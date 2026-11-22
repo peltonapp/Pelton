@@ -92,7 +92,7 @@ func TestReleaseTaskTimeBlocksKeeps(t *testing.T) {
 		t.Fatal(err)
 	}
 	s, e := blockTimes("2030-01-07", "09:00", "10:00")
-	if _, err := a.CreateTimeBlock(TimeBlockRequest{TaskUID: task.Task.UID, Start: s, End: e}); err != nil {
+	if _, err := a.createBlock(TimeBlockRequest{TaskUID: task.Task.UID, Start: s, End: e}); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := a.DeleteTask(task.Task.ID, false); err != nil {
@@ -118,7 +118,7 @@ func TestTimeBlockCalendarLink(t *testing.T) {
 		t.Fatal(err)
 	}
 	s, e := blockTimes("2030-01-07", "09:00", "10:00")
-	b, err := a.CreateTimeBlock(TimeBlockRequest{TaskUID: task.Task.UID, Start: s, End: e, CalendarID: cal.ID})
+	b, err := a.createBlock(TimeBlockRequest{TaskUID: task.Task.UID, Start: s, End: e, CalendarID: cal.ID})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -212,7 +212,7 @@ func TestTimeBlockCalendarLink(t *testing.T) {
 	}
 
 	// deleted here: the event goes too.
-	if err := a.DeleteTimeBlock(b.ID); err != nil {
+	if err := a.DeleteTimeBlocks([]int64{b.ID}); err != nil {
 		t.Fatal(err)
 	}
 	if len(server.Paths()) != 0 {
@@ -227,7 +227,7 @@ func TestTimeBlockCalendarOffline(t *testing.T) {
 	a, cal := remoteSetup(t, server)
 	server.Offline = true
 	s, e := blockTimes("2030-01-07", "09:00", "10:00")
-	b, err := a.CreateTimeBlock(TimeBlockRequest{Title: "Deep work", Start: s, End: e, CalendarID: cal.ID})
+	b, err := a.createBlock(TimeBlockRequest{Title: "Deep work", Start: s, End: e, CalendarID: cal.ID})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -383,7 +383,7 @@ func TestFindTimeAndPlanDay(t *testing.T) {
 	}
 
 	// what is planned already is not planned again.
-	if _, err := a.CreateTimeBlock(TimeBlockRequest{TaskUID: urgent.Task.UID, Start: u0, End: u1}); err != nil {
+	if _, err := a.createBlock(TimeBlockRequest{TaskUID: urgent.Task.UID, Start: u0, End: u1}); err != nil {
 		t.Fatal(err)
 	}
 	plan, err = a.PlanDay("2030-01-07")

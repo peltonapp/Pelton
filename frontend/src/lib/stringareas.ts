@@ -106,7 +106,7 @@ export const stringAreas: Record<StringArea, string[]> = {
     'autoEncrypt.notices', 'autoEncrypt.recipient', 'autoEncrypt.summary', 'autoEncrypt.toggle',
     'avail', 'compose.mode', 'compose.protection', 'compose2', 'quickCompose', 'sendCheck',
   ],
-  calendar: ['calendar.conflict', 'calendar.sched', 'calendar.scope', 'prep', 'timeblock'],
+  calendar: ['calendar.block', 'calendar.conflict', 'calendar.sched', 'calendar.scope', 'prep', 'timeblock'],
   chat: ['chat'],
   contacts: ['contacts.duplicates', 'contacts.merge', 'contacts.sort'],
   feeds: ['feeds.add', 'feeds.empty', 'feeds.folder', 'feeds.reader', 'feeds.settings'],

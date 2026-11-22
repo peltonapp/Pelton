@@ -1330,19 +1330,10 @@ export function CreateTaskList(name: string, color: string): $CancellablePromise
 }
 
 /**
- * CreateTimeBlock makes a block, and writes it to its calendar when it names
- * one. A block for a mail in a vault keeps no title of the mail's: its title
- * is read from the mail while the vault is open.
- */
-export function CreateTimeBlock(req: $models.TimeBlockRequest): $CancellablePromise<$models.TimeBlockDTO> {
-    return $Call.ByID(1793750020, req).then(($result: any) => {
-        return $$createType25($result);
-    });
-}
-
-/**
- * CreateTimeBlocks makes several blocks at once, which is how a day plan is
- * accepted. Nothing is made when one of them is not valid.
+ * CreateTimeBlocks makes blocks, writing each to its calendar when it names
+ * one; accepting a day plan makes them all at once. Nothing is made when one
+ * of them is not valid. A block for a mail in a vault keeps no title of the
+ * mail's: its title is read from the mail while the vault is open.
  */
 export function CreateTimeBlocks(reqs: $models.TimeBlockRequest[]): $CancellablePromise<$models.TimeBlockDTO[]> {
     return $Call.ByID(3323287381, reqs).then(($result: any) => {
@@ -1620,16 +1611,9 @@ export function DeleteTheme(id: string): $CancellablePromise<void> {
 }
 
 /**
- * DeleteTimeBlock deletes a block and, when it is written to a calendar, its
- * event there. A block whose event is already gone just goes.
- */
-export function DeleteTimeBlock(id: number): $CancellablePromise<void> {
-    return $Call.ByID(154632449, id);
-}
-
-/**
- * DeleteTimeBlocks deletes several blocks, which is how an accepted plan is
- * undone.
+ * DeleteTimeBlocks deletes blocks and, for each written to a calendar, its
+ * event there; a block whose event is already gone just goes. Undoing an
+ * accepted plan deletes all its blocks at once.
  */
 export function DeleteTimeBlocks(ids: number[]): $CancellablePromise<void> {
     return $Call.ByID(4099982966, ids);
