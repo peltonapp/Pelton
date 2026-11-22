@@ -7,6 +7,9 @@ import { Create as $Create } from "@wailsio/runtime";
 
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore: Unused imports
+import * as mailimport$0 from "../mailimport/models.js";
+// eslint-disable-next-line @typescript-eslint/ban-ts-comment
+// @ts-ignore: Unused imports
 import * as scripting$0 from "../scripting/models.js";
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore: Unused imports
@@ -5122,6 +5125,417 @@ export class ImageAllowEntryDTO {
 }
 
 /**
+ * ImportAccountDTO is an account found in a source.
+ */
+export class ImportAccountDTO {
+    "email": string;
+    "displayName": string;
+    "imapHost": string;
+    "imapPort": number;
+    "smtpHost": string;
+    "smtpPort": number;
+
+    /**
+     * Kind is "imap" or "pop3"; Pelton adds imap accounts only.
+     */
+    "kind": string;
+
+    /**
+     * SignInWithProvider marks an account that signed in through its
+     * provider's web login there; here it needs an app password.
+     */
+    "signInWithProvider": boolean;
+
+    /**
+     * Exists is set when an account with this address is already here.
+     */
+    "exists": boolean;
+
+    /** Creates a new ImportAccountDTO instance. */
+    constructor($$source: Partial<ImportAccountDTO> = {}) {
+        if (!("email" in $$source)) {
+            this["email"] = "";
+        }
+        if (!("displayName" in $$source)) {
+            this["displayName"] = "";
+        }
+        if (!("imapHost" in $$source)) {
+            this["imapHost"] = "";
+        }
+        if (!("imapPort" in $$source)) {
+            this["imapPort"] = 0;
+        }
+        if (!("smtpHost" in $$source)) {
+            this["smtpHost"] = "";
+        }
+        if (!("smtpPort" in $$source)) {
+            this["smtpPort"] = 0;
+        }
+        if (!("kind" in $$source)) {
+            this["kind"] = "";
+        }
+        if (!("signInWithProvider" in $$source)) {
+            this["signInWithProvider"] = false;
+        }
+        if (!("exists" in $$source)) {
+            this["exists"] = false;
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new ImportAccountDTO instance from a string or object.
+     */
+    static createFrom($$source: any = {}): ImportAccountDTO {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new ImportAccountDTO($$parsedSource as Partial<ImportAccountDTO>);
+    }
+}
+
+/**
+ * ImportEstimateDTO is what a plan would bring over: messages and their size,
+ * which is about the space they need on a server.
+ */
+export class ImportEstimateDTO {
+    "messages": number;
+    "bytes": number;
+
+    /** Creates a new ImportEstimateDTO instance. */
+    constructor($$source: Partial<ImportEstimateDTO> = {}) {
+        if (!("messages" in $$source)) {
+            this["messages"] = 0;
+        }
+        if (!("bytes" in $$source)) {
+            this["bytes"] = 0;
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new ImportEstimateDTO instance from a string or object.
+     */
+    static createFrom($$source: any = {}): ImportEstimateDTO {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new ImportEstimateDTO($$parsedSource as Partial<ImportEstimateDTO>);
+    }
+}
+
+/**
+ * ImportFilterDTO is a message filter found in a source, with what of it
+ * cannot become an automation.
+ */
+export class ImportFilterDTO {
+    "key": string;
+    "name": string;
+    "account": string;
+    "enabled": boolean;
+    "mappable": boolean;
+    "unmappable": string[];
+
+    /** Creates a new ImportFilterDTO instance. */
+    constructor($$source: Partial<ImportFilterDTO> = {}) {
+        if (!("key" in $$source)) {
+            this["key"] = "";
+        }
+        if (!("name" in $$source)) {
+            this["name"] = "";
+        }
+        if (!("account" in $$source)) {
+            this["account"] = "";
+        }
+        if (!("enabled" in $$source)) {
+            this["enabled"] = false;
+        }
+        if (!("mappable" in $$source)) {
+            this["mappable"] = false;
+        }
+        if (!("unmappable" in $$source)) {
+            this["unmappable"] = [];
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new ImportFilterDTO instance from a string or object.
+     */
+    static createFrom($$source: any = {}): ImportFilterDTO {
+        const $$createField5_0 = $$createType0;
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        if ("unmappable" in $$parsedSource) {
+            $$parsedSource["unmappable"] = $$createField5_0($$parsedSource["unmappable"]);
+        }
+        return new ImportFilterDTO($$parsedSource as Partial<ImportFilterDTO>);
+    }
+}
+
+/**
+ * ImportFolderDTO is a mail folder found in a source.
+ */
+export class ImportFolderDTO {
+    "key": string;
+    "path": string[];
+    "count": number;
+    "sizeBytes": number;
+    "serverCopy": boolean;
+
+    /** Creates a new ImportFolderDTO instance. */
+    constructor($$source: Partial<ImportFolderDTO> = {}) {
+        if (!("key" in $$source)) {
+            this["key"] = "";
+        }
+        if (!("path" in $$source)) {
+            this["path"] = [];
+        }
+        if (!("count" in $$source)) {
+            this["count"] = 0;
+        }
+        if (!("sizeBytes" in $$source)) {
+            this["sizeBytes"] = 0;
+        }
+        if (!("serverCopy" in $$source)) {
+            this["serverCopy"] = false;
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new ImportFolderDTO instance from a string or object.
+     */
+    static createFrom($$source: any = {}): ImportFolderDTO {
+        const $$createField1_0 = $$createType0;
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        if ("path" in $$parsedSource) {
+            $$parsedSource["path"] = $$createField1_0($$parsedSource["path"]);
+        }
+        return new ImportFolderDTO($$parsedSource as Partial<ImportFolderDTO>);
+    }
+}
+
+/**
+ * ImportInventoryDTO is what a scanned source holds.
+ */
+export class ImportInventoryDTO {
+    "kind": string;
+    "paths": string[];
+    "accounts": ImportAccountDTO[];
+    "folders": ImportFolderDTO[];
+    "addressBooks": ImportPartDTO[];
+    "calendars": ImportPartDTO[];
+    "filters": ImportFilterDTO[];
+    "notices": mailimport$0.Notice[];
+
+    /** Creates a new ImportInventoryDTO instance. */
+    constructor($$source: Partial<ImportInventoryDTO> = {}) {
+        if (!("kind" in $$source)) {
+            this["kind"] = "";
+        }
+        if (!("paths" in $$source)) {
+            this["paths"] = [];
+        }
+        if (!("accounts" in $$source)) {
+            this["accounts"] = [];
+        }
+        if (!("folders" in $$source)) {
+            this["folders"] = [];
+        }
+        if (!("addressBooks" in $$source)) {
+            this["addressBooks"] = [];
+        }
+        if (!("calendars" in $$source)) {
+            this["calendars"] = [];
+        }
+        if (!("filters" in $$source)) {
+            this["filters"] = [];
+        }
+        if (!("notices" in $$source)) {
+            this["notices"] = [];
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new ImportInventoryDTO instance from a string or object.
+     */
+    static createFrom($$source: any = {}): ImportInventoryDTO {
+        const $$createField1_0 = $$createType0;
+        const $$createField2_0 = $$createType58;
+        const $$createField3_0 = $$createType60;
+        const $$createField4_0 = $$createType62;
+        const $$createField5_0 = $$createType62;
+        const $$createField6_0 = $$createType64;
+        const $$createField7_0 = $$createType66;
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        if ("paths" in $$parsedSource) {
+            $$parsedSource["paths"] = $$createField1_0($$parsedSource["paths"]);
+        }
+        if ("accounts" in $$parsedSource) {
+            $$parsedSource["accounts"] = $$createField2_0($$parsedSource["accounts"]);
+        }
+        if ("folders" in $$parsedSource) {
+            $$parsedSource["folders"] = $$createField3_0($$parsedSource["folders"]);
+        }
+        if ("addressBooks" in $$parsedSource) {
+            $$parsedSource["addressBooks"] = $$createField4_0($$parsedSource["addressBooks"]);
+        }
+        if ("calendars" in $$parsedSource) {
+            $$parsedSource["calendars"] = $$createField5_0($$parsedSource["calendars"]);
+        }
+        if ("filters" in $$parsedSource) {
+            $$parsedSource["filters"] = $$createField6_0($$parsedSource["filters"]);
+        }
+        if ("notices" in $$parsedSource) {
+            $$parsedSource["notices"] = $$createField7_0($$parsedSource["notices"]);
+        }
+        return new ImportInventoryDTO($$parsedSource as Partial<ImportInventoryDTO>);
+    }
+}
+
+/**
+ * ImportJobDTO is one guided import and where it stands.
+ */
+export class ImportJobDTO {
+    "id": number;
+    "kind": string;
+    "sourcePath": string;
+    "state": string;
+    "plan": mailimport$0.Plan;
+    "progress": mailimport$0.RunProgress;
+    "report": mailimport$0.Report;
+    "error": string;
+    "createdAt": string;
+    "updatedAt": string;
+
+    /** Creates a new ImportJobDTO instance. */
+    constructor($$source: Partial<ImportJobDTO> = {}) {
+        if (!("id" in $$source)) {
+            this["id"] = 0;
+        }
+        if (!("kind" in $$source)) {
+            this["kind"] = "";
+        }
+        if (!("sourcePath" in $$source)) {
+            this["sourcePath"] = "";
+        }
+        if (!("state" in $$source)) {
+            this["state"] = "";
+        }
+        if (!("plan" in $$source)) {
+            this["plan"] = (new mailimport$0.Plan());
+        }
+        if (!("progress" in $$source)) {
+            this["progress"] = (new mailimport$0.RunProgress());
+        }
+        if (!("report" in $$source)) {
+            this["report"] = (new mailimport$0.Report());
+        }
+        if (!("error" in $$source)) {
+            this["error"] = "";
+        }
+        if (!("createdAt" in $$source)) {
+            this["createdAt"] = "";
+        }
+        if (!("updatedAt" in $$source)) {
+            this["updatedAt"] = "";
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new ImportJobDTO instance from a string or object.
+     */
+    static createFrom($$source: any = {}): ImportJobDTO {
+        const $$createField4_0 = $$createType67;
+        const $$createField5_0 = $$createType68;
+        const $$createField6_0 = $$createType69;
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        if ("plan" in $$parsedSource) {
+            $$parsedSource["plan"] = $$createField4_0($$parsedSource["plan"]);
+        }
+        if ("progress" in $$parsedSource) {
+            $$parsedSource["progress"] = $$createField5_0($$parsedSource["progress"]);
+        }
+        if ("report" in $$parsedSource) {
+            $$parsedSource["report"] = $$createField6_0($$parsedSource["report"]);
+        }
+        return new ImportJobDTO($$parsedSource as Partial<ImportJobDTO>);
+    }
+}
+
+/**
+ * ImportPartDTO is an address book or a calendar found in a source.
+ */
+export class ImportPartDTO {
+    "key": string;
+    "name": string;
+    "count": number;
+
+    /** Creates a new ImportPartDTO instance. */
+    constructor($$source: Partial<ImportPartDTO> = {}) {
+        if (!("key" in $$source)) {
+            this["key"] = "";
+        }
+        if (!("name" in $$source)) {
+            this["name"] = "";
+        }
+        if (!("count" in $$source)) {
+            this["count"] = 0;
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new ImportPartDTO instance from a string or object.
+     */
+    static createFrom($$source: any = {}): ImportPartDTO {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new ImportPartDTO($$parsedSource as Partial<ImportPartDTO>);
+    }
+}
+
+/**
+ * ImportTargetDTO is an account mail can be uploaded into, with its folders.
+ */
+export class ImportTargetDTO {
+    "accountId": number;
+    "email": string;
+    "folders": string[];
+
+    /** Creates a new ImportTargetDTO instance. */
+    constructor($$source: Partial<ImportTargetDTO> = {}) {
+        if (!("accountId" in $$source)) {
+            this["accountId"] = 0;
+        }
+        if (!("email" in $$source)) {
+            this["email"] = "";
+        }
+        if (!("folders" in $$source)) {
+            this["folders"] = [];
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new ImportTargetDTO instance from a string or object.
+     */
+    static createFrom($$source: any = {}): ImportTargetDTO {
+        const $$createField2_0 = $$createType0;
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        if ("folders" in $$parsedSource) {
+            $$parsedSource["folders"] = $$createField2_0($$parsedSource["folders"]);
+        }
+        return new ImportTargetDTO($$parsedSource as Partial<ImportTargetDTO>);
+    }
+}
+
+/**
  * InsightsAccountDTO is one account's share of the local store, with its
  * folders largest first.
  */
@@ -5165,7 +5579,7 @@ export class InsightsAccountDTO {
      * Creates a new InsightsAccountDTO instance from a string or object.
      */
     static createFrom($$source: any = {}): InsightsAccountDTO {
-        const $$createField6_0 = $$createType58;
+        const $$createField6_0 = $$createType71;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("folders" in $$parsedSource) {
             $$parsedSource["folders"] = $$createField6_0($$parsedSource["folders"]);
@@ -5363,10 +5777,10 @@ export class InsightsPeopleDTO {
      * Creates a new InsightsPeopleDTO instance from a string or object.
      */
     static createFrom($$source: any = {}): InsightsPeopleDTO {
-        const $$createField0_0 = $$createType60;
-        const $$createField1_0 = $$createType60;
-        const $$createField2_0 = $$createType61;
-        const $$createField3_0 = $$createType61;
+        const $$createField0_0 = $$createType73;
+        const $$createField1_0 = $$createType73;
+        const $$createField2_0 = $$createType74;
+        const $$createField3_0 = $$createType74;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("writesTo" in $$parsedSource) {
             $$parsedSource["writesTo"] = $$createField0_0($$parsedSource["writesTo"]);
@@ -5481,9 +5895,9 @@ export class InsightsStorageDTO {
      * Creates a new InsightsStorageDTO instance from a string or object.
      */
     static createFrom($$source: any = {}): InsightsStorageDTO {
-        const $$createField0_0 = $$createType63;
-        const $$createField1_0 = $$createType60;
-        const $$createField2_0 = $$createType65;
+        const $$createField0_0 = $$createType76;
+        const $$createField1_0 = $$createType73;
+        const $$createField2_0 = $$createType78;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("accounts" in $$parsedSource) {
             $$parsedSource["accounts"] = $$createField0_0($$parsedSource["accounts"]);
@@ -5531,8 +5945,8 @@ export class InsightsVolumeDTO {
      * Creates a new InsightsVolumeDTO instance from a string or object.
      */
     static createFrom($$source: any = {}): InsightsVolumeDTO {
-        const $$createField1_0 = $$createType67;
-        const $$createField2_0 = $$createType69;
+        const $$createField1_0 = $$createType80;
+        const $$createField2_0 = $$createType82;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("days" in $$parsedSource) {
             $$parsedSource["days"] = $$createField1_0($$parsedSource["days"]);
@@ -6330,7 +6744,7 @@ export class MailVaultCreateRequest {
      * Creates a new MailVaultCreateRequest instance from a string or object.
      */
     static createFrom($$source: any = {}): MailVaultCreateRequest {
-        const $$createField2_0 = $$createType71;
+        const $$createField2_0 = $$createType84;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("members" in $$parsedSource) {
             $$parsedSource["members"] = $$createField2_0($$parsedSource["members"]);
@@ -6445,7 +6859,7 @@ export class MailVaultDTO {
      * Creates a new MailVaultDTO instance from a string or object.
      */
     static createFrom($$source: any = {}): MailVaultDTO {
-        const $$createField6_0 = $$createType71;
+        const $$createField6_0 = $$createType84;
         const $$createField7_0 = $$createType14;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("members" in $$parsedSource) {
@@ -6674,12 +7088,12 @@ export class MeetingPrepDTO {
      * Creates a new MeetingPrepDTO instance from a string or object.
      */
     static createFrom($$source: any = {}): MeetingPrepDTO {
-        const $$createField11_0 = $$createType73;
-        const $$createField12_0 = $$createType75;
-        const $$createField13_0 = $$createType77;
+        const $$createField11_0 = $$createType86;
+        const $$createField12_0 = $$createType88;
+        const $$createField13_0 = $$createType90;
         const $$createField14_0 = $$createType3;
-        const $$createField15_0 = $$createType79;
-        const $$createField16_0 = $$createType81;
+        const $$createField15_0 = $$createType92;
+        const $$createField16_0 = $$createType94;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("join" in $$parsedSource) {
             $$parsedSource["join"] = $$createField11_0($$parsedSource["join"]);
@@ -6745,7 +7159,7 @@ export class MergeContactsRequest {
      */
     static createFrom($$source: any = {}): MergeContactsRequest {
         const $$createField1_0 = $$createType14;
-        const $$createField3_0 = $$createType82;
+        const $$createField3_0 = $$createType95;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("mergeIds" in $$parsedSource) {
             $$parsedSource["mergeIds"] = $$createField1_0($$parsedSource["mergeIds"]);
@@ -7113,15 +7527,15 @@ export class MessageDetailDTO {
      * Creates a new MessageDetailDTO instance from a string or object.
      */
     static createFrom($$source: any = {}): MessageDetailDTO {
-        const $$createField19_0 = $$createType83;
+        const $$createField19_0 = $$createType96;
         const $$createField27_0 = $$createType0;
         const $$createField28_0 = $$createType0;
         const $$createField37_0 = $$createType0;
         const $$createField38_0 = $$createType48;
-        const $$createField39_0 = $$createType85;
-        const $$createField40_0 = $$createType86;
-        const $$createField42_0 = $$createType88;
-        const $$createField43_0 = $$createType90;
+        const $$createField39_0 = $$createType98;
+        const $$createField40_0 = $$createType99;
+        const $$createField42_0 = $$createType101;
+        const $$createField43_0 = $$createType103;
         const $$createField45_0 = $$createType14;
         const $$createField46_0 = $$createType14;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
@@ -7302,8 +7716,8 @@ export class MessageListDTO {
      * Creates a new MessageListDTO instance from a string or object.
      */
     static createFrom($$source: any = {}): MessageListDTO {
-        const $$createField0_0 = $$createType92;
-        const $$createField3_0 = $$createType92;
+        const $$createField0_0 = $$createType105;
+        const $$createField3_0 = $$createType105;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("messages" in $$parsedSource) {
             $$parsedSource["messages"] = $$createField0_0($$parsedSource["messages"]);
@@ -7375,8 +7789,8 @@ export class MessageScanDTO {
      * Creates a new MessageScanDTO instance from a string or object.
      */
     static createFrom($$source: any = {}): MessageScanDTO {
-        const $$createField0_0 = $$createType94;
-        const $$createField1_0 = $$createType96;
+        const $$createField0_0 = $$createType107;
+        const $$createField1_0 = $$createType109;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("links" in $$parsedSource) {
             $$parsedSource["links"] = $$createField0_0($$parsedSource["links"]);
@@ -7539,7 +7953,7 @@ export class MessageSummaryDTO {
      * Creates a new MessageSummaryDTO instance from a string or object.
      */
     static createFrom($$source: any = {}): MessageSummaryDTO {
-        const $$createField19_0 = $$createType83;
+        const $$createField19_0 = $$createType96;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("smime" in $$parsedSource) {
             $$parsedSource["smime"] = $$createField19_0($$parsedSource["smime"]);
@@ -8354,11 +8768,11 @@ export class PassportDTO {
      * Creates a new PassportDTO instance from a string or object.
      */
     static createFrom($$source: any = {}): PassportDTO {
-        const $$createField11_0 = $$createType98;
-        const $$createField12_0 = $$createType100;
+        const $$createField11_0 = $$createType111;
+        const $$createField12_0 = $$createType113;
         const $$createField15_0 = $$createType0;
-        const $$createField16_0 = $$createType101;
-        const $$createField17_0 = $$createType86;
+        const $$createField16_0 = $$createType114;
+        const $$createField17_0 = $$createType99;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("changes" in $$parsedSource) {
             $$parsedSource["changes"] = $$createField11_0($$parsedSource["changes"]);
@@ -8570,7 +8984,7 @@ export class PendingMailtoDTO {
      * Creates a new PendingMailtoDTO instance from a string or object.
      */
     static createFrom($$source: any = {}): PendingMailtoDTO {
-        const $$createField1_0 = $$createType102;
+        const $$createField1_0 = $$createType115;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("draft" in $$parsedSource) {
             $$parsedSource["draft"] = $$createField1_0($$parsedSource["draft"]);
@@ -8602,7 +9016,7 @@ export class PhishingDTO {
      * Creates a new PhishingDTO instance from a string or object.
      */
     static createFrom($$source: any = {}): PhishingDTO {
-        const $$createField1_0 = $$createType104;
+        const $$createField1_0 = $$createType117;
         const $$createField2_0 = $$createType0;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("signals" in $$parsedSource) {
@@ -8674,7 +9088,7 @@ export class PlacedScriptDTO {
      * Creates a new PlacedScriptDTO instance from a string or object.
      */
     static createFrom($$source: any = {}): PlacedScriptDTO {
-        const $$createField3_0 = $$createType105;
+        const $$createField3_0 = $$createType118;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("options" in $$parsedSource) {
             $$parsedSource["options"] = $$createField3_0($$parsedSource["options"]);
@@ -8741,7 +9155,7 @@ export class PrepAttendeeDTO {
      * Creates a new PrepAttendeeDTO instance from a string or object.
      */
     static createFrom($$source: any = {}): PrepAttendeeDTO {
-        const $$createField6_0 = $$createType106;
+        const $$createField6_0 = $$createType119;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("contact" in $$parsedSource) {
             $$parsedSource["contact"] = $$createField6_0($$parsedSource["contact"]);
@@ -8871,7 +9285,7 @@ export class PrepThreadDTO {
      */
     static createFrom($$source: any = {}): PrepThreadDTO {
         const $$createField4_0 = $$createType0;
-        const $$createField6_0 = $$createType91;
+        const $$createField6_0 = $$createType104;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("people" in $$parsedSource) {
             $$parsedSource["people"] = $$createField4_0($$parsedSource["people"]);
@@ -8931,7 +9345,7 @@ export class PrivacyReportDTO {
      * Creates a new PrivacyReportDTO instance from a string or object.
      */
     static createFrom($$source: any = {}): PrivacyReportDTO {
-        const $$createField5_0 = $$createType108;
+        const $$createField5_0 = $$createType121;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("rows" in $$parsedSource) {
             $$parsedSource["rows"] = $$createField5_0($$parsedSource["rows"]);
@@ -9000,7 +9414,7 @@ export class PrivacySenderDTO {
      */
     static createFrom($$source: any = {}): PrivacySenderDTO {
         const $$createField8_0 = $$createType0;
-        const $$createField9_0 = $$createType110;
+        const $$createField9_0 = $$createType123;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("companies" in $$parsedSource) {
             $$parsedSource["companies"] = $$createField8_0($$parsedSource["companies"]);
@@ -9191,9 +9605,9 @@ export class ProjectBoardDTO {
      * Creates a new ProjectBoardDTO instance from a string or object.
      */
     static createFrom($$source: any = {}): ProjectBoardDTO {
-        const $$createField0_0 = $$createType111;
-        const $$createField1_0 = $$createType113;
-        const $$createField2_0 = $$createType115;
+        const $$createField0_0 = $$createType124;
+        const $$createField1_0 = $$createType126;
+        const $$createField2_0 = $$createType128;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("project" in $$parsedSource) {
             $$parsedSource["project"] = $$createField0_0($$parsedSource["project"]);
@@ -9262,7 +9676,7 @@ export class ProjectCardDTO {
      * Creates a new ProjectCardDTO instance from a string or object.
      */
     static createFrom($$source: any = {}): ProjectCardDTO {
-        const $$createField0_0 = $$createType78;
+        const $$createField0_0 = $$createType91;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("task" in $$parsedSource) {
             $$parsedSource["task"] = $$createField0_0($$parsedSource["task"]);
@@ -9512,7 +9926,7 @@ export class ProjectDTO {
      * Creates a new ProjectDTO instance from a string or object.
      */
     static createFrom($$source: any = {}): ProjectDTO {
-        const $$createField22_0 = $$createType117;
+        const $$createField22_0 = $$createType130;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("people" in $$parsedSource) {
             $$parsedSource["people"] = $$createField22_0($$parsedSource["people"]);
@@ -9705,7 +10119,7 @@ export class ProjectMoveResultDTO {
      * Creates a new ProjectMoveResultDTO instance from a string or object.
      */
     static createFrom($$source: any = {}): ProjectMoveResultDTO {
-        const $$createField0_0 = $$createType114;
+        const $$createField0_0 = $$createType127;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("card" in $$parsedSource) {
             $$parsedSource["card"] = $$createField0_0($$parsedSource["card"]);
@@ -9843,7 +10257,7 @@ export class ProjectRequest {
      * Creates a new ProjectRequest instance from a string or object.
      */
     static createFrom($$source: any = {}): ProjectRequest {
-        const $$createField9_0 = $$createType119;
+        const $$createField9_0 = $$createType132;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("columns" in $$parsedSource) {
             $$parsedSource["columns"] = $$createField9_0($$parsedSource["columns"]);
@@ -9919,8 +10333,8 @@ export class ProjectVaultNotesDTO {
      * Creates a new ProjectVaultNotesDTO instance from a string or object.
      */
     static createFrom($$source: any = {}): ProjectVaultNotesDTO {
-        const $$createField1_0 = $$createType121;
-        const $$createField2_0 = $$createType121;
+        const $$createField1_0 = $$createType134;
+        const $$createField2_0 = $$createType134;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("notes" in $$parsedSource) {
             $$parsedSource["notes"] = $$createField1_0($$parsedSource["notes"]);
@@ -10212,7 +10626,7 @@ export class PromiseSettingsDTO {
      * Creates a new PromiseSettingsDTO instance from a string or object.
      */
     static createFrom($$source: any = {}): PromiseSettingsDTO {
-        const $$createField4_0 = $$createType123;
+        const $$createField4_0 = $$createType136;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("accounts" in $$parsedSource) {
             $$parsedSource["accounts"] = $$createField4_0($$parsedSource["accounts"]);
@@ -10290,7 +10704,7 @@ export class ProtectionStatusDTO {
      * Creates a new ProtectionStatusDTO instance from a string or object.
      */
     static createFrom($$source: any = {}): ProtectionStatusDTO {
-        const $$createField3_0 = $$createType125;
+        const $$createField3_0 = $$createType138;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("recipients" in $$parsedSource) {
             $$parsedSource["recipients"] = $$createField3_0($$parsedSource["recipients"]);
@@ -10783,7 +11197,7 @@ export class SaveThemeRequest {
      * Creates a new SaveThemeRequest instance from a string or object.
      */
     static createFrom($$source: any = {}): SaveThemeRequest {
-        const $$createField5_0 = $$createType126;
+        const $$createField5_0 = $$createType139;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("tokens" in $$parsedSource) {
             $$parsedSource["tokens"] = $$createField5_0($$parsedSource["tokens"]);
@@ -10925,13 +11339,13 @@ export class ScriptDTO {
      * Creates a new ScriptDTO instance from a string or object.
      */
     static createFrom($$source: any = {}): ScriptDTO {
-        const $$createField6_0 = $$createType127;
+        const $$createField6_0 = $$createType140;
         const $$createField7_0 = $$createType0;
         const $$createField8_0 = $$createType0;
-        const $$createField11_0 = $$createType129;
-        const $$createField12_0 = $$createType105;
+        const $$createField11_0 = $$createType142;
+        const $$createField12_0 = $$createType118;
         const $$createField15_0 = $$createType0;
-        const $$createField16_0 = $$createType131;
+        const $$createField16_0 = $$createType144;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("trigger" in $$parsedSource) {
             $$parsedSource["trigger"] = $$createField6_0($$parsedSource["trigger"]);
@@ -11026,8 +11440,8 @@ export class ScriptFileDTO {
      * Creates a new ScriptFileDTO instance from a string or object.
      */
     static createFrom($$source: any = {}): ScriptFileDTO {
-        const $$createField0_0 = $$createType132;
-        const $$createField1_0 = $$createType134;
+        const $$createField0_0 = $$createType145;
+        const $$createField1_0 = $$createType147;
         const $$createField4_0 = $$createType0;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("script" in $$parsedSource) {
@@ -11099,9 +11513,9 @@ export class ScriptInput {
      * Creates a new ScriptInput instance from a string or object.
      */
     static createFrom($$source: any = {}): ScriptInput {
-        const $$createField5_0 = $$createType127;
+        const $$createField5_0 = $$createType140;
         const $$createField6_0 = $$createType0;
-        const $$createField7_0 = $$createType129;
+        const $$createField7_0 = $$createType142;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("trigger" in $$parsedSource) {
             $$parsedSource["trigger"] = $$createField5_0($$parsedSource["trigger"]);
@@ -11241,7 +11655,7 @@ export class ScriptLibraryNoteDTO {
      * Creates a new ScriptLibraryNoteDTO instance from a string or object.
      */
     static createFrom($$source: any = {}): ScriptLibraryNoteDTO {
-        const $$createField5_0 = $$createType136;
+        const $$createField5_0 = $$createType149;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("diff" in $$parsedSource) {
             $$parsedSource["diff"] = $$createField5_0($$parsedSource["diff"]);
@@ -11274,8 +11688,8 @@ export class ScriptLibrarySavedDTO {
      * Creates a new ScriptLibrarySavedDTO instance from a string or object.
      */
     static createFrom($$source: any = {}): ScriptLibrarySavedDTO {
-        const $$createField0_0 = $$createType133;
-        const $$createField1_0 = $$createType138;
+        const $$createField0_0 = $$createType146;
+        const $$createField1_0 = $$createType151;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("library" in $$parsedSource) {
             $$parsedSource["library"] = $$createField0_0($$parsedSource["library"]);
@@ -11358,7 +11772,7 @@ export class ScriptProposalDTO {
      * Creates a new ScriptProposalDTO instance from a string or object.
      */
     static createFrom($$source: any = {}): ScriptProposalDTO {
-        const $$createField3_0 = $$createType136;
+        const $$createField3_0 = $$createType149;
         const $$createField4_0 = $$createType0;
         const $$createField5_0 = $$createType0;
         const $$createField7_0 = $$createType0;
@@ -11528,7 +11942,7 @@ export class ScriptRunDTO {
      * Creates a new ScriptRunDTO instance from a string or object.
      */
     static createFrom($$source: any = {}): ScriptRunDTO {
-        const $$createField10_0 = $$createType140;
+        const $$createField10_0 = $$createType153;
         const $$createField16_0 = $$createType14;
         const $$createField20_0 = $$createType0;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
@@ -11568,7 +11982,7 @@ export class ScriptTriggerDTO {
      * Creates a new ScriptTriggerDTO instance from a string or object.
      */
     static createFrom($$source: any = {}): ScriptTriggerDTO {
-        const $$createField1_0 = $$createType105;
+        const $$createField1_0 = $$createType118;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("params" in $$parsedSource) {
             $$parsedSource["params"] = $$createField1_0($$parsedSource["params"]);
@@ -11736,7 +12150,7 @@ export class SearchResultDTO {
      * Creates a new SearchResultDTO instance from a string or object.
      */
     static createFrom($$source: any = {}): SearchResultDTO {
-        const $$createField0_0 = $$createType92;
+        const $$createField0_0 = $$createType105;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("messages" in $$parsedSource) {
             $$parsedSource["messages"] = $$createField0_0($$parsedSource["messages"]);
@@ -11794,7 +12208,7 @@ export class SenderOverviewDTO {
      * Creates a new SenderOverviewDTO instance from a string or object.
      */
     static createFrom($$source: any = {}): SenderOverviewDTO {
-        const $$createField4_0 = $$createType92;
+        const $$createField4_0 = $$createType105;
         const $$createField5_0 = $$createType3;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("recent" in $$parsedSource) {
@@ -11912,8 +12326,8 @@ export class ShieldDTO {
      * Creates a new ShieldDTO instance from a string or object.
      */
     static createFrom($$source: any = {}): ShieldDTO {
-        const $$createField3_0 = $$createType142;
-        const $$createField4_0 = $$createType110;
+        const $$createField3_0 = $$createType155;
+        const $$createField4_0 = $$createType123;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("items" in $$parsedSource) {
             $$parsedSource["items"] = $$createField3_0($$parsedSource["items"]);
@@ -12119,7 +12533,7 @@ export class SieveSaveDTO {
      * Creates a new SieveSaveDTO instance from a string or object.
      */
     static createFrom($$source: any = {}): SieveSaveDTO {
-        const $$createField0_0 = $$createType143;
+        const $$createField0_0 = $$createType156;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("state" in $$parsedSource) {
             $$parsedSource["state"] = $$createField0_0($$parsedSource["state"]);
@@ -12243,8 +12657,8 @@ export class SieveStateDTO {
      * Creates a new SieveStateDTO instance from a string or object.
      */
     static createFrom($$source: any = {}): SieveStateDTO {
-        const $$createField8_0 = $$createType144;
-        const $$createField13_0 = $$createType145;
+        const $$createField8_0 = $$createType157;
+        const $$createField13_0 = $$createType158;
         const $$createField16_0 = $$createType0;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("caps" in $$parsedSource) {
@@ -12579,7 +12993,7 @@ export class TaskDTO {
         const $$createField17_0 = $$createType39;
         const $$createField19_0 = $$createType0;
         const $$createField20_0 = $$createType0;
-        const $$createField21_0 = $$createType147;
+        const $$createField21_0 = $$createType160;
         const $$createField22_0 = $$createType0;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("reminders" in $$parsedSource) {
@@ -12625,7 +13039,7 @@ export class TaskDeleteResultDTO {
      * Creates a new TaskDeleteResultDTO instance from a string or object.
      */
     static createFrom($$source: any = {}): TaskDeleteResultDTO {
-        const $$createField0_0 = $$createType149;
+        const $$createField0_0 = $$createType162;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("removed" in $$parsedSource) {
             $$parsedSource["removed"] = $$createField0_0($$parsedSource["removed"]);
@@ -12844,7 +13258,7 @@ export class TaskRequest {
         const $$createField13_0 = $$createType39;
         const $$createField15_0 = $$createType0;
         const $$createField16_0 = $$createType0;
-        const $$createField17_0 = $$createType147;
+        const $$createField17_0 = $$createType160;
         const $$createField18_0 = $$createType0;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("reminders" in $$parsedSource) {
@@ -12906,8 +13320,8 @@ export class TaskSaveResultDTO {
      * Creates a new TaskSaveResultDTO instance from a string or object.
      */
     static createFrom($$source: any = {}): TaskSaveResultDTO {
-        const $$createField0_0 = $$createType78;
-        const $$createField3_0 = $$createType78;
+        const $$createField0_0 = $$createType91;
+        const $$createField3_0 = $$createType91;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("task" in $$parsedSource) {
             $$parsedSource["task"] = $$createField0_0($$parsedSource["task"]);
@@ -13128,8 +13542,8 @@ export class ThemeApplyDTO {
      * Creates a new ThemeApplyDTO instance from a string or object.
      */
     static createFrom($$source: any = {}): ThemeApplyDTO {
-        const $$createField2_0 = $$createType126;
-        const $$createField4_0 = $$createType126;
+        const $$createField2_0 = $$createType139;
+        const $$createField4_0 = $$createType139;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("tokens" in $$parsedSource) {
             $$parsedSource["tokens"] = $$createField2_0($$parsedSource["tokens"]);
@@ -13186,7 +13600,7 @@ export class ThemeDraftDTO {
      * Creates a new ThemeDraftDTO instance from a string or object.
      */
     static createFrom($$source: any = {}): ThemeDraftDTO {
-        const $$createField5_0 = $$createType126;
+        const $$createField5_0 = $$createType139;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("tokens" in $$parsedSource) {
             $$parsedSource["tokens"] = $$createField5_0($$parsedSource["tokens"]);
@@ -13258,8 +13672,8 @@ export class ThemeImportPreviewDTO {
      * Creates a new ThemeImportPreviewDTO instance from a string or object.
      */
     static createFrom($$source: any = {}): ThemeImportPreviewDTO {
-        const $$createField2_0 = $$createType150;
-        const $$createField3_0 = $$createType152;
+        const $$createField2_0 = $$createType163;
+        const $$createField3_0 = $$createType165;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("info" in $$parsedSource) {
             $$parsedSource["info"] = $$createField2_0($$parsedSource["info"]);
@@ -13385,7 +13799,7 @@ export class ThreadDTO {
      * Creates a new ThreadDTO instance from a string or object.
      */
     static createFrom($$source: any = {}): ThreadDTO {
-        const $$createField1_0 = $$createType154;
+        const $$createField1_0 = $$createType167;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("messages" in $$parsedSource) {
             $$parsedSource["messages"] = $$createField1_0($$parsedSource["messages"]);
@@ -13426,8 +13840,8 @@ export class ThreadListDTO {
      * Creates a new ThreadListDTO instance from a string or object.
      */
     static createFrom($$source: any = {}): ThreadListDTO {
-        const $$createField0_0 = $$createType156;
-        const $$createField3_0 = $$createType156;
+        const $$createField0_0 = $$createType169;
+        const $$createField3_0 = $$createType169;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("threads" in $$parsedSource) {
             $$parsedSource["threads"] = $$createField0_0($$parsedSource["threads"]);
@@ -13597,7 +14011,7 @@ export class ThreadMessageDTO {
      * Creates a new ThreadMessageDTO instance from a string or object.
      */
     static createFrom($$source: any = {}): ThreadMessageDTO {
-        const $$createField19_0 = $$createType83;
+        const $$createField19_0 = $$createType96;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("smime" in $$parsedSource) {
             $$parsedSource["smime"] = $$createField19_0($$parsedSource["smime"]);
@@ -13677,7 +14091,7 @@ export class ThreadSummaryDTO {
      * Creates a new ThreadSummaryDTO instance from a string or object.
      */
     static createFrom($$source: any = {}): ThreadSummaryDTO {
-        const $$createField1_0 = $$createType91;
+        const $$createField1_0 = $$createType104;
         const $$createField4_0 = $$createType0;
         const $$createField9_0 = $$createType14;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
@@ -13825,8 +14239,8 @@ export class ThunderbirdProfileDTO {
      * Creates a new ThunderbirdProfileDTO instance from a string or object.
      */
     static createFrom($$source: any = {}): ThunderbirdProfileDTO {
-        const $$createField2_0 = $$createType158;
-        const $$createField3_0 = $$createType160;
+        const $$createField2_0 = $$createType171;
+        const $$createField3_0 = $$createType173;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("accounts" in $$parsedSource) {
             $$parsedSource["accounts"] = $$createField2_0($$parsedSource["accounts"]);
@@ -15541,7 +15955,7 @@ export class UserLocaleApplyDTO {
      * Creates a new UserLocaleApplyDTO instance from a string or object.
      */
     static createFrom($$source: any = {}): UserLocaleApplyDTO {
-        const $$createField3_0 = $$createType126;
+        const $$createField3_0 = $$createType139;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("strings" in $$parsedSource) {
             $$parsedSource["strings"] = $$createField3_0($$parsedSource["strings"]);
@@ -15880,9 +16294,9 @@ export class VaultNoteDTO {
     static createFrom($$source: any = {}): VaultNoteDTO {
         const $$createField4_0 = $$createType0;
         const $$createField5_0 = $$createType0;
-        const $$createField6_0 = $$createType162;
-        const $$createField8_0 = $$createType164;
-        const $$createField9_0 = $$createType166;
+        const $$createField6_0 = $$createType175;
+        const $$createField8_0 = $$createType177;
+        const $$createField9_0 = $$createType179;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("tags" in $$parsedSource) {
             $$parsedSource["tags"] = $$createField4_0($$parsedSource["tags"]);
@@ -15930,7 +16344,7 @@ export class VaultOpDTO {
      * Creates a new VaultOpDTO instance from a string or object.
      */
     static createFrom($$source: any = {}): VaultOpDTO {
-        const $$createField1_0 = $$createType126;
+        const $$createField1_0 = $$createType139;
         const $$createField2_0 = $$createType0;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("moves" in $$parsedSource) {
@@ -16056,7 +16470,7 @@ export class VaultSnapshotDTO {
      * Creates a new VaultSnapshotDTO instance from a string or object.
      */
     static createFrom($$source: any = {}): VaultSnapshotDTO {
-        const $$createField2_0 = $$createType168;
+        const $$createField2_0 = $$createType181;
         const $$createField3_0 = $$createType0;
         const $$createField4_0 = $$createType0;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
@@ -16321,115 +16735,128 @@ const $$createType53 = FeedCountsDTO.createFrom;
 const $$createType54 = $Create.Array($Create.Any);
 const $$createType55 = AttendeeFreeBusyDTO.createFrom;
 const $$createType56 = $Create.Array($$createType55);
-const $$createType57 = InsightsFolderDTO.createFrom;
+const $$createType57 = ImportAccountDTO.createFrom;
 const $$createType58 = $Create.Array($$createType57);
-const $$createType59 = InsightsSenderDTO.createFrom;
+const $$createType59 = ImportFolderDTO.createFrom;
 const $$createType60 = $Create.Array($$createType59);
-const $$createType61 = InsightsReplyDTO.createFrom;
-const $$createType62 = InsightsAccountDTO.createFrom;
-const $$createType63 = $Create.Array($$createType62);
-const $$createType64 = InsightsAttachmentDTO.createFrom;
-const $$createType65 = $Create.Array($$createType64);
-const $$createType66 = InsightsDayDTO.createFrom;
-const $$createType67 = $Create.Array($$createType66);
-const $$createType68 = InsightsHourDTO.createFrom;
-const $$createType69 = $Create.Array($$createType68);
-const $$createType70 = MailVaultMemberDTO.createFrom;
+const $$createType61 = ImportPartDTO.createFrom;
+const $$createType62 = $Create.Array($$createType61);
+const $$createType63 = ImportFilterDTO.createFrom;
+const $$createType64 = $Create.Array($$createType63);
+const $$createType65 = mailimport$0.Notice.createFrom;
+const $$createType66 = $Create.Array($$createType65);
+const $$createType67 = mailimport$0.Plan.createFrom;
+const $$createType68 = mailimport$0.RunProgress.createFrom;
+const $$createType69 = mailimport$0.Report.createFrom;
+const $$createType70 = InsightsFolderDTO.createFrom;
 const $$createType71 = $Create.Array($$createType70);
-const $$createType72 = JoinLinkDTO.createFrom;
-const $$createType73 = $Create.Nullable($$createType72);
-const $$createType74 = PrepAttendeeDTO.createFrom;
-const $$createType75 = $Create.Array($$createType74);
-const $$createType76 = PrepThreadDTO.createFrom;
-const $$createType77 = $Create.Array($$createType76);
-const $$createType78 = TaskDTO.createFrom;
-const $$createType79 = $Create.Array($$createType78);
-const $$createType80 = PrepMeetingDTO.createFrom;
-const $$createType81 = $Create.Array($$createType80);
-const $$createType82 = $Create.Map($Create.Any, $Create.Any);
-const $$createType83 = SMIMEDTO.createFrom;
-const $$createType84 = AttachmentDTO.createFrom;
-const $$createType85 = $Create.Array($$createType84);
-const $$createType86 = PhishingDTO.createFrom;
-const $$createType87 = MessageEncryptionDTO.createFrom;
-const $$createType88 = $Create.Nullable($$createType87);
-const $$createType89 = UnsubscribeDTO.createFrom;
-const $$createType90 = $Create.Nullable($$createType89);
-const $$createType91 = MessageSummaryDTO.createFrom;
+const $$createType72 = InsightsSenderDTO.createFrom;
+const $$createType73 = $Create.Array($$createType72);
+const $$createType74 = InsightsReplyDTO.createFrom;
+const $$createType75 = InsightsAccountDTO.createFrom;
+const $$createType76 = $Create.Array($$createType75);
+const $$createType77 = InsightsAttachmentDTO.createFrom;
+const $$createType78 = $Create.Array($$createType77);
+const $$createType79 = InsightsDayDTO.createFrom;
+const $$createType80 = $Create.Array($$createType79);
+const $$createType81 = InsightsHourDTO.createFrom;
+const $$createType82 = $Create.Array($$createType81);
+const $$createType83 = MailVaultMemberDTO.createFrom;
+const $$createType84 = $Create.Array($$createType83);
+const $$createType85 = JoinLinkDTO.createFrom;
+const $$createType86 = $Create.Nullable($$createType85);
+const $$createType87 = PrepAttendeeDTO.createFrom;
+const $$createType88 = $Create.Array($$createType87);
+const $$createType89 = PrepThreadDTO.createFrom;
+const $$createType90 = $Create.Array($$createType89);
+const $$createType91 = TaskDTO.createFrom;
 const $$createType92 = $Create.Array($$createType91);
-const $$createType93 = LinkVerdictDTO.createFrom;
+const $$createType93 = PrepMeetingDTO.createFrom;
 const $$createType94 = $Create.Array($$createType93);
-const $$createType95 = AttachmentVerdictDTO.createFrom;
-const $$createType96 = $Create.Array($$createType95);
-const $$createType97 = PassportChangeDTO.createFrom;
+const $$createType95 = $Create.Map($Create.Any, $Create.Any);
+const $$createType96 = SMIMEDTO.createFrom;
+const $$createType97 = AttachmentDTO.createFrom;
 const $$createType98 = $Create.Array($$createType97);
-const $$createType99 = PassportLookalikeDTO.createFrom;
-const $$createType100 = $Create.Nullable($$createType99);
-const $$createType101 = PassportEvidenceDTO.createFrom;
-const $$createType102 = MailtoDraft.createFrom;
-const $$createType103 = PhishingSignalDTO.createFrom;
-const $$createType104 = $Create.Array($$createType103);
-const $$createType105 = $Create.Map($Create.Any, $Create.Any);
-const $$createType106 = $Create.Nullable($$createType27);
-const $$createType107 = PrivacySenderDTO.createFrom;
-const $$createType108 = $Create.Array($$createType107);
-const $$createType109 = ShieldUnsubDTO.createFrom;
-const $$createType110 = $Create.Nullable($$createType109);
-const $$createType111 = ProjectDTO.createFrom;
-const $$createType112 = ProjectColumnDTO.createFrom;
-const $$createType113 = $Create.Array($$createType112);
-const $$createType114 = ProjectCardDTO.createFrom;
-const $$createType115 = $Create.Array($$createType114);
-const $$createType116 = ProjectPersonDTO.createFrom;
+const $$createType99 = PhishingDTO.createFrom;
+const $$createType100 = MessageEncryptionDTO.createFrom;
+const $$createType101 = $Create.Nullable($$createType100);
+const $$createType102 = UnsubscribeDTO.createFrom;
+const $$createType103 = $Create.Nullable($$createType102);
+const $$createType104 = MessageSummaryDTO.createFrom;
+const $$createType105 = $Create.Array($$createType104);
+const $$createType106 = LinkVerdictDTO.createFrom;
+const $$createType107 = $Create.Array($$createType106);
+const $$createType108 = AttachmentVerdictDTO.createFrom;
+const $$createType109 = $Create.Array($$createType108);
+const $$createType110 = PassportChangeDTO.createFrom;
+const $$createType111 = $Create.Array($$createType110);
+const $$createType112 = PassportLookalikeDTO.createFrom;
+const $$createType113 = $Create.Nullable($$createType112);
+const $$createType114 = PassportEvidenceDTO.createFrom;
+const $$createType115 = MailtoDraft.createFrom;
+const $$createType116 = PhishingSignalDTO.createFrom;
 const $$createType117 = $Create.Array($$createType116);
-const $$createType118 = ProjectColumnRequest.createFrom;
-const $$createType119 = $Create.Array($$createType118);
-const $$createType120 = ProjectVaultNoteDTO.createFrom;
+const $$createType118 = $Create.Map($Create.Any, $Create.Any);
+const $$createType119 = $Create.Nullable($$createType27);
+const $$createType120 = PrivacySenderDTO.createFrom;
 const $$createType121 = $Create.Array($$createType120);
-const $$createType122 = PromiseAccountDTO.createFrom;
-const $$createType123 = $Create.Array($$createType122);
-const $$createType124 = RecipientKeyDTO.createFrom;
-const $$createType125 = $Create.Array($$createType124);
-const $$createType126 = $Create.Map($Create.Any, $Create.Any);
-const $$createType127 = ScriptTriggerDTO.createFrom;
-const $$createType128 = scripting$0.Param.createFrom;
-const $$createType129 = $Create.Array($$createType128);
-const $$createType130 = scripting$0.PlacementConfig.createFrom;
-const $$createType131 = $Create.Array($$createType130);
-const $$createType132 = ScriptDTO.createFrom;
-const $$createType133 = ScriptLibraryDTO.createFrom;
-const $$createType134 = $Create.Nullable($$createType133);
-const $$createType135 = ScriptDiffLineDTO.createFrom;
+const $$createType122 = ShieldUnsubDTO.createFrom;
+const $$createType123 = $Create.Nullable($$createType122);
+const $$createType124 = ProjectDTO.createFrom;
+const $$createType125 = ProjectColumnDTO.createFrom;
+const $$createType126 = $Create.Array($$createType125);
+const $$createType127 = ProjectCardDTO.createFrom;
+const $$createType128 = $Create.Array($$createType127);
+const $$createType129 = ProjectPersonDTO.createFrom;
+const $$createType130 = $Create.Array($$createType129);
+const $$createType131 = ProjectColumnRequest.createFrom;
+const $$createType132 = $Create.Array($$createType131);
+const $$createType133 = ProjectVaultNoteDTO.createFrom;
+const $$createType134 = $Create.Array($$createType133);
+const $$createType135 = PromiseAccountDTO.createFrom;
 const $$createType136 = $Create.Array($$createType135);
-const $$createType137 = ScriptRefDTO.createFrom;
+const $$createType137 = RecipientKeyDTO.createFrom;
 const $$createType138 = $Create.Array($$createType137);
-const $$createType139 = scripting$0.Step.createFrom;
-const $$createType140 = $Create.Array($$createType139);
-const $$createType141 = ShieldItemDTO.createFrom;
+const $$createType139 = $Create.Map($Create.Any, $Create.Any);
+const $$createType140 = ScriptTriggerDTO.createFrom;
+const $$createType141 = scripting$0.Param.createFrom;
 const $$createType142 = $Create.Array($$createType141);
-const $$createType143 = SieveStateDTO.createFrom;
-const $$createType144 = SieveCapsDTO.createFrom;
-const $$createType145 = sieve$0.Script.createFrom;
-const $$createType146 = TaskContactDTO.createFrom;
-const $$createType147 = $Create.Array($$createType146);
-const $$createType148 = RemovedTaskDTO.createFrom;
+const $$createType143 = scripting$0.PlacementConfig.createFrom;
+const $$createType144 = $Create.Array($$createType143);
+const $$createType145 = ScriptDTO.createFrom;
+const $$createType146 = ScriptLibraryDTO.createFrom;
+const $$createType147 = $Create.Nullable($$createType146);
+const $$createType148 = ScriptDiffLineDTO.createFrom;
 const $$createType149 = $Create.Array($$createType148);
-const $$createType150 = ThemeInfoDTO.createFrom;
-const $$createType151 = themepack$0.CSSFile.createFrom;
-const $$createType152 = $Create.Array($$createType151);
-const $$createType153 = ThreadMessageDTO.createFrom;
-const $$createType154 = $Create.Array($$createType153);
-const $$createType155 = ThreadSummaryDTO.createFrom;
-const $$createType156 = $Create.Array($$createType155);
-const $$createType157 = ThunderbirdAccountDTO.createFrom;
-const $$createType158 = $Create.Array($$createType157);
-const $$createType159 = ThunderbirdFolderDTO.createFrom;
+const $$createType150 = ScriptRefDTO.createFrom;
+const $$createType151 = $Create.Array($$createType150);
+const $$createType152 = scripting$0.Step.createFrom;
+const $$createType153 = $Create.Array($$createType152);
+const $$createType154 = ShieldItemDTO.createFrom;
+const $$createType155 = $Create.Array($$createType154);
+const $$createType156 = SieveStateDTO.createFrom;
+const $$createType157 = SieveCapsDTO.createFrom;
+const $$createType158 = sieve$0.Script.createFrom;
+const $$createType159 = TaskContactDTO.createFrom;
 const $$createType160 = $Create.Array($$createType159);
-const $$createType161 = VaultHeadingDTO.createFrom;
+const $$createType161 = RemovedTaskDTO.createFrom;
 const $$createType162 = $Create.Array($$createType161);
-const $$createType163 = VaultLinkDTO.createFrom;
-const $$createType164 = $Create.Array($$createType163);
-const $$createType165 = VaultPropDTO.createFrom;
-const $$createType166 = $Create.Array($$createType165);
-const $$createType167 = VaultNoteDTO.createFrom;
-const $$createType168 = $Create.Array($$createType167);
+const $$createType163 = ThemeInfoDTO.createFrom;
+const $$createType164 = themepack$0.CSSFile.createFrom;
+const $$createType165 = $Create.Array($$createType164);
+const $$createType166 = ThreadMessageDTO.createFrom;
+const $$createType167 = $Create.Array($$createType166);
+const $$createType168 = ThreadSummaryDTO.createFrom;
+const $$createType169 = $Create.Array($$createType168);
+const $$createType170 = ThunderbirdAccountDTO.createFrom;
+const $$createType171 = $Create.Array($$createType170);
+const $$createType172 = ThunderbirdFolderDTO.createFrom;
+const $$createType173 = $Create.Array($$createType172);
+const $$createType174 = VaultHeadingDTO.createFrom;
+const $$createType175 = $Create.Array($$createType174);
+const $$createType176 = VaultLinkDTO.createFrom;
+const $$createType177 = $Create.Array($$createType176);
+const $$createType178 = VaultPropDTO.createFrom;
+const $$createType179 = $Create.Array($$createType178);
+const $$createType180 = VaultNoteDTO.createFrom;
+const $$createType181 = $Create.Array($$createType180);
