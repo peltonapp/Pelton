@@ -1487,7 +1487,7 @@ const en: Record<string, string> = {
   'settingsPanel.hint.verboseSync': 'Show which mailbox is currently syncing.',
   'settingsPanel.hint.verboseSyncDetail': 'When on, the status line names the mailbox being synced instead of a plain "Syncing". Handy on slow or large syncs.',
   'settingsPanel.label.syncMessageLimit': 'Messages to sync per folder',
-  'settingsPanel.hint.syncMessageLimit': "Pelton keeps this many of each folder's newest messages, in the list and in full. Older mail is fetched from the server when you reach the end of the list. Choosing All keeps every message, newest first. Lowering this never removes mail you already have; raising it downloads more in the background.",
+  'settingsPanel.hint.syncMessageLimit': "How many of each folder's newest messages Pelton downloads from the server, in full. Mail you already have stays in the list and in search. Older mail is fetched from the server when you reach the end of the list. Choosing All downloads every message, newest first. Lowering this never removes mail you already have; raising it downloads more in the background.",
   'settingsPanel.label.syncMaxParallel': 'Parallel sync connections',
   'settingsPanel.hint.syncMaxParallel': 'How many connections this mailbox may have open to the server at once, counting one that listens for new mail and handles what you click right away. 3 suits most servers. More speeds up the background download, but some servers limit connections per user. If the server refuses, Pelton lowers the number by itself.',
   'settingsPanel.label.syncFullReconcileDays': 'Full folder check every (days)',
