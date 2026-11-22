@@ -26,8 +26,7 @@ import (
 	"log/slog"
 	"os"
 	"slices"
-	"strconv"
-	"strings"
+	"time"
 
 	"github.com/peltonapp/Pelton/internal/rfc822"
 	"github.com/peltonapp/Pelton/internal/storage"
@@ -208,9 +207,22 @@ func (im *Importer) storeMessage(ctx context.Context, accountID int64, folder st
 		return errAlreadyStored
 	}
 
-	message := &storage.Message{
+	flags, _ := mboxFlags(raw)
+	message := messageFor(parsed, accountID, folder.ID, uid, flags, time.Time{})
+	_, err = im.store.InsertMessageWithAttachments(ctx, message, attachmentsFor(parsed))
+	return err
+}
+
+// messageFor builds the stored row for a parsed message. received fills in
+// for a missing or unreadable Date header.
+func messageFor(parsed *rfc822.Message, accountID, folderID int64, uid uint32, flags storage.Flag, received time.Time) *storage.Message {
+	date := parsed.Date
+	if date.IsZero() {
+		date = received
+	}
+	return &storage.Message{
 		AccountID:           accountID,
-		FolderID:            folder.ID,
+		FolderID:            folderID,
 		UID:                 uid,
 		MessageID:           parsed.MessageID,
 		InReplyTo:           parsed.InReplyTo,
@@ -219,8 +231,9 @@ func (im *Importer) storeMessage(ctx context.Context, accountID int64, folder st
 		FromAddress:         parsed.From,
 		ToAddresses:         parsed.To,
 		CcAddresses:         parsed.Cc,
-		Date:                parsed.Date,
-		Flags:               importedFlags(parsed.Header.Get("X-Mozilla-Status")),
+		ReplyTo:             parsed.ReplyTo,
+		Date:                date,
+		Flags:               flags,
 		BodyPlain:           parsed.Text,
 		BodyHTML:            parsed.HTML,
 		SizeBytes:           parsed.Size,
@@ -229,7 +242,9 @@ func (im *Importer) storeMessage(ctx context.Context, accountID int64, folder st
 		ListID:              parsed.ListID,
 		CharsetGuess:        parsed.CharsetGuess,
 	}
+}
 
+func attachmentsFor(parsed *rfc822.Message) []storage.IncomingAttachment {
 	attachments := make([]storage.IncomingAttachment, 0, len(parsed.Attachments))
 	for _, a := range parsed.Attachments {
 		attachments = append(attachments, storage.IncomingAttachment{
@@ -239,37 +254,7 @@ func (im *Importer) storeMessage(ctx context.Context, accountID int64, folder st
 			Content:     bytes.NewReader(a.Content),
 		})
 	}
-	_, err = im.store.InsertMessageWithAttachments(ctx, message, attachments)
-	return err
-}
-
-// Thunderbird records per-message state in an X-Mozilla-Status header, a hex
-// bitmask it writes into the mbox itself.
-const (
-	mozillaStatusRead    = 0x0001
-	mozillaStatusFlagged = 0x0004
-)
-
-// importedFlags maps Thunderbird's status header onto Pelton's flags. Mail
-// with no status header (a plain .eml, or an archive from another client)
-// imports as read: an archive is something the user already dealt with, and
-// marking thousands of old messages unread would bury whatever is actually new.
-func importedFlags(status string) storage.Flag {
-	if status == "" {
-		return storage.FlagSeen
-	}
-	bits, err := strconv.ParseUint(strings.TrimSpace(status), 16, 32)
-	if err != nil {
-		return storage.FlagSeen
-	}
-	var flags storage.Flag
-	if bits&mozillaStatusRead != 0 {
-		flags |= storage.FlagSeen
-	}
-	if bits&mozillaStatusFlagged != 0 {
-		flags |= storage.FlagFlagged
-	}
-	return flags
+	return attachments
 }
 
 // source is one file's worth of messages, whichever format it turned out to be.
