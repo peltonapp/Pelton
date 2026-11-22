@@ -145,7 +145,7 @@ describe('add mailbox from settings', () => {
     const user = userEvent.setup()
     render(MailboxesSection)
     await user.click(await screen.findByRole('button', { name: 'Add mailbox…' }))
-    await user.click(await screen.findByRole('button', { name: /Add a mailbox/i }))
+    await screen.findByLabelText('Email')
 
     await fillImapFormAndAdd(user, api)
     await screen.findByText('Archive')

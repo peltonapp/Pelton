@@ -987,6 +987,7 @@ const es: Record<string, string> = {
   'settingsPanel.category.accounts': 'Cuentas',
   'settingsPanel.category.integrations': 'Copia de seguridad e integraciones',
   'settingsPanel.category.powerSync': 'Sincronización y energía',
+  'settingsPanel.category.power': 'Sincronización y energía',
   'settingsPanel.category.appearance': 'Apariencia',
   'settingsPanel.category.sidebar': 'Barra lateral',
   'settingsPanel.category.avatars': 'Avatares',

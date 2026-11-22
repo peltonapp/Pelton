@@ -987,6 +987,7 @@ const ru: Record<string, string> = {
   'settingsPanel.category.accounts': 'Почтовые ящики',
   'settingsPanel.category.integrations': 'Бэкап и интеграции',
   'settingsPanel.category.powerSync': 'Синхронизация и управление',
+  'settingsPanel.category.power': 'Синхронизация и управление',
   'settingsPanel.category.appearance': 'Персонализация',
   'settingsPanel.category.sidebar': 'Боковая панель',
   'settingsPanel.category.avatars': 'Аватары',

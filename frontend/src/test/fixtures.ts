@@ -95,13 +95,27 @@ export async function fillImapFormAndAdd(
 ): Promise<void> {
   const { testConnection } = api
   api.discoverConfig.mockRejectedValue(new Error('no settings found'))
+  // the servers are typed by hand: no lookup, and no question about one.
+  // Loaded here, not at the top, so a test that mocks the api whole can still
+  // use the other builders.
+  const { prefs } = await import('../stores/prefs')
+  prefs.update((p) => ({ ...p, autoconfigLookup: 'manual' }))
+  // the wizard opens on the address; the provider grid is one click away.
+  const manual = screen.queryByRole('button', { name: /Choose the provider yourself/i })
+  if (manual) {
+    await user.click(manual)
+  }
   await user.click(await screen.findByRole('button', { name: /Other \(IMAP \/ SMTP\)/i }))
   await user.type(screen.getByLabelText(/^Email$/i), 'user@example.com')
   await user.type(screen.getByLabelText(/^Password$/i), 'secret')
+  if (!screen.queryByLabelText(/IMAP host/i)) {
+    await user.click(screen.getByRole('button', { name: /Advanced/ }))
+  }
   const imap = screen.getByLabelText(/IMAP host/i)
   await user.clear(imap)
   await user.type(imap, 'imap.example.com')
   await user.click(screen.getByRole('button', { name: /Test connection/i }))
   await waitFor(() => expect(testConnection).toHaveBeenCalled())
-  await user.click(screen.getByRole('button', { name: /^Add mailbox$/i }))
+  // a passed test moves on to naming the mailbox, where it is added.
+  await user.click(await screen.findByRole('button', { name: /^Add mailbox$/i }))
 }

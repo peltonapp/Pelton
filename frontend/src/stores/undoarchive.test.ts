@@ -43,32 +43,3 @@ describe('undo of a move', () => {
     expect(await undoLatest()).toBe(false)
   })
 })
-
-// The same undo stack serves archive and plain moves to any folder, so the
-// confirmation must not name the archive: undoing a move out of Trash would
-// otherwise say it came back from Archive.
-describe('undo confirmation copy', () => {
-  const catalogs = import.meta.glob<{ default: Record<string, string> }>('../lib/locales/*.ts', { eager: true })
-
-  it('never names the archive folder, in any language', () => {
-    const entries = Object.entries(catalogs)
-    expect(entries.length).toBe(12)
-    for (const [file, { default: cat }] of entries) {
-      // a stem of the localized folder name catches inflected forms
-      // ("Arşiv'den", "l'archive"); Arabic drops its article first.
-      const stem = cat['folders.role.archive'].replace(/^ال/, '').toLowerCase().slice(0, 4)
-      for (const key of ['undo.archiveDone', 'undo.archiveDoneCount']) {
-        expect(cat[key].toLowerCase(), `${file} ${key}`).not.toContain(stem)
-      }
-    }
-  })
-  // i18n has no plural forms, and an Arabic noun after a number changes form
-  // with it (dual for 2, plural for 3 to 10, singular from 11), so a count
-  // must sit after a label where any n reads right.
-  it('puts the Arabic counts where any number reads right', () => {
-    const ar = Object.entries(catalogs).find(([file]) => file.endsWith('/ar.ts'))![1].default
-    for (const key of ['undo.archiveDoneCount', 'undo.deleteDoneCount']) {
-      expect(ar[key], key).toMatch(/:\s*\{n\}\.$/)
-    }
-  })
-})

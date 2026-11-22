@@ -33,6 +33,7 @@ import {
 } from './messages'
 import { refreshCountsSoon } from './sidebarcounts'
 import { threadMessages } from './threads'
+import { prefs } from './prefs'
 
 const refreshed = vi.mocked(refreshCountsSoon)
 
@@ -86,6 +87,8 @@ function ids(): number[] {
 beforeEach(() => {
   api.listFolderMessages.mockReset()
   api.fetchOlderMessages.mockReset()
+  // the paging tests read the flat list; grouped lists have tests of their own.
+  prefs.update((p) => ({ ...p, threadedList: false }))
   messageList.set(idle())
   refreshed.mockClear()
 })
@@ -188,7 +191,8 @@ describe('refreshListHead', () => {
       hasOlder: false,
     })
     await loadMore()
-    expect(api.listFolderMessages).toHaveBeenLastCalledWith(1, PAGE_SIZE, PAGE_SIZE)
+    // the last argument is the split inbox tab, none here.
+    expect(api.listFolderMessages).toHaveBeenLastCalledWith(1, PAGE_SIZE, PAGE_SIZE, '')
 
     // two rows left and one arrived: the server's rows shifted up by one.
     const head = [summary(0), ...firstPage.filter((m) => m.id !== 3 && m.id !== 7), summary(51)]
@@ -197,7 +201,25 @@ describe('refreshListHead', () => {
 
     api.listFolderMessages.mockResolvedValueOnce({ messages: [], total: 119, hasOlder: false })
     await loadMore()
-    expect(api.listFolderMessages).toHaveBeenLastCalledWith(1, PAGE_SIZE, 2 * PAGE_SIZE - 1)
+    expect(api.listFolderMessages).toHaveBeenLastCalledWith(1, PAGE_SIZE, 2 * PAGE_SIZE - 1, '')
+  })
+
+  // the Pinned group comes with the first page and is not paged, so it does
+  // not move the next page, and a head refresh keeps it in front.
+  it('pages past the Pinned group by the rows the server pages', async () => {
+    const firstPage = Array.from({ length: PAGE_SIZE }, (_, i) => summary(i + 1))
+    const pinned = [summary(500, { pinned: true })]
+    api.listFolderMessages.mockResolvedValueOnce({ messages: firstPage, pinned, total: 120, hasOlder: false })
+    await loadList(inbox)
+    expect(ids()[0]).toBe(500)
+
+    api.listFolderMessages.mockResolvedValueOnce({ messages: [], pinned, total: 120, hasOlder: false })
+    await loadMore()
+    expect(api.listFolderMessages).toHaveBeenLastCalledWith(1, PAGE_SIZE, PAGE_SIZE, '')
+
+    api.listFolderMessages.mockResolvedValueOnce({ messages: [summary(0), ...firstPage], pinned, total: 121, hasOlder: false })
+    await refreshListHead(inbox)
+    expect(ids().slice(0, 3)).toEqual([500, 0, 1])
   })
 
   it('queues one refresh while the next page loads and runs it after', async () => {

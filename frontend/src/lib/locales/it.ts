@@ -994,6 +994,7 @@ const it: Record<string, string> = {
   'settingsPanel.category.accounts': 'Account',
   'settingsPanel.category.integrations': 'Backup e integrazioni',
   'settingsPanel.category.powerSync': 'Sincronizzazione e alimentazione',
+  'settingsPanel.category.power': 'Sincronizzazione e alimentazione',
   'settingsPanel.category.appearance': 'Aspetto',
   'settingsPanel.category.sidebar': 'Barra laterale',
   'settingsPanel.category.avatars': 'Avatar',

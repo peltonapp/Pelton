@@ -990,6 +990,7 @@ const zhCN: Record<string, string> = {
   'settingsPanel.category.accounts': '账户',
   'settingsPanel.category.integrations': '备份与集成',
   'settingsPanel.category.powerSync': '同步与功耗',
+  'settingsPanel.category.power': '同步与功耗',
   'settingsPanel.category.appearance': '外观',
   'settingsPanel.category.sidebar': '侧边栏',
   'settingsPanel.category.avatars': '头像',
