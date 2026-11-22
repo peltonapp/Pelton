@@ -21,6 +21,8 @@ export interface MailDrag {
   over: boolean
   /** True while Shift is held, which some targets read as a different drop. */
   shift: boolean
+  /** True while Alt (Option) is held, which the calendar reads as a time block. */
+  alt?: boolean
   /** What the target under the pointer says a drop would do, or empty. */
   hint: string
 }
@@ -28,6 +30,7 @@ export interface MailDrag {
 /** How the messages were dropped. */
 export interface MailDropInfo {
   shift: boolean
+  alt?: boolean
 }
 
 /** What a drop target does with mail. */
@@ -37,7 +40,7 @@ export interface MailDropOptions {
   /** Runs when the messages are dropped on the target. */
   onDrop: (items: MessageSummary[], info: MailDropInfo) => void
   /** Says what a drop here would do, shown with the dragged stack. */
-  hint?: (items: MessageSummary[], shift: boolean) => string
+  hint?: (items: MessageSummary[], shift: boolean, alt?: boolean) => string
 }
 
 /** The drag in progress, or null. */
@@ -147,7 +150,7 @@ function scrollStep(): void {
   }
   if (moved) {
     setHovered(targetAt(pointerX, pointerY, drag.items))
-    mailDrag.set({ ...drag, over: hovered !== null, hint: hintFor(drag.items, drag.shift) })
+    mailDrag.set({ ...drag, over: hovered !== null, hint: hintFor(drag.items, drag.shift, !!drag.alt) })
     scrollFrame = requestAnimationFrame(scrollStep)
   }
 }
@@ -179,8 +182,8 @@ function setHovered(next: HTMLElement | null): void {
   hovered = next
 }
 
-function hintFor(items: MessageSummary[], shift: boolean): string {
-  return (hovered && targets.get(hovered)?.hint?.(items, shift)) || ''
+function hintFor(items: MessageSummary[], shift: boolean, alt: boolean): string {
+  return (hovered && targets.get(hovered)?.hint?.(items, shift, alt)) || ''
 }
 
 function onMove(event: PointerEvent): void {
@@ -189,7 +192,15 @@ function onMove(event: PointerEvent): void {
     return
   }
   setHovered(targetAt(event.clientX, event.clientY, drag.items))
-  mailDrag.set({ ...drag, x: event.clientX, y: event.clientY, over: hovered !== null, shift: event.shiftKey, hint: hintFor(drag.items, event.shiftKey) })
+  mailDrag.set({
+    ...drag,
+    x: event.clientX,
+    y: event.clientY,
+    over: hovered !== null,
+    shift: event.shiftKey,
+    alt: event.altKey,
+    hint: hintFor(drag.items, event.shiftKey, event.altKey),
+  })
   pointerX = event.clientX
   pointerY = event.clientY
   springAt(event.clientX, event.clientY)
@@ -218,14 +229,14 @@ function finish(drop: boolean): void {
   }
   mailDrag.set(null)
   if (drop && drag && target) {
-    targets.get(target)?.onDrop(drag.items, { shift: drag.shift })
+    targets.get(target)?.onDrop(drag.items, { shift: drag.shift, alt: !!drag.alt })
   }
 }
 
 function onUp(event: PointerEvent): void {
   const drag = get(mailDrag)
-  if (drag && drag.shift !== event.shiftKey) {
-    mailDrag.set({ ...drag, shift: event.shiftKey })
+  if (drag && (drag.shift !== event.shiftKey || !!drag.alt !== event.altKey)) {
+    mailDrag.set({ ...drag, shift: event.shiftKey, alt: event.altKey })
   }
   finish(true)
 }
@@ -238,13 +249,13 @@ function onKey(event: KeyboardEvent): void {
     return
   }
   const drag = get(mailDrag)
-  if (event.key === 'Shift' && drag && drag.shift !== event.shiftKey) {
-    mailDrag.set({ ...drag, shift: event.shiftKey, hint: hintFor(drag.items, event.shiftKey) })
+  if ((event.key === 'Shift' || event.key === 'Alt') && drag && (drag.shift !== event.shiftKey || !!drag.alt !== event.altKey)) {
+    mailDrag.set({ ...drag, shift: event.shiftKey, alt: event.altKey, hint: hintFor(drag.items, event.shiftKey, event.altKey) })
   }
 }
 
 function begin(items: MessageSummary[], x: number, y: number): void {
-  mailDrag.set({ items, x, y, over: false, shift: false, hint: '' })
+  mailDrag.set({ items, x, y, over: false, shift: false, alt: false, hint: '' })
   document.body.classList.add('mail-dragging')
   for (const [el, options] of targets) {
     markRefusing(el, options)

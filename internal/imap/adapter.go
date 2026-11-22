@@ -388,6 +388,7 @@ func (a *Adapter) listMeta(ids []string) ([]psync.Header, error) {
 			LegacyUID:   uint32(h.UID),
 			Flags:       imapFlagsToStorage(h.Flags),
 			HasListMeta: true,
+			MessageID:   h.MessageID,
 			Subject:     h.Subject,
 			From:        h.From,
 			FromName:    h.FromName,

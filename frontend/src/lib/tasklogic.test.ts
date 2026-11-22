@@ -30,6 +30,7 @@ function task(over: Partial<Task> = {}): Task {
     contacts: [],
     eventUids: [],
     sortOrder: 0,
+    estimate: 0,
     created: '',
     readOnly: false,
     pending: false,

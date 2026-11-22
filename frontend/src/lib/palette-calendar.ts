@@ -17,10 +17,14 @@ import {
   IconFileImport,
   IconEye,
   IconSettings,
+  IconCalendarCheck,
+  IconCalendarTime,
+  IconMailForward,
 } from '@tabler/icons-svelte'
 import { registerPaletteSource } from './palettesources'
 import type { CommandStep, PaletteCommand } from './commands'
-import { calendars, calendarFocus, calendarView, refreshCalendars, toggleCalendar } from '../stores/calendar'
+import { blockMailRequest, calendars, calendarFocus, calendarView, findTimeFor, planMyDay, refreshCalendars, toggleCalendar } from '../stores/calendar'
+import { tasks } from '../stores/tasks'
 import { openSpace, runInSpace } from '../stores/space'
 import { openSettingsAt } from '../stores/settingsnav'
 import { menuHint } from '../stores/shortcuts'
@@ -51,8 +55,44 @@ function calendarsStep(t: (key: string) => string): CommandStep {
   }
 }
 
+// a step listing the open tasks; picking one finds time for it.
+function findTimeStep(t: (key: string) => string): CommandStep {
+  return {
+    label: t('timeblock.palette.findTime'),
+    placeholder: t('timeblock.palette.pickTask'),
+    items: get(tasks)
+      .filter((x) => !x.done)
+      .map((x) => ({
+        id: `calendar:find-time:${x.id}`,
+        group: 'calendar' as const,
+        label: x.title || t('tasks.untitled'),
+        icon: IconCalendarTime,
+        swatch: x.listColor || undefined,
+        run: () => findTimeFor(x.id),
+      })),
+  }
+}
+
 registerPaletteSource('calendar', (t) => {
   const out: PaletteCommand[] = [
+    {
+      id: 'calendar:plan-day',
+      group: 'calendar',
+      label: t('timeblock.palette.planDay'),
+      keywords: t('timeblock.palette.planKeywords'),
+      hint: menuHint('plan-day'),
+      icon: IconCalendarCheck,
+      run: () => planMyDay(),
+    },
+    {
+      id: 'calendar:block-mail',
+      group: 'calendar',
+      label: t('timeblock.palette.blockMail'),
+      keywords: t('timeblock.palette.blockKeywords'),
+      hint: menuHint('block-time'),
+      icon: IconMailForward,
+      run: () => blockMailRequest.set(true),
+    },
     {
       id: 'calendar:open',
       group: 'calendar',
@@ -124,6 +164,16 @@ registerPaletteSource('calendar', (t) => {
       run: () => openSettingsAt('calendar'),
     },
   )
+  if (get(tasks).some((x) => !x.done)) {
+    out.push({
+      id: 'calendar:find-time',
+      group: 'calendar',
+      label: t('timeblock.palette.findTime'),
+      keywords: t('timeblock.palette.blockKeywords'),
+      icon: IconCalendarTime,
+      run: () => findTimeStep(t),
+    })
+  }
   if (get(calendars).length > 0) {
     out.push({
       id: 'calendar:toggle',

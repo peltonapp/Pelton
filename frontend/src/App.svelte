@@ -27,7 +27,8 @@
   import { startChat, stopChat } from './stores/chat'
   import { popupIsOpen } from './lib/popups'
   import { openMenuFromKeyboard } from './lib/keymenu'
-  import { calendarFocus, calendarImport, calendarQuickAdd } from './stores/calendar'
+  import { blockMailRequest, calendarFocus, calendarImport, calendarQuickAdd, planMyDay } from './stores/calendar'
+  import { blockTimeForMail } from './lib/timeblockmail'
   import { formatTime } from './lib/calformat'
   import type { TimeFormat } from './lib/format'
   import { frameIntegrated } from './stores/windowframe'
@@ -69,6 +70,7 @@
     loadInviteCard,
     loadMeetingPrep,
     loadMenuBarEditor,
+    loadMyDayPanel,
     loadNewsletterManager,
     loadNightlyDialog,
     loadNotesScreen,
@@ -195,7 +197,6 @@
   } from './stores/listselect'
   import { selectFolder, selectView, revealMessage } from './stores/selection'
   import { setTheme, setThemeId, setMyDayPanel } from './stores/prefs'
-  import MyDayPanel from './components/myday/MyDayPanel.svelte'
   import { myDayFits } from './lib/myday'
   import { openCreateFolder, openRenameFolder, openDeleteFolder, openEmptyTrash } from './stores/folderdialog'
   import { setFolderPinned, listThemes } from './lib/api'
@@ -550,6 +551,23 @@
     void createTasksFromMail(ids)
   }
 
+  // blocks the next free time to deal with the open mail, or each selected one.
+  function blockTimeForOpenMail(): void {
+    const ids = selectedMessages.length > 1 ? selectedMessages.map((m) => m.id) : [currentMessage()?.id].filter((id): id is number => id !== undefined)
+    if (ids.length === 0) {
+      toastInfo(get(t)('app.toast.openMessageFirst'))
+      return
+    }
+    void blockTimeForMail(ids)
+  }
+
+  $: if ($blockMailRequest) {
+    blockMailRequest.set(false)
+    if (!classic) {
+      blockTimeForOpenMail()
+    }
+  }
+
   // files the open conversation, or the selected ones, under a project.
   function addToProject(): void {
     const items = selectedMessages.length > 1 ? selectedMessages : [currentMessage()].filter((m): m is MessageSummary => m !== null)
@@ -772,7 +790,7 @@
       loadEncryptionIndicator,
       loadDatePeek,
       ...(get(prefs).design === 'classic' ? [] : [loadInviteCard]),
-      ...(get(prefs).design === 'classic' ? [] : [loadPromiseStrip]),
+      ...(get(prefs).design === 'classic' ? [] : [loadPromiseStrip, loadMyDayPanel]),
     ])
     void initShortcuts()
     void initCoach().then((stop) => unsubscribers.push(stop))
@@ -1505,6 +1523,18 @@
       case 'go-tasks':
         if (!classic) {
           openSpace('tasks')
+        }
+        break
+      case 'plan-day':
+        if (!classic) {
+          planMyDay()
+        }
+        break
+      case 'block-time':
+        // the calendar and tasks take it themselves; in mail it blocks time
+        // for the open or selected mail.
+        if (!classic && $space === 'mail') {
+          blockTimeForOpenMail()
         }
         break
       case 'go-notes':
@@ -2501,7 +2531,9 @@
         </div>
         {/if}
         {#if showMyDay}
-          <MyDayPanel on:close={() => setMyDayPanel(false)} />
+          {#await loadMyDayPanel() then m}
+            <svelte:component this={m.default} on:close={() => setMyDayPanel(false)} />
+          {/await}
         {/if}
       </div>
     {:else if $space === 'contacts'}

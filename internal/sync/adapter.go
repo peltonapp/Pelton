@@ -73,6 +73,7 @@ type Header struct {
 	// (IMAP ENVELOPE). When it is false the engine skips
 	// stub upsert and only stores the message after a full Fetch.
 	HasListMeta   bool
+	MessageID     string // the envelope's Message-ID, or ""
 	Subject       string
 	From          string // display form, e.g. "Ada <ada@ex>" or "ada@ex"
 	FromName      string

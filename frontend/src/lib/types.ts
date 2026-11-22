@@ -2209,6 +2209,11 @@ export interface Occurrence {
   conflict: boolean
   // set on an entry the calendar draws for a task due that day.
   task?: Task
+  // set on an entry the calendar draws for a time block.
+  block?: TimeBlock
+  // set on an entry the calendar draws for a proposed block of a day plan;
+  // key names it among the proposals.
+  proposal?: BlockProposal & { key: string }
 }
 
 /**
@@ -2577,6 +2582,8 @@ export interface Task {
   contacts: TaskContact[]
   eventUids: string[]
   sortOrder: number
+  // minutes the task is expected to take, 0 for no estimate.
+  estimate: number
   created: string
   readOnly: boolean
   pending: boolean
@@ -2606,7 +2613,102 @@ export interface TaskDraft {
   contacts: TaskContact[]
   eventUids: string[]
   sortOrder: number
+  estimate: number
   force: boolean
+}
+
+/**
+ * TimeBlock is time set aside in the calendar for a task or a mail. start and
+ * end are rfc3339. title is empty while masked: the block's mail is in a
+ * locked vault and the block says nothing about it.
+ */
+export interface TimeBlock {
+  id: number
+  title: string
+  start: string
+  end: string
+  // the task, 0 when it is not found any more.
+  taskId: number
+  taskUid: string
+  // where the mail lives, all 0 when there is none or it cannot be shown.
+  messageId: number
+  accountId: number
+  folderId: number
+  hasMail: boolean
+  masked: boolean
+  done: boolean
+  // the calendar it is written to, 0 for this device only, and the UID of the
+  // event there.
+  calendarId: number
+  eventUid: string
+  // '' follows the setting, 'generic' or 'title'.
+  eventTitle: string
+  // '' in step, 'out_of_step' or 'event_gone'.
+  linkState: string
+  // the event change waits to reach the server.
+  pending: boolean
+}
+
+/** TimeBlockRequest makes (id 0) or changes a block; calendarId 0 keeps it on this device. */
+export interface TimeBlockRequest {
+  id: number
+  title: string
+  start: string
+  end: string
+  taskUid: string
+  messageId: number
+  done: boolean
+  calendarId: number
+  eventTitle: string
+}
+
+/** TimeBlockSettings are the time blocking preferences. */
+export interface TimeBlockSettings {
+  defaultMinutes: number
+  minSlotMinutes: number
+  bufferMinutes: number
+  // days of the week with working hours, 0 for Sunday.
+  workDays: number[]
+  searchDays: number
+  writeToCalendar: boolean
+  calendarId: number
+  eventTitle: string
+  includeTitle: boolean
+}
+
+/** FreeSlot is a proposed time; afterDue says it ends after the task's due date. */
+export interface FreeSlot {
+  start: string
+  end: string
+  afterDue: boolean
+}
+
+/** BlockProposal is one block of a day plan, not stored yet. */
+export interface BlockProposal {
+  taskId: number
+  taskUid: string
+  title: string
+  start: string
+  end: string
+  part: number
+  parts: number
+}
+
+/** DayPlan is a day laid out as proposals, with the tasks that did not fit. */
+export interface DayPlan {
+  proposals: BlockProposal[]
+  short: string[]
+  unplaced: string[]
+  tasks: number
+}
+
+/** TaskPlan is how much time a task has in blocks, in minutes. */
+export interface TaskPlan {
+  taskUid: string
+  plannedMinutes: number
+  aheadMinutes: number
+  // blocks that have not started.
+  future: number
 }
 
 /** TaskSaveResult is the outcome of a task save. */

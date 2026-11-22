@@ -41,14 +41,17 @@ func (m *Mailbox) KeepsKeyword(keyword imap.Flag) bool {
 
 // MessageHeader is the envelope-level summary used for listings.
 type MessageHeader struct {
-	SeqNum   uint32
-	UID      imap.UID
-	Subject  string
-	From     string
-	FromName string
-	To       string
-	Date     time.Time
-	Flags    []imap.Flag
+	SeqNum uint32
+	UID    imap.UID
+	// MessageID is the envelope's Message-ID, so a list stub can be found
+	// and threaded by it before its body arrives.
+	MessageID string
+	Subject   string
+	From      string
+	FromName  string
+	To        string
+	Date      time.Time
+	Flags     []imap.Flag
 	// Size is RFC822.SIZE when the fetch asked for it, else 0.
 	Size int64
 	// HasEnvelope is true when this header was filled from a FETCH ENVELOPE.
@@ -388,6 +391,7 @@ func headerFromBuffer(b *imapclient.FetchMessageBuffer) MessageHeader {
 	h := MessageHeader{SeqNum: b.SeqNum, UID: b.UID, Flags: b.Flags, Size: b.RFC822Size}
 	if b.Envelope != nil {
 		h.HasEnvelope = true
+		h.MessageID = b.Envelope.MessageID
 		h.Subject, _ = charsetguess.Text(b.Envelope.Subject)
 		h.From = formatAddresses(b.Envelope.From)
 		h.FromName = envelopeName(b.Envelope.From)

@@ -174,6 +174,7 @@ func listStub(folder storage.Folder, h Header) storage.Message {
 		FolderID:       folder.ID,
 		UID:            h.LegacyUID,
 		RemoteID:       h.RemoteID,
+		MessageID:      h.MessageID,
 		Subject:        h.Subject,
 		FromAddress:    h.From,
 		FromName:       h.FromName,

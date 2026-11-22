@@ -73,6 +73,11 @@ func TestVaultStubAndFillStaySealed(t *testing.T) {
 	if _, err := f.db.GetMessage(userCtx(), id); !errors.Is(err, ErrMessageNotFound) {
 		t.Fatalf("locked vault stub readable: %v", err)
 	}
+	// time blocks and tasks find vault mail by its Message-ID, which a stub
+	// keeps only as its vault's keyed hash.
+	if v, err := f.db.HeaderVault(ctx, "a"+markMsgID); err != nil || v != f.vault {
+		t.Fatalf("sealed stub's vault by Message-ID = %d, %v; want %d", v, err, f.vault)
+	}
 	if again := f.listStub(t, f.secret, 1, "a"); again != id {
 		t.Fatalf("refresh made row %d, want %d", again, id)
 	}
@@ -89,6 +94,9 @@ func TestVaultStubAndFillStaySealed(t *testing.T) {
 		t.Fatalf("fill while locked: %v", err)
 	}
 	f.checkSealedRow(t, id, true)
+	if v, err := f.db.HeaderVault(ctx, "<a"+markMsgID+">"); err != nil || v != f.vault {
+		t.Fatalf("filled message's vault by Message-ID = %d, %v; want %d", v, err, f.vault)
+	}
 	if msgs, err := f.db.ListMessagesForReindex(ctx, 0, id, 10); err != nil || len(msgs) != 0 {
 		t.Fatalf("vault mail offered to the search index: %d rows, %v", len(msgs), err)
 	}
@@ -178,6 +186,10 @@ func TestVaultSealAfterFill(t *testing.T) {
 		t.Fatal(err)
 	}
 	f.makeVault(t)
+	// in clear until the sealing job gets to it, and still found by folder.
+	if v, err := f.db.HeaderVault(ctx, "a"+markMsgID); err != nil || v != f.vault {
+		t.Fatalf("unsealed message's vault by Message-ID = %d, %v; want %d", v, err, f.vault)
+	}
 	for {
 		n, err := f.db.SealPending(ctx, f.vault, 10)
 		if err != nil {
