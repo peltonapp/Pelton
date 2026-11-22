@@ -14,7 +14,8 @@ const t = (key: string) => catalogs[key] ?? key
 describe('buildSyncLabel', () => {
   it.each<{ name: string; verbose: boolean; phase: SyncPhase; folder: string; account: string; server: string; counts: Partial<SyncCounts>; want: string }>([
     { name: 'names the body phase with counts', verbose: false, phase: 'bodies', folder: 'Allegro', account: '', server: '',
-      counts: { done: 502, total: 1576 }, want: 'Downloading messages: 502/1,576' },
+      // the count is grouped the way the system locale groups it.
+      counts: { done: 502, total: 1576 }, want: `Downloading messages: 502/${(1576).toLocaleString()}` },
     { name: 'uses stub phase copy while listing folders', verbose: true, phase: 'stubs', folder: 'INBOX', account: 'a@b.com', server: 'mail.example',
       counts: { foldersDone: 0, foldersTotal: 5 }, want: 'Listing messages: INBOX (1/5) · a@b.com · mail.example' },
     { name: 'names account and server on the verbose body line', verbose: true, phase: 'bodies', folder: 'INBOX', account: 'a@b.com', server: 'mail.example',
