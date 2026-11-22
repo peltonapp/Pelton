@@ -116,7 +116,7 @@ func blockScriptEntries(h blockScriptHost) scripting.Entries {
 			scripting.NewField("for_mail", "bool"), scripting.NewField("on_calendar", "bool"),
 		}}},
 		Triggers: []scripting.Trigger{trigger(triggerBlockStarts), trigger(triggerBlockEnds)},
-		Modules: []scripting.Module{{Meta: meta("module", "timeblocks", "timeblocks"), Functions: []scripting.Function{blockTask}}},
+		Modules:  []scripting.Module{{Meta: meta("module", "timeblocks", "timeblocks"), Functions: []scripting.Function{blockTask}}},
 		Conditions: []scripting.Condition{
 			scripting.TextCondition(meta("cond", "timeblocks.title", "timeblocks"), "{{block}}.title", ref),
 			{Meta: meta("cond", "timeblocks.for_task", "timeblocks"), Params: []scripting.Param{ref}, Lua: "({{block}}.task_id or 0) > 0"},
