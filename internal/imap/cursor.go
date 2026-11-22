@@ -35,18 +35,23 @@ func parseCursor(s string) (imapCursor, bool) {
 	if len(parts) != 4 {
 		return imapCursor{}, false
 	}
-	var n [4]uint64
-	for i, p := range parts {
-		v, err := strconv.ParseUint(p, 10, 64)
-		if err != nil {
-			return imapCursor{}, false
-		}
-		n[i] = v
-	}
-	if n[0] > 1<<32-1 || n[2] > 1<<32-1 || n[3] > 1<<32-1 {
+	validity, err := strconv.ParseUint(parts[0], 10, 32)
+	if err != nil {
 		return imapCursor{}, false
 	}
-	return imapCursor{UIDValidity: uint32(n[0]), HighestModSeq: n[1], UIDNext: uint32(n[2]), Messages: uint32(n[3])}, true
+	modSeq, err := strconv.ParseUint(parts[1], 10, 64)
+	if err != nil {
+		return imapCursor{}, false
+	}
+	next, err := strconv.ParseUint(parts[2], 10, 32)
+	if err != nil {
+		return imapCursor{}, false
+	}
+	messages, err := strconv.ParseUint(parts[3], 10, 32)
+	if err != nil {
+		return imapCursor{}, false
+	}
+	return imapCursor{UIDValidity: uint32(validity), HighestModSeq: modSeq, UIDNext: uint32(next), Messages: uint32(messages)}, true
 }
 
 // cursorFor is the cursor for a freshly selected mailbox, or "" when the
