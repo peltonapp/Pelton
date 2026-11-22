@@ -299,6 +299,8 @@ var vaultExempt = map[string]string{
 	"TestConnection": "server check", "ImportThunderbirdAccounts": "account import", "DefaultMailClientStatus": "os setting",
 	"GetAccountPGPKey": "the account's own key", "GetAccountSignatures": "the user's signatures",
 	"ChooseArchiveExportFolder": "a folder picker", "ChooseMailFiles": "a file picker",
+	"ChooseImportSource": "a file picker",
+	"ScanImportSource":   "reads another program's files on disk, never stored mail",
 	// other spaces with content of their own.
 	"ChatRooms": "chat", "ChatTimeline": "chat", "GetFeedEntry": "feeds", "ListFeedEntries": "feeds",
 	"CheckSieveScript": "server filters", "RecheckSieve": "server filters", "RestoreSievePrevious": "server filters",

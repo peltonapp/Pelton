@@ -65,6 +65,9 @@ const (
 	// EventImportProgress fires while mail is being imported from files, and
 	// once more with Running false when the job ends.
 	EventImportProgress = "import:progress"
+	// EventGuidedImport fires while a guided import runs, and once more when
+	// it pauses, is cancelled, fails or finishes. The payload is the job.
+	EventGuidedImport = "import:job"
 	// EventFilesDropped fires when files from the system are dropped onto an
 	// element of the page marked as a drop target. The payload says which.
 	EventFilesDropped = "files:dropped"
