@@ -68,6 +68,9 @@ func (a *App) saveContact(req ContactRequest) (ContactConflictDTO, error) {
 	}
 
 	contact := a.contactFromRequest(req, existing)
+	if book.Local() {
+		return a.saveLocalContact(book.ID, contact)
+	}
 	client, err := a.addressBookClient(a.ctx, *book)
 	if err != nil {
 		return ContactConflictDTO{}, err
@@ -102,6 +105,20 @@ func (a *App) saveContact(req ContactRequest) (ContactConflictDTO, error) {
 	return ContactConflictDTO{Saved: saved}, nil
 }
 
+// saveLocalContact stores a contact of a book that lives only here, such as
+// an imported one: there is no server to write to first.
+func (a *App) saveLocalContact(bookID int64, contact pcarddav.Contact) (ContactConflictDTO, error) {
+	contact.Card = contact.ToCard()
+	if err := a.storeContact(a.ctx, bookID, contact); err != nil {
+		return ContactConflictDTO{}, err
+	}
+	saved, err := a.contactByPath(bookID, contact.Path)
+	if err != nil {
+		return ContactConflictDTO{}, err
+	}
+	return ContactConflictDTO{Saved: saved}, nil
+}
+
 // DeleteContact removes a contact here and on the server. Like a save it is
 // conditional, so a contact edited elsewhere since the last sync reports a
 // conflict rather than disappearing.
@@ -119,6 +136,9 @@ func (a *App) DeleteContact(id int64, force bool) (ContactConflictDTO, error) {
 	}
 	if book.ReadOnly {
 		return ContactConflictDTO{}, errBookReadOnly
+	}
+	if book.Local() {
+		return ContactConflictDTO{}, a.store.DeleteContact(a.ctx, id)
 	}
 
 	client, err := a.addressBookClient(a.ctx, *book)

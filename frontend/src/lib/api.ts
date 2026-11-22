@@ -217,6 +217,14 @@ import type {
   ScriptRun,
 } from './scripting'
 import type { ScriptProposal } from './assistantScripts'
+import type {
+  ImportEstimate,
+  ImportInventory,
+  ImportJob,
+  ImportPlan,
+  ImportSourceKind,
+  ImportTarget,
+} from './guidedimport'
 
 // isDemoMode reports whether the app launched in the cosmetic --potatoes-are-nice
 // screenshot mode; the frontend reads it once to switch the data layer to samples.
@@ -1871,6 +1879,55 @@ export function importMailFiles(paths: string[]): Promise<void> {
 // keeping their names. Like importMailFiles it runs in the background.
 export function importThunderbirdFolders(paths: string[]): Promise<void> {
   return App.ImportThunderbirdFolders(paths)
+}
+
+// chooseImportSource opens the picker that fits a guided import source. An
+// empty list means it was cancelled.
+export function chooseImportSource(kind: ImportSourceKind): Promise<string[]> {
+  return App.ChooseImportSource(kind).then((paths) => paths ?? [])
+}
+
+// scanImportSource reads what a source holds, changing nothing in it.
+export function scanImportSource(kind: ImportSourceKind, paths: string[]): Promise<ImportInventory> {
+  return App.ScanImportSource(kind, paths) as unknown as Promise<ImportInventory>
+}
+
+// estimateImport says how many messages a plan brings over and their size.
+export function estimateImport(plan: ImportPlan): Promise<ImportEstimate> {
+  return App.EstimateImport(plan as BoundPlan) as unknown as Promise<ImportEstimate>
+}
+
+// importTargets lists the accounts mail can be uploaded into, with their folders.
+export function importTargets(): Promise<ImportTarget[]> {
+  return App.ImportTargets().then((list) => (list ?? []) as unknown as ImportTarget[])
+}
+
+// startImportJob starts a guided import and returns its id; watch onGuidedImport.
+export function startImportJob(plan: ImportPlan): Promise<number> {
+  return App.StartImportJob(plan as BoundPlan)
+}
+
+// BoundPlan is the generated binding's plan type; a plain plan has its shape.
+type BoundPlan = Parameters<typeof App.StartImportJob>[0]
+
+// pauseImportJob stops a running import so it can be resumed later.
+export function pauseImportJob(id: number): Promise<void> {
+  return App.PauseImportJob(id)
+}
+
+// resumeImportJob carries on with a paused import.
+export function resumeImportJob(id: number): Promise<void> {
+  return App.ResumeImportJob(id)
+}
+
+// cancelImportJob stops an import for good; what it imported stays.
+export function cancelImportJob(id: number): Promise<void> {
+  return App.CancelImportJob(id)
+}
+
+// importJobs returns the most recent guided imports, newest first.
+export function importJobs(): Promise<ImportJob[]> {
+  return App.ImportJobs().then((list) => (list ?? []) as unknown as ImportJob[])
 }
 
 // systemColorScheme returns the OS dark/light preference ("dark" | "light"), or

@@ -15,6 +15,7 @@ import type {
 } from './types'
 import type { LiveRun, ScriptAsk, ScriptCatchUp, ScriptConfirmRequest, ScriptResult, ScriptRun, ScriptToast } from './scripting'
 import type { AssistantScriptEvent } from './assistantScripts'
+import type { ImportJob } from './guidedimport'
 
 // EventsOn subscribes to a backend event and hands the callback its payload.
 function EventsOn<T>(name: string, cb: (data: T) => void): () => void {
@@ -39,6 +40,7 @@ export const EventNames = {
   foldersChanged: 'folders:changed',
   profileChanged: 'profile:changed',
   importProgress: 'import:progress',
+  guidedImport: 'import:job',
   filesDropped: 'files:dropped',
   agentProposals: 'agent:proposals',
   openMessage: 'message:open',
@@ -375,6 +377,12 @@ export function onMailtoCompose(cb: (e: MailtoDraft) => void): Unsubscribe {
 // with running false when the job ends.
 export function onImportProgress(cb: (e: ImportProgressEvent) => void): Unsubscribe {
   return EventsOn(EventNames.importProgress, (e: ImportProgressEvent) => cb(e))
+}
+
+// onGuidedImport fires while a guided import runs, and once more when it
+// pauses, is cancelled, fails or finishes.
+export function onGuidedImport(cb: (job: ImportJob) => void): Unsubscribe {
+  return EventsOn(EventNames.guidedImport, (job: ImportJob) => cb(job))
 }
 
 /** FilesDroppedEvent names the drop target files from the system landed on. */

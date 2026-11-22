@@ -45,6 +45,10 @@ type Account struct {
 	// Kind is "imap" or "pop3". Pelton speaks imap only, so a pop3 account is
 	// reported for the ui to explain rather than silently dropped.
 	Kind string
+	// SignInWithProvider is set for an account that signed in through its
+	// provider's web login (OAuth). Pelton adds such an account with an app
+	// password instead.
+	SignInWithProvider bool
 }
 
 // MboxFile is one mail folder on disk, with the display name it should keep.
@@ -263,6 +267,8 @@ func accountsFromPrefs(p prefs) []Account {
 			IMAPHost: p["mail.server."+serverKey+".hostname"],
 			IMAPPort: atoi(p["mail.server."+serverKey+".port"]),
 			Username: p["mail.server."+serverKey+".userName"],
+			// Thunderbird's authMethod 10 is OAuth2.
+			SignInWithProvider: p["mail.server."+serverKey+".authMethod"] == "10",
 		}
 
 		identities := splitList(p["mail.account."+id+".identities"])
