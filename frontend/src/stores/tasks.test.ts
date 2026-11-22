@@ -6,6 +6,12 @@ const api = vi.hoisted(() => ({
   setTaskDone: vi.fn(),
   updateTask: vi.fn(),
   resolveTaskConflict: vi.fn(),
+  deleteTask: vi.fn(),
+  listTaskPlans: vi.fn(),
+  releaseTaskTimeBlocks: vi.fn(),
+  listTaskLists: vi.fn(),
+  listTasks: vi.fn(),
+  listTaskMailMarks: vi.fn(),
 }))
 
 vi.mock('../lib/api', async (importOriginal) => ({
@@ -13,7 +19,8 @@ vi.mock('../lib/api', async (importOriginal) => ({
   ...api,
 }))
 
-import { defaultListId, defaultTaskSettings, draftOf, resolveConflict, saveTask, taskBadge, taskClock, taskConflict, tasks, taskSettings, toggleDone } from './tasks'
+import { defaultListId, defaultTaskSettings, draftOf, removeTask, resolveConflict, saveTask, taskBadge, taskClock, taskConflict, tasks, taskSettings, toggleDone } from './tasks'
+import { confirmRequest } from './confirm'
 import { toasts } from './toast'
 
 const base: Task = {
@@ -85,6 +92,48 @@ describe('conflicts', () => {
     expect(api.resolveTaskConflict).toHaveBeenCalledWith(1, false)
     expect(get(taskConflict)).toBeNull()
     expect(get(tasks)[0].title).toBe('Theirs')
+  })
+})
+
+describe('deleting a task with time blocks', () => {
+  beforeEach(() => {
+    api.deleteTask.mockResolvedValue({ removed: [], queued: false })
+    api.releaseTaskTimeBlocks.mockResolvedValue(undefined)
+    api.listTaskLists.mockResolvedValue([])
+    api.listTasks.mockResolvedValue([])
+    api.listTaskMailMarks.mockResolvedValue([])
+  })
+
+  it('asks what to do with the blocks still ahead and deletes them when told', async () => {
+    api.listTaskPlans.mockResolvedValue([{ taskUid: 'a', plannedMinutes: 90, aheadMinutes: 60, future: 2 }])
+    const done = removeTask(base)
+    await vi.waitFor(() => expect(get(confirmRequest)).not.toBeNull())
+    const ask = get(confirmRequest)
+    expect(ask?.title).toBe('Delete the 2 time blocks still ahead for this task?')
+    expect(ask?.cancelLabel).toBe('Keep blocks')
+    ask?.resolve(true)
+    await done
+    expect(api.deleteTask).toHaveBeenCalledWith(1)
+    expect(api.releaseTaskTimeBlocks).toHaveBeenCalledWith('a', 'Pay rent', true)
+  })
+
+  it('keeps the blocks when asked to, and never asks for a task without blocks ahead', async () => {
+    api.listTaskPlans.mockResolvedValue([{ taskUid: 'a', plannedMinutes: 30, aheadMinutes: 30, future: 1 }])
+    const done = removeTask(base)
+    await vi.waitFor(() => expect(get(confirmRequest)).not.toBeNull())
+    get(confirmRequest)?.resolve(false)
+    await done
+    expect(api.releaseTaskTimeBlocks).toHaveBeenCalledWith('a', 'Pay rent', false)
+
+    vi.clearAllMocks()
+    api.deleteTask.mockResolvedValue({ removed: [], queued: false })
+    api.listTasks.mockResolvedValue([])
+    api.listTaskPlans.mockResolvedValue([])
+    tasks.set([base])
+    await removeTask(base)
+    expect(get(confirmRequest)).toBeNull()
+    expect(api.releaseTaskTimeBlocks).not.toHaveBeenCalled()
+    expect(api.deleteTask).toHaveBeenCalledWith(1)
   })
 })
 

@@ -129,11 +129,21 @@
                 <span class="name">{p.title || $t('calendar.block.untitled')}</span>
                 <span class="meta">{proposalText(p)}</span>
               </div>
-              <button type="button" class="cal-btn small" on:click={() => dispatch('accept', [p.key])}>
-                {$t('timeblock.review.accept')}<span class="sr">{` ${p.title}`}</span>
+              <button
+                type="button"
+                class="cal-btn small"
+                aria-label={$t('timeblock.review.acceptOne').replace('{title}', p.title || $t('calendar.block.untitled')).replace('{time}', proposalText(p))}
+                on:click={() => dispatch('accept', [p.key])}
+              >
+                {$t('timeblock.review.accept')}
               </button>
-              <button type="button" class="cal-btn small" on:click={() => dispatch('dismiss', [p.key])}>
-                {$t('timeblock.review.dismiss')}<span class="sr">{` ${p.title}`}</span>
+              <button
+                type="button"
+                class="cal-btn small"
+                aria-label={$t('timeblock.review.dismissOne').replace('{title}', p.title || $t('calendar.block.untitled')).replace('{time}', proposalText(p))}
+                on:click={() => dispatch('dismiss', [p.key])}
+              >
+                {$t('timeblock.review.dismiss')}
               </button>
             </li>
           {/each}
@@ -169,8 +179,13 @@
               <span>{planText(task)}</span>
             </span>
           </div>
-          <button type="button" class="cal-btn small" on:click={() => dispatch('findTime', task)}>
-            {$t('timeblock.findTime')}<span class="sr">{` ${task.title}`}</span>
+          <button
+            type="button"
+            class="cal-btn small"
+            aria-label={$t('timeblock.findTimeFor').replace('{title}', task.title || $t('tasks.untitled'))}
+            on:click={() => dispatch('findTime', task)}
+          >
+            {$t('timeblock.findTime')}
           </button>
           <button
             type="button"
@@ -299,15 +314,6 @@
     margin: 0;
     font-size: var(--fz-meta);
     color: var(--text-tertiary);
-  }
-
-  .sr {
-    position: absolute;
-    width: 1px;
-    height: 1px;
-    overflow: hidden;
-    clip-path: inset(50%);
-    white-space: nowrap;
   }
 
   :global(body.task-dragging) {
