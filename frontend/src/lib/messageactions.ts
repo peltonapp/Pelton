@@ -22,26 +22,88 @@ import {
 } from './api'
 import type { ArchiveUndo } from './api'
 import type { MessageSummary } from './types'
-import { patchInList, removeFromList, neighbourInList } from '../stores/messages'
+import { messageList, patchInList, removeFromList, neighbourInList } from '../stores/messages'
 import { openMessageId } from '../stores/selection'
 import { clearSelection } from '../stores/listselect'
+import { visibleMessageId } from '../stores/tabs'
 import { recordDeleted, recordDeletedBatch } from '../stores/undodelete'
 import { recordArchived, archivedEntry, recordArchivedBatch, type ArchivedMessage } from '../stores/undoarchive'
 import { askConfirm } from '../stores/confirm'
 import { isVIPAddress, addVIP, removeVIP } from '../stores/vip'
 import { errorMessage, toastError, toastSuccess } from '../stores/toast'
 import { sidebar } from '../stores/accounts'
+import { prefs } from '../stores/prefs'
 import { t } from './i18n'
 import { get } from 'svelte/store'
 
+// pendingAutoRead is the message waiting out the delay before it is marked
+// read. There is only ever one, since the reading pane shows one message.
+let pendingAutoRead: { id: number; timer: ReturnType<typeof setTimeout> } | null = null
+
+function dropPendingAutoRead(): void {
+  if (pendingAutoRead) {
+    clearTimeout(pendingAutoRead.timer)
+    pendingAutoRead = null
+  }
+}
+
+// whatever puts another message in the reading pane or empties it, the wait is
+// over: the message was not on screen for the full delay. A tab counts, since
+// it covers the pane without changing the open message.
+visibleMessageId.subscribe((id) => {
+  if (pendingAutoRead && pendingAutoRead.id !== id) {
+    dropPendingAutoRead()
+  }
+})
+
+// autoReadDelay is the wait in seconds, or 0 when nothing should be marked.
+function autoReadDelay(): number {
+  const { markReadOnOpen, markReadDelaySeconds } = get(prefs)
+  return markReadOnOpen && markReadDelaySeconds > 0 ? markReadDelaySeconds : 0
+}
+
 /** Marks one message read or unread. */
 export async function markSeen(item: MessageSummary, seen: boolean): Promise<void> {
+  // an explicit choice wins over a pending auto-mark, which would otherwise
+  // undo marking the message unread a moment later.
+  if (pendingAutoRead?.id === item.id) {
+    dropPendingAutoRead()
+  }
   patchInList(item.id, { seen })
   try {
     await setSeen(item.id, seen)
   } catch (err) {
     toastError(errorMessage(err))
   }
+}
+
+/**
+ * Marks a message read once the reading pane has shown it for the delay the
+ * user picked. It is for an open that does not mark at once, which is moving
+ * through the list with the vim keys, so that the cursor resting on a message
+ * marks it and passing over it does not. Does nothing while the delay is off.
+ */
+export function autoMarkRead(item: MessageSummary): void {
+  // opening the message that is already waiting must not start its wait over,
+  // or a held key at the end of the list would keep it unread for good.
+  if (pendingAutoRead?.id === item.id) {
+    return
+  }
+  dropPendingAutoRead()
+  const delay = autoReadDelay()
+  if (!delay || item.seen) {
+    return
+  }
+  const timer = setTimeout(() => {
+    pendingAutoRead = null
+    // the row is read again here: a click on it during the wait marks it
+    // without going through markSeen.
+    const row = get(messageList).data?.items.find((m) => m.id === item.id)
+    if (row && !row.seen && get(visibleMessageId) === item.id && autoReadDelay()) {
+      void markSeen(row, true)
+    }
+  }, delay * 1000)
+  pendingAutoRead = { id: item.id, timer }
 }
 
 /** Flags or unflags one message. */

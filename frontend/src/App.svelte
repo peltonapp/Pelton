@@ -50,7 +50,6 @@
     SettingKeys,
     exportMessagePrintView,
     setWindowTitle,
-    setSeen,
     setFlagged,
     deleteMessage,
     getMessage,
@@ -115,9 +114,7 @@
   import {
     selectedIds,
     clearSelection,
-    anchorAt,
     ensureAnchor,
-    selectRange,
     rangeCursor,
     startVisual,
     endVisual,
@@ -147,6 +144,7 @@
     dropDeleted,
     toggleSpam,
   } from './lib/messageactions'
+  import { vimCursorTo } from './lib/vimcursor'
   import { buildCommands, mailCommands, type CommandContext, type MessageOp, type FolderOp } from './lib/commands'
   import { catalogByAction } from './lib/menuactions'
   import { shortcutLabel } from './lib/i18n'
@@ -739,12 +737,10 @@
           openForward(await getMessage(msg.id), editorMode)
           break
         case 'mark-read':
-          patchInList(msg.id, { seen: true })
-          await setSeen(msg.id, true)
+          await markSeen(msg, true)
           break
         case 'mark-unread':
-          patchInList(msg.id, { seen: false })
-          await setSeen(msg.id, false)
+          await markSeen(msg, false)
           break
         case 'flag':
           patchInList(msg.id, { flagged: !msg.flagged })
@@ -1242,7 +1238,7 @@
   let lastVimKey = ''
   let lastVimKeyAt = 0
 
-  function vimNavList(): { id: number }[] {
+  function vimNavList(): MessageSummary[] {
     return get(messageList).data?.items ?? []
   }
 
@@ -1251,22 +1247,6 @@
   function vimCursorIndex(items: { id: number }[]): number {
     const id = get(rangeCursor) ?? get(openMessageId)
     return id === null ? -1 : items.findIndex((m) => m.id === id)
-  }
-
-  // vimCursorTo moves the cursor to a row. Extending carries the selection
-  // along from the anchor and leaves the reading pane alone, so a range does
-  // not open and mark read every message it passes. A plain move opens the row
-  // and makes it the anchor, so a selection started from it includes it.
-  function vimCursorTo(items: { id: number }[], index: number, extend: boolean): void {
-    const id = items[index].id
-    if (extend) {
-      rangeCursor.set(id)
-      selectRange(items.map((m) => m.id), id)
-    } else {
-      rangeCursor.set(null)
-      openMessageId.set(id)
-      anchorAt(id)
-    }
   }
 
   function vimMove(delta: number, extend: boolean): void {

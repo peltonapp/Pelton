@@ -150,7 +150,10 @@ const (
 	settingStatusUnread = "status_unread"
 	// opening a message marks it read (#517). On by default.
 	settingMarkReadOnOpen = "mark_read_on_open"
-	settingOpenOnArrow    = "open_on_arrow"
+	// how many seconds the vim keys rest on a message before it is marked
+	// read. 0, the default, leaves that to Enter.
+	settingMarkReadDelay = "mark_read_delay_seconds"
+	settingOpenOnArrow   = "open_on_arrow"
 	// a reply's footer goes above the quoted original (#512). Off by default.
 	settingSignatureAboveQuote = "signature_above_quote"
 	// what the window's close button does: "background" (default) or "quit".
@@ -433,6 +436,9 @@ type UIPrefsDTO struct {
 	StatusUnread bool `json:"statusUnread"`
 	// MarkReadOnOpen marks a message read when it is opened in the list.
 	MarkReadOnOpen bool `json:"markReadOnOpen"`
+	// MarkReadDelaySeconds is how long the vim keys have to rest on a message
+	// before it is marked read. 0 never marks it that way.
+	MarkReadDelaySeconds int `json:"markReadDelaySeconds"`
 	// OpenOnArrow opens the message the arrow keys move to in the list, instead
 	// of only highlighting it until Enter.
 	OpenOnArrow bool `json:"openOnArrow"`
@@ -562,6 +568,7 @@ func (a *App) GetUIPrefs() (UIPrefsDTO, error) {
 		StatusClock:                a.boolSetting(settingStatusClock, true),
 		StatusUnread:               a.boolSetting(settingStatusUnread, true),
 		MarkReadOnOpen:             a.boolSetting(settingMarkReadOnOpen, true),
+		MarkReadDelaySeconds:       a.intSetting(settingMarkReadDelay, 0),
 		OpenOnArrow:                a.boolSetting(settingOpenOnArrow, false),
 		SignatureAboveQuote:        a.boolSetting(settingSignatureAboveQuote, false),
 		CloseAction:                a.stringSetting(settingCloseAction, closeActionBackground),

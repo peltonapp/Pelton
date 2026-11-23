@@ -95,6 +95,7 @@ const defaults: UIPrefs = {
   statusClock: true,
   statusUnread: true,
   markReadOnOpen: true,
+  markReadDelaySeconds: 0,
   openOnArrow: false,
   signatureAboveQuote: false,
   closeAction: 'background',
@@ -571,6 +572,13 @@ export function setStatusUnread(value: boolean): void {
 export function setMarkReadOnOpen(value: boolean): void {
   prefs.update((p) => ({ ...p, markReadOnOpen: value }))
   void setSetting(SettingKeys.markReadOnOpen, String(value))
+}
+
+// setMarkReadDelay persists how long the vim keys rest on a message before it
+// is marked read, in seconds (0 turns that off).
+export function setMarkReadDelay(seconds: number): void {
+  prefs.update((p) => ({ ...p, markReadDelaySeconds: seconds }))
+  void setSetting(SettingKeys.markReadDelay, String(seconds))
 }
 
 // setOpenOnArrow picks whether the arrow keys open the row they move to.
