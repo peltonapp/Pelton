@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="utf-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom" xmlns:media="http://search.yahoo.com/mrss/" xml:base="https://blog.example.org/">
+  <title type="html">Atom &lt;i&gt;Example&lt;/i&gt;</title>
+  <subtitle>Things</subtitle>
+  <link href="https://blog.example.org/" />
+  <link rel="self" href="https://blog.example.org/atom.xml" />
+  <icon>/favicon.png</icon>
+  <author><name>Grace Hopper</name></author>
+  <updated>2026-11-12T12:00:00Z</updated>
+  <id>urn:uuid:feed</id>
+  <entry xml:base="/2026/11/">
+    <title>Inline xhtml</title>
+    <link rel="alternate" type="text/html" href="xhtml-post" />
+    <link rel="enclosure" type="audio/ogg" length="42" href="sound.ogg" />
+    <id>urn:uuid:1</id>
+    <published>2026-11-11T08:00:00.123+02:00</published>
+    <updated>2026-11-12T08:00:00Z</updated>
+    <content type="xhtml"><div xmlns="http://www.w3.org/1999/xhtml"><p>Look <a href="img/pic.png">here</a><br/>and there</p></div></content>
+  </entry>
+  <entry>
+    <title>Html content</title>
+    <link href="https://blog.example.org/html" />
+    <id>urn:uuid:2</id>
+    <updated>2026-11-10T08:00:00Z</updated>
+    <author><name>Alan Turing</name></author>
+    <summary>Plain summary &amp; more</summary>
+    <content type="html">&lt;p&gt;Rich &lt;img src="/x.png"&gt;&lt;/p&gt;</content>
+  </entry>
+  <entry>
+    <title>Video entry</title>
+    <link rel="alternate" href="https://www.example.org/watch?v=1" />
+    <id>yt:video:1</id>
+    <published>2026-11-09T08:00:00+00:00</published>
+    <media:group>
+      <media:title>Video entry</media:title>
+      <media:thumbnail url="https://i.example.org/1.jpg" width="480" height="360" />
+      <media:description>Watch this
+second line</media:description>
+    </media:group>
+  </entry>
+</feed>

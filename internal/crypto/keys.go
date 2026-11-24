@@ -22,8 +22,8 @@ const (
 // Private key material is read here but only unlocked transiently during a
 // signing or encryption call; passphrases are never held by the store.
 //
-// Key discovery from keyservers or WKD is intentionally out of scope for now;
-// keys come from the local store. WKD/keyserver lookup is a future addition.
+// Keys found automatically (Autocrypt, WKD, key servers) are not written here;
+// they are kept apart so the keyring stays what the user put in it.
 type PGPKeyStore struct {
 	dir string
 }

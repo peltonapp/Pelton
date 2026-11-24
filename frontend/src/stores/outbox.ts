@@ -2,9 +2,11 @@
 // when the backend emits outbox:changed and reflects sync:state so the ui can
 // show sending, queued and failed messages plus a sync indicator.
 
-import { writable } from 'svelte/store'
+import { get, writable } from 'svelte/store'
 import type { OutboxRow } from '../lib/types'
+import type { SyncPhase } from '../lib/syncstatus'
 import { listOutbox, clearSentOutbox } from '../lib/api'
+import { t } from '../lib/i18n'
 import { errorMessage, toastSuccess } from './toast'
 
 export const outbox = writable<OutboxRow[]>([])
@@ -27,6 +29,10 @@ export const syncFolder = writable<string>('')
 // are empty when idle or between folders.
 export const syncServer = writable<string>('')
 export const syncAccount = writable<string>('')
+
+// syncPhase is stubs or bodies during a sync's first pass, verify while only
+// the background folder check runs, else empty.
+export const syncPhase = writable<SyncPhase>('')
 
 // SyncCounts is how far the running sync has got, in message bodies. total is
 // what the reconcile plans have asked for so far and grows as mailboxes open;
@@ -53,17 +59,29 @@ export const emptySyncCounts: SyncCounts = {
 // finished bar does not linger into the next one.
 export const syncCounts = writable<SyncCounts>(emptySyncCounts)
 
+let announceSent = true
+
+/**
+ * quietOutbox leaves confirming and pruning sent messages to the main window,
+ * for a window of its own that also shows the outbox.
+ */
+export function quietOutbox(): void {
+  announceSent = false
+}
+
 // loadOutbox refetches the queue. it swallows errors into an empty list since the
 // outbox view is secondary; a transient failure should not break the app. when
 // the refetch reveals freshly-sent messages it shows a brief confirmation and
-// prunes them so the queue does not keep completed rows around.
+// prunes them so the queue does not keep completed rows around. In a window
+// other than the main one (see quietOutbox) it only leaves them out.
 export async function loadOutbox(): Promise<void> {
   try {
     const rows = await listOutbox()
     const sent = rows.filter((r) => r.state === 'sent')
     outbox.set(rows.filter((r) => r.state !== 'sent'))
-    if (sent.length > 0) {
-      toastSuccess(sent.length === 1 ? 'Message sent.' : `${sent.length} messages sent.`)
+    if (announceSent && sent.length > 0) {
+      const tr = get(t)
+      toastSuccess(sent.length === 1 ? tr('outbox.toast.sent') : tr('outbox.toast.sentMany').replace('{count}', String(sent.length)))
       // prune the sent rows; the resulting outbox:changed event triggers another
       // load that simply finds them gone.
       void clearSentOutbox()

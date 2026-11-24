@@ -1,0 +1,37 @@
+{
+  "format": 1,
+  "name": "Add people you reply to as contacts",
+  "description": "After you send a reply, adds everyone in To to your address book, unless they are in it already.",
+  "kind": "blocks",
+  "trigger": { "type": "mail.after_send", "params": {} },
+  "permissions": ["mail.read", "contacts.write"],
+  "blocks": {
+    "version": 1,
+    "blocks": [
+      {
+        "id": "reply",
+        "kind": "if",
+        "branches": [
+          {
+            "when": {
+              "kind": "condition",
+              "type": "text.value",
+              "args": { "text": { "ref": "event.draft.subject" }, "op": { "value": "matches" }, "value": { "value": "(?i)^(re|aw|sv|antw)\\s*:" } }
+            },
+            "body": [
+              {
+                "id": "each",
+                "kind": "foreach",
+                "list": { "ref": "event.draft.to" },
+                "as": "person",
+                "body": [
+                  { "id": "add", "kind": "action", "type": "contacts.add", "args": { "email": { "ref": "var:person" } } }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}

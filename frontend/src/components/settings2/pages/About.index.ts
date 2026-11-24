@@ -5,7 +5,31 @@ const entries: SettingsIndexEntry[] = [
     page: 'about',
     id: 'about',
     labelKey: 'settingsPanel.category.about',
-    keywords: 'version license licenses update check updates release website github issue report diagnostics copy default mail client onboarding tour rerun',
+    keywords: 'version license licenses website github issue report contributors warranty liability logo',
+  },
+  {
+    page: 'about',
+    id: 'about-updates',
+    labelKey: 'about.update.label',
+    keywords: 'update updates check release new version weekly monthly',
+  },
+  {
+    page: 'about',
+    id: 'about-diagnostics',
+    labelKey: 'about.diagnostics.label',
+    keywords: 'diagnostics log folder logs copy bug report',
+  },
+  {
+    page: 'about',
+    id: 'about-whats-new',
+    labelKey: 'whatsnew.title',
+    keywords: 'whats new release notes changes features changelog',
+  },
+  {
+    page: 'about',
+    id: 'about-tour',
+    labelKey: 'setup.runAgain',
+    keywords: 'onboarding tour welcome rerun setup again',
   },
 ]
 

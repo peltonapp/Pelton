@@ -16,9 +16,17 @@ var errSearchUnavailable = errors.New("pelton: search index is unavailable")
 const (
 	// EventMailNew fires when a sync or idle cycle pulled new messages.
 	EventMailNew = "mail:new"
-	// EventMailRepaired fires when a sync replaced the text of messages that
-	// were cached with an encoding nothing could read, so the list reloads.
+	// EventMailRepaired fires when cached messages changed underneath an open
+	// list without new mail arriving, so the list reloads: a sync replaced text
+	// cached with an encoding nothing could read, conversations were regrouped,
+	// or messages became answered or forwarded.
 	EventMailRepaired = "mail:repaired"
+	// EventMailUpdated fires when a message row changes in place, such as a stub
+	// gaining its full body after a background fetch.
+	EventMailUpdated = "mail:updated"
+	// EventMailBodyFailed fires when the body of a message opened in the reading
+	// pane could not be fetched, after every retry, so the pane stops waiting.
+	EventMailBodyFailed = "mail:bodyFailed"
 	// EventSyncProgress fires as folders are synced so the ui can show progress.
 	EventSyncProgress = "sync:progress"
 	// EventSyncState fires when background sync starts or stops, with any error.
@@ -29,6 +37,9 @@ const (
 	EventAccountSyncState = "sync:accounts"
 	// EventOutboxChanged fires when the outbox contents or a message state change.
 	EventOutboxChanged = "outbox:changed"
+	// EventOutboxLog fires for each new line of the send activity log, with
+	// the OutboxLogEntryDTO as payload.
+	EventOutboxLog = "outbox:log"
 	// EventAgentProposals fires when an agent proposes a message, or one is
 	// approved or discarded, so the queue in the ui matches what is stored.
 	EventAgentProposals = "agent:proposals"
@@ -60,6 +71,12 @@ const (
 	// EventImportProgress fires while mail is being imported from files, and
 	// once more with Running false when the job ends.
 	EventImportProgress = "import:progress"
+	// EventGuidedImport fires while a guided import runs, and once more when
+	// it pauses, is cancelled, fails or finishes. The payload is the job.
+	EventGuidedImport = "import:job"
+	// EventFilesDropped fires when files from the system are dropped onto an
+	// element of the page marked as a drop target. The payload says which.
+	EventFilesDropped = "files:dropped"
 	// EventProfileChanged fires when the app switches profile, or when the
 	// profile it is in is edited. Everything the ui holds is scoped to a profile,
 	// so the frontend reloads its preferences, sidebar, list and views rather
@@ -70,7 +87,100 @@ const (
 	// It carries the folder as well as the message so the list can move to
 	// where the message actually lives rather than opening it out of context.
 	EventOpenMessage = "message:open"
+	// EventReplyMessage fires when something outside the ui asks for a reply
+	// to one message to be opened in a composer. Today that is the Reply
+	// button of a new-mail notification.
+	EventReplyMessage = "message:reply"
+	// EventCalendarSync fires as calendars sync, and once more with Running
+	// false when the run ends, carrying any error.
+	EventCalendarSync = "calendar:sync"
+	// EventCalendarChanged fires when events or calendars changed, from a sync
+	// or an edit, so the calendar view reloads the window it shows.
+	EventCalendarChanged = "calendar:changed"
+	// EventCalendarReminder fires when an event's reminder is due, alongside
+	// the desktop notification, so the ui can show it too.
+	EventCalendarReminder = "calendar:reminder"
+	// EventTaskReminder fires when a task's reminder is due, alongside the
+	// desktop notification, so the ui can offer to complete or open it.
+	EventTaskReminder = "tasks:reminder"
+	// EventICSOpen fires when the system asks the running app to open .ics
+	// files, such as one double-clicked in the file manager.
+	EventICSOpen = "calendar:open-files"
+	// EventFollowUpsChanged fires when a follow-up reminder is set, comes due,
+	// is answered or is cancelled, so the reminder lists reload.
+	EventFollowUpsChanged = "followups:changed"
+	// EventTimeBlocksChanged fires when a time block was made, moved, changed
+	// or deleted, or followed its calendar event. Subscribers refetch.
+	EventTimeBlocksChanged = "timeblocks:changed"
+	// EventFocusChanged fires when focus mode starts, ends or changes its end
+	// time, with the FocusDTO as payload.
+	EventFocusChanged = "focus:changed"
+	// EventFocusEnded fires once when focus mode ends, with a FocusSummaryDTO
+	// saying what arrived meanwhile.
+	EventFocusEnded = "focus:ended"
+	// EventProjectsChanged fires when a project, its board, its links or its
+	// notes changed, with a ProjectsChangedEvent naming which.
+	EventProjectsChanged = "projects:changed"
+	// EventVaultChanged fires when notes in the notes folder changed, through
+	// Pelton or another app, with a VaultChangeEvent as payload.
+	EventVaultChanged = "notes:changed"
+	// EventFeedsProgress fires as feeds are fetched, and once more with
+	// Running false when the run ends, with a FeedsProgressEvent.
+	EventFeedsProgress = "feeds:progress"
+	// EventFeedsChanged fires when feeds or their entries changed, from a
+	// refresh, an icon arriving or an edit, with a FeedsChangedEvent.
+	EventFeedsChanged = "feeds:changed"
+	// EventFeedsOpen fires when a clicked notification asks for a feed entry
+	// to be shown, with a FeedsOpenEvent.
+	EventFeedsOpen = "feeds:open"
 )
+
+// CalendarSyncEvent is the payload for EventCalendarSync. Done and Total
+// count calendars in the run; Calendar names the one being synced.
+type CalendarSyncEvent struct {
+	Running    bool   `json:"running"`
+	CalendarID int64  `json:"calendarId"`
+	Calendar   string `json:"calendar"`
+	Done       int    `json:"done"`
+	Total      int    `json:"total"`
+	Error      string `json:"error"`
+}
+
+// CalendarChangedEvent is the payload for EventCalendarChanged. An empty list
+// means anything may have changed.
+type CalendarChangedEvent struct {
+	CalendarIDs []int64 `json:"calendarIds"`
+}
+
+// ProjectsChangedEvent is the payload for EventProjectsChanged. An empty list
+// means any project may have changed.
+type ProjectsChangedEvent struct {
+	ProjectIDs []int64 `json:"projectIds"`
+}
+
+// CalendarReminderEvent is the payload for EventCalendarReminder.
+type CalendarReminderEvent struct {
+	EventID      int64  `json:"eventId"`
+	CalendarID   int64  `json:"calendarId"`
+	RecurrenceID string `json:"recurrenceId"`
+	Summary      string `json:"summary"`
+	Location     string `json:"location"`
+	Start        string `json:"start"`
+	End          string `json:"end"`
+	AllDay       bool   `json:"allDay"`
+	// HasAttendees is true when others are invited, so the reminder can offer
+	// to prepare for the meeting.
+	HasAttendees bool `json:"hasAttendees"`
+}
+
+// TaskReminderEvent is the payload for EventTaskReminder. Due is a date
+// (2006-01-02), rfc3339 in the user's zone, or empty for a task with none.
+type TaskReminderEvent struct {
+	TaskID  int64  `json:"taskId"`
+	ListID  int64  `json:"listId"`
+	Summary string `json:"summary"`
+	Due     string `json:"due"`
+}
 
 // OpenMessageEvent is the payload for EventOpenMessage.
 type OpenMessageEvent struct {
@@ -94,13 +204,15 @@ type DownloadProgressEvent struct {
 // AttachmentProgressEvent is the payload for EventAttachmentProgress. It reports
 // byte progress for the current file plus how many files are done in a save-all.
 type AttachmentProgressEvent struct {
-	Running    bool   `json:"running"`
-	Filename   string `json:"filename"`
-	BytesDone  int64  `json:"bytesDone"`
-	BytesTotal int64  `json:"bytesTotal"`
-	FilesDone  int    `json:"filesDone"`
-	FilesTotal int    `json:"filesTotal"`
-	Error      string `json:"error"`
+	Running bool `json:"running"`
+	// AttachmentID names the attachment being written.
+	AttachmentID int64  `json:"attachmentId"`
+	Filename     string `json:"filename"`
+	BytesDone    int64  `json:"bytesDone"`
+	BytesTotal   int64  `json:"bytesTotal"`
+	FilesDone    int    `json:"filesDone"`
+	FilesTotal   int    `json:"filesTotal"`
+	Error        string `json:"error"`
 }
 
 // ImportProgressEvent is the payload for EventImportProgress. Running is false
@@ -123,6 +235,14 @@ type ImportProgressEvent struct {
 	Error     string   `json:"error"`
 }
 
+// FilesDroppedEvent is the payload for EventFilesDropped. Target is the value
+// of the drop target's data-file-drop-target attribute, so the page can tell
+// its drop targets apart; Paths are the dropped files.
+type FilesDroppedEvent struct {
+	Target string   `json:"target"`
+	Paths  []string `json:"paths"`
+}
+
 // MailNewEvent is the payload for EventMailNew.
 type MailNewEvent struct {
 	AccountID int64 `json:"accountId"`
@@ -131,7 +251,8 @@ type MailNewEvent struct {
 }
 
 // MailRepairedEvent is the payload for EventMailRepaired. Count is how many
-// messages in the folder were rewritten.
+// messages changed. AccountID and FolderID are 0 when the change spans more
+// than one.
 type MailRepairedEvent struct {
 	AccountID int64 `json:"accountId"`
 	FolderID  int64 `json:"folderId"`
@@ -163,6 +284,20 @@ type SyncProgressEvent struct {
 	// the "mailbox 3 of 12" part of the line.
 	FoldersDone  int `json:"foldersDone"`
 	FoldersTotal int `json:"foldersTotal"`
+	// Phase is "stubs" while the named folder is listed, "bodies" while bodies
+	// are fetched, and "verify" on the background folder check's own line.
+	Phase string `json:"phase"`
+}
+
+// MailUpdatedEvent is the payload for EventMailUpdated. The reading pane reloads
+// when the open message gains a body that was fetched in the background.
+type MailUpdatedEvent struct {
+	MessageID int64 `json:"messageId"`
+}
+
+// MailBodyFailedEvent is the payload for EventMailBodyFailed.
+type MailBodyFailedEvent struct {
+	MessageID int64 `json:"messageId"`
 }
 
 // SyncStateEvent is the payload for EventSyncState. Error is empty on success.
@@ -181,6 +316,9 @@ type AccountSyncStateEvent struct {
 // call sites stay terse and an emit before startup (or in a test) is a safe
 // no-op.
 func (a *App) emit(name string, payload any) {
+	if a.emitForTest != nil {
+		a.emitForTest(name, payload)
+	}
 	if a.wapp == nil || !a.runtimeReady.Load() {
 		return
 	}

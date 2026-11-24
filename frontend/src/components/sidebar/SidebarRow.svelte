@@ -55,7 +55,8 @@
       type="button"
       class="caret"
       class:open={expanded}
-      aria-label={expanded ? $t('sidebar.collapse') : $t('sidebar.expand')}
+      aria-label={(expanded ? $t('a11y.collapseNamed') : $t('a11y.expandNamed')).replace('{name}', label)}
+      aria-expanded={expanded}
       on:click|stopPropagation={() => dispatch('toggle')}
     >
       <IconChevronRight size={14} stroke={1.8} />
@@ -68,6 +69,7 @@
     type="button"
     class="main"
     class:unread={count > 0}
+    aria-current={active ? 'true' : undefined}
     title={title || null}
     on:click={() => dispatch('select')}
   >
@@ -76,7 +78,7 @@
     <slot name="badge" />
     {#if count > 0}
       {#key count}
-        <span class="count" aria-label={`${count} ${$t('sidebar.unreadSuffix')}`}>{count}</span>
+        <span class="count" role="img" aria-label={`${count} ${$t('sidebar.unreadSuffix')}`}>{count}</span>
       {/key}
     {/if}
   </button>

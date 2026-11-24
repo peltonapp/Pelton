@@ -10,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/emersion/go-vcard"
+	"github.com/peltonapp/Pelton/internal/dav"
 )
 
 // fakeServer answers the handful of requests the write paths make. Discovery
@@ -64,11 +65,11 @@ func (f *fakeServer) start(t *testing.T) *Client {
 // clientFor builds a Client without the HasSupport handshake, which the fake
 // server above does not answer.
 func clientFor(endpoint string) (*Client, error) {
-	parsed, err := endpointURL(endpoint)
+	parsed, err := dav.Endpoint(endpoint)
 	if err != nil {
 		return nil, err
 	}
-	return &Client{http: http.DefaultClient, base: parsed, user: "me", pass: "secret"}, nil
+	return &Client{conn: &dav.Conn{HTTP: http.DefaultClient, Base: parsed, User: "me", Pass: "secret"}}, nil
 }
 
 func testContact() vcard.Card {
@@ -180,38 +181,45 @@ func TestDeleteReportsNotFound(t *testing.T) {
 	}
 }
 
-func TestEndpointURLDefaultsToHTTPS(t *testing.T) {
-	tests := []struct {
-		raw     string
-		want    string
-		wantErr bool
-	}{
-		{raw: "cloud.example.com", want: "https://cloud.example.com"},
-		{raw: "https://cloud.example.com/remote.php/dav", want: "https://cloud.example.com/remote.php/dav"},
-		{raw: "http://localhost:5232", want: "http://localhost:5232"},
-		{raw: "   ", wantErr: true},
-		{raw: "https://", wantErr: true},
-	}
-	for _, tt := range tests {
-		got, err := endpointURL(tt.raw)
-		if tt.wantErr {
-			if err == nil {
-				t.Errorf("endpointURL(%q) = %v, want an error", tt.raw, got)
-			}
-			continue
-		}
-		if err != nil {
-			t.Errorf("endpointURL(%q): %v", tt.raw, err)
-			continue
-		}
-		if got.String() != tt.want {
-			t.Errorf("endpointURL(%q) = %q, want %q", tt.raw, got, tt.want)
-		}
-	}
-}
-
 // requestAuth reports the basic auth on a recorded request.
 func requestAuth(headers http.Header) (string, string, bool) {
 	req := &http.Request{Header: headers}
 	return req.BasicAuth()
+}
+
+func TestDiscoverTakesTheDomainAfterTheLastAt(t *testing.T) {
+	srv := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusMultiStatus)
+	}))
+	defer srv.Close()
+	host := strings.TrimPrefix(srv.URL, "https://")
+	want := srv.URL + "/.well-known/carddav"
+
+	tests := []struct {
+		name    string
+		address string
+		wantErr bool
+	}{
+		{"address", "me@" + host, false},
+		{"bare domain", host, false},
+		{"several at signs", "a@b@" + host, false},
+		{"leading at", "@" + host, false},
+		{"surrounding space", "me@" + host + " ", false},
+		{"at last", "me@", true},
+		{"empty", "", true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := Discover(context.Background(), srv.Client(), tt.address)
+			if tt.wantErr {
+				if err == nil {
+					t.Fatalf("Discover(%q) = %q, want an error", tt.address, got)
+				}
+				return
+			}
+			if err != nil || got != want {
+				t.Errorf("Discover(%q) = (%q, %v), want %q", tt.address, got, err, want)
+			}
+		})
+	}
 }

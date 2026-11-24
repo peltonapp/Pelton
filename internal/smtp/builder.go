@@ -70,6 +70,41 @@ type Message struct {
 	// MessageID is used as the Message-ID header when set. Left empty, a fresh
 	// one is generated. Drafts set it so each save replaces the last copy.
 	MessageID string
+
+	// Calendar is an iTIP scheduling part, such as the reply to an
+	// invitation. It goes out as one more alternative of the body, which is
+	// where calendar clients look for it.
+	Calendar *CalendarPart
+
+	// Headers are extra top-level headers, such as Autocrypt, written after
+	// the standard ones. Values must already be folded.
+	Headers [][2]string
+
+	// Protected applies to an encrypted message only: the headers are
+	// repeated inside the encrypted part, as RFC 9788 describes, together
+	// with any Autocrypt-Gossip headers.
+	Protected *ProtectedHeaders
+}
+
+// ProtectedHeaders controls what an encrypted message carries inside its
+// encryption.
+type ProtectedHeaders struct {
+	// HideSubject replaces the visible subject with a placeholder, leaving the
+	// real one only inside the encryption.
+	HideSubject bool
+	// Gossip are Autocrypt-Gossip header values, already folded.
+	Gossip []string
+}
+
+// SubjectPlaceholder is the visible subject of a message whose subject is
+// encrypted, the one most programs that hide the subject use.
+const SubjectPlaceholder = "..."
+
+// CalendarPart is iCalendar data with its iTIP method (REQUEST, REPLY,
+// CANCEL).
+type CalendarPart struct {
+	Method string
+	Data   []byte
 }
 
 // Recipients returns every envelope recipient address, including Bcc. The
@@ -108,38 +143,47 @@ type part struct {
 //	+ regular attachments           -> multipart/mixed    [ body|related, attach... ]
 //
 // withBcc is only ever true for a draft, which is stored and not transmitted.
-func (m *Message) topHeaders(withBcc bool) (string, string, error) {
+func (m *Message) topHeaders(withBcc bool, subject, date, msgID string) string {
 	var b strings.Builder
-	writeHeader(&b, headerFrom, formatAddress(m.From))
+	headers := m.addressHeaders(withBcc, subject, date, msgID)
+	headers = append(headers, [2]string{headerMIMEVersion, mimeVersion}, [2]string{headerUserAgent, userAgent})
+	for _, h := range append(headers, m.Headers...) {
+		writeHeader(&b, h[0], h[1])
+	}
+	return b.String()
+}
+
+// addressHeaders returns the headers that say who, what and when, the ones an
+// encrypted message repeats inside its encryption.
+func (m *Message) addressHeaders(withBcc bool, subject, date, msgID string) [][2]string {
+	out := [][2]string{{headerFrom, formatAddress(m.From)}}
 	if len(m.To) > 0 {
-		writeHeader(&b, headerTo, formatAddressList(m.To))
+		out = append(out, [2]string{headerTo, formatAddressList(m.To)})
 	}
 	if len(m.Cc) > 0 {
-		writeHeader(&b, headerCc, formatAddressList(m.Cc))
+		out = append(out, [2]string{headerCc, formatAddressList(m.Cc)})
 	}
 	if withBcc && len(m.Bcc) > 0 {
-		writeHeader(&b, headerBcc, formatAddressList(m.Bcc))
+		out = append(out, [2]string{headerBcc, formatAddressList(m.Bcc)})
 	}
-	writeHeader(&b, headerSubject, encodeWord(m.Subject))
-	writeHeader(&b, headerDate, nowDate())
-
-	msgID := m.MessageID
-	if msgID == "" {
-		var err error
-		if msgID, err = NewMessageID(m.From.Email); err != nil {
-			return "", "", err
-		}
-	}
-	writeHeader(&b, headerMessageID, msgID)
-
+	out = append(out,
+		[2]string{headerSubject, encodeWord(subject)},
+		[2]string{headerDate, date},
+		[2]string{headerMessageID, msgID})
 	if parent, ok := messageid.Bracket(m.InReplyTo); ok {
-		writeHeader(&b, headerInReplyTo, parent)
-		writeHeader(&b, headerReferences, referenceChain(m.References, m.InReplyTo))
+		out = append(out,
+			[2]string{headerInReplyTo, parent},
+			[2]string{headerReferences, referenceChain(m.References, m.InReplyTo)})
 	}
+	return out
+}
 
-	writeHeader(&b, headerMIMEVersion, mimeVersion)
-	writeHeader(&b, headerUserAgent, userAgent)
-	return b.String(), msgID, nil
+// messageID returns the message's Message-ID, making one when it has none.
+func (m *Message) messageID() (string, error) {
+	if m.MessageID != "" {
+		return m.MessageID, nil
+	}
+	return NewMessageID(m.From.Email)
 }
 
 // contentEntity builds the MIME tree for the message body and attachments.
@@ -170,6 +214,16 @@ func (m *Message) contentEntity() (*part, error) {
 
 // bodyPart returns the text/html/alternative part for the message body.
 func (m *Message) bodyPart() part {
+	if m.Calendar != nil {
+		alts := []part{textLeaf(m.Text)}
+		if m.HTML != "" {
+			alts = append(alts, htmlLeaf(m.HTML))
+		}
+		alts = append(alts, calendarLeaf(*m.Calendar))
+		if alt, err := newMultipart(mpAlternative, alts); err == nil {
+			return *alt
+		}
+	}
 	switch {
 	case m.Text != "" && m.HTML != "":
 		alt, err := newMultipart(mpAlternative, []part{textLeaf(m.Text), htmlLeaf(m.HTML)})
@@ -210,6 +264,14 @@ func htmlLeaf(html string) part {
 		contentType: ctTextHTML,
 		headers:     [][2]string{{headerContentTransferEncoding, cteQuotedPrintable}},
 		body:        quotedPrintable(html),
+	}
+}
+
+func calendarLeaf(c CalendarPart) part {
+	return part{
+		contentType: "text/calendar; charset=utf-8; method=" + strings.ToUpper(c.Method),
+		headers:     [][2]string{{headerContentTransferEncoding, cteBase64}},
+		body:        base64Body(c.Data),
 	}
 }
 
@@ -315,13 +377,28 @@ func base64Body(content []byte) []byte {
 // variable that is never returned on the failure path, so a message meant to be
 // protected can never be transmitted in the clear.
 func BuildRaw(msg *Message, engine crypto.Engine, mode crypto.Mode, opts crypto.Options) ([]byte, error) {
-	top, _, err := msg.topHeaders(false)
+	msgID, err := msg.messageID()
 	if err != nil {
 		return nil, err
 	}
+	date := nowDate()
+	encrypting := mode == crypto.ModeEncrypt || mode == crypto.ModeSignEncrypt
+	subject := msg.Subject
+	if encrypting && msg.Protected != nil && msg.Protected.HideSubject {
+		subject = SubjectPlaceholder
+	}
+	top := msg.topHeaders(false, subject, date, msgID)
 	root, err := msg.contentEntity()
 	if err != nil {
 		return nil, err
+	}
+	if encrypting && msg.Protected != nil {
+		inner := msg.addressHeaders(false, msg.Subject, date, msgID)
+		for _, g := range msg.Protected.Gossip {
+			inner = append(inner, [2]string{headerAutocryptGossip, g})
+		}
+		root.contentType += `; protected-headers="v1"`
+		root.headers = append(inner, root.headers...)
 	}
 	content := serializePart(root)
 
@@ -359,10 +436,11 @@ func newBoundary() (string, error) {
 // still has those recipients, and it never signs or encrypts: a draft of a
 // message meant to be encrypted is the caller's to keep off the server.
 func BuildDraft(msg *Message) ([]byte, string, error) {
-	top, msgID, err := msg.topHeaders(true)
+	msgID, err := msg.messageID()
 	if err != nil {
 		return nil, "", err
 	}
+	top := msg.topHeaders(true, msg.Subject, nowDate(), msgID)
 	root, err := msg.contentEntity()
 	if err != nil {
 		return nil, "", err

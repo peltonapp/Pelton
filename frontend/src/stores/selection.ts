@@ -55,7 +55,7 @@ function storedSelection(sel: Selection): string {
 
 // unifiedViewLabel localizes a unified view key the same way the sidebar rows
 // do, so a restored selection reads identically to a clicked one.
-function unifiedViewLabel(key: string): string {
+export function unifiedViewLabel(key: string): string {
   const translate = get(t)
   const lookup = key === 'inbox' ? 'sidebar.unifiedInbox' : `sidebar.view.${key}`
   const translated = translate(lookup)

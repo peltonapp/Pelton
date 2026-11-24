@@ -19,49 +19,132 @@ import {
   markNotSpam,
   exportMessageEml,
   exportMessagesEml,
+  moveMessage,
 } from './api'
 import type { ArchiveUndo } from './api'
-import type { MessageSummary } from './types'
-import { patchInList, removeFromList, neighbourInList } from '../stores/messages'
+import type { MessageSummary, Folder } from './types'
+import { patchInList, removeFromList, neighbourInList, newestFirst } from '../stores/messages'
+import { prefs } from '../stores/prefs'
 import { openMessageId } from '../stores/selection'
 import { clearSelection } from '../stores/listselect'
 import { recordDeleted, recordDeletedBatch } from '../stores/undodelete'
 import { recordArchived, archivedEntry, recordArchivedBatch, type ArchivedMessage } from '../stores/undoarchive'
 import { askConfirm } from '../stores/confirm'
 import { isVIPAddress, addVIP, removeVIP } from '../stores/vip'
-import { errorMessage, toastError, toastSuccess } from '../stores/toast'
+import { messageDetail } from '../stores/message'
+import { recordHistory, stateKey, subjectDetail, undoEntry, undoToastTTL, type HistoryKind } from '../stores/undohistory'
+import { errorMessage, pushAction, toastError, toastInfo, toastSuccess, withBusyToast } from '../stores/toast'
 import { sidebar } from '../stores/accounts'
 import { t } from './i18n'
 import { get } from 'svelte/store'
 
-/** Marks one message read or unread. */
-export async function markSeen(item: MessageSummary, seen: boolean): Promise<void> {
-  patchInList(item.id, { seen })
-  try {
-    await setSeen(item.id, seen)
-  } catch (err) {
-    toastError(errorMessage(err))
+// patchView carries a change into the list and into the reading pane when it
+// shows the message.
+function patchView(id: number, patch: Partial<MessageSummary>): void {
+  patchInList(id, patch)
+  messageDetail.update((s) => (s.data?.id === id ? { ...s, data: { ...s.data, ...patch } } : s))
+}
+
+// AttrSpec describes one per-message setting the history can restore: how to
+// read it off a summary, how it shows in the view and how it reaches the backend.
+interface AttrSpec<V> {
+  domain: 'seen' | 'flag' | 'color'
+  kind: HistoryKind
+  read: (m: MessageSummary) => V
+  patch: (v: V) => Partial<MessageSummary>
+  send: (id: number, v: V) => Promise<void>
+  label: (v: V) => string
+}
+
+const seenSpec: AttrSpec<boolean> = {
+  domain: 'seen',
+  kind: 'seen',
+  read: (m) => m.seen,
+  patch: (seen) => ({ seen }),
+  send: setSeen,
+  label: (v) => get(t)(v ? 'history.kind.read' : 'history.kind.unread'),
+}
+
+const flagSpec: AttrSpec<boolean> = {
+  domain: 'flag',
+  kind: 'flag',
+  read: (m) => m.flagged,
+  patch: (flagged) => ({ flagged }),
+  send: setFlagged,
+  label: (v) => get(t)(v ? 'history.kind.flagged' : 'history.kind.unflagged'),
+}
+
+const colorSpec: AttrSpec<number> = {
+  domain: 'color',
+  kind: 'color',
+  read: (m) => m.flagColor,
+  patch: (flagColor) => ({ flagColor }),
+  send: setFlagColor,
+  label: (v) => get(t)(v === 0 ? 'history.kind.colorCleared' : 'history.kind.color'),
+}
+
+// changeAttr sets one attribute on every item and records the ones that really
+// changed as one history entry, remembering each one's earlier value so undo
+// puts every message back to what it was.
+async function changeAttr<V>(spec: AttrSpec<V>, items: MessageSummary[], next: V): Promise<void> {
+  const changed: { item: MessageSummary; prev: V }[] = []
+  await Promise.all(
+    items.map(async (item) => {
+      const prev = spec.read(item)
+      patchView(item.id, spec.patch(next))
+      try {
+        await spec.send(item.id, next)
+        if (prev !== next) {
+          changed.push({ item, prev })
+        }
+      } catch (err) {
+        patchView(item.id, spec.patch(prev))
+        toastError(errorMessage(err))
+      }
+    }),
+  )
+  if (changed.length === 0) {
+    return
   }
+  const apply = async (value: (c: { prev: V }) => V): Promise<void> => {
+    let failure: unknown = null
+    for (const c of changed) {
+      const v = value(c)
+      try {
+        await spec.send(c.item.id, v)
+        patchView(c.item.id, spec.patch(v))
+      } catch (err) {
+        failure = failure ?? err
+      }
+    }
+    if (failure !== null) {
+      throw failure
+    }
+  }
+  recordHistory({
+    kind: spec.kind,
+    label: spec.label(next),
+    detail: subjectDetail(changed.map((c) => c.item.subject)),
+    count: changed.length,
+    touches: changed.map((c) => stateKey(spec.domain, c.item.id)),
+    undo: () => apply((c) => c.prev),
+    redo: () => apply(() => next),
+  })
+}
+
+/** Marks one message read or unread. */
+export function markSeen(item: MessageSummary, seen: boolean): Promise<void> {
+  return changeAttr(seenSpec, [item], seen)
 }
 
 /** Flags or unflags one message. */
-export async function markFlagged(item: MessageSummary, flagged: boolean): Promise<void> {
-  patchInList(item.id, { flagged })
-  try {
-    await setFlagged(item.id, flagged)
-  } catch (err) {
-    toastError(errorMessage(err))
-  }
+export function markFlagged(item: MessageSummary, flagged: boolean): Promise<void> {
+  return changeAttr(flagSpec, [item], flagged)
 }
 
 /** Sets a message's color label; 0 clears it. */
-export async function markColor(item: MessageSummary, color: number): Promise<void> {
-  patchInList(item.id, { flagColor: color })
-  try {
-    await setFlagColor(item.id, color)
-  } catch (err) {
-    toastError(errorMessage(err))
-  }
+export function markColor(item: MessageSummary, color: number): Promise<void> {
+  return changeAttr(colorSpec, [item], color)
 }
 
 /** Stars or unstars the message's sender. */
@@ -79,6 +162,7 @@ export async function toggleSenderVIP(item: MessageSummary): Promise<void> {
 
 /** Downloads a message for offline reading, or drops the offline copy. */
 export async function setOffline(item: MessageSummary, offline: boolean): Promise<void> {
+  const previous = item.offline
   patchInList(item.id, { offline })
   try {
     if (offline) {
@@ -88,28 +172,63 @@ export async function setOffline(item: MessageSummary, offline: boolean): Promis
       await removeOffline(item.id)
     }
   } catch (err) {
+    // the optimistic flag would otherwise keep claiming a download that failed
+    patchInList(item.id, { offline: previous })
     toastError(errorMessage(err))
   }
 }
 
 /**
- * Drops a deleted message from the list and moves the detail pane on.
- *
- * Emptying the pane instead means a run of deletes has to go back to the list
- * between each one, which is most of the work of triaging a mailbox. alsoDeleting
- * names the rest of a batch, so a bulk delete does not land on a row that is
- * about to go as well.
- *
- * It removes the row itself because the neighbour has to be read while the row
- * is still there to have one.
+ * nextAfterLeaving picks the message the reader opens once the open message
+ * leaves the list. The new design follows the afterMove preference: the older
+ * or newer neighbour, falling back to the other side at either end, or null
+ * for back to the list. Classic keeps its own behaviour: a delete moves on to
+ * the neighbour below and anything else closes the pane.
  */
-export function dropDeleted(id: number, alsoDeleting?: ReadonlySet<number>): void {
-  const wasOpen = get(openMessageId) === id
-  const next = wasOpen ? neighbourInList(id, alsoDeleting) : null
-  removeFromList(id)
+export function nextAfterLeaving(openId: number, leaving: ReadonlySet<number>, classicAdvance: boolean): number | null {
+  const p = get(prefs)
+  if (p.design === 'classic') {
+    return classicAdvance ? neighbourInList(openId, leaving) : null
+  }
+  if (p.afterMove === 'list') {
+    return null
+  }
+  const older = newestFirst() ? 'below' : 'above'
+  const newer = older === 'below' ? 'above' : 'below'
+  return neighbourInList(openId, leaving, p.afterMove === 'newer' ? newer : older)
+}
+
+/**
+ * Takes rows out of the list after they were archived, deleted or moved, and
+ * moves the reader on when it was showing one of them, so working down a
+ * mailbox never goes back to an empty pane in between. alsoLeaving names the
+ * rest of a batch, so the reader does not land on a row about to go as well.
+ * classicAdvance keeps the classic design's delete behaviour (see
+ * nextAfterLeaving).
+ *
+ * It removes the rows itself because the neighbour has to be read while the
+ * open row is still there to have one.
+ */
+export function leaveList(ids: readonly number[], alsoLeaving?: ReadonlySet<number>, classicAdvance = false): void {
+  const leaving = new Set([...ids, ...(alsoLeaving ?? [])])
+  const open = get(openMessageId)
+  const wasOpen = open !== null && ids.includes(open)
+  const next = wasOpen ? nextAfterLeaving(open, leaving, classicAdvance) : null
+  for (const id of ids) {
+    removeFromList(id)
+  }
   if (wasOpen) {
     openMessageId.set(next)
   }
+}
+
+/**
+ * Drops a deleted message from the list and moves the detail pane on.
+ * alsoDeleting names the rest of a batch, so a bulk delete does not land on a
+ * row that is about to go as well.
+ */
+export function dropDeleted(id: number, alsoDeleting?: ReadonlySet<number>): void {
+  leaveList([id], alsoDeleting, true)
 }
 
 /** Deletes one message, recording it for undo and moving the pane on if it was open. */
@@ -134,16 +253,53 @@ export function reportArchiveExport(undo: ArchiveUndo): void {
   }
 }
 
-/** Archives one message, recording it for undo and closing it if it was open. */
+/**
+ * Moves messages to a folder of their account as one undo step. Messages
+ * already in that folder are left alone. The rows leave the list at once and
+ * a failure is reported as a toast.
+ */
+export async function moveToFolder(items: MessageSummary[], folder: Folder): Promise<void> {
+  const targets = items.filter((m) => m.folderId !== folder.id)
+  if (targets.length === 0) {
+    return
+  }
+  leaveList(targets.map((m) => m.id))
+  const undone: ArchivedMessage[] = []
+  let failure = ''
+  for (const target of targets) {
+    try {
+      const entry = archivedEntry(target, await moveMessage(target.id, folder.id))
+      if (entry) {
+        undone.push(entry)
+      }
+    } catch (err) {
+      failure = errorMessage(err)
+    }
+  }
+  const say = get(t)
+  const entry = recordArchivedBatch(undone, { kind: 'move', label: say('history.kind.move').replace('{folder}', folder.name) })
+  if (failure !== '') {
+    toastError(failure)
+    return
+  }
+  const message =
+    targets.length === 1
+      ? say('detail.moveDialog.moved').replace('{folder}', folder.name)
+      : say('detail.moveDialog.movedCount').replace('{n}', String(targets.length)).replace('{folder}', folder.name)
+  if (entry === null) {
+    toastInfo(message)
+    return
+  }
+  pushAction('info', message, { label: say('menu.undo'), run: () => void undoEntry(entry) }, undoToastTTL)
+}
+
+/** Archives one message, recording it for undo and moving the reader on if it was open. */
 export async function archive(item: MessageSummary): Promise<void> {
   try {
     const undo = await archiveMessage(item.id)
     reportArchiveExport(undo)
     recordArchived(item, undo)
-    removeFromList(item.id)
-    if (get(openMessageId) === item.id) {
-      openMessageId.set(null)
-    }
+    leaveList([item.id])
   } catch (err) {
     toastError(errorMessage(err))
   }
@@ -176,11 +332,8 @@ export async function toggleSpam(item: MessageSummary): Promise<boolean> {
   }
   try {
     const undo = state === 'spam' ? await markNotSpam(item.id) : await markSpam(item.id)
-    recordArchived(item, undo)
-    removeFromList(item.id)
-    if (get(openMessageId) === item.id) {
-      openMessageId.set(null)
-    }
+    recordArchived(item, undo, { kind: 'spam', label: get(t)(state === 'spam' ? 'history.kind.notSpam' : 'history.kind.spam') })
+    leaveList([item.id])
     toastSuccess(get(t)(state === 'spam' ? 'spam.toast.notSpam' : 'spam.toast.marked'))
     return true
   } catch (err) {
@@ -198,19 +351,19 @@ export async function toggleSpam(item: MessageSummary): Promise<boolean> {
 /** Marks every given message read or unread. */
 export async function bulkMarkSeen(items: MessageSummary[], seen: boolean): Promise<void> {
   clearSelection()
-  await Promise.all(items.map((item) => markSeen(item, seen)))
+  await changeAttr(seenSpec, items, seen)
 }
 
 /** Flags or unflags every given message. */
 export async function bulkMarkFlagged(items: MessageSummary[], flagged: boolean): Promise<void> {
   clearSelection()
-  await Promise.all(items.map((item) => markFlagged(item, flagged)))
+  await changeAttr(flagSpec, items, flagged)
 }
 
 /** Sets the same color label on every given message. */
 export async function bulkMarkColor(items: MessageSummary[], color: number): Promise<void> {
   clearSelection()
-  await Promise.all(items.map((item) => markColor(item, color)))
+  await changeAttr(colorSpec, items, color)
 }
 
 /** Downloads every given message for offline reading, or drops the copies. */
@@ -271,13 +424,13 @@ export async function exportEml(ids: number[]): Promise<void> {
   }
   try {
     if (ids.length === 1) {
-      const path = await exportMessageEml(ids[0])
+      const path = await withBusyToast(get(t)('export.working'), () => exportMessageEml(ids[0]))
       if (path) {
         toastSuccess(get(t)('export.eml.done'))
       }
       return
     }
-    const result = await exportMessagesEml(ids)
+    const result = await withBusyToast(get(t)('export.working'), () => exportMessagesEml(ids))
     if (!result.dir) {
       return
     }
@@ -297,6 +450,7 @@ export async function exportEml(ids: number[]): Promise<void> {
 /** Archives every given message, sequentially, as one undo step. */
 export async function bulkArchive(items: MessageSummary[]): Promise<void> {
   clearSelection()
+  const batch = new Set(items.map((m) => m.id))
   const undone: ArchivedMessage[] = []
   for (const item of items) {
     try {
@@ -306,10 +460,7 @@ export async function bulkArchive(items: MessageSummary[]): Promise<void> {
       if (entry) {
         undone.push(entry)
       }
-      removeFromList(item.id)
-      if (get(openMessageId) === item.id) {
-        openMessageId.set(null)
-      }
+      leaveList([item.id], batch)
     } catch (err) {
       toastError(errorMessage(err))
     }

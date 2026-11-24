@@ -6,12 +6,12 @@
   import { onMount, onDestroy, type ComponentType } from 'svelte'
   import { get } from 'svelte/store'
   import { t } from './lib/i18n'
+  import { isEditableTarget } from './lib/editable'
 
   import Sidebar from './components/sidebar/Sidebar.svelte'
   import MenuBar from './components/common/MenuBar.svelte'
   import MessageList from './components/list/MessageList.svelte'
   import MessageDetail from './components/detail/MessageDetail.svelte'
-  import Compose from './components/compose/Compose.svelte'
   import Toasts from './components/common/Toasts.svelte'
   import StatusBar from './components/common/StatusBar.svelte'
   import ContextMenu from './components/common/ContextMenu.svelte'
@@ -19,16 +19,25 @@
   import TopBar from './components/shell/TopBar.svelte'
   import Rail from './components/shell/Rail.svelte'
   import SpaceSwitcher from './components/shell/SpaceSwitcher.svelte'
-  import { space, openSpace } from './stores/space'
+  import { space, openSpace, runSpaceAction, isMailOnlyAction } from './stores/space'
+  import { meetingPrepTarget, openMeetingPrep, closeMeetingPrep } from './stores/meetingprep'
+  import { mailScreen, openMailScreen, closeMailScreen } from './stores/mailscreen'
+  import { IconMailX, IconChartBar, IconShieldCheck } from '@tabler/icons-svelte'
+  import { orderedSpaces, visibleSpaces } from './lib/spaces'
+  import { startChat, stopChat } from './stores/chat'
+  import { popupIsOpen } from './lib/popups'
+  import { openMenuFromKeyboard } from './lib/keymenu'
+  import { blockMailRequest, calendarFocus, calendarImport, calendarQuickAdd, planMyDay } from './stores/calendar'
+  import { blockTimeForMail } from './lib/timeblockmail'
+  import { formatTime } from './lib/calformat'
+  import type { TimeFormat } from './lib/format'
   import { frameIntegrated } from './stores/windowframe'
-  import SnoozeDialog from './components/detail/SnoozeDialog.svelte'
+  import { setDraft, submitSearch, searchOpenedId } from './stores/search'
+  import DragStack from './components/list/DragStack.svelte'
   import ConfirmDialog from './components/common/ConfirmDialog.svelte'
-  import SyncFailureDialog from './components/common/SyncFailureDialog.svelte'
   import { loadSyncStates, watchSyncStates } from './stores/syncfailures'
-  import FolderDialog from './components/sidebar/FolderDialog.svelte'
-  import AttachmentPreview from './components/detail/AttachmentPreview.svelte'
-  import MoveDialog from './components/detail/MoveDialog.svelte'
-  import CommandPalette from './components/common/CommandPalette.svelte'
+  import AddMailboxDialog from './components/wizard/AddMailboxDialog.svelte'
+  import { createMailtoHold } from './lib/mailtohold'
 
   import { initPrefs, prefs, setPaneWidths, setListHeight, setLowPowerMode } from './stores/prefs'
   import { applyScale } from './theme/theme'
@@ -38,13 +47,49 @@
   import { loadSignatures } from './stores/signatures'
   import { loadVIPSenders } from './stores/vip'
   import { loadVirusTotalConfig } from './stores/virustotal'
-  import { loadOutbox, syncing, lastSynced, syncFolder, syncServer, syncAccount, syncCounts, emptySyncCounts } from './stores/outbox'
+  import { loadOutbox, syncing, lastSynced, syncFolder, syncServer, syncAccount, syncCounts, syncPhase, emptySyncCounts } from './stores/outbox'
   import { selection, applyStartupSelection, searchQuery } from './stores/selection'
-  import { loadList, messageList } from './stores/messages'
+  import { loadList, listIsPaginated, messageList, refreshListHead } from './stores/messages'
+  import { refreshListOnMailNew } from './lib/maillistrefresh'
   import { initProgress } from './stores/progress'
-  import { composeSessions, openCompose, openComposeWith, initComposePrefs, openReply, openForward, requestComposeClose } from './stores/compose'
+  import { composeSessions, openCompose, openComposeWith, initComposePrefs, openReply, openForward, requestComposeClose, setForcedComposeMode, updateCompose } from './stores/compose'
+  import { routeComposeSessions } from './stores/composeroute'
+  import {
+    loadAccountPasswordDialog,
+    loadAttachmentsBrowser,
+    loadAutomationsOverlay,
+    loadAutomationsSpace,
+    loadCalendarScreen,
+    loadChatSpace,
+    loadClassicCompose,
+    loadComposer,
+    loadContactsSpace,
+    loadDatePeek,
+    loadEncryptionIndicator,
+    loadFeedsScreen,
+    loadInviteCard,
+    loadMeetingPrep,
+    loadMenuBarEditor,
+    loadMyDayPanel,
+    loadNewsletterManager,
+    loadNightlyDialog,
+    loadNotesScreen,
+    loadOnboarding,
+    loadProjectsScreen,
+    loadPromiseStrip,
+    loadSettingsPanel,
+    loadSettingsScreen,
+    loadSetup,
+    loadShareToChatDialog,
+    loadSyncFailureDialog,
+    loadTasksScreen,
+    loadVaultDialogs,
+    loadVerificationDialog,
+    warmUp,
+  } from './lib/lazyload'
+  import ComposeTabLayer from './components/compose/ComposeTabLayer.svelte'
   import { openSnooze, openSnoozeMany } from './stores/snooze'
-  import { patchInList, removeFromList } from './stores/messages'
+  import { patchInList } from './stores/messages'
   import {
     triggerSync,
     getSetting,
@@ -52,24 +97,24 @@
     SettingKeys,
     exportMessagePrintView,
     setWindowTitle,
-    setSeen,
-    setFlagged,
     deleteMessage,
     getMessage,
-    downloadMessageOffline,
     archiveMessage,
     setMailActionsEnabled,
     isDemoMode,
     isNightly,
     unsubscribeMessage,
     consumePendingMailto,
+    consumePendingICS,
     closeWindow,
     getLogStatus,
     openCrashReport,
     titleBarDoubleClick,
+    applyTrafficLights,
     setUnreadBadge,
     quitApp,
     hideApp,
+    lockNow,
     isFullscreen,
     toggleFullscreen as toggleWindowFullscreen,
   } from './lib/api'
@@ -77,17 +122,45 @@
   import { liabilityAccepted } from './lib/liability'
   import { setDemoActive } from './lib/demo'
   import { recordArchived } from './stores/undoarchive'
-  import { onMailNew, onMailRepaired, onSyncState, onSyncProgress, onOutboxChanged, onMenu, onViewsChanged, onFoldersChanged, onProfileChanged, onMailtoCompose, onAgentProposals, onOpenMessage, type Unsubscribe, type MailtoDraft } from './lib/events'
+  import { accountPhase, applyProgressEvent, applySyncState, currentProgress, currentVerify, isSyncing, startProgressSweep, type SyncView } from './lib/syncprogress'
+  import { onMailNew, onMailRepaired, onMailUpdated, onMailBodyFailed, onMailVault, onSyncState, onSyncProgress, onOutboxChanged, onMenu, onViewsChanged, onFoldersChanged, onProfileChanged, onMailtoCompose, onAgentProposals, onOpenMessage, onReplyMessage, onArchiveAfterSend, onFeedsOpen, onCalendarReminder, onTaskReminder, onICSOpen, onAssistantScript, type Unsubscribe, type MailtoDraft, type CalendarReminderEvent, type TaskReminderEvent } from './lib/events'
+  import { assistantToastKey } from './lib/assistantScripts'
+  import { selectScript } from './stores/scripts'
+  import { refreshMessage } from './stores/message'
+  import { refreshCard } from './stores/threads'
+  import { markBodyFetchFailed, clearBodyFetchFailed } from './stores/bodyfetch'
   import { loadViews, editingView, closeViewEditor, openViewEditor, views as savedViews } from './stores/views'
   import { selectSavedView } from './stores/selection'
   import { isMac } from './lib/i18n'
-  import { matchShortcut, comboHasModifier, isFunctionKeyCombo, type ShortcutAction } from './lib/shortcuts'
+  import {
+    matchShortcut,
+    comboTypes,
+    isComposeAction,
+    chipActions,
+    sendActions,
+    spaceNumber,
+    scriptOfAction,
+    shortcuts as shortcutRegistry,
+    type ShortcutAction,
+  } from './lib/shortcuts'
+  import { runComposeCommand } from './stores/composecommands'
+  import CoachLayer from './components/shell/CoachLayer.svelte'
+  import FirstTipLayer from './components/shell/FirstTipLayer.svelte'
+  import { initCoach, toggleSheet } from './stores/coach'
+  import { initFirstTips, setTipsSuspended } from './stores/firsttips'
+  import { initWhatsNew, markWhatsNewSeen, whatsNewOpen, whatsNewUnseen } from './stores/whatsnew'
+  import { setupRequested } from './stores/setuprun'
+  import './lib/palette-setup'
+  import { noteAction, noteShortcut } from './lib/coach'
+  import { initFocus, focusMenuOpen, refreshFocus } from './stores/focus'
+  import './lib/palette-focus'
   import { cyclePane, focusPane as focusPaneArea } from './lib/panes'
-  import { bindings, recording, initShortcuts } from './stores/shortcuts'
+  import { bindings, activeBindings, recording, initShortcuts } from './stores/shortcuts'
+  import { currentMessageItems, runAt } from './lib/scriptplacements'
   import { initMenuBar } from './stores/menubar'
-  import { triggerUndo } from './stores/undosend'
-  import { recordDeleted, triggerUndoDelete } from './stores/undodelete'
-  import { triggerUndoArchive } from './stores/undoarchive'
+  import { recordDeleted } from './stores/undodelete'
+  import { historyOpen, redoOrSay, undoOrSay } from './stores/undohistory'
+  import './lib/palette-history'
   import { openMessageId, openMessage } from './stores/selection'
   import {
     visibleMessageId,
@@ -102,10 +175,10 @@
     restoreTabs,
   } from './stores/tabs'
   import { messageDetail } from './stores/message'
-  import { profiles, currentProfile, loadProfiles, switchTo, switchRelative } from './stores/profiles'
+  import { profiles, loadProfiles, switchTo, switchRelative } from './stores/profiles'
   import { loadProposals } from './stores/agent'
-  import { settingsRequest, clearSettingsRequest } from './stores/settingsnav'
-  import { errorMessage, toastError, toastInfo, pushAction } from './stores/toast'
+  import { settingsRequest, clearSettingsRequest, openSettingsAt } from './stores/settingsnav'
+  import { errorMessage, toastError, toastInfo, pushAction, pushActions, withBusyToast } from './stores/toast'
   import { friendlyError } from './lib/errors'
   import { setOnline } from './stores/network'
   import { moveTargets } from './stores/move'
@@ -124,7 +197,8 @@
     inVisual,
   } from './stores/listselect'
   import { selectFolder, selectView, revealMessage } from './stores/selection'
-  import { setTheme, setThemeId } from './stores/prefs'
+  import { setTheme, setThemeId, setMyDayPanel } from './stores/prefs'
+  import { myDayFits } from './lib/myday'
   import { openCreateFolder, openRenameFolder, openDeleteFolder, openEmptyTrash } from './stores/folderdialog'
   import { setFolderPinned, listThemes } from './lib/api'
   import { editViewInEditor } from './stores/views'
@@ -145,9 +219,52 @@
     exportEml,
     reportArchiveExport,
     dropDeleted,
+    leaveList,
     toggleSpam,
   } from './lib/messageactions'
-  import { buildCommands, mailCommands, type CommandContext, type MessageOp, type FolderOp } from './lib/commands'
+  import { markAnsweredDone, markDone } from './lib/triage'
+  import { watchFollowUps } from './stores/followups'
+  import { lockVaultsNow, openVaultUnlock, vaultDialog } from './stores/vaultdialog'
+  import { loadSnippets } from './stores/snippets'
+  import { editNote, toggleMute, togglePin } from './lib/organize'
+  import { buildCommands, mailCommands, type CommandContext, type MessageOp, type FolderOp, type PaletteCommand } from './lib/commands'
+  import { extraPaletteCommands, registerPaletteSource } from './lib/palettesources'
+  import './lib/palette-calendar'
+  import './lib/palette-contacts'
+  import './lib/palette-attachments'
+  import './lib/palette-sieve'
+  import { attachmentsOpen, toggleAttachments } from './stores/attachments'
+  import { setSenderPanel } from './stores/prefs'
+  import { toggleReadingView } from './stores/readingview'
+  import './lib/palette-tasks'
+  import './lib/palette-promises'
+  import { startPromises } from './stores/promises'
+  import './lib/palette-notes'
+  import { reloadVault, requestNotes, startNotes } from './stores/notes'
+  import './lib/palette-chat'
+  import './lib/palette-chatshare'
+  import './lib/palette-availability'
+  import './lib/palette-projects'
+  import { startProjects, fileMailRequest } from './stores/projects'
+  import { pickProjectFor } from './lib/projectpicker'
+  import './lib/palette-feeds'
+  import './lib/palette-automations'
+  import AutomationsHost from './components/automations/AutomationsHost.svelte'
+  import './lib/palette-navhistory'
+  import './lib/location-mail'
+  import './lib/location-calendar'
+  import './lib/location-tasks'
+  import './lib/location-projects'
+  import './lib/location-contacts'
+  import './lib/location-notes'
+  import './lib/location-feeds'
+  import './lib/location-chat'
+  import './lib/location-automations'
+  import { startNavHistory, clearNavHistory, goBack, goForward } from './stores/navhistory'
+  import { startFeeds, feedFocus } from './stores/feeds'
+  import { startTasks, toggleDone, tasks as taskStore, taskFromMailRequest } from './stores/tasks'
+  import { createTasksFromMail, openTask } from './lib/taskmail'
+  import { getTask } from './lib/api'
   import { catalogByAction } from './lib/menuactions'
   import { shortcutLabel } from './lib/i18n'
   import {
@@ -159,16 +276,16 @@
     paletteMail,
     paletteQuery,
   } from './stores/palette'
-  import AccountPasswordDialog from './components/settings/AccountPasswordDialog.svelte'
   import DevOverlays from './components/dev/DevOverlays.svelte'
   import peltonLogo from './assets/images/icons/pelton-logo.png'
   import {
     passwordPrompt,
+    passwordPromptSyncFollows,
     answerPasswordPrompt,
     promptForMissingPasswords,
     refreshMissingPasswords,
   } from './stores/passwordprompt'
-  import type { EditorMode, MessageSummary, ThemePref, ThemeInfo, Folder, Account } from './lib/types'
+  import type { EditorMode, MessageSummary, ThemePref, ThemeInfo, Folder, Space } from './lib/types'
 
   let settingsOpen = false
   // the settings screen is code-split and loaded on first open. A load that
@@ -186,8 +303,8 @@
     settingsDesign = $prefs.design
     const load: Promise<{ default: ComponentType }> =
       $prefs.design === 'classic'
-        ? import('./components/settings/SettingsPanel.svelte')
-        : import('./components/settings2/SettingsScreen.svelte')
+        ? loadSettingsPanel()
+        : loadSettingsScreen()
     settingsPanel = load.catch((err) => {
       settingsPanel = null
       settingsOpen = false
@@ -203,6 +320,13 @@
   let settingsCategory: string | null = null
   let wizardOpen = false
   let onboardingOpen = false
+  // which flow is showing, fixed when it opens: the classic design keeps its
+  // own onboarding, the new one runs the setup flow, and a re-run treats what
+  // exists as set up.
+  let onboardingClassic = false
+  let onboardingRerun = false
+  // the setup flow opens on the acknowledgement while it is owed.
+  let setupNeedsLegal = false
   // installs that predate the onboarding liability step have to acknowledge it
   // once before they can carry on.
   let liabilityOpen = false
@@ -210,6 +334,35 @@
   // onboarding, and the acknowledgement is deliberately never remembered.
   let nightlyOpen = false
   const unsubscribers: Unsubscribe[] = []
+  let syncView: SyncView = { progress: new Map(), verify: new Map(), running: false }
+  // pushes the view into the status bar's stores. A running sync owns the line;
+  // the background folder check shows only when nothing else runs.
+  function publishSyncView(view: SyncView): void {
+    const running = isSyncing(view)
+    syncing.set(running)
+    const cur = currentProgress(view.progress) ?? (running ? null : currentVerify(view))
+    syncFolder.set(cur ? cur.folder : '')
+    syncServer.set(cur ? cur.server : '')
+    syncAccount.set(cur ? cur.accountEmail : '')
+    syncPhase.set(cur?.phase ? cur.phase : '')
+    syncCounts.set(
+      cur
+        ? {
+            done: cur.done,
+            total: cur.total,
+            folderDone: cur.folderDone,
+            folderTotal: cur.folderTotal,
+            foldersDone: cur.foldersDone,
+            foldersTotal: cur.foldersTotal,
+          }
+        : emptySyncCounts,
+    )
+  }
+
+  // set when the app mounts again after the app lock was opened. The stores
+  // still hold the session, so the launch-only steps (the startup folder,
+  // restored tabs, the nightly and crash notices) are skipped.
+  export let resumed = false
 
   // live pane widths. they track the persisted prefs unless the user is mid-drag,
   // so a resize feels immediate and only commits on release.
@@ -226,12 +379,23 @@
 
   // the new design. classic keeps the shell below it exactly as it was.
   $: classic = $prefs.design === 'classic'
+  $: setForcedComposeMode(classic ? null : $prefs.composeVimMode ? 'plaintext' : 'wysiwyg')
+  unsubscribers.push(routeComposeSessions({ tabs: true }))
   $: stacked = $prefs.layoutMode === 'stacked'
   // below this window width the rail folds into the top bar as tabs.
   const railFoldWidth = 760
   let windowWidth = window.innerWidth
   $: railFolded = $prefs.navStyle === 'rail' && windowWidth < railFoldWidth
   $: showRail = $prefs.navStyle === 'rail' && !railFolded
+
+  // the My Day panel sits beside the mail surface only while the reader keeps
+  // a readable column next to it; narrower, it folds away.
+  let mailWidth = 0
+  let myDayWidth = 0
+  $: if ($prefs.myDayPanel && myDayWidth === 0) {
+    myDayWidth = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--myday-width')) || 0
+  }
+  $: showMyDay = $prefs.myDayPanel && myDayFits(mailWidth, sidebarW, listW, stacked, myDayWidth)
   $: inboxUnread = $sidebar.data?.views?.find((v) => v.key === 'inbox')?.unreadCount ?? 0
   // classic shows contacts as an overlay; the new design shows it as a space.
   function openContacts(): void {
@@ -243,7 +407,14 @@
   }
   // an overlay covers the top bar, so the window needs another handle to be
   // dragged by while one is open.
-  $: overlayOpen = settingsOpen || onboardingOpen || wizardOpen || contactsOpen
+  // classic shows automations as an overlay too.
+  let automationsOpen = false
+  $: overlayOpen = settingsOpen || onboardingOpen || wizardOpen || contactsOpen || automationsOpen
+  $: setTipsSuspended(overlayOpen || nightlyOpen || liabilityOpen || $whatsNewOpen)
+  $: if ($setupRequested) {
+    setupRequested.set(false)
+    rerunOnboarding()
+  }
 
   // the in-app menu bar is the only menu on Windows/Linux (no native menu is
   // created there); on macOS the native bar stays and the in-app one is opt-in.
@@ -270,6 +441,9 @@
       return
     }
     fullscreen = await isFullscreen().catch(() => false)
+    // where the traffic lights sit differs between macOS releases, so what is
+    // drawn beside them is lined up with where they really are.
+    await applyTrafficLights()
   }
 
   // the native Mail menu's message actions are only usable while a message is
@@ -336,6 +510,264 @@
     )
   }
 
+  // the toast line of a calendar reminder: the title and when it starts.
+  function reminderText(e: CalendarReminderEvent): string {
+    const title = e.summary || $t('calendar.untitled')
+    if (e.allDay) {
+      return `${title}, ${$t('calendar.allDay')}`
+    }
+    return `${title}, ${formatTime(new Date(e.start), $prefs.timeFormat as TimeFormat)}`
+  }
+
+  function showReminder(e: CalendarReminderEvent): void {
+    calendarFocus.set(e.allDay ? new Date(`${e.start}T00:00:00`) : new Date(e.start))
+    openSpace('calendar')
+  }
+
+  // the toast line of a task reminder: the title and when it is due.
+  function taskReminderText(e: TaskReminderEvent): string {
+    const title = e.summary || $t('tasks.untitled')
+    if (e.due.length > 10) {
+      return `${title}, ${formatTime(new Date(e.due), $prefs.timeFormat as TimeFormat)}`
+    }
+    return title
+  }
+
+  async function completeFromReminder(e: TaskReminderEvent): Promise<void> {
+    try {
+      const task = get(taskStore).find((x) => x.id === e.taskId) ?? (await getTask(e.taskId))
+      await toggleDone(task, true)
+    } catch (err) {
+      toastError(errorMessage(err))
+    }
+  }
+
+  // tasks: create-task acts on the selection or the open message.
+  function createTaskFromMail(): void {
+    const ids = selectedMessages.length > 1 ? selectedMessages.map((m) => m.id) : [currentMessage()?.id].filter((id): id is number => id !== undefined)
+    if (ids.length === 0) {
+      toastInfo(get(t)('app.toast.openMessageFirst'))
+      return
+    }
+    void createTasksFromMail(ids)
+  }
+
+  // blocks the next free time to deal with the open mail, or each selected one.
+  function blockTimeForOpenMail(): void {
+    const ids = selectedMessages.length > 1 ? selectedMessages.map((m) => m.id) : [currentMessage()?.id].filter((id): id is number => id !== undefined)
+    if (ids.length === 0) {
+      toastInfo(get(t)('app.toast.openMessageFirst'))
+      return
+    }
+    void blockTimeForMail(ids)
+  }
+
+  $: if ($blockMailRequest) {
+    blockMailRequest.set(false)
+    if (!classic) {
+      blockTimeForOpenMail()
+    }
+  }
+
+  // files the open conversation, or the selected ones, under a project.
+  function addToProject(): void {
+    const items = selectedMessages.length > 1 ? selectedMessages : [currentMessage()].filter((m): m is MessageSummary => m !== null)
+    pickProjectFor(
+      items.map((m) => m.id),
+      items.length === 1 ? items[0].threadId : 0,
+    )
+  }
+
+  $: if ($fileMailRequest) {
+    fileMailRequest.set(false)
+    if (!classic) {
+      addToProject()
+    }
+  }
+
+  $: if ($taskFromMailRequest) {
+    taskFromMailRequest.set(false)
+    if (!classic) {
+      createTaskFromMail()
+    }
+  }
+
+  // the tasks store feeds the rail badge, the mail markers and the calendar,
+  // so it runs for as long as the new design is on.
+  let stopTasks: (() => void) | undefined
+  $: if (!classic && !stopTasks) {
+    stopTasks = startTasks()
+  } else if (classic && stopTasks) {
+    stopTasks()
+    stopTasks = undefined
+  }
+
+  // the promises found in mail feed the reader's suggestions and the task
+  // lists "I owe" and "Owed to me", in the new design only.
+  let stopPromises: (() => void) | undefined
+  $: if ($prefs.design === 'new' && !stopPromises) {
+    stopPromises = startPromises()
+  } else if ($prefs.design !== 'new' && stopPromises) {
+    stopPromises()
+    stopPromises = undefined
+  }
+  onDestroy(() => stopTasks?.())
+
+  // the projects feed the mail chips, the reader's suggestions and the
+  // composer's picker as well as their own space.
+  let stopProjects: (() => void) | undefined
+  $: if (!classic && !stopProjects) {
+    stopProjects = startProjects()
+  } else if (classic && stopProjects) {
+    stopProjects()
+    stopProjects = undefined
+  }
+  onDestroy(() => stopProjects?.())
+
+  // the notes index feeds the palette and the notes listed beside mail,
+  // events, contacts and tasks. It loads the folder the backend opened at
+  // startup, if any, without creating one.
+  let stopNotes: (() => void) | undefined
+  $: if (!classic && !stopNotes) {
+    stopNotes = startNotes()
+    void reloadVault()
+  } else if (classic && stopNotes) {
+    stopNotes()
+    stopNotes = undefined
+  }
+  onDestroy(() => stopNotes?.())
+
+  // back and forward follow the places visited in the new design.
+  let stopNav: (() => void) | undefined
+  $: if (!classic && !stopNav) {
+    stopNav = startNavHistory()
+  } else if (classic && stopNav) {
+    stopNav()
+    stopNav = undefined
+  }
+  onDestroy(() => stopNav?.())
+
+  // the side buttons of a mouse go back and forward, where the webview
+  // reports them; the press is taken so the webview does not act on it too.
+  function onNavMouseDown(event: MouseEvent): void {
+    if (!classic && (event.button === 3 || event.button === 4)) {
+      event.preventDefault()
+    }
+  }
+
+  function onNavMouseUp(event: MouseEvent): void {
+    if (classic || (event.button !== 3 && event.button !== 4)) {
+      return
+    }
+    event.preventDefault()
+    if (!overlayOpen) {
+      void (event.button === 3 ? goBack() : goForward())
+    }
+  }
+
+  // the feeds store feeds the rail's unread dot, so it runs alongside.
+  let stopFeeds: (() => void) | undefined
+  $: if (!classic && !stopFeeds) {
+    stopFeeds = startFeeds()
+  } else if (classic && stopFeeds) {
+    stopFeeds()
+    stopFeeds = undefined
+  }
+  onDestroy(() => stopFeeds?.())
+
+  // shareFromFeeds opens a new message carrying a feed entry's title and link.
+  function shareFromFeeds(mail: { subject: string; body: string }): void {
+    const accountId = composeAccountId()
+    if (accountId === null) {
+      toastError(get(t)('app.toast.addMailboxFirst'))
+      return
+    }
+    openComposeWith(accountId, editorMode, { to: '', cc: '', bcc: '', subject: mail.subject, body: mail.body })
+  }
+
+  // chat runs only while the user has it turned on, in the new design. Off
+  // again, the space closes and its state is dropped.
+  let chatRunning = false
+  $: chatWanted = !classic && $prefs.chatEnabled
+  $: if (chatWanted && !chatRunning) {
+    chatRunning = true
+    void startChat()
+  } else if (!chatWanted && chatRunning) {
+    chatRunning = false
+    stopChat()
+  }
+  $: if (!chatWanted && $space === 'chat') {
+    openSpace('mail')
+  }
+  onDestroy(() => {
+    if (chatRunning) {
+      stopChat()
+    }
+  })
+
+  // the newsletter manager, the insights page and the tracking report in the
+  // palette, with their live shortcut as the hint.
+  registerPaletteSource('mailtools', (tr) => {
+    const hint = (action: 'open-newsletters' | 'open-insights'): string => {
+      const combo = get(bindings)[action]
+      return combo ? shortcutLabel(combo) : ''
+    }
+    return [
+      {
+        id: 'open-newsletters',
+        group: 'navigate',
+        label: tr('newsletters.title'),
+        keywords: tr('newsletters.keywords'),
+        hint: hint('open-newsletters'),
+        icon: IconMailX,
+        run: () => openMailScreen('newsletters'),
+      },
+      {
+        id: 'open-insights',
+        group: 'navigate',
+        label: tr('settings2.page.insights'),
+        keywords: tr('insights.keywords'),
+        hint: hint('open-insights'),
+        icon: IconChartBar,
+        run: () => openSettingsAt('insights'),
+      },
+      {
+        id: 'open-privacy-report',
+        group: 'navigate',
+        label: tr('privacy.report.title'),
+        keywords: tr('privacy.report.keywords'),
+        hint: '',
+        icon: IconShieldCheck,
+        run: () => openMailScreen('privacy'),
+      },
+      ...vaultPaletteCommands(tr),
+    ]
+  })
+
+  // the vault's palette entries come from the vault marks on the folders.
+  function vaultPaletteCommands(tr: (key: string) => string): PaletteCommand[] {
+    const folders = Object.values(get(sidebar).data?.foldersByAccount ?? {}).flat()
+    const locked = folders.find((f) => f.vaultLocked)
+    return [
+      ...(folders.some((f) => f.vaultId && !f.vaultLocked)
+        ? [{ id: 'mailvault:lock', group: 'action' as const, label: tr('mailvault.lockNow'), icon: IconShieldCheck, run: lockVaultsNow }]
+        : []),
+      ...(locked
+        ? [{ id: 'mailvault:unlock', group: 'action' as const, label: tr('mailvault.unlock'), icon: IconShieldCheck, run: () => openVaultUnlock(locked.vaultId ?? 0) }]
+        : []),
+    ]
+  }
+
+  // the newsletter manager or the attachments browser fills the mail surface
+  // in place of the list and the reader.
+  $: screenInPlace = !classic && ($mailScreen !== null || $attachmentsOpen)
+
+  // picking a folder, view or search in the sidebar puts the list back.
+  $: closeScreenOn($selection)
+  function closeScreenOn(_sel: unknown): void {
+    closeMailScreen()
+  }
+
   onMount(async () => {
     // cosmetic demo mode (--potatoes-are-nice). main.ts has normally answered
     // this before the first component mounted; this is the backstop for a
@@ -347,15 +779,29 @@
 
     // a nightly warns before anything else is on screen. demo mode is only used
     // for screenshots, so the dialog would just be in the way there.
-    nightlyOpen = !demo && (await isNightly().catch(() => false))
+    nightlyOpen = !demo && !resumed && (await isNightly().catch(() => false))
 
     await initPrefs()
     await initSidebarState()
     await initComposePrefs()
+    warmUp([
+      get(prefs).design === 'classic' ? loadClassicCompose : loadComposer,
+      ...(get(prefs).design === 'classic' ? [] : [loadAttachmentsBrowser]),
+      ...(showMenuBar ? [loadMenuBarEditor] : []),
+      loadEncryptionIndicator,
+      loadDatePeek,
+      ...(get(prefs).design === 'classic' ? [] : [loadInviteCard]),
+      ...(get(prefs).design === 'classic' ? [] : [loadPromiseStrip, loadMyDayPanel]),
+    ])
     void initShortcuts()
+    void initCoach().then((stop) => unsubscribers.push(stop))
+    void initFirstTips()
+    void initWhatsNew()
+    void initFocus().then((stop) => unsubscribers.push(stop))
     void initMenuBar()
     void initPalette()
     void loadSignatures()
+    void loadSnippets()
     void loadVIPSenders()
     void loadVirusTotalConfig()
     // the sidebar marks mailboxes with no stored password, so the markers have
@@ -364,16 +810,20 @@
     // a mailbox that failed its last sync is marked from the first paint, not
     // only once another sync run happens to end.
     void loadSyncStates()
-    void restoreTabs(get(prefs).restoreTabs)
+    if (!resumed) {
+      void restoreTabs(get(prefs).restoreTabs)
+    }
     void loadProfiles()
     initProgress()
     await loadSidebar()
     // the sidebar data has to be here first: a configured or remembered folder
     // is only honoured if it still exists (#187).
     const sidebarData = get(sidebar).data
-    if (sidebarData) {
+    if (sidebarData && !resumed) {
       await applyStartupSelection(get(prefs).startupSelection, sidebarData)
     }
+    // the history starts where the window opened, not on the default list.
+    clearNavHistory()
     void loadViews()
     await loadOutbox()
 
@@ -382,43 +832,88 @@
       onboardingOpen = false
       syncing.set(true)
     } else {
-      // show the first-run onboarding until it has been completed once.
+      // show the first-run onboarding until it has been completed once. the
+      // new design's setup flow also comes back when a run was left half way.
+      onboardingClassic = get(prefs).design === 'classic'
       try {
         const r = await getSetting(SettingKeys.onboarded)
-        onboardingOpen = !(r.found && r.value === 'true')
+        const done = r.found && r.value === 'true'
+        let resume = false
+        if (done && !onboardingClassic) {
+          const p = await getSetting(SettingKeys.onboardingProgress)
+          resume = p.found && p.value !== ''
+        }
+        onboardingOpen = !done || resume
+        onboardingRerun = done && resume
       } catch {
         // if the lookup fails, do not block the app with onboarding.
         onboardingOpen = false
       }
-      // onboarding collects the acknowledgement itself, so only ask separately
-      // when the flow is not going to run.
-      liabilityOpen = !onboardingOpen && !(await liabilityAccepted())
-      void offerCrashReport()
+      // both onboarding flows collect the acknowledgement as their first step,
+      // so only ask separately when neither is going to run.
+      const accepted = await liabilityAccepted()
+      setupNeedsLegal = !accepted
+      liabilityOpen = !onboardingOpen && !accepted
+      if (!resumed) {
+        void offerCrashReport()
+      }
     }
 
     unsubscribers.push(
-      onMailNew(() => {
+      onMailNew((e) => {
+        void refreshSidebar()
+        refreshListOnMailNew(e.accountId, {
+          selection: () => get(selection),
+          phase: (id) => accountPhase(syncView, id),
+          paginated: listIsPaginated,
+          loadList,
+          refreshListHead,
+        })
+      }),
+    )
+    unsubscribers.push(
+      onMailVault((e) => {
         void refreshSidebar()
         void loadList(get(selection))
+        void import('./stores/mailvault').then((m) => m.vaultChanged(e.locked))
       }),
     )
     unsubscribers.push(
       onMailRepaired(() => {
         // the subjects and bodies changed underneath the list, so what is on
-        // screen is stale rather than merely incomplete.
+        // screen is stale rather than merely incomplete. the unread counts
+        // beside it can be too, after a notification button archived or read
+        // a message.
+        void refreshSidebar()
         void loadList(get(selection))
       }),
     )
     unsubscribers.push(
+      onMailUpdated((e) => {
+        clearBodyFetchFailed(e.messageId)
+        const open = get(visibleMessageId)
+        if (open === e.messageId) {
+          void refreshMessage(e.messageId)
+        }
+        void refreshCard(e.messageId)
+      }),
+    )
+    unsubscribers.push(
+      onMailBodyFailed((e) => {
+        if (get(visibleMessageId) === e.messageId) {
+          markBodyFetchFailed(e.messageId)
+        }
+      }),
+    )
+    unsubscribers.push(
       onSyncState((e) => {
-        syncing.set(e.running)
+        // fires once per account run, so it cannot clear the status line;
+        // only the progress closing events do that.
+        syncView = applySyncState(syncView, e.running, Date.now())
+        syncing.set(isSyncing(syncView))
         // record the moment a sync finishes for the status bar's last-synced time.
         if (!e.running) {
           lastSynced.set(Date.now())
-          syncFolder.set('')
-          syncServer.set('')
-          syncAccount.set('')
-          syncCounts.set(emptySyncCounts)
           // a password the server refuses is only discovered by trying, so the
           // markers can only be right after a sync has run.
           void refreshMissingPasswords()
@@ -427,26 +922,18 @@
     )
     unsubscribers.push(
       onSyncProgress((e) => {
-        // the closing event carries no folder name; that is what says the run
-        // is over, rather than the counts, which for a resync of a cached
-        // mailbox can be 0 of 0 the whole way through.
-        const running = e.folder !== ''
-        syncFolder.set(running ? e.folder : '')
-        syncServer.set(running ? e.server : '')
-        syncAccount.set(running ? e.accountEmail : '')
-        syncCounts.set(
-          running
-            ? {
-                done: e.done,
-                total: e.total,
-                folderDone: e.folderDone,
-                folderTotal: e.folderTotal,
-                foldersDone: e.foldersDone,
-                foldersTotal: e.foldersTotal,
-              }
-            : emptySyncCounts,
-        )
+        // accounts sync concurrently, so the line follows whichever is still
+        // running instead of going blank when the first one closes.
+        syncView = applyProgressEvent(syncView, e, Date.now())
+        publishSyncView(syncView)
       }),
+    )
+    unsubscribers.push(
+      startProgressSweep(
+        () => syncView,
+        (v) => (syncView = v),
+        publishSyncView,
+      ),
     )
     unsubscribers.push(watchSyncStates())
     unsubscribers.push(
@@ -462,7 +949,44 @@
     unsubscribers.push(onFoldersChanged(() => void refreshSidebar()))
     unsubscribers.push(onProfileChanged(() => void reloadForProfile()))
     unsubscribers.push(onAgentProposals(() => void loadProposals()))
+    unsubscribers.push(
+      onAssistantScript((e) => {
+        const key = assistantToastKey(e)
+        if (key) {
+          pushAction('info', $t(key).replace('{name}', e.name), { label: $t('scripts.assistant.review'), run: () => reviewScript(e.scriptId) }, 12000)
+        }
+      }),
+    )
+    // the system notification already went out; in the new design the reminder
+    // also shows here with a way to the event.
+    unsubscribers.push(
+      onCalendarReminder((e) => {
+        if (!classic) {
+          const actions = [{ label: $t('calendar.show'), run: () => showReminder(e) }]
+          if (e.hasAttendees) {
+            actions.push({ label: $t('prep.button'), run: () => openMeetingPrep(e.eventId, e.recurrenceId) })
+          }
+          pushActions('info', reminderText(e), actions, 10000)
+        }
+      }),
+    )
+    unsubscribers.push(
+      onTaskReminder((e) => {
+        if (!classic) {
+          pushActions(
+            'info',
+            taskReminderText(e),
+            [
+              { label: $t('tasks.reminder.done'), run: () => void completeFromReminder(e) },
+              { label: $t('tasks.open'), run: () => openTask(e.taskId) },
+            ],
+            10000,
+          )
+        }
+      }),
+    )
     void loadProposals()
+    unsubscribers.push(watchFollowUps())
     unsubscribers.push(onMenu(handleMenu))
     // a mailto: link opened while the app is already running.
     unsubscribers.push(onMailtoCompose((draft) => openMailtoDraft(draft)))
@@ -470,6 +994,30 @@
     // time this arrives; all that is left is to go to the message.
     unsubscribers.push(
       onOpenMessage((e) => revealMessage(e.messageId, e.accountId, e.folderId, get(sidebar).data ?? null)),
+    )
+    unsubscribers.push(
+      onReplyMessage(async (e) => {
+        try {
+          openReply(await getMessage(e.messageId), editorMode, false)
+        } catch (err) {
+          toastError(errorMessage(err))
+        }
+      }),
+    )
+    // a clicked notification about a new feed entry.
+    unsubscribers.push(
+      onFeedsOpen((id) => {
+        if (!classic) {
+          feedFocus.set(id)
+          openSpace('feeds')
+        }
+      }),
+    )
+    // a send and archive from a compose window, which closes as it sends.
+    unsubscribers.push(
+      onArchiveAfterSend((e) => {
+        setTimeout(() => void markAnsweredDone(e.messageId), e.delaySeconds * 1000)
+      }),
     )
 
     // a mailto: link that launched the app: the backend stashed it, so pick it
@@ -484,6 +1032,9 @@
       } catch {
         // a failed lookup just means no prefilled compose; not worth surfacing.
       }
+      // .ics files opened with Pelton, at launch and while it runs.
+      unsubscribers.push(onICSOpen(() => void openPendingICS()))
+      void openPendingICS()
     }
 
     // WebKitGTK (Linux) has a known quirk where maximizing the window - a
@@ -541,42 +1092,67 @@
 
   // startComposeTo opens a new message addressed to one contact, which is what
   // clicking an address on the contacts screen does (#168).
-  function startComposeTo(email: string): void {
+  function startComposeTo(email: string, subject = '', projectId = 0): void {
     const accountId = composeAccountId()
     if (accountId === null) {
       toastError(get(t)('app.toast.addMailboxFirst'))
       return
     }
-    openComposeWith(accountId, editorMode, { to: email, cc: '', bcc: '', subject: '', body: '' })
+    const id = openComposeWith(accountId, editorMode, { to: email, cc: '', bcc: '', subject, body: '' })
+    if (projectId) {
+      updateCompose(id, { projectId })
+    }
   }
 
-  // a mailto: link waiting for a mailbox to exist. onboarding-first: if the link
-  // arrives before any account is set up, it is held here and opened once
-  // onboarding finishes, rather than being dropped.
-  let pendingMailto: MailtoDraft | null = null
+  // openPendingICS takes the .ics files the system asked Pelton to open and
+  // hands them to the calendar's import. Classic has no calendar to take them.
+  async function openPendingICS(): Promise<void> {
+    try {
+      const paths = await consumePendingICS()
+      if (paths.length > 0 && !classic) {
+        calendarImport.set(paths)
+        openSpace('calendar')
+      }
+    } catch {
+      // nothing to open is the same as a failed lookup here.
+    }
+  }
 
-  // openMailtoDraft opens a prefilled compose from a mailto: link, or defers it
-  // until a mailbox exists (see pendingMailto).
+  // a mailto: link waiting for a mailbox to exist, and for the wizard or
+  // onboarding to get out of the way. If the link arrives before any account is
+  // set up, it is held and opened once that flow closes, rather than dropped.
+  const mailtoHold = createMailtoHold({
+    accountId: composeAccountId,
+    covered: () => wizardOpen || onboardingOpen,
+    open: (accountId, draft) => openComposeWith(accountId, editorMode, draft),
+  })
+
+  // openMailtoDraft opens a prefilled compose from a mailto: link, or holds it.
   function openMailtoDraft(draft: MailtoDraft): void {
-    const accountId = composeAccountId()
-    if (accountId === null) {
-      pendingMailto = draft
-      return
-    }
-    openComposeWith(accountId, editorMode, draft)
+    mailtoHold.offer(draft)
   }
 
-  // flushPendingMailto opens a held mailto draft once a mailbox is available.
-  function flushPendingMailto(): void {
-    if (pendingMailto && composeAccountId() !== null) {
-      const draft = pendingMailto
-      pendingMailto = null
-      openComposeWith(composeAccountId() as number, editorMode, draft)
-    }
+  // the sidebar's mailbox list is what compose sends from. A held link opens
+  // when it goes from empty to not, which covers the wizard inside Settings.
+  unsubscribers.push(
+    sidebar.subscribe((s) => {
+      if (s.status === 'ready' && s.data) {
+        mailtoHold.accountsChanged(s.data.accounts.length)
+      }
+    }),
+  )
+
+  // closeWizard closes the add-mailbox wizard and opens a held mailto link once
+  // the sidebar lists the mailbox it may have added, now that compose is no
+  // longer hidden under the wizard.
+  function closeWizard(): void {
+    wizardOpen = false
+    void mailtoHold.releaseAfter(refreshSidebar())
   }
 
   async function runSync(): Promise<void> {
-    await promptForMissingPasswords()
+    // the sync below covers every account, so the prompts leave it to us.
+    await promptForMissingPasswords(true)
     syncing.set(true)
     try {
       await triggerSync()
@@ -597,31 +1173,39 @@
     wizardOpen = true
   }
 
-  function onMailboxAdded(): void {
-    wizardOpen = false
-    void refreshSidebar().then(flushPendingMailto)
-    toastInfo(get(t)('app.toast.mailboxAdded'))
-  }
-
   // onboarding completion is persisted so it shows only once. re-run clears it
   // from settings and reopens the flow.
   function finishOnboarding(): void {
     onboardingOpen = false
+    setupNeedsLegal = false
     void setSetting(SettingKeys.onboarded, 'true')
-    flushPendingMailto()
+    mailtoHold.release()
+  }
+
+  // the setup flow reports where to land; its first run also counts as having
+  // seen what is new, since all of it is new then.
+  function finishSetup(event: CustomEvent<{ landing: Space; rerun: boolean }>): void {
+    finishOnboarding()
+    if (!event.detail.rerun) {
+      void markWhatsNewSeen()
+    }
+    openSpace(event.detail.landing)
   }
 
   function rerunOnboarding(): void {
     settingsOpen = false
+    onboardingClassic = classic
+    onboardingRerun = true
     onboardingOpen = true
   }
 
+  // the held mailto link waits for finishOnboarding: onboarding is still open.
   function onboardingAddedMailbox(): void {
-    void refreshSidebar().then(flushPendingMailto)
+    void refreshSidebar()
   }
 
   function focusSearch(): void {
-    const input = document.querySelector<HTMLInputElement>('input[type="search"]')
+    const input = document.querySelector<HTMLInputElement>(classic ? 'input[type="search"]' : 'input[data-top-search]')
     input?.focus()
   }
 
@@ -633,7 +1217,7 @@
       toastInfo(get(t)('app.toast.exportOpenFirst'))
       return
     }
-    exportMessagePrintView(id).catch((err) => toastError(errorMessage(err)))
+    withBusyToast(get(t)('export.working'), () => exportMessagePrintView(id)).catch((err) => toastError(errorMessage(err)))
   }
 
   // export the currently open message as an .eml file, or tell the user to open
@@ -692,6 +1276,9 @@
       case 'archive':
         void bulkArchive(items)
         return true
+      case 'done':
+        void markDone(items)
+        return true
       case 'download-offline':
         void bulkSetOffline(items, true)
         return true
@@ -732,23 +1319,19 @@
           openForward(await getMessage(msg.id), editorMode)
           break
         case 'mark-read':
-          patchInList(msg.id, { seen: true })
-          await setSeen(msg.id, true)
+          await markSeen(msg, true)
           break
         case 'mark-unread':
-          patchInList(msg.id, { seen: false })
-          await setSeen(msg.id, false)
+          await markSeen(msg, false)
           break
         case 'flag':
-          patchInList(msg.id, { flagged: !msg.flagged })
-          await setFlagged(msg.id, !msg.flagged)
+          await markFlagged(msg, !msg.flagged)
           break
         case 'snooze':
           openSnooze(msg.id, msg.subject)
           break
         case 'download-offline':
-          patchInList(msg.id, { offline: true })
-          await downloadMessageOffline(msg.id)
+          await setOffline(msg, true)
           break
         case 'delete-message':
           await deleteMessage(msg.id)
@@ -774,17 +1357,17 @@
           const undo = await archiveMessage(msg.id)
           reportArchiveExport(undo)
           recordArchived(msg, undo)
-          removeFromList(msg.id)
           closeTab(msg.id)
-          if (get(openMessageId) === msg.id) {
-            openMessageId.set(null)
-          }
+          leaveList([msg.id])
           break
         }
         case 'toggle-spam':
           if (await toggleSpam(msg)) {
             closeTab(msg.id)
           }
+          break
+        case 'done':
+          await markDone([msg])
           break
       }
     } catch (err) {
@@ -796,16 +1379,57 @@
   type MenuAction =
     | ShortcutAction
     | 'about'
-    | 'undo'
     | 'toggle-low-power'
     | 'open-mailboxes'
     | 'open-contacts'
     | 'hide-window'
     | 'export-eml'
 
+  // a mail action with no mail panes on screen, under a screen that fills the
+  // mail surface or in another space, does nothing the coach should hear of.
+  function swallowedMailAction(action: string): boolean {
+    return !classic && isMailOnlyAction(action) && (screenInPlace || $space !== 'mail')
+  }
+
   // dispatch maps an action (from a shortcut or a menu item) to its handler.
   function dispatchAction(action: MenuAction): void {
+    // the coach tells a click from a key press here, for every action a menu,
+    // the palette or a shortcut runs.
+    if (!swallowedMailAction(action)) {
+      noteAction(action as ShortcutAction)
+    }
+    // the space on screen gets the first say, so the same key makes a new
+    // event in the calendar and a new message in mail.
+    if (!classic && !overlayOpen && runSpaceAction($space, action)) {
+      return
+    }
+    if (isComposeAction(action)) {
+      runComposeCommand(action)
+      return
+    }
+    // a screen in place of the list and the reader leaves no message on show
+    // for a message shortcut to act on.
+    if (screenInPlace && isMailOnlyAction(action)) {
+      return
+    }
+    const place = spaceNumber(action)
+    if (place !== null) {
+      if (!classic) {
+        goToSpaceNumber(place)
+      }
+      return
+    }
     switch (action) {
+      case 'open-newsletters':
+        if (!classic) {
+          openMailScreen('newsletters')
+        }
+        break
+      case 'open-insights':
+        if (!classic) {
+          openSettingsAt('insights')
+        }
+        break
       case 'compose':
         startCompose()
         break
@@ -853,6 +1477,7 @@
       case 'download-offline':
       case 'delete-message':
       case 'archive':
+      case 'done':
       case 'toggle-spam':
       case 'unsubscribe':
         void messageAction(action)
@@ -890,9 +1515,102 @@
       case 'focus-reader':
         focusPaneArea('reader')
         break
+      case 'calendar-quick-add':
+        // from another space: go to the calendar, which opens quick add.
+        if (!classic) {
+          calendarQuickAdd.set(true)
+          openSpace('calendar')
+        }
+        break
+      case 'go-tasks':
+        if (!classic) {
+          openSpace('tasks')
+        }
+        break
+      case 'plan-day':
+        if (!classic) {
+          planMyDay()
+        }
+        break
+      case 'block-time':
+        // the calendar and tasks take it themselves; in mail it blocks time
+        // for the open or selected mail.
+        if (!classic && $space === 'mail') {
+          blockTimeForOpenMail()
+        }
+        break
+      case 'go-notes':
+        goToSpace('notes')
+        break
+      case 'notes-new':
+        if (!classic && !overlayOpen) {
+          requestNotes({ kind: 'new' })
+        }
+        break
+      case 'notes-today':
+        if (!classic && !overlayOpen) {
+          requestNotes({ kind: 'today' })
+        }
+        break
+      case 'notes-switcher':
+        if (!classic && !overlayOpen) {
+          requestNotes({ kind: 'switcher' })
+        }
+        break
+      case 'notes-graph':
+        if (!classic && !overlayOpen) {
+          requestNotes({ kind: 'graph' })
+        }
+        break
+      case 'notes-toggle-mode':
+        // the editor's mode only means something with a note on screen.
+        break
+      case 'go-feeds':
+        goToSpace('feeds')
+        break
+      case 'create-task':
+        if (!classic) {
+          createTaskFromMail()
+        }
+        break
+      case 'go-projects':
+        if (!classic) {
+          goToSpace('projects')
+        }
+        break
+      case 'add-to-project':
+        if (!classic) {
+          addToProject()
+        }
+        break
+      case 'toggle-my-day':
+        // from another space it brings mail back with the panel open.
+        if (!classic) {
+          if ($space !== 'mail') {
+            openSpace('mail')
+            setMyDayPanel(true)
+          } else {
+            setMyDayPanel(!$prefs.myDayPanel)
+          }
+        }
+        break
       case 'undo':
-        if (!triggerUndo() && !triggerUndoDelete() && !triggerUndoArchive()) {
-          toastInfo(get(t)('app.toast.nothingToUndo'))
+        void undoOrSay()
+        break
+      case 'redo':
+        void redoOrSay()
+        break
+      case 'undo-history':
+        historyOpen.update((open) => !open)
+        break
+      case 'nav-back':
+        if (!classic && !overlayOpen) {
+          void goBack()
+        }
+        break
+      case 'nav-forward':
+        if (!classic && !overlayOpen) {
+          void goForward()
         }
         break
       case 'toggle-low-power':
@@ -910,6 +1628,51 @@
       case 'toggle-fullscreen':
         void toggleFullscreen()
         break
+      case 'go-mail':
+        goToSpace('mail')
+        break
+      case 'go-calendar':
+        goToSpace('calendar')
+        break
+      case 'go-contacts':
+        goToSpace('contacts')
+        break
+      case 'go-chat':
+        goToSpace('chat')
+        break
+      case 'go-automations':
+        if (classic) {
+          automationsOpen = !settingsOpen && !onboardingOpen && !wizardOpen
+        } else {
+          goToSpace('automations')
+        }
+        break
+      case 'open-attachments':
+        if (!classic && !overlayOpen) {
+          openSpace('mail')
+          toggleAttachments()
+        }
+        break
+      case 'toggle-sender-panel':
+        if (!classic) {
+          setSenderPanel(!$prefs.senderPanel)
+        }
+        break
+      case 'reading-view':
+        if (!classic && get(visibleMessageId) !== null) {
+          toggleReadingView()
+        }
+        break
+      case 'shortcut-sheet':
+        if (!classic && !overlayOpen) {
+          toggleSheet()
+        }
+        break
+      case 'focus-mode':
+        if (!classic && !overlayOpen) {
+          focusMenuOpen.update((open) => !open)
+        }
+        break
       case 'hide-window':
         // the app, not just the window: on macOS ordering the window out
         // strands it, and an app hidden whole comes back from the dock icon.
@@ -920,6 +1683,14 @@
         break
       case 'quit':
         quitApp()
+        break
+      case 'lock-app':
+        if ($prefs.appLock) {
+          void lockNow()
+        } else {
+          toastInfo($t('applock.offHint'))
+          openSettingsAt('privacy')
+        }
         break
       case 'command-palette':
         togglePalette()
@@ -933,6 +1704,24 @@
         }
         break
       }
+      case 'toggle-pin':
+      case 'toggle-mute':
+      case 'edit-note': {
+        const msg = currentMessage()
+        if (!msg) {
+          toastInfo(get(t)('app.toast.openMessageFirst'))
+        } else if (action === 'toggle-pin') {
+          void togglePin(msg)
+        } else if (action === 'toggle-mute') {
+          void toggleMute(msg)
+        } else {
+          editNote(msg)
+        }
+        break
+      }
+      case 'next-split':
+      case 'prev-split':
+        break
       case 'move-to': {
         if (selectedMessages.length > 1) {
           const items = selectedMessages
@@ -1029,6 +1818,9 @@
       case 'archive':
         void archiveOne(item)
         break
+      case 'done':
+        void markDone([item])
+        break
       case 'download-offline':
         void setOffline(item, true)
         break
@@ -1060,6 +1852,9 @@
         break
       case 'archive':
         void bulkArchive(items)
+        break
+      case 'done':
+        void markDone(items)
         break
       case 'download-offline':
         void bulkSetOffline(items, true)
@@ -1145,13 +1940,22 @@
   // rebuilt whenever anything the entries depend on moves, so the open palette
   // never offers a folder that was just deleted or a message action with no
   // message behind it.
-  $: paletteCommands = $paletteOpen ? buildCommands(commandContext) : []
+  $: paletteCommands = $paletteOpen
+    ? [...buildCommands(commandContext), ...(classic ? [] : extraPaletteCommands($t))]
+    : []
 
   // opening a hit also puts the query in the search bar, so the list behind the
   // palette holds the same results the reading pane is showing rather than
   // whatever folder happened to be open.
   function openMailHit(item: MessageSummary): void {
-    searchQuery.set(parseQuery(get(paletteQuery)).text)
+    const query = parseQuery(get(paletteQuery)).text
+    searchQuery.set(query)
+    if (!classic && query.trim() !== '') {
+      setDraft({ text: query, chips: [] })
+      submitSearch()
+      openSpace('mail')
+      searchOpenedId.set(item.id)
+    }
     openMessage(item.id)
   }
 
@@ -1191,7 +1995,7 @@
       return
     }
     if (wizardOpen) {
-      wizardOpen = false
+      closeWizard()
       return
     }
     // a reading-pane tab is the next thing in, the way a browser tab is: with
@@ -1312,6 +2116,41 @@
     }
   }
 
+  // goToSpaceNumber shows the nth space of the navigation, from 1.
+  function goToSpaceNumber(n: number): void {
+    const entry = get(visibleSpaces)[n - 1]
+    if (entry) {
+      goToSpace(entry.key)
+    }
+  }
+
+  // reviewScript opens a script an assistant created or proposed a change to.
+  function reviewScript(id: number): void {
+    selectScript(id)
+    if (classic) {
+      automationsOpen = !settingsOpen && !onboardingOpen && !wizardOpen
+    } else {
+      goToSpace('automations')
+    }
+  }
+
+  // goToSpace shows one of the spaces from its shortcut. classic has no spaces
+  // but does have a contacts screen; a space this build lacks is left alone.
+  function goToSpace(key: Space): void {
+    if (classic) {
+      if (key === 'contacts') {
+        openContacts()
+      }
+      return
+    }
+    // a space left out of the navigation still opens; only one switched off
+    // does not.
+    if (overlayOpen || !get(orderedSpaces).some((s) => s.key === key)) {
+      return
+    }
+    openSpace(key)
+  }
+
   function anyDialogOpen(): boolean {
     return (
       settingsOpen ||
@@ -1337,7 +2176,7 @@
     if (!$prefs.appVimMode || event.metaKey || event.ctrlKey || event.altKey) {
       return false
     }
-    if (isEditableTarget(event.target) || inSidebar(event.target) || anyDialogOpen()) {
+    if (isEditableTarget(event.target) || inSidebar(event.target) || anyDialogOpen() || screenInPlace) {
       return false
     }
     // shift is part of G itself; with anything else it can only be extending
@@ -1398,7 +2237,7 @@
     if ((event.key !== 'ArrowDown' && event.key !== 'ArrowUp') || !$prefs.multiSelectEnabled) {
       return false
     }
-    if (matchShortcut(event, $bindings) !== null) {
+    if (matchShortcut(event, $activeBindings) !== null) {
       return false
     }
     vimMove(event.key === 'ArrowDown' ? 1 : -1, true)
@@ -1406,60 +2245,101 @@
     return true
   }
 
+  const newDesignOnly = new Set<ShortcutAction>(shortcutRegistry.filter((s) => s.newDesignOnly).map((s) => s.action))
+
   function onKeydown(event: KeyboardEvent): void {
     // while the settings panel is capturing a new binding, let it have the keys.
     if ($recording) {
+      return
+    }
+    // Escape that has something of ours to close is ours alone. left to the
+    // system as well, it would also take a full screen window out of full
+    // screen, which should only happen from the plain main view.
+    if (event.key === 'Escape' && (anyDialogOpen() || overlayOpen || popupIsOpen())) {
+      event.preventDefault()
+    }
+    if ($prefs.design !== 'classic' && openMenuFromKeyboard(event)) {
       return
     }
     if (tryVimNav(event)) {
       event.preventDefault()
       return
     }
-    // cmd/ctrl+z undoes a pending delayed send, when one is in its window. it
-    // takes priority over other shortcuts and is swallowed only if it acted.
-    if ((event.metaKey || event.ctrlKey) && !event.shiftKey && event.key.toLowerCase() === 'z') {
-      // undo-send takes priority; otherwise undo the last message deletion.
-      if (triggerUndo()) {
-        event.preventDefault()
-        return
-      }
-      if (triggerUndoDelete()) {
-        event.preventDefault()
-        return
-      }
-      if (triggerUndoArchive()) {
-        event.preventDefault()
-        return
-      }
+    const action = matchShortcut(event, $activeBindings)
+    // undo and redo belong to a text field, a composer or an editor while one
+    // has focus, and are the history's everywhere else.
+    if ((action === 'undo' || action === 'redo') && isEditableTarget(event.target)) {
+      return
     }
-    const action = matchShortcut(event, $bindings)
+    // the split keys belong to the message list, which takes them itself while
+    // it has focus; anywhere else Tab keeps moving focus.
+    if (action === 'next-split' || action === 'prev-split') {
+      return
+    }
+    // an editor that already used the keys (indenting on mod+[, say) keeps
+    // them, and alt with an arrow moves through a text field's words.
+    if ((action === 'nav-back' || action === 'nav-forward') && (event.defaultPrevented || (event.altKey && isEditableTarget(event.target)))) {
+      return
+    }
     if (action) {
-      // a modifier-less custom binding must not hijack typing in a field.
-      if (!comboHasModifier($bindings[action]) && !isFunctionKeyCombo($bindings[action]) && isEditableTarget(event.target)) {
+      // a binding that types a character must not hijack typing in a field.
+      if (comboTypes($bindings[action]) && isEditableTarget(event.target)) {
+        return
+      }
+      const scriptId = scriptOfAction(action)
+      if (scriptId !== null) {
+        event.preventDefault()
+        runAt('shortcut', scriptId, currentMessageItems())
+        return
+      }
+      if (classic && newDesignOnly.has(action)) {
+        if (selectTabByNumber(event)) {
+          event.preventDefault()
+        }
+        return
+      }
+      // a recipient move only means something on a focused recipient chip;
+      // anywhere else its keys keep their own meaning.
+      if ((chipActions as readonly string[]).includes(action) &&!(event.target as HTMLElement | null)?.closest?.('[data-chip]')) {
+        return
+      }
+      // like send, a send variant only answers inside a composer, which takes
+      // the key before it gets here.
+      if ((sendActions as readonly string[]).includes(action)) {
         return
       }
       event.preventDefault()
+      if (!swallowedMailAction(action)) {
+        noteShortcut(action)
+      }
       dispatchAction(action)
       return
     }
     // cmd/ctrl+1 to 9 jump between the reading-pane chips, the way they jump
     // between tabs in a browser: 1 is the pane, 9 is the last tab. Checked after
     // the bindings, so a key the user assigned themselves still wins, and only
-    // while tabs exist, so the combination is otherwise left alone.
+    // while tabs exist, so the combination is otherwise left alone. The new
+    // design gives those keys to the spaces, so there the chips also answer
+    // with alt added.
     if (selectTabByNumber(event)) {
       event.preventDefault()
     }
   }
 
-  // selectTabByNumber handles cmd/ctrl+1 to 9 and reports whether it acted. The
-  // chips are the untabbed pane followed by the tabs, so 1 is the pane and the
+  // selectTabByNumber handles cmd/ctrl+1 to 9, and cmd/ctrl+alt+1 to 9 in the
+  // new design outside a text field, and reports whether it acted. The chips
+  // are the untabbed pane followed by the tabs, so 1 is the pane and the
   // numbers after it count along the bar. 9 is the last chip however many there
   // are, which is what a browser does.
   function selectTabByNumber(event: KeyboardEvent): boolean {
-    if (!(event.metaKey || event.ctrlKey) || event.shiftKey || event.altKey) {
+    if (!(event.metaKey || event.ctrlKey) || event.shiftKey) {
       return false
     }
-    const slot = Number(event.key)
+    if (event.altKey && (classic || isEditableTarget(event.target))) {
+      return false
+    }
+    // alt turns a digit into a symbol on some layouts, so its key code counts.
+    const slot = event.altKey ? Number(/^Digit([1-9])$/.exec(event.code)?.[1]) : Number(event.key)
     if (!Number.isInteger(slot) || slot < 1 || slot > 9) {
       return false
     }
@@ -1499,9 +2379,12 @@
     if (data) {
       await applyStartupSelection(get(prefs).startupSelection, data)
     }
+    // the places of the profile left behind are not this one's.
+    clearNavHistory()
     void loadSignatures()
     void loadVIPSenders()
     void loadViews()
+    void refreshFocus()
     await loadList(get(selection))
   }
 
@@ -1513,16 +2396,6 @@
     clearSettingsRequest()
   }
 
-  // isEditableTarget reports whether the event originated in a text field, so
-  // plain-key shortcuts do not fire while the user is typing.
-  function isEditableTarget(target: EventTarget | null): boolean {
-    const el = target as HTMLElement | null
-    if (!el) {
-      return false
-    }
-    const tag = el.tagName
-    return tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || el.isContentEditable
-  }
 
   // pane resize. clamps keep each column usable; widths persist on release.
   function clamp(value: number, min: number, max: number): number {
@@ -1555,7 +2428,7 @@
   }
 </script>
 
-<svelte:window on:keydown={onKeydown} on:contextmenu={onContextMenu} on:resize={refreshFullscreen} bind:innerWidth={windowWidth} />
+<svelte:window on:keydown={onKeydown} on:mousedown={onNavMouseDown} on:mouseup={onNavMouseUp} on:contextmenu={onContextMenu} on:resize={refreshFullscreen} bind:innerWidth={windowWidth} />
 
 <!-- macOS with no in-app menu bar: an empty top row for the traffic lights, and
      a matching strip above every overlay so the window can still be dragged
@@ -1570,14 +2443,17 @@
     on:dblclick={titleBarDoubleClick}
   >
     <!-- the app mark sits where a native title bar would put the title, just
-         past the traffic lights -->
-    <img class="titlebar-logo" src={peltonLogo} alt="" draggable="false" />
+         past the traffic lights. the new design's overlays have headers of
+         their own there. -->
+    {#if classic}
+      <img class="titlebar-logo" src={peltonLogo} alt="" draggable="false" />
+    {/if}
   </div>
 {/if}
 
 {#if !classic}
-<div class="frame" class:rail-right={$prefs.railSide === 'right'} class:has-rail={showRail}>
-  <TopBar tabs={$prefs.navStyle === 'tabs' || railFolded} on:search={focusSearch}>
+<div class="frame" class:rail-right={$prefs.railSide === 'right'} class:has-rail={showRail} data-file-drop-target="app">
+  <TopBar tabs={$prefs.navStyle === 'tabs' || railFolded}>
     <svelte:fragment slot="menu">
       {#if showMenuBar}
         <MenuBar on:action={(e) => handleMenu(e.detail)} />
@@ -1591,12 +2467,19 @@
         side={$prefs.railSide}
         unread={inboxUnread}
         on:search={focusSearch}
-        on:settings={() => { settingsCategory = null; settingsOpen = true }}
+        on:settings={() => { settingsCategory = $whatsNewUnseen ? 'about#about-whats-new' : null; settingsOpen = true }}
       />
     {/if}
 
     {#if $space === 'mail'}
-      <div class="mail" style={`grid-template-columns: ${sidebarW}px 0 minmax(0, 1fr)`}>
+      <div
+        class="mail"
+        class:with-myday={showMyDay}
+        role="main"
+        aria-label={$t('space.mail')}
+        style={`grid-template-columns: ${sidebarW}px 0 minmax(0, 1fr)${showMyDay ? ' var(--myday-width)' : ''}`}
+        bind:clientWidth={mailWidth}
+      >
         <div class="side-col">
           <Sidebar
             on:compose={startCompose}
@@ -1610,30 +2493,103 @@
           {/if}
         </div>
         <Resizer disabled={locked} label={$t('app.pane.resizeSidebar')} on:resize={resizeSidebar} on:end={commitPanes} />
+        {#if $mailScreen === 'newsletters'}
+          <div class="screen">
+            {#await loadNewsletterManager() then m}
+              <svelte:component this={m.default} on:close={closeMailScreen} />
+            {/await}
+          </div>
+        {:else if $mailScreen === 'privacy'}
+          <div class="screen">
+            {#await import('./components/privacy/PrivacyReport.svelte') then m}
+              <svelte:component this={m.default} on:close={closeMailScreen} />
+            {/await}
+          </div>
+        {:else}
         <div
           class="surface"
-          class:stacked
-          style={stacked
-            ? `grid-template-rows: ${listH}px 0 minmax(0, 1fr)`
-            : `grid-template-columns: ${listW}px 0 minmax(0, 1fr)`}
+          class:stacked={stacked && !$attachmentsOpen}
+          class:browsing={$attachmentsOpen}
+          style={$attachmentsOpen
+            ? ''
+            : stacked
+              ? `grid-template-rows: ${listH}px 0 minmax(0, 1fr)`
+              : `grid-template-columns: ${listW}px 0 minmax(0, 1fr)`}
         >
-          <MessageList />
-          {#if stacked}
-            <Resizer orientation="horizontal" disabled={locked} label={$t('app.pane.resizeMessageList')} on:resize={resizeListHeight} on:end={commitListHeight} />
+          {#if $attachmentsOpen}
+            {#await loadAttachmentsBrowser() then m}
+              <svelte:component this={m.default} />
+            {/await}
           {:else}
-            <Resizer disabled={locked} label={$t('app.pane.resizeMessageList')} on:resize={resizeList} on:end={commitPanes} />
+            <MessageList />
+            {#if stacked}
+              <Resizer orientation="horizontal" disabled={locked} label={$t('app.pane.resizeMessageList')} on:resize={resizeListHeight} on:end={commitListHeight} />
+            {:else}
+              <Resizer disabled={locked} label={$t('app.pane.resizeMessageList')} on:resize={resizeList} on:end={commitPanes} />
+            {/if}
+            <MessageDetail />
           {/if}
-          <MessageDetail />
+          <ComposeTabLayer />
         </div>
+        {/if}
+        {#if showMyDay}
+          {#await loadMyDayPanel() then m}
+            <svelte:component this={m.default} on:close={() => setMyDayPanel(false)} />
+          {/await}
+        {/if}
       </div>
     {:else if $space === 'contacts'}
-      <div class="space-host">
-        {#await import('./components/contacts/ContactsScreen.svelte') then m}
+      <div class="space-host" role="main" aria-label={$t(`space.${$space}`)}>
+        {#await loadContactsSpace() then m}
           <svelte:component
             this={m.default}
-            on:close={() => openSpace('mail')}
             on:compose={(e) => { openSpace('mail'); startComposeTo(e.detail) }}
           />
+        {/await}
+      </div>
+    {:else if $space === 'calendar'}
+      <div class="space-host" role="main" aria-label={$t(`space.${$space}`)}>
+        {#await loadCalendarScreen() then m}
+          <svelte:component this={m.default} />
+        {/await}
+      </div>
+    {:else if $space === 'tasks'}
+      <div class="space-host" role="main" aria-label={$t(`space.${$space}`)}>
+        {#await loadTasksScreen() then m}
+          <svelte:component this={m.default} />
+        {/await}
+      </div>
+    {:else if $space === 'projects'}
+      <div class="space-host" role="main" aria-label={$t(`space.${$space}`)}>
+        {#await loadProjectsScreen() then m}
+          <svelte:component
+            this={m.default}
+            on:compose={(e) => { openSpace('mail'); startComposeTo(e.detail.email, '', e.detail.projectId) }}
+          />
+        {/await}
+      </div>
+    {:else if $space === 'notes'}
+      <div class="space-host" role="main" aria-label={$t(`space.${$space}`)}>
+        {#await loadNotesScreen() then m}
+          <svelte:component this={m.default} />
+        {/await}
+      </div>
+    {:else if $space === 'feeds'}
+      <div class="space-host" role="main" aria-label={$t(`space.${$space}`)}>
+        {#await loadFeedsScreen() then m}
+          <svelte:component this={m.default} on:compose={(e) => shareFromFeeds(e.detail)} />
+        {/await}
+      </div>
+    {:else if $space === 'chat' && chatWanted}
+      <div class="space-host" role="main" aria-label={$t(`space.${$space}`)}>
+        {#await loadChatSpace() then m}
+          <svelte:component this={m.default} />
+        {/await}
+      </div>
+    {:else if $space === 'automations'}
+      <div class="space-host" role="main" aria-label={$t(`space.${$space}`)}>
+        {#await loadAutomationsSpace() then m}
+          <svelte:component this={m.default} />
         {/await}
       </div>
     {/if}
@@ -1642,7 +2598,7 @@
   <StatusBar />
 </div>
 {:else}
-<div class="shell" class:with-topbar={showMenuBar || macTitlebar}>
+<div class="shell" class:with-topbar={showMenuBar || macTitlebar} data-file-drop-target="app">
   {#if showMenuBar}
     <MenuBar on:action={(e) => handleMenu(e.detail)} />
   {:else if macTitlebar}
@@ -1667,13 +2623,30 @@
 {#if $composeSessions.length > 0}
   <div class="compose-layer">
     {#each $composeSessions as session (session.id)}
-      <Compose {session} />
+      {#if classic}
+        {#await loadClassicCompose() then m}
+          <svelte:component this={m.default} {session} />
+        {/await}
+      {:else if session.placement === 'docked'}
+        {#await loadComposer() then m}
+          <svelte:component this={m.default} {session} layout="docked" mainWindow />
+        {/await}
+      {/if}
     {/each}
   </div>
 {/if}
 
 <!-- settings and the wizard are code-split: their js/css load only when opened,
-     so they cost nothing at startup. compose stays eager (used constantly). -->
+     so they cost nothing at startup. compose is split too, and loaded once the
+     window has settled so it is ready before it is first opened. -->
+{#if automationsOpen && classic}
+  {#await loadAutomationsOverlay() then m}
+    <svelte:component this={m.default} on:close={() => (automationsOpen = false)} />
+  {/await}
+{/if}
+
+<AutomationsHost />
+
 {#if contactsOpen}
   {#await import('./components/contacts/ContactsScreen.svelte') then m}
     <svelte:component
@@ -1699,7 +2672,7 @@
 
 <!-- the nightly-build warning, above everything else and shown every launch. -->
 {#if nightlyOpen}
-  {#await import('./components/common/NightlyDialog.svelte') then m}
+  {#await loadNightlyDialog() then m}
     <svelte:component this={m.default} on:accepted={() => (nightlyOpen = false)} />
   {/await}
 {/if}
@@ -1707,21 +2680,37 @@
 <!-- the liability acknowledgement for installs from before the onboarding step. -->
 {#if liabilityOpen}
   {#await import('./components/common/LiabilityDialog.svelte') then m}
-    <svelte:component this={m.default} on:accepted={() => (liabilityOpen = false)} />
+    <svelte:component this={m.default} on:accepted={() => { liabilityOpen = false; setupNeedsLegal = false }} />
   {/await}
 {/if}
 
 <!-- onboarding is code-split too: shown only on first run or when re-run. -->
-{#if onboardingOpen}
-  {#await import('./components/onboarding/Onboarding.svelte') then m}
+{#if onboardingOpen && onboardingClassic}
+  {#await loadOnboarding() then m}
     <svelte:component this={m.default} on:finish={finishOnboarding} on:added={onboardingAddedMailbox} />
+  {/await}
+{:else if onboardingOpen}
+  {#await loadSetup() then m}
+    <svelte:component
+      this={m.default}
+      rerun={onboardingRerun}
+      blocked={nightlyOpen}
+      legal={setupNeedsLegal}
+      on:finish={finishSetup}
+      on:added={onboardingAddedMailbox}
+      on:classic={() => (onboardingClassic = true)}
+    />
+  {/await}
+{/if}
+
+{#if !classic && $whatsNewOpen}
+  {#await import('./components/whatsnew/WhatsNew.svelte') then m}
+    <svelte:component this={m.default} on:close={() => whatsNewOpen.set(false)} />
   {/await}
 {/if}
 
 {#if wizardOpen}
-  {#await import('./components/wizard/AddMailboxWizard.svelte') then m}
-    <svelte:component this={m.default} on:close={() => (wizardOpen = false)} on:added={onMailboxAdded} />
-  {/await}
+  <AddMailboxDialog on:close={closeWizard} />
 {/if}
 
 {#if $editingView}
@@ -1736,19 +2725,82 @@
   {/await}
 {/if}
 
+{#if !classic && $meetingPrepTarget}
+  {#await loadMeetingPrep() then m}
+    <svelte:component
+      this={m.default}
+      target={$meetingPrepTarget}
+      on:close={closeMeetingPrep}
+      on:compose={(e) => { closeMeetingPrep(); openSpace('mail'); startComposeTo(e.detail.to, e.detail.subject) }}
+    />
+  {/await}
+{/if}
+
 <Toasts />
 <ContextMenu />
 <ConfirmDialog />
-<SnoozeDialog />
-<FolderDialog />
-<AttachmentPreview />
-<MoveDialog />
+<DragStack />
+<!-- the dialogs below show only when asked for, so their code loads after the
+     window's first paint. -->
+{#if classic}
+  {#await import('./components/detail/classic/SnoozeDialog.svelte') then m}
+    <svelte:component this={m.default} />
+  {/await}
+  {#await import('./components/sidebar/classic/FolderDialog.svelte') then m}
+    <svelte:component this={m.default} />
+  {/await}
+{:else}
+  {#await import('./components/detail/SnoozeDialog.svelte') then m}
+    <svelte:component this={m.default} />
+  {/await}
+  {#await import('./components/sidebar/FolderDialog.svelte') then m}
+    <svelte:component this={m.default} />
+  {/await}
+{/if}
+{#await import('./components/detail/AttachmentPreview.svelte') then m}
+  <svelte:component this={m.default} />
+{/await}
+{#if classic}
+  {#await import('./components/detail/classic/MoveDialog.svelte') then m}
+    <svelte:component this={m.default} />
+  {/await}
+{:else}
+  {#await import('./components/detail/MoveDialog.svelte') then m}
+    <svelte:component this={m.default} />
+  {/await}
+{/if}
 
-<CommandPalette commands={paletteCommands} mail={paletteMailCommands} />
+{#await import('./components/common/CommandPalette.svelte') then m}
+  <svelte:component this={m.default} commands={paletteCommands} mail={paletteMailCommands} />
+{/await}
 
-<AccountPasswordDialog account={$passwordPrompt} onDone={answerPasswordPrompt} />
+{#if $vaultDialog}
+  {#await loadVaultDialogs() then m}
+    <svelte:component this={m.default} />
+  {/await}
+{/if}
 
-<SyncFailureDialog />
+{#if !classic}
+  <CoachLayer suspended={overlayOpen} />
+  <FirstTipLayer />
+{/if}
+
+{#if chatWanted}
+  {#await loadShareToChatDialog() then m}
+    <svelte:component this={m.default} />
+  {/await}
+  {#await loadVerificationDialog() then m}
+    <svelte:component this={m.default} />
+  {/await}
+{/if}
+
+{#await loadAccountPasswordDialog() then m}
+  <svelte:component this={m.default} account={$passwordPrompt} syncOnSave={!$passwordPromptSyncFollows} onDone={answerPasswordPrompt} />
+{/await}
+
+{#await loadSyncFailureDialog() then m}
+  <svelte:component this={m.default} />
+{/await}
 
 <DevOverlays />
 
@@ -1828,6 +2880,7 @@
 
   /* the list and the reader. hybrid raises the two as one rounded surface. */
   .surface {
+    position: relative;
     display: grid;
     grid-template-rows: minmax(0, 1fr);
     min-width: 0;
@@ -1838,8 +2891,29 @@
     border-radius: var(--pane-radius);
   }
 
-  .surface.stacked {
+  .surface.stacked,
+  .surface.browsing {
     grid-template-columns: minmax(0, 1fr);
+  }
+
+  :global(:root[data-panes='soft']) .surface.browsing > :global(.browser) {
+    border: var(--hairline) solid var(--border-default);
+    border-radius: var(--pane-radius);
+    overflow: hidden;
+  }
+
+  /* a mail-level screen in place of the list and the reader. */
+  .screen {
+    min-width: 0;
+    min-height: 0;
+    overflow: hidden;
+    border: var(--hairline) solid var(--border-default);
+    border-radius: var(--pane-radius);
+    background: var(--surface-base);
+  }
+
+  :global(:root[data-panes='flat']) .screen {
+    border-width: var(--hairline) 0 var(--hairline) var(--hairline);
   }
 
   .surface.stacked > :global(.list-col) {
@@ -1850,6 +2924,33 @@
   /* flat: edge to edge, split by hairlines only. */
   :global(:root[data-panes='flat']) .surface {
     border-width: var(--hairline) 0 var(--hairline) var(--hairline);
+  }
+
+  .frame .side-col {
+    position: relative;
+    background: var(--sidebar-bg);
+    border-start-start-radius: var(--pane-radius);
+    border-end-start-radius: var(--pane-radius);
+  }
+
+  /* the folder pane's color runs on under the rounded corners of the surface
+     beside it, so no chrome shows through between the two. */
+  .frame .side-col::after {
+    content: '';
+    position: absolute;
+    inset-block: 0;
+    inset-inline-start: 100%;
+    width: var(--pane-radius);
+    background: var(--sidebar-bg);
+    pointer-events: none;
+  }
+
+  :global(:root[data-panes='soft']) .frame .side-col {
+    border-radius: var(--pane-radius);
+  }
+
+  :global(:root[data-panes='soft']) .frame .side-col::after {
+    display: none;
   }
 
   /* soft: every pane is a rounded panel of its own, with a gap between. */
@@ -1907,10 +3008,10 @@
   .titlebar-logo {
     position: absolute;
     left: var(--titlebar-inset);
-    top: 50%;
+    top: var(--titlebar-lights-center);
     height: calc(16px / var(--ui-scale, 1));
     width: auto;
-    transform: translateY(calc(-50% - var(--titlebar-nudge)));
+    transform: translateY(-50%);
     opacity: 0.85;
     pointer-events: none;
     user-select: none;

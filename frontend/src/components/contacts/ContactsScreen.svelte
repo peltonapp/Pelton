@@ -28,6 +28,7 @@
     showBook,
     refreshContacts,
     removeContact,
+    contactSeed,
   } from '../../stores/contacts'
   import { openSettingsAt } from '../../stores/settingsnav'
   import { formatRelative } from '../../lib/format'
@@ -87,8 +88,18 @@
       note: '',
       emails: [{ value: '', label: '' }],
       phones: [],
+      matrixId: '',
       force: false,
     }
+  }
+
+  // a person handed over from elsewhere opens the editor already filled in.
+  $: if ($contactSeed) {
+    startCreate()
+    if (editing) {
+      editing = { ...editing, fullName: $contactSeed.name, emails: [{ value: $contactSeed.email, label: '' }] }
+    }
+    contactSeed.set(null)
   }
 
   function startEdit(contact: Contact): void {
@@ -101,6 +112,7 @@
       note: contact.note,
       emails: contact.emails.length ? contact.emails.map((e) => ({ ...e })) : [{ value: '', label: '' }],
       phones: contact.phones.map((p) => ({ ...p })),
+      matrixId: contact.matrixId,
       force: false,
     }
   }

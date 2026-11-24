@@ -185,6 +185,9 @@ func TestTriggerSyncReportsTheRealFailure(t *testing.T) {
 	}
 	a, account := sendingAccount(t, client)
 	seedFolder(t, a, account.ID, "INBOX", "INBOX", nil, 0)
+	// The failing step is retried before the sync gives up; the real
+	// backoff only made the test wait 1.5 s.
+	useFastSyncRetryBackoff(t)
 
 	err := a.TriggerSync()
 	if errors.Is(err, errNoCredentials) {

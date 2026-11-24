@@ -5,7 +5,7 @@
   // rejected and never applied.
   import { IconCheck } from '@tabler/icons-svelte'
   import { prefs, setAccent } from '../../stores/prefs'
-  import { ACCENT_PRESETS, isValidHex, normalizeHex } from '../../theme/accent'
+  import { accentPresets, accentTone, canonicalAccent, contrastForeground, darkScheme, isValidHex, normalizeHex } from '../../theme/accent'
   import { t } from '../../lib/i18n'
 
   // the hex text the user is typing, seeded from the current accent.
@@ -18,7 +18,11 @@
   }
 
   $: valid = isValidHex(hexInput)
-  $: current = normalizeHex($prefs.accent)
+  $: classic = $prefs.design === 'classic'
+  $: presets = accentPresets($prefs.design)
+  $: current = canonicalAccent($prefs.accent, $prefs.design)
+  // the new design shows each swatch in the tone the live theme paints it in.
+  $: shown = (hex: string): string => (classic ? hex : accentTone(hex, $prefs.design, $darkScheme))
 
   function pick(hex: string): void {
     touched = false
@@ -38,23 +42,23 @@
   <span class="label">{$t('settingsPanel.accentLabel')}</span>
 
   <div class="swatches" role="group" aria-label={$t('settingsPanel.accentPresets')}>
-    {#each ACCENT_PRESETS as preset (preset)}
+    {#each presets as preset (preset)}
       <button
         type="button"
         class="swatch"
         class:selected={normalizeHex(preset) === current}
-        style={`background:${preset}`}
+        style={`background:${shown(preset)}`}
         aria-label={`${$t('settingsPanel.accentLabel')} ${preset}`}
         aria-pressed={normalizeHex(preset) === current}
         on:click={() => pick(preset)}
       >
         {#if normalizeHex(preset) === current}
-          <IconCheck size={14} stroke={2.4} color="#ffffff" />
+          <IconCheck size={14} stroke={2.4} color={classic ? '#ffffff' : contrastForeground(shown(preset))} />
         {/if}
       </button>
     {/each}
 
-    <span class="preview" style={`background:${current}`} aria-hidden="true"></span>
+    <span class="preview" style={`background:${shown(current)}`} aria-hidden="true"></span>
     <input
       class="hex"
       class:invalid={hexInput !== '' && !valid}

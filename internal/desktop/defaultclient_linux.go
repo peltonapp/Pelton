@@ -20,6 +20,18 @@ func isDefaultMailHandler() (isDefault bool, known bool) {
 	return strings.TrimSpace(string(out)) == peltonDesktopFile, true
 }
 
+func isDefaultCalendarHandler() (isDefault bool, known bool) {
+	out, err := exec.Command("xdg-mime", "query", "default", "text/calendar").Output()
+	if err != nil {
+		return false, false
+	}
+	return strings.TrimSpace(string(out)) == peltonDesktopFile, true
+}
+
+func setDefaultCalendarHandler() error {
+	return exec.Command("xdg-mime", "default", peltonDesktopFile, "text/calendar").Run()
+}
+
 func setDefaultMailHandler() error {
 	return exec.Command("xdg-settings", "set", "default-url-scheme-handler", "mailto", peltonDesktopFile).Run()
 }

@@ -1,0 +1,28 @@
+{
+  "version": "https://jsonfeed.org/version/1.1",
+  "title": "JSON Example",
+  "home_page_url": "https://json.example.com/",
+  "feed_url": "https://json.example.com/feed.json",
+  "favicon": "/favicon.ico",
+  "authors": [{ "name": "Margaret" }],
+  "items": [
+    {
+      "id": "1",
+      "url": "/posts/1",
+      "title": "Hello JSON",
+      "content_html": "<p>Body <img src=\"/i.png\"></p>",
+      "summary": "Short",
+      "date_published": "2026-11-05T10:00:00Z",
+      "attachments": [
+        { "url": "https://json.example.com/ep.m4a", "mime_type": "audio/x-m4a", "size_in_bytes": 1000, "title": "Episode" }
+      ]
+    },
+    {
+      "id": 2,
+      "title": "Text only",
+      "content_text": "Line one\n\nLine two",
+      "date_modified": "2026-11-04T10:00:00Z",
+      "author": { "name": "Ken" }
+    }
+  ]
+}

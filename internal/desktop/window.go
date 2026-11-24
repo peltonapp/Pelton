@@ -1,6 +1,10 @@
 package desktop
 
-import goruntime "runtime"
+import (
+	goruntime "runtime"
+
+	"github.com/wailsapp/wails/v3/pkg/application"
+)
 
 // showWindow restores and focuses the main window. It is used by the tray
 // icon, by the single-instance handler (a second launch surfaces the running
@@ -16,8 +20,10 @@ func (a *App) showWindow() {
 	}
 	// Show alone is enough on Windows and Linux, but on macOS a window hidden
 	// with [NSApp hide:] needs the app itself unhidden too.
+	// Wails runs the window calls below on the main thread itself, but not
+	// this one, and AppKit traps when the app is unhidden from another thread.
 	if goruntime.GOOS == "darwin" && a.wapp != nil {
-		a.wapp.Show()
+		application.InvokeSync(a.wapp.Show)
 	}
 	a.win.Show()
 	a.win.UnMinimise()
@@ -35,7 +41,7 @@ func (a *App) showWindow() {
 func (a *App) hideApp() {
 	if goruntime.GOOS == "darwin" {
 		if a.wapp != nil {
-			a.wapp.Hide()
+			application.InvokeSync(a.wapp.Hide)
 		}
 		return
 	}

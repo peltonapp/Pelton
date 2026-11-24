@@ -183,6 +183,32 @@ func TestDeleteIsIdempotent(t *testing.T) {
 // A mailbox's proxy password is its own entry: it must not overwrite the
 // account's mail secret or the app-wide proxy password, and clearing it must
 // leave both alone.
+func TestChatSecretRoundTrip(t *testing.T) {
+	if _, err := LoadChatSecret("profile-1"); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("missing chat secret: %v", err)
+	}
+	want := ChatSecret{AccessToken: "syt_token", PickleKey: "pickle"}
+	if err := StoreChatSecret("profile-1", want); err != nil {
+		t.Fatal(err)
+	}
+	// a mail account with the same number must not see it.
+	if _, err := Load(1); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("account 1 = %v", err)
+	}
+	if got, err := LoadChatSecret("profile-1"); err != nil || got != want {
+		t.Fatalf("LoadChatSecret = %+v, %v", got, err)
+	}
+	if err := DeleteChatSecret("profile-1"); err != nil {
+		t.Fatal(err)
+	}
+	if err := DeleteChatSecret("profile-1"); err != nil {
+		t.Fatalf("second delete: %v", err)
+	}
+	if _, err := LoadChatSecret("profile-1"); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("after delete: %v", err)
+	}
+}
+
 func TestAccountProxyPasswordIsSeparate(t *testing.T) {
 	const accountID = 12
 	if err := Store(accountID, Secret{Method: MethodPassword, Password: "mail"}); err != nil {
@@ -211,5 +237,40 @@ func TestAccountProxyPasswordIsSeparate(t *testing.T) {
 	}
 	if got, err := LoadProxyPassword(); err != nil || got != "global" {
 		t.Errorf("global proxy password = %q, %v, want it untouched", got, err)
+	}
+}
+
+// A dev run and a nightly keep their own databases, so their account ids start
+// at 1 just like the installed app's. Their secrets must not land on the
+// installed app's entries, or testing a build overwrites the real password.
+func TestUseServiceKeepsInstallsApart(t *testing.T) {
+	const accountID = 1
+	t.Cleanup(func() {
+		for _, name := range []string{"Pelton", "Pelton-dev"} {
+			UseService(name)
+			_ = Delete(accountID)
+		}
+		UseService(defaultService)
+	})
+
+	UseService("Pelton")
+	if err := Store(accountID, Secret{Method: MethodPassword, Password: "real"}); err != nil {
+		t.Fatalf("store stable: %v", err)
+	}
+	UseService("Pelton-dev")
+	if _, err := Load(accountID); !errors.Is(err, ErrNotFound) {
+		t.Fatalf("dev Load of the stable account returned %v, want ErrNotFound", err)
+	}
+	if err := Store(accountID, Secret{Method: MethodPassword, Password: "alice-e2e"}); err != nil {
+		t.Fatalf("store dev: %v", err)
+	}
+
+	UseService("Pelton")
+	got, err := Load(accountID)
+	if err != nil {
+		t.Fatalf("load stable: %v", err)
+	}
+	if got.Password != "real" {
+		t.Errorf("stable password = %q after a dev store, want %q", got.Password, "real")
 	}
 }

@@ -11,16 +11,6 @@
   background: var(--surface-raised);
 }
 
-:root[data-design="new"] .screen .s2-section.found {
-  animation: s2-found var(--motion-slow) var(--ease-out) 3 alternate;
-}
-
-@keyframes s2-found {
-  to {
-    background: var(--selection-bg);
-  }
-}
-
 /* the page card already carries the section's title. */
 :root[data-design="new"] .screen .s2-section :is(h3) {
   display: none;

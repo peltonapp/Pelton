@@ -66,7 +66,7 @@ modules:
       # The tag is read from the VERSION file the release workflow puts in the
       # tarball, so a version bump here is only ever the url and its checksum
       # and the external data checker can do it unattended.
-      - go build -tags "production gtk3" -trimpath -ldflags "-s -w -X main.version=$(cat VERSION)" -o pelton .
+      - go build -tags "production gtk3 goolm" -trimpath -ldflags "-s -w -X main.version=$(cat VERSION)" -o pelton .
       - install -Dm755 pelton /app/bin/pelton
       - install -Dm644 build/icons/pelton-512.png
         /app/share/icons/hicolor/512x512/apps/sh.arne.Pelton.png

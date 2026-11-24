@@ -8,9 +8,11 @@
   export let description: string = ''
   /** Drops the box, for a group whose content brings its own surface. */
   export let bare: boolean = false
+  /** Anchor settings search scrolls to, for a group that is one setting. */
+  export let id: string = ''
 </script>
 
-<section class="group">
+<section class="group" data-setting={id || undefined}>
   {#if title}
     <h3>{title}</h3>
   {/if}

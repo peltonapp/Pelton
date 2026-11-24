@@ -1,27 +1,32 @@
 <script lang="ts">
   // the Reading page: how a message is shown once it is open (type size, fonts,
-  // character encoding, technical badges), what opening a message does, and the
-  // status bar.
+  // character encoding, technical badges) and what opening a message does.
   import { onMount } from 'svelte'
   import Card from '../ui/Card.svelte'
   import Row from '../ui/Row.svelte'
   import ToggleSwitch from '../../common/ToggleSwitch.svelte'
   import Select from '../../common/Select.svelte'
+  import SenderFontPreview from '../skeletons/SenderFontPreview.svelte'
+  import BadgesPreview from '../skeletons/BadgesPreview.svelte'
+  import OpeningPreview from '../skeletons/OpeningPreview.svelte'
   import {
     prefs,
     setToggle,
-    setRestoreTabs,
     setMessageFontSize,
     setBodyFont,
     setSenderFonts,
-    setUIFont,
-    setMonoFont,
     setMarkReadOnOpen,
     setOpenOnArrow,
-    setStatusClock,
-    setStatusUnread,
+    setSenderPanel,
+    setMailDates,
+    setProjectSuggestions,
+    setHtmlColors,
   } from '../../../stores/prefs'
-  import { bodyFonts, uiFonts, monoFonts, bodyFontStack, uiFontStack, monoFontStack } from '../../../lib/fonts'
+  import Segmented from '../ui/Segmented.svelte'
+  import { ensureSenderReading, forgetSenderReading, senderReading } from '../../../stores/senderreading'
+  import { errorMessage, toastError, toastSuccess } from '../../../stores/toast'
+  import type { HtmlColors } from '../../../lib/types'
+  import { bodyFonts, bodyFontStack } from '../../../lib/fonts'
   import { listSystemFonts, getSetting, setSetting } from '../../../lib/api'
   import { t } from '../../../lib/i18n'
   import type { SelectItem } from '../../../lib/selectnav'
@@ -35,8 +40,6 @@
   ]
 
   $: bodyFontOptions = bodyFonts.map((f) => ({ key: f.key, label: f.label ?? $t(f.labelKey ?? '') }))
-  $: uiFontOptions = uiFonts.map((f) => ({ key: f.key, label: f.label ?? $t(f.labelKey ?? '') }))
-  $: monoFontOptions = monoFonts.map((f) => ({ key: f.key, label: f.label ?? $t(f.labelKey ?? '') }))
 
   // every installed system font, loaded once when the page opens. the list is
   // backend-cached, so reopening settings is instant.
@@ -47,8 +50,8 @@
       .catch(() => (systemFonts = []))
   })
 
-  // the three font pickers share a shape: a curated list, then whatever the
-  // system has, prefixed so the backend can tell the two apart.
+  // a curated list, then whatever the system has, prefixed so the backend can
+  // tell the two apart.
   function fontItems(curated: { key: string; label: string }[]): SelectItem[] {
     const items: SelectItem[] = [{ label: $t('settingsPanel.bodyFont.groupCurated'), options: curated.map((o) => ({ value: o.key, label: o.label })) }]
     if (systemFonts.length > 0) {
@@ -61,8 +64,6 @@
   }
 
   $: bodyStack = bodyFontStack($prefs.bodyFont) ?? 'var(--font-ui)'
-  $: uiStack = uiFontStack($prefs.uiFont) ?? 'var(--font-ui)'
-  $: monoStack = monoFontStack($prefs.monoFont) ?? 'var(--font-mono)'
 
   // how mail that names no encoding, or names one nothing knows, is read. It is
   // a parser setting rather than a ui preference, so it is read from and written
@@ -101,6 +102,23 @@
     void setSetting(charsetKey, charsetFallback)
   }
 
+  $: htmlColorOptions = [
+    { key: 'auto', label: $t('reader.colors.auto') },
+    { key: 'adapt', label: $t('reader.colors.always') },
+    { key: 'original', label: $t('reader.colors.never') },
+  ]
+
+  onMount(() => void ensureSenderReading())
+
+  async function forgetSenders(): Promise<void> {
+    try {
+      const n = await forgetSenderReading()
+      toastSuccess($t('reader.senders.forgotten').replace('{n}', String(n)))
+    } catch (err) {
+      toastError(errorMessage(err))
+    }
+  }
+
   type ToggleKey = 'showMailboxBadge' | 'showPgp' | 'showAuth'
 
   $: techInfo = [
@@ -134,25 +152,21 @@
     />
   </Row>
   <Row id="sender-fonts" label={$t('settingsPanel.toggle.senderFonts')} hint={$t('settingsPanel.hint.senderFonts')}>
+    <SenderFontPreview slot="preview" senderFonts={$prefs.senderFonts} />
     <ToggleSwitch checked={$prefs.senderFonts} label={$t('settingsPanel.toggle.senderFonts')} on:change={(e) => setSenderFonts(e.detail)} />
   </Row>
-  <Row id="ui-font" label={$t('settingsPanel.label.uiFont')} hint={$t('settingsPanel.hint.uiFont')}>
-    <div slot="preview" class="sample" style={`font-family:${uiStack}`}>{$t('reading.sample')}</div>
-    <Select
-      value={$prefs.uiFont}
-      ariaLabel={$t('settingsPanel.label.uiFont')}
-      items={fontItems(uiFontOptions)}
-      on:change={(e) => setUIFont(e.detail)}
+  <Row id="html-colors" label={$t('reader.colors.setting')} hint={$t('reader.colors.settingHint')}>
+    <Segmented
+      label={$t('reader.colors.setting')}
+      value={$prefs.htmlColors}
+      options={htmlColorOptions}
+      on:change={(e) => setHtmlColors(e.detail as HtmlColors)}
     />
   </Row>
-  <Row id="mono-font" label={$t('settingsPanel.label.monoFont')} hint={$t('settingsPanel.hint.monoFont')}>
-    <div slot="preview" class="sample" style={`font-family:${monoStack}`}>{$t('reading.sample')}</div>
-    <Select
-      value={$prefs.monoFont}
-      ariaLabel={$t('settingsPanel.label.monoFont')}
-      items={fontItems(monoFontOptions)}
-      on:change={(e) => setMonoFont(e.detail)}
-    />
+  <Row id="sender-reading" label={$t('reader.senders.setting')} hint={$t('reader.senders.settingHint')}>
+    <button type="button" class="s2-btn" disabled={$senderReading.size === 0} on:click={() => void forgetSenders()}>
+      {$t('reader.senders.forget')}
+    </button>
   </Row>
   <Row id="charset-fallback" label={$t('settingsPanel.label.charsetFallback')} hint={$t('settingsPanel.hint.charsetFallback')}>
     <Select
@@ -167,6 +181,7 @@
 <Card title={$t('settingsPanel.techInfo')}>
   {#each techInfo as item (item.key)}
     <Row id={item.id} label={item.label} hint={item.note}>
+      <BadgesPreview slot="preview" />
       <ToggleSwitch checked={$prefs[item.key]} label={item.label} on:change={(e) => setToggle(item.key, e.detail)} />
     </Row>
   {/each}
@@ -174,22 +189,24 @@
 
 <Card title={$t('reading.card.opening')}>
   <Row id="mark-read" label={$t('settingsPanel.toggle.markReadOnOpen')}>
+    <OpeningPreview slot="preview" markRead={$prefs.markReadOnOpen} openOnArrow />
     <ToggleSwitch checked={$prefs.markReadOnOpen} label={$t('settingsPanel.toggle.markReadOnOpen')} on:change={(e) => setMarkReadOnOpen(e.detail)} />
   </Row>
   <Row id="open-on-arrow" label={$t('settingsPanel.toggle.openOnArrow')}>
+    <OpeningPreview slot="preview" markRead={$prefs.markReadOnOpen} openOnArrow={$prefs.openOnArrow} />
     <ToggleSwitch checked={$prefs.openOnArrow} label={$t('settingsPanel.toggle.openOnArrow')} on:change={(e) => setOpenOnArrow(e.detail)} />
   </Row>
-  <Row id="restore-tabs" label={$t('settingsPanel.toggle.restoreTabs')} hint={$t('settingsPanel.hint.restoreTabs')}>
-    <ToggleSwitch checked={$prefs.restoreTabs} label={$t('settingsPanel.toggle.restoreTabs')} on:change={(e) => setRestoreTabs(e.detail)} />
+  <Row id="sender-panel" label={$t('senderPanel.setting')} hint={$t('senderPanel.settingHint')}>
+    <ToggleSwitch checked={$prefs.senderPanel} label={$t('senderPanel.setting')} on:change={(e) => setSenderPanel(e.detail)} />
+  </Row>
+  <Row id="project-suggestions" label={$t('projects.settings.suggestions')} hint={$t('projects.settings.suggestionsHint')}>
+    <ToggleSwitch checked={$prefs.projectSuggestions} label={$t('projects.settings.suggestions')} on:change={(e) => setProjectSuggestions(e.detail)} />
   </Row>
 </Card>
 
-<Card title={$t('settingsPanel.heading.statusBar')}>
-  <Row id="status-clock" label={$t('settingsPanel.toggle.statusClock')}>
-    <ToggleSwitch checked={$prefs.statusClock} label={$t('settingsPanel.toggle.statusClock')} on:change={(e) => setStatusClock(e.detail)} />
-  </Row>
-  <Row id="status-unread" label={$t('settingsPanel.toggle.statusUnread')} hint={$t('settingsPanel.hint.statusUnread')}>
-    <ToggleSwitch checked={$prefs.statusUnread} label={$t('settingsPanel.toggle.statusUnread')} on:change={(e) => setStatusUnread(e.detail)} />
+<Card title={$t('reading.card.dates')}>
+  <Row id="mail-dates" label={$t('reading.mailDates')} hint={$t('reading.mailDates.hint')}>
+    <ToggleSwitch checked={$prefs.mailDates} label={$t('reading.mailDates')} on:change={(e) => setMailDates(e.detail)} />
   </Row>
 </Card>
 

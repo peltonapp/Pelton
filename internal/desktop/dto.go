@@ -55,6 +55,9 @@ type AccountDTO struct {
 	// prompt to stop asking for this account. The ui marks the mailbox instead
 	// of interrupting.
 	PasswordPromptDismissed bool `json:"passwordPromptDismissed"`
+	// SyncMaxParallel is the account's own parallel-sync limit, or null when
+	// it follows the global setting.
+	SyncMaxParallel *int `json:"syncMaxParallel"`
 	// TrustedCerts are the fingerprints of certificates the user accepted for
 	// this mailbox, formatted for reading. CASubjects name the certificates in
 	// the CA it trusts, empty when it has none.
@@ -88,6 +91,12 @@ type FolderDTO struct {
 	// SyncExcluded means the user unchecked this folder, so sync skips it.
 	// Whatever was already cached stays readable (#173).
 	SyncExcluded bool `json:"syncExcluded"`
+	// VaultID is the mail vault the folder is in, 0 for none. VaultLocked is
+	// set while that vault is locked, and VaultHidden when it also asks for
+	// its folders to stay out of the sidebar then.
+	VaultID     int64 `json:"vaultId"`
+	VaultLocked bool  `json:"vaultLocked"`
+	VaultHidden bool  `json:"vaultHidden"`
 }
 
 // UnifiedViewDTO is a cross account view (inbox/flagged/sent/drafts). The ui
@@ -130,6 +139,20 @@ type MessageSummaryDTO struct {
 	// SMIME is the s/mime signature verdict recorded when the message synced.
 	// Empty status means unsigned, which is most mail.
 	SMIME SMIMEDTO `json:"smime"`
+	// ThreadID is the conversation the message belongs to within its account,
+	// 0 until the background threading pass reaches mail cached before
+	// threading existed. Answered and Forwarded mirror \Answered and
+	// $Forwarded, set from the server or when the user replied or forwarded
+	// through Pelton.
+	ThreadID  int64 `json:"threadId"`
+	Answered  bool  `json:"answered"`
+	Forwarded bool  `json:"forwarded"`
+	// Pinned keeps the row in the Pinned group at the top of the list. Muted
+	// means its conversation is muted. HasNote means the message or its
+	// conversation carries a private note.
+	Pinned  bool `json:"pinned"`
+	Muted   bool `json:"muted"`
+	HasNote bool `json:"hasNote"`
 }
 
 // smimeDTO flattens a verified signature for the ui. It carries both PGP and
@@ -164,6 +187,9 @@ type MessageListDTO struct {
 	// for this selection, so reaching Total is not the end of the mailbox and
 	// the list can offer to fetch more (see bind_backfill.go).
 	HasOlder bool `json:"hasOlder"`
+	// Pinned is the Pinned group listed above the page. Only the first page
+	// carries it, and Messages and Total then leave the pinned mail out.
+	Pinned []MessageSummaryDTO `json:"pinned"`
 }
 
 // AttachmentDTO describes a stored attachment. Inline parts (referenced by the
@@ -221,6 +247,9 @@ type MessageDetailDTO struct {
 	// or "failed" (the pgp data could not be read). The reading pane offers a
 	// different next step for each, rather than one generic error.
 	PGPState string `json:"pgpState"`
+	// Encryption describes encryption and signature in the words the new
+	// reader uses, nil for mail that is neither.
+	Encryption *MessageEncryptionDTO `json:"encryption"`
 	// Unsubscribe describes the unsubscribe mechanism the message advertises
 	// via its List-Unsubscribe headers, nil when it has none on record.
 	Unsubscribe *UnsubscribeDTO `json:"unsubscribe"`
@@ -229,6 +258,15 @@ type MessageDetailDTO struct {
 	// picked but not reported back. Empty for mail that was right about itself,
 	// which is nearly all of it, and the reader is shown nothing then.
 	CharsetGuess string `json:"charsetGuess"`
+	// ReplyIDs and ForwardIDs are the cached copies of messages the user sent
+	// from Pelton in reply to or as a forward of this one, oldest first, so the
+	// reader can jump to them. A sent message shows up here once its Sent
+	// folder has synced.
+	ReplyIDs   []int64 `json:"replyIds"`
+	ForwardIDs []int64 `json:"forwardIds"`
+	// BodyComplete is false while the row is still a list stub whose preview
+	// may be shown before the full body arrives.
+	BodyComplete bool `json:"bodyComplete"`
 }
 
 // TrackingPixelDTO is one remote image the scan thinks exists to report the
@@ -290,6 +328,7 @@ func toAccountDTO(a storage.Account) AccountDTO {
 		Color:              a.Color,
 
 		PasswordPromptDismissed: a.PasswordPromptDismissed,
+		SyncMaxParallel:         a.SyncMaxParallel,
 
 		TrustedCerts: displayPins(a.TrustedCerts),
 		CASubjects:   caSubjects(a.CAPEM),
@@ -343,6 +382,8 @@ func folderRole(f storage.Folder) string {
 	}
 	for _, attr := range f.Attributes {
 		switch strings.ToLower(strings.TrimPrefix(attr, "\\")) {
+		case "inbox":
+			return roleInbox
 		case "sent":
 			return roleSent
 		case "drafts":
@@ -394,6 +435,12 @@ func toSummaryDTO(m storage.Message, accountEmail, folderName string) MessageSum
 		FlagColor:      m.FlagColor,
 		Offline:        m.Offline,
 		SnoozeUntil:    m.SnoozeUntil,
+		ThreadID:       m.ThreadID,
+		Answered:       m.Flags.Has(storage.FlagAnswered),
+		Forwarded:      m.Flags.Has(storage.FlagForwarded),
+		Pinned:         m.Pinned,
+		Muted:          m.Muted,
+		HasNote:        m.HasNote,
 		SMIME: SMIMEDTO{
 			Status: m.SMIME.Status,
 			Signer: m.SMIME.Signer,

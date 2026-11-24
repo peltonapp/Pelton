@@ -9,6 +9,8 @@
   import RowSkeleton from '../skeletons/RowSkeleton.svelte'
   import FlagSkeleton from '../skeletons/FlagSkeleton.svelte'
   import SwipeSkeleton from '../skeletons/SwipeSkeleton.svelte'
+  import SelectionPreview from '../skeletons/SelectionPreview.svelte'
+  import ThreadPreview from '../skeletons/ThreadPreview.svelte'
   import ToggleSwitch from '../../common/ToggleSwitch.svelte'
   import Select from '../../common/Select.svelte'
   import {
@@ -18,27 +20,31 @@
     setRowShowSnippet,
     setPreviewLines,
     setFlagHighlight,
-    setShowAccountEmail,
     setToggle,
-    setTimeFormat,
     setMultiSelectEnabled,
     setShowSelectedCount,
     setSelectAllScope,
     setSelectAllUnified,
     setSearchSort,
     searchSortPref,
-    setSidebarIndentGuides,
-    setShowUnsyncedFolder,
-    setShowFlaggedCount,
-    setStartupSelection,
-    setViewsPlacement,
     setAvatarSource,
     setAvatarStyle,
     setSwipeEnabled,
-    setSwipeLeftAction,
-    setSwipeRightAction,
+    setSwipeSlot,
+    setRowActions,
+    setRowActionList,
+    setThreadedList,
+    setAfterMove,
+    setSplitInbox,
+    type SwipeSlot,
   } from '../../../stores/prefs'
-  import { sidebar } from '../../../stores/accounts'
+  import AfterMoveSkeleton from '../skeletons/AfterMoveSkeleton.svelte'
+  import SplitEditor from '../../list/SplitEditor.svelte'
+  import RowActionsEditor from '../../list/RowActionsEditor.svelte'
+  import { rowActionIds, rowActionSettingKey, scriptRowAction } from '../../../lib/rowactions'
+  import { placed } from '../../../lib/scriptplacements'
+
+  const swipeScripts = placed('row.swipe')
   import { t } from '../../../lib/i18n'
   import { pfpDataUri, type PfpStyle } from '../../../lib/pfp'
   import { initials } from '../../../lib/format'
@@ -47,13 +53,25 @@
   import type {
     AvatarPlacement,
     RowTemplate,
-    ViewsPlacement,
     SelectAllScope,
     SearchKind,
     SearchSortPref,
+    AfterMove,
   } from '../../../lib/types'
 
+  $: afterMoveOptions = [
+    { key: 'older', label: $t('list.afterMove.older') },
+    { key: 'newer', label: $t('list.afterMove.newer') },
+    { key: 'list', label: $t('list.afterMove.list') },
+  ]
+
   $: snippetCapable = $prefs.rowTemplate === 'relaxed' || $prefs.rowTemplate === 'comfortable'
+
+  // the option under the pointer in each card group, which the preview shows
+  // in place of the saved choice.
+  let trialAvatar: string | null = null
+  let trialTemplate: string | null = null
+  let trialFlag: string | null = null
   $: multi = $prefs.multiSelectEnabled
 
   $: placements = [
@@ -82,12 +100,6 @@
     { key: 'off', label: $t('onboarding.flagopt.off') },
   ]
 
-  $: timeFormatOptions = [
-    { key: 'auto', label: $t('settingsPanel.timeFormat.auto') },
-    { key: '12', label: $t('settingsPanel.timeFormat.h12') },
-    { key: '24', label: $t('settingsPanel.timeFormat.h24') },
-  ]
-
   $: selectAllScopeItems = [
     { value: 'offer', label: $t('settingsPanel.selectAllScope.offer') },
     { value: 'all', label: $t('settingsPanel.selectAllScope.all') },
@@ -110,43 +122,6 @@
     ]
   }
 
-  $: viewsPlacementOptions = [
-    { key: 'hidden', label: $t('views.setting.hidden') },
-    { key: 'sidebar', label: $t('views.setting.sidebar') },
-    { key: 'tab', label: $t('views.setting.tab') },
-  ]
-
-  // unified view names are localized by key in the sidebar; reuse that here so
-  // the setting and the row it points at read the same.
-  function unifiedViewName(key: string, fallback: string): string {
-    const lookup = key === 'inbox' ? 'sidebar.unifiedInbox' : `sidebar.view.${key}`
-    const translated = $t(lookup)
-    return translated === lookup ? fallback : translated
-  }
-
-  // "last used", then every unified view and every folder grouped by account.
-  $: startupItems = [
-    { value: 'last', label: $t('settingsPanel.startup.lastUsed') },
-    ...($sidebar.data
-      ? [
-          {
-            label: $t('sidebar.unifiedViews.heading'),
-            options: $sidebar.data.views.map((view) => ({
-              value: `view:${view.key}`,
-              label: unifiedViewName(view.key, view.label),
-            })),
-          },
-          ...$sidebar.data.accounts.map((account) => ({
-            label: account.email,
-            options: ($sidebar.data?.foldersByAccount[account.id] ?? []).map((folder) => ({
-              value: `folder:${folder.id}`,
-              label: folder.imapPath,
-            })),
-          })),
-        ]
-      : []),
-  ] satisfies SelectItem[]
-
   $: avatarSourceItems = [
     { value: 'bimi_gravatar', label: $t('settingsPanel.avatarSource.bimiGravatar') },
     { value: 'gravatar_bimi', label: $t('settingsPanel.avatarSource.gravatarBimi') },
@@ -164,13 +139,16 @@
   ]
 
   $: swipeActionItems = [
-    { value: 'none', label: $t('settingsPanel.swipeAction.none') },
-    { value: 'delete', label: $t('settingsPanel.swipeAction.delete') },
-    { value: 'read', label: $t('settingsPanel.swipeAction.read') },
-    { value: 'unread', label: $t('settingsPanel.swipeAction.unread') },
-    { value: 'flag', label: $t('settingsPanel.swipeAction.flag') },
-    { value: 'archive', label: $t('settingsPanel.swipeAction.archive') },
-    { value: 'snooze', label: $t('settingsPanel.swipeAction.snooze') },
+    { value: 'none', label: $t('swipe.off') },
+    ...rowActionIds.map((id) => ({ value: id, label: $t(rowActionSettingKey(id)) })),
+    ...$swipeScripts.map((s) => ({ value: scriptRowAction(s.scriptId), label: s.name })),
+  ]
+
+  const swipeSlots: { key: SwipeSlot; id: string; label: string; dir: 'left' | 'right'; long: boolean }[] = [
+    { key: 'swipeLeftShort', id: 'swipe-left-short', label: 'swipe.leftShort', dir: 'left', long: false },
+    { key: 'swipeLeftLong', id: 'swipe-left-long', label: 'swipe.leftLong', dir: 'left', long: true },
+    { key: 'swipeRightShort', id: 'swipe-right-short', label: 'swipe.rightShort', dir: 'right', long: false },
+    { key: 'swipeRightLong', id: 'swipe-right-long', label: 'swipe.rightLong', dir: 'right', long: true },
   ]
 
   function swipeLabel(action: string): string {
@@ -178,12 +156,12 @@
   }
 </script>
 
-<ListPreview />
-
 <Card title={$t('list.card.layout')}>
   <Row id="avatar-placement" label={$t('list.avatarPlacement.label')} hint={$t('list.avatarPlacement.hint')} stacked>
+    <ListPreview slot="preview" trial={{ avatar: trialAvatar ?? undefined }} />
     <div class="fill">
       <ChoiceCards
+        on:hover={(e) => (trialAvatar = e.detail)}
         label={$t('list.avatarPlacement.label')}
         value={$prefs.avatarPlacement}
         options={placements}
@@ -198,8 +176,10 @@
     {/if}
   </Row>
   <Row id="row-template" label={$t('settingsPanel.label.rowLayout')} stacked>
+    <ListPreview slot="preview" trial={{ template: trialTemplate ?? undefined }} />
     <div class="fill">
       <ChoiceCards
+        on:hover={(e) => (trialTemplate = e.detail)}
         label={$t('settingsPanel.label.rowLayout')}
         value={$prefs.rowTemplate}
         options={templates}
@@ -212,9 +192,7 @@
     </div>
   </Row>
   <Row id="snippet" label={$t('settingsPanel.toggle.showMessagePreview')} hint={$t('settingsPanel.hint.previewShowsOn')} disabled={!snippetCapable}>
-    <span slot="preview">
-      <RowSkeleton avatar={$prefs.avatarPlacement} template="relaxed" height={84} />
-    </span>
+    <ListPreview slot="preview" />
     <ToggleSwitch
       checked={$prefs.rowShowSnippet}
       disabled={!snippetCapable}
@@ -223,11 +201,7 @@
     />
   </Row>
   <Row id="preview-lines" label={$t('settingsPanel.label.previewLines')} disabled={!snippetCapable || !$prefs.rowShowSnippet}>
-    <span slot="preview" class="lines-pic">
-      {#each Array($prefs.previewLines) as _, i (i)}
-        <span class="bar" class:short={i === $prefs.previewLines - 1}></span>
-      {/each}
-    </span>
+    <ListPreview slot="preview" />
     <Segmented
       label={$t('settingsPanel.label.previewLines')}
       value={String($prefs.previewLines)}
@@ -235,18 +209,10 @@
       on:change={(e) => setPreviewLines(Number(e.detail))}
     />
   </Row>
-  <Row id="account-email" label={$t('settingsPanel.toggle.showMailboxEmail')}>
-    <ToggleSwitch
-      checked={$prefs.showAccountEmail}
-      label={$t('settingsPanel.toggle.showMailboxEmail')}
-      on:change={(e) => setShowAccountEmail(e.detail)}
-    />
-  </Row>
-</Card>
-
-<Card title={$t('settingsPanel.label.flaggedHighlight')} description={$t('settingsPanel.hint.barIconFlag')} bare>
-  <div data-setting="flag-highlight">
+  <Row id="flag-highlight" label={$t('settingsPanel.label.flaggedHighlight')} hint={$t('settingsPanel.hint.barIconFlag')} stacked>
+    <ListPreview slot="preview" trial={{ flag: trialFlag ?? undefined }} />
     <ChoiceCards
+      on:hover={(e) => (trialFlag = e.detail)}
       label={$t('settingsPanel.label.flaggedHighlight')}
       value={$prefs.flagHighlight}
       options={flagOptions}
@@ -256,29 +222,56 @@
     >
       <FlagSkeleton mode={option.key as 'flag' | 'left' | 'both' | 'off'} />
     </ChoiceCards>
-  </div>
+  </Row>
+</Card>
+
+<Card title={$t('list.card.conversations')}>
+  <Row id="threaded-list" label={$t('list.threaded.label')} hint={$t('list.threaded.hint')}>
+    <ThreadPreview slot="preview" threaded={$prefs.threadedList} />
+    <ToggleSwitch
+      checked={$prefs.threadedList}
+      label={$t('list.threaded.label')}
+      on:change={(e) => setThreadedList(e.detail)}
+    />
+  </Row>
+  <Row id="after-move" label={$t('list.afterMove.label')} hint={$t('list.afterMove.hint')}>
+    <AfterMoveSkeleton slot="preview" mode={$prefs.afterMove} />
+    <Segmented
+      label={$t('list.afterMove.label')}
+      value={$prefs.afterMove}
+      options={afterMoveOptions}
+      on:change={(e) => setAfterMove(e.detail as AfterMove)}
+    />
+  </Row>
+</Card>
+
+<Card title={$t('settings.list.splitInbox')}>
+  <Row id="split-inbox" label={$t('settings.list.splitInbox')} hint={$t('settings.list.splitInboxHint')}>
+    <ToggleSwitch
+      checked={$prefs.splitInbox}
+      label={$t('settings.list.splitInbox')}
+      on:change={(e) => setSplitInbox(e.detail)}
+    />
+  </Row>
+  <Row id="split-tabs" label={$t('settings.list.splitTabs')} hint={$t('settings.list.splitTabsHint')} stacked disabled={!$prefs.splitInbox}>
+    <SplitEditor />
+  </Row>
 </Card>
 
 <Card title={$t('list.card.dateTime')}>
   <Row id="date-time" label={$t('settingsPanel.dateTime')} hint={$t('settingsPanel.dateTimeNote')}>
+    <ListPreview slot="preview" />
     <ToggleSwitch
       checked={$prefs.showDateTime}
       label={$t('settingsPanel.dateTime')}
       on:change={(e) => setToggle('showDateTime', e.detail)}
     />
   </Row>
-  <Row id="time-format" label={$t('settingsPanel.label.timeFormat')} hint={$t('settingsPanel.hint.timeFormat')}>
-    <Segmented
-      label={$t('settingsPanel.label.timeFormat')}
-      value={$prefs.timeFormat}
-      options={timeFormatOptions}
-      on:change={(e) => setTimeFormat(e.detail)}
-    />
-  </Row>
 </Card>
 
 <Card title={$t('list.card.selection')}>
   <Row id="multi-select" label={$t('settingsPanel.toggle.multiSelect')} hint={$t('settingsPanel.hint.multiSelect')}>
+    <SelectionPreview slot="preview" enabled={$prefs.multiSelectEnabled} showCount={$prefs.showSelectedCount} />
     <ToggleSwitch
       checked={$prefs.multiSelectEnabled}
       label={$t('settingsPanel.toggle.multiSelect')}
@@ -286,6 +279,7 @@
     />
   </Row>
   <Row id="selected-count" label={$t('settingsPanel.toggle.showSelectedCount')} disabled={!multi}>
+    <SelectionPreview slot="preview" showCount={$prefs.showSelectedCount} />
     <ToggleSwitch
       checked={$prefs.showSelectedCount}
       disabled={!multi}
@@ -294,6 +288,7 @@
     />
   </Row>
   <Row id="select-all-scope" label={$t('settingsPanel.label.selectAllScope')} hint={$t('settingsPanel.hint.selectAllScope')} disabled={!multi}>
+    <SelectionPreview slot="preview" showCount scope={$prefs.selectAllScope as 'offer' | 'all' | 'loaded'} />
     <Select
       value={$prefs.selectAllScope}
       disabled={!multi}
@@ -323,46 +318,6 @@
       />
     </Row>
   {/each}
-</Card>
-
-<Card title={$t('settingsPanel.category.sidebar')}>
-  <Row id="indent-guides" label={$t('settingsPanel.toggle.indentGuides')} hint={$t('settingsPanel.hint.indentGuides')}>
-    <ToggleSwitch
-      checked={$prefs.sidebarIndentGuides}
-      label={$t('settingsPanel.toggle.indentGuides')}
-      on:change={(e) => setSidebarIndentGuides(e.detail)}
-    />
-  </Row>
-  <Row id="unsynced-folder" label={$t('settingsPanel.toggle.unsyncedFolder')} hint={$t('settingsPanel.hint.unsyncedFolder')}>
-    <ToggleSwitch
-      checked={$prefs.showUnsyncedFolder}
-      label={$t('settingsPanel.toggle.unsyncedFolder')}
-      on:change={(e) => setShowUnsyncedFolder(e.detail)}
-    />
-  </Row>
-  <Row id="flagged-count" label={$t('settingsPanel.toggle.flaggedCount')} hint={$t('settingsPanel.hint.flaggedCount')}>
-    <ToggleSwitch
-      checked={$prefs.showFlaggedCount}
-      label={$t('settingsPanel.toggle.flaggedCount')}
-      on:change={(e) => setShowFlaggedCount(e.detail)}
-    />
-  </Row>
-  <Row id="startup-selection" label={$t('settingsPanel.label.startupSelection')} hint={$t('settingsPanel.hint.startupSelection')}>
-    <Select
-      value={$prefs.startupSelection}
-      ariaLabel={$t('settingsPanel.label.startupSelection')}
-      items={startupItems}
-      on:change={(e) => setStartupSelection(e.detail)}
-    />
-  </Row>
-  <Row id="views-placement" label={$t('views.setting.label')} hint={$t('views.setting.hint')}>
-    <Segmented
-      label={$t('views.setting.label')}
-      value={$prefs.viewsPlacement}
-      options={viewsPlacementOptions}
-      on:change={(e) => setViewsPlacement(e.detail as ViewsPlacement)}
-    />
-  </Row>
 </Card>
 
 <Card title={$t('settingsPanel.category.avatars')}>
@@ -403,10 +358,19 @@
   </Row>
 </Card>
 
-<Card title={$t('settingsPanel.heading.gestures')} description={$t('settingsPanel.hint.swipeWork')}>
+<Card title={$t('rowActions.card')}>
+  <Row id="row-actions" label={$t('rowActions.toggle')} hint={$t('rowActions.toggleHint')}>
+    <ToggleSwitch checked={$prefs.rowActions} label={$t('rowActions.toggle')} on:change={(e) => setRowActions(e.detail)} />
+  </Row>
+  <Row id="row-action-list" label={$t('rowActions.choose')} hint={$t('rowActions.chooseHint')} stacked disabled={!$prefs.rowActions}>
+    <RowActionsEditor value={$prefs.rowActionList} disabled={!$prefs.rowActions} on:change={(e) => setRowActionList(e.detail)} />
+  </Row>
+</Card>
+
+<Card title={$t('swipe.card')} description={$t('swipe.cardHint')}>
   <Row id="swipe-enabled" label={$t('settingsPanel.toggle.swipeEnabled')} hint={$t('settingsPanel.hint.swipeEnable')}>
     <span slot="preview">
-      <SwipeSkeleton direction="left" action={$prefs.swipeLeftAction} label={swipeLabel($prefs.swipeLeftAction)} />
+      <SwipeSkeleton direction="left" action={$prefs.swipeLeftShort} label={swipeLabel($prefs.swipeLeftShort)} />
     </span>
     <ToggleSwitch
       checked={$prefs.swipeEnabled}
@@ -414,30 +378,25 @@
       on:change={(e) => setSwipeEnabled(e.detail)}
     />
   </Row>
-  <Row id="swipe-left" label={$t('settingsPanel.label.swipeLeft')} disabled={!$prefs.swipeEnabled}>
-    <span slot="preview">
-      <SwipeSkeleton direction="left" action={$prefs.swipeLeftAction} label={swipeLabel($prefs.swipeLeftAction)} />
-    </span>
-    <Select
-      disabled={!$prefs.swipeEnabled}
-      value={$prefs.swipeLeftAction}
-      ariaLabel={$t('settingsPanel.label.swipeLeft')}
-      items={swipeActionItems}
-      on:change={(e) => setSwipeLeftAction(e.detail)}
-    />
-  </Row>
-  <Row id="swipe-right" label={$t('settingsPanel.label.swipeRight')} disabled={!$prefs.swipeEnabled}>
-    <span slot="preview">
-      <SwipeSkeleton direction="right" action={$prefs.swipeRightAction} label={swipeLabel($prefs.swipeRightAction)} />
-    </span>
-    <Select
-      disabled={!$prefs.swipeEnabled}
-      value={$prefs.swipeRightAction}
-      ariaLabel={$t('settingsPanel.label.swipeRight')}
-      items={swipeActionItems}
-      on:change={(e) => setSwipeRightAction(e.detail)}
-    />
-  </Row>
+  {#each swipeSlots as slot (slot.key)}
+    <Row id={slot.id} label={$t(slot.label)} hint={slot.long ? $t('swipe.longHint') : ''} disabled={!$prefs.swipeEnabled}>
+      <span slot="preview">
+        <SwipeSkeleton
+          direction={slot.dir}
+          action={$prefs[slot.key]}
+          label={swipeLabel($prefs[slot.key])}
+          reach={slot.long ? 0.68 : 0.34}
+        />
+      </span>
+      <Select
+        disabled={!$prefs.swipeEnabled}
+        value={$prefs[slot.key]}
+        ariaLabel={$t(slot.label)}
+        items={swipeActionItems}
+        on:change={(e) => setSwipeSlot(slot.key, e.detail)}
+      />
+    </Row>
+  {/each}
 </Card>
 
 <style>
@@ -464,20 +423,4 @@
     border-radius: 50%;
   }
 
-  .lines-pic {
-    display: flex;
-    flex-direction: column;
-    gap: var(--space-2);
-  }
-
-  .bar {
-    display: block;
-    height: 6px;
-    border-radius: 3px;
-    background: var(--border-strong);
-  }
-
-  .bar.short {
-    width: 60%;
-  }
 </style>

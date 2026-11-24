@@ -1,29 +1,44 @@
 <script lang="ts">
   // the Composing page: which editor a new message starts in, how recipients
-  // are entered, signature placement, vim keys, and the undo-send window.
+  // are entered, signature placement, vim keys, quick compose, the undo-send
+  // window, and what sending a reply does besides.
   import Card from '../ui/Card.svelte'
   import Row from '../ui/Row.svelte'
-  import Segmented from '../ui/Segmented.svelte'
+  import ChoiceCards from '../ui/ChoiceCards.svelte'
+  import ComposeSkeleton from '../skeletons/ComposeSkeleton.svelte'
   import ToggleSwitch from '../../common/ToggleSwitch.svelte'
   import Select from '../../common/Select.svelte'
-  import VimPreview from '../../onboarding/VimPreview.svelte'
+  import VimPreview from '../skeletons/VimPreview.svelte'
+  import MarkdownPreview from '../skeletons/MarkdownPreview.svelte'
+  import CaretPreview from '../skeletons/CaretPreview.svelte'
+  import AutocompletePreview from '../skeletons/AutocompletePreview.svelte'
+  import RecipientsPreview from '../skeletons/RecipientsPreview.svelte'
+  import SignaturePreview from '../skeletons/SignaturePreview.svelte'
+  import SendDelayPreview from '../skeletons/SendDelayPreview.svelte'
   import {
     prefs,
-    setDefaultEditorMode,
+    setComposeOpenIn,
     setComposeAutocomplete,
     setComposeChips,
     setComposeMarkdown,
+    setSmoothCaret,
     setSignatureAboveQuote,
     setComposeVimMode,
     setSendDelay,
+    setWarnMissingAttachment,
+    setWarnEmptySubject,
+    setAfterReplySend,
+    setSendRemindAfter,
   } from '../../../stores/prefs'
+  import SendCheckSkeleton from '../skeletons/SendCheckSkeleton.svelte'
+  import QuickComposeRows from '../QuickComposeRows.svelte'
   import { t } from '../../../lib/i18n'
-  import type { EditorMode } from '../../../lib/types'
+  import type { AfterReplySend, ComposeOpenIn, FollowUpInterval } from '../../../lib/types'
 
-  $: editorModes = [
-    { key: 'plaintext', label: $t('settingsPanel.editorMode.plaintext') },
-    { key: 'markdown', label: $t('settingsPanel.editorMode.markdown') },
-    { key: 'wysiwyg', label: $t('settingsPanel.editorMode.wysiwyg') },
+  $: openInOptions = [
+    { key: 'window', label: $t('composing.openIn.window'), hint: $t('composing.openIn.window.hint') },
+    { key: 'docked', label: $t('composing.openIn.docked'), hint: $t('composing.openIn.docked.hint') },
+    { key: 'tab', label: $t('composing.openIn.tab'), hint: $t('composing.openIn.tab.hint') },
   ]
 
   $: sendDelays = [
@@ -34,24 +49,45 @@
     { value: '60', label: $t('settingsPanel.unit.s60') },
   ]
 
+  $: afterReplyOptions = [
+    { value: 'nothing', label: $t('sendVariant.setting.nothing') },
+    { value: 'archive', label: $t('sendVariant.setting.archive') },
+  ]
+
+  $: remindOptions = [
+    { value: 'tomorrow', label: $t('followUp.tomorrow') },
+    { value: 'threeDays', label: $t('followUp.threeDays') },
+    { value: 'week', label: $t('followUp.week') },
+  ]
+
   $: chipsHint = $prefs.composeChips
     ? $t('settingsPanel.hint.chipRecipients')
     : `${$t('settingsPanel.hint.chipRecipients')} ${$t('settingsPanel.hint.plainRecipients')}`
 </script>
 
 <Card title={$t('settingsPanel.category.composingSending')}>
-  <Row id="default-editor" label={$t('settingsPanel.label.defaultEditor')} hint={$t('settingsPanel.hint.defaultEditor')}>
-    <Segmented
-      label={$t('settingsPanel.label.defaultEditor')}
-      value={$prefs.defaultEditorMode}
-      options={editorModes}
-      on:change={(e) => setDefaultEditorMode(e.detail as EditorMode)}
-    />
+  <Row id="compose-open-in" label={$t('composing.openIn')} hint={$t('composing.openIn.hint')} stacked>
+    <ChoiceCards
+      label={$t('composing.openIn')}
+      value={$prefs.composeOpenIn}
+      options={openInOptions}
+      minWidth={170}
+      on:change={(e) => setComposeOpenIn(e.detail as ComposeOpenIn)}
+      let:option
+    >
+      <ComposeSkeleton mode={option.key as ComposeOpenIn} />
+    </ChoiceCards>
   </Row>
   <Row id="compose-markdown" label={$t('composing.markdown')} hint={$t('composing.markdown.hint')}>
+    <MarkdownPreview slot="preview" on={$prefs.composeMarkdown} />
     <ToggleSwitch checked={$prefs.composeMarkdown} label={$t('composing.markdown')} on:change={(e) => setComposeMarkdown(e.detail)} />
   </Row>
+  <Row id="smooth-caret" label={$t('composing.smoothCaret')} hint={$t('composing.smoothCaret.hint')}>
+    <CaretPreview slot="preview" smooth={$prefs.smoothCaret} />
+    <ToggleSwitch checked={$prefs.smoothCaret} label={$t('composing.smoothCaret')} on:change={(e) => setSmoothCaret(e.detail)} />
+  </Row>
   <Row id="autocomplete" label={$t('settingsPanel.toggle.autocomplete')} hint={$t('settingsPanel.hint.autocomplete')}>
+    <AutocompletePreview slot="preview" enabled={$prefs.composeAutocomplete} />
     <ToggleSwitch
       checked={$prefs.composeAutocomplete}
       label={$t('settingsPanel.toggle.autocomplete')}
@@ -59,6 +95,7 @@
     />
   </Row>
   <Row id="chips" label={$t('settingsPanel.toggle.chipRecipients')} hint={chipsHint}>
+    <RecipientsPreview slot="preview" chips={$prefs.composeChips} />
     <ToggleSwitch
       checked={$prefs.composeChips}
       label={$t('settingsPanel.toggle.chipRecipients')}
@@ -66,6 +103,7 @@
     />
   </Row>
   <Row id="signature-above-quote" label={$t('settingsPanel.toggle.signatureAboveQuote')}>
+    <SignaturePreview slot="preview" above={$prefs.signatureAboveQuote} />
     <ToggleSwitch
       checked={$prefs.signatureAboveQuote}
       label={$t('settingsPanel.toggle.signatureAboveQuote')}
@@ -89,13 +127,50 @@
   </Row>
 </Card>
 
+<Card title={$t('quickCompose.settings.title')}>
+  <QuickComposeRows />
+</Card>
+
 <Card title={$t('settingsPanel.category.sending')}>
   <Row id="undo-send" label={$t('settingsPanel.label.undoSendWindow')} hint={$t('settingsPanel.hint.undoSend')}>
+    <SendDelayPreview slot="preview" seconds={$prefs.sendDelaySeconds} />
     <Select
       value={String($prefs.sendDelaySeconds)}
       ariaLabel={$t('settingsPanel.label.undoSendWindow')}
       items={sendDelays}
       on:change={(e) => setSendDelay(Number(e.detail))}
+    />
+  </Row>
+  <Row id="after-reply-send" label={$t('sendVariant.setting.afterReply')} hint={$t('sendVariant.setting.afterReplyHint')}>
+    <Select
+      value={$prefs.afterReplySend}
+      ariaLabel={$t('sendVariant.setting.afterReply')}
+      items={afterReplyOptions}
+      on:change={(e) => setAfterReplySend(e.detail as AfterReplySend)}
+    />
+  </Row>
+  <Row id="send-remind-after" label={$t('sendVariant.setting.remindAfter')} hint={$t('sendVariant.setting.remindAfterHint')}>
+    <Select
+      value={$prefs.sendRemindAfter}
+      ariaLabel={$t('sendVariant.setting.remindAfter')}
+      items={remindOptions}
+      on:change={(e) => setSendRemindAfter(e.detail as FollowUpInterval)}
+    />
+  </Row>
+  <Row id="warn-missing-attachment" label={$t('sendCheck.setting.attachment')} hint={$t('sendCheck.setting.attachmentHint')}>
+    <SendCheckSkeleton slot="preview" issue="missingAttachment" />
+    <ToggleSwitch
+      checked={$prefs.warnMissingAttachment}
+      label={$t('sendCheck.setting.attachment')}
+      on:change={(e) => setWarnMissingAttachment(e.detail)}
+    />
+  </Row>
+  <Row id="warn-empty-subject" label={$t('sendCheck.setting.subject')} hint={$t('sendCheck.setting.subjectHint')}>
+    <SendCheckSkeleton slot="preview" issue="emptySubject" />
+    <ToggleSwitch
+      checked={$prefs.warnEmptySubject}
+      label={$t('sendCheck.setting.subject')}
+      on:change={(e) => setWarnEmptySubject(e.detail)}
     />
   </Row>
 </Card>

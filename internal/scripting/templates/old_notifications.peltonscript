@@ -1,0 +1,54 @@
+{
+  "format": 1,
+  "name": "Archive old notifications",
+  "description": "Every night, archives read mail from no-reply and notification senders that is older than two weeks.",
+  "kind": "blocks",
+  "trigger": { "type": "schedule.daily", "params": { "at": "03:00" } },
+  "permissions": ["mail.read", "mail.modify"],
+  "blocks": {
+    "version": 1,
+    "blocks": [
+      {
+        "id": "find",
+        "kind": "action",
+        "type": "mail.list",
+        "args": { "folder": { "value": "inbox" }, "limit": { "value": 200 } }
+      },
+      {
+        "id": "each",
+        "kind": "foreach",
+        "list": { "ref": "step:find.messages" },
+        "as": "item",
+        "body": [
+          {
+            "id": "old",
+            "kind": "if",
+            "branches": [
+              {
+                "when": {
+                  "kind": "all",
+                  "items": [
+                    { "kind": "condition", "type": "mail.is_read", "args": { "message": { "ref": "var:item" }, "state": { "value": "on" } } },
+                    { "kind": "condition", "type": "mail.age", "args": { "message": { "ref": "var:item" }, "age": { "value": "older" }, "duration": { "value": "14d" } } },
+                    {
+                      "kind": "condition",
+                      "type": "mail.from",
+                      "args": {
+                        "message": { "ref": "var:item" },
+                        "op": { "value": "matches" },
+                        "value": { "value": "(?i)(no-?reply|notifications?|alerts?|mailer-daemon)@" }
+                      }
+                    }
+                  ]
+                },
+                "body": [
+                  { "id": "archive", "kind": "action", "type": "mail.archive", "args": { "message": { "ref": "var:item" } } }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}

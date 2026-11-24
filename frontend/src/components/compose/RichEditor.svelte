@@ -19,7 +19,9 @@
     IconHeading,
   } from '@tabler/icons-svelte'
   import { t } from '../../lib/i18n'
+  import { get } from 'svelte/store'
   import { caretMark } from '../../lib/richtext'
+  import { looksLikeMarkdown, renderMarkdown } from '../../lib/markdown'
 
   // the initial html to seed the editor with (a draft or reply body).
   export let content = ''
@@ -27,8 +29,19 @@
   // content with caretMark standing where the caret belongs; without the mark
   // the caret starts at the top.
   export let caretContent: string | null = null
+  // bare leaves out the built-in toolbar, for a composer that draws its own
+  // and drives the editor through run() and isActive().
+  export let bare = false
+  // inputRules turns Markdown typed into the editor into formatting as it is
+  // written. Off, typing ** or # does nothing special. Read on mount.
+  export let inputRules = true
+  // pasteMarkdown turns pasted plain text that reads as Markdown into
+  // formatting. Read on mount.
+  export let pasteMarkdown = false
+  // placeholder is shown while the editor is empty.
+  export let placeholder = ''
 
-  const dispatch = createEventDispatcher<{ change: string }>()
+  const dispatch = createEventDispatcher<{ change: string; transaction: number }>()
 
   let element: HTMLDivElement
   let editor: Editor | null = null
@@ -40,6 +53,9 @@
   // echo of the editor's own typing, which comes back equal to its html.
   let lastContent = content
 
+  // empty drives the placeholder.
+  let empty = false
+
   onMount(() => {
     editor = new Editor({
       element,
@@ -48,13 +64,22 @@
         Link.configure({ openOnClick: false, autolink: true }),
       ],
       content,
+      enableInputRules: inputRules,
+      enablePasteRules: inputRules,
+      editorProps: {
+        handlePaste: (_view, event) => pasteAsMarkdown(event),
+        attributes: { 'aria-label': get(t)('a11y.messageBody'), 'aria-multiline': 'true' },
+      },
       onUpdate: ({ editor }) => {
         dispatch('change', editor.getHTML())
       },
-      onTransaction: () => {
+      onTransaction: ({ editor }) => {
         revision += 1
+        empty = editor.isEmpty
+        dispatch('transaction', revision)
       },
     })
+    empty = editor.isEmpty
     if (caretContent !== null) {
       editor.commands.focus(markPosition(caretContent, editor) ?? 'start')
     }
@@ -94,6 +119,173 @@
   onDestroy(() => {
     editor?.destroy()
   })
+
+  // pasteAsMarkdown inserts pasted plain text that reads as Markdown as the
+  // formatting it describes. Anything carrying html of its own pastes as usual.
+  function pasteAsMarkdown(event: ClipboardEvent): boolean {
+    const data = event.clipboardData
+    if (!pasteMarkdown || !editor || !data || data.types.includes('text/html')) {
+      return false
+    }
+    const text = data.getData('text/plain')
+    if (!text || !looksLikeMarkdown(text)) {
+      return false
+    }
+    editor.chain().focus().insertContent(renderMarkdown(text)).run()
+    return true
+  }
+
+  /** A formatting command the composer's own toolbar can run. */
+  type Command = 'bold' | 'italic' | 'underline' | 'strike' | 'bulletList' | 'orderedList' | 'blockquote' | 'code' | 'clear'
+
+  /** run applies a formatting command to the selection. */
+  export function run(command: Command): void {
+    if (!editor) {
+      return
+    }
+    const chain = editor.chain().focus()
+    switch (command) {
+      case 'bold':
+        chain.toggleBold().run()
+        break
+      case 'italic':
+        chain.toggleItalic().run()
+        break
+      case 'underline':
+        chain.toggleUnderline().run()
+        break
+      case 'strike':
+        chain.toggleStrike().run()
+        break
+      case 'bulletList':
+        chain.toggleBulletList().run()
+        break
+      case 'orderedList':
+        chain.toggleOrderedList().run()
+        break
+      case 'blockquote':
+        chain.toggleBlockquote().run()
+        break
+      case 'code':
+        chain.toggleCode().run()
+        break
+      case 'clear':
+        chain.unsetAllMarks().clearNodes().run()
+        break
+    }
+  }
+
+  /** isActive reports whether a mark or node is on at the caret. */
+  export function isActive(name: string): boolean {
+    return editor ? editor.isActive(name) : false
+  }
+
+  /** linkHref is the address of the link at the caret, or ''. */
+  export function linkHref(): string {
+    return editor ? ((editor.getAttributes('link').href as string | undefined) ?? '') : ''
+  }
+
+  /** setLinkHref links the selection to href, or removes the link when href is ''. */
+  export function setLinkHref(href: string): void {
+    if (!editor) {
+      return
+    }
+    if (href === '') {
+      editor.chain().focus().extendMarkRange('link').unsetLink().run()
+      return
+    }
+    editor.chain().focus().extendMarkRange('link').setLink({ href }).run()
+  }
+
+  /** selectedText is the text of the selection, or '' when nothing is selected. */
+  export function selectedText(): string {
+    if (!editor) {
+      return ''
+    }
+    const { from, to } = editor.state.selection
+    return from === to ? '' : editor.state.doc.textBetween(from, to, ' ')
+  }
+
+  /** insertLink puts text at the caret, linked to href. */
+  export function insertLink(text: string, href: string): void {
+    editor
+      ?.chain()
+      .focus()
+      .insertContent({ type: 'text', text, marks: [{ type: 'link', attrs: { href } }] })
+      .unsetMark('link')
+      .run()
+  }
+
+  /** insertText puts plain text at the caret, one paragraph per line. */
+  export function insertText(text: string): void {
+    const lines = text.split('\n')
+    editor
+      ?.chain()
+      .focus()
+      .insertContent(lines.map((line) => ({ type: 'paragraph', content: line ? [{ type: 'text', text: line }] : [] })))
+      .run()
+  }
+
+  /** focus puts the caret in the editor. */
+  export function focus(): void {
+    editor?.commands.focus()
+  }
+
+  /** textBeforeCaret is the text of the caret's block up to the caret. */
+  export function textBeforeCaret(): string {
+    if (!editor) {
+      return ''
+    }
+    const { $from, empty } = editor.state.selection
+    return empty ? $from.parent.textBetween(0, $from.parentOffset, undefined, '￼') : ''
+  }
+
+  /**
+   * insertBeforeCaret replaces the count characters before the caret with
+   * html. It returns where the insert starts and how far its end is from the
+   * end of the document, which stays true while text inside it changes.
+   */
+  export function insertBeforeCaret(count: number, html: string): { from: number; tail: number } {
+    if (!editor) {
+      return { from: 0, tail: 0 }
+    }
+    const head = editor.state.selection.head
+    const from = Math.max(0, head - count)
+    editor.chain().focus().insertContentAt({ from, to: head }, html).run()
+    return { from, tail: editor.state.doc.content.size - editor.state.selection.head }
+  }
+
+  /**
+   * selectNextPlaceholder selects the next {placeholder} from position from
+   * (the end of the selection when left out) up to tail characters before the
+   * end of the document, and reports whether there was one.
+   */
+  export function selectNextPlaceholder(tail: number, from?: number): boolean {
+    if (!editor) {
+      return false
+    }
+    const { doc, selection } = editor.state
+    const at = from ?? selection.to
+    const until = doc.content.size - tail
+    let found = null as { from: number; to: number } | null
+    doc.nodesBetween(at, Math.max(at, until), (node, pos) => {
+      if (found || !node.isText) {
+        return !found
+      }
+      const text = node.text ?? ''
+      const start = Math.max(0, at - pos)
+      const match = /\{[^{}\n]+\}/.exec(text.slice(start))
+      if (match && pos + start + match.index + match[0].length <= until) {
+        found = { from: pos + start + match.index, to: pos + start + match.index + match[0].length }
+      }
+      return !found
+    })
+    if (!found) {
+      return false
+    }
+    editor.chain().focus().setTextSelection(found).run()
+    return true
+  }
 
   // active() reports whether a mark/node is on at the caret. it reads `revision`
   // so the buttons recompute as the selection moves.
@@ -147,6 +339,7 @@
 </script>
 
 <div class="rich">
+  {#if !bare}
   <div class="toolbar" role="toolbar" aria-label={$t('compose.toolbar.ariaLabel')}>
     <button type="button" class:on={active('bold')} title={$t('compose.toolbar.bold')} aria-label={$t('compose.toolbar.bold')} on:click={toggleBold}>
       <IconBold size={16} stroke={1.8} />
@@ -173,11 +366,18 @@
       <IconQuote size={16} stroke={1.8} />
     </button>
   </div>
+  {/if}
 
   <!-- dir="auto" turns the editor round once the first strong character typed
        is right-to-left (#356), and the direction it settles on is what goes out
        with the message: see writingDirection in mailcompose.ts. -->
-  <div dir="auto" class="surface selectable" bind:this={element}></div>
+  <div
+    dir="auto"
+    class="surface selectable"
+    class:empty={empty && placeholder !== ''}
+    style:--placeholder={placeholder ? JSON.stringify(placeholder) : null}
+    bind:this={element}
+  ></div>
 </div>
 
 <style>
@@ -273,6 +473,17 @@
     padding-inline-start: var(--space-3);
     border-inline-start: 2px solid var(--border-strong);
     color: var(--text-secondary);
+  }
+
+  .surface.empty :global(.ProseMirror > p:first-child) {
+    position: relative;
+  }
+
+  .surface.empty :global(.ProseMirror > p:first-child::before) {
+    content: var(--placeholder);
+    position: absolute;
+    color: var(--text-tertiary);
+    pointer-events: none;
   }
 
   /* placeholder-less empty state still needs a caret target height. */

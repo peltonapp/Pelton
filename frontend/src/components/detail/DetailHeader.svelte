@@ -8,14 +8,19 @@
   import TechBadges from '../common/TechBadges.svelte'
   import { prefs } from '../../stores/prefs'
   import { formatFullDate, displayName, type TimeFormat } from '../../lib/format'
-  import { unsubscribeMessage, checkSMIMERevocation } from '../../lib/api'
+  import { unsubscribeMessage, checkSMIMERevocation, noteUnsubscribeLink } from '../../lib/api'
   import { openURL } from '../../lib/browser'
   import { errorMessage, toastError, toastSuccess } from '../../stores/toast'
   import { t } from '../../lib/i18n'
+  import { loadTrustLine } from '../../lib/lazyload'
   import { vipSenders, bareAddress, addVIP, removeVIP } from '../../stores/vip'
   import type { MessageDetail, UnsubscribeInfo, SMIMERevocation } from '../../lib/types'
 
   export let detail: MessageDetail
+  /** Drops the subject and sets sender, recipients and date on one address line, for a conversation card. */
+  export let compact: boolean = false
+  /** How long the message takes to read, shown beside the date; empty shows nothing. */
+  export let readingTime: string = ''
 
   $: avatarPlacement = $prefs.design === 'classic' ? 'column' : $prefs.avatarPlacement
 
@@ -54,6 +59,9 @@
   // removed sender would stay lit.
   $: isVip = $vipSenders.has(bareAddress(detail.fromAddress))
 
+  // pop plays the star's grow and settle once, as the sender is starred.
+  let pop = false
+
   // toggleVip stars or unstars the sender; failures surface as a toast and the
   // store reverts via the reload path.
   async function toggleVip(): Promise<void> {
@@ -62,6 +70,7 @@
         await removeVIP(detail.fromAddress)
         toastSuccess($t('vip.removed').replace('{who}', displayName(detail.fromName, detail.fromAddress)))
       } else {
+        pop = compact
         await addVIP(detail.fromAddress)
         toastSuccess($t('vip.added').replace('{who}', displayName(detail.fromName, detail.fromAddress)))
       }
@@ -129,6 +138,9 @@
     confirming = false
     if (unsub.kind === 'link') {
       openURL(unsub.target)
+      if ($prefs.design === 'new' && detail.unsubscribe) {
+        void noteUnsubscribeLink(detail.id)
+      }
       return
     }
     working = true
@@ -144,10 +156,12 @@
   }
 </script>
 
-<header class="head">
+<header class="head" class:compact>
   <!-- the subject is the sender's words, so it reads in its own direction
        whatever the interface is set to (#356). -->
-  <h1 dir="auto" class="subject">{detail.subject || $t('detail.noSubject')}</h1>
+  {#if !compact}
+    <h1 dir="auto" class="subject">{detail.subject || $t('detail.noSubject')}</h1>
+  {/if}
 
   <div class="from-row">
     {#if avatarPlacement === 'column'}
@@ -162,7 +176,9 @@
           type="button"
           class="vip-toggle"
           class:active={isVip}
+          class:pop
           on:click={toggleVip}
+          on:animationend={() => (pop = false)}
           title={isVip ? $t('vip.unmark') : $t('vip.mark')}
           aria-pressed={isVip}
         >
@@ -176,15 +192,26 @@
         {#if detail.fromName}
           <span class="from-addr">&lt;{detail.fromAddress}&gt;</span>
         {/if}
+        {#if compact}
+          <span class="to-line" title={[detail.toAddresses, detail.ccAddresses].filter(Boolean).join(', ')}>
+            {$t('detail.header.to')} {[detail.toAddresses, detail.ccAddresses].filter(Boolean).join(', ')}
+          </span>
+        {/if}
       </div>
+      {#if !compact}
       <div class="recipients">
         {#if detail.toAddresses}<span>{$t('detail.header.to')} {detail.toAddresses}</span>{/if}
         {#if detail.ccAddresses}<span class="cc">{$t('detail.header.cc')} {detail.ccAddresses}</span>{/if}
       </div>
+      {/if}
     </div>
+    {#if readingTime}
+      <span class="reading-time">{readingTime}</span>
+    {/if}
     {#if $prefs.showDateTime}
       <time class="date">{formatFullDate(detail.date, $prefs.timeFormat as TimeFormat)}</time>
     {/if}
+    <slot name="actions" />
   </div>
 
   <div class="badges-row">
@@ -198,12 +225,23 @@
       charsetGuess={detail.charsetGuess}
     />
     {#if unsub}
-      <button type="button" class="unsub" class:confirming disabled={done || working} on:click={onUnsubscribe}>
+      <button
+        type="button"
+        class="unsub"
+        class:confirming
+        disabled={done || working}
+        title={unsub.unverified ? $t('detail.unsubscribe.unverified') : undefined}
+        on:click={onUnsubscribe}
+      >
         {#if done}
           <IconCheck size={13} stroke={2} />
           {$t('detail.unsubscribe.doneLabel')}
         {:else if confirming}
-          {unsub.kind === 'link' ? $t('detail.unsubscribe.confirmOpen') : $t('detail.unsubscribe.confirm')}
+          {unsub.unverified
+            ? $t('detail.unsubscribe.unverified')
+            : unsub.kind === 'link'
+              ? $t('detail.unsubscribe.confirmOpen')
+              : $t('detail.unsubscribe.confirm')}
         {:else}
           <IconMailOff size={13} stroke={1.8} />
           {$t('detail.unsubscribe.button')}
@@ -211,6 +249,11 @@
       </button>
     {/if}
   </div>
+  {#if $prefs.design === 'new'}
+    {#await loadTrustLine() then m}
+      <svelte:component this={m.default} {detail} />
+    {/await}
+  {/if}
 </header>
 
 <style>
@@ -337,5 +380,74 @@
     color: var(--text-tertiary);
     flex-shrink: 0;
     white-space: nowrap;
+  }
+
+  .reading-time {
+    flex-shrink: 0;
+    padding: 0 var(--space-2);
+    border: var(--hairline) solid var(--border-subtle);
+    border-radius: var(--radius-control);
+    font-size: var(--fz-meta);
+    line-height: 1.6;
+    color: var(--text-tertiary);
+    white-space: nowrap;
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* the conversation card's address line: sender, address and recipients on
+     one line that truncates, with the date and the card's actions after it. */
+  .head.compact {
+    gap: var(--space-2);
+    padding-bottom: 0;
+    border-bottom: none;
+  }
+
+  .compact .from-row {
+    align-items: center;
+  }
+
+  .compact .from-line {
+    flex-wrap: nowrap;
+    align-items: center;
+    min-width: 0;
+  }
+
+  .compact .from-name,
+  .compact .from-addr {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    min-width: 0;
+  }
+
+  .compact .from-name {
+    flex-shrink: 0;
+    max-width: 50%;
+  }
+
+  .to-line {
+    min-width: 0;
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: var(--fz-label);
+    color: var(--text-tertiary);
+  }
+
+  .compact .vip-toggle.pop :global(svg) {
+    animation: star-pop var(--motion-slow) var(--ease-out);
+  }
+
+  @keyframes star-pop {
+    40% {
+      transform: scale(1.3);
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .compact .vip-toggle.pop :global(svg) {
+      animation: none;
+    }
   }
 </style>

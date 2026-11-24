@@ -40,6 +40,12 @@ func (a *App) buildMenu() *application.Menu {
 	// profiles (#270). No accelerator: switching ships unbound so the user picks
 	// their own key under Settings, Shortcuts.
 	appMenu.Add(s.switchProfile).OnClick(a.menuAction("switch-profile"))
+	appMenu.Add(s.lockApp).OnClick(func(*application.Context) {
+		a.lockFromMenu()
+	})
+	appMenu.Add(s.lockVaults).OnClick(func(*application.Context) {
+		go a.lockMailVaults()
+	})
 	appMenu.AddSeparator()
 	appMenu.Add(s.hide).SetAccelerator("CmdOrCtrl+H").OnClick(func(*application.Context) {
 		a.hideApp()
@@ -166,6 +172,16 @@ func (a *App) SetMailActionsEnabled(enabled bool) {
 			item.SetEnabled(enabled)
 		}
 	})
+}
+
+// lockFromMenu locks the app from the native menu. With the lock off the
+// frontend is asked instead, which points the way to the setting.
+func (a *App) lockFromMenu() {
+	if a.lock.Enabled() {
+		a.lock.Lock()
+		return
+	}
+	a.emit(EventMenu, "lock-app")
 }
 
 // menuAction returns a menu callback that emits the menu event with the given

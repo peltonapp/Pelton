@@ -110,6 +110,7 @@ const multipartMessage = "Message-ID: <root@example.com>\r\n" +
 	"Date: Mon, 06 Jan 2020 10:00:00 +0000\r\n" +
 	"List-Unsubscribe: <https://example.com/u>\r\n" +
 	"List-Unsubscribe-Post: List-Unsubscribe=One-Click\r\n" +
+	"List-Id: Example News <news.example.com>\r\n" +
 	"MIME-Version: 1.0\r\n" +
 	"Content-Type: multipart/mixed; boundary=outer\r\n" +
 	"\r\n" +
@@ -173,6 +174,9 @@ func TestParseMultipart(t *testing.T) {
 	}
 	if !msg.ListUnsubscribePost {
 		t.Error("one-click unsubscribe was not detected")
+	}
+	if msg.ListID != "Example News <news.example.com>" {
+		t.Errorf("list id = %q", msg.ListID)
 	}
 	if msg.Size != int64(len(multipartMessage)) {
 		t.Errorf("size = %d, want %d", msg.Size, len(multipartMessage))
@@ -261,6 +265,48 @@ func TestParseBodyReadsAuthenticationHeaders(t *testing.T) {
 	}
 	if !strings.Contains(msg.AuthResults[0], "spf=fail") {
 		t.Errorf("first header = %q, want the receiving server's one first", msg.AuthResults[0])
+	}
+}
+
+// TestParseBodyReadsClaims: the sender headers the passport and the privacy
+// report keep, including a folded DKIM-Signature and repeated signers.
+func TestParseBodyReadsClaims(t *testing.T) {
+	raw := []byte("Return-Path: <bounce+abc@mail.example.com>\r\n" +
+		"Received-SPF: pass (mx.example.org: domain of bounce@mail.example.com designates 192.0.2.1)\r\n" +
+		"ARC-Authentication-Results: i=1; mx.example.org; dkim=pass header.d=example.com\r\n" +
+		"DKIM-Signature: v=1; a=rsa-sha256; c=relaxed/relaxed;\r\n\td=Example.com; s=s1;\r\n\th=from:to; bh=x; b=y\r\n" +
+		"DKIM-Signature: v=1; a=rsa-sha256; d=esp.test; s=k1; h=From:List-Unsubscribe:\r\n List-Unsubscribe-Post; b=z\r\n" +
+		"DKIM-Signature: v=1; d=esp.test; s=k2; b=z\r\n" +
+		"From: News <news@example.com>\r\n" +
+		"Sender: Esp Mailer <mailer@esp.test>\r\n" +
+		"Disposition-Notification-To: Tracker <Receipts@Example.com>\r\n" +
+		"Subject: Hi\r\n" +
+		"\r\n" +
+		"body\r\n")
+	msg, err := ParseBody(raw)
+	if err != nil {
+		t.Fatalf("ParseBody: %v", err)
+	}
+	c := msg.Claims
+	if c.ReturnPath != "bounce+abc@mail.example.com" || c.Sender != "mailer@esp.test" || c.ReadReceiptTo != "receipts@example.com" {
+		t.Errorf("addresses = %+v", c)
+	}
+	if strings.Join(c.Signers, " ") != "example.com esp.test" {
+		t.Errorf("Signers = %v, want each signing domain once", c.Signers)
+	}
+	if strings.Join(c.UnsubSigners, " ") != "esp.test" {
+		t.Errorf("UnsubSigners = %v, want only the signer covering both unsubscribe headers", c.UnsubSigners)
+	}
+	if !strings.HasPrefix(c.ReceivedSPF, "pass") || !strings.Contains(c.ARC, "dkim=pass") {
+		t.Errorf("ReceivedSPF = %q, ARC = %q", c.ReceivedSPF, c.ARC)
+	}
+
+	long := []byte("Received-SPF: " + strings.Repeat("é", 400) + "\r\nFrom: a@example.com\r\n\r\nbody\r\n")
+	if msg, err = ParseBody(long); err != nil {
+		t.Fatalf("ParseBody: %v", err)
+	}
+	if len(msg.Claims.ReceivedSPF) > claimCap || !utf8.ValidString(msg.Claims.ReceivedSPF) {
+		t.Errorf("a long value was kept at %d bytes or cut inside a character", len(msg.Claims.ReceivedSPF))
 	}
 }
 

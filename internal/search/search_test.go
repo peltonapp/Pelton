@@ -1,6 +1,7 @@
 package search
 
 import (
+	"slices"
 	"testing"
 	"time"
 )
@@ -39,12 +40,7 @@ func ids(t *testing.T, idx *Index, q Query) []int64 {
 }
 
 func contains(ids []int64, want int64) bool {
-	for _, id := range ids {
-		if id == want {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(ids, want)
 }
 
 var corpus = []Doc{
@@ -316,5 +312,33 @@ func TestPrefixDoesNotWidenTheQuery(t *testing.T) {
 	idx := testIndex(t, corpus...)
 	if got := ids(t, idx, Query{Text: "Lunch invoi"}); len(got) != 0 {
 		t.Errorf("search %q returned %v, want nothing: no message is both", "Lunch invoi", got)
+	}
+}
+
+// A match found outside the index (a private note) narrows the search to its
+// messages, alone or together with text.
+func TestOnlyIDsNarrowsMatches(t *testing.T) {
+	idx := testIndex(t, corpus...)
+	tests := []struct {
+		name string
+		q    Query
+		want []int64
+	}{
+		{"ids alone", Query{OnlyIDs: []int64{3, 1}, RestrictIDs: true, Sort: SortOldest}, []int64{1, 3}},
+		{"ids with text", Query{Text: "invoice", OnlyIDs: []int64{1, 3}, RestrictIDs: true}, []int64{1}},
+		{"no ids matches nothing", Query{Text: "invoice", RestrictIDs: true}, nil},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := ids(t, idx, tt.q)
+			if len(got) != len(tt.want) {
+				t.Fatalf("got %v, want %v", got, tt.want)
+			}
+			for i := range got {
+				if got[i] != tt.want[i] {
+					t.Fatalf("got %v, want %v", got, tt.want)
+				}
+			}
+		})
 	}
 }

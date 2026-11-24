@@ -9,7 +9,15 @@
   import { IconSearch, IconX, IconCalendar, IconBookmarkPlus, IconArrowsSort, IconCheck } from '@tabler/icons-svelte'
   import { prefs } from '../../stores/prefs'
   import { shortcutLabel, t } from '../../lib/i18n'
-  import { emptyFilter, type SearchFilter } from '../../stores/messages'
+  import {
+    emptyFilter,
+    addChip as withChip,
+    buildFilter as filterOf,
+    parseToken,
+    chipLabel,
+    type SearchFilter,
+    type SearchChip,
+  } from '../../lib/searchquery'
   import { activeSortPref, searchSortKind } from '../../stores/messages'
   import { searchSorts, automaticSort } from '../../lib/searchsort'
   import type { SearchSortPref } from '../../lib/types'
@@ -36,26 +44,9 @@
   const searchHint = shortcutLabel('mod+f')
   const dispatch = createEventDispatcher<{ search: string; filter: SearchFilter; sort: SearchSortPref }>()
 
-  // chip fields and the aliases that produce them ("sender:" -> from).
-  type ChipField = 'from' | 'to' | 'subject' | 'has' | 'is' | 'before' | 'after'
-  const alias: Record<string, ChipField> = {
-    from: 'from',
-    sender: 'from',
-    to: 'to',
-    subject: 'subject',
-    has: 'has',
-    is: 'is',
-    before: 'before',
-    after: 'after',
-  }
   const keywordList = ['from', 'sender', 'to', 'subject', 'has', 'is', 'before', 'after']
 
-  interface Chip {
-    field: ChipField
-    value: string
-  }
-
-  let chips: Chip[] = []
+  let chips: SearchChip[] = []
   // free text (and the keyword currently being typed) live in the input.
   let text = value
   let inputEl: HTMLInputElement
@@ -64,53 +55,14 @@
   let afterDate = ''
   let beforeDate = ''
 
-  const day = 86400
-
-  // fieldLabel is the human label shown on a chip.
-  function fieldLabel(field: ChipField): string {
-    return $t(`messageList.search.chip.${field}`)
-  }
-
-  // chipText renders a chip's value; has:attachment and is:unread each stand for
-  // one thing, so they read as a plain label rather than a field and a value.
-  function chipText(chip: Chip): string {
-    if (chip.field === 'has') {
-      return $t('messageList.search.chip.hasAttachment')
-    }
-    if (chip.field === 'is') {
-      return $t('messageList.search.chip.isUnread')
-    }
-    return `${fieldLabel(chip.field)}: ${chip.value}`
-  }
-
-  // parseToken turns a "keyword:value" token into a chip, or null if it is not a
-  // recognized, valid keyword token.
-  function parseToken(token: string): Chip | null {
-    const at = token.indexOf(':')
-    if (at <= 0) {
-      return null
-    }
-    const field = alias[token.slice(0, at).toLowerCase()]
-    const raw = token.slice(at + 1).trim()
-    if (!field || raw === '') {
-      return null
-    }
-    if (field === 'has') {
-      return raw.toLowerCase().startsWith('attach') ? { field, value: 'attachment' } : null
-    }
-    if (field === 'is') {
-      return raw.toLowerCase().startsWith('unread') ? { field, value: 'unread' } : null
-    }
-    if ((field === 'before' || field === 'after') && Number.isNaN(Date.parse(raw))) {
-      return null
-    }
-    return { field, value: raw }
+  function chipText(chip: SearchChip): string {
+    return chipLabel(chip, $t)
   }
 
   // addChip stores a chip, replacing any existing chip of the same field so each
   // constraint appears once.
-  function addChip(chip: Chip): void {
-    chips = [...chips.filter((c) => c.field !== chip.field), chip]
+  function addChip(chip: SearchChip): void {
+    chips = withChip(chips, chip)
     emit()
   }
 
@@ -119,28 +71,8 @@
     emit()
   }
 
-  // buildFilter maps the chips onto the structured SearchFilter.
   function buildFilter(): SearchFilter {
-    const f: SearchFilter = { ...emptyFilter }
-    for (const c of chips) {
-      if (c.field === 'from') {
-        f.from = c.value
-      } else if (c.field === 'to') {
-        f.to = c.value
-      } else if (c.field === 'subject') {
-        f.subject = c.value
-      } else if (c.field === 'has') {
-        f.hasAttachment = true
-      } else if (c.field === 'is') {
-        f.unreadOnly = true
-      } else if (c.field === 'after') {
-        f.afterUnix = Math.floor(Date.parse(c.value) / 1000) || 0
-      } else if (c.field === 'before') {
-        // include the whole "before" day.
-        f.beforeUnix = Math.floor(Date.parse(c.value) / 1000) + day - 1 || 0
-      }
-    }
-    return f
+    return filterOf(chips)
   }
 
   // emit debounces and dispatches the current free text and chip filter.

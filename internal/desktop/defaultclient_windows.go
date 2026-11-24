@@ -14,6 +14,17 @@ func isDefaultMailHandler() (isDefault bool, known bool) {
 	return false, false
 }
 
+// .ics files: the installer lists Pelton under the extension's
+// OpenWithProgids, so it shows in "Open with" without taking the default. The
+// default itself is the user's to pick in Settings.
+func isDefaultCalendarHandler() (isDefault bool, known bool) {
+	return false, false
+}
+
+func setDefaultCalendarHandler() error {
+	return setDefaultMailHandler()
+}
+
 func setDefaultMailHandler() error {
 	// "start" is a cmd builtin, so it runs through cmd /c; the empty title arg
 	// keeps start from treating the URI as the window title.

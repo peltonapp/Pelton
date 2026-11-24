@@ -179,6 +179,27 @@ ShowInstDetails show # This will always show the installation details.
     Sleep 500
 !macroend
 
+## .ics files: Pelton is listed under the extension's OpenWithProgids, so it
+## shows in "Open with" without replacing the default calendar app. The user
+## picks the default in Windows Settings.
+!ifdef PELTON_NIGHTLY
+    !define PELTON_ICS_PROGID "PeltonNightly.ics"
+!else
+    !define PELTON_ICS_PROGID "Pelton.ics"
+!endif
+
+!macro pelton.registerIcs
+    WriteRegStr SHCTX "Software\Classes\${PELTON_ICS_PROGID}" "" "iCalendar file"
+    WriteRegStr SHCTX "Software\Classes\${PELTON_ICS_PROGID}\DefaultIcon" "" "$INSTDIR\${PRODUCT_EXECUTABLE},0"
+    WriteRegStr SHCTX "Software\Classes\${PELTON_ICS_PROGID}\shell\open\command" "" '"$INSTDIR\${PRODUCT_EXECUTABLE}" "%1"'
+    WriteRegStr SHCTX "Software\Classes\.ics\OpenWithProgids" "${PELTON_ICS_PROGID}" ""
+!macroend
+
+!macro pelton.unregisterIcs
+    DeleteRegValue SHCTX "Software\Classes\.ics\OpenWithProgids" "${PELTON_ICS_PROGID}"
+    DeleteRegKey SHCTX "Software\Classes\${PELTON_ICS_PROGID}"
+!macroend
+
 Function .onInit
 !ifdef PELTON_NIGHTLY
    ; before the installer ui is even up, so nobody double-clicks their way past
@@ -261,6 +282,7 @@ Section "-Core" SecCore
 
     !insertmacro wails.associateFiles
     !insertmacro wails.associateCustomProtocols
+    !insertmacro pelton.registerIcs
 
     !insertmacro pelton.writeUninstaller
 SectionEnd
@@ -310,6 +332,7 @@ Section "uninstall"
 
     !insertmacro wails.unassociateFiles
     !insertmacro wails.unassociateCustomProtocols
+    !insertmacro pelton.unregisterIcs
 
     ; the notification registration Pelton writes at startup. Always HKCU, so
     ; this only clears it for the account running the uninstaller; an all-users

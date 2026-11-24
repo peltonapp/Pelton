@@ -1,11 +1,3 @@
-<script module lang="ts">
-  // pending is each session's draft save (local save, then server upload) still
-  // in flight. It outlives the pane (save and close returns before the upload
-  // does), and the next save, send or discard waits on it so it reads the draft
-  // id and Message-ID that save stored rather than making a second copy.
-  const pending = new Map<number, Promise<void>>()
-</script>
-
 <script lang="ts">
   // a single compose pane. it edits one session: addresses, subject, the body in
   // the chosen editor mode, and attachments. the floating pane can be minimized
@@ -13,7 +5,6 @@
   // formatting toolbar and a github-style live preview. send enqueues to the
   // outbox (with the undo-send window when enabled); save stores a local draft
   // and uploads a copy to the server Drafts folder.
-  import { formatWeekdayTime, type TimeFormat } from '../../lib/format'
   import { onMount, tick } from 'svelte'
   import {
     IconX,
@@ -40,25 +31,30 @@
   import AttachmentPicker from './AttachmentPicker.svelte'
   import DateTimePicker from '../common/DateTimePicker.svelte'
   import { currentUIScale } from '../../theme/theme'
-  import { updateCompose, closeCompose, closeRequest, getSession, restoreSession, setComposeFullscreenDefault, composeInWindow, type ComposeSession } from '../../stores/compose'
+  import { updateCompose, getSession, closeCompose, closeRequest, setComposeFullscreenDefault, composeInWindow, type ComposeSession } from '../../stores/compose'
   import { openComposeWindow } from '../../lib/api'
   import { isDemoActive } from '../../lib/demo'
   import { signatures, signatureById, getAccountSignatures } from '../../stores/signatures'
   import type { Signature } from '../../lib/types'
   import { sidebar } from '../../stores/accounts'
-  import { sendMessage, saveDraft, deleteDraft, uploadDraft, removeServerDraft } from '../../lib/api'
-  import { loadOutbox } from '../../stores/outbox'
-  import { scheduleUndo } from '../../stores/undosend'
   import { prefs } from '../../stores/prefs'
   import { shortcutTitle, bindings } from '../../stores/shortcuts'
   import { comboMatches } from '../../lib/shortcuts'
   import { bodyFontStack } from '../../lib/fonts'
-  import { buildRequest, hasRecipients, parseAddressList } from '../../lib/mailcompose'
   import ProtectionPicker from './ProtectionPicker.svelte'
-  import { composeProtectionStatus } from '../../lib/api'
   import type { ProtectionStatus } from '../../lib/types'
-  import { atTime, addDays, nextWeekday } from '../../lib/datepresets'
-  import { errorMessage, toastError, toastInfo, toastSuccess } from '../../stores/toast'
+  import { errorMessage, toastError } from '../../stores/toast'
+  import {
+    buildSendPresets,
+    draftState as stateOf,
+    formatSendWhen,
+    hasContent as sessionHasContent,
+    ProtectionWatch,
+    recipientsOf,
+    saveSession,
+    sendSession,
+    settled as settledSession,
+  } from '../../lib/composeactions'
   import type CodeMirrorEditor from './CodeMirrorEditor.svelte'
   import type RichEditorView from './RichEditor.svelte'
 
@@ -78,18 +74,14 @@
   // control that offers encryption to somebody with no key is a control that
   // fails at send time.
   let protectionStatus: ProtectionStatus | null = null
-  // the recipient list the status was fetched for, so an unchanged list does
-  // not refetch on every keystroke elsewhere in the form.
-  let statusFor = ''
-  // suggestedApplied keeps the account default from overriding a choice the
-  // user made: it is a starting point, once, not a correction.
   // A saved draft keeps the protection it was saved with.
-  let suggestedApplied = session.saved
+  const protectionWatch = new ProtectionWatch(session.id, session.saved)
   let preview = false
   let confirmClose = false
   // savedAs is the draft as last saved, so closing it unchanged asks nothing.
-  // A session that opens as a saved draft starts out saved.
-  let savedAs = session.saved ? draftState(session) : ''
+  // A session that opens as a saved draft starts out saved, and any other
+  // starts at its prefilled state, so an untouched reply closes silently.
+  let savedAs = draftState(session)
 
   // send-later dropdown state: caret toggles the menu, presets are built fresh
   // each time it opens so "tomorrow" is always relative to now. the menu is
@@ -102,41 +94,15 @@
   let sendMenuTop = 0
   let customSendValue = ''
 
-  interface SendPreset {
-    label: string
-    when: Date
-    icon: typeof IconClock
-  }
-
-  // buildSendPresets mirrors SnoozeDialog's buildPresets: a short list of
-  // friendly relative times, filtering out ones already in the past and
-  // deduplicating "tomorrow" and "next Monday" when they land on the same day.
-  function buildSendPresets(now: Date, tr: (key: string) => string): SendPreset[] {
-    const out: SendPreset[] = []
-    const laterToday = new Date(now.getTime() + 3 * 60 * 60 * 1000)
-    out.push({ label: tr('compose.sendLater.laterToday'), when: laterToday, icon: IconClock })
-
-    const evening = atTime(now, 18, 0)
-    if (evening.getTime() > now.getTime() + 60 * 1000) {
-      out.push({ label: tr('compose.sendLater.thisEvening'), when: evening, icon: IconSunset2 })
-    }
-
-    const tomorrow = atTime(addDays(now, 1), 8, 0)
-    out.push({ label: tr('compose.sendLater.tomorrowMorning'), when: tomorrow, icon: IconSun })
-
-    const monday = atTime(nextWeekday(now, 1), 8, 0)
-    if (monday.toDateString() !== tomorrow.toDateString()) {
-      out.push({ label: tr('compose.sendLater.mondayMorning'), when: monday, icon: IconCalendarWeek })
-    }
-    return out
+  const presetIcons = {
+    laterToday: IconClock,
+    thisEvening: IconSunset2,
+    tomorrowMorning: IconSun,
+    mondayMorning: IconCalendarWeek,
   }
 
   $: sendPresets = sendMenuOpen ? buildSendPresets(new Date(), $t) : []
-  $: formattedSendPresets = sendPresets.map((p) => ({ ...p, sub: formatSendWhen(p.when) }))
-
-  function formatSendWhen(d: Date): string {
-    return formatWeekdayTime(d, $prefs.timeFormat as TimeFormat)
-  }
+  $: formattedSendPresets = sendPresets.map((p) => ({ ...p, icon: presetIcons[p.key], sub: formatSendWhen(p.when) }))
 
   // toggleSendMenu opens the menu anchored above the caret button (fixed
   // positioning, since the compose pane itself clips overflow) or closes it.
@@ -256,11 +222,21 @@
       if (footer) {
         body = withBlock(body, footer)
       }
-      updateCompose(session.id, { body, signaturesApplied: true })
+      updateOpened({ body, signaturesApplied: true })
     } catch {
-      updateCompose(session.id, { signaturesApplied: true })
+      updateOpened({ signaturesApplied: true })
     }
   })
+
+  // updateOpened applies a change the app makes itself to the session, and
+  // moves the saved baseline along with it while the user has not edited.
+  function updateOpened(patch: Partial<ComposeSession>): void {
+    const untouched = draftState(getSession(session.id) ?? session) === savedAs
+    updateCompose(session.id, patch)
+    if (untouched) {
+      savedAs = draftState(getSession(session.id) ?? session)
+    }
+  }
 
   // insertSignature lets the user drop a different block into the body from the
   // compose footer menu (the "change in compose" path).
@@ -386,37 +362,9 @@
   // resolveNotBefore in internal/desktop/bind_compose.go for the backend side
   // of this precedence).
   async function send(scheduledAt?: Date): Promise<void> {
-    if (!hasRecipients(session)) {
-      toastError($t('compose.error.noRecipients'))
-      return
-    }
     sending = true
     try {
-      const current = await settled()
-      const snapshot: ComposeSession = { ...current }
-      const req = buildRequest(current)
-      if (scheduledAt) {
-        req.sendAt = scheduledAt.toISOString()
-      }
-      const id = await sendMessage(req)
-      if (current.draftId) {
-        await deleteDraft(current.draftId)
-      }
-      await loadOutbox()
-      closeCompose(session.id)
-
-      if (scheduledAt) {
-        toastSuccess($t('compose.sendLater.scheduledToast').replace('{when}', formatSendWhen(scheduledAt)))
-      } else {
-        const delay = $prefs.sendDelaySeconds
-        if (delay > 0) {
-          scheduleUndo(id, snapshot, delay)
-        } else {
-          toastSuccess($t('compose.toast.queued'))
-        }
-      }
-    } catch (err) {
-      toastError(errorMessage(err))
+      await sendSession(session.id, session, { scheduledAt })
     } finally {
       sending = false
     }
@@ -443,99 +391,28 @@
 
   // settled waits for this session's save in flight and returns the session as
   // it stands afterwards, carrying the draft id and Message-ID it stored.
-  async function settled(): Promise<ComposeSession> {
-    await pending.get(session.id)
-    return getSession(session.id) ?? session
+  function settled(): Promise<ComposeSession> {
+    return settledSession(session.id, session)
   }
 
   // save stores the draft locally, runs saved (the pane closing, for save and
-  // close), and puts a copy in the server Drafts folder. It is queued behind
-  // the session's save already in flight before anything awaits.
+  // close), and puts a copy in the server Drafts folder.
   function save(saved?: () => void): Promise<void> {
-    const id = session.id
-    const run = (pending.get(id) ?? Promise.resolve()).then(async () => {
-      const current = getSession(id) ?? session
-      const draftId = await saveDraft(current.draftId, buildRequest(current))
-      updateCompose(id, { draftId })
+    return saveSession(session.id, session, (current) => {
       savedAs = draftState(current)
-      toastSuccess($t('compose.toast.draftSaved'))
       saved?.()
-      await upload(current, draftId)
     })
-    const done = run.catch((err) => toastError(errorMessage(err)))
-    pending.set(id, done)
-    void done.then(() => {
-      if (pending.get(id) === done) {
-        pending.delete(id)
-      }
-    })
-    return done
-  }
-
-  // upload replaces the draft's server copy. An encrypted draft is not uploaded,
-  // and a plaintext copy an earlier save left there is removed.
-  async function upload(current: ComposeSession, draftId: number): Promise<void> {
-    if (current.protection === 'encrypt' || current.protection === 'signencrypt') {
-      toastInfo($t('compose.toast.draftLocalOnly'))
-      if (current.draftMessageId) {
-        await removeServerDraft(current.accountId, current.draftMessageId)
-        updateCompose(current.id, { draftMessageId: '' })
-      }
-      return
-    }
-    try {
-      updateCompose(current.id, { draftMessageId: await uploadDraft(draftId) })
-    } catch (err) {
-      toastError($t('compose.toast.draftUploadFailed').replace('{error}', errorMessage(err)))
-      // a pane that save and close already shut comes back, since nothing
-      // could open a draft kept only on this device.
-      if (!getSession(current.id)) {
-        restoreSession({ ...current, draftId })
-      }
-    }
   }
 
   // recipientList is every address currently typed in, which is what the
   // status is about.
-  $: recipientList = [session.to, session.cc, session.bcc]
-    .flatMap(parseAddressList)
-    .map((a) => a.email.toLowerCase())
-    .filter((email) => email.includes('@'))
+  $: recipientList = recipientsOf(session)
 
   $: void refreshProtection(session.accountId, recipientList)
 
-  // refreshProtection asks the backend what is possible. A failure leaves the
-  // controls as they were rather than pretending nothing can be protected.
-  // The answer depends on the sending account's own keys as much as on the
-  // recipients, so both make up the key a reply is matched against.
   async function refreshProtection(accountId: number, recipients: string[]): Promise<void> {
-    const key = JSON.stringify([accountId, recipients])
-    if (key === statusFor && protectionStatus !== null) {
-      return
-    }
-    statusFor = key
-    try {
-      const status = await composeProtectionStatus(accountId, recipients)
-      // a newer account or recipient list was asked for while this was in
-      // flight; its answer, not this one, decides what the controls may offer.
-      if (key !== statusFor) {
-        return
-      }
-      protectionStatus = status as unknown as ProtectionStatus
-      if (!suggestedApplied) {
-        suggestedApplied = true
-        if (status.suggested !== 'none') {
-          updateCompose(session.id, { protection: status.suggested })
-        }
-      }
-      // the recipient list changed and encryption is no longer possible: drop
-      // it rather than leaving a control on that would fail the send.
-      if (!protectionStatus.canEncrypt && (session.protection === 'encrypt' || session.protection === 'signencrypt')) {
-        updateCompose(session.id, { protection: session.protection === 'signencrypt' ? 'sign' : 'none' })
-      }
-    } catch {
-      // leave whatever was last known; the send still refuses on its own if
-      // the keys are not there.
+    if (await protectionWatch.refresh(accountId, recipients)) {
+      protectionStatus = protectionWatch.status
     }
   }
 
@@ -543,14 +420,7 @@
   // recipient, subject or body text counts, but a session that was only ever
   // opened and never touched should close silently.
   function hasContent(): boolean {
-    return (
-      session.to.trim().length > 0 ||
-      session.cc.trim().length > 0 ||
-      session.bcc.trim().length > 0 ||
-      session.subject.trim().length > 0 ||
-      session.body.trim().length > 0 ||
-      session.attachments.length > 0
-    )
+    return sessionHasContent(session)
   }
 
   // an outside close (the close-window action) lands here rather than removing
@@ -562,7 +432,7 @@
 
   // draftState is what a save would store, minus the server link it gains after.
   function draftState(s: ComposeSession): string {
-    return JSON.stringify({ ...buildRequest(s), draftMessageId: '' })
+    return stateOf(s)
   }
 
   function requestClose(): void {

@@ -12,6 +12,8 @@ import type {
   MessageSummary,
   MessageDetail,
   OutboxRow,
+  Thread,
+  ThreadList,
 } from './types'
 import { blankAccountProxy } from './proxyroute'
 
@@ -161,6 +163,10 @@ function msg(
     senderVip: false,
     // the demo mail is not signed, so there is no verdict to show.
     smime: { status: '', signer: '', email: '', issuer: '', detail: '' },
+    // every sample is a conversation of its own.
+    threadId: id,
+    answered: false,
+    forwarded: false,
     ...opts,
   }
 }
@@ -169,8 +175,8 @@ const messages: MessageSummary[] = [
   msg(1, 'Marina Tuber', 'marina@pelton-potato.island', 'Q4 potato numbers', 'Here are the Q4 yield figures for the russet fields, up 12% on last quarter. Take a look before the board call.', 14, { seen: false, flagged: true, hasAttachments: true, flagColor: 1 }),
   msg(2, 'Pelton Potato Island', 'hello@pelton-potato.island', 'Welcome to Potato Island 🥔', 'Thanks for joining the co-op! Here is everything you need to know about this season’s harvest, storage and market days.', 52, { seen: false }),
   msg(3, 'Chip Mash', 'chip@fryco.potato', 'Re: Fryer maintenance schedule', 'Sounds good, let’s do Tuesday. I’ll bring the oil samples and the new baskets.', 96, {}),
-  msg(4, 'Yukon Gold', 'billing@goldseed.potato', 'Invoice #4048 — seed potatoes', 'Your order of 4,048 sacks of certified seed potatoes is confirmed and ready for pickup.', 130, { seen: false, hasAttachments: true }),
-  msg(5, 'Marina Tuber', 'marina@pelton-potato.island', 'Harvest festival — potato salad?', 'Are you bringing potato salad on Friday? I’ll handle the mash and the gravy boat.', 200, { flagged: true, flagColor: 3 }),
+  msg(4, 'Yukon Gold', 'billing@goldseed.potato', 'Invoice #4048 - seed potatoes', 'Your order of 4,048 sacks of certified seed potatoes is confirmed and ready for pickup.', 130, { seen: false, hasAttachments: true }),
+  msg(5, 'Marina Tuber', 'marina@pelton-potato.island', 'Harvest festival - potato salad?', 'Are you bringing potato salad on Friday? I’ll handle the mash and the gravy boat.', 200, { flagged: true, flagColor: 3 }),
   msg(6, 'Spud Weekly', 'news@spudweekly.potato', 'This week in potatoes', 'Blight watch, market prices, and a loving profile of the humble fingerling.', 320, {}),
   msg(7, 'Dr. Solanum', 'research@tuberlab.potato', 'New blight-resistant variety', 'We’ve had very promising results with the Pelton-7 cultivar this season. Details inside.', 540, {}),
   msg(8, 'Rosa Fingerling', 'rosa@peltonfarms.potato', 'North field irrigation is in', 'The drip lines are installed. Soil moisture looks perfect for the earlies.', 900, {}),
@@ -182,9 +188,9 @@ const messages: MessageSummary[] = [
 const sharedBodyHtml = `
 <div style="font-family: system-ui, sans-serif; font-size: 14px; line-height: 1.6; color: inherit;">
   <p>Hey,</p>
-  <p>Quick one before standup — the potato shipment from the north field came in this morning and it is looking <strong>great</strong>. Marina says the Q4 russet numbers are up 12% on last quarter. \u{1F954}</p>
+  <p>Quick one before standup - the potato shipment from the north field came in this morning and it is looking <strong>great</strong>. Marina says the Q4 russet numbers are up 12% on last quarter. \u{1F954}</p>
   <p>Could you double-check the crate counts for <strong>Pelton Potato Island</strong> before we send the invoice? I think we are at about <strong>4,048 sacks</strong>, but the paperwork says 4,032.</p>
-  <p>Also — potato salad for the harvest festival on Friday? I’ll bring the spuds if you handle the dressing.</p>
+  <p>Also - potato salad for the harvest festival on Friday? I’ll bring the spuds if you handle the dressing.</p>
   <p>Cheers,<br />Marina</p>
   <p style="color: #999; font-size: 12px;">Pelton Potato Island · Grown with love, mostly underground</p>
 </div>`.trim()
@@ -227,6 +233,7 @@ export function demoMessage(id: number): MessageDetail {
     charsetGuess: '',
     // the demo mail is not protected, so there is nothing to decrypt.
     pgpState: '',
+    bodyComplete: true,
     isHtml: true,
     hasRemoteContent: false,
     remoteAllowed: true,
@@ -235,7 +242,35 @@ export function demoMessage(id: number): MessageDetail {
     attachments: summary.hasAttachments
       ? [{ id: id * 10, filename: 'q4-potato-yields.xlsx', contentType: 'application/vnd.ms-excel', sizeBytes: 48213, inline: false }]
       : [],
+    replyIds: [],
+    forwardIds: [],
   }
+}
+
+/** demoThreads returns the sample inbox as conversations, one message each. */
+export function demoThreads(): ThreadList {
+  return {
+    threads: messages.map((m) => ({
+      threadId: m.threadId,
+      head: m,
+      count: 1,
+      unreadCount: m.seen ? 0 : 1,
+      participants: [m.fromName],
+      hasAttachments: m.hasAttachments,
+      flagged: m.flagged,
+      answered: m.answered,
+      forwarded: m.forwarded,
+      messageIds: [m.id],
+    })),
+    total: messages.length,
+    hasOlder: false,
+  }
+}
+
+/** demoThread returns the one-message conversation of a sample. */
+export function demoThread(threadId: number): Thread {
+  const m = messages.find((x) => x.threadId === threadId) ?? messages[0]
+  return { threadId: m.threadId, messages: [{ ...m, folderRole: 'inbox', fromMe: false }] }
 }
 
 /** demoSearch returns the sample inbox as a result page, so searching in demo
@@ -283,6 +318,8 @@ export function demoOutbox(): OutboxRow[] {
       lastError: '',
       nextAttemptAt: '',
       createdAt: ago(0),
+      editable: false,
+      priority: 0,
     },
   ]
 }

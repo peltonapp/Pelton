@@ -4,22 +4,29 @@
 // and deletes reflect immediately without a round trip.
 
 import { writable, get, derived, type Readable } from 'svelte/store'
-import type { MessageSummary, Selection, SearchSort, SearchSortPref, SearchKind } from '../lib/types'
+import type { MessageList, MessageSummary, Selection, SearchSort, SearchSortPref, SearchKind, ThreadSummary } from '../lib/types'
 import {
   listFolderMessages,
   listViewMessages,
   listSavedViewMessages,
+  listFolderThreads,
+  listViewThreads,
+  listSavedViewThreads,
   fetchOlderMessages,
   search,
   messageIds,
   searchMessageIds,
   type MessageIDs,
+  type SearchRequest,
 } from '../lib/api'
+import { emptyFilter, type SearchFilter } from '../lib/searchquery'
 import { type AsyncState, idle, loading, ready, failed } from '../lib/async'
 import { searchKind, resolveSort } from '../lib/searchsort'
 import { errorMessage, push, toastError } from './toast'
 import { prefs, searchSortPref } from './prefs'
 import { refreshCountsSoon } from './sidebarcounts'
+import { dropThreadMessage, invalidateThreads, patchThreadMessage, threadedOn, threadSeenOf } from './threads'
+import { splitFor } from './splits'
 
 // how many rows we request per page.
 export const PAGE_SIZE = 50
@@ -44,6 +51,10 @@ export interface ListData {
   // backfilling is true while older mail is being fetched from the server, so
   // the list can show that it is waiting on the network rather than on disk.
   backfilling: boolean
+  // threads is set when the list is grouped into conversations: items are
+  // then each conversation's newest message, and this maps such a message's
+  // id to its conversation. total counts conversations.
+  threads?: Record<number, ThreadSummary>
 }
 
 // backfillFailed marks a 'load older' round trip that errored. The list falls
@@ -55,20 +66,45 @@ export const messageList = writable<AsyncState<ListData>>(idle())
 
 // the selection the current list belongs to, so loadMore can ask for the next
 // page of the same thing.
+//
+// The next page of a folder or view starts at the number of rows loaded, not at
+// a running offset. Every local change to the list (a head merge, a delete, an
+// undo) changes the server's order the same way it changes the loaded rows, so
+// items.length stays the server position of the first row not loaded yet. When
+// the server moved first (mail saved before a page read), the page overlaps
+// rows already loaded and appendPage drops them: a repeat, never a gap.
 let currentSelection: Selection | null = null
-let currentOffset = 0
 // bumped on every loadList call so a response from a superseded selection
 // never overwrites a later one's result.
 let loadGeneration = 0
+// the loadMore whose page is being read, or 0. While one is in flight the user
+// is already past the first page, even before that page lands.
+let moreInFlight = 0
+let moreSeq = 0
 
 // appendPage joins a freshly read page onto the loaded rows, dropping ids that
 // are already on screen. Paging is by offset over a date-ordered query, so mail
 // arriving between two page reads (a sync, or a backfill inserting older mail)
 // can shift rows across the page boundary and repeat one. The list renders rows
 // keyed by id, which a duplicate would break outright.
-function appendPage(loaded: MessageSummary[], page: MessageSummary[]): MessageSummary[] {
+// A conversation can move across a page boundary the same way, with a new
+// newest message, so a grouped list also drops a conversation already shown.
+function appendPage(loaded: MessageSummary[], page: MessageSummary[], grouped = false): MessageSummary[] {
   const seen = new Set(loaded.map((m) => m.id))
-  return [...loaded, ...page.filter((m) => !seen.has(m.id))]
+  const threads = new Set(grouped ? loaded.filter((m) => m.threadId !== 0).map((m) => m.threadId) : [])
+  return [...loaded, ...page.filter((m) => !seen.has(m.id) && !threads.has(m.threadId))]
+}
+
+// mergeThreads joins the conversations of a freshly read page onto the loaded
+// ones. undefined means the list is not grouped.
+function mergeThreads(
+  loaded: Record<number, ThreadSummary> | undefined,
+  page: Record<number, ThreadSummary> | undefined,
+): Record<number, ThreadSummary> | undefined {
+  if (!loaded && !page) {
+    return undefined
+  }
+  return { ...page, ...loaded }
 }
 
 // Page is one page of cached summaries plus whether the server still holds
@@ -77,44 +113,248 @@ interface Page {
   items: MessageSummary[]
   total: number
   hasOlder: boolean
+  threads?: Record<number, ThreadSummary>
 }
 
-// fetchPage reads one page for a selection at the given offset.
+// fetchThreadPage reads one page of conversations for a selection. The first
+// page puts the Pinned group in front.
+async function fetchThreadPage(sel: Selection, offset: number, limit: number): Promise<Page> {
+  const split = splitFor(sel)
+  const page =
+    sel.kind === 'view'
+      ? await listViewThreads(sel.view, limit, offset, split)
+      : sel.kind === 'savedView'
+        ? await listSavedViewThreads(sel.viewId, limit, offset)
+        : await listFolderThreads(sel.folderId, limit, offset, split)
+  const pinned = (page.pinned ?? []).map((thread) => ({ ...thread, head: { ...thread.head, pinned: true } }))
+  const all = [...pinned, ...(page.threads ?? [])]
+  const threads: Record<number, ThreadSummary> = {}
+  for (const thread of all) {
+    threads[thread.head.id] = thread
+  }
+  return {
+    items: all.map((thread) => thread.head),
+    total: page.total + pinned.length,
+    hasOlder: page.hasOlder,
+    threads,
+  }
+}
+
+// flatPage joins a page of messages onto its Pinned group.
+function flatPage(page: MessageList): Page {
+  const pinned = page.pinned ?? []
+  return { items: [...pinned, ...(page.messages ?? [])], total: page.total + pinned.length, hasOlder: page.hasOlder }
+}
+
+// fetchPage reads one page for a selection at the given offset, as
+// conversations when the list is grouped.
 async function fetchPage(sel: Selection, offset: number): Promise<Page> {
+  if (threadedOn(get(prefs))) {
+    return fetchThreadPage(sel, offset, PAGE_SIZE)
+  }
   if (sel.kind === 'view') {
-    const page = await listViewMessages(sel.view, PAGE_SIZE, offset)
-    return { items: page.messages ?? [], total: page.total, hasOlder: page.hasOlder }
+    return flatPage(await listViewMessages(sel.view, PAGE_SIZE, offset, splitFor(sel)))
   }
   if (sel.kind === 'savedView') {
-    const page = await listSavedViewMessages(sel.viewId, PAGE_SIZE, offset)
-    return { items: page.messages ?? [], total: page.total, hasOlder: page.hasOlder }
+    return flatPage(await listSavedViewMessages(sel.viewId, PAGE_SIZE, offset))
   }
-  const page = await listFolderMessages(sel.folderId, PAGE_SIZE, offset)
-  return { items: page.messages ?? [], total: page.total, hasOlder: page.hasOlder }
+  return flatPage(await listFolderMessages(sel.folderId, PAGE_SIZE, offset, splitFor(sel)))
+}
+
+// pagedCount is the server position of the first row not loaded yet: the
+// loaded rows less the Pinned group, which comes with the first page and is
+// not paged.
+function pagedCount(data: ListData | null | undefined): number {
+  return data ? data.items.filter((m) => !rowPinned(m, data.threads)).length : 0
+}
+
+/** Whether a row belongs to the Pinned group: the message or its conversation is pinned. */
+export function rowPinned(m: MessageSummary, threads?: Record<number, ThreadSummary>): boolean {
+  return !!m.pinned || !!threads?.[m.id]?.pinned
+}
+
+/**
+ * Puts the pinned rows in front, each side keeping its order. A list that is
+ * not a result set keeps its rest newest first, which is where an unpinned
+ * row has to go back to.
+ */
+export function pinnedFirst(items: MessageSummary[], threads?: Record<number, ThreadSummary>, byDate = false): MessageSummary[] {
+  const pinned = items.filter((m) => rowPinned(m, threads))
+  const rest = items.filter((m) => !rowPinned(m, threads))
+  if (byDate) {
+    rest.sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0))
+  }
+  return [...pinned, ...rest]
+}
+
+/** Pins or unpins a loaded row, conversation included, and moves it into place. */
+export function repinInList(id: number, pinned: boolean): void {
+  messageList.update((s) => {
+    if (s.status !== 'ready' || !s.data) {
+      return s
+    }
+    const threads = s.data.threads
+      ? Object.fromEntries(
+          Object.entries(s.data.threads).map(([head, thread]) =>
+            Number(head) === id ? [head, { ...thread, pinned, head: { ...thread.head, pinned } }] : [head, thread],
+          ),
+        )
+      : undefined
+    const items = s.data.items.map((m) => (m.id === id ? { ...m, pinned } : m))
+    return ready({ ...s.data, threads, items: pinnedFirst(items, threads, !s.data.searching) })
+  })
+  patchThreadMessage(id, { pinned })
+}
+
+// listIsPaginated is true once the user has loaded, or is loading, beyond the
+// first page. mail:new reads it to merge the head instead of reloading the list
+// back to one page, so a page or a backfill still in flight counts: reloading
+// then would also throw that page away.
+export function listIsPaginated(): boolean {
+  const state = get(messageList)
+  if (!state.data || state.data.searching) {
+    return false
+  }
+  if (moreInFlight !== 0 || state.data.backfilling) {
+    return true
+  }
+  // a reload would cut the list back to one page.
+  return state.status === 'ready' && state.data.items.length > PAGE_SIZE
+}
+
+// a mail:new that came while the list was loading. One refresh covers any
+// number of them, so only the latest selection is kept.
+let queuedHead: Selection | null = null
+
+function sameSelection(a: Selection, b: Selection): boolean {
+  if (a.kind === 'view' && b.kind === 'view') return a.view === b.view
+  if (a.kind === 'savedView' && b.kind === 'savedView') return a.viewId === b.viewId
+  if (a.kind === 'folder' && b.kind === 'folder') return a.folderId === b.folderId
+  return false
+}
+
+// flushQueuedHead runs the head refresh queued while the list was loading.
+function flushQueuedHead(): void {
+  const sel = queuedHead
+  queuedHead = null
+  if (sel) {
+    void refreshListHead(sel)
+  }
+}
+
+// refreshListHead re-reads the first page, prepends rows that are not loaded
+// yet, replaces loaded rows with their fresh copy (body sync fills in the
+// snippet, attachment and security flags of rows already on screen) and drops
+// loaded rows within the head's date range that are gone from it. Scroll and
+// the rest of the loaded window stay intact. While the list is loading it queues one
+// refresh for when the load ends.
+export async function refreshListHead(sel: Selection): Promise<void> {
+  if (currentSearch || !currentSelection || !sameSelection(sel, currentSelection)) {
+    return
+  }
+  const state = get(messageList)
+  if (state.status === 'loading') {
+    queuedHead = sel
+    return
+  }
+  if (state.status !== 'ready' || !state.data || state.data.searching) {
+    return
+  }
+  const generation = loadGeneration
+  try {
+    const { items: head, total, hasOlder, threads: headThreads } = await fetchPage(sel, 0)
+    if (generation !== loadGeneration) {
+      return
+    }
+    if (get(messageList).status === 'loading') {
+      // a loadMore started meanwhile; its result may predate this head.
+      queuedHead = sel
+      return
+    }
+    messageList.update((s) => {
+      if (s.status !== 'ready' || !s.data || s.data.searching) {
+        return s
+      }
+      const byId = new Map(head.map((m) => [m.id, m]))
+      // the head is the whole selection down to its oldest row, so a loaded
+      // row newer than that row that the head lacks has left (deleted, moved,
+      // read under an unread view, or no longer the newest of its
+      // conversation). A row on the same date may just sort below the head
+      // (the server breaks date ties by uid, which the list does not have), so
+      // it stays. A short head is the entire selection. The Pinned group comes
+      // whole with the head and is not paged, so it does not count here, and a
+      // loaded pinned row the head lacks has left the group.
+      const paged = head.filter((m) => !rowPinned(m, headThreads))
+      const whole = paged.length < PAGE_SIZE
+      const oldestHead = whole ? '' : paged.reduce((min, m) => (m.date < min ? m.date : min), paged[0].date)
+      let changed = total !== s.data.total || hasOlder !== s.data.hasOlder
+      const kept: MessageSummary[] = []
+      for (const m of s.data.items) {
+        const next = byId.get(m.id)
+        byId.delete(m.id)
+        if (!next) {
+          if (whole || m.date > oldestHead || rowPinned(m, s.data.threads)) {
+            changed = true
+          } else {
+            kept.push(m)
+          }
+          continue
+        }
+        if (
+          JSON.stringify(next) !== JSON.stringify(m) ||
+          JSON.stringify(headThreads?.[m.id]) !== JSON.stringify(s.data.threads?.[m.id])
+        ) {
+          changed = true
+          kept.push(next)
+        } else {
+          kept.push(m)
+        }
+      }
+      const fresh = [...byId.values()]
+      if (fresh.length === 0 && !changed) {
+        return s
+      }
+      const sorted = [...fresh, ...kept].sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0))
+      // a conversation keeps the head's summary of it; one that left keeps
+      // nothing.
+      let threads = s.data.threads
+      if (threads || headThreads) {
+        const merged = mergeThreads(s.data.threads, undefined) ?? {}
+        Object.assign(merged, headThreads)
+        threads = Object.fromEntries(sorted.filter((m) => merged[m.id]).map((m) => [m.id, merged[m.id]]))
+      }
+      const items = pinnedFirst(sorted, threads, true)
+      return ready({ ...s.data, items, total, hasOlder, threads })
+    })
+  } catch {
+    // a failed head refresh must not disturb the list the user is scrolling.
+  }
 }
 
 // loadList loads the first page for a selection, replacing the list.
 export async function loadList(sel: Selection): Promise<void> {
   currentSelection = sel
-  currentOffset = 0
+  moreInFlight = 0
   // leaving a result set: a late search page must not append onto a folder.
   currentSearch = null
   searchSortKind.set(null)
   backfillFailed.set(false)
   const generation = ++loadGeneration
+  invalidateThreads()
   messageList.update((s) => loading(s))
   try {
-    const { items, total, hasOlder } = await fetchPage(sel, 0)
+    const { items, total, hasOlder, threads } = await fetchPage(sel, 0)
     if (generation !== loadGeneration) {
       return
     }
-    messageList.set(ready({ items, total, searching: false, hasOlder, backfilling: false }))
+    messageList.set(ready({ items, total, searching: false, hasOlder, backfilling: false, threads }))
   } catch (err) {
     if (generation !== loadGeneration) {
       return
     }
     messageList.set(failed(errorMessage(err)))
   }
+  flushQueuedHead()
 }
 
 // loadMore appends the next page if there are more rows. it is a no-op while
@@ -142,36 +382,44 @@ export async function loadMore(): Promise<void> {
     }
     return
   }
-  const nextOffset = currentOffset + PAGE_SIZE
+  const nextOffset = pagedCount(state.data)
   const generation = loadGeneration
+  const token = ++moreSeq
+  moreInFlight = token
   messageList.update((s) => loading(s))
   try {
-    const { items, total, hasOlder } = await fetchPage(currentSelection, nextOffset)
+    const { items, total, hasOlder, threads } = await fetchPage(currentSelection, nextOffset)
+    if (moreInFlight === token) {
+      moreInFlight = 0
+    }
     if (generation !== loadGeneration) {
       return
     }
-    currentOffset = nextOffset
     messageList.update((s) => {
       if (!s.data) {
         return s
       }
       return ready({
         ...s.data,
-        items: appendPage(s.data.items, items),
+        items: appendPage(s.data.items, items, threads !== undefined),
         total,
         hasOlder,
         searching: false,
+        threads: mergeThreads(s.data.threads, threads),
       })
     })
   } catch (err) {
+    if (moreInFlight === token) {
+      moreInFlight = 0
+    }
     if (generation !== loadGeneration) {
       return
     }
-    // leave currentOffset unchanged so a retry re-requests this same page
-    // instead of skipping it; keep the existing list and surface the error
+    // nothing was appended, so a retry re-requests this same page; keep the existing list and surface the error
     // without discarding loaded rows.
     messageList.update((s) => (s.data ? ready(s.data) : failed(errorMessage(err))))
   }
+  flushQueuedHead()
 }
 
 // loadOlder fetches the next batch of older mail from the server and appends
@@ -204,21 +452,22 @@ export async function loadOlder(): Promise<void> {
       return
     }
     // the newly cached mail is older than everything on screen, so it lands at
-    // the end of the list; re-read from the current offset rather than
-    // reloading from the top, which would lose the user's scroll position.
-    const nextOffset = currentOffset + PAGE_SIZE
-    const { items, total } = await fetchPage(sel, nextOffset)
+    // the end of the list; read on from the loaded rows rather than reloading
+    // from the top, which would lose the user's scroll position. The count is
+    // read now, not before the round trip: a head merge may have run meanwhile.
+    const loaded = pagedCount(get(messageList).data)
+    const { items, total, threads } = await fetchPage(sel, loaded)
     if (generation !== loadGeneration) {
       return
     }
-    currentOffset = nextOffset
     messageList.update((s) => {
       if (!s.data) {
         return s
       }
       return ready({
         ...s.data,
-        items: appendPage(s.data.items, items),
+        items: appendPage(s.data.items, items, threads !== undefined),
+        threads: mergeThreads(s.data.threads, threads),
         total,
         hasOlder: result.hasOlder,
         backfilling: false,
@@ -234,47 +483,28 @@ export async function loadOlder(): Promise<void> {
   }
 }
 
-// SearchFilter carries the structured constraints from the search chips: an
-// optional date window (0 on a side leaves it open), field-scoped terms, and
-// the attachment toggle. Free text is passed separately to runSearch.
-export interface SearchFilter {
-  afterUnix: number
-  beforeUnix: number
-  from: string
-  to: string
-  subject: string
-  hasAttachment: boolean
-  unreadOnly: boolean
-}
-
-export const emptyFilter: SearchFilter = {
-  afterUnix: 0,
-  beforeUnix: 0,
-  from: '',
-  to: '',
-  subject: '',
-  hasAttachment: false,
-  unreadOnly: false,
-}
-
 // datesActive reports whether the filter carries a date window, which is what
 // separates a 'dated' search from a 'filtered' one.
 function datesActive(f: SearchFilter): boolean {
   return f.afterUnix > 0 || f.beforeUnix > 0
 }
 
-// filterActive reports whether any chip constraint is set (used to decide
-// between the ranked search and the plain folder list).
-export function filterActive(f: SearchFilter): boolean {
-  return (
-    f.afterUnix > 0 ||
-    f.beforeUnix > 0 ||
-    f.from !== '' ||
-    f.to !== '' ||
-    f.subject !== '' ||
-    f.hasAttachment ||
-    f.unreadOnly
-  )
+// requestFilter is the part of a search request the filter supplies.
+function requestFilter(f: SearchFilter): Omit<SearchRequest, 'query' | 'limit' | 'offset' | 'sort'> {
+  return {
+    afterUnix: f.afterUnix,
+    beforeUnix: f.beforeUnix,
+    from: f.from,
+    to: f.to,
+    subject: f.subject,
+    hasAttachment: f.hasAttachment,
+    unreadOnly: f.unreadOnly,
+    flaggedOnly: f.flaggedOnly,
+    accountId: f.accountId,
+    folderId: f.folderId,
+    note: f.note,
+    hasNote: f.hasNote,
+  }
 }
 
 // searchPageSize is how many ranked hits one search page holds. It matches what
@@ -317,13 +547,7 @@ export function allMatchingIds(): Promise<MessageIDs> {
   if (active) {
     return searchMessageIds({
       query: active.query,
-      afterUnix: active.filter.afterUnix,
-      beforeUnix: active.filter.beforeUnix,
-      from: active.filter.from,
-      to: active.filter.to,
-      subject: active.filter.subject,
-      hasAttachment: active.filter.hasAttachment,
-      unreadOnly: active.filter.unreadOnly,
+      ...requestFilter(active.filter),
       limit: 0,
       offset: 0,
       // the same order the list is in: the backend caps how many ids it
@@ -335,7 +559,7 @@ export function allMatchingIds(): Promise<MessageIDs> {
   if (!currentSelection) {
     return Promise.resolve({ ids: [], capped: false, matching: 0 })
   }
-  return messageIds(currentSelection)
+  return messageIds(currentSelection, splitFor(currentSelection))
 }
 
 // searchPage fetches one page of ranked results.
@@ -347,13 +571,7 @@ function searchPage(
 ): Promise<{ messages: MessageSummary[]; total: number }> {
   return search({
     query,
-    afterUnix: filter.afterUnix,
-    beforeUnix: filter.beforeUnix,
-    from: filter.from,
-    to: filter.to,
-    subject: filter.subject,
-    hasAttachment: filter.hasAttachment,
-    unreadOnly: filter.unreadOnly,
+    ...requestFilter(filter),
     limit: searchPageSize,
     offset,
     sort,
@@ -388,7 +606,7 @@ export async function runSearch(query: string, filter: SearchFilter = emptyFilte
     // "load older" affordance on a result set.
     messageList.set(
       ready({
-        items: messages,
+        items: pinnedFirst(messages),
         total,
         searching: true,
         hasOlder: false,
@@ -431,7 +649,7 @@ async function loadMoreSearch(): Promise<void> {
       if (!s.data || !s.data.searching || currentSearch !== active) {
         return s
       }
-      const items = appendPage(s.data.items, messages)
+      const items = pinnedFirst(appendPage(s.data.items, messages))
       return ready({
         ...s.data,
         items,
@@ -449,28 +667,123 @@ async function loadMoreSearch(): Promise<void> {
   }
 }
 
+// withoutMember takes a message out of the conversation that lists it as a
+// member, so its count and unread count stay true. The conversation whose
+// newest message it was is left alone: that row is going.
+function withoutMember(
+  threads: Record<number, ThreadSummary> | undefined,
+  id: number,
+): Record<number, ThreadSummary> | undefined {
+  if (!threads) {
+    return threads
+  }
+  const seen = threadSeenOf(id)
+  const out: Record<number, ThreadSummary> = {}
+  for (const [head, thread] of Object.entries(threads)) {
+    if (Number(head) !== id && thread.messageIds.includes(id)) {
+      out[Number(head)] = {
+        ...thread,
+        messageIds: thread.messageIds.filter((m) => m !== id),
+        count: Math.max(1, thread.count - 1),
+        unreadCount: seen === false ? Math.max(0, thread.unreadCount - 1) : thread.unreadCount,
+      }
+    } else {
+      out[Number(head)] = thread
+    }
+  }
+  return out
+}
+
+// a conversation whose newest message left the list still has the rest of its
+// messages, so the loaded pages are read again shortly after to bring it back
+// under its next newest message.
+let regroupTimer: ReturnType<typeof setTimeout> | undefined
+// while a hold is out, a regroup waits for its release: a conversation whose
+// members are still being moved away one by one would otherwise come back
+// under a member that is about to go too.
+let regroupHolds = 0
+let regroupPending = false
+
+function regroupSoon(): void {
+  if (regroupHolds > 0) {
+    regroupPending = true
+    return
+  }
+  clearTimeout(regroupTimer)
+  regroupTimer = setTimeout(() => void regroup(), 400)
+}
+
+/**
+ * holdRegroup keeps conversations that lost their row from being read back
+ * until the returned release is called, which then regroups if one was due.
+ */
+export function holdRegroup(): () => void {
+  regroupHolds++
+  let released = false
+  return () => {
+    if (released) {
+      return
+    }
+    released = true
+    regroupHolds--
+    if (regroupHolds === 0 && regroupPending) {
+      regroupPending = false
+      regroupSoon()
+    }
+  }
+}
+
+// regroup reads the conversations loaded so far again in one request, without
+// showing the list as loading or moving its scroll.
+async function regroup(): Promise<void> {
+  const sel = currentSelection
+  const state = get(messageList)
+  if (!sel || state.status !== 'ready' || !state.data?.threads || currentSearch) {
+    return
+  }
+  const generation = loadGeneration
+  try {
+    const page = await fetchThreadPage(sel, 0, Math.max(pagedCount(state.data), PAGE_SIZE))
+    if (generation !== loadGeneration) {
+      return
+    }
+    messageList.update((s) =>
+      s.status === 'ready' && s.data?.threads
+        ? ready({ ...s.data, items: page.items, threads: page.threads, total: page.total, hasOlder: page.hasOlder })
+        : s,
+    )
+  } catch {
+    // the rows already on screen are still right; the next reload catches up.
+  }
+}
+
 // removeFromList drops a message from the loaded list after a delete.
 export function removeFromList(id: number): void {
   messageList.update((s) => {
     if (s.status !== 'ready' || !s.data) {
       return s
     }
+    const thread = s.data.threads?.[id]
+    if (thread && thread.count > 1) {
+      regroupSoon()
+    }
+    const threads = withoutMember(s.data.threads, id)
+    if (threads && thread) {
+      delete threads[id]
+    }
     const items = s.data.items.filter((m) => m.id !== id)
     // only decrement total if the id was actually loaded (e.g. deleting from
     // the detail view for a message outside the currently loaded page must
     // not desync total from the real remaining count).
     const removed = items.length !== s.data.items.length
-    // the rows behind it move up one on the server, so the next page starts
-    // one earlier than it would have.
-    if (removed) {
-      currentOffset = Math.max(0, currentOffset - 1)
-    }
     return ready({
       ...s.data,
       items,
+      threads,
       total: removed ? Math.max(0, s.data.total - 1) : s.data.total,
     })
   })
+  dropThreadMessage(id)
   // the message left a folder (deleted, archived, moved or snoozed), so that
   // folder's badge and every unified view it feeds are now wrong. This fires
   // even when the row was not loaded: the count changed either way.
@@ -478,11 +791,16 @@ export function removeFromList(id: number): void {
 }
 
 // neighbourInList returns the row that should take id's place when it leaves
-// the list: the one below it, or the one above when it was the last. skip holds
+// the list: the one below it, or the one above when it was the last. toward
+// 'above' prefers the row above and falls back to the one below. skip holds
 // rows that are going too, so a bulk action does not land on one of its own
 // casualties. null when the list holds nothing else, is not loaded, or does not
 // have id at all (a message opened from outside the current page).
-export function neighbourInList(id: number, skip: ReadonlySet<number> = new Set()): number | null {
+export function neighbourInList(
+  id: number,
+  skip: ReadonlySet<number> = new Set(),
+  toward: 'below' | 'above' = 'below',
+): number | null {
   const state = get(messageList)
   if (state.status !== 'ready' || !state.data) {
     return null
@@ -493,11 +811,21 @@ export function neighbourInList(id: number, skip: ReadonlySet<number> = new Set(
     return null
   }
   const survives = (m: MessageSummary): boolean => m.id !== id && !skip.has(m.id)
-  const below = items.slice(at + 1).find(survives)
-  if (below) {
-    return below.id
+  const below = items.slice(at + 1).find(survives)?.id ?? null
+  const above = items.slice(0, at).findLast(survives)?.id ?? null
+  return toward === 'below' ? (below ?? above) : (above ?? below)
+}
+
+/**
+ * newestFirst reports whether the loaded list runs from newest to oldest,
+ * which is what every folder does and what a search sorted by date may not.
+ */
+export function newestFirst(): boolean {
+  const items = get(messageList).data?.items ?? []
+  if (items.length < 2) {
+    return true
   }
-  return items.slice(0, at).findLast(survives)?.id ?? null
+  return Date.parse(items[0].date) >= Date.parse(items[items.length - 1].date)
 }
 
 // restoreToList re-inserts a previously removed row (used by undo-delete),
@@ -510,12 +838,51 @@ export function restoreToList(summary: MessageSummary): void {
     if (s.data.items.some((m) => m.id === summary.id)) {
       return s
     }
-    const items = [...s.data.items, summary].sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0))
-    currentOffset += 1
+    // a grouped list reads its conversations again rather than guessing which
+    // one the message rejoins.
+    if (s.data.threads) {
+      regroupSoon()
+      return s
+    }
+    const items = pinnedFirst([...s.data.items, summary], undefined, true)
     return ready({ ...s.data, items, total: s.data.total + 1 })
   })
   // an undone delete puts the message back where it was, badge included.
   refreshCountsSoon()
+}
+
+// patchThreads carries a change to a message into the conversation it belongs
+// to: the newest message's copy, the unread count when its read state moved,
+// and the conversation's flag when it is flagged.
+function patchThreads(
+  threads: Record<number, ThreadSummary> | undefined,
+  items: MessageSummary[],
+  id: number,
+  patch: Partial<MessageSummary>,
+): Record<number, ThreadSummary> | undefined {
+  if (!threads) {
+    return threads
+  }
+  const before = items.find((m) => m.id === id)?.seen ?? threadSeenOf(id)
+  const out: Record<number, ThreadSummary> = {}
+  for (const [key, thread] of Object.entries(threads)) {
+    const head = Number(key)
+    if (head !== id && !thread.messageIds.includes(id)) {
+      out[head] = thread
+      continue
+    }
+    let unreadCount = thread.unreadCount
+    if (patch.seen !== undefined && before !== undefined && patch.seen !== before) {
+      unreadCount = Math.max(0, unreadCount + (patch.seen ? -1 : 1))
+    }
+    out[head] = {
+      ...thread,
+      head: head === id ? { ...thread.head, ...patch } : thread.head,
+      unreadCount,
+      flagged: patch.flagged === true ? true : thread.flagged,
+    }
+  }
+  return out
 }
 
 // patchInList applies a partial update to one row, for optimistic flag changes.
@@ -527,8 +894,10 @@ export function patchInList(id: number, patch: Partial<MessageSummary>): void {
     return ready({
       ...s.data,
       items: s.data.items.map((m) => (m.id === id ? { ...m, ...patch } : m)),
+      threads: patchThreads(s.data.threads, s.data.items, id, patch),
     })
   })
+  patchThreadMessage(id, patch)
   // only the two flags the sidebar counts. Read state drives every folder badge
   // and the unified views; flagged drives the Flagged view. A color label or an
   // offline copy changes nothing the sidebar shows, and refreshing on those
