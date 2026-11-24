@@ -7,6 +7,10 @@ const entries: SettingsIndexEntry[] = [
   { page: 'tasks', id: 'tasks-in-calendar', labelKey: 'taskSettings.inCalendar', keywords: 'tasks todo calendar show due' },
   { page: 'tasks', id: 'tasks-completed', labelKey: 'taskSettings.completed', keywords: 'tasks todo completed done hide keep days' },
   { page: 'tasks', id: 'tasks-sort', labelKey: 'taskSettings.sort', keywords: 'tasks todo sort order manual due priority title' },
+  { page: 'tasks', id: 'promises-enabled', labelKey: 'promiseSettings.enabled', keywords: 'promises commitments i owe owed to me mail suggestions' },
+  { page: 'tasks', id: 'promises-auto', labelKey: 'promiseSettings.autoMine', keywords: 'promises accept automatically sent mail' },
+  { page: 'tasks', id: 'promises-nudge', labelKey: 'promiseSettings.nudge', keywords: 'promises nudge reminder waiting overdue' },
+  { page: 'tasks', id: 'promises-list', labelKey: 'promiseSettings.list', keywords: 'promises task list local caldav' },
 ]
 
 export default entries

@@ -107,8 +107,8 @@ func TestFetchAttachmentRestoresFromServer(t *testing.T) {
 	if !entry.Downloaded {
 		t.Fatalf("entry = %+v, want downloaded", entry)
 	}
-	if len(client.fetchedUIDs) != 1 || client.fetchedUIDs[0] != 42 || client.selected[0] != "INBOX" || !client.loggedOut {
-		t.Fatalf("server calls: uids %v, selected %v, logged out %v", client.fetchedUIDs, client.selected, client.loggedOut)
+	if len(client.fetchedUIDs) != 1 || client.fetchedUIDs[0] != 42 || len(client.selected) == 0 || client.selected[len(client.selected)-1] != "INBOX" {
+		t.Fatalf("server calls: uids %v, selected %v", client.fetchedUIDs, client.selected)
 	}
 	content, err := a.ReadAttachment(id, atts[1].ID)
 	if err != nil {

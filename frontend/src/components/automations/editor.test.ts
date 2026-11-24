@@ -6,6 +6,7 @@ import type { BlockCond, ScriptCatalog, ScriptRun } from '../../lib/scripting'
 import { needs, permissionMet } from '../../lib/scripting'
 import { blockCatalog, catalogFixture, scriptFixture } from '../../test/scriptfixtures'
 import { expectAccessible } from '../../test/a11y'
+import { expectAxeClean } from '../../test/axe'
 import { onTestedMessage, testableOnMail } from './blocks/matchcond'
 
 const api = vi.hoisted(() => ({
@@ -139,6 +140,7 @@ describe('ScriptEditor and AI', () => {
     await userEvent.type(within(panel).getByRole('searchbox'), 'mail.send')
     expect(within(panel).getByText('mail.send()')).toBeInTheDocument()
     expectAccessible()
+    await expectAxeClean()
   })
 })
 

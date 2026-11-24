@@ -102,6 +102,9 @@ type TaskDTO struct {
 	EventUIDs []string         `json:"eventUids"`
 	// SortOrder is the manual position, shared with other task apps.
 	SortOrder int `json:"sortOrder"`
+	// Estimate is how many minutes the task is expected to take, 0 for no
+	// estimate.
+	Estimate int `json:"estimate"`
 	// Created is rfc3339 from the task's CREATED, empty when it has none.
 	Created   string `json:"created"`
 	ReadOnly  bool   `json:"readOnly"`
@@ -133,6 +136,8 @@ type TaskRequest struct {
 	Contacts   []TaskContactDTO `json:"contacts"`
 	EventUIDs  []string         `json:"eventUids"`
 	SortOrder  int              `json:"sortOrder"`
+	// Estimate is the expected time in minutes, 0 for none.
+	Estimate int `json:"estimate"`
 	// Force writes over the server's copy, for "keep mine" on a conflict.
 	Force bool `json:"force"`
 }
@@ -753,6 +758,7 @@ func (a *App) taskFamily(root storage.CalendarEvent, uid string) ([]storage.Cale
 // commitTask stores an edited task and, for a synced list, writes it to the
 // server right away, the way commitEvent does for an event.
 func (a *App) commitTask(ctx context.Context, cal storage.Calendar, row storage.CalendarEvent, obj *ical.TodoObject, force bool) (TaskSaveResultDTO, error) {
+	wasDone := row.TaskCompleted != ""
 	fillTaskRow(&row, obj)
 	row.SyncError = ""
 	if cal.Local() {
@@ -766,6 +772,7 @@ func (a *App) commitTask(ctx context.Context, cal storage.Calendar, row storage.
 	if err := a.store.SaveCalendarEvent(ctx, &row); err != nil {
 		return TaskSaveResultDTO{}, err
 	}
+	a.blocksFollowTask(ctx, row.UID, wasDone, row.TaskCompleted != "")
 	var result TaskSaveResultDTO
 	if !cal.Local() {
 		out, err := a.pushRowNow(ctx, cal, &row, force)
@@ -890,6 +897,7 @@ func applyTaskRequest(t *ical.Todo, req TaskRequest) error {
 		}
 	}
 	t.SortOrder = req.SortOrder
+	t.Estimate = time.Duration(max(0, req.Estimate)) * time.Minute
 	return nil
 }
 
@@ -986,6 +994,7 @@ func taskDTO(row storage.CalendarEvent, cal storage.Calendar, obj *ical.TodoObje
 		Contacts:   []TaskContactDTO{},
 		EventUIDs:  append([]string{}, t.Related...),
 		SortOrder:  t.SortOrder,
+		Estimate:   int(t.Estimate / time.Minute),
 		ReadOnly:   cal.ReadOnly,
 		Pending:    row.Pending != "",
 		Conflict:   row.Conflict,

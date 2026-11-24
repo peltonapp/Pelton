@@ -3,6 +3,7 @@ import { render, screen } from '@testing-library/svelte'
 import { createRawSnippet, tick, type ComponentProps } from 'svelte'
 import Modal from './Modal.svelte'
 import { prefs } from '../../stores/prefs'
+import { expectAxeClean } from '../../test/axe'
 
 // the dialog opens with a transition, and jsdom has no web animations.
 Element.prototype.animate ??= function () {
@@ -34,5 +35,6 @@ describe('Modal focus on open', () => {
     await open()
 
     expect(document.activeElement).toBe(screen.getByRole('textbox', { name: 'Name' }))
+    await expectAxeClean()
   })
 })

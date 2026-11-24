@@ -21,6 +21,7 @@ import projectIcon from '@phosphor-icons/core/assets/duotone/kanban-duotone.svg?
 import taskIcon from '@phosphor-icons/core/assets/duotone/check-square-duotone.svg?raw'
 import { scriptAction, type ShortcutAction } from './shortcuts'
 import { scriptIcon } from './scripticons'
+import { scriptText } from './scriptmark'
 import type { PlacedScript } from './scripting'
 
 /** A script placed on the row buttons or the swipes: "script:" and its id. */
@@ -84,6 +85,8 @@ export interface RowActionView {
   labelKey: string
   /** A name shown instead of the label key, for a script. */
   label?: string
+  /** Set for a script, to its name: the action carries the script mark. */
+  script?: string
   /** Raw Phosphor svg. */
   icon: string
   /** The shortcut it mirrors, for the tooltip. */
@@ -109,7 +112,8 @@ export function rowActionView(id: RowActionId, s: RowActionState, scripts: reado
   const scriptId = scriptRowActionId(id)
   if (scriptId !== null) {
     const script = scripts.find((p) => p.scriptId === scriptId)
-    return { ...view('', scriptIcon(script?.options.icon), scriptAction(scriptId)), label: script?.name ?? '' }
+    const name = scriptText(script?.name ?? '')
+    return { ...view('', scriptIcon(script?.options.icon), scriptAction(scriptId)), label: name, script: name }
   }
   switch (id as BuiltinRowActionId) {
     case 'archive':

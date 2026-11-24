@@ -1,0 +1,59 @@
+{
+  "running": true,
+  "version": "2026.5",
+  "protocol": 1,
+  "access": true,
+  "locked": false,
+  "capabilities": [
+    {
+      "name": "read",
+      "label": "Read mail",
+      "on": true
+    },
+    {
+      "name": "search",
+      "label": "Search mail",
+      "on": true
+    },
+    {
+      "name": "change",
+      "label": "Change mail",
+      "on": true
+    },
+    {
+      "name": "send",
+      "label": "Send mail",
+      "on": true
+    },
+    {
+      "name": "send_unasked",
+      "label": "Send without asking",
+      "on": false
+    },
+    {
+      "name": "delete_unasked",
+      "label": "Delete permanently without asking",
+      "on": false
+    },
+    {
+      "name": "scripts",
+      "label": "Run automations",
+      "on": true
+    },
+    {
+      "name": "export",
+      "label": "Export mail",
+      "on": true
+    },
+    {
+      "name": "pim_read",
+      "label": "Read calendar, tasks and contacts",
+      "on": true
+    },
+    {
+      "name": "pim_change",
+      "label": "Add tasks",
+      "on": true
+    }
+  ]
+}

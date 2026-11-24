@@ -8,8 +8,8 @@
   import Live from './Live.svelte'
   import { t } from '../../lib/i18n'
   import { checkScriptLua } from '../../lib/api'
-  import type { ScriptCatalog, ScriptLibrary, ScriptLibraryInput } from '../../lib/scripting'
-  import { exportLibrary, libraries, removeLibrary, runLog, saveLibrary, testRun } from '../../stores/scripts'
+  import type { ScriptCatalog, ScriptLibrary, ScriptLibraryInput, ScriptRef } from '../../lib/scripting'
+  import { exportLibrary, libraries, libraryImpact, removeLibrary, runLog, saveLibrary, testRun } from '../../stores/scripts'
   import { askConfirm } from '../../stores/confirm'
   import { errorMessage, toastError, toastSuccess } from '../../stores/toast'
   import { syntaxErrorLine } from './lua/assist'
@@ -63,9 +63,28 @@
 
   onDestroy(() => clearTimeout(timer))
 
+  function impactText(affected: ScriptRef[]): string {
+    return $t(affected.length === 1 ? 'scripts.library.impact.body.one' : 'scripts.library.impact.body')
+      .replace('{n}', String(affected.length))
+      .replace('{list}', affected.map((s) => s.name).join(', '))
+  }
+
   async function save(): Promise<void> {
     busy = true
     try {
+      if (input.source !== library.source || input.name !== library.name) {
+        const affected = await libraryImpact(library.id, input.name)
+        if (affected.length > 0) {
+          const ok = await askConfirm({
+            title: $t(affected.length === 1 ? 'scripts.library.impact.title.one' : 'scripts.library.impact.title').replace('{n}', String(affected.length)),
+            body: impactText(affected),
+            confirmLabel: $t('scripts.library.impact.confirm'),
+          })
+          if (!ok) {
+            return
+          }
+        }
+      }
       await saveLibrary(library.id, input)
       toastSuccess($t('scripts.toast.saved'))
     } catch (err) {
@@ -76,9 +95,10 @@
   }
 
   async function remove(): Promise<void> {
+    const affected = await libraryImpact(library.id, library.name).catch(() => [] as ScriptRef[])
     const ok = await askConfirm({
       title: $t('scripts.library.delete.title').replace('{name}', library.name),
-      body: $t('scripts.library.delete.body'),
+      body: affected.length > 0 ? `${$t('scripts.library.delete.body')} ${impactText(affected)}` : $t('scripts.library.delete.body'),
       confirmLabel: $t('scripts.delete'),
       danger: true,
     })

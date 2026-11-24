@@ -34,9 +34,10 @@
   import { occurrenceKey } from './occurrence'
   import { eventLabel } from './labels'
   import { calendars, type CellMenuAt, type MailDropAt } from '../../stores/calendar'
+  import { onTaskDrop, taskDrag, type TaskDrag } from './taskdrag'
   import { t } from '../../lib/i18n'
   import type { TimeFormat } from '../../lib/format'
-  import type { Occurrence, TimeZoneDisplay } from '../../lib/types'
+  import type { Occurrence, Task, TimeZoneDisplay } from '../../lib/types'
 
   /** The days shown, one column each. */
   export let days: Date[]
@@ -58,6 +59,8 @@
   export let selectedKey: string = ''
   /** A popover is open: the next press only closes it. */
   export let busy: boolean = false
+  /** The occurrence key to put the keyboard focus on once it is drawn, after a move from the keyboard. */
+  export let focusKey: string = ''
 
   const dispatch = createEventDispatcher<{
     create: { start: Date; end: Date; allDay: boolean }
@@ -67,6 +70,8 @@
     mailDrop: MailDropAt
     menu: CellMenuAt
     toggleTask: Occurrence
+    taskDrop: { task: Task; start: Date; end: Date }
+    blockAction: { occ: Occurrence; action: 'delete' | 'duplicate' | 'menu'; anchor: HTMLElement }
   }>()
 
   const step = 15
@@ -434,10 +439,16 @@
       onDrop: (items, info) => {
         const hit = hintAt(lastMail.x, lastMail.y)
         if (items.length > 0) {
-          dispatch('mailDrop', { messageIds: items.map((m) => m.id), at: timeAt(hit?.col ?? col, hit?.minutes ?? workStart), mode: 'time', shift: info.shift })
+          dispatch('mailDrop', {
+            messageIds: items.map((m) => m.id),
+            at: timeAt(hit?.col ?? col, hit?.minutes ?? workStart),
+            mode: 'time',
+            shift: info.shift,
+            alt: !!info.alt,
+          })
         }
       },
-      hint: (items, shift) => mailDropHint(items.length, shift, true),
+      hint: (items, shift, alt) => mailDropHint(items.length, shift, true, alt),
     }
   }
 
@@ -445,11 +456,123 @@
     return {
       onDrop: (items, info) => {
         if (items.length > 0) {
-          dispatch('mailDrop', { messageIds: items.map((m) => m.id), at: startOfDay(days[col]), mode: 'allDay', shift: info.shift })
+          dispatch('mailDrop', { messageIds: items.map((m) => m.id), at: startOfDay(days[col]), mode: 'allDay', shift: info.shift, alt: !!info.alt })
         }
       },
-      hint: (items, shift) => mailDropHint(items.length, shift, true),
+      hint: (items, shift, alt) => mailDropHint(items.length, shift, true, alt),
     }
+  }
+
+  // --- a task dragged in from the plan pane ------------------------------------
+
+  $: taskHint = $taskDrag && scroller ? taskHintAt($taskDrag) : null
+
+  function taskHintAt(d: TaskDrag): { col: number; minutes: number; length: number } | null {
+    const col = colEls.findIndex((el) => inside(el, d.x, d.y))
+    if (col === -1) {
+      return null
+    }
+    const length = Math.min(dayMinutes, Math.max(step, d.minutes))
+    return { col, minutes: Math.min(dayMinutes - length, minutesAtY(d.y, Math.floor)), length }
+  }
+
+  const offTaskDrop = onTaskDrop((d) => {
+    const hit = taskHintAt(d)
+    if (!hit) {
+      return false
+    }
+    dispatch('taskDrop', { task: d.task, start: timeAt(hit.col, hit.minutes), end: timeAt(hit.col, hit.minutes + hit.length) })
+    return true
+  })
+
+  // --- blocks and proposals from the keyboard ------------------------------------
+
+  // Alt with an arrow moves a block or proposal by a quarter hour, with Shift
+  // it changes the end instead, Alt with Page Up or Down moves it a day;
+  // Delete removes it, mod+D copies it, the menu key or Shift+F10 opens its
+  // menu.
+  function onEntryKey(event: KeyboardEvent, p: Placed<Occurrence>): void {
+    const occ = p.occ
+    if (!occ.block && !occ.proposal) {
+      return
+    }
+    const anchor = event.currentTarget as HTMLElement
+    const length = p.end.getTime() - p.start.getTime()
+    const minute = 60000
+    let start = p.start
+    let endAt = p.end
+    if (event.altKey && (event.key === 'ArrowUp' || event.key === 'ArrowDown')) {
+      const by = (event.key === 'ArrowUp' ? -step : step) * minute
+      if (event.shiftKey) {
+        endAt = new Date(Math.max(p.start.getTime() + step * minute, p.end.getTime() + by))
+      } else {
+        start = new Date(p.start.getTime() + by)
+        endAt = new Date(start.getTime() + length)
+      }
+    } else if (event.altKey && (event.key === 'PageUp' || event.key === 'PageDown')) {
+      start = addDays(p.start, event.key === 'PageUp' ? -1 : 1)
+      endAt = new Date(start.getTime() + length)
+    } else if (!event.altKey && !event.metaKey && !event.ctrlKey && (event.key === 'Delete' || event.key === 'Backspace')) {
+      event.preventDefault()
+      event.stopPropagation()
+      dispatch('blockAction', { occ, action: 'delete', anchor })
+      return
+    } else if ((event.metaKey || event.ctrlKey) && !event.altKey && event.key.toLowerCase() === 'd' && occ.block) {
+      event.preventDefault()
+      event.stopPropagation()
+      dispatch('blockAction', { occ, action: 'duplicate', anchor })
+      return
+    } else if (event.key === 'ContextMenu' || (event.shiftKey && event.key === 'F10')) {
+      event.preventDefault()
+      event.stopPropagation()
+      dispatch('blockAction', { occ, action: 'menu', anchor })
+      return
+    } else {
+      return
+    }
+    event.preventDefault()
+    event.stopPropagation()
+    dispatch('change', { occ, start, end: endAt })
+  }
+
+  function entryLabel(occ: Occurrence, start: Date, endAt: Date): string {
+    const parts = [
+      $t(occ.proposal ? 'calendar.block.labelProposal' : 'calendar.block.label').replace('{title}', entryTitle(occ)),
+      `${formatTimeRange(start, endAt, timeFormat)}, ${formatLongDay(start)}`,
+    ]
+    if (occ.block?.done) {
+      parts.push($t('calendar.block.done'))
+    }
+    if (occ.block?.linkState) {
+      parts.push($t(occ.block.linkState === 'event_gone' ? 'calendar.block.linkGone' : 'calendar.block.outOfStep'))
+    }
+    if (occ.proposal && occ.proposal.parts > 1) {
+      parts.push($t('calendar.block.part').replace('{part}', String(occ.proposal.part)).replace('{parts}', String(occ.proposal.parts)))
+    }
+    parts.push($t('calendar.block.keys'))
+    return parts.join(', ')
+  }
+
+  // what a block or proposal is called on screen: "Busy" while its mail is in
+  // a locked vault, its title, or a plain "Time block".
+  function entryTitle(occ: Occurrence): string {
+    if (occ.block?.masked) {
+      return $t('calendar.block.busy')
+    }
+    return occ.summary || $t('calendar.block.untitled')
+  }
+
+  function onEntryMenu(event: MouseEvent, occ: Occurrence): void {
+    if (occ.block || occ.proposal) {
+      event.preventDefault()
+      dispatch('blockAction', { occ, action: 'menu', anchor: event.currentTarget as HTMLElement })
+    } else if (!occ.task) {
+      openScriptMenu(event, 'calendar.event', { id: String(occ.eventId) })
+    }
+  }
+
+  $: if (focusKey && scroller) {
+    void tick().then(() => scroller?.querySelector<HTMLElement>(`[data-occ="${CSS.escape(focusKey)}"]`)?.focus())
   }
 
   // a right click on empty time or the all-day lane asks for the cell menu.
@@ -488,6 +611,7 @@
   onDestroy(() => {
     end()
     offMail()
+    offTaskDrop()
   })
 </script>
 
@@ -508,7 +632,7 @@
             class:today={sameDay(day, today)}
             class:weekend={day.getDay() === 0 || day.getDay() === 6}
             aria-current={sameDay(day, today) ? 'date' : undefined}
-            aria-label={formatLongDay(day)}
+            aria-label={`${day.toLocaleDateString(undefined, { weekday: 'short' })} ${day.getDate()}, ${formatLongDay(day)}`}
             style={`grid-column:${i + 2}`}
             on:click={() => dispatch('day', day)}
           >
@@ -615,11 +739,16 @@
                 class:free={occ.transparency === 'TRANSPARENT'}
                 class:readonly={occ.readOnly}
                 class:task={occ.task}
-                class:done={occ.task?.done}
+                class:done={occ.task?.done || occ.block?.done}
+                class:block={occ.block}
+                class:proposal={occ.proposal}
+                class:masked={occ.block?.masked}
+                class:overlaps={(occ.block || occ.proposal) && b.cols > 1}
+                data-occ={occurrenceKey(occ)}
                 style={`top:${pct(b.top)};height:${pct(b.bottom - b.top)};--col:${b.col};--cols:${b.cols};--ev:${colorOf(occ)}`}
-                aria-label={occ.task ? undefined : eventLabel({
+                aria-label={occ.task ? undefined : occ.block || occ.proposal ? entryLabel(occ, b.placed.start, b.placed.end) : eventLabel({
                   title: occ.summary || $t('calendar.untitled'),
-                  when: `${formatLongDay(b.placed.start)}, ${formatTimeRange(b.placed.start, b.placed.end, timeFormat)}`,
+                  when: `${formatTimeRange(b.placed.start, b.placed.end, timeFormat)}, ${occ.location && !short ? `${occ.location}, ` : ''}${formatLongDay(b.placed.start)}`,
                   calendar: calendarNameOf(occ.calendarId),
                   status: occ.status,
                   free: occ.transparency === 'TRANSPARENT',
@@ -628,7 +757,8 @@
                 }, $t)}
                 on:pointerdown={(e) => onEventDown(e, b.placed)}
                 on:click={(e) => e.detail === 0 && dispatch('open', { occ, anchor: e.currentTarget })}
-                on:contextmenu={(e) => !occ.task && openScriptMenu(e, 'calendar.event', { id: String(occ.eventId) })}
+                on:contextmenu={(e) => onEntryMenu(e, occ)}
+                on:keydown={(e) => onEntryKey(e, b.placed)}
               >
                 <span class="title">
                   {#if occ.task}
@@ -640,8 +770,15 @@
                     />
                   {/if}
                   {#if occ.conflict}<Ph svg={warningIcon} size={11} />{/if}
-                  {occ.summary || $t('calendar.untitled')}
+                  {#if occ.block || occ.proposal}
+                    {entryTitle(occ)}
+                  {:else}
+                    {occ.summary || $t('calendar.untitled')}
+                  {/if}
                 </span>
+                {#if occ.proposal && !short}
+                  <span class="tag">{$t('calendar.block.proposed')}</span>
+                {/if}
                 {#if short}
                   <span class="time inline">{formatTime(b.placed.start, timeFormat)}</span>
                 {:else}
@@ -669,6 +806,12 @@
             {#if dropHint && dropHint.col === i}
               <div class="ghost drop" style={`top:${pct(dropHint.minutes)};height:${pct(clickMinutes)}`}>
                 <span>{formatTime(timeAt(i, dropHint.minutes), timeFormat)}</span>
+              </div>
+            {/if}
+
+            {#if taskHint && taskHint.col === i}
+              <div class="ghost drop" style={`top:${pct(taskHint.minutes)};height:${pct(taskHint.length)}`}>
+                <span>{formatTimeRange(timeAt(i, taskHint.minutes), timeAt(i, taskHint.minutes + taskHint.length), timeFormat)}</span>
               </div>
             {/if}
 
@@ -1029,6 +1172,56 @@
   .ev.task.done .title {
     color: var(--text-tertiary);
     text-decoration: line-through;
+  }
+
+  /* a time block: the accent instead of a calendar's color, with a dashed
+     outline so it never reads as an event. */
+  .ev.block {
+    border: var(--hairline) dashed color-mix(in srgb, var(--accent) 60%, transparent);
+    border-inline-start: var(--cal-edge) solid var(--accent);
+    background: color-mix(in srgb, var(--accent) 10%, var(--surface-raised));
+  }
+
+  .ev.block:hover,
+  .ev.block.selected {
+    background: color-mix(in srgb, var(--accent) 20%, var(--surface-raised));
+  }
+
+  .ev.block.done .title {
+    color: var(--text-tertiary);
+    text-decoration: line-through;
+  }
+
+  /* a block whose mail is in a locked vault says only that the time is taken. */
+  .ev.block.masked {
+    border-color: var(--border-strong);
+    background: var(--surface-sunken);
+    color: var(--text-secondary);
+  }
+
+  /* a proposal of a day plan: an outline only, until it is accepted. */
+  .ev.proposal {
+    border: var(--hairline) dashed var(--accent);
+    background: var(--surface-raised);
+    color: var(--text-secondary);
+    opacity: 0.9;
+  }
+
+  .ev.proposal:hover,
+  .ev.proposal:focus-visible {
+    background: var(--selection-bg);
+    opacity: 1;
+  }
+
+  /* blocks may overlap; the ones that do carry a warning edge. */
+  .ev.overlaps {
+    border-inline-end: var(--cal-edge) solid var(--warning);
+  }
+
+  .tag {
+    color: var(--accent);
+    font-size: var(--fz-meta);
+    font-weight: var(--fw-medium);
   }
 
   .ev.cancelled .title,

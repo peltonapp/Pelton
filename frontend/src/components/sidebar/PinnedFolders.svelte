@@ -33,6 +33,10 @@
   // two accounts can easily both have an Archive.
   export let accountEmails: Record<number, string> = {}
 
+  // a pinned folder of a locked vault stays in the account tree, as a locked
+  // entry or not at all, and out of here.
+  $: shown = folders.filter((f) => !f.vaultLocked)
+
   const roleIcons: Record<string, typeof IconFolder> = {
     inbox: IconInbox,
     sent: IconSend,
@@ -69,11 +73,11 @@
   }
 </script>
 
-{#if folders.length > 0}
+{#if shown.length > 0}
   <nav class="pinned" aria-label={$t('sidebar.pinned.ariaLabel')}>
     <header class="group-head">{$t('sidebar.pinned.heading')}</header>
     <div class="list" use:reorder on:reorder={onReorder}>
-      {#each folders as folder (folder.id)}
+      {#each shown as folder (folder.id)}
         <SidebarRow
           label={folder.name}
           title={accountEmails[folder.accountId] ?? ''}

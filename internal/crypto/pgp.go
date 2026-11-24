@@ -99,6 +99,9 @@ func (p *PGP) sign(entity []byte, opts Options) (*Part, error) {
 // encrypt builds a multipart/encrypted body. When sign is true the message is
 // also signed, with the signature inside the encrypted payload.
 func (p *PGP) encrypt(entity []byte, opts Options, sign bool) (*Part, error) {
+	if len(opts.RecipientKeys)+len(opts.HiddenKeys) > 0 {
+		return p.encryptExplicit(entity, opts, sign)
+	}
 	recipients, err := p.recipients(opts)
 	if err != nil {
 		return nil, err

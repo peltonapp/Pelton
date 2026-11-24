@@ -1,0 +1,39 @@
+services:
+  stalwart:
+    # Pinned by digest: v0.16 is a moving tag. Bump both together.
+    image: stalwartlabs/stalwart:v0.16.27@sha256:c429b311c93db5606598abc1c68225a85a6953183848ae01bee9c6a98885836c
+    environment:
+      STALWART_RECOVERY_ADMIN: admin:e2e-admin-pass
+      # Leave the public URL unset so each listener advertises its own origin.
+      # ProbeDomain only accepts https://127.0.0.1, while the seed uses
+      # http://127.0.0.1:18081. A single STALWART_PUBLIC_URL fails one of them.
+    # E2E_HTTP_PORT and E2E_HTTPS_PORT move the host side of Stalwart's HTTP
+    # ports, e.g. when 443 is taken. IMAP and SMTP stay on 993 and 465, the
+    # defaults the account form fills in and the suite checks.
+    ports:
+      - "127.0.0.1:${E2E_HTTP_PORT:-18081}:8080"
+      - "127.0.0.1:${E2E_HTTPS_PORT:-443}:443"
+      - "127.0.0.1:993:993"
+      - "127.0.0.1:465:465"
+    volumes:
+      - stalwart-data:/var/lib/stalwart
+      - ./config.json:/etc/stalwart/config.json:ro
+      - ./certs:/certs:ro
+    healthcheck:
+      test: ["CMD-SHELL", "bash -c 'echo >/dev/tcp/127.0.0.1/8080'"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+      start_period: 5s
+  cli:
+    # Pinned by digest (the multi-arch index of 1.0.12). Bump both together.
+    image: ghcr.io/stalwartlabs/cli:1.0.12@sha256:fe199affac1d120a8c200ef39ae629765a2976270e0453575c1caf906ee15b52
+    profiles: ["cli"]
+    network_mode: "service:stalwart"
+    environment:
+      STALWART_URL: http://127.0.0.1:8080
+      STALWART_USER: admin
+      STALWART_PASSWORD: e2e-admin-pass
+    entrypoint: ["stalwart-cli"]
+volumes:
+  stalwart-data:

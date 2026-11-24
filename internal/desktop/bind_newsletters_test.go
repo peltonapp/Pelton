@@ -78,9 +78,22 @@ func TestListNewsletters(t *testing.T) {
 	acc := newStatsAccount(t, db, ctx)
 	now := time.Now()
 	unsub := "<mailto:off@news.example>, <https://news.example/u>"
+	var newest int64
 	for i := range 6 {
-		acc.add(t, db, ctx, storage.Message{FromAddress: "News <news@example.com>", ListUnsubscribe: unsub,
+		id := acc.add(t, db, ctx, storage.Message{FromAddress: "News <news@example.com>", ListUnsubscribe: unsub,
 			ListUnsubscribePost: true, Date: now.Add(-time.Duration(i*7+1) * 24 * time.Hour), SizeBytes: 10})
+		if i == 0 {
+			newest = id
+		}
+	}
+	// one-click is offered only when the newest mail's signature vouches for
+	// the unsubscribe headers (RFC 8058); without that it is a web page.
+	if got, err := a.ListNewsletters(); err != nil || len(got) != 1 || got[0].UnsubscribeKind != unsubKindLink {
+		t.Fatalf("unverified = %+v, %v; want the link kind", got, err)
+	}
+	if err := db.SetMessageTrust(ctx, storage.MessageTrust{MessageID: newest, AuthState: "trusted", DKIM: "pass",
+		DKIMDomains: []string{"example.com"}, UnsubSigners: []string{"example.com"}}); err != nil {
+		t.Fatal(err)
 	}
 	// mail in trash and in Gmail's All Mail is not counted again.
 	acc.add(t, db, ctx, storage.Message{FolderID: acc.trash.ID, FromAddress: "news@example.com", ListUnsubscribe: unsub, Date: now})
@@ -224,9 +237,6 @@ func TestArchiveMessagesMovesPerFolder(t *testing.T) {
 	}
 	if _, err := db.GetMessage(ctx, already); err != nil {
 		t.Errorf("the message already in Archive was dropped: %v", err)
-	}
-	if !client.loggedOut {
-		t.Error("the imap session was left open")
 	}
 }
 

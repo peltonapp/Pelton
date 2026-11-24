@@ -11,6 +11,7 @@ vi.mock('../../stores/scripts', async (importOriginal) => ({
 
 import ReaderActionBar from './ReaderActionBar.svelte'
 import { placedScripts } from '../../stores/scripts'
+import { expectAxeClean } from '../../test/axe'
 
 // the bar flies in, and jsdom has no web animations. A finished stub lets svelte run it to its end.
 Element.prototype.animate ??= function () {
@@ -36,10 +37,27 @@ describe('ReaderActionBar scripts', () => {
       'toolbar.list': [{ scriptId: 4, name: 'Elsewhere', description: '', options: {} }],
     })
     render(ReaderActionBar, { messageId: 9 })
-    expect(screen.queryByRole('button', { name: 'Elsewhere' })).toBeNull()
-    const button = screen.getByRole('button', { name: 'Send to CRM' })
-    expect(button.getAttribute('title')).toBe('Send to CRM')
+    expect(screen.queryByRole('button', { name: /Elsewhere/ })).toBeNull()
+    const button = screen.getByRole('button', { name: 'Send to CRM, Script: CRM' })
+    expect(button.getAttribute('title')).toBe('Send to CRM, Script: CRM')
+    expect(button.querySelector('[data-script-mark]')).not.toBeNull()
+    await expectAxeClean()
     await userEvent.setup().click(button)
     expect(run).toHaveBeenCalledWith(3, 'toolbar.message', [{ id: '9' }])
+  })
+
+  it('keeps the mark when the script tries to draw or hide it in its label', () => {
+    placedScripts.set({
+      'toolbar.message': [{ scriptId: 3, name: '⚡ Reply', description: '', options: { icon: 'lightning', label: 'Reply ⚡️' } }],
+    })
+    render(ReaderActionBar, { messageId: 9 })
+    const button = screen.getByRole('button', { name: 'Script: Reply' })
+    expect(button.querySelectorAll('[data-script-mark]')).toHaveLength(1)
+    expect(button.textContent).not.toContain('⚡')
+  })
+
+  it('marks only script buttons', () => {
+    render(ReaderActionBar, { messageId: 9 })
+    expect(document.querySelector('[data-script-mark]')).toBeNull()
   })
 })

@@ -211,6 +211,9 @@ func (r *Registry) checkPlacements(sc *Script) error {
 			if s, ok := v.(string); ok && len(s) > maxOptionBytes {
 				return fmt.Errorf("scripting: placement %q option %q is longer than %d bytes", c.ID, name, maxOptionBytes)
 			}
+			if s, ok := v.(string); ok && HasMarkGlyph(s) {
+				return fmt.Errorf("%w (placement %q option %q)", errMarkGlyph, c.ID, name)
+			}
 			if _, err := literalLua(p.Options[i], v); err != nil {
 				return fmt.Errorf("scripting: placement %q option %q: %w", c.ID, name, err)
 			}

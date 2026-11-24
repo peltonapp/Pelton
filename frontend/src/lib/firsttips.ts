@@ -16,6 +16,7 @@ export type TipId =
   | 'compose-send'
   | 'calendar-quick-add'
   | 'notes-links'
+  | 'promises'
 
 /** One tip. */
 export interface TipDef {
@@ -39,6 +40,7 @@ export const tipDefs: readonly TipDef[] = [
   { id: 'compose-send', textKey: 'tips.composeSend', keys: { archive: 'compose-send-archive', remind: 'compose-send-remind' } },
   { id: 'calendar-quick-add', textKey: 'tips.calendarQuickAdd', keys: { key: 'calendar-quick-add' } },
   { id: 'notes-links', textKey: 'tips.notesLinks', keys: {} },
+  { id: 'promises', textKey: 'tips.promises', keys: {} },
 ]
 
 /** The tip with this id. */

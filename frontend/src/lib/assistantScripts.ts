@@ -7,6 +7,9 @@ export interface ScriptDiffLine {
   text: string
 }
 
+/** A change that takes back a script's approval when an assistant proposed it. */
+export type ScriptResetReason = 'code' | 'trigger' | 'permissions' | 'triggerParams' | 'placements'
+
 /** A change an assistant proposed to a script. */
 export interface ScriptProposal {
   scriptId: number
@@ -18,6 +21,8 @@ export interface ScriptProposal {
   removedPermissions: string[]
   /** Accepting switches the script off and clears its approvals. */
   resetsApproval: boolean
+  /** What the proposal changes that does so. */
+  resetReasons: ScriptResetReason[]
   /** Set when the proposal can no longer be applied; it can still be rejected. */
   problem: string
 }

@@ -53,7 +53,7 @@ func (d *DB) MessagesInvolving(ctx context.Context, addresses []string, folderID
 
 	query := selectMessageColumns + `
 FROM messages
-WHERE pending_delete = 0 AND snooze_hidden = 0 AND folder_id IN (` + folders + `) AND date >= ?
+WHERE pending_delete = 0 AND snooze_hidden = 0 AND folder_id IN (` + folders + `) AND date >= ? AND ` + notVaulted + `
 AND (` + strings.Join(conds, " OR ") + `)
 ORDER BY date DESC, id DESC`
 	rows, err := d.sql.QueryContext(ctx, query, args...)
@@ -146,7 +146,7 @@ func (d *DB) MessagesWithSubject(ctx context.Context, text string, folderIDs []i
 	args = append(args, formatTime(since), likePattern(strings.ToLower(text)), normalizeLimit(limit))
 	query := selectMessageColumns + `
 FROM messages
-WHERE pending_delete = 0 AND snooze_hidden = 0 AND folder_id IN (` + folders + `) AND date >= ?
+WHERE pending_delete = 0 AND snooze_hidden = 0 AND folder_id IN (` + folders + `) AND date >= ? AND ` + notVaulted + `
 AND lower(subject) LIKE ? ESCAPE '\'
 ORDER BY date DESC, id DESC
 LIMIT ?`
@@ -182,7 +182,7 @@ SELECT a.id, a.message_id, a.filename, a.content_type, a.size_bytes, a.content_i
        ` + kindExpr + `, m.account_id, m.folder_id, m.thread_id, m.subject, m.from_address, m.from_name, m.date
 FROM messages m
 JOIN attachments a ON a.message_id = m.id
-WHERE m.id IN (` + ids + `)
+WHERE m.id IN (` + ids + `) AND ` + notVaultedM + `
 AND NOT (` + kindExpr + fmt.Sprintf(` = 'image' AND (a.size_bytes < %d OR (a.content_id <> '' AND a.size_bytes < %d)))`, TinyImageBytes, InlineImageBytes) + `
 ORDER BY m.date DESC, m.id DESC, a.id`
 	rows, err := d.sql.QueryContext(ctx, query, args...)

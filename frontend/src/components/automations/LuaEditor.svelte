@@ -72,16 +72,14 @@
     },
   })
 
-  const comboAttrs = EditorView.contentAttributes.of((v) => {
+  const assistAttrs = EditorView.contentAttributes.of((v) => {
     if (!assist || readonly) {
       return {}
     }
     const open = complete.current(v.state)
     const attrs: Record<string, string> = {
-      role: 'combobox',
       'aria-haspopup': 'listbox',
       'aria-autocomplete': 'list',
-      'aria-expanded': open ? 'true' : 'false',
       'aria-describedby': `${uid}-hint`,
     }
     if (open) {
@@ -172,7 +170,7 @@
           resetLeaving,
           tabKeys,
           keymap.of([...defaultKeymap, ...historyKeymap]),
-          comboAttrs,
+          assistAttrs,
           EditorState.tabSize.of(2),
           editable.of(editableExt(readonly)),
           colours.of(luaHighlight(modules)),

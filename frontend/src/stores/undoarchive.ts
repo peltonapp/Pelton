@@ -17,6 +17,7 @@ interface ArchivedMessage {
   summary: MessageSummary
   messageId: string
   originalFolderId: number
+  // the folder the action put the message in.
   destFolderId: number
 }
 
@@ -79,7 +80,11 @@ export function recordArchivedBatch(entries: ArchivedMessage[], record: MoveReco
     count: entries.length,
     touches: entries.flatMap((e) => messageKeys(e.summary.id)),
     rekeys: true,
-    undo: () => moveAll(entries, false),
+    // last to first: the server finds each copy by Message-ID and takes the
+    // highest UID, so two messages sharing one Message-ID (a mailing list
+    // copy and the sent copy, say) only go back to their own folders when
+    // the newest move is undone first.
+    undo: () => moveAll([...entries].reverse(), false),
     redo: () => moveAll(entries, true),
   })
 }

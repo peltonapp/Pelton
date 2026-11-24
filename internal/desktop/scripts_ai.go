@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net"
+	"net/netip"
 	"slices"
 	"strconv"
 	"strings"
@@ -94,7 +96,14 @@ type AIScriptOptionsDTO struct {
 }
 
 func (a *App) aiNetwork() ai.Network {
-	return ai.Network{Dial: a.scriptDial}
+	return ai.Network{Dial: a.scriptDial, Lookup: a.resolveAIHost}
+}
+
+func (a *App) resolveAIHost(ctx context.Context, host string) ([]netip.Addr, error) {
+	if a.aiLookup != nil {
+		return a.aiLookup(ctx, host)
+	}
+	return net.DefaultResolver.LookupNetIP(ctx, "ip", host)
 }
 
 func (a *App) aiRecords() []aiRecord {
@@ -220,6 +229,12 @@ func (a *App) SaveAIProvider(in AIProviderInput) (AIProviderDTO, error) {
 		return AIProviderDTO{}, err
 	}
 	p, kind, err := inputProvider(in)
+	if err != nil {
+		return AIProviderDTO{}, err
+	}
+	ctx, cancel := context.WithTimeout(a.ctx, aiTestTimeout)
+	err = a.aiNetwork().CheckAddress(ctx, p)
+	cancel()
 	if err != nil {
 		return AIProviderDTO{}, err
 	}

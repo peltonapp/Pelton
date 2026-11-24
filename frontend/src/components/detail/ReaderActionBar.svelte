@@ -25,6 +25,8 @@
   import { currentMessageItems, messageItems, placed, runAt } from '../../lib/scriptplacements'
   import { placedLabel } from '../../lib/scriptmenu'
   import { scriptIcon } from '../../lib/scripticons'
+  import { scriptEntryName } from '../../lib/scriptmark'
+  import ScriptMark from '../common/ScriptMark.svelte'
 
   const toolbarScripts = placed('toolbar.message')
 
@@ -175,12 +177,13 @@
     {#each $toolbarScripts as script (script.scriptId)}
       <button
         type="button"
-        class="btn"
-        aria-label={placedLabel(script)}
-        title={placedLabel(script)}
+        class="btn script"
+        aria-label={scriptEntryName(placedLabel(script), script.name, $t)}
+        title={scriptEntryName(placedLabel(script), script.name, $t)}
         on:click={() => runAt('toolbar.message', script.scriptId, messageId ? messageItems([messageId]) : currentMessageItems())}
       >
         <Ph svg={scriptIcon(script.options.icon)} size={16} />
+        <ScriptMark badge />
       </button>
     {/each}
     <button type="button" class="btn" aria-label={$t('reader.more')} title={$t('reader.more')} on:click={onMore}>
@@ -252,6 +255,10 @@
 
   .btn:active {
     transform: scale(var(--press-scale));
+  }
+
+  .btn.script {
+    position: relative;
   }
 
   .btn.task {

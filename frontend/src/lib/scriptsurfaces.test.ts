@@ -9,7 +9,7 @@ vi.mock('../stores/scripts', async (importOriginal) => ({
 }))
 
 import { placedScripts } from '../stores/scripts'
-import { closeContextMenu, contextMenu, openContextMenu } from '../stores/contextmenu'
+import { closeContextMenu, contextMenu, openContextMenu, type MenuGroup } from '../stores/contextmenu'
 import { messageItems, placed, runAt } from './scriptplacements'
 import { openScriptMenu, placedLabel } from './scriptmenu'
 import { placedRowActions, placedSwipeAction, rowActionView, scriptRowAction, scriptRowActionId, parseRowActions, isRowAction } from './rowactions'
@@ -28,21 +28,27 @@ beforeEach(() => {
 })
 
 describe('context menu sections', () => {
-  it('appends the placed scripts after a separator', () => {
+  it('appends the placed scripts after a separator, in their own Scripts group', () => {
     placedScripts.set({ 'mail.row': [script(4, 'Tag invoices')] })
     openContextMenu(1, 2, [{ label: 'Open', action: () => {} }], { place: 'mail.row', items: [{ id: '7' }] })
     const entries = get(contextMenu)!.entries
     expect(entries[1]).toBe('separator')
-    expect(entries[2]).toMatchObject({ label: 'Tag invoices' })
+    expect(entries[2]).toMatchObject({ kind: 'group', label: 'Scripts', items: [{ label: 'Tag invoices', script: 'Tag invoices' }] })
   })
 
   it('runs the script with the place and the items', () => {
     placedScripts.set({ 'tasks.task': [script(4, 'Plan')] })
     openContextMenu(0, 0, [], { place: 'tasks.task', items: [{ id: '9' }] })
-    const entries = get(contextMenu)!.entries
-    expect(entries[0]).toMatchObject({ label: 'Plan' })
-    ;(entries[0] as { action: () => void }).action()
+    const group = get(contextMenu)!.entries[0] as MenuGroup
+    expect(group.items[0]).toMatchObject({ label: 'Plan' })
+    group.items[0].action()
     expect(run).toHaveBeenCalledWith(4, 'tasks.task', [{ id: '9' }])
+  })
+
+  it('takes lookalikes of the script mark out of a script name', () => {
+    placedScripts.set({ 'mail.row': [script(4, '⚡ Tag ☇ invoices')] })
+    openContextMenu(0, 0, [], { place: 'mail.row', items: [{ id: '7' }] })
+    expect((get(contextMenu)!.entries[0] as MenuGroup).items[0].label).toBe('Tag invoices')
   })
 
   it('opens nothing without entries and without scripts', () => {
@@ -82,6 +88,11 @@ describe('placedLabel', () => {
     expect(placedLabel(script(1, 'Name', { label: '' }))).toBe('Name')
     expect(placedLabel(script(1, 'Name'))).toBe('Name')
   })
+
+  it('cannot carry a lookalike of the script mark', () => {
+    expect(placedLabel(script(1, 'Name', { label: '⚡️ Send' }))).toBe('Send')
+    expect(placedLabel(script(1, '\u{1F5F2}Name', { label: '⚡' }))).toBe('Name')
+  })
 })
 
 describe('placed', () => {
@@ -111,6 +122,8 @@ describe('script row actions', () => {
   it('describes a script from the placed ones, with its icon and name', () => {
     const view = rowActionView('script:5', plain, [script(5, 'Summarize', { icon: 'star' })])
     expect(view.label).toBe('Summarize')
+    expect(view.script).toBe('Summarize')
+    expect(rowActionView('archive', plain).script).toBeUndefined()
     expect(view.icon).toContain('<svg')
     expect(view.danger).toBe(false)
   })

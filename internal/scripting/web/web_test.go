@@ -2,6 +2,7 @@ package web
 
 import (
 	"context"
+	"crypto/x509"
 	"fmt"
 	"net"
 	"net/http"
@@ -175,6 +176,39 @@ local a, err = http.get(%q) print(a == nil, err ~= nil)
 local b, err2 = http.get(%q) print(b == nil, err2 ~= nil)`, srv.URL+"/same", srv.URL+"/away", srv.URL+"/file"), "net:127.0.0.1")
 	if got.Status != scripting.StatusOK || lines(got) != "end\ntrue true\ntrue true" {
 		t.Fatalf("%s %s %q", got.Status, got.Error, lines(got))
+	}
+}
+
+func TestHTTPSNeverMovesToPlainHTTP(t *testing.T) {
+	var plainHits atomic.Int32
+	plain := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		plainHits.Add(1)
+		fmt.Fprint(w, "plain")
+	}))
+	defer plain.Close()
+	var mux http.ServeMux
+	secure := httptest.NewTLSServer(&mux)
+	defer secure.Close()
+	mux.HandleFunc("/down", func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, plain.URL+"/end", http.StatusFound)
+	})
+	mux.HandleFunc("/end", func(w http.ResponseWriter, r *http.Request) { fmt.Fprint(w, "secure") })
+	upgrade := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, secure.URL+"/end", http.StatusFound)
+	}))
+	defer upgrade.Close()
+	pool := x509.NewCertPool()
+	pool.AddCert(secure.Certificate())
+	r := registry(t, Config{RootCAs: pool})
+	got := run(t, r, fmt.Sprintf(`
+local a, err = http.get(%q) print(a == nil, err)
+print(http.get(%q).body)`, secure.URL+"/down", upgrade.URL), "net:127.0.0.1")
+	want := "true http.get: refused a redirect from https to plain http (127.0.0.1)\nsecure"
+	if got.Status != scripting.StatusOK || lines(got) != want {
+		t.Fatalf("%s %s %q", got.Status, got.Error, lines(got))
+	}
+	if plainHits.Load() != 0 {
+		t.Fatal("the downgraded request reached the plain server")
 	}
 }
 

@@ -46,6 +46,9 @@ export interface Account {
   // the user told the missing-password prompt to stop asking about this
   // account. It still cannot sync; the ui marks it instead of interrupting.
   passwordPromptDismissed: boolean
+  // this account's own parallel sync connection limit (the ui offers 2-10, the backend accepts 1-10), or null/absent
+  // when it follows the global setting.
+  syncMaxParallel?: number | null
   // fingerprints of server certificates the user accepted for this mailbox,
   // formatted for reading, and the subjects of the CA it trusts (#446).
   trustedCerts: string[]
@@ -133,6 +136,12 @@ export interface Folder {
   // syncExcluded means the user unchecked this folder, so sync skips it. What
   // was already fetched stays readable; it just stops being updated (#173).
   syncExcluded: boolean
+  // vaultId is the mail vault the folder is in, 0 or absent for none;
+  // vaultLocked is set while it is locked, vaultHidden when it is also to stay
+  // out of the sidebar then.
+  vaultId?: number
+  vaultLocked?: boolean
+  vaultHidden?: boolean
 }
 
 export interface UnifiedView {
@@ -367,11 +376,17 @@ export interface MessageDetail extends MessageSummary {
   // when it was opened, so the pane can offer the right next step rather than
   // one generic error.
   pgpState: PGPState
+  // encryption says, for the new reader, whether the message was encrypted
+  // and how its signature checked out; null for mail that is neither.
+  encryption?: MessageEncryption | null
   // replyIds and forwardIds are the cached copies of what the user sent from
   // Pelton in reply to or as a forward of this message, oldest first. A sent
   // message appears once its Sent folder has synced.
   replyIds: number[]
   forwardIds: number[]
+  // bodyComplete is false while the row is still a stub and the reading pane
+  // may be showing a preview before the full body arrives.
+  bodyComplete?: boolean
 }
 
 /**
@@ -412,6 +427,116 @@ export interface UnsubscribeInfo {
   target: string
   // done is true when this sender was already unsubscribed from.
   done: boolean
+  // unverified marks a one-click header authentication did not vouch for,
+  // offered as a web page instead (new design only).
+  unverified?: boolean
+}
+
+/** One verdict of the sender passport; see internal/desktop/passport.go. */
+export type PassportState = 'impostor' | 'failed' | 'lookalike' | 'verified' | 'unverified' | 'unchecked'
+
+/** Something about a sender that differs from their earlier mail. */
+export interface PassportChange {
+  kind: 'new_domain' | 'new_reply_to' | 'name_elsewhere'
+  detail: string
+  before?: string
+}
+
+/** The technical record behind a passport. */
+export interface PassportEvidence {
+  authState: string
+  servId: string
+  spf: string
+  spfDomain: string
+  dkim: string
+  dkimDomains: string[]
+  dmarc: string
+  dmarcPolicy: string
+  headerFrom: string
+  alignedSpf: boolean
+  alignedDkim: boolean
+  sendingDomain: string
+  returnPath: string
+  sender: string
+  signers: string[]
+  receivedSpf: string
+  arc: string
+  mixedScript: boolean
+}
+
+/** Who sent a message, as far as the local mail and the user's server say. */
+export interface Passport {
+  address: string
+  domain: string
+  state: PassportState
+  reason?: 'legacy' | 'none' | 'untrusted' | 'other_domain' | 'no_pass'
+  mark: '' | 'known' | 'impostor'
+  first: boolean
+  received: number
+  sent: number
+  since: string
+  contact: boolean
+  sameDomain: boolean
+  changes: PassportChange[]
+  lookalike: { kind: 'name' | 'domain'; of: string; address?: string } | null
+  replyGoesTo: string
+  replyElsewhere: boolean
+  warnings: string[]
+  evidence: PassportEvidence
+  banner: PhishingReport
+}
+
+/** One thing a message tried to load or learn. */
+export interface ShieldItem {
+  kind: 'pixel' | 'image' | 'link' | 'receipt' | 'font' | 'stylesheet' | 'form' | 'frame' | 'media' | 'background'
+  host: string
+  company: string
+  url: string
+  reasons: string[]
+  destination: string
+  status: 'blocked' | 'loaded' | 'removed' | 'click' | 'not_sent'
+}
+
+/** The unsubscribe state of a sender. */
+export interface ShieldUnsub {
+  at: string
+  stillSending: boolean
+  stillCount: number
+  blocked: '' | 'junk' | 'trash'
+  sender: string
+}
+
+/** What one message tried to learn about its reader. */
+export interface Shield {
+  remoteAllowed: boolean
+  trackers: number
+  links: number
+  items: ShieldItem[]
+  unsub: ShieldUnsub | null
+}
+
+/** One sender of the tracking report. */
+export interface PrivacySender {
+  address: string
+  name: string
+  mails: number
+  pixels: number
+  links: number
+  receipts: number
+  first: string
+  last: string
+  companies: string[]
+  unsub: ShieldUnsub | null
+}
+
+/** The tracking report over a period. */
+export interface PrivacyReport {
+  counting: boolean
+  trackers: number
+  links: number
+  mails: number
+  senders: number
+  rows: PrivacySender[]
 }
 
 export interface MessageList {
@@ -483,6 +608,11 @@ export interface ComposeRequest {
   // projectId files the message, and the replies it gets, under a project.
   // 0 or left out files it nowhere.
   projectId?: number
+  // autoEncrypt marks a message from the composer of automatic encryption,
+  // and plaintextConfirmed the user's choice to answer encrypted mail
+  // unencrypted.
+  autoEncrypt?: boolean
+  plaintextConfirmed?: boolean
 }
 
 /**
@@ -518,6 +648,70 @@ export interface FollowUp {
   localId: number
   folderId: number
   threadId: number
+}
+
+/** Who owes a promise: the user ('mine') or someone else ('theirs'). */
+export type PromiseDirection = 'mine' | 'theirs'
+
+/** Where a promise is: a suggestion on its mail, a task, set aside, or closed by a reply. */
+export type PromiseState = 'suggested' | 'accepted' | 'dismissed' | 'closed'
+
+/** A promise found in mail. mailId is the Message-ID it was found in, messageId a cached copy (0 for none). */
+export interface MailPromise {
+  id: number
+  accountId: number
+  mailId: string
+  messageId: number
+  threadId: number
+  direction: PromiseDirection
+  personName: string
+  personEmail: string
+  title: string
+  quote: string
+  /** A date, rfc3339, or ''. */
+  due: string
+  confidence: number
+  source: string
+  state: PromiseState
+  taskUid: string
+  /** The reply that closed it (theirs) or offers to (mine), with a cached copy of it. */
+  replyId: string
+  replyAt: string
+  replyMessageId: number
+  mailDate: string
+  /** A follow-up reminder already watches the thread. */
+  followUp: boolean
+}
+
+/** A suggestion as the user accepts it. */
+export interface PromiseEdit {
+  id: number
+  title: string
+  due: string
+  direction: PromiseDirection
+  personName: string
+  personEmail: string
+}
+
+/** The promise switches of one account. */
+export interface PromiseAccount {
+  accountId: number
+  name: string
+  email: string
+  on: boolean
+  ai: boolean
+  provider: string
+}
+
+/** The promise preferences. */
+export interface PromiseSettings {
+  enabled: boolean
+  autoAcceptMine: boolean
+  nudge: boolean
+  taskList: 'local' | 'default'
+  accounts: PromiseAccount[]
+  aiMaxChars: number
+  aiPerDay: number
 }
 
 // ProtectionStatus is what the compose window needs to offer the pgp controls
@@ -952,6 +1146,9 @@ export interface UIPrefs {
   // windowMaterial puts the window over a native material (Liquid Glass on
   // macOS, Mica on Windows) from the next launch on.
   windowMaterial: boolean
+  // ocrLanguages is the "+" joined tesseract language list the pdf viewer
+  // reads with; empty follows the ui language.
+  ocrLanguages: string
   // timeFormat picks the clock for rendered times: auto (locale), 12, or 24.
   timeFormat: string
   // reduceMotion disables ui transitions and animations.
@@ -987,6 +1184,11 @@ export interface UIPrefs {
   // cleanLinks takes known tracking parameters and redirect wrappers off links
   // opened from a mail. Off by default: it can break a sign-in or verification link.
   cleanLinks: boolean
+  // privacyCounters keeps the tracking report's counters, on this device only.
+  privacyCounters: boolean
+  // unsubscribeGraceDays is how long after an unsubscribe mail may still come
+  // before Pelton says the sender is still sending.
+  unsubscribeGraceDays: number
   // autoconfigLookup is whether the add-mailbox wizard may look up a typed
   // address's domain: ask (the default, it asks first), allow or manual.
   autoconfigLookup: AutoconfigLookup
@@ -1003,6 +1205,9 @@ export interface UIPrefs {
   // chatEnabled turns the Matrix chat space on. Off by default; nothing chat
   // related runs or connects until it is on.
   chatEnabled: boolean
+  // autoEncrypt is automatic encryption. Off by default; until it is on no
+  // key is made, no header added and nothing looked up.
+  autoEncrypt: boolean
   // chatSendReceipts sends public read receipts; off keeps them private.
   chatSendReceipts: boolean
   // chatSendTyping tells rooms while the user types.
@@ -1036,12 +1241,18 @@ export interface UIPrefs {
   appLockIdleMinutes: number
   appLockOnLaunch: boolean
   appLockHideNotifications: boolean
-  // syncMessageLimit caps how many of a folder's newest messages the first sync
-  // fetches; older mail stays on the server until asked for. 0 means no limit.
+  // syncMessageLimit caps how many of a folder's newest message bodies the
+  // first sync fetches. 0 means no limit.
   syncMessageLimit: number
   // syncAutoBackfill fetches the next batch of older mail automatically on
   // reaching the end of the list. Off puts it behind a button instead.
   syncAutoBackfill: boolean
+  // syncMaxParallel is how many IMAP sessions one mailbox may use at once
+  // (ui 2–10, backend 1–10, default 3), the IDLE one included. Sending does not count.
+  syncMaxParallel: number
+  // syncFullReconcileDays is how many days a folder may go without a full
+  // check against the server before startup re-checks it; 0 = manual Sync only.
+  syncFullReconcileDays: number
   // what the sidebar selects on launch: 'view:<key>' for a unified view,
   // 'folder:<id>' for one account folder, or 'last' to restore the previous
   // session. A target that no longer exists falls back to the unified inbox.
@@ -1998,6 +2209,11 @@ export interface Occurrence {
   conflict: boolean
   // set on an entry the calendar draws for a task due that day.
   task?: Task
+  // set on an entry the calendar draws for a time block.
+  block?: TimeBlock
+  // set on an entry the calendar draws for a proposed block of a day plan;
+  // key names it among the proposals.
+  proposal?: BlockProposal & { key: string }
 }
 
 /**
@@ -2366,6 +2582,8 @@ export interface Task {
   contacts: TaskContact[]
   eventUids: string[]
   sortOrder: number
+  // minutes the task is expected to take, 0 for no estimate.
+  estimate: number
   created: string
   readOnly: boolean
   pending: boolean
@@ -2395,7 +2613,102 @@ export interface TaskDraft {
   contacts: TaskContact[]
   eventUids: string[]
   sortOrder: number
+  estimate: number
   force: boolean
+}
+
+/**
+ * TimeBlock is time set aside in the calendar for a task or a mail. start and
+ * end are rfc3339. title is empty while masked: the block's mail is in a
+ * locked vault and the block says nothing about it.
+ */
+export interface TimeBlock {
+  id: number
+  title: string
+  start: string
+  end: string
+  // the task, 0 when it is not found any more.
+  taskId: number
+  taskUid: string
+  // where the mail lives, all 0 when there is none or it cannot be shown.
+  messageId: number
+  accountId: number
+  folderId: number
+  hasMail: boolean
+  masked: boolean
+  done: boolean
+  // the calendar it is written to, 0 for this device only, and the UID of the
+  // event there.
+  calendarId: number
+  eventUid: string
+  // '' follows the setting, 'generic' or 'title'.
+  eventTitle: string
+  // '' in step, 'out_of_step' or 'event_gone'.
+  linkState: string
+  // the event change waits to reach the server.
+  pending: boolean
+}
+
+/** TimeBlockRequest makes (id 0) or changes a block; calendarId 0 keeps it on this device. */
+export interface TimeBlockRequest {
+  id: number
+  title: string
+  start: string
+  end: string
+  taskUid: string
+  messageId: number
+  done: boolean
+  calendarId: number
+  eventTitle: string
+}
+
+/** TimeBlockSettings are the time blocking preferences. */
+export interface TimeBlockSettings {
+  defaultMinutes: number
+  minSlotMinutes: number
+  bufferMinutes: number
+  // days of the week with working hours, 0 for Sunday.
+  workDays: number[]
+  searchDays: number
+  writeToCalendar: boolean
+  calendarId: number
+  eventTitle: string
+  includeTitle: boolean
+}
+
+/** FreeSlot is a proposed time; afterDue says it ends after the task's due date. */
+export interface FreeSlot {
+  start: string
+  end: string
+  afterDue: boolean
+}
+
+/** BlockProposal is one block of a day plan, not stored yet. */
+export interface BlockProposal {
+  taskId: number
+  taskUid: string
+  title: string
+  start: string
+  end: string
+  part: number
+  parts: number
+}
+
+/** DayPlan is a day laid out as proposals, with the tasks that did not fit. */
+export interface DayPlan {
+  proposals: BlockProposal[]
+  short: string[]
+  unplaced: string[]
+  tasks: number
+}
+
+/** TaskPlan is how much time a task has in blocks, in minutes. */
+export interface TaskPlan {
+  taskUid: string
+  plannedMinutes: number
+  aheadMinutes: number
+  // blocks that have not started.
+  future: number
 }
 
 /** TaskSaveResult is the outcome of a task save. */
@@ -3064,4 +3377,154 @@ export interface ChatMediaProgress {
   bytesDone: number
   bytesTotal: number
   error: string
+}
+
+/** A signature verdict in the words the new reader uses. */
+export type SignatureWord = '' | 'known' | 'verified' | 'new' | 'invalid' | 'unchecked'
+
+/** MessageEncryption is what the new reader says about a message's protection. */
+export interface MessageEncryption {
+  encrypted: boolean
+  signature: SignatureWord
+  signerEmail: string
+  /** The real subject of a message that hid it, '' otherwise. */
+  subject: string
+  /** A key transfer from one of the user's own devices. */
+  setupMessage: boolean
+}
+
+/** Places keys may be found in, and the user's own key servers. */
+export interface KeySources {
+  autocrypt: boolean
+  wkd: boolean
+  keysOpenpgpOrg: boolean
+  keyServers: boolean
+  servers: string[]
+}
+
+/** How a mailbox encrypts: auto turns it on when the recommendation says so, manual never does. */
+export type AutoEncryptMode = 'auto' | 'manual'
+
+/** OwnKey is the key one mailbox encrypts and signs with. */
+export interface OwnKey {
+  accountId: number
+  email: string
+  fingerprint: string
+  /** RFC 3339; expires is '' for a key that does not expire. */
+  created: string
+  expires: string
+  /** Pelton made the key and renews it. */
+  generated: boolean
+  usable: boolean
+  mode: AutoEncryptMode
+}
+
+/** AutoEncryptSettings is everything the encryption settings show. */
+export interface AutoEncryptSettings {
+  enabled: boolean
+  sources: KeySources
+  protectSubject: boolean
+  accounts: OwnKey[]
+}
+
+/** The specification's answer to "should this be encrypted", weakest first. */
+export type EncryptRecommendation = 'disable' | 'discourage' | 'available' | 'encrypt'
+
+/** A contact's encryption preference: follow the recommendation, always or never. */
+export type ContactEncryptPref = '' | 'always' | 'never'
+
+/** RecipientEncryption is what the composer knows about one recipient. */
+export interface RecipientEncryption {
+  email: string
+  state: 'ready' | 'verified' | 'missing' | 'changed'
+  /** manual, autocrypt, gossip, wkd, keys.openpgp.org or server:<url>; '' with no key. */
+  source: string
+  fingerprint: string
+  recommendation: EncryptRecommendation
+  preference: ContactEncryptPref
+  /** For a key change: the fingerprint last used and when the new key was first seen. */
+  previous: string
+  changedAt: string
+  /** Why a key that was found cannot be used: expired, revoked or noencryption. */
+  problem: string
+  bcc: boolean
+}
+
+/** AutoEncryptStatus is what would happen to a message from one mailbox to some recipients. */
+export interface AutoEncryptStatus {
+  enabled: boolean
+  ownKey: boolean
+  recommendation: EncryptRecommendation
+  replyToEncrypted: boolean
+  mode: AutoEncryptMode
+  recipients: RecipientEncryption[]
+}
+
+/** ContactKey is one correspondent's key as the settings list shows it. */
+export interface ContactKey {
+  email: string
+  fingerprint: string
+  source: string
+  firstSeen: string
+  expires: string
+  state: 'ready' | 'verified' | 'missing' | 'changed'
+  problem: string
+  preference: ContactEncryptPref
+  previous: string
+}
+
+/** KeyLookupLogEntry is one request a key lookup made. */
+export interface KeyLookupLogEntry {
+  at: string
+  source: string
+  email: string
+  outcome: 'found' | 'none' | 'unusable' | 'failed'
+}
+
+/** A folder in a mail vault, or a whole account when folderId is 0. */
+export interface MailVaultMember {
+  accountId: number
+  folderId: number
+}
+
+/**
+ * A mail vault: folders and accounts whose cached mail is encrypted with a
+ * passphrase of its own. pending counts messages still to seal, or to unseal
+ * while the vault is being removed.
+ */
+export interface MailVault {
+  id: number
+  name: string
+  locked: boolean
+  state: 'sealing' | 'ready' | 'unsealing'
+  pending: number
+  sealed: number
+  members: MailVaultMember[]
+  folderIds: number[]
+  autoLockMinutes: number
+  notify: 'none' | 'generic'
+  hideLocked: boolean
+  allowScripts: boolean
+  allowMcp: boolean
+  allowCli: boolean
+  retryAfterMs: number
+}
+
+/** The outcome of a vault passphrase or recovery code. */
+export interface MailVaultAuth {
+  ok: boolean
+  reason?: 'wrong' | 'wait' | 'damaged' | 'weak'
+  retryAfterMs?: number
+}
+
+/** The settings of a vault that need no passphrase to change. */
+export interface MailVaultSettings {
+  id: number
+  name: string
+  autoLockMinutes: number
+  notify: 'none' | 'generic'
+  hideLocked: boolean
+  allowScripts: boolean
+  allowMcp: boolean
+  allowCli: boolean
 }

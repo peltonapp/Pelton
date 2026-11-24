@@ -107,7 +107,7 @@ func (a *App) SplitCounts(req ListMessagesRequest) ([]SplitTabDTO, error) {
 		return nil, err
 	}
 	rules, keys := a.splitTabs(a.ctx)
-	counts, err := a.store.SplitCounts(a.ctx, q, rules)
+	counts, err := a.store.SplitCounts(a.mailCtx(), q, rules)
 	if err != nil {
 		return nil, err
 	}

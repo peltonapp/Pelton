@@ -96,8 +96,18 @@ type ResultHost interface {
 // ErrRunCancelled is the cause of a run the user cancelled.
 var ErrRunCancelled = errors.New("scripting: cancelled")
 
-// DefaultAskTimeout is how long a question of a run nobody started waits.
-const DefaultAskTimeout = 2 * time.Minute
+// How long a question of a run nobody started waits: by default, and the
+// shortest and longest the setting or a question's own timeout may set.
+const (
+	DefaultAskTimeout = 2 * time.Minute
+	MinAskTimeout     = 10 * time.Second
+	MaxAskTimeout     = time.Hour
+)
+
+// ClampAskTimeout keeps d within MinAskTimeout and MaxAskTimeout.
+func ClampAskTimeout(d time.Duration) time.Duration {
+	return min(max(d, MinAskTimeout), MaxAskTimeout)
+}
 
 // maxResultText caps the text of one result, and maxPromptBytes a question.
 const (
@@ -240,8 +250,9 @@ func (st *runState) ask(c *Call, k InputKind, prompt string, opts map[string]any
 		}
 	}
 	if secs, ok := toFloat(opts["timeout"]); ok && secs > 0 {
-		timeout = time.Duration(secs * float64(time.Second))
+		timeout = time.Duration(min(secs, MaxAskTimeout.Seconds()) * float64(time.Second))
 	}
+	timeout = ClampAskTimeout(timeout)
 	summary := clip(prompt, 120)
 	hosts := st.e.Hosts
 	if hosts == nil || hosts.Ask == nil {

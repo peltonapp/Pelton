@@ -109,14 +109,14 @@ func TestRequireFailures(t *testing.T) {
 func TestLibraryStoreAndFiles(t *testing.T) {
 	ctx := context.Background()
 	s := testService(t, newFakeMail(), nil)
-	lib, err := s.CreateLibrary(ctx, &Library{Name: "dates", Description: "Date helpers", Source: "return { today = function() return 1 end }"})
+	lib, _, err := s.CreateLibrary(ctx, &Library{Name: "dates", Description: "Date helpers", Source: "return { today = function() return 1 end }"})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := s.CreateLibrary(ctx, &Library{Name: "dates"}); err == nil || !strings.Contains(err.Error(), "already") {
+	if _, _, err := s.CreateLibrary(ctx, &Library{Name: "dates"}); err == nil || !strings.Contains(err.Error(), "already") {
 		t.Fatalf("a second library of the same name: %v", err)
 	}
-	if _, err := s.CreateLibrary(ctx, &Library{Name: "Bad Name"}); err == nil {
+	if _, _, err := s.CreateLibrary(ctx, &Library{Name: "Bad Name"}); err == nil {
 		t.Fatal("a name require cannot take was accepted")
 	}
 
@@ -152,13 +152,13 @@ func TestLibraryStoreAndFiles(t *testing.T) {
 	if _, err := ParseFile(s.Registry(), libData); err == nil {
 		t.Fatal("a library file was read as a script")
 	}
-	if _, err := s.ImportLibrary(ctx, libData); err == nil {
+	if _, _, err := s.ImportLibrary(ctx, libData); err == nil {
 		t.Fatal("an import replaced a library of the same name")
 	}
-	if err := s.DeleteLibrary(ctx, lib.ID); err != nil {
+	if _, err := s.DeleteLibrary(ctx, lib.ID); err != nil {
 		t.Fatal(err)
 	}
-	back, err := s.ImportLibrary(ctx, libData)
+	back, _, err := s.ImportLibrary(ctx, libData)
 	if err != nil {
 		t.Fatal(err)
 	}

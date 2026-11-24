@@ -312,7 +312,9 @@ func TestLookalike(t *testing.T) {
 		{"paypal.com.evil.test", "paypal.com", true},
 		{"example.org", "example.com", true},
 		{"paypal.co", "paypal.com", true},
-		{"bbc.co.uk", "abc.co.uk", true},
+		// two broadcasters: one arbitrary letter on a short name is another name.
+		{"bbc.co.uk", "abc.co.uk", false},
+		{"bbc.co.uk", "bbc.co", true},
 		{"totally-different.test", "paypal.com", false},
 		{"ab.com", "ac.com", false},
 	}
@@ -358,5 +360,23 @@ func TestReportListsEachLinkOnce(t *testing.T) {
 	})
 	if len(got.Links) != 2 {
 		t.Errorf("Links = %v, want two distinct urls", got.Links)
+	}
+}
+
+func TestDomainOf(t *testing.T) {
+	tests := []struct{ addr, want string }{
+		{"me@Example.com", "example.com"},
+		{"<me@example.com>", "example.com"},
+		{"first@second@example.com", "example.com"},
+		{"@example.com", "example.com"},
+		{"me@example.com.", "example.com"},
+		{"me@", ""},
+		{"Example.COM", "example.com"},
+		{"", ""},
+	}
+	for _, tt := range tests {
+		if got := domainOf(tt.addr); got != tt.want {
+			t.Errorf("domainOf(%q) = %q, want %q", tt.addr, got, tt.want)
+		}
 	}
 }

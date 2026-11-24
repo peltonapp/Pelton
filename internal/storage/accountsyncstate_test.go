@@ -6,6 +6,7 @@ import (
 )
 
 func TestAccountSyncStateRecordsFailureAndRecovery(t *testing.T) {
+	t.Parallel()
 	db, id := newAccountTestDB(t)
 	ctx := context.Background()
 
@@ -62,6 +63,7 @@ func TestAccountSyncStateRecordsFailureAndRecovery(t *testing.T) {
 // deleting an account must not leave its sync state behind to be reported
 // against whatever id sqlite hands out next.
 func TestAccountSyncStateGoesWithTheAccount(t *testing.T) {
+	t.Parallel()
 	db, id := newAccountTestDB(t)
 	ctx := context.Background()
 

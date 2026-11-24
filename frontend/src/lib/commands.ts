@@ -69,6 +69,8 @@ export interface PaletteCommand {
   icon: ComponentType
   /** A colour dot rendered instead of the icon, for the flag colours. */
   swatch?: string
+  /** Set for an entry that runs a script, to the script's name: the entry carries the script mark. */
+  script?: string
   danger?: boolean
   /** Runs the entry, or returns the step to descend into. */
   run: () => CommandStep | void | Promise<void>

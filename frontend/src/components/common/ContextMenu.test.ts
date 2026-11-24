@@ -7,6 +7,7 @@ import { closeContextMenu, openContextMenu } from '../../stores/contextmenu'
 import { prefs } from '../../stores/prefs'
 import { openMenuFromKeyboard } from '../../lib/keymenu'
 import { expectAccessible } from '../../test/a11y'
+import { expectAxeClean } from '../../test/axe'
 
 function invoker(): HTMLButtonElement {
   const button = document.createElement('button')
@@ -39,6 +40,7 @@ describe('ContextMenu keyboard', () => {
     expect(openMenuFromKeyboard(event)).toBe(true)
     await waitFor(() => expect(document.activeElement).toBe(screen.getByRole('menuitem', { name: 'Archive' })))
     expectAccessible()
+    await expectAxeClean()
 
     await user.keyboard('{ArrowDown}')
     expect(document.activeElement).toBe(screen.getByRole('menuitem', { name: 'Delete' }))

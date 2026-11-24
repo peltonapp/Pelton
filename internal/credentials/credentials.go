@@ -32,8 +32,22 @@ func rememberSecret(s Secret) {
 	remember(s.Password, s.ClientSecret, s.RefreshToken, s.AccessToken)
 }
 
-// service is the keyring service name all pelton secrets are filed under.
-const service = "Pelton"
+// defaultService is the keyring service name a normal install files its
+// secrets under.
+const defaultService = "Pelton"
+
+// service is the keyring service name all secrets of this process are filed
+// under. See UseService.
+var service = defaultService
+
+// UseService files every secret of this process under name instead of the
+// default. Entries are keyed by account id, and a dev run or a nightly keeps
+// its own database whose ids start at 1 like the installed app's; sharing one
+// service let them overwrite the installed app's passwords. Call it once at
+// startup, before any secret is read or written.
+func UseService(name string) {
+	service = name
+}
 
 // maxEntrySize keeps every keyring write under Windows Credential Manager's
 // hard 2560-byte-per-entry cap (with margin), splitting anything larger
@@ -69,7 +83,7 @@ type Secret struct {
 	ClientSecret string    `json:"clientSecret,omitempty"`
 	RefreshToken string    `json:"refreshToken,omitempty"`
 	AccessToken  string    `json:"accessToken,omitempty"`
-	Expiry       time.Time `json:"expiry,omitempty"`
+	Expiry       time.Time `json:"expiry"`
 }
 
 // Store writes the secret for an account, replacing any existing one. The new

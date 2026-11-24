@@ -2,7 +2,9 @@ package scripting
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"maps"
 	"slices"
 	"strings"
 
@@ -110,16 +112,61 @@ func (s *Service) save(ctx context.Context, sc *Script) error {
 // permissions. The libraries a script requires are approved with it too; a
 // change to one of them resets the scripts that load it.
 func ResetsApproval(cur, next *Script) bool {
-	if cur.Kind != next.Kind || cur.Source != next.Source || cur.Trigger.Type != next.Trigger.Type {
-		return true
+	return len(approvalChanges(cur, next)) > 0
+}
+
+// The parts of a script whose change takes back its approval.
+const (
+	ChangeCode          = "code"
+	ChangeTrigger       = "trigger"
+	ChangePermissions   = "permissions"
+	ChangeTriggerParams = "triggerParams"
+	ChangePlacements    = "placements"
+)
+
+// approvalChanges lists what changing cur into next changes of what the user
+// approved: ChangeCode, ChangeTrigger and ChangePermissions.
+func approvalChanges(cur, next *Script) []string {
+	var out []string
+	if cur.Kind != next.Kind || cur.Source != next.Source || blocksJSON(cur.Blocks) != blocksJSON(next.Blocks) {
+		out = append(out, ChangeCode)
 	}
-	if blocksJSON(cur.Blocks) != blocksJSON(next.Blocks) {
-		return true
+	if cur.Trigger.Type != next.Trigger.Type {
+		out = append(out, ChangeTrigger)
 	}
 	a, b := slices.Clone(cur.Permissions), slices.Clone(next.Permissions)
 	slices.Sort(a)
 	slices.Sort(b)
-	return !slices.Equal(slices.Compact(a), slices.Compact(b))
+	if !slices.Equal(slices.Compact(a), slices.Compact(b)) {
+		out = append(out, ChangePermissions)
+	}
+	return out
+}
+
+// assistantChanges is approvalChanges with what else an assistant's change
+// must not alter unseen: the trigger's parameters and the placements.
+func assistantChanges(cur, next *Script) []string {
+	out := approvalChanges(cur, next)
+	if cur.Trigger.Type == next.Trigger.Type && jsonText(cur.Trigger.Params) != jsonText(next.Trigger.Params) {
+		out = append(out, ChangeTriggerParams)
+	}
+	if jsonText(cur.Placements) != jsonText(next.Placements) {
+		out = append(out, ChangePlacements)
+	}
+	return out
+}
+
+// jsonText renders v for a comparison, an empty map or list as nothing.
+func jsonText(v any) string {
+	data, err := json.Marshal(v)
+	if err != nil {
+		return ""
+	}
+	switch string(data) {
+	case "null", "{}", "[]":
+		return ""
+	}
+	return string(data)
 }
 
 // revoke switches a script off and takes back its approvals and allowances.
@@ -133,29 +180,82 @@ func revoke(sc *Script) {
 // takes back its approvals and allowances, so the user approves the new
 // version; other changes keep them.
 func (s *Service) Update(ctx context.Context, next *Script) (*Script, error) {
+	out, _, err := s.update(ctx, next, false)
+	return out, err
+}
+
+// UpdateFromAssistant is Update for a change an assistant proposed and the
+// user accepted: a change to the trigger's parameters or to the placements
+// switches the script off and takes back its approvals and allowances too.
+// It returns what changed that took them back, nil when nothing did.
+func (s *Service) UpdateFromAssistant(ctx context.Context, next *Script) (*Script, []string, error) {
+	return s.update(ctx, next, true)
+}
+
+// AssistantChanges returns what accepting next as an assistant's change
+// would change that takes back the script's approval, without saving.
+func (s *Service) AssistantChanges(ctx context.Context, next *Script) ([]string, error) {
 	cur, err := s.store.Get(ctx, next.ID)
 	if err != nil {
 		return nil, err
 	}
-	if ResetsApproval(cur, next) {
-		revoke(cur)
+	merged, err := s.merged(cur, next)
+	if err != nil {
+		return nil, err
 	}
-	cur.Name, cur.Description, cur.Kind = next.Name, next.Description, next.Kind
-	cur.Source, cur.Blocks, cur.Trigger = next.Source, next.Blocks, next.Trigger
-	cur.Permissions, cur.SettingsSchema = next.Permissions, next.SettingsSchema
+	return assistantChanges(cur, merged), nil
+}
+
+// merged is a copy of cur with next's content, normalized and checked.
+func (s *Service) merged(cur, next *Script) (*Script, error) {
+	out := *cur
+	out.Name, out.Description, out.Kind = next.Name, next.Description, next.Kind
+	out.Source, out.Blocks = next.Source, next.Blocks
+	out.Trigger = TriggerConfig{Type: next.Trigger.Type, Params: maps.Clone(next.Trigger.Params)}
+	out.Permissions, out.SettingsSchema = next.Permissions, next.SettingsSchema
+	out.Settings = maps.Clone(cur.Settings)
 	if next.CatchUp != "" {
-		cur.CatchUp = next.CatchUp
+		out.CatchUp = next.CatchUp
 	}
 	if next.CatchUpCap > 0 {
-		cur.CatchUpCap = next.CatchUpCap
+		out.CatchUpCap = next.CatchUpCap
 	}
-	if err := deriveSettings(cur); err != nil {
+	if err := deriveSettings(&out); err != nil {
 		return nil, err
 	}
-	s.normalize(cur)
-	if err := cur.Validate(s.reg); err != nil {
+	s.normalize(&out)
+	if err := out.Validate(s.reg); err != nil {
 		return nil, err
 	}
+	return &out, nil
+}
+
+func (s *Service) update(ctx context.Context, next *Script, assistant bool) (*Script, []string, error) {
+	cur, err := s.store.Get(ctx, next.ID)
+	if err != nil {
+		return nil, nil, err
+	}
+	merged, err := s.merged(cur, next)
+	if err != nil {
+		return nil, nil, err
+	}
+	changes := approvalChanges(cur, merged)
+	if assistant {
+		changes = assistantChanges(cur, merged)
+	}
+	if len(changes) > 0 {
+		revoke(merged)
+	}
+	if err := s.saveUpdated(ctx, merged); err != nil {
+		return nil, nil, err
+	}
+	out, err := s.store.Get(ctx, cur.ID)
+	return out, changes, err
+}
+
+// saveUpdated stores a script whose content changed, switched off when it
+// can no longer run as approved.
+func (s *Service) saveUpdated(ctx context.Context, cur *Script) error {
 	if cur.Enabled && len(cur.Unapproved()) > 0 {
 		cur.Enabled = false
 	}
@@ -164,10 +264,7 @@ func (s *Service) Update(ctx context.Context, next *Script) (*Script, error) {
 			cur.Enabled = false
 		}
 	}
-	if err := s.save(ctx, cur); err != nil {
-		return nil, err
-	}
-	return s.store.Get(ctx, cur.ID)
+	return s.save(ctx, cur)
 }
 
 // checkRunnable makes sure the script compiles, before it is switched on.

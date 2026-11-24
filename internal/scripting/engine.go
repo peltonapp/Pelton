@@ -223,7 +223,7 @@ type Engine struct {
 	OnAllow func(scriptID int64, function string)
 	// AskTimeout returns how long a question of a run nobody started waits;
 	// DefaultAskTimeout when nil or 0. A script may ask for another per
-	// question.
+	// question. Either is kept within MinAskTimeout and MaxAskTimeout.
 	AskTimeout func() time.Duration
 	// Libraries is where require finds the user's libraries; with none,
 	// require finds nothing.

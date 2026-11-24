@@ -6,8 +6,8 @@ import (
 	"testing"
 )
 
-// TestScriptMigrationsApplyInOrder checks the scripting migrations 0101 to
-// 0105 on a fresh database and on one that stopped after 0103 with a script
+// TestScriptMigrationsApplyInOrder checks the scripting migrations 0104 to
+// 0108 on a fresh database and on one that stopped after 0106 with a script
 // and a run in it, which keep their rows and gain the later columns.
 func TestScriptMigrationsApplyInOrder(t *testing.T) {
 	ctx := context.Background()
@@ -53,7 +53,7 @@ func TestScriptMigrationsApplyInOrder(t *testing.T) {
 		check(t, db)
 	})
 
-	t.Run("after 0103", func(t *testing.T) {
+	t.Run("after 0106", func(t *testing.T) {
 		db, err := Open(filepath.Join(t.TempDir(), "partial.db"))
 		if err != nil {
 			t.Fatal(err)
@@ -67,7 +67,7 @@ func TestScriptMigrationsApplyInOrder(t *testing.T) {
 			t.Fatal(err)
 		}
 		for _, m := range migrations {
-			if m.version <= 103 {
+			if m.version <= 106 {
 				if err := db.applyMigration(ctx, m); err != nil {
 					t.Fatal(err)
 				}

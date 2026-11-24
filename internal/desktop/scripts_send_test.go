@@ -100,6 +100,47 @@ func TestRecipientChangesAlwaysAsk(t *testing.T) {
 	}
 }
 
+// deadlineConfirm keeps how long it was given and answers as a question
+// that ran out of time does.
+type deadlineConfirm struct {
+	left time.Duration
+}
+
+func (c *deadlineConfirm) Confirm(ctx context.Context, _ scripting.ConfirmRequest) (scripting.ConfirmAnswer, error) {
+	if d, ok := ctx.Deadline(); ok {
+		c.left = time.Until(d)
+	}
+	return scripting.ConfirmAnswer{}, context.DeadlineExceeded
+}
+
+// TestQuestionTimeoutSetting checks the bounds of the setting and that the
+// recipient confirmation waits that long and holds the mail when it runs
+// out.
+func TestQuestionTimeoutSetting(t *testing.T) {
+	a, _ := newScriptTestApp(t)
+	if got := a.ScriptAskSeconds(); got != 120 {
+		t.Fatalf("default %d", got)
+	}
+	for _, bad := range []int{0, 5, 3601} {
+		if err := a.SetScriptAskSeconds(bad); err == nil {
+			t.Fatalf("accepted %d seconds", bad)
+		}
+	}
+	if err := a.SetScriptAskSeconds(300); err != nil || a.ScriptAskSeconds() != 300 {
+		t.Fatalf("%v %d", err, a.ScriptAskSeconds())
+	}
+	enabledBeforeSend(t, a)
+	c := &deadlineConfirm{}
+	a.recipientConfirmer = c
+	req := ComposeRequest{AccountID: 1, Subject: "Hello", Text: "hi", To: []AddressDTO{{Email: "bo@example.test"}}}
+	if _, err := a.beforeSendScripts(a.ctx, req); !errors.Is(err, errRecipientsHeld) {
+		t.Fatalf("not held when the time ran out: %v", err)
+	}
+	if c.left < 290*time.Second || c.left > 300*time.Second {
+		t.Fatalf("the confirmation waits %s, want the setting", c.left)
+	}
+}
+
 // TestSubjectChangesAreLoggedNotAsked checks that a before-send change to
 // the subject goes through without a question and is in the run log with
 // what changed, and that a test run lists the change as planned.

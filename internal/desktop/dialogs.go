@@ -10,6 +10,11 @@ type fileFilter = application.FileFilter
 type openDialogOptions struct {
 	Title   string
 	Filters []fileFilter
+	// Directory is where the dialog opens, empty for the system's choice.
+	Directory string
+	// ShowHidden lists hidden files and folders, which a mail program's
+	// store often is, and opens folders macOS shows as packages.
+	ShowHidden bool
 }
 
 // saveDialogOptions describes a save dialog.
@@ -71,6 +76,11 @@ func (a *App) openOptions(o openDialogOptions, files, dirs bool) *application.Op
 		CanChooseFiles:       files,
 		CanChooseDirectories: dirs,
 		CanCreateDirectories: dirs,
+		Directory:            o.Directory,
+		ShowHiddenFiles:      o.ShowHidden,
+		// an Apple Mail mailbox is a folder ending in .mbox, which macOS
+		// would otherwise offer as a single file.
+		TreatsFilePackagesAsDirectories: o.ShowHidden,
 	}
 	if a.win != nil {
 		opts.Window = a.win

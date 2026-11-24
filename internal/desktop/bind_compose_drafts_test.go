@@ -9,11 +9,9 @@ import (
 	"slices"
 	"strings"
 	"sync"
-	"sync/atomic"
 	"testing"
 	"time"
 
-	pimap "github.com/peltonapp/Pelton/internal/imap"
 	"github.com/peltonapp/Pelton/internal/outbox"
 	"github.com/peltonapp/Pelton/internal/storage"
 )
@@ -57,11 +55,28 @@ func listDrafts(t *testing.T, app *App) []DraftDTO {
 }
 
 // settle waits for the goroutines a binding left behind, so a test reads the
-// fake only once nothing else is using it.
-func settle(t *testing.T) {
+// fake only once nothing else is using it. An account runtime a queued sync
+// started lives until it is stopped, so settle stops them as it waits; the
+// next server operation starts a new one.
+func settle(t *testing.T, app *App) {
 	t.Helper()
-	if !waitForBackgroundWork(backgroundWorkGrace) {
-		t.Fatal("background work did not finish")
+	deadline := time.Now().Add(backgroundWorkGrace)
+	for {
+		app.syncsMu.Lock()
+		ids := make([]int64, 0, len(app.syncs))
+		for id := range app.syncs {
+			ids = append(ids, id)
+		}
+		app.syncsMu.Unlock()
+		for _, id := range ids {
+			app.stopAccountScheduler(id, false)
+		}
+		if waitForBackgroundWork(100 * time.Millisecond) {
+			return
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("background work did not finish")
+		}
 	}
 }
 
@@ -171,7 +186,7 @@ func TestDraftRoundTripsThroughTheServer(t *testing.T) {
 		}
 		assertDraftReplyRequest(t, drafts[0].Request)
 		got, err := app.UploadDraft(id)
-		settle(t)
+		settle(t, app)
 		if err != nil {
 			t.Fatalf("upload %q: %v", subject, err)
 		}
@@ -240,7 +255,7 @@ func TestDraftRoundTripsThroughTheServer(t *testing.T) {
 	if err := app.DeleteDraft(id); err != nil {
 		t.Fatalf("DeleteDraft: %v", err)
 	}
-	settle(t)
+	settle(t, app)
 	if !slices.Equal(client.removedDrafts, []string{messageID}) {
 		t.Fatalf("removed %v, want just %q", client.removedDrafts, messageID)
 	}
@@ -298,7 +313,7 @@ func TestDraftsGoToTheFolderUsedAsDrafts(t *testing.T) {
 			id := saveDraft(t, app, 0, ComposeRequest{AccountID: accountID, Subject: "hi"})
 
 			_, err := app.UploadDraft(id)
-			settle(t)
+			settle(t, app)
 			if tt.want == "" {
 				if !errors.Is(err, ErrNoDraftsFolder) || len(client.drafts) != 0 {
 					t.Fatalf("UploadDraft = %v with %d uploads, want ErrNoDraftsFolder and none", err, len(client.drafts))
@@ -343,7 +358,7 @@ func TestUploadDraftKeepsEncryptedDraftsOffTheServer(t *testing.T) {
 			}
 
 			messageID, err := app.UploadDraft(1)
-			settle(t)
+			settle(t, app)
 			if !errors.Is(err, tt.want) {
 				t.Fatalf("UploadDraft = %v, want %v", err, tt.want)
 			}
@@ -377,7 +392,7 @@ func TestEncryptingAnUploadedDraftRemovesThePlaintextCopy(t *testing.T) {
 	req := ComposeRequest{AccountID: accountID, To: addr("a@example.com"), Subject: "numbers", Text: "plain"}
 	id := saveDraft(t, app, 0, req)
 	messageID, err := app.UploadDraft(id)
-	settle(t)
+	settle(t, app)
 	if err != nil || messageID == "" {
 		t.Fatalf("UploadDraft = %q, %v", messageID, err)
 	}
@@ -385,7 +400,7 @@ func TestEncryptingAnUploadedDraftRemovesThePlaintextCopy(t *testing.T) {
 	// the composer has lost the Message-ID, as when its removal failed.
 	req.Protection = protectionEncrypt
 	saveDraft(t, app, id, req)
-	settle(t)
+	settle(t, app)
 	if !slices.Equal(client.removedDrafts, []string{messageID}) {
 		t.Fatalf("after the encrypted save removed %v, want %q", client.removedDrafts, messageID)
 	}
@@ -400,7 +415,7 @@ func TestEncryptingAnUploadedDraftRemovesThePlaintextCopy(t *testing.T) {
 	if err := app.DeleteDraft(id); err != nil {
 		t.Fatalf("DeleteDraft: %v", err)
 	}
-	settle(t)
+	settle(t, app)
 	if !slices.Equal(client.removedDrafts, []string{messageID, messageID}) {
 		t.Fatalf("after delete removed %v, want %q tried again", client.removedDrafts, messageID)
 	}
@@ -426,28 +441,51 @@ func TestConcurrentDraftSavesKeepEveryDraft(t *testing.T) {
 	}
 }
 
-// Draft changes made while a sync runs queue one sync of the account, not one
-// each. A draft that never reached the server has nothing to remove there.
-func TestDraftRemovalsDuringASyncQueueOneSync(t *testing.T) {
+// Draft removals go through the account's session pool. A draft that never
+// reached the server has nothing to remove there.
+func TestDraftRemovalsGoThroughThePool(t *testing.T) {
 	app, accountID, client := draftTestApp(t)
-	var connects atomic.Int32
-	app.newIMAPClient = func(pimap.Config) (mailClient, error) {
-		connects.Add(1)
-		return client, nil
-	}
-
-	syncMu.Lock()
 	for _, messageID := range []string{"", "<d1@example.com>", "<d2@example.com>", "<d3@example.com>"} {
 		if err := app.RemoveServerDraft(accountID, messageID); err != nil {
-			syncMu.Unlock()
 			t.Fatalf("RemoveServerDraft(%q): %v", messageID, err)
 		}
 	}
-	syncMu.Unlock()
-	settle(t)
+	settle(t, app)
 	want := []string{"<d1@example.com>", "<d2@example.com>", "<d3@example.com>"}
-	if got := connects.Load(); got != 4 || !slices.Equal(client.removedDrafts, want) {
-		t.Fatalf("got %d connections removing %v, want 4 (three removals, then one sync) removing %v", got, client.removedDrafts, want)
+	if !slices.Equal(client.removedDrafts, want) {
+		t.Fatalf("removed %v, want %v", client.removedDrafts, want)
+	}
+}
+
+// Autosave uploads a draft every few seconds. The syncs those changes ask
+// for coalesce: while one runs, any number of saves add a single pass after
+// it, not one pass each.
+func TestDraftSavesCoalesceTheirSyncs(t *testing.T) {
+	app, accountID, _ := draftTestApp(t)
+	release := make(chan struct{})
+	var mu sync.Mutex
+	passes := 0
+	app.changeSyncForTest = func(storage.Account) {
+		mu.Lock()
+		passes++
+		first := passes == 1
+		mu.Unlock()
+		if first {
+			<-release
+		}
+	}
+	id := saveDraft(t, app, 0, ComposeRequest{AccountID: accountID, Subject: "draft"})
+	for range 5 {
+		if _, err := app.UploadDraft(id); err != nil {
+			t.Fatalf("UploadDraft: %v", err)
+		}
+	}
+	close(release)
+	settle(t, app)
+	mu.Lock()
+	defer mu.Unlock()
+	if passes != 2 {
+		t.Fatalf("%d sync passes for 5 saves during a pass, want 2 (the running one and one after it)", passes)
 	}
 }
 
@@ -516,7 +554,7 @@ func TestDraftMessageIDsFromTheFrontendAreChecked(t *testing.T) {
 			t.Errorf("RemoveServerDraft(%q) = %v, want nil", empty, err)
 		}
 	}
-	settle(t)
+	settle(t, app)
 	if len(client.removedDrafts) != 0 {
 		t.Fatalf("drafts removed on the server: %q", client.removedDrafts)
 	}
@@ -543,7 +581,7 @@ func TestDraftMessageIDsFromTheFrontendAreChecked(t *testing.T) {
 		if err := app.RemoveServerDraft(accountID, good); err != nil {
 			t.Fatalf("RemoveServerDraft(%s): %v", good, err)
 		}
-		settle(t)
+		settle(t, app)
 		if got := client.removedDrafts; len(got) != 1 || got[0] != good {
 			t.Fatalf("removed %v, want exactly %q", got, good)
 		}

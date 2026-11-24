@@ -770,8 +770,9 @@ SELECT l.id FROM project_links l WHERE l.project_id = ? AND l.kind = 'mail' AND 
 // LatestThreadMessages returns the newest message of each conversation, held
 // in one of folderIDs, newest first. Hidden rows are left out.
 func (d *DB) LatestThreadMessages(ctx context.Context, threadIDs, folderIDs []int64) ([]Message, error) {
-	if len(threadIDs) == 0 || len(folderIDs) == 0 {
-		return nil, nil
+	folderIDs, err := d.visibleFolderIDs(ctx, folderIDs)
+	if err != nil || len(threadIDs) == 0 || len(folderIDs) == 0 {
+		return nil, err
 	}
 	threadMarks, args := inClause(threadIDs)
 	folderMarks, folderArgs := inClause(folderIDs)
@@ -806,7 +807,7 @@ SELECT id FROM (
 // conversation id when it has none) and its conversation.
 func (d *DB) MessageThreadKey(ctx context.Context, messageID int64) (accountID int64, ref string, threadID int64, subject string, err error) {
 	var header string
-	err = d.sql.QueryRowContext(ctx, `SELECT account_id, message_id, thread_id, subject FROM messages WHERE id = ?`, messageID).
+	err = d.sql.QueryRowContext(ctx, `SELECT account_id, message_id, thread_id, subject FROM messages WHERE id = ? AND `+notVaulted, messageID).
 		Scan(&accountID, &header, &threadID, &subject)
 	if errors.Is(err, sql.ErrNoRows) {
 		return 0, "", 0, "", ErrMessageNotFound

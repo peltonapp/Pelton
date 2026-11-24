@@ -26,6 +26,7 @@
     taskSettings,
     taskSeed,
     taskFocus,
+    taskScopeRequest,
     openTaskId,
     taskForContact,
     taskConflict,
@@ -43,7 +44,7 @@
     startTasks,
     toggleDone,
   } from '../../stores/tasks'
-  import { calendarFocus, calendarSync, calendarSyncError, calendarSettings, loadCalendarSettings, refreshCalendars } from '../../stores/calendar'
+  import { calendarFocus, calendarSync, calendarSyncError, calendarSettings, findTimeFor, loadCalendarSettings, refreshCalendars } from '../../stores/calendar'
   import { reorderTasks, findEventByUID } from '../../lib/api'
   import { createTasksFromMail } from '../../lib/taskmail'
   import { convertTaskToEvent } from '../../lib/taskevent'
@@ -52,7 +53,8 @@
   import type { ChronoLike } from '../../lib/eventphrase'
   import { dayKey, parseEventTime, resolveWeekStart } from '../../lib/caldate'
   import { describeRRule } from '../../lib/recurrence'
-  import { dueDate, dueHasTime, moveDue, taskRows, tasksInScope, type TaskScope } from '../../lib/tasklogic'
+  import { dueDate, dueHasTime, moveDue, promiseLists, taskRows, tasksInScope, type TaskScope } from '../../lib/tasklogic'
+  import { owedByTask } from '../../stores/promises'
   import { focusSpaceSearch, matchesQuery, registerSpaceSearch } from '../../lib/spacesearch'
   import { registerSpaceActions, openSpace } from '../../stores/space'
   import { openContextMenu } from '../../stores/contextmenu'
@@ -94,7 +96,7 @@
   $: weekStart = resolveWeekStart($calendarSettings.weekStart, navigator.language)
   $: now = $taskClock
   $: sort = $taskSettings.sort
-  $: scoped = tasksInScope($tasks, scope, now)
+  $: scoped = tasksInScope($tasks, scope, now, $owedByTask)
   $: visible = filter.trim() ? scoped.filter((x) => matchesTask(x, filter)) : scoped
   $: rows = taskRows(visible, sort, !(scope.kind === 'smart' && scope.key === 'completed'))
   $: selected = $tasks.find((x) => x.id === selectedId) ?? null
@@ -102,7 +104,7 @@
   $: subtasks = selected ? $tasks.filter((x) => x.listId === selected?.listId && x.parent === selected?.uid) : []
   $: currentList = scope.kind === 'list' ? $taskLists.find((l) => scope.kind === 'list' && l.id === scope.id) : undefined
   $: targetList = currentList && !currentList.readOnly ? currentList.id : defaultListId($taskLists, $taskSettings)
-  $: canAdd = targetList !== 0 && !(scope.kind === 'smart' && scope.key === 'completed')
+  $: canAdd = targetList !== 0 && !(scope.kind === 'smart' && (scope.key === 'completed' || promiseLists.includes(scope.key)))
   $: canReorder = scope.kind === 'list' && sort === 'manual' && !filter.trim() && !currentList?.readOnly
   $: title = scope.kind === 'smart' ? $t(`tasks.smart.${scope.key}`) : currentList?.name || $t('tasks.defaultList')
   $: emptyKey = scope.kind === 'smart' ? scope.key : 'list'
@@ -130,6 +132,11 @@
       },
       'delete-message': () => whenFree(() => void removeSelected()),
       sync: () => void sync(),
+      'block-time': () => {
+        if (selected) {
+          findTimeFor(selected.id)
+        }
+      },
     })
     stopSearch = registerSpaceSearch('tasks', {
       placeholderKey: 'tasks.searchPlaceholder',
@@ -204,7 +211,7 @@
       })
       return
     }
-    if (!tasksInScope([task], scope, now).length) {
+    if (!tasksInScope([task], scope, now, $owedByTask).length) {
       scope = { kind: 'list', id: task.listId }
     }
     filter = ''
@@ -215,6 +222,11 @@
     const id = $taskFocus
     taskFocus.set(null)
     showTask(id)
+  }
+
+  $: if ($taskScopeRequest !== null) {
+    scope = $taskScopeRequest
+    taskScopeRequest.set(null)
   }
 
   // --- making tasks -----------------------------------------------------------------
