@@ -32,6 +32,7 @@ func assertPaths(t *testing.T, got []Folder, want ...string) {
 // an install that has never reordered anything must keep discovery order, which
 // is the whole point of position defaulting to 0 rather than to a rank.
 func TestListFoldersKeepsDiscoveryOrderUntilReordered(t *testing.T) {
+	t.Parallel()
 	db := newTestDB(t)
 	ctx := context.Background()
 
@@ -47,6 +48,7 @@ func TestListFoldersKeepsDiscoveryOrderUntilReordered(t *testing.T) {
 // a folder discovered after a reorder has position 0, and must land at the end
 // of the list rather than jumping ahead of every ranked folder.
 func TestNewFolderSortsAfterReorderedOnes(t *testing.T) {
+	t.Parallel()
 	db := newTestDB(t)
 	ctx := context.Background()
 
@@ -63,6 +65,7 @@ func TestNewFolderSortsAfterReorderedOnes(t *testing.T) {
 }
 
 func TestSetAccountPositions(t *testing.T) {
+	t.Parallel()
 	db := newTestDB(t)
 	ctx := context.Background()
 
@@ -101,6 +104,7 @@ func TestSetAccountPositions(t *testing.T) {
 // pinning appends, so the group's order follows the order the user pinned in
 // until they drag it. Pinning spans accounts: the group is global.
 func TestPinFolderAppendsAcrossAccounts(t *testing.T) {
+	t.Parallel()
 	db := newTestDB(t)
 	ctx := context.Background()
 
@@ -138,6 +142,7 @@ func TestPinFolderAppendsAcrossAccounts(t *testing.T) {
 // pinning twice must not move a folder to the end of the group, and unpinning
 // must take it out without disturbing the folders around it.
 func TestPinFolderIsIdempotentAndUnpinnable(t *testing.T) {
+	t.Parallel()
 	db := newTestDB(t)
 	ctx := context.Background()
 

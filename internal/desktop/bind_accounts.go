@@ -36,17 +36,48 @@ func (a *App) ListFolders(accountID int64) ([]FolderDTO, error) {
 		return nil, err
 	}
 	out := make([]FolderDTO, 0, len(folders))
+	mark := a.vaultMarker()
 	for _, f := range folders {
 		dto := toFolderDTO(f)
-		total, unread, err := a.store.FolderCounts(a.ctx, f.ID)
+		total, unread, err := a.folderCounts(f)
 		if err != nil {
 			return nil, err
 		}
 		dto.TotalCount = total
 		dto.UnreadCount = unread
+		mark(&dto)
 		out = append(out, dto)
 	}
 	return out, nil
+}
+
+// vaultMarker returns what marks a folder DTO with its vault and whether that
+// vault is locked, reading the vaults once for a whole listing.
+func (a *App) vaultMarker() func(*FolderDTO) {
+	hide := map[int64]bool{}
+	if vaults, err := a.store.ListMailVaults(a.ctx); err == nil {
+		for _, v := range vaults {
+			hide[v.ID] = v.HideLocked
+		}
+	}
+	return func(dto *FolderDTO) {
+		v, err := a.store.FolderVault(a.ctx, dto.ID)
+		if err != nil || v == 0 {
+			return
+		}
+		dto.VaultID = v
+		dto.VaultLocked = !a.mailVaultUnlocked(v)
+		dto.VaultHidden = dto.VaultLocked && hide[v]
+	}
+}
+
+// folderCounts is a folder's badge counts. An inbox leaves muted
+// conversations out, as its list does.
+func (a *App) folderCounts(f storage.Folder) (total, unread int, err error) {
+	if folderRole(f) == roleInbox {
+		return a.store.FolderCountsHidingMuted(a.mailCtx(), f.ID)
+	}
+	return a.store.FolderCounts(a.mailCtx(), f.ID)
 }
 
 // unifiedView is one entry in the built-in cross-account group. The label is a
@@ -87,11 +118,17 @@ func (a *App) ListUnifiedViews() ([]UnifiedViewDTO, error) {
 		if err != nil {
 			return nil, err
 		}
-		total, err := a.store.CountMessages(a.ctx, q)
+		q.HideMuted = v.key == viewInbox
+		total, err := a.store.CountMessages(a.mailCtx(), q)
 		if err != nil {
 			return nil, err
 		}
-		unread, err := a.store.UnreadCount(a.ctx, q.FolderIDs)
+		var unread int
+		if q.HideMuted {
+			unread, err = a.store.UnreadCountFor(a.mailCtx(), q)
+		} else {
+			unread, err = a.store.UnreadCount(a.mailCtx(), q.FolderIDs)
+		}
 		if err != nil {
 			return nil, err
 		}

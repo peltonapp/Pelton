@@ -32,9 +32,27 @@
         <string>true</string>
         <key>NSHumanReadableCopyright</key>
         <string>{{.Info.Copyright}}</string>
-        {{if .Info.FileAssociations}}
+        <!-- .ics files: Pelton can open them, ranked Alternate so it shows in
+             Open With without taking the default from the calendar app. The
+             user makes it the default from Pelton's calendar settings. -->
         <key>CFBundleDocumentTypes</key>
         <array>
+          <dict>
+            <key>CFBundleTypeName</key>
+            <string>iCalendar file</string>
+            <key>CFBundleTypeRole</key>
+            <string>Viewer</string>
+            <key>LSHandlerRank</key>
+            <string>Alternate</string>
+            <key>LSItemContentTypes</key>
+            <array>
+              <string>com.apple.ical.ics</string>
+            </array>
+            <key>CFBundleTypeExtensions</key>
+            <array>
+              <string>ics</string>
+            </array>
+          </dict>
           {{range .Info.FileAssociations}}
           <dict>
             <key>CFBundleTypeExtensions</key>
@@ -50,7 +68,6 @@
           </dict>
           {{end}}
         </array>
-        {{end}}
         {{if .Info.Protocols}}
         <key>CFBundleURLTypes</key>
         <array>

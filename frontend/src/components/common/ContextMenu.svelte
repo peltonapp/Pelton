@@ -9,14 +9,71 @@
   import { flagColors } from '../../theme/flagcolors'
   import { currentUIScale } from '../../theme/theme'
   import { t } from '../../lib/i18n'
+  import { prefs } from '../../stores/prefs'
+  import { popPopup, pushPopup } from '../../lib/popups'
+  import { scriptEntryName, scriptText } from '../../lib/scriptmark'
+  import ScriptMark from './ScriptMark.svelte'
 
   let menuEl: HTMLDivElement
   let left = 0
   let top = 0
+  // the new design moves focus into the menu and hands it back on close.
+  let restoreTo: HTMLElement | null = null
+  let managing = false
 
   // reposition when the menu opens, keeping it inside the viewport.
   $: if ($contextMenu) {
     void place($contextMenu.x, $contextMenu.y)
+  }
+
+  $: onOpenChange($contextMenu !== null)
+
+  function onOpenChange(open: boolean): void {
+    if (open && !managing && $prefs.design !== 'classic') {
+      managing = true
+      restoreTo = document.activeElement as HTMLElement | null
+      pushPopup()
+      void tick().then(() => items()[0]?.focus())
+    } else if (!open && managing) {
+      managing = false
+      popPopup()
+      const target = restoreTo
+      restoreTo = null
+      if (target?.isConnected && (document.activeElement === document.body || menuEl?.contains(document.activeElement) || !document.activeElement)) {
+        target.focus()
+      }
+    }
+  }
+
+  function items(): HTMLElement[] {
+    return menuEl ? [...menuEl.querySelectorAll<HTMLElement>('[role^="menuitem"]')] : []
+  }
+
+  function onMenuKey(event: KeyboardEvent): void {
+    if (!managing) {
+      return
+    }
+    const list = items()
+    const at = list.indexOf(document.activeElement as HTMLElement)
+    let next = -1
+    if (event.key === 'ArrowDown') {
+      next = at < 0 ? 0 : (at + 1) % list.length
+    } else if (event.key === 'ArrowUp') {
+      next = at <= 0 ? list.length - 1 : at - 1
+    } else if (event.key === 'Home') {
+      next = 0
+    } else if (event.key === 'End') {
+      next = list.length - 1
+    } else if (event.key === 'Escape' || event.key === 'Tab') {
+      event.preventDefault()
+      event.stopPropagation()
+      close()
+      return
+    } else {
+      return
+    }
+    event.preventDefault()
+    list[next]?.focus()
   }
 
   // the app applies an interface zoom via css `zoom` on <html>. under zoom,
@@ -47,14 +104,21 @@
     }
   }
 
-  function run(item: MenuItem): void {
+  // closes before the action runs, so a dialog the action opens finds focus
+  // back on the invoker and returns it there.
+  function close(): void {
     closeContextMenu()
+    onOpenChange(false)
+  }
+
+  function run(item: MenuItem): void {
+    close()
     item.action()
   }
 
   // pickColor fires the swatch row's callback and closes the menu.
   function pickColor(onPick: (color: number) => void, color: number): void {
-    closeContextMenu()
+    close()
     onPick(color)
   }
 </script>
@@ -62,16 +126,46 @@
 {#if $contextMenu}
   <!-- svelte-ignore a11y-click-events-have-key-events a11y-no-static-element-interactions -->
   <div class="scrim" on:click={closeContextMenu} on:contextmenu|preventDefault={closeContextMenu}></div>
-  <div class="menu" bind:this={menuEl} style={`left:${left}px;top:${top}px`} role="menu">
+  <!-- svelte-ignore a11y-no-noninteractive-element-interactions -->
+  <div class="menu" bind:this={menuEl} style={`left:${left}px;top:${top}px`} role="menu" tabindex={managing ? -1 : undefined} on:keydown={onMenuKey}>
     {#each $contextMenu.entries as entry}
       {#if entry === 'separator'}
         <div class="sep" role="separator"></div>
+      {:else if 'kind' in entry && entry.kind === 'group'}
+        <div class="group" role="group" aria-label={entry.label}>
+          <div class="heading" aria-hidden="true">{entry.label}</div>
+          {#each entry.items as item}
+            <button
+              type="button"
+              class="item"
+              class:danger={item.danger}
+              role="menuitem"
+              tabindex={managing ? -1 : undefined}
+              aria-label={item.script !== undefined ? scriptEntryName(item.label, item.script, $t) : undefined}
+              title={item.script !== undefined ? scriptEntryName(item.label, item.script, $t) : undefined}
+              on:click={() => run(item)}
+            >
+              {#if item.script !== undefined}
+                <span class="icon"><ScriptMark /></span>
+              {:else if item.icon}
+                <span class="icon"><svelte:component this={item.icon} size={15} stroke={1.7} /></span>
+              {/if}
+              <span class="label">{item.script !== undefined ? scriptText(item.label) : item.label}</span>
+              {#if item.hint}
+                <kbd class="hint">{item.hint}</kbd>
+              {/if}
+            </button>
+          {/each}
+        </div>
       {:else if 'kind' in entry}
         <div class="swatches" role="group" aria-label={$t('common.contextMenu.flagColor')}>
           <button
             type="button"
             class="swatch clear"
             class:active={entry.current === 0}
+            role="menuitemradio"
+            aria-checked={entry.current === 0}
+            tabindex={managing ? -1 : undefined}
             title={$t('common.contextMenu.noColor')}
             aria-label={$t('common.contextMenu.noColor')}
             on:click={() => pickColor(entry.onPick, 0)}
@@ -83,6 +177,9 @@
               type="button"
               class="swatch"
               class:active={entry.current === c.index}
+              role="menuitemradio"
+              aria-checked={entry.current === c.index}
+              tabindex={managing ? -1 : undefined}
               style={`--sw:${c.hex}`}
               title={c.name}
               aria-label={c.name}
@@ -91,7 +188,7 @@
           {/each}
         </div>
       {:else}
-        <button type="button" class="item" class:danger={entry.danger} role="menuitem" on:click={() => run(entry)}>
+        <button type="button" class="item" class:danger={entry.danger} role="menuitem" tabindex={managing ? -1 : undefined} on:click={() => run(entry)}>
           {#if entry.icon}
             <span class="icon"><svelte:component this={entry.icon} size={15} stroke={1.7} /></span>
           {/if}
@@ -175,6 +272,13 @@
     color: var(--text-secondary);
   }
 
+  .heading {
+    padding: var(--space-1) var(--space-3);
+    font-size: var(--fz-meta);
+    font-weight: var(--fw-semibold);
+    color: var(--text-tertiary);
+  }
+
   .sep {
     height: var(--hairline);
     margin: var(--space-1) var(--space-2);
@@ -202,6 +306,12 @@
     justify-content: center;
     color: var(--text-tertiary);
     transition: transform 0.08s ease;
+  }
+
+  /* 20px apart by 4px keeps each swatch's 24px target clear of the next. */
+  :global(:root[data-design="new"]) .swatch {
+    width: calc(var(--space-5) + var(--space-2));
+    height: calc(var(--space-5) + var(--space-2));
   }
 
   .swatch:hover {

@@ -17,8 +17,65 @@
   export let id: string
   export let chipsEnabled = true
   export let autocompleteEnabled = true
+  // field names the recipient field (to, cc or bcc) for chips moved between
+  // fields; movable lets its chips take focus and be dragged to another field.
+  export let field = ''
+  export let movable = false
 
-  const dispatch = createEventDispatcher<{ change: string }>()
+  const dispatch = createEventDispatcher<{
+    change: string
+    dropchip: { value: string; from: string }
+    dragchip: boolean
+  }>()
+
+  // the data a dragged chip carries, so only a chip can be dropped on a field.
+  const chipType = 'application/x-pelton-recipient'
+  let dropping = false
+
+  function onChipDragStart(event: DragEvent, value: string): void {
+    event.dataTransfer?.setData(chipType, JSON.stringify({ value, from: field }))
+    if (event.dataTransfer) {
+      event.dataTransfer.effectAllowed = 'move'
+    }
+    dispatch('dragchip', true)
+  }
+
+  function carriesChip(event: DragEvent): boolean {
+    return movable && (event.dataTransfer?.types ?? []).includes(chipType)
+  }
+
+  function onDragOver(event: DragEvent): void {
+    if (!carriesChip(event)) {
+      return
+    }
+    event.preventDefault()
+    event.stopPropagation()
+    dropping = true
+  }
+
+  function onDrop(event: DragEvent): void {
+    dropping = false
+    if (!carriesChip(event)) {
+      return
+    }
+    event.preventDefault()
+    event.stopPropagation()
+    try {
+      const data = JSON.parse(event.dataTransfer?.getData(chipType) ?? '') as { value: string; from: string }
+      if (data.from !== field) {
+        dispatch('dropchip', data)
+      }
+    } catch {
+      // not a chip of ours.
+    }
+  }
+
+  function onChipKeydown(event: KeyboardEvent, index: number): void {
+    if (event.key === 'Backspace' || event.key === 'Delete') {
+      event.preventDefault()
+      removeAt(index)
+    }
+  }
 
   let draft = ''
 
@@ -137,14 +194,43 @@
 </script>
 
 {#if chipsEnabled}
-  <div class="chips" role="group" aria-label={label}>
+  <div
+    class="chips"
+    class:dropping
+    role="group"
+    aria-label={label}
+    on:dragover={onDragOver}
+    on:dragleave={() => (dropping = false)}
+    on:drop={onDrop}
+  >
     {#each chips as chip, index (chip + index)}
+      {#if movable}
+        <span
+          class="chip movable"
+          class:invalid={!looksValid(chip)}
+          role="button"
+          tabindex="0"
+          draggable="true"
+          aria-label={$t('recipients.chip').replace('{who}', chip).replace('{field}', label)}
+          data-chip={chip}
+          data-chip-field={field}
+          on:keydown={(e) => onChipKeydown(e, index)}
+          on:dragstart={(e) => onChipDragStart(e, chip)}
+          on:dragend={() => dispatch('dragchip', false)}
+        >
+          <span class="chip-text">{chip}</span>
+          <button type="button" class="chip-x" tabindex="-1" aria-label={`${$t('compose.attach.remove')} ${chip}`} on:click={() => removeAt(index)}>
+            <IconX size={11} stroke={2} />
+          </button>
+        </span>
+      {:else}
       <span class="chip" class:invalid={!looksValid(chip)}>
         <span class="chip-text">{chip}</span>
         <button type="button" class="chip-x" aria-label={`${$t('compose.attach.remove')} ${chip}`} on:click={() => removeAt(index)}>
           <IconX size={11} stroke={2} />
         </button>
       </span>
+      {/if}
     {/each}
     <div class="input-wrap">
       <input
@@ -213,6 +299,25 @@
 
   .chip.invalid {
     border-color: var(--warning);
+  }
+
+  .chip.movable {
+    cursor: grab;
+    transition:
+      border-color var(--motion-fast) var(--ease-out),
+      background-color var(--motion-fast) var(--ease-out);
+  }
+
+  .chip.movable:focus-visible {
+    outline: none;
+    border-color: var(--accent);
+    background: var(--selection-bg);
+  }
+
+  .chips.dropping {
+    border-radius: var(--radius-control);
+    box-shadow: 0 0 0 var(--hairline) var(--accent);
+    background: var(--selection-bg);
   }
 
   .chip-text {

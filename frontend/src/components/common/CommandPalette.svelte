@@ -25,8 +25,13 @@
     type RankedCommand,
   } from '../../stores/palette'
   import type { PaletteCommand, CommandGroup } from '../../lib/commands'
+  import { space } from '../../stores/space'
   import { highlightRuns } from '../../lib/fuzzy'
   import { t, isMac, shortcutLabel } from '../../lib/i18n'
+  import { scriptEntryName, scriptText } from '../../lib/scriptmark'
+  import ScriptMark from './ScriptMark.svelte'
+  import { prefs } from '../../stores/prefs'
+  import { calm } from '../../lib/motion'
 
   /** Every command currently available, rebuilt by the parent as state changes. */
   export let commands: PaletteCommand[] = []
@@ -60,6 +65,40 @@
     void focusInput()
   }
 
+  // the new design hands focus back to where it was when the palette closes.
+  let restoreTo: HTMLElement | null = null
+  let wasOpen = false
+  $: onOpenChange($paletteOpen)
+
+  function onOpenChange(open: boolean): void {
+    if (open === wasOpen) {
+      return
+    }
+    wasOpen = open
+    if ($prefs.design === 'classic') {
+      return
+    }
+    if (open) {
+      restoreTo = document.activeElement as HTMLElement | null
+      return
+    }
+    const target = restoreTo
+    restoreTo = null
+    void tick().then(() => {
+      const now = document.activeElement
+      if (target?.isConnected && (!now || now === document.body)) {
+        target.focus()
+      }
+    })
+  }
+
+  $: resultsStatus =
+    results.length > 0
+      ? $t('a11y.results').replace('{count}', String(results.length))
+      : parsed.text !== '' && !(prefix === 'mail' && $paletteMailBusy)
+        ? $t('palette.noResults')
+        : ''
+
   // group headers only earn their space when more than one group is showing.
   $: groups = groupRuns(results)
   // the flattened display order. keyboard navigation walks this rather than
@@ -76,7 +115,33 @@
   // comes before going somewhere, which comes before changing a preference:
   // typing three letters should not put a settings pane above the action of
   // the same name.
-  const groupRank: CommandGroup[] = ['action', 'mail', 'navigate', 'setting']
+  // the entries of the space on screen lead, so in the calendar "new" finds
+  // the event before the message.
+  $: groupRank = withAutomations(
+    $space === 'calendar'
+      ? ['calendar', 'action', 'mail', 'navigate', 'tasks', 'projects', 'notes', 'contacts', 'feeds', 'chat', 'setting']
+      : $space === 'contacts'
+        ? ['contacts', 'action', 'mail', 'navigate', 'calendar', 'tasks', 'projects', 'notes', 'feeds', 'chat', 'setting']
+        : $space === 'tasks'
+          ? ['tasks', 'action', 'mail', 'navigate', 'calendar', 'projects', 'notes', 'contacts', 'feeds', 'chat', 'setting']
+          : $space === 'projects'
+            ? ['projects', 'action', 'mail', 'navigate', 'tasks', 'calendar', 'notes', 'contacts', 'feeds', 'chat', 'setting']
+            : $space === 'notes'
+              ? ['notes', 'action', 'navigate', 'mail', 'calendar', 'tasks', 'projects', 'contacts', 'feeds', 'chat', 'setting']
+              : $space === 'feeds'
+                ? ['feeds', 'action', 'mail', 'navigate', 'calendar', 'tasks', 'projects', 'notes', 'contacts', 'chat', 'setting']
+                : $space === 'chat'
+                  ? ['chat', 'action', 'mail', 'navigate', 'calendar', 'tasks', 'projects', 'notes', 'contacts', 'feeds', 'setting']
+                  : ['action', 'mail', 'calendar', 'tasks', 'projects', 'notes', 'contacts', 'feeds', 'chat', 'navigate', 'setting'],
+    $space === 'automations',
+  )
+
+  // automations lead while their space is on screen and otherwise come just
+  // before the settings.
+  function withAutomations(rank: string[], leading: boolean): CommandGroup[] {
+    const rest = rank.filter((g) => g !== 'setting') as CommandGroup[]
+    return leading ? ['automations', ...rest, 'setting'] : [...rest, 'automations', 'setting']
+  }
 
   /**
    * Buckets ranked results by group. The buckets are in a fixed order rather
@@ -107,6 +172,30 @@
     }
     if (group === 'mail') {
       return $t('palette.group.mail')
+    }
+    if (group === 'calendar') {
+      return $t('space.calendar')
+    }
+    if (group === 'contacts') {
+      return $t('space.contacts')
+    }
+    if (group === 'tasks') {
+      return $t('space.tasks')
+    }
+    if (group === 'projects') {
+      return $t('space.projects')
+    }
+    if (group === 'notes') {
+      return $t('space.notes')
+    }
+    if (group === 'feeds') {
+      return $t('space.feeds')
+    }
+    if (group === 'chat') {
+      return $t('space.chat')
+    }
+    if (group === 'automations') {
+      return $t('space.automations')
     }
     return $t('palette.group.settings')
   }
@@ -175,6 +264,12 @@
 
   function onKeydown(event: KeyboardEvent): void {
     switch (event.key) {
+      case 'Tab':
+        // the input is the palette's only stop; the page behind is inert.
+        if ($prefs.design !== 'classic') {
+          event.preventDefault()
+        }
+        break
       case 'Escape':
         event.preventDefault()
         back()
@@ -236,13 +331,13 @@
 
 {#if $paletteOpen}
   <!-- svelte-ignore a11y-click-events-have-key-events a11y-no-static-element-interactions -->
-  <div class="backdrop" transition:fade={{ duration: 100 }} on:click={closePalette}></div>
+  <div class="backdrop" transition:fade={{ duration: calm(100) }} on:click={closePalette}></div>
   <div
     class="palette"
     role="dialog"
     aria-modal="true"
     aria-label={$t('palette.title')}
-    transition:fly={{ y: -8, duration: 140 }}
+    transition:fly={{ y: -8, duration: calm(140) }}
   >
     <div class="field">
       {#if $paletteStep}
@@ -285,13 +380,16 @@
               id="palette-row-{i}"
               role="option"
               aria-selected={i === active}
+              title={entry.command.script !== undefined ? scriptEntryName(entry.command.label, entry.command.script, $t) : undefined}
               data-active={i === active}
               tabindex="-1"
               on:click={() => void run(entry.command)}
               on:mousemove={() => (active = i)}
             >
               <span class="icon">
-                {#if entry.command.swatch}
+                {#if entry.command.script !== undefined}
+                  <ScriptMark size={16} />
+                {:else if entry.command.swatch}
                   <span class="swatch" style="background: {entry.command.swatch}"></span>
                 {:else}
                   <svelte:component this={entry.command.icon} size={16} stroke={1.6} />
@@ -300,7 +398,7 @@
               <span class="label">
                 {#each highlightRuns(entry.command.label, entry.positions) as part}
                   {#if part.hit}<mark>{part.text}</mark>{:else}{part.text}{/if}
-                {/each}
+                {/each}{#if entry.command.script !== undefined}<span class="sr-only">, {$t('scripts.mark.name').replace('{name}', scriptText(entry.command.script))}</span>{/if}
               </span>
               {#if entry.command.hint}
                 <span class="hint">{entry.command.hint}</span>
@@ -319,6 +417,7 @@
     {/if}
   </div>
 {/if}
+<div class="sr-only" role="status">{$paletteOpen ? resultsStatus : ''}</div>
 
 <style>
   .backdrop {

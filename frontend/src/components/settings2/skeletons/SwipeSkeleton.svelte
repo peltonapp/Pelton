@@ -2,38 +2,34 @@
   // a small picture of a list row slid aside to show the action underneath,
   // which is what a trackpad swipe does. a row dragged to the left shows its
   // action on the right edge; dragged to the right, on the left edge.
-  import trashIcon from '@phosphor-icons/core/assets/duotone/trash-duotone.svg?raw'
-  import openIcon from '@phosphor-icons/core/assets/duotone/envelope-simple-open-duotone.svg?raw'
-  import unreadIcon from '@phosphor-icons/core/assets/duotone/envelope-simple-duotone.svg?raw'
-  import flagIcon from '@phosphor-icons/core/assets/duotone/flag-duotone.svg?raw'
-  import archiveIcon from '@phosphor-icons/core/assets/duotone/archive-duotone.svg?raw'
-  import snoozeIcon from '@phosphor-icons/core/assets/duotone/clock-duotone.svg?raw'
   import noneIcon from '@phosphor-icons/core/assets/duotone/prohibit-duotone.svg?raw'
   import Ph from '../../common/Ph.svelte'
+  import { isRowAction, rowActionView } from '../../../lib/rowactions'
+  import { placed } from '../../../lib/scriptplacements'
+
+  const swipeScripts = placed('row.swipe')
 
   /** Which way the row is dragged. */
   export let direction: 'left' | 'right' = 'left'
-  /** Swipe action key: none, delete, read, unread, flag, archive or snooze. */
+  /** Swipe action: a row action id, or none. */
   export let action: string = 'none'
   /** Name of the action, written next to its icon. */
   export let label: string = ''
   /** Height of the picture in px. */
   export let height: number = 52
+  /** How far the row is slid aside, as a share of its width. */
+  export let reach: number = 0.38
 
-  const meta: Record<string, { icon: string; color: string }> = {
-    none: { icon: noneIcon, color: 'var(--text-tertiary)' },
-    delete: { icon: trashIcon, color: 'var(--danger)' },
-    read: { icon: openIcon, color: 'var(--accent)' },
-    unread: { icon: unreadIcon, color: 'var(--accent)' },
-    flag: { icon: flagIcon, color: 'var(--warning)' },
-    archive: { icon: archiveIcon, color: 'var(--text-tertiary)' },
-    snooze: { icon: snoozeIcon, color: 'var(--accent)' },
-  }
+  const state = { seen: false, flagged: false, pinned: false, muted: false, inSpam: false }
 
-  $: current = meta[action] ?? meta.none
+  // the colours the row's own reveal fills with once a swipe is armed.
+  $: view = isRowAction(action) ? rowActionView(action, state, $swipeScripts) : null
+  $: current = view
+    ? { icon: view.icon, color: view.danger ? 'var(--danger)' : 'var(--accent)' }
+    : { icon: noneIcon, color: 'var(--text-tertiary)' }
 </script>
 
-<div class="stage" class:left={direction === 'left'} style={`height:${height}px`} aria-hidden="true">
+<div class="stage" class:left={direction === 'left'} style={`height:${height}px;--reach:${reach * 100}%`} aria-hidden="true">
   <div class="reveal" style={`background:${current.color}`}>
     <Ph svg={current.icon} size={14} />
     {#if label}
@@ -77,8 +73,8 @@
     position: absolute;
     top: 0;
     bottom: 0;
-    inset-inline-start: 38%;
-    inset-inline-end: -38%;
+    inset-inline-start: var(--reach);
+    inset-inline-end: calc(var(--reach) * -1);
     display: flex;
     align-items: center;
     padding: 0 8px;
@@ -88,8 +84,8 @@
   }
 
   .left .row {
-    inset-inline-start: -38%;
-    inset-inline-end: 38%;
+    inset-inline-start: calc(var(--reach) * -1);
+    inset-inline-end: var(--reach);
     border-inline-start: none;
     border-inline-end: var(--hairline) solid var(--border-default);
   }

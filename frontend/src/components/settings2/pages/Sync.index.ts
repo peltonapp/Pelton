@@ -3,6 +3,8 @@ import type { SettingsIndexEntry } from '../../../lib/settings2'
 const entries: SettingsIndexEntry[] = [
   { page: 'sync', id: 'auto-sync-interval', labelKey: 'settingsPanel.label.autoSyncInterval', keywords: 'sync interval refresh check mail minutes' },
   { page: 'sync', id: 'sync-message-limit', labelKey: 'settingsPanel.label.syncMessageLimit', keywords: 'sync limit messages older initial download first' },
+  { page: 'sync', id: 'sync-max-parallel', labelKey: 'settingsPanel.label.syncMaxParallel', keywords: 'parallel connections sync concurrent pool' },
+  { page: 'sync', id: 'sync-full-reconcile', labelKey: 'settingsPanel.label.syncFullReconcileDays', keywords: 'full check reconcile verify days sync' },
   { page: 'sync', id: 'sync-auto-backfill', labelKey: 'settingsPanel.toggle.syncAutoBackfill', keywords: 'older mail backfill scroll load more' },
   { page: 'sync', id: 'verbose-sync', labelKey: 'settingsPanel.toggle.verboseSync', keywords: 'sync status mailbox name' },
   { page: 'sync', id: 'flag-color-sync', labelKey: 'settingsPanel.toggle.flagColorSync', keywords: 'flag color colour sync keywords' },

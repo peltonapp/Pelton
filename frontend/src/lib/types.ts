@@ -46,6 +46,9 @@ export interface Account {
   // the user told the missing-password prompt to stop asking about this
   // account. It still cannot sync; the ui marks it instead of interrupting.
   passwordPromptDismissed: boolean
+  // this account's own parallel sync connection limit (the ui offers 2-10, the backend accepts 1-10), or null/absent
+  // when it follows the global setting.
+  syncMaxParallel?: number | null
   // fingerprints of server certificates the user accepted for this mailbox,
   // formatted for reading, and the subjects of the CA it trusts (#446).
   trustedCerts: string[]
@@ -133,6 +136,12 @@ export interface Folder {
   // syncExcluded means the user unchecked this folder, so sync skips it. What
   // was already fetched stays readable; it just stops being updated (#173).
   syncExcluded: boolean
+  // vaultId is the mail vault the folder is in, 0 or absent for none;
+  // vaultLocked is set while it is locked, vaultHidden when it is also to stay
+  // out of the sidebar then.
+  vaultId?: number
+  vaultLocked?: boolean
+  vaultHidden?: boolean
 }
 
 export interface UnifiedView {
@@ -176,6 +185,26 @@ export interface MessageSummary {
   // or from a reply or forward sent through Pelton.
   answered: boolean
   forwarded: boolean
+  // pinned keeps the row in the Pinned group at the top of the list, muted
+  // means its conversation is muted, and hasNote that the message or its
+  // conversation carries a private note.
+  pinned?: boolean
+  muted?: boolean
+  hasNote?: boolean
+}
+
+/** A private note on a message or a conversation. body is '' when there is none. */
+export interface Note {
+  body: string
+  updatedAt: string
+}
+
+/** One split inbox tab with its counts. key is important, newsletters,
+ * notifications, view:<id> or other. */
+export interface SplitTab {
+  key: string
+  total: number
+  unread: number
 }
 
 /** ThreadSummary is one conversation row in the threaded list. head is the
@@ -197,14 +226,18 @@ export interface ThreadSummary {
   answered: boolean
   forwarded: boolean
   messageIds: number[]
+  // pinned is true when any of its messages is pinned.
+  pinned?: boolean
 }
 
 /** ThreadList is a page of conversations; total and paging count
- * conversations, not messages. */
+ * conversations, not messages. pinned is the Pinned group, on the first page
+ * only, which the pages leave out. */
 export interface ThreadList {
   threads: ThreadSummary[]
   total: number
   hasOlder: boolean
+  pinned?: ThreadSummary[]
 }
 
 /** ThreadMessage is one message of an open conversation. folderRole is the
@@ -280,11 +313,6 @@ export interface SMIMERevocation {
   checked: string
 }
 
-// good means still in force, revoked means the authority has withdrawn it, and
-// unknown means the question could not be answered. unknown is not evidence
-// either way and must not read as one.
-export type SMIMERevocationStatus = '' | 'good' | 'revoked' | 'unknown'
-
 
 // PhishingSignal is one finding. kind is a stable identifier the ui turns into
 // a sentence; detail is the domain, address or url it is about, and target the
@@ -348,11 +376,38 @@ export interface MessageDetail extends MessageSummary {
   // when it was opened, so the pane can offer the right next step rather than
   // one generic error.
   pgpState: PGPState
+  // encryption says, for the new reader, whether the message was encrypted
+  // and how its signature checked out; null for mail that is neither.
+  encryption?: MessageEncryption | null
   // replyIds and forwardIds are the cached copies of what the user sent from
   // Pelton in reply to or as a forward of this message, oldest first. A sent
   // message appears once its Sent folder has synced.
   replyIds: number[]
   forwardIds: number[]
+  // bodyComplete is false while the row is still a stub and the reading pane
+  // may be showing a preview before the full body arrives.
+  bodyComplete?: boolean
+}
+
+/**
+ * BodyDetail is what the mail body renderer reads of a message. A feed entry
+ * is shown through the same renderer by filling these fields in.
+ */
+export type BodyDetail = Pick<
+  MessageDetail,
+  'id' | 'date' | 'fromName' | 'fromAddress' | 'isHtml' | 'bodyHtmlSafe' | 'bodyPlain' | 'hasRemoteContent' | 'remoteAllowed' | 'remoteHosts' | 'trackingPixels'
+> &
+  Partial<Pick<MessageDetail, 'phishing'>>
+
+/**
+ * RemoteSource loads the remote content of a body that is not a stored
+ * message. load renders it again with remote content and hands the result to
+ * whoever owns the body; always, when set, is the "always load" choice offered
+ * beside "load once".
+ */
+export interface RemoteSource {
+  load: (includeTrackers: boolean) => Promise<void>
+  always?: { label: string; title: string; run: () => Promise<void> }
 }
 
 export type PGPState = '' | 'open' | 'locked' | 'nokey' | 'failed'
@@ -372,6 +427,116 @@ export interface UnsubscribeInfo {
   target: string
   // done is true when this sender was already unsubscribed from.
   done: boolean
+  // unverified marks a one-click header authentication did not vouch for,
+  // offered as a web page instead (new design only).
+  unverified?: boolean
+}
+
+/** One verdict of the sender passport; see internal/desktop/passport.go. */
+export type PassportState = 'impostor' | 'failed' | 'lookalike' | 'verified' | 'unverified' | 'unchecked'
+
+/** Something about a sender that differs from their earlier mail. */
+export interface PassportChange {
+  kind: 'new_domain' | 'new_reply_to' | 'name_elsewhere'
+  detail: string
+  before?: string
+}
+
+/** The technical record behind a passport. */
+export interface PassportEvidence {
+  authState: string
+  servId: string
+  spf: string
+  spfDomain: string
+  dkim: string
+  dkimDomains: string[]
+  dmarc: string
+  dmarcPolicy: string
+  headerFrom: string
+  alignedSpf: boolean
+  alignedDkim: boolean
+  sendingDomain: string
+  returnPath: string
+  sender: string
+  signers: string[]
+  receivedSpf: string
+  arc: string
+  mixedScript: boolean
+}
+
+/** Who sent a message, as far as the local mail and the user's server say. */
+export interface Passport {
+  address: string
+  domain: string
+  state: PassportState
+  reason?: 'legacy' | 'none' | 'untrusted' | 'other_domain' | 'no_pass'
+  mark: '' | 'known' | 'impostor'
+  first: boolean
+  received: number
+  sent: number
+  since: string
+  contact: boolean
+  sameDomain: boolean
+  changes: PassportChange[]
+  lookalike: { kind: 'name' | 'domain'; of: string; address?: string } | null
+  replyGoesTo: string
+  replyElsewhere: boolean
+  warnings: string[]
+  evidence: PassportEvidence
+  banner: PhishingReport
+}
+
+/** One thing a message tried to load or learn. */
+export interface ShieldItem {
+  kind: 'pixel' | 'image' | 'link' | 'receipt' | 'font' | 'stylesheet' | 'form' | 'frame' | 'media' | 'background'
+  host: string
+  company: string
+  url: string
+  reasons: string[]
+  destination: string
+  status: 'blocked' | 'loaded' | 'removed' | 'click' | 'not_sent'
+}
+
+/** The unsubscribe state of a sender. */
+export interface ShieldUnsub {
+  at: string
+  stillSending: boolean
+  stillCount: number
+  blocked: '' | 'junk' | 'trash'
+  sender: string
+}
+
+/** What one message tried to learn about its reader. */
+export interface Shield {
+  remoteAllowed: boolean
+  trackers: number
+  links: number
+  items: ShieldItem[]
+  unsub: ShieldUnsub | null
+}
+
+/** One sender of the tracking report. */
+export interface PrivacySender {
+  address: string
+  name: string
+  mails: number
+  pixels: number
+  links: number
+  receipts: number
+  first: string
+  last: string
+  companies: string[]
+  unsub: ShieldUnsub | null
+}
+
+/** The tracking report over a period. */
+export interface PrivacyReport {
+  counting: boolean
+  trackers: number
+  links: number
+  mails: number
+  senders: number
+  rows: PrivacySender[]
 }
 
 export interface MessageList {
@@ -380,6 +545,9 @@ export interface MessageList {
   // hasOlder means the server still holds mail older than anything cached for
   // this selection, so reaching total is not the end of the mailbox.
   hasOlder: boolean
+  // pinned is the Pinned group, on the first page only, which messages and
+  // total leave out.
+  pinned?: MessageSummary[]
 }
 
 // FetchOlderResult reports what one 'load older mail' round trip fetched, and
@@ -434,6 +602,116 @@ export interface ComposeRequest {
   // forwardOf is the id of the message this one forwards; once sent, that
   // message is marked forwarded. Leave it out (or 0) for anything else.
   forwardOf?: number
+  // followUpAt is an optional RFC3339 time to be reminded at when nobody has
+  // replied by then. Empty or left out sets no reminder.
+  followUpAt?: string
+  // projectId files the message, and the replies it gets, under a project.
+  // 0 or left out files it nowhere.
+  projectId?: number
+  // autoEncrypt marks a message from the composer of automatic encryption,
+  // and plaintextConfirmed the user's choice to answer encrypted mail
+  // unencrypted.
+  autoEncrypt?: boolean
+  plaintextConfirmed?: boolean
+}
+
+/**
+ * Snippet is a reusable text block for the composer. body is plain text with
+ * {placeholders}; subject, to and cc fill only empty fields; trigger is the
+ * word typed after ";" to insert it, '' for none.
+ */
+export interface Snippet {
+  id: number
+  name: string
+  body: string
+  subject: string
+  to: string
+  cc: string
+  trigger: string
+  position: number
+}
+
+/**
+ * FollowUp is a "remind me if nobody replies" reminder on a sent message.
+ * Times are RFC3339; firedAt is empty while it waits. localId, folderId and
+ * threadId point at the cached copy of the sent message, 0 until one synced.
+ */
+export interface FollowUp {
+  id: number
+  accountId: number
+  messageId: string
+  subject: string
+  recipients: string
+  sentAt: string
+  dueAt: string
+  firedAt: string
+  localId: number
+  folderId: number
+  threadId: number
+}
+
+/** Who owes a promise: the user ('mine') or someone else ('theirs'). */
+export type PromiseDirection = 'mine' | 'theirs'
+
+/** Where a promise is: a suggestion on its mail, a task, set aside, or closed by a reply. */
+export type PromiseState = 'suggested' | 'accepted' | 'dismissed' | 'closed'
+
+/** A promise found in mail. mailId is the Message-ID it was found in, messageId a cached copy (0 for none). */
+export interface MailPromise {
+  id: number
+  accountId: number
+  mailId: string
+  messageId: number
+  threadId: number
+  direction: PromiseDirection
+  personName: string
+  personEmail: string
+  title: string
+  quote: string
+  /** A date, rfc3339, or ''. */
+  due: string
+  confidence: number
+  source: string
+  state: PromiseState
+  taskUid: string
+  /** The reply that closed it (theirs) or offers to (mine), with a cached copy of it. */
+  replyId: string
+  replyAt: string
+  replyMessageId: number
+  mailDate: string
+  /** A follow-up reminder already watches the thread. */
+  followUp: boolean
+}
+
+/** A suggestion as the user accepts it. */
+export interface PromiseEdit {
+  id: number
+  title: string
+  due: string
+  direction: PromiseDirection
+  personName: string
+  personEmail: string
+}
+
+/** The promise switches of one account. */
+export interface PromiseAccount {
+  accountId: number
+  name: string
+  email: string
+  on: boolean
+  ai: boolean
+  provider: string
+}
+
+/** The promise preferences. */
+export interface PromiseSettings {
+  enabled: boolean
+  autoAcceptMine: boolean
+  nudge: boolean
+  taskList: 'local' | 'default'
+  accounts: PromiseAccount[]
+  aiMaxChars: number
+  aiPerDay: number
 }
 
 // ProtectionStatus is what the compose window needs to offer the pgp controls
@@ -473,12 +751,158 @@ export interface OutboxRow {
   createdAt: string
   // editable is set when the message can be taken back into a composer.
   editable: boolean
+  // priority orders the queue: a higher one goes before older messages.
+  priority: number
 }
 
 /** A message taken back out of the outbox, or taken false when it could not be. */
 export interface OutboxEdit {
   taken: boolean
   request: ComposeRequest
+}
+
+/**
+ * How cancelling a send ended: back in Drafts, back as a request to open in a
+ * composer, kept as a failed send, too late, or no longer in the outbox.
+ */
+export interface OutboxCancel {
+  outcome: 'draft' | 'compose' | 'held' | 'tooLate' | 'gone'
+  request: ComposeRequest
+}
+
+/** One line of the send activity log. */
+export interface OutboxLogEntry {
+  seq: number
+  at: string
+  messageId: number
+  step: string
+  recipients: string[]
+  detail: string
+  retryAt: string
+}
+
+/** Focus mode as it stands: on or off, when it ends, what arrived so far. */
+export interface FocusInfo {
+  active: boolean
+  /** When focus ends, RFC 3339; empty runs until it is turned off. */
+  until: string
+  /** The schedule started this focus. */
+  scheduled: boolean
+  /** New messages that arrived during this focus. */
+  held: number
+}
+
+/**
+ * When focus starts on its own: on these weekdays (0 is Sunday) from start to
+ * end, both "HH:MM". An end at or before the start runs past midnight.
+ */
+export interface FocusSchedule {
+  enabled: boolean
+  days: number[]
+  start: string
+  end: string
+}
+
+/** What arrived during a focus that just ended. */
+export interface FocusSummary {
+  total: number
+  vip: number
+}
+
+/** An out of office reply kept in Pelton's sieve script on the server. */
+export interface SieveVacation {
+  enabled: boolean
+  /** First and last day, YYYY-MM-DD, both inclusive; '' is unbounded. */
+  start: string
+  end: string
+  /** How often one sender gets a reply; 0 leaves it to the server. */
+  days: number
+  subject: string
+  from: string
+  /** The account's addresses the reply answers for. */
+  addresses: string[]
+  body: string
+}
+
+/** One test of a server filter rule. */
+export interface SieveCondition {
+  /** 'from', 'to', 'subject', 'header', 'size', 'envfrom' or 'envto'. */
+  field: string
+  /** The header a 'header' condition looks at. */
+  header: string
+  /** 'contains', 'is', 'matches', 'exists' (header), 'over' or 'under' (size). */
+  op: string
+  negate: boolean
+  /** Text to compare with, or for size a number with an optional K, M or G. */
+  value: string
+}
+
+/** One thing a server filter rule does. */
+export interface SieveAction {
+  /** 'fileinto', 'redirect', 'keep', 'discard', 'stop' or 'addflag'. */
+  kind: string
+  /** Folder, address or flag. */
+  arg: string
+}
+
+/** One server filter rule. */
+export interface SieveRule {
+  name: string
+  enabled: boolean
+  /** One condition is enough when true; all must hold when false. */
+  matchAny: boolean
+  conditions: SieveCondition[]
+  actions: SieveAction[]
+}
+
+/** Pelton's own sieve script, as a model. */
+export interface SieveScript {
+  vacation: SieveVacation | null
+  rules: SieveRule[]
+  /** Other scripts that keep running after Pelton's rules. */
+  includes: string[]
+}
+
+/** Which of Pelton's controls the server can back. */
+export interface SieveCaps {
+  implementation: string
+  extensions: string[]
+  vacation: boolean
+  dates: boolean
+  fileInto: boolean
+  flags: boolean
+  envelope: boolean
+  include: boolean
+}
+
+/** An account's sieve service and Pelton's script on it. */
+export interface SieveState {
+  accountId: number
+  /** 'ok', 'unsupported', 'unreachable', 'auth', 'credentials', 'tls' or 'error'. */
+  status: string
+  detail: string
+  host: string
+  port: number
+  /** '' for STARTTLS, 'ssl' for implicit TLS. */
+  tls: string
+  manual: boolean
+  remembered: boolean
+  caps: SieveCaps
+  exists: boolean
+  active: boolean
+  editable: boolean
+  raw: string
+  script: SieveScript
+  otherActive: string
+  hasPrevious: boolean
+  addresses: string[]
+}
+
+/** The outcome of a save; with problem set the server refused it and nothing was written. */
+export interface SieveSave {
+  state: SieveState
+  problem: string
+  line: number
 }
 
 export interface UIPrefs {
@@ -501,6 +925,15 @@ export interface UIPrefs {
   // showShortcutHints toggles the keyboard shortcut shown beside a context-menu
   // entry that has one. On by default.
   showShortcutHints: boolean
+  // coachHints shows a short hint naming the key after an action done by
+  // mouse, in the new design. On by default.
+  coachHints: boolean
+  // coachHold shows the shortcuts that apply on screen while the platform
+  // modifier is held, in the new design. On by default.
+  coachHold: boolean
+  // showTips shows a one-time tip the first time a feature's context comes
+  // up, in the new design. On by default.
+  showTips: boolean
   // harvestAddresses keeps learning addresses from mail for compose
   // autocomplete. off leaves only the contacts from a synced address book.
   harvestAddresses: boolean
@@ -568,6 +1001,18 @@ export interface UIPrefs {
   swipeEnabled: boolean
   swipeLeftAction: string
   swipeRightAction: string
+  // the new design's swipes: a short and a long one each way, each a row
+  // action id or 'none'.
+  swipeLeftShort: string
+  swipeLeftLong: string
+  swipeRightShort: string
+  swipeRightLong: string
+  // quick buttons over a hovered row in the new design, and which ones in
+  // what order (comma separated row action ids, five at most).
+  rowActions: boolean
+  rowActionList: string
+  // how html mail is coloured in a dark theme.
+  htmlColors: HtmlColors
   // composeVimMode enables vim keybindings in the compose editor.
   composeVimMode: boolean
   // downloadIncludeAttachments is the remembered default for the range download.
@@ -592,6 +1037,8 @@ export interface UIPrefs {
   composeChips: boolean
   // composeMarkdown formats Markdown as it is typed in the composer.
   composeMarkdown: boolean
+  // smoothCaret glides the compose editor's caret between positions.
+  smoothCaret: boolean
   // updateCheckFrequency controls the automatic GitHub-releases update check:
   // 'off' (default), 'startup', 'weekly', or 'monthly'.
   updateCheckFrequency: string
@@ -612,11 +1059,20 @@ export interface UIPrefs {
   navStyle: NavStyle
   // railSide is the window edge the rail sits on.
   railSide: RailSide
+  // railPins lists the views pinned to the middle of the rail, comma
+  // separated: "u:inbox" for a unified view, "v:12" for a saved one.
+  railPins: string
+  // spaceOrder lists the space keys in navigation order, comma separated.
+  spaceOrder: string
+  // hiddenSpaces lists the space keys left out of the navigation.
+  hiddenSpaces: string
   // paneStyle draws the panes in the new design.
   paneStyle: PaneStyle
   // avatarPlacement puts the sender picture in its own column, inline in the
   // address line, or hides it.
   avatarPlacement: AvatarPlacement
+  // contactsView is how the contacts space shows its contacts.
+  contactsView: ContactsView
   // listHeight is the message list height in the stacked layout, in px.
   listHeight: number
   // nativeTitlebar uses the operating system's title bar instead of the
@@ -631,8 +1087,53 @@ export interface UIPrefs {
   // threadedList groups the message list into conversations in the new
   // design.
   threadedList: boolean
+  // afterMove is what the reader opens once the open message is archived,
+  // deleted or moved in the new design.
+  afterMove: AfterMove
+  // afterReplySend is what plain Send does with the conversation a reply or
+  // forward answered, once it is on its way.
+  afterReplySend: AfterReplySend
+  // sendRemindAfter is when Send and remind sets its reminder.
+  sendRemindAfter: FollowUpInterval
+  // warnMissingAttachment asks before sending a message whose text speaks of
+  // an attachment it does not carry.
+  warnMissingAttachment: boolean
+  // warnEmptySubject asks before sending a message without a subject.
+  warnEmptySubject: boolean
+  // splitInbox splits the inbox into tabs in the new design. splitTabs is the
+  // comma separated tab order (important, newsletters, notifications,
+  // view:<id>), the catch-all Other tab always last and not listed;
+  // splitActive is the tab last shown.
+  splitInbox: boolean
+  splitTabs: string
+  splitActive: string
   // readerWidth caps the reading column in the new design.
   readerWidth: ReaderWidth
+  // senderPanel shows the panel about the open message's sender beside the
+  // reader in the new design.
+  senderPanel: boolean
+  // mailDates marks the dates a mail names in the reader, with a calendar
+  // preview on hover.
+  mailDates: boolean
+  // myDayPanel shows today's agenda and tasks beside the mail surface in the
+  // new design.
+  myDayPanel: boolean
+  // projectsView is how the Projects space lists projects.
+  projectsView: ProjectsView
+  // projectSuggestions offers, in the reader, to file mail from a project's
+  // people under that project.
+  projectSuggestions: boolean
+  // feedsRefreshMinutes is how often feeds are fetched, 0 for only by hand.
+  // feedsKeepDays and feedsKeepCount are the retention rules, 0 turning one
+  // off; starred and read-later entries are always kept.
+  feedsRefreshMinutes: number
+  feedsKeepDays: number
+  feedsKeepCount: number
+  // feedsLoadImages shows every feed's remote images without asking.
+  feedsLoadImages: boolean
+  // feedsMarkReadOnScroll marks entries read as they scroll past the top of
+  // the list.
+  feedsMarkReadOnScroll: boolean
   // themeId selects an installed custom theme; empty means the built-in
   // default themes driven by the theme (light/dark/system) setting.
   themeId: string
@@ -645,6 +1146,9 @@ export interface UIPrefs {
   // windowMaterial puts the window over a native material (Liquid Glass on
   // macOS, Mica on Windows) from the next launch on.
   windowMaterial: boolean
+  // ocrLanguages is the "+" joined tesseract language list the pdf viewer
+  // reads with; empty follows the ui language.
+  ocrLanguages: string
   // timeFormat picks the clock for rendered times: auto (locale), 12, or 24.
   timeFormat: string
   // reduceMotion disables ui transitions and animations.
@@ -672,6 +1176,22 @@ export interface UIPrefs {
   // notifyNewMail raises a native OS notification for new inbox mail. VIP
   // senders notify regardless of this (see stores/vip.ts).
   notifyNewMail: boolean
+  // notifyActionArchive, notifyActionMarkRead and notifyActionReply choose the
+  // buttons a new-mail notification carries where the system supports them.
+  notifyActionArchive: boolean
+  notifyActionMarkRead: boolean
+  notifyActionReply: boolean
+  // cleanLinks takes known tracking parameters and redirect wrappers off links
+  // opened from a mail. Off by default: it can break a sign-in or verification link.
+  cleanLinks: boolean
+  // privacyCounters keeps the tracking report's counters, on this device only.
+  privacyCounters: boolean
+  // unsubscribeGraceDays is how long after an unsubscribe mail may still come
+  // before Pelton says the sender is still sending.
+  unsubscribeGraceDays: number
+  // autoconfigLookup is whether the add-mailbox wizard may look up a typed
+  // address's domain: ask (the default, it asks first), allow or manual.
+  autoconfigLookup: AutoconfigLookup
   // verboseSync shows which mailbox is currently syncing in the status line,
   // with the account and the server it is talking to.
   verboseSync: boolean
@@ -682,6 +1202,20 @@ export interface UIPrefs {
   // unread count of the unified inbox (#488).
   statusClock: boolean
   statusUnread: boolean
+  // chatEnabled turns the Matrix chat space on. Off by default; nothing chat
+  // related runs or connects until it is on.
+  chatEnabled: boolean
+  // autoEncrypt is automatic encryption. Off by default; until it is on no
+  // key is made, no header added and nothing looked up.
+  autoEncrypt: boolean
+  // chatSendReceipts sends public read receipts; off keeps them private.
+  chatSendReceipts: boolean
+  // chatSendTyping tells rooms while the user types.
+  chatSendTyping: boolean
+  // chatNotify picks which chat messages notify.
+  chatNotify: ChatNotifyMode
+  // chatMarkdown formats chat messages as Markdown when sent.
+  chatMarkdown: boolean
   // markReadOnOpen marks a message read when it is opened (#517).
   markReadOnOpen: boolean
   // openOnArrow opens the row the arrow keys move to, instead of waiting for Enter.
@@ -693,12 +1227,32 @@ export interface UIPrefs {
   closeAction: CloseAction
   // startHidden keeps the window hidden at launch (#483).
   startHidden: boolean
-  // syncMessageLimit caps how many of a folder's newest messages the first sync
-  // fetches; older mail stays on the server until asked for. 0 means no limit.
+  // quickCompose registers quickComposeShortcut, a Wails accelerator such as
+  // 'Ctrl+Alt+M', as a system-wide shortcut for a small compose window. Both
+  // change only through setQuickCompose, which registers before it stores.
+  quickCompose: boolean
+  quickComposeShortcut: string
+  // appLock is whether the app lock is on; it changes only through
+  // enableAppLock and disableAppLock. appLockIdleMinutes locks after that long
+  // unused (0 only on demand), appLockOnLaunch starts locked, and
+  // appLockHideNotifications keeps senders and subjects out of notifications
+  // while locked.
+  appLock: boolean
+  appLockIdleMinutes: number
+  appLockOnLaunch: boolean
+  appLockHideNotifications: boolean
+  // syncMessageLimit caps how many of a folder's newest message bodies the
+  // first sync fetches. 0 means no limit.
   syncMessageLimit: number
   // syncAutoBackfill fetches the next batch of older mail automatically on
   // reaching the end of the list. Off puts it behind a button instead.
   syncAutoBackfill: boolean
+  // syncMaxParallel is how many IMAP sessions one mailbox may use at once
+  // (ui 2–10, backend 1–10, default 3), the IDLE one included. Sending does not count.
+  syncMaxParallel: number
+  // syncFullReconcileDays is how many days a folder may go without a full
+  // check against the server before startup re-checks it; 0 = manual Sync only.
+  syncFullReconcileDays: number
   // what the sidebar selects on launch: 'view:<key>' for a unified view,
   // 'folder:<id>' for one account folder, or 'last' to restore the previous
   // session. A target that no longer exists falls back to the unified inbox.
@@ -711,10 +1265,68 @@ export interface UIPrefs {
   logLevel: LogLevel
   logMessageMetadata: boolean
   crashLogs: boolean
+  // the notes space: the chosen notes folder ('' for the Notes folder in the
+  // data directory), where daily notes go and how they are named
+  // (YYYY-MM-DD style), the template a daily note starts from ('' for the
+  // built-in one), the folders of templates, pasted images and project
+  // notes, how a note opens and how wide its text runs.
+  notesVault: string
+  notesDailyFolder: string
+  notesDailyFormat: string
+  notesDailyTemplate: string
+  notesTemplatesFolder: string
+  notesAttachmentsFolder: string
+  notesProjectsFolder: string
+  notesEditorMode: NoteEditorMode
+  notesLineWidth: ReaderWidth
 }
+
+/** How a note opens: rendered as it is typed, as plain source, or read-only. */
+export type NoteEditorMode = 'live' | 'source' | 'reading'
 
 // how much detail the log records.
 export type LogLevel = 'debug' | 'info' | 'warn' | 'error'
+
+/** How the app lock is opened: the system prompt or Pelton's own passphrase. */
+export type LockMethod = 'system' | 'passphrase'
+
+/** What the lock screen and the lock settings need to know. */
+export interface LockState {
+  enabled: boolean
+  locked: boolean
+  /** Empty while the lock is off. */
+  method: LockMethod | ''
+  /** Whether the system prompt (Touch ID or the account password) exists here. */
+  systemAvailable: boolean
+  /** How long the next passphrase attempt has to wait. */
+  retryAfterMs: number
+  /** The look of the lock screen, which cannot read the full preferences while locked. */
+  theme: string
+  accent: string
+  language: string
+}
+
+/** Why an unlock or a lock setting change did not go through. */
+export type LockFailure = 'wrong' | 'wait' | 'cancelled' | 'unavailable' | 'busy' | 'short' | 'off' | 'on'
+
+/** The outcome of an unlock or of a lock setting change that authenticated first. */
+export interface LockAuthResult {
+  ok: boolean
+  reason?: LockFailure
+  retryAfterMs?: number
+}
+
+/** The state of the quick compose shortcut. */
+export interface QuickComposeStatus {
+  enabled: boolean
+  shortcut: string
+  /** Set while the operating system holds the shortcut. */
+  registered: boolean
+  /** A Wayland session, where the desktop decides how the shortcut is bound. */
+  wayland: boolean
+  /** Why the shortcut was not registered: not a shortcut, or refused by the system. */
+  error?: 'invalid' | 'taken'
+}
 
 // LogStatus is what the settings ui shows about logging: where the files are,
 // whether anything is being written, and whether the last run crashed.
@@ -844,12 +1456,78 @@ export interface AttachmentContent {
   tooLarge: boolean
 }
 
-// the eight flag colors. index 0 means "no color"; 1..8 map to the palette in
-// theme/flagcolors.ts and to imap $Label1..$Label8 when syncing is on.
-export type FlagColor = 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8
+/** The groups the attachments browser filters by. */
+export type AttachmentKind = 'document' | 'image' | 'pdf' | 'spreadsheet' | 'archive' | 'media' | 'other'
+
+/** One file in the attachments browser, with the message it came with. */
+export interface AttachmentEntry {
+  id: number
+  messageId: number
+  accountId: number
+  folderId: number
+  threadId: number
+  filename: string
+  contentType: string
+  sizeBytes: number
+  kind: AttachmentKind
+  subject: string
+  fromName: string
+  fromAddress: string
+  date: string
+  /** False when the bytes are not stored here and come from the server on request. */
+  downloaded: boolean
+}
+
+/** The attachments browser filters. Dates are YYYY-MM-DD; empty leaves a filter off. */
+export interface AttachmentFilter {
+  kinds: AttachmentKind[]
+  accountId: number
+  sender: string
+  since: string
+  until: string
+  name: string
+}
+
+/** A request for one page of attachments. */
+export interface AttachmentQuery extends AttachmentFilter {
+  senderAddress: string
+  limit: number
+  offset: number
+  withTotal: boolean
+}
+
+/** A page of attachments; total is -1 unless it was asked for. */
+export interface AttachmentPage {
+  entries: AttachmentEntry[]
+  total: number
+}
+
+/** What the sender panel knows about one address, all from local mail. */
+export interface SenderOverview {
+  address: string
+  count: number
+  first: string
+  last: string
+  /** One message per conversation, newest first. */
+  recent: MessageSummary[]
+  files: AttachmentEntry[]
+  filesTotal: number
+  /** The address reads as a machine sender (noreply and the like). */
+  automated: boolean
+}
 
 // swipe gesture actions for message rows.
 export type SwipeAction = 'none' | 'delete' | 'read' | 'unread' | 'flag' | 'archive' | 'snooze'
+
+/**
+ * How html mail is coloured in a dark theme: 'auto' adapts plain and lightly
+ * styled mail and keeps designed mail on a light sheet, 'adapt' adapts all of
+ * it, 'original' keeps every message as it was sent.
+ */
+export type HtmlColors = 'auto' | 'adapt' | 'original'
+
+/** Whether a typed address's domain may be looked up for its server settings. */
+export type AutoconfigLookup = 'ask' | 'allow' | 'manual'
 
 // list row layouts, from most spacious to a single dense line.
 export type RowTemplate = 'relaxed' | 'comfortable' | 'compact' | 'single'
@@ -862,11 +1540,6 @@ export type ToastPosition =
   | 'bottom-left'
   | 'bottom-center'
   | 'bottom-right'
-
-export interface SettingResult {
-  value: string
-  found: boolean
-}
 
 // a reusable header/footer block. kind places it (top/bottom of a new message);
 // format picks how the content is inserted into the compose body.
@@ -1092,25 +1765,11 @@ export interface PasswordCheck {
   error: string
 }
 
-// folder roles mirror the backend's folderRole classification.
-export type FolderRole =
-  | 'inbox'
-  | 'sent'
-  | 'drafts'
-  | 'trash'
-  | 'junk'
-  | 'archive'
-  | 'normal'
-
 // unified view keys mirror the backend view constants.
 export type ViewKey = 'inbox' | 'unread' | 'flagged' | 'sent' | 'drafts' | 'archive' | 'junk' | 'trash'
 
 // pgp status mirrors mailview.PGPStatus.
 export type PGPStatus = 'none' | 'signed' | 'encrypted'
-
-// auth status placeholder. only "unavailable" exists until the backend parses
-// Authentication-Results headers (documented follow-up).
-export type AuthStatus = 'unavailable'
 
 // editor modes for the compose pane.
 export type EditorMode = 'plaintext' | 'markdown' | 'wysiwyg'
@@ -1130,12 +1789,27 @@ export type RailSide = 'left' | 'right'
 export type PaneStyle = 'hybrid' | 'flat' | 'soft'
 /** Where the sender picture goes in a list row and the reading header. */
 export type AvatarPlacement = 'column' | 'inline' | 'hidden'
+/** How the contacts space shows its contacts: a list with a detail pane, or a card grid. */
+export type ContactsView = 'panes' | 'grid'
 /** Where compose opens in the new design: its own window, docked, or a tab. */
 export type ComposeOpenIn = 'window' | 'docked' | 'tab'
 /** How wide the reading column runs in the new design. */
 export type ReaderWidth = 'narrow' | 'medium' | 'full'
+/**
+ * What the reader opens once the open message leaves the list by archive,
+ * delete or move: the older neighbour, the newer one, or nothing.
+ */
+export type AfterMove = 'older' | 'newer' | 'list'
+/** What plain Send does with the conversation a reply answered. */
+export type AfterReplySend = 'nothing' | 'archive'
+/** When a follow-up reminder set from a preset comes: each lands at nine. */
+export type FollowUpInterval = 'tomorrow' | 'threeDays' | 'week'
 /** One of the top-level areas of the app. */
-export type Space = 'mail' | 'contacts' | 'calendar'
+export type Space = 'mail' | 'contacts' | 'calendar' | 'tasks' | 'projects' | 'notes' | 'feeds' | 'chat' | 'automations'
+/** How the Projects space lists projects. */
+export type ProjectsView = 'grid' | 'list'
+/** Which chat messages notify: all, direct messages and mentions, or none. */
+export type ChatNotifyMode = 'all' | 'mentions' | 'off'
 export type SelectAllScope = 'offer' | 'all' | 'loaded'
 
 // SearchSort is an order search results can actually come back in. The backend
@@ -1308,6 +1982,8 @@ export interface Contact {
   note: string
   emails: ContactValue[]
   phones: ContactValue[]
+  // matrixId is the person's Matrix user id, or empty.
+  matrixId: string
   readOnly: boolean
   updated: string
   // vCard properties Pelton has no field for. They are kept on every save;
@@ -1325,6 +2001,49 @@ export interface ContactConflict {
   saved: Contact
 }
 
+/** What makes a group of contacts look like one person. */
+export interface DuplicateReason {
+  kind: 'email' | 'phone' | 'name'
+  /** The shared address, number or name. */
+  value: string
+  /** What backs up a shared name: organization, domain (same company) or empty (one has no address or number). */
+  overlap: ('organization' | 'domain' | 'empty')[]
+}
+
+/** Contacts that probably are the same person, with the reasons. */
+export interface DuplicateGroup {
+  contacts: Contact[]
+  /** 60 to 100: how sure the match is. */
+  score: number
+  reasons: DuplicateReason[]
+}
+
+/** The answer of the duplicate search. */
+export interface Duplicates {
+  groups: DuplicateGroup[]
+  /** How many pairs were marked as not duplicates. */
+  dismissed: number
+}
+
+/** A merge: the contacts in mergeIds are folded into survivorId. */
+export interface MergeRequest {
+  survivorId: number
+  mergeIds: number[]
+  /** The address book the merged contact goes in; required when the contacts are in several. */
+  targetBookId: number
+  /** Field name (name, organization, title, note) to the id of the contact it comes from; -1 keeps both notes. */
+  choices: Record<string, number>
+}
+
+/** What a merge did. */
+export interface MergeResult {
+  contact: Contact
+  /** Undoes the merge for the rest of the session. */
+  token: string
+  /** Merged contacts the server refused to delete; they are still there. */
+  kept: number
+}
+
 // ContactDraft is the editor's shape. id 0 creates, and then bookId says which
 // address book it goes in.
 export interface ContactDraft {
@@ -1336,6 +2055,8 @@ export interface ContactDraft {
   note: string
   emails: ContactValue[]
   phones: ContactValue[]
+  // matrixId is the person's Matrix user id; empty removes it.
+  matrixId: string
   // set only by "keep mine" on the conflict dialog: write over whatever the
   // server now holds.
   force: boolean
@@ -1350,4 +2071,1460 @@ export interface AddressBookDraft {
   collectionPath: string
   username: string
   password: string
+}
+
+/** CalendarAccount is one CalDAV login. */
+export interface CalendarAccount {
+  id: number
+  // the mail account it was discovered from, 0 for none.
+  accountId: number
+  // the address book whose login it shares, 0 for none.
+  addressBookId: number
+  name: string
+  url: string
+  username: string
+  // rfc3339, empty when it has never synced.
+  lastSync: string
+  // the last sync failure in the server's words, empty once one succeeds.
+  lastError: string
+  hasPassword: boolean
+  calendarCount: number
+}
+
+/**
+ * CalendarAccountDraft is the add/edit calendar account form, and what
+ * discovery starts from. With addressBookId set, an empty url, username or
+ * password is taken from that address book; with accountId and no url,
+ * .well-known/caldav on the mailbox's domain is tried.
+ */
+export interface CalendarAccountDraft {
+  id: number
+  accountId: number
+  addressBookId: number
+  name: string
+  url: string
+  username: string
+  // empty on update leaves the stored password alone.
+  password: string
+}
+
+/** DiscoveredCalendar is one calendar a login can see. */
+export interface DiscoveredCalendar {
+  name: string
+  path: string
+  color: string
+  readOnly: boolean
+}
+
+/** CalendarDiscovery is the endpoint discovery resolved and its calendars. */
+export interface CalendarDiscovery {
+  // the url to add the account with.
+  url: string
+  username: string
+  calendars: DiscoveredCalendar[]
+  // an account for this url and login already exists.
+  exists: boolean
+}
+
+/** Calendar is one calendar, synced or local. */
+export interface Calendar {
+  id: number
+  // 0 for a local calendar.
+  accountId: number
+  accountName: string
+  // empty for the local calendar the app starts with; the ui labels it.
+  name: string
+  description: string
+  // #rrggbb, or empty for the ui to pick.
+  color: string
+  local: boolean
+  readOnly: boolean
+  visible: boolean
+  lastSync: string
+  lastError: string
+  // where new events go unless another calendar is chosen.
+  default: boolean
+}
+
+/** CalendarSettings are the calendar preferences. */
+export interface CalendarSettings {
+  // background sync interval, 0 turns it off.
+  syncIntervalMinutes: number
+  remindersEnabled: boolean
+  // the reminder a new event gets, -1 for none.
+  defaultReminderMinutes: number
+  // where new events go, 0 for the first writable calendar.
+  defaultCalendarId: number
+  // the view the calendar opens in.
+  defaultView: CalendarView
+  // first day of the week, 0 for Sunday through 6, -1 to follow the locale.
+  weekStart: number
+  // working hours as minutes after midnight.
+  workDayStart: number
+  workDayEnd: number
+  // off, the zone's name over the hours, or a second column of hours.
+  timeZoneDisplay: TimeZoneDisplay
+  // IANA zone of the second column, empty for none.
+  secondaryTimeZone: string
+}
+
+/** The views of the calendar screen. */
+export type CalendarView = 'month' | 'week' | 'day' | 'agenda' | 'year'
+
+/** How the time grid names time zones. */
+export type TimeZoneDisplay = 'off' | 'label' | 'dual'
+
+/** The scope an edit or delete of one occurrence of a series applies to. */
+export type EventScope = 'this' | 'future' | 'all'
+
+/**
+ * Occurrence is one already expanded occurrence in a window. start and end are
+ * rfc3339, or yyyy-mm-dd dates for an all-day occurrence with end exclusive.
+ */
+export interface Occurrence {
+  eventId: number
+  calendarId: number
+  calendarColor: string
+  uid: string
+  summary: string
+  location: string
+  start: string
+  end: string
+  allDay: boolean
+  recurring: boolean
+  // names the occurrence for getEvent, updateEvent and deleteEvent: the
+  // rfc3339 utc instant it originally started at. Empty when not recurring.
+  recurrenceId: string
+  // this occurrence was edited on its own.
+  override: boolean
+  status: string
+  transparency: string
+  readOnly: boolean
+  hasReminders: boolean
+  // others are invited, so preparing for the meeting has something to show.
+  // unset on the entries the calendar draws for tasks.
+  hasAttendees?: boolean
+  // a change made here has not reached the server yet.
+  pending: boolean
+  conflict: boolean
+  // set on an entry the calendar draws for a task due that day.
+  task?: Task
+  // set on an entry the calendar draws for a time block.
+  block?: TimeBlock
+  // set on an entry the calendar draws for a proposed block of a day plan;
+  // key names it among the proposals.
+  proposal?: BlockProposal & { key: string }
+}
+
+/**
+ * Reminder is one VALARM. minutesBefore counts back from the start (from the
+ * end with relatedEnd); negative means after. absolute, an rfc3339 time,
+ * replaces both when set.
+ */
+export interface Reminder {
+  minutesBefore: number
+  relatedEnd: boolean
+  absolute: string
+  // DISPLAY, AUDIO or EMAIL; empty means DISPLAY.
+  action: string
+}
+
+/** Attendee is an attendee or the organizer of an event. */
+export interface Attendee {
+  email: string
+  name: string
+  // REQ-PARTICIPANT, OPT-PARTICIPANT, NON-PARTICIPANT or CHAIR.
+  role: string
+  // NEEDS-ACTION, ACCEPTED, TENTATIVE, DECLINED or DELEGATED.
+  partStat: string
+  rsvp: boolean
+}
+
+/** A person invited to a meeting, with the address book's card for them. */
+export interface PrepAttendee {
+  email: string
+  name: string
+  role: string
+  // NEEDS-ACTION, ACCEPTED, TENTATIVE, DECLINED or DELEGATED.
+  partStat: string
+  organizer: boolean
+  /** The user's own address. */
+  self: boolean
+  contact: Contact | null
+}
+
+/** A conversation worth a look before a meeting. */
+export interface PrepThread {
+  threadId: number
+  subject: string
+  /** rfc3339 of the newest message found. */
+  last: string
+  messages: number
+  /** The invited who take part, by name or address. */
+  people: string[]
+  titleMatch: boolean
+  /** The newest message, to open in the reader. */
+  message: MessageSummary
+}
+
+/** An earlier meeting with the same people. */
+export interface PrepMeeting {
+  eventId: number
+  recurrenceId: string
+  title: string
+  start: string
+  end: string
+  allDay: boolean
+  /** An earlier occurrence of the same recurring event. */
+  sameSeries: boolean
+  /** The invited of this meeting who were at that one too. */
+  shared: string[]
+}
+
+/** How to join a call. */
+export interface JoinLink {
+  url: string
+  /** The service, when the address is a known one. */
+  provider: string
+}
+
+/** Everything the Prepare panel shows for one meeting. */
+export interface MeetingPrep {
+  eventId: number
+  recurrenceId: string
+  uid: string
+  title: string
+  description: string
+  location: string
+  url: string
+  start: string
+  end: string
+  allDay: boolean
+  recurring: boolean
+  join: JoinLink | null
+  attendees: PrepAttendee[]
+  threads: PrepThread[]
+  files: AttachmentEntry[]
+  tasks: Task[]
+  previous: PrepMeeting[]
+}
+
+/** CalendarEvent is one event, or one occurrence of a series, for the editor. */
+export interface CalendarEvent {
+  id: number
+  calendarId: number
+  calendarName: string
+  calendarColor: string
+  uid: string
+  summary: string
+  description: string
+  location: string
+  url: string
+  status: string
+  transparency: string
+  categories: string[]
+  start: string
+  end: string
+  allDay: boolean
+  // IANA zone the event was written in, empty for utc or floating.
+  timeZone: string
+  // the series' RRULE value, empty for none.
+  rrule: string
+  recurring: boolean
+  // rfc3339 starts of occurrences removed from the series.
+  exDates: string[]
+  // set when this is one occurrence of a series.
+  recurrenceId: string
+  reminders: Reminder[]
+  // email is empty when the event has no organizer.
+  organizer: Attendee
+  attendees: Attendee[]
+  readOnly: boolean
+  pending: boolean
+  conflict: boolean
+  syncError: string
+  // iCalendar properties kept on every save that the editor has no field for.
+  extra: string[]
+}
+
+/**
+ * EventDraft is the editor's event. id 0 creates in calendarId. For an
+ * occurrence of a series, recurrenceId names it and scope says what changes.
+ * The draft is the full state: an empty rrule removes the recurrence.
+ */
+export interface EventDraft {
+  id: number
+  calendarId: number
+  summary: string
+  description: string
+  location: string
+  url: string
+  status: string
+  transparency: string
+  categories: string[]
+  start: string
+  end: string
+  allDay: boolean
+  timeZone: string
+  rrule: string
+  reminders: Reminder[]
+  organizer: Attendee
+  attendees: Attendee[]
+  scope: EventScope | ''
+  recurrenceId: string
+  // set only by "keep mine" on a conflict: write over the server's copy.
+  force: boolean
+}
+
+/** EventSaveResult is the outcome of a save or delete. */
+export interface EventSaveResult {
+  event: CalendarEvent
+  // the server was unreachable; the change goes out with the next sync.
+  queued: boolean
+  // the server's copy moved on; server holds it and resolveEventConflict
+  // settles which one stays.
+  conflict: boolean
+  server: CalendarEvent
+}
+
+/** FreeBusyQuery asks for busy time between from and to, both rfc3339. */
+export interface FreeBusyQuery {
+  // the event's calendar; its CalDAV server is asked about the attendees.
+  calendarId: number
+  from: string
+  to: string
+  // the address the request is made as; empty for the server's first one.
+  organizer: string
+  attendees: string[]
+  // the event being edited, left out of the user's own time; 0 for none.
+  excludeEventId: number
+}
+
+/** BusyKind is how busy a stretch is. */
+export type BusyKind = 'busy' | 'tentative' | 'unavailable'
+
+/** BusySpan is one busy stretch, rfc3339 bounds. */
+export interface BusySpan {
+  start: string
+  end: string
+  kind: BusyKind
+}
+
+/** AttendeeFreeBusy is what is known of one attendee's time. */
+export interface AttendeeFreeBusy {
+  email: string
+  known: boolean
+  // why nothing is known: local, unsupported or unanswered.
+  reason: '' | 'local' | 'unsupported' | 'unanswered'
+  // the server's request-status, when it gave one.
+  status: string
+  busy: BusySpan[]
+}
+
+/** FreeBusy is the user's own busy time and the attendees', in the order asked. */
+export interface FreeBusy {
+  mine: BusySpan[]
+  attendees: AttendeeFreeBusy[]
+}
+
+/** Invite is the invitation a message carries. */
+export interface Invite {
+  // false for a message without calendar data; nothing else is set then.
+  found: boolean
+  // REQUEST, CANCEL, REPLY or PUBLISH, or empty.
+  method: string
+  uid: string
+  sequence: number
+  summary: string
+  description: string
+  location: string
+  start: string
+  end: string
+  allDay: boolean
+  timeZone: string
+  recurring: boolean
+  rrule: string
+  recurrenceId: string
+  organizer: Attendee
+  attendees: Attendee[]
+  // the mailbox address the invitation is read for and its answer so far.
+  myEmail: string
+  myPartStat: string
+  // the copy an earlier answer stored, 0 for none.
+  existingEventId: number
+  existingCalendarId: number
+  // the stored copy is newer than this invitation.
+  outdated: boolean
+}
+
+/** InviteResponse is an answer to an invitation. */
+export type InviteResponse = 'accepted' | 'tentative' | 'declined'
+
+/** InviteAnswer is the request to answer an invitation. */
+export interface InviteAnswer {
+  messageId: number
+  // where an accepted event goes when no copy is stored, 0 for the default.
+  calendarId: number
+  response: InviteResponse
+  sendReply: boolean
+}
+
+/** InviteAnswerResult says what answering or applying an invitation did. */
+export interface InviteAnswerResult {
+  // 0 when the answer removed the event.
+  eventId: number
+  // 0 when no reply was queued.
+  outboxId: number
+}
+
+/** ICSImportResult counts what an .ics import did. */
+export interface ICSImportResult {
+  imported: number
+  updated: number
+  skipped: number
+  /** Tasks the file carried, which went to a task list. */
+  tasks: number
+}
+
+/** ICSFile is a calendar file read for import, iCalendar or JSCalendar. */
+export interface ICSFile {
+  name: string
+  data: string
+  /** How many events an import would take, and the titles of the first few. */
+  events: number
+  summaries: string[]
+  /** How many tasks it holds. */
+  tasks: number
+  /** Set instead of the rest when the file could not be read. */
+  error: string
+}
+
+/** EventBundle is the events a pasted link or JSCalendar text carries, as drafts with no calendar. */
+export interface EventBundle {
+  events: EventDraft[]
+  skipped: number
+}
+
+/** MailEventSource is what the calendar reads from a mail dropped on it. */
+export interface MailEventSource {
+  subject: string
+  text: string
+  /** When the mail was sent, rfc3339; empty when unknown. */
+  date: string
+  fromName: string
+  fromAddress: string
+  /** A mid: link back to the mail, empty when it has no Message-ID. */
+  link: string
+}
+
+/** MessageRef says where a stored message lives. */
+export interface MessageRef {
+  found: boolean
+  id: number
+  accountId: number
+  folderId: number
+}
+
+/** TaskList is a local task list or a CalDAV collection that takes tasks. */
+export interface TaskList {
+  id: number
+  // 0 for a local list.
+  accountId: number
+  accountName: string
+  // empty for the local list the app starts with; the ui labels it.
+  name: string
+  color: string
+  local: boolean
+  readOnly: boolean
+  // the collection holds events too.
+  events: boolean
+  lastError: string
+  default: boolean
+}
+
+/** TaskContact is a person a task is for or about. */
+export interface TaskContact {
+  name: string
+  email: string
+}
+
+/**
+ * Task is one task. due and start are a date (2006-01-02), rfc3339 for a task
+ * with a time of day, or empty.
+ */
+export interface Task {
+  id: number
+  listId: number
+  listName: string
+  listColor: string
+  uid: string
+  title: string
+  notes: string
+  url: string
+  due: string
+  start: string
+  timeZone: string
+  done: boolean
+  // rfc3339, empty while open.
+  completed: string
+  // NEEDS-ACTION, IN-PROCESS, COMPLETED or CANCELLED, or empty.
+  status: string
+  percent: number
+  // 0 for none, 1 highest through 9 lowest.
+  priority: number
+  rrule: string
+  reminders: Reminder[]
+  // the uid of the parent task, empty for a top-level one.
+  parent: string
+  categories: string[]
+  // mid: links to mails.
+  mailLinks: string[]
+  contacts: TaskContact[]
+  eventUids: string[]
+  sortOrder: number
+  // minutes the task is expected to take, 0 for no estimate.
+  estimate: number
+  created: string
+  readOnly: boolean
+  pending: boolean
+  conflict: boolean
+  syncError: string
+}
+
+/** TaskDraft is the editor's task; id 0 creates one, uid then restores one. */
+export interface TaskDraft {
+  id: number
+  listId: number
+  uid: string
+  title: string
+  notes: string
+  url: string
+  due: string
+  start: string
+  timeZone: string
+  status: string
+  percent: number
+  priority: number
+  rrule: string
+  reminders: Reminder[]
+  parent: string
+  categories: string[]
+  mailLinks: string[]
+  contacts: TaskContact[]
+  eventUids: string[]
+  sortOrder: number
+  estimate: number
+  force: boolean
+}
+
+/**
+ * TimeBlock is time set aside in the calendar for a task or a mail. start and
+ * end are rfc3339. title is empty while masked: the block's mail is in a
+ * locked vault and the block says nothing about it.
+ */
+export interface TimeBlock {
+  id: number
+  title: string
+  start: string
+  end: string
+  // the task, 0 when it is not found any more.
+  taskId: number
+  taskUid: string
+  // where the mail lives, all 0 when there is none or it cannot be shown.
+  messageId: number
+  accountId: number
+  folderId: number
+  hasMail: boolean
+  masked: boolean
+  done: boolean
+  // the calendar it is written to, 0 for this device only, and the UID of the
+  // event there.
+  calendarId: number
+  eventUid: string
+  // '' follows the setting, 'generic' or 'title'.
+  eventTitle: string
+  // '' in step, 'out_of_step' or 'event_gone'.
+  linkState: string
+  // the event change waits to reach the server.
+  pending: boolean
+}
+
+/** TimeBlockRequest makes (id 0) or changes a block; calendarId 0 keeps it on this device. */
+export interface TimeBlockRequest {
+  id: number
+  title: string
+  start: string
+  end: string
+  taskUid: string
+  messageId: number
+  done: boolean
+  calendarId: number
+  eventTitle: string
+}
+
+/** TimeBlockSettings are the time blocking preferences. */
+export interface TimeBlockSettings {
+  defaultMinutes: number
+  minSlotMinutes: number
+  bufferMinutes: number
+  // days of the week with working hours, 0 for Sunday.
+  workDays: number[]
+  searchDays: number
+  writeToCalendar: boolean
+  calendarId: number
+  eventTitle: string
+  includeTitle: boolean
+}
+
+/** FreeSlot is a proposed time; afterDue says it ends after the task's due date. */
+export interface FreeSlot {
+  start: string
+  end: string
+  afterDue: boolean
+}
+
+/** BlockProposal is one block of a day plan, not stored yet. */
+export interface BlockProposal {
+  taskId: number
+  taskUid: string
+  title: string
+  start: string
+  end: string
+  part: number
+  parts: number
+}
+
+/** DayPlan is a day laid out as proposals, with the tasks that did not fit. */
+export interface DayPlan {
+  proposals: BlockProposal[]
+  short: string[]
+  unplaced: string[]
+  tasks: number
+}
+
+/** TaskPlan is how much time a task has in blocks, in minutes. */
+export interface TaskPlan {
+  taskUid: string
+  plannedMinutes: number
+  aheadMinutes: number
+  // blocks that have not started.
+  future: number
+}
+
+/** TaskSaveResult is the outcome of a task save. */
+export interface TaskSaveResult {
+  task: Task
+  queued: boolean
+  conflict: boolean
+  server: Task
+  // completing a repeating task moved it on to its next occurrence.
+  advanced: boolean
+}
+
+/** RemovedTask is a deleted task as it was, which restoreTasks takes back. */
+export interface RemovedTask {
+  listId: number
+  data: string
+}
+
+/** TaskDeleteResult is what a deletion removed, subtasks included. */
+export interface TaskDeleteResult {
+  removed: RemovedTask[]
+  queued: boolean
+}
+
+/** TaskMailMark says a stored message has a task; done when every such task is. */
+export interface TaskMailMark {
+  messageId: number
+  done: boolean
+}
+
+/** What the rail badge on Tasks counts. */
+export type TaskBadge = 'overdue' | 'today' | 'off'
+/** How a task list is ordered. */
+export type TaskSort = 'manual' | 'due' | 'priority' | 'title' | 'created'
+
+/** TaskSettings are the task preferences. */
+export interface TaskSettings {
+  defaultListId: number
+  // the time of day a due date picked without one gets, -1 to keep a date.
+  defaultDueMinutes: number
+  badge: TaskBadge
+  showInCalendar: boolean
+  // how long a completed task stays listed, -1 for good.
+  completedDays: number
+  sort: TaskSort
+}
+
+/** Whether a project is worked on or put away. */
+export type ProjectStatus = 'active' | 'archived'
+
+/** ProjectPerson is someone a project is with; their mail is suggested for it. */
+export interface ProjectPerson {
+  email: string
+  name: string
+}
+
+/**
+ * Project is one project with what its tile counts: cards whose task exists,
+ * done ones, overdue open ones, the earliest open due date (a date or rfc3339,
+ * empty for none), conversations, events and notes.
+ */
+export interface Project {
+  id: number
+  // names the project in notes' front matter and pelton://project links.
+  uid: string
+  name: string
+  // #rrggbb, empty for the palette color picked by id.
+  color: string
+  // the name of an icon from lib/projecticons, empty for the default.
+  icon: string
+  // the geometry of a tabler icon as json, empty when the icon is a name from
+  // lib/projecticons or the default.
+  iconNodes?: string
+  description: string
+  status: ProjectStatus
+  // dates as 2006-01-02, empty for none.
+  startDate: string
+  dueDate: string
+  position: number
+  // the task list new cards go to, 0 for the default.
+  listId: number
+  createdAt: string
+  updatedAt: string
+  archivedAt: string
+  cards: number
+  done: number
+  overdue: number
+  nextDue: string
+  mail: number
+  events: number
+  notes: number
+  people: ProjectPerson[]
+}
+
+/** ProjectColumnDraft is a column made with a new project. */
+export interface ProjectColumnDraft {
+  name: string
+  wipLimit: number
+  done: boolean
+}
+
+/** ProjectDraft is the project editor's project; id 0 creates one with columns. */
+export interface ProjectDraft {
+  id: number
+  name: string
+  color: string
+  icon: string
+  iconNodes: string
+  description: string
+  startDate: string
+  dueDate: string
+  listId: number
+  columns: ProjectColumnDraft[]
+}
+
+/** ProjectColumn is one column of a board. wipLimit 0 means no limit. */
+export interface ProjectColumn {
+  id: number
+  projectId: number
+  name: string
+  position: number
+  wipLimit: number
+  // completed tasks gather here, and a card dropped here completes its task.
+  done: boolean
+}
+
+/**
+ * ProjectCard is a task on a board. mail, events and notes count what is
+ * attached, the task's own links included. sourceKind and sourceRef are empty
+ * for a card made in Pelton and name the outside item a mirrored card stands
+ * for.
+ */
+export interface ProjectCard {
+  task: Task
+  projectId: number
+  columnId: number
+  position: number
+  mail: number
+  events: number
+  notes: number
+  sourceKind: string
+  sourceRef: string
+}
+
+/** ProjectBoard is a project with its columns in order and its cards. */
+export interface ProjectBoard {
+  project: Project
+  columns: ProjectColumn[]
+  cards: ProjectCard[]
+}
+
+/** ProjectCardDraft makes a task and puts it in a column; index -1 appends. */
+export interface ProjectCardDraft {
+  projectId: number
+  columnId: number
+  title: string
+  notes: string
+  due: string
+  timeZone: string
+  priority: number
+  index: number
+}
+
+/** ProjectMoveResult is a card after a move; advanced when a repeating task moved on instead. */
+export interface ProjectMoveResult {
+  card: ProjectCard
+  advanced: boolean
+}
+
+/** What a project link points at. */
+export type ProjectLinkKind = 'mail' | 'event' | 'contact' | 'note'
+
+/** ProjectLink is something a card or a project points at; taskUid is empty for the project's own. */
+export interface ProjectLink {
+  id: number
+  projectId: number
+  taskUid: string
+  kind: ProjectLinkKind
+  accountId: number
+  threadId: number
+  ref: string
+  label: string
+  createdAt: string
+}
+
+/**
+ * ProjectEvent is an event filed under a project, at its next occurrence or
+ * its last one when past. found is false when no calendar has it any more.
+ */
+export interface ProjectEvent {
+  uid: string
+  taskUid: string
+  label: string
+  found: boolean
+  eventId: number
+  calendarColor: string
+  summary: string
+  start: string
+  end: string
+  allDay: boolean
+  recurring: boolean
+  recurrenceId: string
+  past: boolean
+}
+
+/** ProjectNoteRecord is a note as the backend stores it, its body Markdown. */
+export interface ProjectNoteRecord {
+  id: number
+  projectId: number
+  title: string
+  body: string
+  createdAt: string
+  updatedAt: string
+}
+
+/** ProjectVaultNote is a note of the notes folder as the Projects space lists it; mtime is unix ms. */
+export interface ProjectVaultNote {
+  path: string
+  title: string
+  snippet: string
+  mtime: number
+}
+
+/**
+ * ProjectVaultNotes is what the notes folder holds for a project: its notes
+ * and the other notes linking to it or its cards, mail and events. available
+ * is false when no notes folder is open.
+ */
+export interface ProjectVaultNotes {
+  available: boolean
+  notes: ProjectVaultNote[]
+  linked: ProjectVaultNote[]
+}
+
+/** ProjectMailMark says a conversation belongs to a project. */
+export interface ProjectMailMark {
+  threadId: number
+  projectId: number
+}
+
+/** VaultInfo describes the open notes folder; folder is '' when none is open. */
+export interface VaultInfo {
+  folder: string
+  ready: boolean
+  /** The folder is the Notes folder in the data directory. */
+  default: boolean
+  error: string
+}
+
+/** VaultHeading is one heading of a note; line counts from 0. */
+export interface VaultHeading {
+  level: number
+  text: string
+  line: number
+}
+
+/** VaultLinkKind says what a link points at. */
+export type VaultLinkKind = 'wiki' | 'markdown' | 'external' | 'pelton'
+
+/** VaultLink is one link a note makes; resolved is the vault path, or ''. */
+export interface VaultLink {
+  kind: VaultLinkKind
+  embed: boolean
+  target: string
+  subpath: string
+  display: string
+  line: number
+  resolved: string
+}
+
+/** VaultNote is what the notes space knows of a note without opening it; mtime is unix ms. */
+export interface VaultNote {
+  path: string
+  title: string
+  mtime: number
+  size: number
+  tags: string[]
+  aliases: string[]
+  headings: VaultHeading[]
+  snippet: string
+  links: VaultLink[]
+  props: VaultProp[]
+}
+
+/** VaultProp is one front matter property of a note: its value, or its items for a list. */
+export interface VaultProp {
+  key: string
+  value: string
+  list: string[]
+}
+
+/** VaultSnapshot is the whole index of the notes folder. */
+export interface VaultSnapshot {
+  folder: string
+  ready: boolean
+  notes: VaultNote[]
+  folders: string[]
+  /** Every file that is not a note, such as images. */
+  files: string[]
+}
+
+/** VaultFile is a note's text as it is on disk. */
+export interface VaultFile {
+  path: string
+  content: string
+  hash: string
+  mtime: number
+  /** Not valid UTF-8: shown, never written. */
+  readOnly: boolean
+}
+
+/** VaultSave is what a save did; on a conflict disk is the text on disk now. */
+export interface VaultSave {
+  hash: string
+  mtime: number
+  conflict: boolean
+  disk: string
+  diskHash: string
+}
+
+/** VaultOp is what a rename, move or delete did, with the id undo takes. */
+export interface VaultOp {
+  undoId: string
+  moves: Record<string, string>
+  rewritten: string[]
+}
+
+/** VaultMention is a line of a note naming another one; match is set for an unlinked one. */
+export interface VaultMention {
+  source: string
+  line: number
+  text: string
+  match: string
+}
+
+/** VaultHit is one search result with the line that matched. */
+export interface VaultHit {
+  path: string
+  title: string
+  context: string
+}
+
+/** FeedFolder groups feeds in the Feeds sidebar. */
+export interface FeedFolder {
+  id: number
+  name: string
+  position: number
+}
+
+/**
+ * Feed is one subscription. title is the name to show; feedTitle what the
+ * feed calls itself and customTitle what the user renamed it to. error is why
+ * the last fetch failed, '' when it worked. Dates are rfc3339, '' for never.
+ */
+export interface Feed {
+  id: number
+  folderId: number
+  url: string
+  siteUrl: string
+  title: string
+  feedTitle: string
+  customTitle: string
+  description: string
+  /** A data: url of the site's icon, or ''. */
+  icon: string
+  error: string
+  errorCount: number
+  lastFetched: string
+  lastSuccess: string
+  nextFetch: string
+  /** 0 follows the Feeds setting. */
+  intervalMinutes: number
+  loadImages: boolean
+  notify: boolean
+  position: number
+  unread: number
+}
+
+/** FeedCounts are the numbers beside the smart views. */
+export interface FeedCounts {
+  unread: number
+  today: number
+  starred: number
+  readLater: number
+}
+
+/** FeedSidebar is everything the Feeds sidebar shows. */
+export interface FeedSidebar {
+  folders: FeedFolder[]
+  feeds: Feed[]
+  counts: FeedCounts
+}
+
+/** FeedEnclosure is a file attached to an entry, such as a podcast episode. */
+export interface FeedEnclosure {
+  url: string
+  type: string
+  length: number
+  title: string
+}
+
+/** FeedEntry is one row of the entry list. published is rfc3339. */
+export interface FeedEntry {
+  id: number
+  feedId: number
+  title: string
+  url: string
+  author: string
+  published: string
+  snippet: string
+  image: string
+  read: boolean
+  starred: boolean
+  readLater: boolean
+  media: FeedEnclosure[]
+}
+
+/** FeedEntryDetail is an entry opened in the reader, its html sanitized. */
+export interface FeedEntryDetail extends FeedEntry {
+  bodyHtmlSafe: string
+  hasRemoteContent: boolean
+  remoteAllowed: boolean
+  remoteHosts: string[]
+  trackingPixels: TrackingPixel[]
+}
+
+/** The smart views of the Feeds sidebar. */
+export type FeedSmartView = 'unread' | 'today' | 'starred' | 'later' | 'newsletters'
+
+/**
+ * FeedScope is what the entry list shows: a smart view, one feed, or one
+ * folder (id 0 holds the feeds in no folder).
+ */
+export type FeedScope = { kind: FeedSmartView } | { kind: 'feed'; id: number } | { kind: 'folder'; id: number }
+
+/** FeedSettings is what the user edits on a feed. */
+export interface FeedSettings {
+  id: number
+  customTitle: string
+  folderId: number
+  intervalMinutes: number
+  loadImages: boolean
+  notify: boolean
+}
+
+/** FeedCandidate is a feed found at an address, with a preview. */
+export interface FeedCandidate {
+  url: string
+  title: string
+  siteUrl: string
+  kind: string
+  entryCount: number
+  latest: string[]
+  lastPost: string
+  subscribed: boolean
+}
+
+/** FeedImportResult reports an OPML import. */
+export interface FeedImportResult {
+  added: number
+  skipped: number
+}
+
+/** The chat account's session state. */
+export type ChatState = 'signedOut' | 'starting' | 'syncing' | 'online' | 'offline' | 'error' | 'stopped'
+
+/** ChatEncryption is this device's end to end encryption state. */
+export interface ChatEncryption {
+  ready: boolean
+  deviceVerified: boolean
+  crossSigning: boolean
+  secretStorage: boolean
+  secretStoragePassphrase: boolean
+  backupVersion: string
+  backupKeys: number
+  backupActive: boolean
+  fingerprint: string
+}
+
+/** ChatStatus is the chat account as settings and the banner show it. */
+export interface ChatStatus {
+  state: ChatState
+  userId: string
+  deviceId: string
+  homeserver: string
+  displayName: string
+  avatar: string
+  error: string
+  encryption: ChatEncryption
+}
+
+/** ChatServer is a homeserver found from what the user typed, with its sign-in methods. */
+export interface ChatServer {
+  homeserver: string
+  serverName: string
+  user: string
+  password: boolean
+  sso: boolean
+  token: boolean
+  providers: { id: string; name: string }[]
+}
+
+/** The kind of a chat room in the list. */
+export type ChatRoomKind = 'direct' | 'room' | 'space'
+
+/** ChatRoom is one room, direct chat, space or invite. */
+export interface ChatRoom {
+  id: string
+  name: string
+  topic: string
+  avatar: string
+  alias: string
+  kind: ChatRoomKind
+  directUser: string
+  encrypted: boolean
+  membership: 'join' | 'invite'
+  inviterId: string
+  inviterName: string
+  favourite: boolean
+  lowPriority: boolean
+  unread: number
+  highlight: number
+  lastTs: number
+  preview: string
+  previewSender: string
+  previewKind: string
+  spaces: string[]
+  memberCount: number
+  fullyRead: string
+}
+
+/** ChatMember is a person in a room. */
+export interface ChatMember {
+  userId: string
+  name: string
+  avatar: string
+  membership: string
+  powerLevel: number
+}
+
+/** The kind of a timeline row. */
+export type ChatMessageKind =
+  | 'text'
+  | 'notice'
+  | 'emote'
+  | 'image'
+  | 'video'
+  | 'audio'
+  | 'file'
+  | 'sticker'
+  | 'location'
+  | 'state'
+  | 'redacted'
+  | 'encrypted'
+  | 'unknown'
+
+/** ChatMessage is one timeline row with edits, reactions and redactions applied. */
+export interface ChatMessage {
+  id: string
+  sender: string
+  senderName: string
+  senderAvatar: string
+  ts: number
+  kind: ChatMessageKind
+  body: string
+  // sanitised to the Matrix subset by the backend.
+  html: string
+  edited: boolean
+  own: boolean
+  replyTo: { id: string; sender: string; senderName: string; body: string; missing: boolean } | null
+  reactions: ChatReaction[]
+  media: ChatMedia | null
+  state: { kind: string; target: string; targetName: string; value: string } | null
+  encrypted: boolean
+  decryptError: string
+  missingKeys: boolean
+  mentioned: boolean
+  readBy: ChatMember[]
+}
+
+/** ChatReaction is one reaction key on a message. */
+export interface ChatReaction {
+  key: string
+  count: number
+  // the user's own reaction event with this key, or empty.
+  mine: string
+  senders: string[]
+}
+
+/** ChatMedia describes the file of a media message; the bytes load separately. */
+export interface ChatMedia {
+  name: string
+  mime: string
+  size: number
+  width: number
+  height: number
+  duration: number
+  thumbnail: boolean
+  encrypted: boolean
+}
+
+/** ChatTimelinePage is a slice of a timeline, oldest first. */
+export interface ChatTimelinePage {
+  messages: ChatMessage[]
+  hasMore: boolean
+  fullyRead: string
+}
+
+/** ChatSendRequest is a text message, reply or edit to send. */
+export interface ChatSendRequest {
+  roomId: string
+  text: string
+  markdown: boolean
+  emote: boolean
+  replyTo: string
+  edit: string
+  mentions: { userId: string; name: string }[]
+}
+
+/** ChatCreateRoomRequest describes a new room. */
+export interface ChatCreateRoomRequest {
+  name: string
+  topic: string
+  invite: string[]
+  encrypted: boolean
+  public: boolean
+}
+
+/** ChatVerificationState is the step an interactive verification is at. */
+export type ChatVerificationState = 'requested' | 'ready' | 'sas' | 'confirmed' | 'done' | 'cancelled'
+
+/** ChatVerification is a device verification in flight. */
+export interface ChatVerification {
+  id: string
+  userId: string
+  userName: string
+  deviceId: string
+  self: boolean
+  incoming: boolean
+  state: ChatVerificationState
+  emojis: { emoji: string; description: string }[]
+  decimals: number[]
+  reason: string
+}
+
+/** ChatDevice is one of the user's sessions. */
+export interface ChatDevice {
+  id: string
+  name: string
+  lastSeen: number
+  current: boolean
+  verified: boolean
+}
+
+/** ChatProfile is a person's public name and picture. */
+export interface ChatProfile {
+  userId: string
+  name: string
+  avatar: string
+}
+
+/** ChatMediaProgress reports a file being saved or sent. */
+export interface ChatMediaProgress {
+  key: string
+  running: boolean
+  bytesDone: number
+  bytesTotal: number
+  error: string
+}
+
+/** A signature verdict in the words the new reader uses. */
+export type SignatureWord = '' | 'known' | 'verified' | 'new' | 'invalid' | 'unchecked'
+
+/** MessageEncryption is what the new reader says about a message's protection. */
+export interface MessageEncryption {
+  encrypted: boolean
+  signature: SignatureWord
+  signerEmail: string
+  /** The real subject of a message that hid it, '' otherwise. */
+  subject: string
+  /** A key transfer from one of the user's own devices. */
+  setupMessage: boolean
+}
+
+/** Places keys may be found in, and the user's own key servers. */
+export interface KeySources {
+  autocrypt: boolean
+  wkd: boolean
+  keysOpenpgpOrg: boolean
+  keyServers: boolean
+  servers: string[]
+}
+
+/** How a mailbox encrypts: auto turns it on when the recommendation says so, manual never does. */
+export type AutoEncryptMode = 'auto' | 'manual'
+
+/** OwnKey is the key one mailbox encrypts and signs with. */
+export interface OwnKey {
+  accountId: number
+  email: string
+  fingerprint: string
+  /** RFC 3339; expires is '' for a key that does not expire. */
+  created: string
+  expires: string
+  /** Pelton made the key and renews it. */
+  generated: boolean
+  usable: boolean
+  mode: AutoEncryptMode
+}
+
+/** AutoEncryptSettings is everything the encryption settings show. */
+export interface AutoEncryptSettings {
+  enabled: boolean
+  sources: KeySources
+  protectSubject: boolean
+  accounts: OwnKey[]
+}
+
+/** The specification's answer to "should this be encrypted", weakest first. */
+export type EncryptRecommendation = 'disable' | 'discourage' | 'available' | 'encrypt'
+
+/** A contact's encryption preference: follow the recommendation, always or never. */
+export type ContactEncryptPref = '' | 'always' | 'never'
+
+/** RecipientEncryption is what the composer knows about one recipient. */
+export interface RecipientEncryption {
+  email: string
+  state: 'ready' | 'verified' | 'missing' | 'changed'
+  /** manual, autocrypt, gossip, wkd, keys.openpgp.org or server:<url>; '' with no key. */
+  source: string
+  fingerprint: string
+  recommendation: EncryptRecommendation
+  preference: ContactEncryptPref
+  /** For a key change: the fingerprint last used and when the new key was first seen. */
+  previous: string
+  changedAt: string
+  /** Why a key that was found cannot be used: expired, revoked or noencryption. */
+  problem: string
+  bcc: boolean
+}
+
+/** AutoEncryptStatus is what would happen to a message from one mailbox to some recipients. */
+export interface AutoEncryptStatus {
+  enabled: boolean
+  ownKey: boolean
+  recommendation: EncryptRecommendation
+  replyToEncrypted: boolean
+  mode: AutoEncryptMode
+  recipients: RecipientEncryption[]
+}
+
+/** ContactKey is one correspondent's key as the settings list shows it. */
+export interface ContactKey {
+  email: string
+  fingerprint: string
+  source: string
+  firstSeen: string
+  expires: string
+  state: 'ready' | 'verified' | 'missing' | 'changed'
+  problem: string
+  preference: ContactEncryptPref
+  previous: string
+}
+
+/** KeyLookupLogEntry is one request a key lookup made. */
+export interface KeyLookupLogEntry {
+  at: string
+  source: string
+  email: string
+  outcome: 'found' | 'none' | 'unusable' | 'failed'
+}
+
+/** A folder in a mail vault, or a whole account when folderId is 0. */
+export interface MailVaultMember {
+  accountId: number
+  folderId: number
+}
+
+/**
+ * A mail vault: folders and accounts whose cached mail is encrypted with a
+ * passphrase of its own. pending counts messages still to seal, or to unseal
+ * while the vault is being removed.
+ */
+export interface MailVault {
+  id: number
+  name: string
+  locked: boolean
+  state: 'sealing' | 'ready' | 'unsealing'
+  pending: number
+  sealed: number
+  members: MailVaultMember[]
+  folderIds: number[]
+  autoLockMinutes: number
+  notify: 'none' | 'generic'
+  hideLocked: boolean
+  allowScripts: boolean
+  allowMcp: boolean
+  allowCli: boolean
+  retryAfterMs: number
+}
+
+/** The outcome of a vault passphrase or recovery code. */
+export interface MailVaultAuth {
+  ok: boolean
+  reason?: 'wrong' | 'wait' | 'damaged' | 'weak'
+  retryAfterMs?: number
+}
+
+/** The settings of a vault that need no passphrase to change. */
+export interface MailVaultSettings {
+  id: number
+  name: string
+  autoLockMinutes: number
+  notify: 'none' | 'generic'
+  hideLocked: boolean
+  allowScripts: boolean
+  allowMcp: boolean
+  allowCli: boolean
 }

@@ -9,7 +9,7 @@ import (
 
 func newTestDB(t *testing.T) *DB {
 	t.Helper()
-	db, err := Open(filepath.Join(t.TempDir(), "test.db"))
+	db, err := openMigrated(filepath.Join(t.TempDir(), "test.db"))
 	if err != nil {
 		t.Fatalf("open db: %v", err)
 	}
@@ -21,6 +21,7 @@ func newTestDB(t *testing.T) *DB {
 }
 
 func TestViewCRUD(t *testing.T) {
+	t.Parallel()
 	db := newTestDB(t)
 	ctx := context.Background()
 
@@ -77,6 +78,7 @@ func TestViewCRUD(t *testing.T) {
 }
 
 func TestViewReorder(t *testing.T) {
+	t.Parallel()
 	db := newTestDB(t)
 	ctx := context.Background()
 

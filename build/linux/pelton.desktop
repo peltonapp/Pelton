@@ -11,4 +11,4 @@ Categories=Network;Email;Office;
 Keywords=email;mail;imap;smtp;inbox;
 StartupNotify=true
 StartupWMClass=Pelton
-MimeType=x-scheme-handler/mailto;
+MimeType=x-scheme-handler/mailto;text/calendar;

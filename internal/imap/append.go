@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"slices"
 	"strings"
+	"time"
 
 	"github.com/emersion/go-imap/v2"
 )
@@ -127,11 +128,22 @@ func (c *Client) appendSpecial(attr imap.MailboxAttr, fallbacks []string, raw []
 	return mailbox, nil
 }
 
+// AppendMessage uploads a message into mailbox with flags and, when date is
+// not zero, that arrival date, so an imported message keeps the date it
+// arrived on rather than the day of the import.
+func (c *Client) AppendMessage(mailbox string, raw []byte, flags []imap.Flag, date time.Time) error {
+	_, err := c.appendWith(mailbox, raw, &imap.AppendOptions{Flags: flags, Time: date})
+	return err
+}
+
 // append uploads a message into a mailbox with the given flags via APPEND and
 // returns the uid the server reports for it, or 0 when it reports none, as a
 // server without UIDPLUS does.
 func (c *Client) append(mailbox string, raw []byte, flags ...imap.Flag) (imap.UID, error) {
-	options := &imap.AppendOptions{Flags: flags}
+	return c.appendWith(mailbox, raw, &imap.AppendOptions{Flags: flags})
+}
+
+func (c *Client) appendWith(mailbox string, raw []byte, options *imap.AppendOptions) (imap.UID, error) {
 	cmd := c.raw.Append(mailbox, int64(len(raw)), options)
 	if _, err := cmd.Write(raw); err != nil {
 		_ = cmd.Close()

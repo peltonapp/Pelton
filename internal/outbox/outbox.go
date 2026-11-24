@@ -52,7 +52,13 @@ type Message struct {
 	// NotBefore, when set on enqueue, holds the message queued until this time so
 	// the worker does not transmit it before then. It backs the undo-send delay.
 	NotBefore time.Time
+	// Priority orders the queue: a higher one is claimed before older messages.
+	Priority int
 }
+
+// CancelledReason is the LastError of a message the user cancelled while it
+// was waiting or being transmitted, which leaves it failed rather than gone.
+const CancelledReason = "cancelled"
 
 // Queue is the persistent send queue backed by the store.
 type Queue struct {
@@ -106,14 +112,36 @@ func (q *Queue) markSent(ctx context.Context, id int64) error {
 
 // markAttemptFailed records a failed attempt. It requeues with backoff while
 // attempts remain, otherwise marks the message failed, always keeping the last
-// error for the user to see. It returns whether the message will be retried.
-func (q *Queue) markAttemptFailed(ctx context.Context, m Message, cause string) (retry bool, err error) {
+// error for the user to see. It returns when the message will be retried, or
+// the zero time when it will not.
+func (q *Queue) markAttemptFailed(ctx context.Context, m Message, cause string) (time.Time, error) {
 	attempts := m.Attempts + 1
 	if attempts >= MaxAttempts {
-		return false, q.db.UpdateOutboxState(ctx, m.ID, StateFailed, attempts, cause, time.Time{})
+		return time.Time{}, q.db.UpdateOutboxState(ctx, m.ID, StateFailed, attempts, cause, time.Time{})
 	}
 	next := time.Now().UTC().Add(backoff(attempts))
-	return true, q.db.UpdateOutboxState(ctx, m.ID, StateQueued, attempts, cause, next)
+	return next, q.db.UpdateOutboxState(ctx, m.ID, StateQueued, attempts, cause, next)
+}
+
+// hold moves message id from state to failed with CancelledReason, and
+// reports whether it was still in state.
+func (q *Queue) hold(ctx context.Context, id int64, state string) (bool, error) {
+	return q.db.UpdateOutboxStateIf(ctx, id, state, StateFailed, 0, CancelledReason, time.Time{})
+}
+
+// Hold takes a queued message out of the send order by marking it failed with
+// CancelledReason, and reports whether it was still queued. Nothing is lost:
+// the message can be retried, edited or discarded like any failed one. It does
+// not reach a message the worker is transmitting; Worker.Withdraw does.
+func (q *Queue) Hold(ctx context.Context, id int64) (bool, error) {
+	return q.hold(ctx, id, StateQueued)
+}
+
+// Prioritise moves a queued message to the front of the queue, so it is the
+// next one claimed once due, and reports whether it was still queued. Moving
+// another later puts that one in front of it.
+func (q *Queue) Prioritise(ctx context.Context, id int64) (bool, error) {
+	return q.db.PrioritiseOutbox(ctx, id, StateQueued)
 }
 
 // RequeueStuck moves any rows left in sending (from a crashed run) back to
@@ -177,6 +205,20 @@ func (q *Queue) List(ctx context.Context) ([]Message, error) {
 	return out, nil
 }
 
+// get returns message id, or storage.ErrOutboxNotFound.
+func (q *Queue) get(ctx context.Context, id int64) (Message, error) {
+	all, err := q.List(ctx)
+	if err != nil {
+		return Message{}, err
+	}
+	for _, m := range all {
+		if m.ID == id {
+			return m, nil
+		}
+	}
+	return Message{}, storage.ErrOutboxNotFound
+}
+
 // backoff returns the capped exponential delay for the given attempt number,
 // which is 1 for the first retry.
 func backoff(attempt int) time.Duration {
@@ -203,6 +245,7 @@ func toMessage(r storage.OutboxRow) Message {
 		LastError:     r.LastError,
 		NextAttemptAt: r.NextAttemptAt,
 		CreatedAt:     r.CreatedAt,
+		Priority:      r.Priority,
 	}
 }
 

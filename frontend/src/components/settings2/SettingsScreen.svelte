@@ -2,7 +2,7 @@
   // the settings screen of the new design. it takes over the window: a
   // navigation of pages on the left with a search over single settings, the
   // open page on the right. pages are separate components loaded on first use.
-  import { createEventDispatcher, tick, type ComponentType } from 'svelte'
+  import { createEventDispatcher, onMount, tick, type ComponentType } from 'svelte'
   import { get } from 'svelte/store'
   // the duotone x draws a tinted square behind the cross, which reads as a
   // checkbox rather than as close.
@@ -11,21 +11,30 @@
   import goIcon from '@phosphor-icons/core/assets/regular/arrow-right.svg?raw'
   import Ph from '../common/Ph.svelte'
   import Highlight from '../common/Highlight.svelte'
-  import Spinner from '../common/Spinner.svelte'
   import PassphraseDialog from '../settings/PassphraseDialog.svelte'
   import { settingsPages2, settingsGroups2, settingsIndex2, pageExists, loadPage, resolvePage, type SettingsIndexEntry } from '../../lib/settings2'
   import { popupIsOpen } from '../../lib/popups'
   import { recording } from '../../stores/shortcuts'
   import { toastError, errorMessage } from '../../stores/toast'
   import { t } from '../../lib/i18n'
+  import { dur } from '../../lib/motion'
 
-  /** Page to open on, as a page key or a classic category key. */
+  /**
+   * Page to open on, as a page key or a classic category key, optionally
+   * followed by "#" and the id of a setting on it to scroll to and mark.
+   */
   export let initialCategory: string | null = null
 
   const dispatch = createEventDispatcher<{ close: void; rerunOnboarding: void }>()
 
   const pages = settingsPages2.filter((p) => pageExists(p.key))
-  let active = resolvePage(initialCategory)
+  const [initialPage, initialSetting] = (initialCategory ?? '').split('#')
+  let active = resolvePage(initialPage || null)
+  onMount(() => {
+    if (initialSetting) {
+      void openResult({ page: active, id: initialSetting, labelKey: '' })
+    }
+  })
   let component: ComponentType | null = null
   let contentEl: HTMLDivElement | undefined
   let loadedKey = ''
@@ -33,6 +42,14 @@
   // the load in flight, so a caller that asks for the page already being
   // loaded waits for it instead of returning early.
   let loading: Promise<void> = Promise.resolve()
+  // the key of the page whose component is on screen, which trails `active`
+  // while the next page loads.
+  let shownKey = ''
+
+  // pointing at a page fetches it, so the click finds it already there.
+  function warm(key: string): void {
+    void loadPage(key).catch(() => {})
+  }
 
   $: void open(active)
   function open(key: string): Promise<void> {
@@ -40,12 +57,14 @@
       return loading
     }
     loadedKey = key
-    component = null
+    // the page on screen stays until the next one is ready, and then gives
+    // way to it in one move; an empty moment in between would only flicker.
     loading = (async () => {
       try {
         const loaded = await loadPage(key)
         if (loadedKey === key) {
           component = loaded
+          shownKey = key
           await tick()
           contentEl?.scrollTo({ top: 0 })
         }
@@ -112,7 +131,7 @@
       return
     }
     const found = row
-    found.scrollIntoView({ block: 'center', behavior: 'smooth' })
+    found.scrollIntoView({ block: 'center', behavior: dur(1) ? 'smooth' : 'auto' })
     found.classList.remove('s2-found')
     void found.offsetWidth
     found.classList.add('s2-found')
@@ -176,6 +195,8 @@
               class:active={active === page.key && q === ''}
               class:dim={q !== '' && !groups.some((g) => g.page.key === page.key)}
               aria-current={active === page.key ? 'page' : undefined}
+              on:pointerenter={() => warm(page.key)}
+              on:focus={() => warm(page.key)}
               on:click={() => {
                 active = page.key
                 query = ''
@@ -236,13 +257,11 @@
             {/each}
           {/if}
         {:else if component}
-          {#key active}
-            <div class="page">
+          {#key shownKey}
+            <div class="page" class:leaving={shownKey !== active}>
               <svelte:component this={component} on:close={() => dispatch('close')} on:rerunOnboarding={() => dispatch('rerunOnboarding')} />
             </div>
           {/key}
-        {:else}
-          <Spinner />
         {/if}
       </div>
     </div>
@@ -418,6 +437,13 @@
 
   .page {
     animation: turn var(--motion-base) var(--ease-out);
+    transition: opacity var(--motion-fast) var(--ease-out);
+  }
+
+  /* the page being left dims while the next one loads, then is replaced. */
+  .page.leaving {
+    opacity: 0.4;
+    pointer-events: none;
   }
 
   @keyframes turn {

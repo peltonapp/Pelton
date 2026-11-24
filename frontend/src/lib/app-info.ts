@@ -1,7 +1,5 @@
 // app-info.ts holds the static facts shown in the settings about section. the
-// version is hardcoded for now; wiring it to the build (ldflags or wails.json)
-// is a small follow-up.
-// TODO(build): inject version at build time instead of hardcoding here.
+// version is only the fallback until the about screen reads the build's own.
 export const APP = {
   name: 'Pelton',
   version: '0.1.0',

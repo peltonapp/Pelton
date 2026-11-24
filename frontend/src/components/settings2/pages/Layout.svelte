@@ -8,7 +8,15 @@
   import ChoiceCards from '../ui/ChoiceCards.svelte'
   import Segmented from '../ui/Segmented.svelte'
   import ShellSkeleton from '../skeletons/ShellSkeleton.svelte'
+  import ListPreview from '../skeletons/ListPreview.svelte'
+  import PaneLockPreview from '../skeletons/PaneLockPreview.svelte'
+  import TitleBarPreview from '../skeletons/TitleBarPreview.svelte'
+  import MenuBarPreview from '../skeletons/MenuBarPreview.svelte'
+  import StatusBarPreview from '../skeletons/StatusBarPreview.svelte'
+  import SidebarPreview from '../skeletons/SidebarPreview.svelte'
   import ToggleSwitch from '../../common/ToggleSwitch.svelte'
+  import SpaceNavEditor from '../SpaceNavEditor.svelte'
+  import { resetSpaceNav } from '../../../lib/spaces'
   import {
     prefs,
     setLayoutMode,
@@ -36,6 +44,11 @@
   const dispatch = createEventDispatcher<{ close: void }>()
 
   $: classic = $prefs.design === 'classic'
+  $: navDefault = $prefs.spaceOrder === '' && $prefs.hiddenSpaces === ''
+
+  // the placement under the pointer in the views control, which the sidebar
+  // picture shows in place of the saved one.
+  let trialViews: string | null = null
 
   $: newItemsOptions = [
     { key: 'visible', label: $t('menuBar.newItems.visible') },
@@ -133,11 +146,22 @@
   </Card>
 {/if}
 
+<Card id="spaces" title={$t('spaces.settings.title')} description={$t('spaces.settings.description')}>
+  <div class:inert={classic}>
+    <SpaceNavEditor />
+  </div>
+  <Row id="spaces-reset" label={$t('spaces.settings.reset')} hint={$t('spaces.settings.resetHint')} disabled={classic}>
+    <button type="button" class="action" disabled={navDefault} on:click={resetSpaceNav}>{$t('spaces.settings.resetButton')}</button>
+  </Row>
+</Card>
+
 <Card title={$t('layout.window')}>
   <Row id="pane-lock" label={$t('settings.lockPanes')} hint={$t('settingsPanel.hint.lockPanes')}>
+    <PaneLockPreview slot="preview" locked={$prefs.paneLocked} />
     <ToggleSwitch checked={$prefs.paneLocked} label={$t('settings.lockPanes')} on:change={(e) => setPaneLocked(e.detail)} />
   </Row>
   <Row id="native-titlebar" label={$t('layout.nativeTitlebar')} hint={$t('layout.nativeTitlebar.hint')} disabled={classic}>
+    <TitleBarPreview slot="preview" native={$prefs.nativeTitlebar} />
     <ToggleSwitch checked={$prefs.nativeTitlebar} label={$t('layout.nativeTitlebar')} on:change={(e) => setNativeTitlebar(e.detail)} />
   </Row>
 </Card>
@@ -145,6 +169,7 @@
 <Card title={$t('settingsPanel.category.menubar')}>
   {#if isMac}
     <Row id="menubar-in-app" label={$t('settingsPanel.toggle.menuBarInApp')} hint={$t('settingsPanel.hint.menuBarInApp')}>
+      <MenuBarPreview slot="preview" inApp={$prefs.menuBarInApp} icons={$prefs.menuBarIcons} />
       <ToggleSwitch
         checked={$prefs.menuBarInApp}
         label={$t('settingsPanel.toggle.menuBarInApp')}
@@ -163,6 +188,7 @@
   {/if}
   {#if !isMac || $prefs.menuBarInApp}
     <Row id="menubar-icons" label={$t('settingsPanel.toggle.menuBarIcons')} hint={$t('settingsPanel.hint.menuBarIcons')}>
+      <MenuBarPreview slot="preview" icons={$prefs.menuBarIcons} />
       <ToggleSwitch
         checked={$prefs.menuBarIcons}
         label={$t('settingsPanel.toggle.menuBarIcons')}
@@ -185,12 +211,21 @@
 
 <Card title={$t('settingsPanel.heading.statusBar')}>
   <Row id="status-clock" label={$t('settingsPanel.toggle.statusClock')}>
+    <StatusBarPreview slot="preview" clock={$prefs.statusClock} unread={$prefs.statusUnread} />
     <ToggleSwitch checked={$prefs.statusClock} label={$t('settingsPanel.toggle.statusClock')} on:change={(e) => setStatusClock(e.detail)} />
   </Row>
   <Row id="status-unread" label={$t('settingsPanel.toggle.statusUnread')} hint={$t('settingsPanel.hint.statusUnread')}>
+    <StatusBarPreview slot="preview" clock={$prefs.statusClock} unread={$prefs.statusUnread} />
     <ToggleSwitch checked={$prefs.statusUnread} label={$t('settingsPanel.toggle.statusUnread')} on:change={(e) => setStatusUnread(e.detail)} />
   </Row>
   <Row id="sync-progress-bar" label={$t('settingsPanel.toggle.syncProgressBar')} hint={$t('settingsPanel.hint.syncProgressBarDetail')}>
+    <StatusBarPreview
+      slot="preview"
+      syncing
+      progress={$prefs.syncProgressBar}
+      clock={$prefs.statusClock}
+      unread={$prefs.statusUnread}
+    />
     <span title={$t('settingsPanel.hint.syncProgressBar')}>
       <ToggleSwitch
         checked={$prefs.syncProgressBar}
@@ -203,6 +238,14 @@
 
 <Card title={$t('settingsPanel.category.sidebar')}>
   <Row id="indent-guides" label={$t('settingsPanel.toggle.indentGuides')} hint={$t('settingsPanel.hint.indentGuides')}>
+    <SidebarPreview
+      slot="preview"
+      indentGuides={$prefs.sidebarIndentGuides}
+      accountEmail={$prefs.showAccountEmail}
+      flaggedCount={$prefs.showFlaggedCount}
+      unsynced={$prefs.showUnsyncedFolder}
+      views={$prefs.viewsPlacement as ViewsPlacement}
+    />
     <ToggleSwitch
       checked={$prefs.sidebarIndentGuides}
       label={$t('settingsPanel.toggle.indentGuides')}
@@ -210,6 +253,14 @@
     />
   </Row>
   <Row id="account-email" label={$t('settingsPanel.toggle.showMailboxEmail')}>
+    <SidebarPreview
+      slot="preview"
+      indentGuides={$prefs.sidebarIndentGuides}
+      accountEmail={$prefs.showAccountEmail}
+      flaggedCount={$prefs.showFlaggedCount}
+      unsynced={$prefs.showUnsyncedFolder}
+      views={$prefs.viewsPlacement as ViewsPlacement}
+    />
     <ToggleSwitch
       checked={$prefs.showAccountEmail}
       label={$t('settingsPanel.toggle.showMailboxEmail')}
@@ -217,6 +268,14 @@
     />
   </Row>
   <Row id="flagged-count" label={$t('settingsPanel.toggle.flaggedCount')} hint={$t('settingsPanel.hint.flaggedCount')}>
+    <SidebarPreview
+      slot="preview"
+      indentGuides={$prefs.sidebarIndentGuides}
+      accountEmail={$prefs.showAccountEmail}
+      flaggedCount={$prefs.showFlaggedCount}
+      unsynced={$prefs.showUnsyncedFolder}
+      views="sidebar"
+    />
     <ToggleSwitch
       checked={$prefs.showFlaggedCount}
       label={$t('settingsPanel.toggle.flaggedCount')}
@@ -224,6 +283,7 @@
     />
   </Row>
   <Row id="offline-indicator" label={$t('settingsPanel.toggle.offlineIndicator')} hint={$t('settingsPanel.hint.offlineIndicator')}>
+    <ListPreview slot="preview" />
     <ToggleSwitch
       checked={$prefs.showOfflineIndicator}
       label={$t('settingsPanel.toggle.offlineIndicator')}
@@ -231,6 +291,14 @@
     />
   </Row>
   <Row id="unsynced-folder" label={$t('settingsPanel.toggle.unsyncedFolder')} hint={$t('settingsPanel.hint.unsyncedFolder')}>
+    <SidebarPreview
+      slot="preview"
+      indentGuides={$prefs.sidebarIndentGuides}
+      accountEmail={$prefs.showAccountEmail}
+      flaggedCount={$prefs.showFlaggedCount}
+      unsynced={$prefs.showUnsyncedFolder}
+      views={$prefs.viewsPlacement as ViewsPlacement}
+    />
     <ToggleSwitch
       checked={$prefs.showUnsyncedFolder}
       label={$t('settingsPanel.toggle.unsyncedFolder')}
@@ -238,10 +306,19 @@
     />
   </Row>
   <Row id="views-placement" label={$t('views.setting.label')} hint={$t('views.setting.hint')}>
+    <SidebarPreview
+      slot="preview"
+      indentGuides={$prefs.sidebarIndentGuides}
+      accountEmail={$prefs.showAccountEmail}
+      flaggedCount={$prefs.showFlaggedCount}
+      unsynced={$prefs.showUnsyncedFolder}
+      views={(trialViews ?? $prefs.viewsPlacement) as ViewsPlacement}
+    />
     <Segmented
       label={$t('views.setting.label')}
       value={$prefs.viewsPlacement}
       options={viewsPlacementOptions}
+      on:hover={(e) => (trialViews = e.detail)}
       on:change={(e) => setViewsPlacement(e.detail as ViewsPlacement)}
     />
   </Row>
@@ -260,8 +337,18 @@
     transition: background-color var(--motion-fast) var(--ease-out);
   }
 
-  .action:hover {
+  .action:hover:not(:disabled) {
     background: var(--surface-hover);
+  }
+
+  .inert {
+    opacity: 0.5;
+    pointer-events: none;
+  }
+
+  .action:disabled {
+    opacity: 0.5;
+    cursor: default;
   }
 
   .note {

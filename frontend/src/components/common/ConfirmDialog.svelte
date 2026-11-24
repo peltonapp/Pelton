@@ -12,7 +12,7 @@
 {#if request}
   <Modal title={request.title} hint={request.body} size="small" on:close={() => request.resolve(false)}>
     <svelte:fragment slot="footer">
-      <button type="button" class="btn" on:click={() => request.resolve(false)}>{$t('confirm.cancel')}</button>
+      <button type="button" class="btn" on:click={() => request.resolve(false)}>{request.cancelLabel || $t('confirm.cancel')}</button>
       <button type="button" class="btn primary" class:danger={request.danger} on:click={() => request.resolve(true)}>
         {request.confirmLabel}
       </button>

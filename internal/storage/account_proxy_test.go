@@ -8,6 +8,7 @@ import (
 // Every existing mailbox has to keep following the app-wide proxy, with its
 // contacts and sign-in on the same route as its mail.
 func TestAccountProxyDefaultsToGlobal(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	db, id := newAccountTestDB(t)
 
@@ -21,6 +22,7 @@ func TestAccountProxyDefaultsToGlobal(t *testing.T) {
 }
 
 func TestCreateAccountStoresProxy(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	db, _ := newAccountTestDB(t)
 	want := AccountProxy{Mode: AccountProxyManual, Scheme: "socks5", Host: "10.0.0.1", Port: 1080, Username: "me", OAuthUseGlobal: true}
@@ -41,6 +43,7 @@ func TestCreateAccountStoresProxy(t *testing.T) {
 // The route is set on its own, so a regular edit of the account's servers must
 // not reset it.
 func TestSetAccountProxySurvivesAnUpdate(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	db, id := newAccountTestDB(t)
 	want := AccountProxy{Mode: AccountProxyDirect, ContactsUseGlobal: true}
@@ -67,6 +70,7 @@ func TestSetAccountProxySurvivesAnUpdate(t *testing.T) {
 }
 
 func TestSetAccountProxyUnknownAccount(t *testing.T) {
+	t.Parallel()
 	db, _ := newAccountTestDB(t)
 	if err := db.SetAccountProxy(context.Background(), 9999, AccountProxy{}); err != ErrAccountNotFound {
 		t.Errorf("SetAccountProxy(unknown) error = %v, want ErrAccountNotFound", err)

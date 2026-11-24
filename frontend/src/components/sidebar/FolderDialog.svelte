@@ -4,8 +4,9 @@
   // trip that can fail. deleting a mailbox asks for its name to be typed rather
   // than offering a plain confirm button; emptying the trash only confirms,
   // since the messages in there have already been deleted once.
-  import { fade, scale } from 'svelte/transition'
-  import { IconX, IconAlertTriangle } from '@tabler/icons-svelte'
+  import { IconAlertTriangle } from '@tabler/icons-svelte'
+  import Modal from '../common/Modal.svelte'
+  import '../../theme/controls.css'
   import { folderDialog, closeFolderDialog } from '../../stores/folderdialog'
   import {
     createFolder,
@@ -128,39 +129,12 @@
     }
   }
 
-  function onKeydown(event: KeyboardEvent): void {
-    if (busy) {
-      return
-    }
-    if (event.key === 'Escape') {
-      close()
-    }
-    // enter on a button presses that button; it only submits from elsewhere
-    if (event.key === 'Enter' && canSubmit && !(event.target instanceof HTMLButtonElement)) {
-      void submit()
-    }
-  }
+  $: dirty = request?.mode === 'rename' ? name.trim() !== (request.folder?.name ?? '') : request?.mode === 'create' && name.trim() !== ''
 </script>
 
-<svelte:window on:keydown={request ? onKeydown : undefined} />
-
 {#if request}
-  <!-- svelte-ignore a11y-click-events-have-key-events a11y-no-static-element-interactions -->
-  <div class="backdrop" transition:fade={{ duration: 120 }} on:click={close}></div>
-  <div
-    class="dialog"
-    role="dialog"
-    aria-modal="true"
-    aria-label={title}
-    transition:scale={{ duration: 150, start: 0.94 }}
-  >
-    <header>
-      <h2>{title}</h2>
-      <button type="button" class="close" aria-label={$t('folders.cancel')} on:click={close}>
-        <IconX size={16} stroke={1.8} />
-      </button>
-    </header>
-
+  <Modal {title} size="small" closable={!busy} {dirty} on:close={close}>
+  <form class="body" id="folder-form" on:submit|preventDefault={() => void submit()}>
     {#if request.mode === 'delete'}
       <div class="warn">
         <span class="warn-icon"><IconAlertTriangle size={17} stroke={1.8} /></span>
@@ -211,79 +185,34 @@
         />
       </label>
     {/if}
+  </form>
 
-    <div class="actions">
-      <button type="button" class="cancel" on:click={close}>{$t('folders.cancel')}</button>
-      <button
-        type="button"
-        class="go"
-        class:danger={request.mode === 'delete' || request.mode === 'empty'}
-        disabled={!canSubmit || busy}
-        on:click={submit}
-      >
-        {#if request.mode === 'delete'}
-          {$t('action.delete')}
-        {:else if request.mode === 'empty'}
-          {$t('folders.emptyTrashConfirm')}
-        {:else}
-          {$t('folders.save')}
-        {/if}
-      </button>
-    </div>
-  </div>
+  <svelte:fragment slot="footer">
+    <button type="button" class="cal-btn" disabled={busy} on:click={close}>{$t('folders.cancel')}</button>
+    <button
+      type="submit"
+      form="folder-form"
+      class="cal-btn primary"
+      class:danger={request.mode === 'delete' || request.mode === 'empty'}
+      disabled={!canSubmit || busy}
+    >
+      {#if request.mode === 'delete'}
+        {$t('action.delete')}
+      {:else if request.mode === 'empty'}
+        {$t('folders.emptyTrashConfirm')}
+      {:else}
+        {$t('folders.save')}
+      {/if}
+    </button>
+  </svelte:fragment>
+  </Modal>
 {/if}
 
 <style>
-  .backdrop {
-    position: fixed;
-    inset: 0;
-    z-index: 300;
-    background: var(--scrim, rgba(0, 0, 0, 0.4));
-    backdrop-filter: blur(2px);
-  }
-
-  .dialog {
-    position: fixed;
-    z-index: 301;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
-    width: min(400px, calc(100vw - 2 * var(--space-5)));
-    padding: var(--space-4);
-    border: var(--hairline) solid var(--border-default);
-    border-radius: var(--radius-card);
-    background: var(--surface-overlay);
-    box-shadow: var(--shadow-overlay);
+  .body {
     display: flex;
     flex-direction: column;
     gap: var(--space-4);
-  }
-
-  header {
-    display: flex;
-    align-items: flex-start;
-    justify-content: space-between;
-    gap: var(--space-3);
-  }
-
-  h2 {
-    margin: 0;
-    font-size: var(--fz-title);
-    font-weight: var(--fw-semibold);
-    color: var(--text-primary);
-  }
-
-  .close {
-    border: none;
-    background: transparent;
-    color: var(--text-tertiary);
-    cursor: var(--cursor-action);
-    padding: var(--space-1);
-    border-radius: var(--radius-control);
-  }
-  .close:hover {
-    background: var(--surface-hover);
-    color: var(--text-primary);
   }
 
   .warn {
@@ -368,42 +297,4 @@
     border-color: var(--accent);
   }
 
-  .actions {
-    display: flex;
-    justify-content: flex-end;
-    gap: var(--space-2);
-  }
-
-  .cancel {
-    padding: var(--space-2) var(--space-4);
-    font-size: var(--fz-label);
-    color: var(--text-secondary);
-    background: transparent;
-    border: var(--hairline) solid var(--border-default);
-    border-radius: var(--radius-control);
-    cursor: var(--cursor-action);
-  }
-  .cancel:hover {
-    background: var(--surface-hover);
-    color: var(--text-primary);
-  }
-
-  .go {
-    padding: var(--space-2) var(--space-4);
-    font-size: var(--fz-label);
-    font-weight: var(--fw-medium);
-    color: var(--accent-fg);
-    background: var(--accent);
-    border: none;
-    border-radius: var(--radius-control);
-    cursor: var(--cursor-action);
-  }
-  .go.danger {
-    color: var(--text-inverse);
-    background: var(--danger);
-  }
-  .go:disabled {
-    opacity: 0.5;
-    cursor: default;
-  }
 </style>

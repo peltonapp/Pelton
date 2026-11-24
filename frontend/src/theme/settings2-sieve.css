@@ -1,0 +1,92 @@
+/*
+  settings2-sieve.css holds the controls the out of office and server filter
+  pages share: text fields, the primary button, and the status lines. the pages
+  only exist in the new design's settings screen.
+*/
+
+.screen .sv-input {
+  min-width: 0;
+  height: var(--control-height);
+  padding: 0 var(--space-3);
+  border: var(--hairline) solid var(--border-default);
+  border-radius: var(--radius-control);
+  background: var(--surface-base);
+  color: var(--text-primary);
+  font: inherit;
+  font-size: var(--fz-label);
+  transition: border-color var(--motion-fast) var(--ease-out);
+}
+
+.screen .sv-input:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.screen .sv-input::placeholder {
+  color: var(--text-tertiary);
+}
+
+.screen textarea.sv-input {
+  height: auto;
+  padding: var(--space-2) var(--space-3);
+  line-height: 1.5;
+  resize: vertical;
+}
+
+.screen .s2-btn.primary {
+  border-color: transparent;
+  background: var(--accent);
+  color: var(--accent-fg);
+}
+
+.screen .s2-btn.primary:hover {
+  background: color-mix(in srgb, var(--accent) 88%, var(--text-primary));
+}
+
+.screen .s2-btn.quiet {
+  border-color: transparent;
+  background: transparent;
+  color: var(--text-secondary);
+}
+
+.screen .s2-btn.quiet:hover {
+  background: var(--surface-hover);
+  color: var(--text-primary);
+}
+
+.screen .sv-note {
+  margin: 0;
+  font-size: var(--fz-label);
+  line-height: 1.4;
+  color: var(--text-tertiary);
+}
+
+.screen .sv-problem {
+  margin: 0;
+  font-size: var(--fz-label);
+  line-height: 1.4;
+  color: var(--danger);
+}
+
+.screen .sv-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--space-3);
+  margin-bottom: var(--space-6);
+}
+
+.screen .sv-bar .sv-problem {
+  margin-inline-end: auto;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .screen .sv-input {
+    transition: none;
+  }
+}
+
+:root[data-reduce-motion] .screen .sv-input {
+  transition: none;
+}

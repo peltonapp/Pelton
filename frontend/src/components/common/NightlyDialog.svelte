@@ -7,6 +7,7 @@
   import { fade, scale } from 'svelte/transition'
   import { createEventDispatcher } from 'svelte'
   import { t } from '../../lib/i18n'
+  import { calm } from '../../lib/motion'
   import nightlyLogo from '../../assets/images/icons/pelton-nightly-logo.png'
 
   const dispatch = createEventDispatcher<{ accepted: void }>()
@@ -14,13 +15,13 @@
   let accepted = false
 </script>
 
-<div class="backdrop" transition:fade={{ duration: 120 }}></div>
+<div class="backdrop" transition:fade={{ duration: calm(120) }}></div>
 <div
   class="dialog"
   role="dialog"
   aria-modal="true"
   aria-label={$t('nightly.title')}
-  transition:scale={{ duration: 150, start: 0.94 }}
+  transition:scale={{ duration: calm(150), start: 0.94 }}
 >
   <img class="mark" src={nightlyLogo} alt="" draggable="false" />
   <h2>{$t('nightly.title')}</h2>

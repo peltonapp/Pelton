@@ -28,3 +28,17 @@ func (a *App) DefaultMailClientStatus() DefaultMailStatusDTO {
 func (a *App) SetDefaultMailClient() error {
 	return setDefaultMailHandler()
 }
+
+// DefaultCalendarFileStatus reports whether Pelton opens .ics files. The
+// installers list Pelton as an app that can open them without taking the
+// default; this answers whether the user has made it the one.
+func (a *App) DefaultCalendarFileStatus() DefaultMailStatusDTO {
+	isDefault, known := isDefaultCalendarHandler()
+	return DefaultMailStatusDTO{Known: known, IsDefault: isDefault}
+}
+
+// SetDefaultCalendarFileHandler asks the OS to open .ics files with Pelton,
+// the same way SetDefaultMailClient does for mailto links.
+func (a *App) SetDefaultCalendarFileHandler() error {
+	return setDefaultCalendarHandler()
+}

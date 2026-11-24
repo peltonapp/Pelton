@@ -6,6 +6,9 @@ const entries: SettingsIndexEntry[] = [
   { page: 'list', id: 'snippet', labelKey: 'settingsPanel.toggle.showMessagePreview', keywords: 'preview snippet excerpt text body' },
   { page: 'list', id: 'preview-lines', labelKey: 'settingsPanel.label.previewLines', keywords: 'preview snippet lines one two three' },
   { page: 'list', id: 'threaded-list', labelKey: 'list.threaded.label', keywords: 'threads threaded conversation group replies thread view' },
+  { page: 'list', id: 'after-move', labelKey: 'list.afterMove.label', keywords: 'done archive delete move next newer older advance auto inbox zero triage' },
+  { page: 'list', id: 'split-inbox', labelKey: 'settings.list.splitInbox', keywords: 'split inbox tabs important newsletters notifications other superhuman' },
+  { page: 'list', id: 'split-tabs', labelKey: 'settings.list.splitTabs', keywords: 'split inbox tabs order saved views' },
   { page: 'list', id: 'flag-highlight', labelKey: 'settingsPanel.label.flaggedHighlight', keywords: 'flag flagged highlight bar icon star mark' },
   { page: 'list', id: 'date-time', labelKey: 'settingsPanel.dateTime', keywords: 'date time timestamp show hide' },
   { page: 'list', id: 'multi-select', labelKey: 'settingsPanel.toggle.multiSelect', keywords: 'select multiple bulk checkbox' },
@@ -17,9 +20,13 @@ const entries: SettingsIndexEntry[] = [
   { page: 'list', id: 'search-sort-filtered', labelKey: 'settingsPanel.searchSort.filtered', keywords: 'search sort order filter relevance newest oldest' },
   { page: 'list', id: 'avatar-source', labelKey: 'settingsPanel.label.senderPhotos', keywords: 'avatar gravatar bimi sender photos logo generated' },
   { page: 'list', id: 'avatar-style', labelKey: 'settingsPanel.label.generatedStyle', keywords: 'avatar style initials mono pixel geometric generated' },
+  { page: 'list', id: 'row-actions', labelKey: 'rowActions.toggle', keywords: 'hover quick actions buttons row archive delete done snooze pin' },
+  { page: 'list', id: 'row-action-list', labelKey: 'rowActions.choose', keywords: 'hover quick actions buttons order reorder choose' },
   { page: 'list', id: 'swipe-enabled', labelKey: 'settingsPanel.toggle.swipeEnabled', keywords: 'swipe gesture trackpad' },
-  { page: 'list', id: 'swipe-left', labelKey: 'settingsPanel.label.swipeLeft', keywords: 'swipe left gesture trackpad action' },
-  { page: 'list', id: 'swipe-right', labelKey: 'settingsPanel.label.swipeRight', keywords: 'swipe right gesture trackpad action' },
+  { page: 'list', id: 'swipe-left-short', labelKey: 'swipe.leftShort', keywords: 'swipe left short gesture trackpad action' },
+  { page: 'list', id: 'swipe-left-long', labelKey: 'swipe.leftLong', keywords: 'swipe left long gesture trackpad action' },
+  { page: 'list', id: 'swipe-right-short', labelKey: 'swipe.rightShort', keywords: 'swipe right short gesture trackpad action' },
+  { page: 'list', id: 'swipe-right-long', labelKey: 'swipe.rightLong', keywords: 'swipe right long gesture trackpad action' },
 ]
 
 export default entries

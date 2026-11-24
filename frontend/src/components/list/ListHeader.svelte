@@ -17,6 +17,13 @@
   import SortOptions from './SortOptions.svelte'
   import { resetQuickFilter } from '../../stores/quickfilter'
   import { clearSearch } from '../../stores/search'
+  import { currentMessageItems, placed, runAt } from '../../lib/scriptplacements'
+  import { placedLabel } from '../../lib/scriptmenu'
+  import { scriptIcon } from '../../lib/scripticons'
+  import { scriptEntryName } from '../../lib/scriptmark'
+  import ScriptMark from '../common/ScriptMark.svelte'
+
+  const listScripts = placed('toolbar.list')
 
   /** The folder, view or results name. */
   export let title: string
@@ -94,6 +101,18 @@
       {/if}
     </span>
   </div>
+  {#each $listScripts as script (script.scriptId)}
+    <button
+      type="button"
+      class="icon-btn script"
+      aria-label={scriptEntryName(placedLabel(script), script.name, $t)}
+      use:tip={{ text: scriptEntryName(placedLabel(script), script.name, $t), side: 'bottom' }}
+      on:click={() => runAt('toolbar.list', script.scriptId, currentMessageItems())}
+    >
+      <Ph svg={scriptIcon(script.options.icon)} size={15} />
+      <ScriptMark badge />
+    </button>
+  {/each}
   <button
     type="button"
     class="icon-btn"
@@ -222,6 +241,10 @@
   .icon-btn:hover {
     background: var(--surface-hover);
     color: var(--text-primary);
+  }
+
+  .icon-btn.script {
+    position: relative;
   }
 
   :global(:root[dir='rtl']) .back {

@@ -15,7 +15,7 @@ vi.mock('./api', async (importOriginal) => ({
 import { spamState, toggleSpam } from './messageactions'
 import { sidebar } from '../stores/accounts'
 import { openMessageId } from '../stores/selection'
-import { triggerUndoArchive } from '../stores/undoarchive'
+import { clearHistory, undoLatest } from '../stores/undohistory'
 import { ready } from './async'
 import type { Folder, MessageSummary } from './types'
 
@@ -38,6 +38,7 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.clearAllMocks()
+  clearHistory()
   openMessageId.set(null)
 })
 
@@ -66,7 +67,7 @@ describe('toggleSpam', () => {
     expect(api.markNotSpam).not.toHaveBeenCalled()
     expect(get(openMessageId)).toBeNull()
 
-    expect(triggerUndoArchive()).toBe(true)
+    expect(await undoLatest()).toBe(true)
     await vi.waitFor(() => expect(api.restoreMessage).toHaveBeenCalledWith('<a@x>', 3, 2))
   })
 

@@ -36,6 +36,9 @@
     {#if drag.items.length > 1}
       <span class="count">{drag.items.length}</span>
     {/if}
+    {#if drag.over && drag.hint}
+      <span class="hint">{drag.hint}</span>
+    {/if}
   </div>
 {/if}
 
@@ -98,6 +101,31 @@
   .subject {
     font-size: var(--fz-meta);
     color: var(--text-secondary);
+  }
+
+  /* what a drop here does, under the stack: one line, plus how Shift changes
+     it, updated as the key goes down and up. */
+  .hint {
+    position: absolute;
+    top: calc(100% + var(--space-3));
+    inset-inline-start: 0;
+    max-width: calc(var(--cal-popover-width) * 1.2);
+    padding: var(--space-1) var(--space-2);
+    border-radius: var(--radius-control);
+    background: var(--surface-overlay);
+    border: var(--hairline) solid var(--border-default);
+    box-shadow: var(--shadow-overlay);
+    font-size: var(--fz-meta);
+    line-height: 1.4;
+    color: var(--text-secondary);
+    white-space: pre-line;
+    animation: hint-in var(--motion-fast) var(--ease-out);
+  }
+
+  @keyframes hint-in {
+    from {
+      opacity: 0;
+    }
   }
 
   .count {

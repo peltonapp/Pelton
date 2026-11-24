@@ -6,34 +6,52 @@
   // Below the cards sits the quick reply, and a floating action bar stays at
   // the bottom of the pane. With the list not grouped the conversation is the
   // one message.
-  import { createEventDispatcher, tick } from 'svelte'
+  import { createEventDispatcher, onDestroy, onMount, tick } from 'svelte'
+  import readingIcon from '@phosphor-icons/core/assets/duotone/book-open-text-duotone.svg?raw'
+  import resetIcon from '@phosphor-icons/core/assets/duotone/arrow-counter-clockwise-duotone.svg?raw'
+  import closeIcon from '@phosphor-icons/core/assets/regular/x.svg?raw'
+  import { choiceFor, ensureSenderReading, rememberFontSize, senderReading } from '../../stores/senderreading'
+  import { closeReadingView, openReadingView } from '../../stores/readingview'
+  import { bindings } from '../../stores/shortcuts'
+  import { tip } from '../../lib/tip'
+  import { displayName } from '../../lib/format'
+  import type { ShortcutAction } from '../../lib/shortcuts'
   import narrowIcon from '@phosphor-icons/core/assets/duotone/arrows-in-line-horizontal-duotone.svg?raw'
   import mediumIcon from '@phosphor-icons/core/assets/duotone/text-align-justify-duotone.svg?raw'
   import fullIcon from '@phosphor-icons/core/assets/duotone/arrows-out-line-horizontal-duotone.svg?raw'
   import smallerIcon from '@phosphor-icons/core/assets/duotone/minus-duotone.svg?raw'
   import largerIcon from '@phosphor-icons/core/assets/duotone/plus-duotone.svg?raw'
+  import panelIcon from '@phosphor-icons/core/assets/duotone/sidebar-simple-duotone.svg?raw'
   import Ph from '../common/Ph.svelte'
   import ConversationCard from './ConversationCard.svelte'
   import QuickReply from './QuickReply.svelte'
   import ReaderActionBar from './ReaderActionBar.svelte'
-  import { prefs, setMessageFontSize, setReaderWidth } from '../../stores/prefs'
+  import { prefs, setReaderWidth } from '../../stores/prefs'
   import { threadedOn, threadMessages, cardDetails, loadThread, loadCard } from '../../stores/threads'
-  import { patchInList } from '../../stores/messages'
+  import { messageList, patchInList, rowPinned } from '../../stores/messages'
+  import NoteCard from './NoteCard.svelte'
+  import ProjectHint from '../projects/ProjectHint.svelte'
+  import NoteMentions from '../notes/NoteMentions.svelte'
   import { setSeen } from '../../lib/api'
   import { sameMessage } from '../../lib/threadrows'
   import { errorMessage, toastError } from '../../stores/toast'
-  import { t } from '../../lib/i18n'
+  import { t, shortcutLabel } from '../../lib/i18n'
   import type { MessageDetail, MessageSummary, ReaderWidth, ThreadMessage } from '../../lib/types'
 
   /** The message opened from the list, whose conversation is shown. */
   export let detail: MessageDetail
+  /** Whether the sender panel is on, for the header button's state. */
+  export let senderPanel = false
+  /** Shows the conversation as the reading view: roomy, with its controls tucked away. */
+  export let reading = false
 
   /** What a reader action is asked to do, and to which message. */
-  type Action = 'reply' | 'replyAll' | 'forward' | 'archive' | 'delete' | 'reload'
+  type Action = 'reply' | 'replyAll' | 'forward' | 'archive' | 'delete' | 'reload' | 'pin' | 'mute' | 'note'
 
   const dispatch = createEventDispatcher<{
     action: { kind: Action; message: MessageDetail }
     more: { message: MessageDetail; x: number; y: number }
+    toggleSender: void
   }>()
 
   // the message type sizes the reading pane offers, smallest to largest.
@@ -206,13 +224,66 @@
     }
   }
 
-  $: fontIndex = Math.max(0, fontSizes.indexOf($prefs.messageFontSize))
+  // the pin and mute state the action bar shows, from the list row when there
+  // is one, since a conversation's pin lives there.
+  $: listRow = $messageList.data?.items.find((m) => m.id === detail.id)
+  $: pinned = rowPinned(listRow ?? detail, $messageList.data?.threads)
+  $: muted = !!(listRow?.muted ?? detail.muted)
+
+  // the text size steps are kept per sender of the opened message: a step
+  // the sender's mail was set to wins over the global size, and stepping back
+  // to the global size forgets it.
+  onMount(() => void ensureSenderReading())
+  $: senderSize = choiceFor($senderReading, detail.fromAddress).fontSize
+  $: textSize = senderSize || $prefs.messageFontSize
+  $: fontIndex = nearestStep(textSize)
+  $: senderName = displayName(detail.fromName, detail.fromAddress)
+
+  function nearestStep(size: number): number {
+    let best = 0
+    fontSizes.forEach((s, i) => {
+      if (Math.abs(s - size) < Math.abs(fontSizes[best] - size)) {
+        best = i
+      }
+    })
+    return best
+  }
 
   function stepFont(by: number): void {
     const next = fontSizes[Math.min(fontSizes.length - 1, Math.max(0, fontIndex + by))]
-    if (next !== $prefs.messageFontSize) {
-      setMessageFontSize(next)
+    if (next !== textSize) {
+      void rememberFontSize(detail.fromAddress, next === $prefs.messageFontSize ? 0 : next)
     }
+  }
+
+  function resetFont(): void {
+    void rememberFontSize(detail.fromAddress, 0)
+  }
+
+  // the reading view keeps its controls out of sight until the pointer moves
+  // or the keyboard is used, and puts them away again after a quiet moment.
+  const chromeIdle = 1800
+  let chromeShown = true
+  let chromeTimer: ReturnType<typeof setTimeout> | undefined
+
+  function wake(): void {
+    chromeShown = true
+    clearTimeout(chromeTimer)
+    chromeTimer = setTimeout(() => (chromeShown = false), chromeIdle)
+  }
+
+  $: if (reading) {
+    wake()
+  }
+
+  onDestroy(() => clearTimeout(chromeTimer))
+
+  $: quiet = reading && !chromeShown
+  $: readingCombo = keysFor('reading-view', $bindings)
+
+  function keysFor(action: ShortcutAction, map: Record<string, string>): string | undefined {
+    const combo = map[action]
+    return combo ? shortcutLabel(combo) : undefined
   }
 
   $: widths = [
@@ -239,7 +310,19 @@
   }
 </script>
 
-<div class="scroll selectable" tabindex="-1" bind:this={scrollEl}>
+<!-- svelte-ignore a11y-no-noninteractive-tabindex a11y-no-noninteractive-element-interactions -->
+<div
+  class="scroll selectable"
+  class:reading
+  class:quiet
+  tabindex="0"
+  role="region"
+  aria-label={subject}
+  bind:this={scrollEl}
+  on:pointermove={reading ? wake : undefined}
+  on:keydown={reading ? wake : undefined}
+  on:focusin={reading ? wake : undefined}
+>
   <div class="column" data-width={$prefs.readerWidth}>
     <header class="conv-head">
       <div class="title">
@@ -248,7 +331,7 @@
           <span class="count">{$t('reader.count').replace('{count}', String(messages.length))}</span>
         {/if}
       </div>
-      <div class="view" role="group" aria-label={$t('reader.view')}>
+      <div class="view chrome" role="group" aria-label={$t('reader.view')}>
         <button
           type="button"
           class="tool"
@@ -259,7 +342,7 @@
         >
           <Ph svg={smallerIcon} size={14} />
         </button>
-        <span class="aa" aria-hidden="true">Aa</span>
+        <span class="aa" class:kept={senderSize > 0} title={senderSize > 0 ? $t('reader.size.remembered') : undefined}>Aa</span>
         <button
           type="button"
           class="tool"
@@ -270,6 +353,17 @@
         >
           <Ph svg={largerIcon} size={14} />
         </button>
+        {#if senderSize > 0}
+          <button
+            type="button"
+            class="tool"
+            aria-label={$t('reader.size.reset').replace('{who}', senderName)}
+            title={$t('reader.size.reset').replace('{who}', senderName)}
+            on:click={resetFont}
+          >
+            <Ph svg={resetIcon} size={14} />
+          </button>
+        {/if}
         <span class="sep" aria-hidden="true"></span>
         <div class="widths" role="radiogroup" aria-label={$t('reader.width')}>
           {#each widths as w (w.key)}
@@ -287,7 +381,47 @@
           {/each}
         </div>
       </div>
+      {#if reading}
+        <button
+          type="button"
+          class="tool panel-toggle chrome"
+          aria-label={$t('reading.close')}
+          use:tip={{ text: $t('reading.close'), shortcut: 'Esc', side: 'bottom' }}
+          on:click={closeReadingView}
+        >
+          <Ph svg={closeIcon} size={16} />
+        </button>
+      {:else}
+        <button
+          type="button"
+          class="tool panel-toggle"
+          aria-label={$t('reading.open')}
+          use:tip={{ text: $t('reading.open'), shortcut: readingCombo, side: 'bottom' }}
+          on:click={openReadingView}
+        >
+          <Ph svg={readingIcon} size={16} />
+        </button>
+        <button
+          type="button"
+          class="tool panel-toggle mirrored"
+          aria-pressed={senderPanel}
+          aria-label={senderPanel ? $t('senderPanel.hide') : $t('senderPanel.show')}
+          title={senderPanel ? $t('senderPanel.hide') : $t('senderPanel.show')}
+          on:click={() => dispatch('toggleSender')}
+        >
+          <Ph svg={panelIcon} size={16} />
+        </button>
+      {/if}
     </header>
+
+    {#if !reading}
+      <NoteCard messageId={detail.id} {threadId} />
+      <ProjectHint {detail} />
+
+      <div class="vault-notes">
+        <NoteMentions about={{ kind: 'mail', id: detail.messageId.replace(/^<|>$/g, ''), title: detail.subject }} alsoKinds={['conversation']} />
+      </div>
+    {/if}
 
     {#if threadError}
       <p class="thread-error">{threadError}</p>
@@ -311,6 +445,7 @@
               closable={messages.length > 1}
               fromMe={m.fromMe}
               error={cardErrors.get(m.id) ?? ''}
+              roomy={reading}
               on:toggle={() => toggle(m)}
               on:reply={() => act('reply', detailOf(m, $cardDetails))}
               on:more={(e) => more(detailOf(m, $cardDetails), e.detail)}
@@ -321,10 +456,22 @@
       {/each}
     </div>
 
-    <QuickReply detail={newestDetail} />
+    {#if !reading}
+      <QuickReply detail={newestDetail} />
+    {/if}
   </div>
 
   <ReaderActionBar
+    hidden={quiet}
+    messageId={focusDetail?.id ?? 0}
+    headerId={focusDetail?.messageId ?? ''}
+    {pinned}
+    {muted}
+    conversation={threadId !== 0}
+    canMute={detail.threadId !== 0}
+    on:pin={() => act('pin', detail)}
+    on:mute={() => act('mute', detail)}
+    on:note={() => act('note', detail)}
     on:reply={() => act('reply', focusDetail)}
     on:replyAll={() => act('replyAll', focusDetail)}
     on:forward={() => act('forward', focusDetail)}
@@ -338,6 +485,7 @@
   .scroll {
     flex: 1;
     min-height: 0;
+    min-width: 0;
     overflow-y: auto;
     display: flex;
     flex-direction: column;
@@ -348,7 +496,10 @@
     outline: none;
   }
 
+  /* the column takes the room a short conversation leaves, which keeps the
+     action bar at the foot of the pane instead of under the last card. */
   .column {
+    flex: 1 0 auto;
     width: 100%;
     margin-inline: auto;
     padding: var(--pane-pad) var(--pane-pad) calc(var(--control-height) * 2 + var(--space-6));
@@ -364,13 +515,14 @@
 
   .conv-head {
     display: flex;
+    flex-wrap: wrap;
     align-items: flex-start;
-    gap: var(--space-4);
+    gap: var(--space-2) var(--space-4);
     margin-bottom: var(--space-4);
   }
 
   .title {
-    flex: 1;
+    flex: 1 1 16rem;
     min-width: 0;
     display: flex;
     flex-direction: column;
@@ -432,6 +584,64 @@
     opacity: 0.4;
   }
 
+  .panel-toggle {
+    flex-shrink: 0;
+    align-self: center;
+    border: var(--hairline) solid var(--border-default);
+    padding: var(--space-2);
+  }
+
+  /* the panel opens on the inline end, so the glyph's bar sits there too. */
+  .panel-toggle.mirrored :global(svg) {
+    transform: scaleX(-1);
+  }
+
+  :global([dir='rtl']) .panel-toggle.mirrored :global(svg) {
+    transform: none;
+  }
+
+  /* the reading view: a comfortable measure with wide margins, the cards'
+     frames let go of, and the controls faded out until they are wanted. */
+  .scroll.reading .column {
+    padding-top: clamp(var(--pane-pad), 6%, var(--reading-margin));
+    padding-inline: clamp(var(--pane-pad), 8%, var(--reading-margin));
+  }
+
+  .scroll.reading .column[data-width='full'] {
+    max-width: calc(var(--reading-measure) + 2 * var(--reading-margin));
+  }
+
+  .scroll.reading .column[data-width='narrow'] {
+    max-width: calc(var(--reader-width-narrow) + 2 * var(--reading-margin));
+  }
+
+  .scroll.reading .column[data-width='medium'] {
+    max-width: calc(var(--reader-width-medium) + 2 * var(--reading-margin));
+  }
+
+  .scroll.reading .conv-head {
+    margin-bottom: var(--space-6);
+  }
+
+  .scroll.reading .cards :global(.card.open) {
+    border-color: transparent;
+    background: transparent;
+  }
+
+  .chrome {
+    transition: opacity var(--motion-base) var(--ease-out);
+  }
+
+  .scroll.quiet .chrome {
+    opacity: 0;
+    pointer-events: none;
+  }
+
+  .aa.kept {
+    color: var(--accent);
+  }
+
+  .tool[aria-pressed='true'],
   .tool[aria-checked='true'] {
     background: var(--selection-bg);
     color: var(--text-primary);
@@ -447,6 +657,10 @@
     align-self: stretch;
     margin-inline: var(--space-1);
     background: var(--border-default);
+  }
+
+  .vault-notes {
+    margin: 0 0 var(--space-3);
   }
 
   .thread-error {

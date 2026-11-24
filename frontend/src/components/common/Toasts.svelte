@@ -5,9 +5,11 @@
   // ephemeral ui state.
   import { fly, fade } from 'svelte/transition'
   import { IconCircleCheck, IconAlertCircle, IconInfoCircle, IconX } from '@tabler/icons-svelte'
-  import { toasts, dismiss } from '../../stores/toast'
+  import { toasts, dismiss, pauseToast, resumeToast, type Toast } from '../../stores/toast'
+  import PieProgress from './PieProgress.svelte'
   import { prefs } from '../../stores/prefs'
   import { t } from '../../lib/i18n'
+  import { calm } from '../../lib/motion'
   import type { ToastKind } from '../../stores/toast'
   import type { ToastPosition } from '../../lib/types'
 
@@ -25,23 +27,63 @@
   function iconFor(kind: ToastKind) {
     return icons[kind]
   }
+
+  // each toast is read out once, when it arrives: a countdown ticking in its
+  // text stays quiet. errors interrupt, everything else waits its turn.
+  let said = new Set<number>()
+  let politeText = ''
+  let alertText = ''
+  $: announce($toasts)
+
+  function announce(list: Toast[]): void {
+    const live = new Set(list.map((x) => x.id))
+    for (const toast of list) {
+      if (said.has(toast.id)) {
+        continue
+      }
+      const actions = [toast.action, ...(toast.more ?? [])].filter(Boolean).map((a) => a!.label)
+      const text = [toast.message, ...actions].join('. ')
+      if (toast.kind === 'error') {
+        alertText = text
+      } else {
+        politeText = text
+      }
+    }
+    said = live
+  }
+
+  // the new design holds a toast while the pointer or focus rests on it.
+  $: holds = $prefs.design !== 'classic'
 </script>
 
-<div class={`stack ${position}`} aria-live="polite">
+<div class="sr-only" role="status">{politeText}</div>
+<div class="sr-only" role="alert">{alertText}</div>
+<div class={`stack ${position}`}>
   {#each $toasts as toast (toast.id)}
+    <!-- svelte-ignore a11y-no-static-element-interactions -->
     <div
       class={`toast ${toast.kind}`}
-      role="status"
-      in:fly={{ y: flyY, duration: 200 }}
-      out:fade={{ duration: 150 }}
+      in:fly={{ y: flyY, duration: calm(200) }}
+      out:fade={{ duration: calm(150) }}
+      on:mouseenter={() => holds && pauseToast(toast.id)}
+      on:mouseleave={() => holds && resumeToast(toast.id)}
+      on:focusin={() => holds && pauseToast(toast.id)}
+      on:focusout={() => holds && resumeToast(toast.id)}
     >
       <span class="icon" aria-hidden="true">
-        <svelte:component this={iconFor(toast.kind)} size={17} stroke={1.7} />
+        {#if toast.busy}
+          <PieProgress size={15} label={toast.message} />
+        {:else}
+          <svelte:component this={iconFor(toast.kind)} size={17} stroke={1.7} />
+        {/if}
       </span>
       <span class="message">{toast.message}</span>
       {#if toast.action}
         <button type="button" class="action" on:click={toast.action.run}>{toast.action.label}</button>
       {/if}
+      {#each toast.more ?? [] as extra (extra.label)}
+        <button type="button" class="action" on:click={extra.run}>{extra.label}</button>
+      {/each}
       <button type="button" class="close" aria-label={$t('common.toasts.dismiss')} on:click={() => dismiss(toast.id)}>
         <IconX size={14} stroke={1.8} />
       </button>

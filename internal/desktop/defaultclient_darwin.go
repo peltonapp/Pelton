@@ -35,6 +35,27 @@ static int peltonIsMailtoDefault(const char *bundleID) {
     CFRelease(bid);
     return eq ? 1 : 0;
 }
+// peltonSetICSDefault makes bundleID the default app for .ics files.
+static int peltonSetICSDefault(const char *bundleID) {
+    CFStringRef bid = CFStringCreateWithCString(NULL, bundleID, kCFStringEncodingUTF8);
+    OSStatus st = LSSetDefaultRoleHandlerForContentType(CFSTR("com.apple.ical.ics"), kLSRolesAll, bid);
+    CFRelease(bid);
+    return (int)st;
+}
+
+// peltonIsICSDefault returns 1 when bundleID opens .ics files, 0 when another
+// app does, and -1 when it cannot be determined.
+static int peltonIsICSDefault(const char *bundleID) {
+    CFStringRef current = LSCopyDefaultRoleHandlerForContentType(CFSTR("com.apple.ical.ics"), kLSRolesAll);
+    if (current == NULL) {
+        return -1;
+    }
+    CFStringRef bid = CFStringCreateWithCString(NULL, bundleID, kCFStringEncodingUTF8);
+    Boolean eq = CFStringCompare(current, bid, kCFCompareCaseInsensitive) == kCFCompareEqualTo;
+    CFRelease(current);
+    CFRelease(bid);
+    return eq ? 1 : 0;
+}
 */
 import "C"
 
@@ -57,6 +78,28 @@ func isDefaultMailHandler() (isDefault bool, known bool) {
 	default:
 		return false, false
 	}
+}
+
+func isDefaultCalendarHandler() (isDefault bool, known bool) {
+	cid := C.CString(peltonBundleID)
+	defer C.free(unsafe.Pointer(cid))
+	switch C.peltonIsICSDefault(cid) {
+	case 1:
+		return true, true
+	case 0:
+		return false, true
+	default:
+		return false, false
+	}
+}
+
+func setDefaultCalendarHandler() error {
+	cid := C.CString(peltonBundleID)
+	defer C.free(unsafe.Pointer(cid))
+	if st := C.peltonSetICSDefault(cid); st != 0 {
+		return fmt.Errorf("open .ics files with Pelton: LSSetDefaultRoleHandlerForContentType OSStatus %d", int(st))
+	}
+	return nil
 }
 
 func setDefaultMailHandler() error {

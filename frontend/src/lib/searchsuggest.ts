@@ -116,7 +116,11 @@ export function suggest(input: SuggestInput): Suggestion[] {
     case 'in':
       return folderMatches(input.folders, partial, 8)
     case 'has':
-      return 'attachment'.startsWith(lower) ? [{ kind: 'chip', group: 'values', chip: { field: 'has', value: 'attachment' } }] : []
+      return (['attachment', 'note'] as const)
+        .filter((v) => v.startsWith(lower))
+        .map((value) => ({ kind: 'chip' as const, group: 'values' as const, chip: { field: 'has' as const, value } }))
+    case 'note':
+      return partial === '' ? [] : [{ kind: 'chip', group: 'values', chip: { field: 'note', value: partial } }]
     case 'is':
       return (['unread', 'flagged'] as const)
         .filter((v) => v.startsWith(lower))

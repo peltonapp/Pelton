@@ -1,6 +1,7 @@
 <script lang="ts">
   // the Composing page: which editor a new message starts in, how recipients
-  // are entered, signature placement, vim keys, and the undo-send window.
+  // are entered, signature placement, vim keys, quick compose, the undo-send
+  // window, and what sending a reply does besides.
   import Card from '../ui/Card.svelte'
   import Row from '../ui/Row.svelte'
   import ChoiceCards from '../ui/ChoiceCards.svelte'
@@ -8,18 +9,31 @@
   import ToggleSwitch from '../../common/ToggleSwitch.svelte'
   import Select from '../../common/Select.svelte'
   import VimPreview from '../skeletons/VimPreview.svelte'
+  import MarkdownPreview from '../skeletons/MarkdownPreview.svelte'
+  import CaretPreview from '../skeletons/CaretPreview.svelte'
+  import AutocompletePreview from '../skeletons/AutocompletePreview.svelte'
+  import RecipientsPreview from '../skeletons/RecipientsPreview.svelte'
+  import SignaturePreview from '../skeletons/SignaturePreview.svelte'
+  import SendDelayPreview from '../skeletons/SendDelayPreview.svelte'
   import {
     prefs,
     setComposeOpenIn,
     setComposeAutocomplete,
     setComposeChips,
     setComposeMarkdown,
+    setSmoothCaret,
     setSignatureAboveQuote,
     setComposeVimMode,
     setSendDelay,
+    setWarnMissingAttachment,
+    setWarnEmptySubject,
+    setAfterReplySend,
+    setSendRemindAfter,
   } from '../../../stores/prefs'
+  import SendCheckSkeleton from '../skeletons/SendCheckSkeleton.svelte'
+  import QuickComposeRows from '../QuickComposeRows.svelte'
   import { t } from '../../../lib/i18n'
-  import type { ComposeOpenIn } from '../../../lib/types'
+  import type { AfterReplySend, ComposeOpenIn, FollowUpInterval } from '../../../lib/types'
 
   $: openInOptions = [
     { key: 'window', label: $t('composing.openIn.window'), hint: $t('composing.openIn.window.hint') },
@@ -33,6 +47,17 @@
     { value: '10', label: $t('settingsPanel.unit.s10') },
     { value: '30', label: $t('settingsPanel.unit.s30') },
     { value: '60', label: $t('settingsPanel.unit.s60') },
+  ]
+
+  $: afterReplyOptions = [
+    { value: 'nothing', label: $t('sendVariant.setting.nothing') },
+    { value: 'archive', label: $t('sendVariant.setting.archive') },
+  ]
+
+  $: remindOptions = [
+    { value: 'tomorrow', label: $t('followUp.tomorrow') },
+    { value: 'threeDays', label: $t('followUp.threeDays') },
+    { value: 'week', label: $t('followUp.week') },
   ]
 
   $: chipsHint = $prefs.composeChips
@@ -54,9 +79,15 @@
     </ChoiceCards>
   </Row>
   <Row id="compose-markdown" label={$t('composing.markdown')} hint={$t('composing.markdown.hint')}>
+    <MarkdownPreview slot="preview" on={$prefs.composeMarkdown} />
     <ToggleSwitch checked={$prefs.composeMarkdown} label={$t('composing.markdown')} on:change={(e) => setComposeMarkdown(e.detail)} />
   </Row>
+  <Row id="smooth-caret" label={$t('composing.smoothCaret')} hint={$t('composing.smoothCaret.hint')}>
+    <CaretPreview slot="preview" smooth={$prefs.smoothCaret} />
+    <ToggleSwitch checked={$prefs.smoothCaret} label={$t('composing.smoothCaret')} on:change={(e) => setSmoothCaret(e.detail)} />
+  </Row>
   <Row id="autocomplete" label={$t('settingsPanel.toggle.autocomplete')} hint={$t('settingsPanel.hint.autocomplete')}>
+    <AutocompletePreview slot="preview" enabled={$prefs.composeAutocomplete} />
     <ToggleSwitch
       checked={$prefs.composeAutocomplete}
       label={$t('settingsPanel.toggle.autocomplete')}
@@ -64,6 +95,7 @@
     />
   </Row>
   <Row id="chips" label={$t('settingsPanel.toggle.chipRecipients')} hint={chipsHint}>
+    <RecipientsPreview slot="preview" chips={$prefs.composeChips} />
     <ToggleSwitch
       checked={$prefs.composeChips}
       label={$t('settingsPanel.toggle.chipRecipients')}
@@ -71,6 +103,7 @@
     />
   </Row>
   <Row id="signature-above-quote" label={$t('settingsPanel.toggle.signatureAboveQuote')}>
+    <SignaturePreview slot="preview" above={$prefs.signatureAboveQuote} />
     <ToggleSwitch
       checked={$prefs.signatureAboveQuote}
       label={$t('settingsPanel.toggle.signatureAboveQuote')}
@@ -94,13 +127,50 @@
   </Row>
 </Card>
 
+<Card title={$t('quickCompose.settings.title')}>
+  <QuickComposeRows />
+</Card>
+
 <Card title={$t('settingsPanel.category.sending')}>
   <Row id="undo-send" label={$t('settingsPanel.label.undoSendWindow')} hint={$t('settingsPanel.hint.undoSend')}>
+    <SendDelayPreview slot="preview" seconds={$prefs.sendDelaySeconds} />
     <Select
       value={String($prefs.sendDelaySeconds)}
       ariaLabel={$t('settingsPanel.label.undoSendWindow')}
       items={sendDelays}
       on:change={(e) => setSendDelay(Number(e.detail))}
+    />
+  </Row>
+  <Row id="after-reply-send" label={$t('sendVariant.setting.afterReply')} hint={$t('sendVariant.setting.afterReplyHint')}>
+    <Select
+      value={$prefs.afterReplySend}
+      ariaLabel={$t('sendVariant.setting.afterReply')}
+      items={afterReplyOptions}
+      on:change={(e) => setAfterReplySend(e.detail as AfterReplySend)}
+    />
+  </Row>
+  <Row id="send-remind-after" label={$t('sendVariant.setting.remindAfter')} hint={$t('sendVariant.setting.remindAfterHint')}>
+    <Select
+      value={$prefs.sendRemindAfter}
+      ariaLabel={$t('sendVariant.setting.remindAfter')}
+      items={remindOptions}
+      on:change={(e) => setSendRemindAfter(e.detail as FollowUpInterval)}
+    />
+  </Row>
+  <Row id="warn-missing-attachment" label={$t('sendCheck.setting.attachment')} hint={$t('sendCheck.setting.attachmentHint')}>
+    <SendCheckSkeleton slot="preview" issue="missingAttachment" />
+    <ToggleSwitch
+      checked={$prefs.warnMissingAttachment}
+      label={$t('sendCheck.setting.attachment')}
+      on:change={(e) => setWarnMissingAttachment(e.detail)}
+    />
+  </Row>
+  <Row id="warn-empty-subject" label={$t('sendCheck.setting.subject')} hint={$t('sendCheck.setting.subjectHint')}>
+    <SendCheckSkeleton slot="preview" issue="emptySubject" />
+    <ToggleSwitch
+      checked={$prefs.warnEmptySubject}
+      label={$t('sendCheck.setting.subject')}
+      on:change={(e) => setWarnEmptySubject(e.detail)}
     />
   </Row>
 </Card>

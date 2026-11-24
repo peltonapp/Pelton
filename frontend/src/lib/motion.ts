@@ -7,6 +7,15 @@
 export const motion = { fast: 110, base: 170, slow: 260 } as const
 
 /**
+ * Returns the duration of a transition both designs share: zero in the new
+ * design when reduced motion is asked for, the given one otherwise.
+ */
+export function calm(ms: number): number {
+  const root = document.documentElement
+  return root.dataset.design === 'classic' ? ms : dur(ms)
+}
+
+/**
  * Returns the duration to animate with now: the given one in the new design,
  * zero in the classic design or with reduced motion on.
  */

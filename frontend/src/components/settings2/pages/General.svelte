@@ -7,6 +7,9 @@
   import Card from '../ui/Card.svelte'
   import Row from '../ui/Row.svelte'
   import Segmented from '../ui/Segmented.svelte'
+  import TimeFormatPreview from '../skeletons/TimeFormatPreview.svelte'
+  import TabsPreview from '../skeletons/TabsPreview.svelte'
+  import DesktopPreview from '../skeletons/DesktopPreview.svelte'
   import Ph from '../../common/Ph.svelte'
   import Select from '../../common/Select.svelte'
   import ToggleSwitch from '../../common/ToggleSwitch.svelte'
@@ -23,10 +26,15 @@
   } from '../../../stores/prefs'
   import { sidebar } from '../../../stores/accounts'
   import { openLocalesFolder, saveLocaleTemplate } from '../../../lib/api'
-  import en from '../../../lib/locales/en'
   import { toastInfo, toastError, errorMessage } from '../../../stores/toast'
   import { t, isMac } from '../../../lib/i18n'
   import type { CloseAction } from '../../../lib/types'
+  import type { TimeFormat } from '../../../lib/format'
+
+  // the option under the pointer in each segmented control, which the picture
+  // shows in place of the saved choice.
+  let trialTime: string | null = null
+  let trialClose: string | null = null
 
   // remounts the picker so newly dropped language files show up without
   // leaving settings.
@@ -43,8 +51,9 @@
   // writes a ready-to-translate template: every English string plus the meta
   // fields a language file needs.
   async function onSaveLocaleTemplate(): Promise<void> {
-    const template = JSON.stringify({ name: 'My Language', author: '', base: 'en', strings: en }, null, 2)
     try {
+      const en = (await import('../../../lib/locales/en')).default
+      const template = JSON.stringify({ name: 'My Language', author: '', base: 'en', strings: en }, null, 2)
       const path = await saveLocaleTemplate(template)
       if (path) {
         toastInfo($t('language.templateSaved'))
@@ -120,10 +129,12 @@
     </div>
   </Row>
   <Row id="time-format" label={$t('settingsPanel.label.timeFormat')} hint={$t('settingsPanel.hint.timeFormat')}>
+    <TimeFormatPreview slot="preview" format={(trialTime ?? $prefs.timeFormat) as TimeFormat} />
     <Segmented
       label={$t('settingsPanel.label.timeFormat')}
       value={$prefs.timeFormat}
       options={timeFormatOptions}
+      on:hover={(e) => (trialTime = e.detail)}
       on:change={(e) => setTimeFormat(e.detail)}
     />
   </Row>
@@ -139,6 +150,7 @@
     />
   </Row>
   <Row id="restore-tabs" label={$t('settingsPanel.toggle.restoreTabs')} hint={$t('settingsPanel.hint.restoreTabs')}>
+    <TabsPreview slot="preview" restore={$prefs.restoreTabs} />
     <ToggleSwitch checked={$prefs.restoreTabs} label={$t('settingsPanel.toggle.restoreTabs')} on:change={(e) => setRestoreTabs(e.detail)} />
   </Row>
   <Row
@@ -146,13 +158,16 @@
     label={$t('settingsPanel.toggle.startHidden')}
     hint={isMac ? $t('settingsPanel.hint.startHiddenMac') : $t('settingsPanel.hint.startHidden')}
   >
+    <DesktopPreview slot="preview" appWindow={!$prefs.startHidden} />
     <ToggleSwitch checked={$prefs.startHidden} label={$t('settingsPanel.toggle.startHidden')} on:change={(e) => setStartHidden(e.detail)} />
   </Row>
   <Row id="close-action" label={$t('settingsPanel.label.closeAction')} hint={$t('settingsPanel.hint.closeAction')}>
+    <DesktopPreview slot="preview" appWindow={false} tray={(trialClose ?? $prefs.closeAction) === 'background'} />
     <Segmented
       label={$t('settingsPanel.label.closeAction')}
       value={$prefs.closeAction}
       options={closeActionOptions}
+      on:hover={(e) => (trialClose = e.detail)}
       on:change={(e) => setCloseAction(e.detail as CloseAction)}
     />
   </Row>
