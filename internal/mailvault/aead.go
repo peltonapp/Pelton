@@ -36,6 +36,9 @@ const KeySize = 32
 // boxVersion is the first byte of every ciphertext this package writes.
 const boxVersion byte = 1
 
+// maxSealPlaintext is the largest plaintext seal accepts.
+const maxSealPlaintext = 1 << 30
+
 // aadLabel opens every associated data string, so a ciphertext from another
 // purpose or format version never authenticates here.
 const aadLabel = "pelton-mailvault/v1"
@@ -63,6 +66,9 @@ func seal(key, plaintext, ad []byte) ([]byte, error) {
 	aead, err := chacha20poly1305.NewX(key)
 	if err != nil {
 		return nil, fmt.Errorf("mailvault: cipher: %w", err)
+	}
+	if len(plaintext) > maxSealPlaintext {
+		return nil, errors.New("mailvault: plaintext too large to seal")
 	}
 	out := make([]byte, 1+aead.NonceSize(), 1+aead.NonceSize()+len(plaintext)+aead.Overhead())
 	out[0] = boxVersion

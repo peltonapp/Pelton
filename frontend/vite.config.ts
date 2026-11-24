@@ -111,6 +111,12 @@ function splitCatalog(locale: string): Map<string, Record<string, string>> {
   return areas
 }
 
+const unsafeInScript = new RegExp(`[<>/${String.fromCharCode(0x2028, 0x2029)}]`, 'g')
+
+function jsLiteral(value: unknown): string {
+  return JSON.stringify(value).replace(unsafeInScript, (c) => `${String.fromCharCode(92)}u${c.charCodeAt(0).toString(16).padStart(4, '0')}`)
+}
+
 const stringChunks: Plugin = {
   name: 'string-chunks',
   resolveId(source) {
@@ -121,15 +127,18 @@ const stringChunks: Plugin = {
       return null
     }
     const [locale, area] = id.slice(stringsPrefix.length + 1).split('/')
+    if (!/^[A-Za-z]{2,3}(-[A-Za-z0-9]{2,8})*$/.test(locale)) {
+      throw new Error(`string-chunks: ${locale} is not a locale name`)
+    }
     this.addWatchFile(path.join(localesDir, `${locale}.ts`))
     const areas = splitCatalog(locale)
     if (area) {
-      return `export default ${JSON.stringify(areas.get(area) ?? {})}`
+      return `export default ${jsLiteral(areas.get(area) ?? {})}`
     }
     const loaders = [...areas.keys()]
       .filter((a) => a !== 'core')
-      .map((a) => `${JSON.stringify(a)}: () => import(${JSON.stringify(`${stringsPrefix}${locale}/${a}`)})`)
-    return `export const core = ${JSON.stringify(areas.get('core') ?? {})}\nexport const areas = {${loaders.join(',')}}\n`
+      .map((a) => `${jsLiteral(a)}: () => import(${jsLiteral(`${stringsPrefix}${locale}/${a}`)})`)
+    return `export const core = ${jsLiteral(areas.get('core') ?? {})}\nexport const areas = {${loaders.join(',')}}\n`
   },
   handleHotUpdate({file, server}) {
     if (file.startsWith(localesDir)) {

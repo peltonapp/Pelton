@@ -332,6 +332,14 @@ func plistString(m map[string]any, key string) string {
 	return s
 }
 
+func plistPort(m map[string]any, key string) int {
+	n := plistInt(m, key)
+	if n < 1 || n > 65535 {
+		return 0
+	}
+	return int(n)
+}
+
 func plistInt(m map[string]any, key string) int64 {
 	switch v := m[key].(type) {
 	case int64:

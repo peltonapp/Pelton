@@ -13,7 +13,7 @@ function scriptOf(file: string): string {
   if (!file.endsWith('.svelte')) {
     return text
   }
-  return [...text.matchAll(/<script[^>]*>([\s\S]*?)<\/script>/g)].map((m) => m[1]).join('\n')
+  return [...text.matchAll(/<script\b[^>]*>([\s\S]*?)<\/script\b[^>]*>/gi)].map((m) => m[1]).join('\n')
 }
 
 function join(dir: string, rel: string): string {

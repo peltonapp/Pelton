@@ -212,7 +212,7 @@ export function shareMail(title: string, url: string, mode: EditorMode): { subje
     return { subject, body: `<p>${escapeHtml(subject)}</p>${link}` }
   }
   if (mode === 'markdown' && url) {
-    return { subject, body: `[${subject.replace(/[[\]]/g, '\\$&')}](${url})\n` }
+    return { subject, body: `[${subject.replace(/[\\[\]]/g, '\\$&')}](${url})\n` }
   }
   return { subject, body: url ? `${subject}\n\n${url}\n` : `${subject}\n` }
 }

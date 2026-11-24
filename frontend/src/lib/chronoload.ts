@@ -26,8 +26,9 @@ export function loadChrono(lang: string): Promise<ChronoLike[]> {
   const key = lang.toLowerCase().split(/[-_]/)[0]
   let pending = cache.get(key)
   if (!pending) {
-    const keys = key !== 'en' && loaders[key] ? [key, 'en'] : ['en']
-    pending = Promise.all(keys.map((k) => loaders[k]().then((mod) => mod.casual)))
+    const own = key !== 'en' && Object.hasOwn(loaders, key) ? loaders[key] : null
+    const chain = own ? [own, loaders.en] : [loaders.en]
+    pending = Promise.all(chain.map((load) => load().then((mod) => mod.casual)))
     pending.catch(() => cache.delete(key))
     cache.set(key, pending)
   }

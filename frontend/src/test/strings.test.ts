@@ -19,6 +19,16 @@ const sources = Object.fromEntries(
 )
 const keys = Object.keys(en)
 
+function withoutMarkupComments(code: string): string {
+  let out = code
+  let before = ''
+  while (out !== before) {
+    before = out
+    out = out.replace(/<!--[\s\S]*?-->/g, '')
+  }
+  return out
+}
+
 interface Literal {
   text: string
   prefix: boolean
@@ -101,7 +111,7 @@ function literals(code: string): Literal[] {
 /** usedKeys lists the keys a source names, by the literals in it. */
 function usedKeys(code: string): Set<string> {
   const used = new Set<string>()
-  for (const { text, prefix } of literals(code.replace(/<!--[\s\S]*?-->/g, ''))) {
+  for (const { text, prefix } of literals(withoutMarkupComments(code))) {
     if (!prefix && text in en) {
       used.add(text)
     } else if ((prefix && text.includes('.')) || (!prefix && text.length > 3 && text.endsWith('.'))) {
@@ -151,8 +161,8 @@ const globPattern = /import\.meta\.glob(?:<[^>]*>)?\(\s*['"]([^'"]+)['"]\s*(,[^)
 
 /** edges lists what a source imports, statically or lazily, and the areas a lazy import loads. */
 function edges(file: string): Edge[] {
-  const code = sources[file].replace(/^\s*\/\*[\s\S]*?\*\//gm, '').replace(/^\s*\/\/.*$/gm, '').replace(/<!--[\s\S]*?-->/g, '')
-  const script = file.endsWith('.svelte') ? [...code.matchAll(/<script[^>]*>([\s\S]*?)<\/script>/g)].map((m) => m[1]).join('\n') : code
+  const code = withoutMarkupComments(sources[file].replace(/^\s*\/\*[\s\S]*?\*\//gm, '').replace(/^\s*\/\/.*$/gm, ''))
+  const script = file.endsWith('.svelte') ? [...code.matchAll(/<script\b[^>]*>([\s\S]*?)<\/script\b[^>]*>/gi)].map((m) => m[1]).join('\n') : code
   const out: Edge[] = []
   const add = (spec: string, areas: StringArea[]) => {
     const to = resolve(file, spec)
@@ -168,7 +178,7 @@ function edges(file: string): Edge[] {
     add(m[1], [])
   }
   for (const m of code.matchAll(globPattern)) {
-    const pattern = new RegExp(`^${join(file.slice(0, file.lastIndexOf('/')), m[1]).replace(/\./g, '\\.').replace(/\*/g, '[^/]*')}$`)
+    const pattern = new RegExp(`^${join(file.slice(0, file.lastIndexOf('/')), m[1]).replace(/[\\^$.+?()[\]{}|]/g, '\\$&').replace(/\*/g, '[^/]*')}$`)
     for (const target of Object.keys(sources)) {
       if (pattern.test(target)) out.push({ to: target, areas: [] })
     }

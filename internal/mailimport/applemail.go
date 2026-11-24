@@ -140,7 +140,7 @@ func appleAccounts(base string) (map[string]string, []Account) {
 			DisplayName: plistString(d, "FullUserName"),
 			Username:    plistString(d, "Username"),
 			IMAPHost:    plistString(d, "Hostname"),
-			IMAPPort:    int(plistInt(d, "PortNumber")),
+			IMAPPort:    plistPort(d, "PortNumber"),
 			Kind:        "imap",
 		}
 		if kind == "POPAccount" {
@@ -158,7 +158,7 @@ func appleAccounts(base string) (map[string]string, []Account) {
 		if id := plistString(d, "SMTPIdentifier"); id != "" {
 			if s, ok := smtp[id]; ok {
 				acc.SMTPHost = plistString(s, "Hostname")
-				acc.SMTPPort = int(plistInt(s, "PortNumber"))
+				acc.SMTPPort = plistPort(s, "PortNumber")
 			} else if host, _, ok := strings.Cut(id, ":"); ok {
 				acc.SMTPHost = host
 			}
