@@ -229,11 +229,9 @@
         </div>
       </button>
       <div class="card-actions">
-        {#if !theme.hasCss}
-          <button type="button" class="icon-btn" title={$t('themes.edit')} on:click={() => editTheme(theme)}>
-            <IconPencil size={14} stroke={1.6} />
-          </button>
-        {/if}
+        <button type="button" class="icon-btn" title={$t('themes.edit')} on:click={() => editTheme(theme)}>
+          <IconPencil size={14} stroke={1.6} />
+        </button>
         <button type="button" class="icon-btn" title={$t('themes.export')} on:click={() => onExport(theme.id)}>
           <IconUpload size={14} stroke={1.6} />
         </button>
