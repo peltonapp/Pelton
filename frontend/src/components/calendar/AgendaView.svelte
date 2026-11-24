@@ -3,10 +3,12 @@
   // events under it in order. days without events are left out, so a quiet
   // month reads as a short list.
   import { createEventDispatcher } from 'svelte'
+  import { openScriptMenu } from '../../lib/scriptmenu'
   import mapPinIcon from '@phosphor-icons/core/assets/duotone/map-pin-duotone.svg?raw'
   import repeatIcon from '@phosphor-icons/core/assets/duotone/repeat-duotone.svg?raw'
   import calendarIcon from '@phosphor-icons/core/assets/duotone/calendar-blank-duotone.svg?raw'
   import Ph from '../common/Ph.svelte'
+  import EmptyState from '../common/EmptyState.svelte'
   import TaskCheck from '../tasks/TaskCheck.svelte'
   import { addDays, dayKey, eventsOnDay, sameDay, startOfDay, type Placed } from '../../lib/caldate'
   import { formatLongDay, formatTime } from '../../lib/calformat'
@@ -25,7 +27,7 @@
   export let timeFormat: TimeFormat = 'auto'
   export let selectedKey: string = ''
 
-  const dispatch = createEventDispatcher<{ open: { occ: Occurrence; anchor: HTMLElement }; day: Date; menu: CellMenuAt; toggleTask: Occurrence }>()
+  const dispatch = createEventDispatcher<{ open: { occ: Occurrence; anchor: HTMLElement }; day: Date; menu: CellMenuAt; toggleTask: Occurrence; quickAdd: void }>()
 
   function onDayMenu(event: MouseEvent, day: Date): void {
     if ((event.target as HTMLElement).closest('.row')) {
@@ -69,10 +71,14 @@
 
 <div class="agenda">
   {#if days.length === 0}
-    <div class="empty">
-      <Ph svg={calendarIcon} size={28} />
-      <p>{$t('calendar.agendaEmpty')}</p>
-    </div>
+    <EmptyState
+      icon={calendarIcon}
+      title={$t('calendar.agendaEmptyTitle')}
+      detail={$t('calendar.agendaEmpty')}
+      actionLabel={$t('quickAdd.button')}
+      onAction={() => dispatch('quickAdd')}
+      shortcut="calendar-quick-add"
+    />
   {:else}
     {#each days as { day, items } (dayKey(day))}
       <!-- svelte-ignore a11y-no-static-element-interactions -->
@@ -104,6 +110,7 @@
                 class:cancelled={p.occ.status === 'CANCELLED'}
                 style={`--ev:${colorOf(p.occ)}`}
                 on:click={(e) => dispatch('open', { occ: p.occ, anchor: e.currentTarget })}
+                on:contextmenu={(e) => !p.occ.task && openScriptMenu(e, 'calendar.event', { id: String(p.occ.eventId) })}
               >
                 <span class="time">{timeOf(p, day)}</span>
                 <span class="edge" aria-hidden="true"></span>
@@ -130,21 +137,6 @@
     height: 100%;
     overflow-y: auto;
     padding: var(--space-3) var(--space-5) var(--space-6);
-  }
-
-  .empty {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    gap: var(--space-3);
-    height: 100%;
-    color: var(--text-tertiary);
-    font-size: var(--fz-list);
-  }
-
-  .empty p {
-    margin: 0;
   }
 
   .day {

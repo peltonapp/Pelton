@@ -39,6 +39,9 @@ func (d *DB) ThreadMuted(ctx context.Context, threadID int64) (bool, error) {
 // FolderCountsHidingMuted is FolderCounts for an inbox, leaving out the mail of
 // muted conversations so the badge agrees with the list.
 func (d *DB) FolderCountsHidingMuted(ctx context.Context, folderID int64) (total, unread int, err error) {
+	if visible, err := d.FolderVisible(ctx, folderID); err != nil || !visible {
+		return 0, 0, err
+	}
 	const query = `
 SELECT COUNT(*), COALESCE(SUM(CASE WHEN flags & ? = 0 THEN 1 ELSE 0 END), 0)
 FROM messages WHERE folder_id = ? AND pending_delete = 0 AND snooze_hidden = 0

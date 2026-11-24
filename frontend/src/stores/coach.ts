@@ -8,6 +8,7 @@ import { getSetting, setSetting, SettingKeys } from '../lib/api'
 import {
   emptyCounters,
   hintAllowed,
+  hintLimit,
   onCoachAction,
   parseCounters,
   trackInput,
@@ -40,6 +41,9 @@ export const sheetMode = writable<'closed' | 'hold' | 'pinned'>('closed')
 /** How long a hint stays. */
 export const hintMs = 4000
 
+/** True while a one-time tip is on screen; hints wait until it is gone. */
+export const coachQuiet = writable(false)
+
 let counters: CoachCounters = emptyCounters()
 let nextId = 1
 let hideTimer: ReturnType<typeof setTimeout> | undefined
@@ -63,7 +67,7 @@ function handle(action: ShortcutAction, origin: CoachOrigin): void {
     return
   }
   const p = get(prefs)
-  if (!p.coachHints || p.design === 'classic' || get(coachHint) !== null) {
+  if (!p.coachHints || p.design === 'classic' || get(coachHint) !== null || get(coachQuiet)) {
     return
   }
   const combo = (get(bindings) as Record<string, string>)[action] ?? ''
@@ -98,6 +102,26 @@ export async function initCoach(): Promise<() => void> {
     stopTrack()
     stopBus()
     clearTimeout(hideTimer)
+  }
+}
+
+/** Whether the action's key has been used for it. */
+export function coachLearned(action: string): boolean {
+  return counters.learned[action] === true
+}
+
+/**
+ * Uses up the hints of actions a tip just named, so the coach does not name
+ * the same keys again.
+ */
+export function retireCoachHints(actions: string[]): void {
+  let next = counters
+  for (const action of actions) {
+    next = { ...next, shown: { ...next.shown, [action]: Math.max(next.shown[action] ?? 0, hintLimit) } }
+  }
+  if (next !== counters) {
+    counters = next
+    save()
   }
 }
 

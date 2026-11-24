@@ -359,6 +359,7 @@
       <input
         bind:this={inputEl}
         data-top-search
+        data-tip-anchor="search"
         type="text"
         role="combobox"
         autocomplete="off"

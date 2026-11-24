@@ -22,6 +22,7 @@ function contact(id: number, fullName: string, patch: Partial<Contact> = {}): Co
     note: '',
     emails: [],
     phones: [],
+    matrixId: '',
     readOnly: false,
     updated: '',
     extra: [],

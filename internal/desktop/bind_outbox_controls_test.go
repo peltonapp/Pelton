@@ -24,7 +24,7 @@ func TestCancelOutboxSendPutsAWaitingMessageBackInDrafts(t *testing.T) {
 	if err != nil {
 		t.Fatalf("CancelOutboxSend: %v", err)
 	}
-	settle(t)
+	settle(t, app)
 	if got.Outcome != cancelDraft {
 		t.Fatalf("outcome = %q, want %q", got.Outcome, cancelDraft)
 	}

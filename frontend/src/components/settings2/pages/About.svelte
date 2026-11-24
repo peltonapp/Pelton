@@ -39,6 +39,7 @@
   import { prefs, setUpdateCheckFrequency } from '../../../stores/prefs'
   import { toastError, errorMessage } from '../../../stores/toast'
   import { termsUrl } from '../../../lib/liability'
+  import { openWhatsNew, whatsNewUnseen } from '../../../stores/whatsnew'
   import { t } from '../../../lib/i18n'
   import '../../../theme/settings2-sections-system.css'
 
@@ -256,9 +257,15 @@
       {copiedDiagnostics ? $t('about.diagnostics.copied') : $t('about.diagnostics.copy')}
     </button>
   </Row>
-  <Row id="about-tour" label={$t('about.rerunTourLabel')}>
+  <Row id="about-whats-new" label={$t('whatsnew.title')} hint={$t('whatsnew.rowHint')}>
+    <button type="button" class="s2-btn" on:click={openWhatsNew}>
+      {#if $whatsNewUnseen}<span class="dot" aria-hidden="true"></span>{/if}
+      {$t('whatsnew.open')}
+    </button>
+  </Row>
+  <Row id="about-tour" label={$t('setup.runAgain')} hint={$t('setup.runAgain.hint')}>
     <button type="button" class="s2-btn" on:click={() => dispatch('rerunOnboarding')}>
-      {$t('about.rerunOnboarding')}
+      {$t('setup.runAgain.button')}
     </button>
   </Row>
 </Card>
@@ -366,7 +373,8 @@
     color: var(--accent);
   }
 
-  .state.available .dot {
+  .state.available .dot,
+  .s2-btn .dot {
     background: var(--accent);
   }
 

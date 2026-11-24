@@ -33,6 +33,9 @@ type menuStrings struct {
 	openInTab        string
 	switchProfile    string
 	closeTab         string
+	lockApp          string
+	// lockVaults locks every mail vault; languages without it use English.
+	lockVaults string
 }
 
 // menuLocales mirrors the frontend's supported languages
@@ -72,6 +75,8 @@ var menuLocales = map[string]menuStrings{
 		openInTab:        "Open in New Tab",
 		switchProfile:    "Switch Profile…",
 		closeTab:         "Close Tab",
+		lockApp:          "Lock Pelton",
+		lockVaults:       "Lock Vaults",
 	},
 	"de": {
 		appMenu:          "Pelton",
@@ -103,6 +108,7 @@ var menuLocales = map[string]menuStrings{
 		openInTab:        "In neuem Tab öffnen",
 		switchProfile:    "Profil wechseln…",
 		closeTab:         "Tab schließen",
+		lockApp:          "Pelton sperren",
 	},
 	"fr": {
 		appMenu:          "Pelton",
@@ -134,6 +140,7 @@ var menuLocales = map[string]menuStrings{
 		openInTab:        "Ouvrir dans un nouvel onglet",
 		switchProfile:    "Changer de profil…",
 		closeTab:         "Fermer l'onglet",
+		lockApp:          "Verrouiller Pelton",
 	},
 	"nl": {
 		appMenu:          "Pelton",
@@ -165,6 +172,7 @@ var menuLocales = map[string]menuStrings{
 		openInTab:        "Openen in nieuw tabblad",
 		switchProfile:    "Profiel wisselen…",
 		closeTab:         "Tabblad sluiten",
+		lockApp:          "Pelton vergrendelen",
 	},
 	"es": {
 		appMenu:          "Pelton",
@@ -196,6 +204,7 @@ var menuLocales = map[string]menuStrings{
 		openInTab:        "Abrir en una pestaña nueva",
 		switchProfile:    "Cambiar de perfil…",
 		closeTab:         "Cerrar pestaña",
+		lockApp:          "Bloquear Pelton",
 	},
 	"it": {
 		appMenu:          "Pelton",
@@ -227,6 +236,7 @@ var menuLocales = map[string]menuStrings{
 		openInTab:        "Apri in una nuova scheda",
 		switchProfile:    "Cambia profilo…",
 		closeTab:         "Chiudi scheda",
+		lockApp:          "Blocca Pelton",
 	},
 	"pl": {
 		appMenu:          "Pelton",
@@ -258,6 +268,7 @@ var menuLocales = map[string]menuStrings{
 		openInTab:        "Otwórz w nowej karcie",
 		switchProfile:    "Zmień profil…",
 		closeTab:         "Zamknij kartę",
+		lockApp:          "Zablokuj Pelton",
 	},
 	"ru": {
 		appMenu:          "Pelton",
@@ -289,6 +300,7 @@ var menuLocales = map[string]menuStrings{
 		openInTab:        "Открыть в новой вкладке",
 		switchProfile:    "Переключить профиль…",
 		closeTab:         "Закрыть вкладку",
+		lockApp:          "Заблокировать Pelton",
 	},
 	"tr": {
 		appMenu:          "Pelton",
@@ -320,6 +332,7 @@ var menuLocales = map[string]menuStrings{
 		openInTab:        "Yeni Sekmede Aç",
 		switchProfile:    "Profil Değiştir…",
 		closeTab:         "Sekmeyi Kapat",
+		lockApp:          "Pelton'u Kilitle",
 	},
 	"pt": {
 		appMenu:          "Pelton",
@@ -351,6 +364,7 @@ var menuLocales = map[string]menuStrings{
 		openInTab:        "Abrir em Novo Separador",
 		switchProfile:    "Mudar Perfil…",
 		closeTab:         "Fechar Separador",
+		lockApp:          "Bloquear o Pelton",
 	},
 	// the app name stays in latin script: it is a proper noun, and macOS puts it
 	// in the bold application menu next to the apple logo either way.
@@ -384,6 +398,7 @@ var menuLocales = map[string]menuStrings{
 		openInTab:        "فتح في علامة تبويب جديدة",
 		switchProfile:    "تبديل الملف الشخصي…",
 		closeTab:         "إغلاق علامة التبويب",
+		lockApp:          "قفل Pelton",
 	},
 	"zh-CN": {
 		appMenu:          "Pelton",
@@ -415,14 +430,19 @@ var menuLocales = map[string]menuStrings{
 		openInTab:        "在新标签页中打开",
 		switchProfile:    "切换配置文件…",
 		closeTab:         "关闭标签页",
+		lockApp:          "锁定 Pelton",
 	},
 }
 
 // menuStringsFor returns the translation table for lang, falling back to
 // English for an unrecognized or empty language code.
 func menuStringsFor(lang string) menuStrings {
-	if s, ok := menuLocales[lang]; ok {
-		return s
+	s, ok := menuLocales[lang]
+	if !ok {
+		return menuLocales["en"]
 	}
-	return menuLocales["en"]
+	if s.lockVaults == "" {
+		s.lockVaults = menuLocales["en"].lockVaults
+	}
+	return s
 }

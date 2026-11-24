@@ -56,6 +56,9 @@ type OccurrenceDTO struct {
 	Transparency string `json:"transparency"`
 	ReadOnly     bool   `json:"readOnly"`
 	HasReminders bool   `json:"hasReminders"`
+	// HasAttendees is true when others are invited, which is when preparing
+	// for the meeting has something to show.
+	HasAttendees bool `json:"hasAttendees"`
 	// Pending is true while a change made here has not reached the server.
 	Pending  bool `json:"pending"`
 	Conflict bool `json:"conflict"`
@@ -224,6 +227,7 @@ func (a *App) ListOccurrences(from, to string, calendarIDs []int64) ([]Occurrenc
 				Transparency:  occ.Event.Transparency,
 				ReadOnly:      cal.ReadOnly,
 				HasReminders:  len(occ.Event.Alarms) > 0,
+				HasAttendees:  len(occ.Event.Attendees) > 0,
 				Pending:       row.Pending != "",
 				Conflict:      row.Conflict,
 			})
@@ -271,6 +275,14 @@ func (a *App) GetEvent(id int64, recurrenceID string) (EventDTO, error) {
 
 // CreateEvent stores a new event and writes it to its calendar's server.
 func (a *App) CreateEvent(req EventRequest) (EventSaveResultDTO, error) {
+	res, err := a.createEvent(req)
+	if err == nil {
+		a.scriptEventSaved(a.ctx, res.Event.ID, true)
+	}
+	return res, err
+}
+
+func (a *App) createEvent(req EventRequest) (EventSaveResultDTO, error) {
 	if err := a.ready(); err != nil {
 		return EventSaveResultDTO{}, err
 	}
@@ -302,6 +314,14 @@ func (a *App) CreateEvent(req EventRequest) (EventSaveResultDTO, error) {
 // splits the series there and changes the part from it on, ScopeAll changes
 // the series, moving every occurrence by as much as this one moved.
 func (a *App) UpdateEvent(req EventRequest) (EventSaveResultDTO, error) {
+	res, err := a.updateEvent(req)
+	if err == nil {
+		a.scriptEventSaved(a.ctx, res.Event.ID, false)
+	}
+	return res, err
+}
+
+func (a *App) updateEvent(req EventRequest) (EventSaveResultDTO, error) {
 	if err := a.ready(); err != nil {
 		return EventSaveResultDTO{}, err
 	}

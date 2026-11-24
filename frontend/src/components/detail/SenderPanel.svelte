@@ -16,13 +16,18 @@
   import robotIcon from '@phosphor-icons/core/assets/duotone/robot-duotone.svg?raw'
   import orgIcon from '@phosphor-icons/core/assets/duotone/buildings-duotone.svg?raw'
   import atIcon from '@phosphor-icons/core/assets/duotone/at-duotone.svg?raw'
+  import chatIcon from '@phosphor-icons/core/assets/duotone/chat-circle-text-duotone.svg?raw'
+  import { chatAvailable, chatWith } from '../../lib/chatavailable'
   import closeIcon from '@phosphor-icons/core/assets/regular/x.svg?raw'
+  import shieldIcon from '@phosphor-icons/core/assets/duotone/shield-check-duotone.svg?raw'
+  import { openMailScreen } from '../../stores/mailscreen'
+  import { reportFilter } from '../../stores/trust'
   import Ph from '../common/Ph.svelte'
   import Avatar from '../common/Avatar.svelte'
   import ContactEditor from '../contacts/ContactEditor.svelte'
   import ContactConflictDialog from '../contacts/ContactConflictDialog.svelte'
   import { kindIcon, asAttachment } from '../attachments/kinds'
-  import { unsubscribeMessage } from '../../lib/api'
+  import { noteUnsubscribeLink, unsubscribeMessage } from '../../lib/api'
   import { openURL } from '../../lib/browser'
   import { senderSections } from '../../lib/sendersections'
   import { formatBytes, formatListDate, type TimeFormat } from '../../lib/format'
@@ -120,6 +125,7 @@
       note: contact.note,
       emails: contact.emails.map((e) => ({ ...e })),
       phones: contact.phones.map((p) => ({ ...p })),
+      matrixId: contact.matrixId,
       force: false,
     }
   }
@@ -143,6 +149,11 @@
     openViewEditor({ name, queryFrom: [address] })
   }
 
+  function trackingReport(): void {
+    reportFilter.set(address)
+    openMailScreen('privacy')
+  }
+
   let unsubscribing = false
   let unsubscribed = false
 
@@ -157,6 +168,7 @@
     }
     if (unsub.kind === 'link') {
       openURL(unsub.target)
+      void noteUnsubscribeLink(detail.id)
       return
     }
     unsubscribing = true
@@ -239,11 +251,19 @@
         <Ph svg={writeIcon} size={14} />{$t('senderPanel.write')}
       </button>
     {/if}
+    {#if $chatAvailable && contact?.matrixId}
+      <button type="button" class="btn" on:click={() => void chatWith(contact?.matrixId ?? '')}>
+        <Ph svg={chatIcon} size={14} />{$t('contacts.matrix.chat')}
+      </button>
+    {/if}
     <button type="button" class="btn" on:click={searchFrom}>
       <Ph svg={searchIcon} size={14} />{$t('senderPanel.searchFrom')}
     </button>
     <button type="button" class="btn" on:click={saveView}>
       <Ph svg={viewIcon} size={14} />{$t('senderPanel.saveView')}
+    </button>
+    <button type="button" class="btn" on:click={trackingReport}>
+      <Ph svg={shieldIcon} size={14} />{$t('privacy.report.title')}
     </button>
     {#if !isList && !automated}
       {#if contact}

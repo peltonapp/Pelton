@@ -3,6 +3,10 @@ import {svelte} from '@sveltejs/vite-plugin-svelte'
 import {fileURLToPath} from 'node:url'
 import fs from 'node:fs'
 import path from 'node:path'
+import vm from 'node:vm'
+import type {Plugin} from 'vite'
+import {areaOf} from './src/lib/stringareas.ts'
+import {bundledOCRCodes} from './src/lib/ocrlanguages'
 
 // @tabler/icons ships its full icon geometry as tabler-nodes-outline.json, but
 // the package's exports map only exposes ./icons/*, so the file is aliased here
@@ -49,13 +53,6 @@ const flagUrlDev = {
   },
 }
 
-// the pdf viewer's support files (cmaps, standard fonts, colour profiles and
-// image decoders) are fetched by pdf.js at runtime, so they ship as files under
-// /pdfjs/ rather than going through the module graph. quickjs is left out: it
-// only runs scripts embedded in a pdf, which the viewer never does.
-const pdfjsRoot = fileURLToPath(new URL('./node_modules/pdfjs-dist/', import.meta.url))
-const pdfjsDirs = ['cmaps', 'standard_fonts', 'iccs', 'wasm']
-const pdfjsSkip = (name: string) => name.startsWith('quickjs') || name.startsWith('LICENSE')
 // in development, an error that keeps the app from starting is posted here by
 // the splash (index.html) and printed in the terminal, since the webview's
 // console is not otherwise visible.
@@ -78,41 +75,130 @@ const bootErrors = {
   },
 }
 
-const pdfjsAssets = {
-  name: 'pdfjs-assets',
-  configureServer(server: { middlewares: { use: (fn: (req: { url?: string }, res: { setHeader: (k: string, v: string) => void, end: (b: Buffer) => void }, next: () => void) => void) => void } }) {
-    server.middlewares.use((req, res, next) => {
-      const m = /^\/pdfjs\/([a-z_]+)\/([A-Za-z0-9_.-]+)$/.exec((req.url ?? '').split('?')[0])
-      if (!m || !pdfjsDirs.includes(m[1]) || pdfjsSkip(m[2])) {
-        next()
-        return
+// each catalog in src/lib/locales is served split into the areas of
+// src/lib/stringareas.ts. virtual:strings/<locale> holds the core strings and a
+// loader for every other area, virtual:strings/<locale>/<area> one area's
+// strings. Under vitest all English text is core, so a component test renders
+// without loading anything first.
+const localesDir = fileURLToPath(new URL('./src/lib/locales/', import.meta.url))
+const stringsPrefix = 'virtual:strings/'
+
+const splitCache = new Map<string, {mtime: number, areas: Map<string, Record<string, string>>}>()
+
+function splitCatalog(locale: string): Map<string, Record<string, string>> {
+  const file = path.join(localesDir, `${locale}.ts`)
+  const mtime = fs.statSync(file).mtimeMs
+  const cached = splitCache.get(locale)
+  if (cached?.mtime === mtime) {
+    return cached.areas
+  }
+  const source = fs.readFileSync(file, 'utf8')
+  const start = /^const \w+: Record<string, string> = \{$/m.exec(source)
+  if (!start) {
+    throw new Error(`string-chunks: ${locale}.ts does not open with its catalog object`)
+  }
+  const body = source.slice(start.index + start[0].length - 1, source.lastIndexOf('}') + 1)
+  const catalog = vm.runInNewContext(`(${body})`) as Record<string, string>
+  const areas = new Map<string, Record<string, string>>()
+  for (const [key, text] of Object.entries(catalog)) {
+    const area = process.env.VITEST && locale === 'en' ? 'core' : (areaOf(key) ?? 'core')
+    if (!areas.has(area)) {
+      areas.set(area, {})
+    }
+    areas.get(area)![key] = text
+  }
+  splitCache.set(locale, {mtime, areas})
+  return areas
+}
+
+const stringChunks: Plugin = {
+  name: 'string-chunks',
+  resolveId(source) {
+    return source.startsWith(stringsPrefix) ? `\0${source}` : null
+  },
+  load(id) {
+    if (!id.startsWith(`\0${stringsPrefix}`)) {
+      return null
+    }
+    const [locale, area] = id.slice(stringsPrefix.length + 1).split('/')
+    this.addWatchFile(path.join(localesDir, `${locale}.ts`))
+    const areas = splitCatalog(locale)
+    if (area) {
+      return `export default ${JSON.stringify(areas.get(area) ?? {})}`
+    }
+    const loaders = [...areas.keys()]
+      .filter((a) => a !== 'core')
+      .map((a) => `${JSON.stringify(a)}: () => import(${JSON.stringify(`${stringsPrefix}${locale}/${a}`)})`)
+    return `export const core = ${JSON.stringify(areas.get('core') ?? {})}\nexport const areas = {${loaders.join(',')}}\n`
+  },
+  handleHotUpdate({file, server}) {
+    if (file.startsWith(localesDir)) {
+      server.moduleGraph.invalidateAll()
+      server.ws.send({type: 'full-reload'})
+      return []
+    }
+  },
+}
+
+// files the pdf viewer and text recognition fetch at runtime, which ship as
+// plain files rather than going through the module graph:
+//   pdfjs/      pdf.js's cmaps, standard fonts, colour profiles and image
+//               decoders. quickjs is left out: it only runs scripts embedded in
+//               a pdf, which the viewer never does.
+//   tesseract/  the tesseract.js worker, its lstm-only cores (with and without
+//               simd) and the bundled language data.
+// the map is served path to file on disk, used by the dev server and the build.
+const nodeModules = fileURLToPath(new URL('./node_modules/', import.meta.url))
+function runtimeFiles(): Map<string, string> {
+  const files = new Map<string, string>()
+  const pdfjs = path.join(nodeModules, 'pdfjs-dist')
+  for (const dir of ['cmaps', 'standard_fonts', 'iccs', 'wasm']) {
+    for (const name of fs.readdirSync(path.join(pdfjs, dir))) {
+      if (!name.startsWith('quickjs') && !name.startsWith('LICENSE')) {
+        files.set(`pdfjs/${dir}/${name}`, path.join(pdfjs, dir, name))
       }
-      const file = path.join(pdfjsRoot, m[1], m[2])
-      if (!fs.existsSync(file)) {
+    }
+  }
+  files.set('tesseract/worker.min.js', path.join(nodeModules, 'tesseract.js', 'dist', 'worker.min.js'))
+  for (const core of ['tesseract-core-lstm.wasm.js', 'tesseract-core-simd-lstm.wasm.js']) {
+    files.set(`tesseract/core/${core}`, path.join(nodeModules, 'tesseract.js-core', core))
+  }
+  for (const code of bundledOCRCodes) {
+    files.set(`tesseract/lang/${code}.traineddata.gz`, path.join(nodeModules, '@tesseract.js-data', code, '4.0.0_best_int', `${code}.traineddata.gz`))
+  }
+  return files
+}
+
+const runtimeAssets = {
+  name: 'runtime-assets',
+  configureServer(server: { middlewares: { use: (fn: (req: { url?: string }, res: { setHeader: (k: string, v: string) => void, end: (b: Buffer) => void }, next: () => void) => void) => void } }) {
+    const files = runtimeFiles()
+    server.middlewares.use((req, res, next) => {
+      const file = files.get((req.url ?? '').split('?')[0].replace(/^\//, ''))
+      if (!file) {
         next()
         return
       }
       if (file.endsWith('.wasm')) {
         res.setHeader('Content-Type', 'application/wasm')
+      } else if (file.endsWith('.js')) {
+        res.setHeader('Content-Type', 'text/javascript')
+      } else {
+        res.setHeader('Content-Type', 'application/octet-stream')
       }
       res.end(fs.readFileSync(file))
     })
   },
   generateBundle(this: { emitFile: (f: { type: 'asset', fileName: string, source: Uint8Array }) => string }) {
-    for (const dir of pdfjsDirs) {
-      for (const name of fs.readdirSync(path.join(pdfjsRoot, dir))) {
-        if (pdfjsSkip(name)) {
-          continue
-        }
-        this.emitFile({ type: 'asset', fileName: `pdfjs/${dir}/${name}`, source: fs.readFileSync(path.join(pdfjsRoot, dir, name)) })
-      }
+    for (const [fileName, file] of runtimeFiles()) {
+      this.emitFile({ type: 'asset', fileName, source: fs.readFileSync(file) })
     }
   },
 }
 
 // https://vitejs.dev/config/
 export default defineConfig({
-  plugins: [svelte(), dropLegacyWoff, flagUrlDev, pdfjsAssets, bootErrors],
+  plugins: [svelte(), stringChunks, dropLegacyWoff, flagUrlDev, runtimeAssets, bootErrors],
   resolve: {
     alias: {
       'tabler-nodes-outline': tablerNodesOutline,

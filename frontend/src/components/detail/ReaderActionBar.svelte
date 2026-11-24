@@ -22,6 +22,13 @@
   import { shortcutTitle } from '../../stores/shortcuts'
   import { dur, motion } from '../../lib/motion'
   import { t } from '../../lib/i18n'
+  import { currentMessageItems, messageItems, placed, runAt } from '../../lib/scriptplacements'
+  import { placedLabel } from '../../lib/scriptmenu'
+  import { scriptIcon } from '../../lib/scripticons'
+  import { scriptEntryName } from '../../lib/scriptmark'
+  import ScriptMark from '../common/ScriptMark.svelte'
+
+  const toolbarScripts = placed('toolbar.message')
 
   /** The message, or its conversation, is pinned. */
   export let pinned: boolean = false
@@ -31,6 +38,8 @@
   export let conversation: boolean = false
   /** The message belongs to a conversation that can be muted. */
   export let canMute: boolean = true
+  /** Fades the bar out of the way, as the reading view does while nothing moves. */
+  export let hidden: boolean = false
 
   $: pinLabel = conversation
     ? $t(pinned ? 'pin.unpinConversation' : 'pin.pinConversation')
@@ -81,7 +90,7 @@
   }
 </script>
 
-<div class="dock">
+<div class="dock" class:hidden>
   <div class="bar" role="toolbar" aria-label={$t('reader.actions')} in:fly={{ y: 8, duration: dur(motion.slow) }}>
     <button type="button" class="btn primary" title={$shortcutTitle($t('action.reply'), 'reply')} on:click={() => dispatch('reply')}>
       <Ph svg={replyIcon} size={16} />
@@ -165,6 +174,18 @@
         <span>{$t('tasks.openTask')}</span>
       </button>
     {/if}
+    {#each $toolbarScripts as script (script.scriptId)}
+      <button
+        type="button"
+        class="btn script"
+        aria-label={scriptEntryName(placedLabel(script), script.name, $t)}
+        title={scriptEntryName(placedLabel(script), script.name, $t)}
+        on:click={() => runAt('toolbar.message', script.scriptId, messageId ? messageItems([messageId]) : currentMessageItems())}
+      >
+        <Ph svg={scriptIcon(script.options.icon)} size={16} />
+        <ScriptMark badge />
+      </button>
+    {/each}
     <button type="button" class="btn" aria-label={$t('reader.more')} title={$t('reader.more')} on:click={onMore}>
       <Ph svg={moreIcon} size={16} />
     </button>
@@ -197,6 +218,15 @@
     background: var(--surface-overlay);
     box-shadow: var(--shadow-overlay);
     pointer-events: auto;
+    transition:
+      opacity var(--motion-base) var(--ease-out),
+      transform var(--motion-base) var(--ease-out);
+  }
+
+  .dock.hidden .bar {
+    opacity: 0;
+    transform: translateY(var(--space-2));
+    pointer-events: none;
   }
 
   .btn {
@@ -225,6 +255,10 @@
 
   .btn:active {
     transform: scale(var(--press-scale));
+  }
+
+  .btn.script {
+    position: relative;
   }
 
   .btn.task {

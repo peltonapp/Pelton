@@ -53,7 +53,7 @@ func (d *DB) HarvestSenders(ctx context.Context) error {
 INSERT OR IGNORE INTO address_book (email, name, use_count, last_used, created_at)
 SELECT lower(from_address), MAX(from_name), COUNT(*), MAX(date), ?
 FROM messages
-WHERE from_address LIKE '%@%'
+WHERE from_address LIKE '%@%' AND ` + notVaulted + `
 GROUP BY lower(from_address)`
 	if _, err := d.sql.ExecContext(ctx, query, nowText()); err != nil {
 		return fmt.Errorf("storage: harvest senders: %w", err)

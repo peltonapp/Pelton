@@ -54,8 +54,8 @@ const senderEmailSQL = `lower(trim(CASE WHEN instr(from_address, '<') > 0 AND in
 // The two partial sender indexes split the mail between them: list mail, which
 // offers List-Unsubscribe, and the rest.
 const (
-	fromListMail  = `FROM messages INDEXED BY idx_messages_newsletters WHERE list_unsubscribe != ''`
-	fromOtherMail = `FROM messages INDEXED BY idx_messages_people WHERE list_unsubscribe = ''`
+	fromListMail  = `FROM messages INDEXED BY idx_messages_newsletters WHERE list_unsubscribe != '' AND ` + notVaulted
+	fromOtherMail = `FROM messages INDEXED BY idx_messages_people WHERE list_unsubscribe = '' AND ` + notVaulted
 )
 
 // offsetModifier is the sqlite date modifier that moves a UTC date by offset.
@@ -104,7 +104,7 @@ func folderUsageSQL(folderIDs []int64) (string, []any) {
 	return `
 SELECT folder_id, COUNT(*), COALESCE(SUM(size_bytes), 0)
 FROM messages INDEXED BY idx_messages_date
-WHERE pending_delete = 0 AND folder_id IN (` + folders + `)
+WHERE pending_delete = 0 AND folder_id IN (` + folders + `) AND ` + notVaulted + `
 GROUP BY folder_id`, args
 }
 
@@ -140,7 +140,7 @@ type SenderUsage struct {
 func biggestSendersSQL(folderIDs []int64, limit int) (string, []any) {
 	folders, folderArgs := inClause(folderIDs)
 	part := `SELECT ` + senderEmailSQL + ` AS email, size_bytes `
-	filter := ` AND pending_delete = 0 AND folder_id IN (` + folders + `)`
+	filter := ` AND pending_delete = 0 AND folder_id IN (` + folders + `) AND ` + notVaulted
 	args := append(append([]any{}, folderArgs...), folderArgs...)
 	return `
 SELECT email, COUNT(*), COALESCE(SUM(size_bytes), 0) AS bytes FROM (
@@ -175,7 +175,7 @@ func topSendersSQL(s StatsScope, limit int) (string, []any) {
 	return `
 SELECT ` + senderEmailSQL + ` AS email, COUNT(*) AS n, COALESCE(SUM(size_bytes), 0)
 ` + fromOtherMail + ` AND pending_delete = 0
-  AND folder_id IN (` + folders + `)` + own + ` AND date >= ?
+  AND folder_id IN (` + folders + `) AND ` + notVaulted + own + ` AND date >= ?
 GROUP BY ` + senderEmailSQL + `
 HAVING email != ''
 ORDER BY n DESC, email
@@ -256,7 +256,7 @@ SELECT a.id, a.message_id, a.filename, a.content_type, a.size_bytes,
        m.subject, m.from_address, m.from_name, m.date
 FROM attachments a INDEXED BY idx_attachments_size
 JOIN messages m ON m.id = a.message_id
-WHERE m.pending_delete = 0 AND m.folder_id IN (` + folders + `)
+WHERE m.pending_delete = 0 AND m.folder_id IN (` + folders + `) AND ` + notVaultedM + `
 ORDER BY a.size_bytes DESC
 LIMIT ?`, append(args, normalizeLimit(limit))
 }
@@ -311,7 +311,7 @@ func dailyVolumeSQL(s StatsScope) (string, []any) {
 	return `
 SELECT substr(datetime(date, ?), 1, 10) AS day, ` + sentExpr + ` AS sent, COUNT(*)
 FROM messages INDEXED BY idx_messages_date
-WHERE date >= ? AND date != '' AND pending_delete = 0 AND folder_id IN (` + counted + `)
+WHERE date >= ? AND date != '' AND pending_delete = 0 AND folder_id IN (` + counted + `) AND ` + notVaulted + `
 GROUP BY day, sent
 ORDER BY day`, args
 }
@@ -359,7 +359,7 @@ func receivedByHourSQL(s StatsScope) (string, []any) {
 	return `
 SELECT CAST(strftime('%w', date, ?) AS INTEGER) AS wd, CAST(strftime('%H', date, ?) AS INTEGER) AS hr, COUNT(*)
 FROM messages INDEXED BY idx_messages_date
-WHERE date >= ? AND date != '' AND pending_delete = 0 AND folder_id IN (` + folders + `)
+WHERE date >= ? AND date != '' AND pending_delete = 0 AND folder_id IN (` + folders + `) AND ` + notVaulted + `
 GROUP BY wd, hr`, append([]any{modifier, modifier, s.since()}, folderArgs...)
 }
 
@@ -395,7 +395,7 @@ func sentRecipientsSQL(s StatsScope) (string, []any) {
 	return `
 SELECT to_addresses, cc_addresses, COUNT(*)
 FROM messages INDEXED BY idx_messages_list
-WHERE pending_delete = 0 AND folder_id IN (` + folders + `) AND date >= ?
+WHERE pending_delete = 0 AND folder_id IN (` + folders + `) AND ` + notVaulted + ` AND date >= ?
 GROUP BY to_addresses, cc_addresses`, append(args, s.since())
 }
 
@@ -453,7 +453,7 @@ func replyTimesSQL(s StatsScope, maxGap time.Duration) (string, []any) {
 WITH sided AS (
     SELECT thread_id, date, ` + mineExpr + ` AS mine
     FROM messages INDEXED BY idx_messages_thread_date
-    WHERE thread_id > 0 AND date != '' AND pending_delete = 0 AND folder_id IN (` + counted + `)
+    WHERE thread_id > 0 AND date != '' AND pending_delete = 0 AND folder_id IN (` + counted + `) AND ` + notVaulted + `
 ), ordered AS (
     SELECT date, mine, LAG(date) OVER w AS prev_date, LAG(mine) OVER w AS prev_mine
     FROM sided

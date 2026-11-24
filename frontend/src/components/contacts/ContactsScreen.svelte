@@ -18,7 +18,6 @@
   import Spinner from '../common/Spinner.svelte'
   import ContactEditor from './ContactEditor.svelte'
   import ContactConflictDialog from './ContactConflictDialog.svelte'
-  import { prefs } from '../../stores/prefs'
   import {
     addressBooks,
     contacts,
@@ -89,6 +88,7 @@
       note: '',
       emails: [{ value: '', label: '' }],
       phones: [],
+      matrixId: '',
       force: false,
     }
   }
@@ -112,6 +112,7 @@
       note: contact.note,
       emails: contact.emails.length ? contact.emails.map((e) => ({ ...e })) : [{ value: '', label: '' }],
       phones: contact.phones.map((p) => ({ ...p })),
+      matrixId: contact.matrixId,
       force: false,
     }
   }

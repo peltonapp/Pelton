@@ -40,7 +40,7 @@ type ICSFileDTO struct {
 // dialog returns an empty name.
 func (a *App) OpenICSFile() (ICSFileDTO, error) {
 	path, err := a.openFileDialog(openDialogOptions{
-		Title:   "Import calendar",
+		Title: "Import calendar",
 		Filters: []fileFilter{
 			{DisplayName: "Calendar files (*.ics, *.json)", Pattern: "*.ics;*.ical;*.ifb;*.icalendar;*.json;*.jscal"},
 		},

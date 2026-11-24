@@ -25,7 +25,9 @@ import { calendars, calendarSettings, calendarSettingsLoaded, defaultCalendarSet
 import { taskLists, tasks, tasksLoaded } from '../../stores/tasks'
 import { maildragSource } from '../../stores/maildrag'
 import { prefs } from '../../stores/prefs'
+import { meetingPrepTarget } from '../../stores/meetingprep'
 import { toRFC3339 } from '../../lib/caldate'
+import { get } from 'svelte/store'
 
 vi.stubGlobal(
   'ResizeObserver',
@@ -90,6 +92,7 @@ function task(id: number, title: string, due: string): Task {
     contacts: [],
     eventUids: [],
     sortOrder: 0,
+    estimate: 0,
     created: '',
     readOnly: false,
     pending: false,
@@ -123,6 +126,32 @@ describe('MyDayPanel', () => {
     expect(list.getAllByRole('checkbox').map((c) => c.getAttribute('aria-label'))).toEqual(['Mark as done: Pay rent', 'Mark as done: Send the report'])
     expect(list.queryByText('Book trip')).toBeNull()
     expect(api.listOccurrences).toHaveBeenCalledWith(toRFC3339(new Date(2026, 10, 16)), toRFC3339(new Date(2026, 10, 17)))
+  })
+
+  it('offers to prepare for the next meeting with others invited', async () => {
+    const user = userEvent.setup()
+    api.listOccurrences.mockImplementation(async (from: string) =>
+      from.startsWith('2026-11-16')
+        ? [
+            { ...occ('Standup', new Date(2026, 10, 16, 9, 30), new Date(2026, 10, 16, 10)), hasAttendees: true },
+            { ...occ('Focus time', new Date(2026, 10, 16, 10, 30), new Date(2026, 10, 16, 11)), eventId: 6 },
+            { ...occ('Roadmap review', new Date(2026, 10, 16, 14), new Date(2026, 10, 16, 15)), eventId: 7, recurrenceId: '2026-11-16T13:00:00Z', hasAttendees: true },
+          ]
+        : [],
+    )
+    render(MyDayPanel, { props: { clock } })
+    // standup is over at 10:00, so the next meeting is the one at 14:00.
+    const next = await screen.findByRole('group', { name: 'Next meeting' })
+    expect(next).toHaveTextContent('Roadmap review')
+    expect(next).toHaveTextContent('14:00')
+    await user.click(within(next).getByRole('button', { name: 'Prepare' }))
+    expect(get(meetingPrepTarget)).toEqual({ eventId: 7, recurrenceId: '2026-11-16T13:00:00Z' })
+  })
+
+  it('shows no prepare strip when nobody else is invited', async () => {
+    render(MyDayPanel, { props: { clock } })
+    await screen.findByText('Standup')
+    expect(screen.queryByRole('group', { name: 'Next meeting' })).toBeNull()
   })
 
   it('switches to tomorrow', async () => {

@@ -36,7 +36,7 @@ const (
 // The calendar views, the week starts and the time zone displays the settings
 // accept. A week start of -1 follows the locale.
 var (
-	calendarViews        = []string{"month", "week", "day", "agenda"}
+	calendarViews        = []string{"month", "week", "day", "agenda", "year"}
 	calendarZoneDisplays = []string{"off", "label", "dual"}
 )
 
@@ -146,8 +146,8 @@ type CalendarSettingsDTO struct {
 	DefaultReminderMinutes int `json:"defaultReminderMinutes"`
 	// DefaultCalendarID is where new events go, 0 for the first writable one.
 	DefaultCalendarID int64 `json:"defaultCalendarId"`
-	// DefaultView is the view the calendar opens in: month, week, day or
-	// agenda.
+	// DefaultView is the view the calendar opens in: month, week, day,
+	// agenda or year.
 	DefaultView string `json:"defaultView"`
 	// WeekStart is the first day of the week, 0 for Sunday through 6, or -1
 	// to follow the locale.

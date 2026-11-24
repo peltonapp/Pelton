@@ -2,7 +2,7 @@
   // the settings screen of the new design. it takes over the window: a
   // navigation of pages on the left with a search over single settings, the
   // open page on the right. pages are separate components loaded on first use.
-  import { createEventDispatcher, tick, type ComponentType } from 'svelte'
+  import { createEventDispatcher, onMount, tick, type ComponentType } from 'svelte'
   import { get } from 'svelte/store'
   // the duotone x draws a tinted square behind the cross, which reads as a
   // checkbox rather than as close.
@@ -17,14 +17,24 @@
   import { recording } from '../../stores/shortcuts'
   import { toastError, errorMessage } from '../../stores/toast'
   import { t } from '../../lib/i18n'
+  import { dur } from '../../lib/motion'
 
-  /** Page to open on, as a page key or a classic category key. */
+  /**
+   * Page to open on, as a page key or a classic category key, optionally
+   * followed by "#" and the id of a setting on it to scroll to and mark.
+   */
   export let initialCategory: string | null = null
 
   const dispatch = createEventDispatcher<{ close: void; rerunOnboarding: void }>()
 
   const pages = settingsPages2.filter((p) => pageExists(p.key))
-  let active = resolvePage(initialCategory)
+  const [initialPage, initialSetting] = (initialCategory ?? '').split('#')
+  let active = resolvePage(initialPage || null)
+  onMount(() => {
+    if (initialSetting) {
+      void openResult({ page: active, id: initialSetting, labelKey: '' })
+    }
+  })
   let component: ComponentType | null = null
   let contentEl: HTMLDivElement | undefined
   let loadedKey = ''
@@ -121,7 +131,7 @@
       return
     }
     const found = row
-    found.scrollIntoView({ block: 'center', behavior: 'smooth' })
+    found.scrollIntoView({ block: 'center', behavior: dur(1) ? 'smooth' : 'auto' })
     found.classList.remove('s2-found')
     void found.offsetWidth
     found.classList.add('s2-found')

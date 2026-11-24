@@ -243,6 +243,7 @@ func attachmentWhere(q AttachmentQuery) (string, []any) {
 		"m.has_attachments = 1",
 		"m.pending_delete = 0",
 		"m.folder_id IN (" + folders + ")",
+		notVaultedM,
 		fmt.Sprintf("NOT (%s = 'image' AND (a.size_bytes < %d OR (a.content_id <> '' AND a.size_bytes < %d)))",
 			kindExpr, TinyImageBytes, InlineImageBytes),
 	}
@@ -303,7 +304,7 @@ func (d *DB) GetAttachmentEntry(ctx context.Context, attachmentID int64) (*Attac
 SELECT a.id, a.message_id, a.filename, a.content_type, a.size_bytes, a.content_id, a.disk_path,
        m.account_id, m.folder_id, m.thread_id, m.subject, m.from_address, m.from_name, m.date
 FROM attachments a JOIN messages m ON m.id = a.message_id
-WHERE a.id = ?`
+WHERE a.id = ? AND ` + notVaultedM
 	var (
 		e    AttachmentEntry
 		date string
@@ -338,6 +339,13 @@ func (d *DB) AttachmentOnDisk(diskPath string) bool {
 // RestoreAttachmentFile writes the bytes of an attachment whose file is
 // missing and points its row at the new file.
 func (d *DB) RestoreAttachmentFile(ctx context.Context, accountID int64, att Attachment, content io.Reader) (*Attachment, error) {
+	mk, _, _, err := d.sealedKey(ctx, att.MessageID)
+	if err != nil {
+		return nil, err
+	}
+	if mk != nil {
+		return d.restoreSealedAttachment(ctx, accountID, att, content, mk)
+	}
 	saved, err := d.writeAttachmentFile(accountID, att.MessageID, att.Filename, content)
 	if err != nil {
 		return nil, err

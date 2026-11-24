@@ -78,6 +78,11 @@ export type ShortcutAction =
   | 'focus-reader'
   // opens the calendar's quick add, from the calendar or any other space.
   | 'calendar-quick-add'
+  // lays today's due tasks out as proposed time blocks.
+  | 'plan-day'
+  // blocks time for the open mail or task: in the next free time for mail,
+  // with Find time for a task.
+  | 'block-time'
   // switching between the spaces of the new design.
   | 'go-mail'
   | 'go-calendar'
@@ -87,10 +92,22 @@ export type ShortcutAction =
   | 'toggle-sender-panel'
   // shows or hides the My Day panel beside the mail.
   | 'toggle-my-day'
+  // the open conversation alone, set for reading, new design only.
+  | 'reading-view'
   // shows the Tasks space.
   | 'go-tasks'
+  // shows the Chat space, when chat is on.
+  | 'go-chat'
   // makes a task from the open message, or from each selected one.
   | 'create-task'
+  // shows the Projects space.
+  | 'go-projects'
+  // files the open or selected conversations under a project.
+  | 'add-to-project'
+  // shows the Feeds space.
+  | 'go-feeds'
+  // shows the Automations space, or its overlay in the classic design.
+  | 'go-automations'
   // the split inbox tabs, only while the message list has focus.
   | 'next-split'
   | 'prev-split'
@@ -101,15 +118,68 @@ export type ShortcutAction =
   // the newsletter manager on the mail surface, and the insights page.
   | 'open-newsletters'
   | 'open-insights'
+  // undo and redo of the last mail action, and the list of recent ones. They
+  // leave a text field, the composer and the editors to their own undo.
+  | 'undo'
+  | 'redo'
+  | 'undo-history'
   // the shortcut sheet and focus mode, new design only.
   | 'shortcut-sheet'
   | 'focus-mode'
+  // locks the app, when the app lock is on.
+  | 'lock-app'
+  // the Notes space: showing it, a new note, today's daily note, the quick
+  // switcher, the editor's reading mode and the graph. The last two only act
+  // while Notes is on screen; the others bring it up from anywhere.
+  | 'go-notes'
+  | 'notes-new'
+  | 'notes-today'
+  | 'notes-switcher'
+  | 'notes-toggle-mode'
+  | 'notes-graph'
+  // the spaces by their place in the navigation, hidden ones skipped.
+  | SpaceNumberAction
+  // back and forward through the places visited in this window.
+  | 'nav-back'
+  | 'nav-forward'
   // composer actions of the new design. They act on the composer that last
   // had focus, so they carry a modifier and work while typing.
   | ComposeAction
+  // a script placed as a shortcut, bound by the user alone.
+  | ScriptAction
+
+/** The action of a script placed as a shortcut: "script:" and its id. */
+export type ScriptAction = `script:${number}`
+
+/** The action id of a script. */
+export function scriptAction(scriptId: number): ScriptAction {
+  return `script:${scriptId}`
+}
+
+/** The script an action runs, or null for another action. */
+export function scriptOfAction(action: string): number | null {
+  const m = /^script:(\d+)$/.exec(action)
+  return m ? Number(m[1]) : null
+}
+
+/** Goes to the nth space of the navigation. */
+export type SpaceNumberAction = `go-space-${1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9}`
+
+/** The number actions, first to ninth. */
+export const spaceNumberActions: readonly SpaceNumberAction[] = [1, 2, 3, 4, 5, 6, 7, 8, 9].map((n) => `go-space-${n}` as SpaceNumberAction)
+
+/** The place in the navigation an action goes to, from 1, or null for another action. */
+export function spaceNumber(action: string): number | null {
+  const at = spaceNumberActions.indexOf(action as SpaceNumberAction)
+  return at < 0 ? null : at + 1
+}
 
 /** The shortcut actions that act on a composer rather than on mail. */
 export type ComposeAction =
+  // send, then archive the conversation a reply answered, or set a follow-up
+  // reminder on the message.
+  | 'compose-send-archive'
+  | 'compose-send-remind'
   | 'compose-follow-up'
   | 'compose-insert-snippet'
   | 'compose-intro-bcc'
@@ -122,6 +192,8 @@ export type ComposeAction =
 
 /** Every composer action, in the order Settings and the palette list them. */
 export const composeActions: readonly ComposeAction[] = [
+  'compose-send-archive',
+  'compose-send-remind',
   'compose-follow-up',
   'compose-insert-snippet',
   'compose-intro-bcc',
@@ -134,6 +206,9 @@ export const composeActions: readonly ComposeAction[] = [
 /** The composer actions that act on a focused recipient chip. */
 export const chipActions: readonly ComposeAction[] = ['compose-recipient-down', 'compose-recipient-up']
 
+/** The composer actions that send, which like send only answer inside a composer. */
+export const sendActions: readonly ComposeAction[] = ['compose-send-archive', 'compose-send-remind']
+
 /** isComposeAction reports whether an action belongs to a composer. */
 export function isComposeAction(action: string): action is ComposeAction {
   return (composeActions as readonly string[]).includes(action)
@@ -144,6 +219,8 @@ export interface Shortcut {
   action: ShortcutAction
   combo: string
   labelKey: string
+  /** A name shown instead of the label key, for an action that has no catalog entry. */
+  label?: string
   /** The action exists in the new design only; classic does not list it. */
   newDesignOnly?: boolean
   /**
@@ -231,8 +308,12 @@ export const shortcuts: Shortcut[] = [
   // q is the key other calendars open quick add with, and nothing else here
   // uses it; like every bare letter it never fires from inside a text field.
   { action: 'calendar-quick-add', combo: 'q', labelKey: 'shortcut.calendarQuickAdd' },
-  // letters rather than digits: mod+1 to 9 pick reading-pane tabs, and a digit
-  // with Shift or Alt types a symbol that would not match.
+  // p for plan and w for work, the Shift letters the spaces left free.
+  { action: 'plan-day', combo: 'mod+shift+p', labelKey: 'shortcut.planDay', newDesignOnly: true },
+  { action: 'block-time', combo: 'mod+shift+w', labelKey: 'shortcut.blockTime', newDesignOnly: true },
+  // letters rather than digits: mod+1 to 9 go to a space by its place in the
+  // navigation, and a digit with Shift or Alt types a symbol that would not
+  // match.
   { action: 'go-mail', combo: 'mod+shift+m', labelKey: 'shortcut.goMail' },
   { action: 'go-calendar', combo: 'mod+shift+c', labelKey: 'shortcut.goCalendar' },
   { action: 'go-contacts', combo: 'mod+shift+a', labelKey: 'shortcut.goContacts' },
@@ -240,12 +321,24 @@ export const shortcuts: Shortcut[] = [
   // mod+shift+i opens the web inspector in development builds.
   { action: 'open-attachments', combo: 'mod+shift+f', labelKey: 'shortcut.openAttachments' },
   { action: 'toggle-sender-panel', combo: 'i', labelKey: 'shortcut.toggleSenderPanel' },
+  // R for reading, with Shift since plain r replies.
+  { action: 'reading-view', combo: 'shift+r', labelKey: 'shortcut.readingView', newDesignOnly: true },
   // y for "your day"; the letters near it are taken by the spaces and tasks.
   { action: 'toggle-my-day', combo: 'mod+shift+y', labelKey: 'shortcut.toggleMyDay' },
   // the key Thunderbird shows its task list with.
   { action: 'go-tasks', combo: 'mod+shift+d', labelKey: 'shortcut.goTasks' },
+  // x for chat: the letters nearer the meaning are taken.
+  { action: 'go-chat', combo: 'mod+shift+x', labelKey: 'shortcut.goChat', newDesignOnly: true },
   // t for task, free among the message letters.
   { action: 'create-task', combo: 't', labelKey: 'shortcut.createTask' },
+  // j sits between the letters the other spaces took.
+  { action: 'go-projects', combo: 'mod+shift+j', labelKey: 'shortcut.goProjects', newDesignOnly: true },
+  // p for project, free among the message letters; with a suggestion showing
+  // in the reader it takes that one without asking.
+  { action: 'add-to-project', combo: 'p', labelKey: 'shortcut.addToProject', newDesignOnly: true },
+  { action: 'go-feeds', combo: 'mod+shift+g', labelKey: 'shortcut.goFeeds', newDesignOnly: true },
+  // s for scripts.
+  { action: 'go-automations', combo: 'mod+shift+s', labelKey: 'shortcut.goAutomations' },
   // Tab only moves between splits while the list has focus; everywhere else it
   // keeps moving focus between controls.
   { action: 'next-split', combo: 'tab', labelKey: 'shortcut.nextSplit' },
@@ -255,9 +348,26 @@ export const shortcuts: Shortcut[] = [
   { action: 'edit-note', combo: 'shift+n', labelKey: 'shortcut.editNote' },
   { action: 'open-newsletters', combo: 'mod+shift+l', labelKey: 'shortcut.openNewsletters' },
   { action: 'open-insights', combo: '', labelKey: 'shortcut.openInsights' },
+  { action: 'undo', combo: 'mod+z', labelKey: 'shortcut.undo' },
+  { action: 'redo', combo: 'mod+shift+z', labelKey: 'shortcut.redo' },
+  { action: 'undo-history', combo: 'mod+shift+t', labelKey: 'shortcut.undoHistory', newDesignOnly: true },
   // "?" is shifted on every common layout, so the key arrives with shift held.
   { action: 'shortcut-sheet', combo: 'shift+?', labelKey: 'shortcut.shortcutSheet', newDesignOnly: true },
   { action: 'focus-mode', combo: 'mod+shift+h', labelKey: 'shortcut.focusMode', newDesignOnly: true },
+  // a letter no other Shift combo here or in the editors uses; Alt would type
+  // a symbol on macOS and never match.
+  { action: 'lock-app', combo: 'mod+shift+n', labelKey: 'shortcut.lockApp' },
+  // k for knowledge, beside the other spaces' mod+shift letters. Quick open
+  // and the reading-mode toggle take the keys Obsidian uses for them.
+  { action: 'go-notes', combo: 'mod+shift+k', labelKey: 'shortcut.goNotes', newDesignOnly: true },
+  { action: 'notes-new', combo: '', labelKey: 'shortcut.notesNew', newDesignOnly: true },
+  { action: 'notes-today', combo: '', labelKey: 'shortcut.notesToday', newDesignOnly: true },
+  { action: 'notes-switcher', combo: 'mod+o', labelKey: 'shortcut.notesSwitcher', newDesignOnly: true },
+  { action: 'notes-toggle-mode', combo: 'mod+e', labelKey: 'shortcut.notesToggleMode', newDesignOnly: true },
+  { action: 'notes-graph', combo: '', labelKey: 'shortcut.notesGraph', newDesignOnly: true },
+  // the send key with one more modifier, so the variants sit beside it.
+  { action: 'compose-send-archive', combo: 'mod+shift+enter', labelKey: 'sendVariant.archive' },
+  { action: 'compose-send-remind', combo: 'mod+alt+enter', labelKey: 'sendVariant.remind' },
   { action: 'compose-follow-up', combo: 'mod+shift+u', labelKey: 'followUp.menu' },
   { action: 'compose-insert-snippet', combo: 'mod+shift+i', labelKey: 'snippets.insert' },
   { action: 'compose-intro-bcc', combo: 'mod+shift+b', labelKey: 'recipients.introBcc' },
@@ -266,6 +376,13 @@ export const shortcuts: Shortcut[] = [
   // alt with an arrow, since a focused chip has no text to move through.
   { action: 'compose-recipient-down', combo: 'alt+arrowdown', labelKey: 'recipients.moveDown' },
   { action: 'compose-recipient-up', combo: 'alt+arrowup', labelKey: 'recipients.moveUp' },
+  // the keys macOS apps go back and forward with; elsewhere the browser's
+  // alt and an arrow work as well.
+  { action: 'nav-back', combo: 'mod+[', alt: isMac ? undefined : 'alt+arrowleft', labelKey: 'shortcut.navBack', newDesignOnly: true },
+  { action: 'nav-forward', combo: 'mod+]', alt: isMac ? undefined : 'alt+arrowright', labelKey: 'shortcut.navForward', newDesignOnly: true },
+  // the digits a browser picks tabs with. Last in the list, so a key someone
+  // already gave another action keeps doing that.
+  ...spaceNumberActions.map((action, i): Shortcut => ({ action, combo: `mod+${i + 1}`, labelKey: `shortcut.goSpace${i + 1}`, newDesignOnly: true })),
 ]
 
 // ParsedCombo is a combo broken into its modifier flags and final key.

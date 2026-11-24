@@ -36,6 +36,9 @@ type MessageQuery struct {
 	// Split narrows the query to one tab of the split inbox. Nil lists every
 	// tab.
 	Split *SplitFilter
+	// ListMail narrows the query to mailing list mail, the messages offering
+	// List-Unsubscribe that the newsletter manager lists.
+	ListMail bool
 	// byThread is set by the conversation queries.
 	byThread bool
 }
@@ -55,9 +58,11 @@ const (
 // QueryMessages returns the page of messages matching q, newest first. It is the
 // single read path the ui list uses for both per folder and unified views.
 func (d *DB) QueryMessages(ctx context.Context, q MessageQuery) ([]Message, error) {
-	if len(q.FolderIDs) == 0 {
-		return nil, nil
+	ids, err := d.visibleFolderIDs(ctx, q.FolderIDs)
+	if err != nil || len(ids) == 0 {
+		return nil, err
 	}
+	q.FolderIDs = ids
 
 	query, args := pageQuery(q)
 	rows, err := d.sql.QueryContext(ctx, query, args...)
@@ -77,7 +82,7 @@ func (d *DB) QueryMessages(ctx context.Context, q MessageQuery) ([]Message, erro
 	if err := rows.Err(); err != nil {
 		return nil, fmt.Errorf("storage: iterate messages: %w", err)
 	}
-	return messages, nil
+	return d.visibleMessages(ctx, messages)
 }
 
 // pageQuery builds the read for one page of the list.
@@ -136,9 +141,11 @@ LIMIT ? OFFSET ?`
 // means naming every row in it, which is one id column rather than the bodies
 // that make a page read expensive.
 func (d *DB) QueryMessageIDs(ctx context.Context, q MessageQuery) ([]int64, error) {
-	if len(q.FolderIDs) == 0 {
-		return nil, nil
+	visible, err := d.visibleFolderIDs(ctx, q.FolderIDs)
+	if err != nil || len(visible) == 0 {
+		return nil, err
 	}
+	q.FolderIDs = visible
 	where, args := messageWhere(q)
 	rows, err := d.sql.QueryContext(ctx,
 		`SELECT id FROM messages WHERE `+where+` ORDER BY date DESC, uid DESC`, args...)
@@ -164,12 +171,14 @@ func (d *DB) QueryMessageIDs(ctx context.Context, q MessageQuery) ([]int64, erro
 // CountMessages returns how many messages match q ignoring its limit and offset,
 // so the ui can show totals and decide whether more pages exist.
 func (d *DB) CountMessages(ctx context.Context, q MessageQuery) (int, error) {
-	if len(q.FolderIDs) == 0 {
-		return 0, nil
+	visible, err := d.visibleFolderIDs(ctx, q.FolderIDs)
+	if err != nil || len(visible) == 0 {
+		return 0, err
 	}
+	q.FolderIDs = visible
 	where, args := messageWhere(q)
 	var n int
-	err := d.sql.QueryRowContext(ctx,
+	err = d.sql.QueryRowContext(ctx,
 		`SELECT COUNT(*) FROM messages WHERE `+where, args...).Scan(&n)
 	if err != nil {
 		return 0, fmt.Errorf("storage: count messages: %w", err)
@@ -182,6 +191,9 @@ func (d *DB) CountMessages(ctx context.Context, q MessageQuery) (int, error) {
 // expunge after a delete, or snoozed away) are left out, so the badge agrees
 // with the list.
 func (d *DB) FolderCounts(ctx context.Context, folderID int64) (total, unread int, err error) {
+	if visible, err := d.FolderVisible(ctx, folderID); err != nil || !visible {
+		return 0, 0, err
+	}
 	const query = `
 SELECT COUNT(*), COALESCE(SUM(CASE WHEN flags & ? = 0 THEN 1 ELSE 0 END), 0)
 FROM messages WHERE folder_id = ? AND pending_delete = 0 AND snooze_hidden = 0`
@@ -194,8 +206,9 @@ FROM messages WHERE folder_id = ? AND pending_delete = 0 AND snooze_hidden = 0`
 // UnreadCount returns the number of unread messages across the given folders,
 // used for unified view badges.
 func (d *DB) UnreadCount(ctx context.Context, folderIDs []int64) (int, error) {
-	if len(folderIDs) == 0 {
-		return 0, nil
+	folderIDs, err := d.visibleFolderIDs(ctx, folderIDs)
+	if err != nil || len(folderIDs) == 0 {
+		return 0, err
 	}
 	placeholders, args := inClause(folderIDs)
 	args = append([]any{uint8(FlagSeen)}, args...)
@@ -222,7 +235,7 @@ func (d *DB) LatestMessageFrom(ctx context.Context, value string, matchDomain bo
 	}
 	query := selectMessageColumns + `
 FROM messages
-WHERE ` + cond + `
+WHERE ` + cond + ` AND ` + notVaulted + `
 ORDER BY date DESC, uid DESC
 LIMIT 1`
 	m, err := scanMessage(d.sql.QueryRowContext(ctx, query, arg))
@@ -264,6 +277,9 @@ func folderWhere(q MessageQuery, folderIDs []int64) (string, []any) {
 		where += " AND thread_id NOT IN (SELECT id FROM threads WHERE muted = 1)"
 	}
 	where += pinClause(q.Pin, q.byThread)
+	if q.ListMail {
+		where += " AND list_unsubscribe != ''"
+	}
 	if q.Split != nil {
 		clause, splitArgs := splitWhere(*q.Split, time.Now())
 		where += " AND " + clause

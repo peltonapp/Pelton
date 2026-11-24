@@ -4,6 +4,9 @@ import { isMac } from '../../../lib/i18n'
 const entries: SettingsIndexEntry[] = [
   { page: 'notifications', id: 'toast-position', labelKey: 'settings.toastPosition', keywords: 'notification toast position corner popup' },
   { page: 'notifications', id: 'notify-new-mail', labelKey: 'vip.notifyNewMail', keywords: 'new mail notification alert desktop' },
+  { page: 'notifications', id: 'notify-action-archive', labelKey: 'notify.actions.archive', keywords: 'notification button action archive' },
+  { page: 'notifications', id: 'notify-action-mark-read', labelKey: 'notify.actions.markRead', keywords: 'notification button action mark read' },
+  { page: 'notifications', id: 'notify-action-reply', labelKey: 'notify.actions.reply', keywords: 'notification button action reply' },
   {
     page: 'notifications',
     id: 'unread-badge',

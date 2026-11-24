@@ -7,7 +7,7 @@ import { openSpace } from './space'
 import { attachmentsOpen, closeAttachments } from './attachments'
 
 /** A screen that can fill the mail surface. */
-export type MailScreen = 'newsletters'
+export type MailScreen = 'newsletters' | 'privacy'
 
 /** The screen on the mail surface, or null for the list and reader. */
 export const mailScreen = writable<MailScreen | null>(null)

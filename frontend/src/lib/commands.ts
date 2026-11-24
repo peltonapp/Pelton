@@ -28,7 +28,19 @@ import { accountLabel } from './format'
 import type { Account, Folder, UnifiedView, View, MessageSummary, ThemeInfo, Profile } from './types'
 
 /** Which section of the palette an entry belongs to. */
-export type CommandGroup = 'action' | 'navigate' | 'setting' | 'mail' | 'calendar' | 'contacts' | 'tasks'
+export type CommandGroup =
+  | 'action'
+  | 'navigate'
+  | 'setting'
+  | 'mail'
+  | 'calendar'
+  | 'contacts'
+  | 'tasks'
+  | 'projects'
+  | 'notes'
+  | 'feeds'
+  | 'chat'
+  | 'automations'
 
 /**
  * A second stage of the palette: picking a folder for "Rename mailbox", a
@@ -57,6 +69,8 @@ export interface PaletteCommand {
   icon: ComponentType
   /** A colour dot rendered instead of the icon, for the flag colours. */
   swatch?: string
+  /** Set for an entry that runs a script, to the script's name: the entry carries the script mark. */
+  script?: string
   danger?: boolean
   /** Runs the entry, or returns the step to descend into. */
   run: () => CommandStep | void | Promise<void>

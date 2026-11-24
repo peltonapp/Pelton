@@ -12,6 +12,9 @@
   import MessageSkeleton from './MessageSkeleton.svelte'
   import EmptyState from '../common/EmptyState.svelte'
   import ErrorState from '../common/ErrorState.svelte'
+  import funnelIcon from '@phosphor-icons/core/assets/duotone/funnel-duotone.svg?raw'
+  import trayIcon from '@phosphor-icons/core/assets/duotone/tray-duotone.svg?raw'
+  import searchIcon from '@phosphor-icons/core/assets/duotone/magnifying-glass-duotone.svg?raw'
   import {
     IconMail,
     IconArrowBackUp,
@@ -27,6 +30,8 @@
     IconSquareMinus,
     IconClockPause,
     IconChecklist,
+    IconLayoutKanban,
+    IconFilterPlus,
     IconDownload,
     IconDownloadOff,
     IconFolderSymlink,
@@ -61,7 +66,6 @@
     backfillFailed,
     runSearch,
     patchInList,
-    removeFromList,
     restoreToList,
     searchSortKind,
     rowPinned,
@@ -95,14 +99,20 @@
   } from '../../stores/selectall'
   import { prefs, setSearchSort, setSplitActive } from '../../stores/prefs'
   import { createTasksFromMail } from '../../lib/taskmail'
+  import { pickProjectFor } from '../../lib/projectpicker'
+  import { createRuleFromMail } from '../automations/blocks/rulefrommail'
   import { maildragSource } from '../../stores/maildrag'
   import { threadedOn, threadMessages, loadThread } from '../../stores/threads'
   import { listRows, threadAware, type ListRow } from '../../lib/threadrows'
   import { motion } from '../../lib/motion'
+  import { parseRowActions, rowActionView, type RowActionId } from '../../lib/rowactions'
+  import { runRowAction } from '../../lib/rowactionrun'
+  import { messageItems } from '../../lib/scriptplacements'
+  import { newestHistoryId, offerUndo } from '../../stores/undohistory'
+  import { noteAction } from '../../lib/coach'
   import {
     setSeen,
     getMessage,
-    removeOffline,
     archiveMessage,
     openDraft,
     openMessageWindow,
@@ -111,10 +121,9 @@
   import { sidebar } from '../../stores/accounts'
   import { openSnooze, openSnoozeMany } from '../../stores/snooze'
   import { openMove, openMoveMany } from '../../stores/move'
-  import { recordDeleted } from '../../stores/undodelete'
   import { recordArchived } from '../../stores/undoarchive'
   import { openContextMenu, type MenuEntry } from '../../stores/contextmenu'
-  import { bindings, menuHint, shortcutTitle } from '../../stores/shortcuts'
+  import { activeBindings, bindings, menuHint, shortcutTitle } from '../../stores/shortcuts'
   import { matchShortcut } from '../../lib/shortcuts'
   import { openInTab } from '../../stores/tabs'
   import { errorMessage, toastError } from '../../stores/toast'
@@ -205,7 +214,7 @@
       return
     }
     await tick()
-    const el = listEl?.querySelector<HTMLElement>(`[id="msg-${id}"]`)
+    const el = listEl?.querySelector<HTMLElement>(`[data-msg-id="${id}"]`)
     if (el) {
       bandTop = el.offsetTop
       bandHeight = el.offsetHeight
@@ -220,7 +229,7 @@
     if (!bandOn || event.pointerType !== 'mouse') {
       return
     }
-    const el = (event.target as HTMLElement).closest<HTMLElement>('[id^="msg-"]')
+    const el = (event.target as HTMLElement).closest<HTMLElement>('[data-msg-id]')
     if (!el) {
       hoverShown = false
       return
@@ -305,6 +314,13 @@
   // the new design searches from the top bar; classic keeps its own bar here.
   $: classic = $prefs.design === 'classic'
   $: inSearch = !classic && $activeSearch !== null
+  // a finished search says how much it found; browsing a folder stays quiet.
+  $: searchStatus =
+    inSearch && $messageList.status !== 'loading'
+      ? items.length === 0
+        ? $t('messageList.empty.noMatch')
+        : $t('a11y.results').replace('{count}', String(items.length))
+      : ''
 
   let searchFilter: SearchFilter = emptyFilter
   let lastKey = ''
@@ -727,7 +743,7 @@
   // on them, which the global handler then runs alone.
   async function onKeydown(event: KeyboardEvent): Promise<void> {
     const vim = $prefs.appVimMode
-    const bound = matchShortcut(event, $bindings)
+    const bound = matchShortcut(event, $activeBindings)
     if (splitOn && (bound === 'next-split' || bound === 'prev-split')) {
       event.preventDefault()
       stepSplit(bound === 'next-split' ? 1 : -1)
@@ -750,7 +766,7 @@
     }
     if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
       const extend = event.shiftKey && $prefs.multiSelectEnabled
-      if (extend && (vim || matchShortcut(event, $bindings) !== null)) {
+      if (extend && (vim || matchShortcut(event, $activeBindings) !== null)) {
         return
       }
       event.preventDefault()
@@ -797,7 +813,7 @@
       event.key === ' ' &&
       $prefs.multiSelectEnabled &&
       activeIndex >= 0 &&
-      matchShortcut(event, $bindings) === null
+      matchShortcut(event, $activeBindings) === null
     ) {
       event.preventDefault()
       toggleSelect(items[activeIndex].id)
@@ -928,6 +944,30 @@
     await setOffline(item, !item.offline)
   }
 
+  // the quick buttons over a hovered row, new design only, and out of the
+  // way while a selection is being built.
+  $: rowActionList = !classic && $prefs.rowActions && selectionCount === 0 ? parseRowActions($prefs.rowActionList) : []
+
+  // onRowAction runs a quick button or a swipe of the new design on its row
+  // alone, through the same functions as the action's shortcut. A swipe also
+  // offers its undo, since nothing on screen says what the gesture did. A
+  // button that took its row away hands the focus back to the list.
+  async function onRowAction(item: MessageSummary, id: RowActionId, via: 'button' | 'swipe'): Promise<void> {
+    if (via === 'button') {
+      noteAction(rowActionView(id, { seen: item.seen, flagged: item.flagged, pinned: false, muted: false, inSpam: false }).shortcut)
+    }
+    const hadFocus = listEl?.contains(document.activeElement) ?? false
+    const since = newestHistoryId()
+    await runRowAction(id, item, via)
+    if (via === 'swipe') {
+      offerUndo(since)
+    }
+    await tick()
+    if (hadFocus && listEl && !listEl.contains(document.activeElement)) {
+      listEl.focus()
+    }
+  }
+
   // performSwipe runs the configured action for a swipe direction on a row.
   function performSwipe(item: MessageSummary, dir: 'left' | 'right'): void {
     const action = (dir === 'left' ? $prefs.swipeLeftAction : $prefs.swipeRightAction) as SwipeAction
@@ -979,7 +1019,10 @@
         { label: $t('messageList.bulk.snoozeCount').replace('{n}', n), icon: IconClockPause, hint: menuHint('snooze'), action: bulkSnooze },
         ...(classic
           ? []
-          : [{ label: $t('tasks.createFromMailCount').replace('{n}', n), icon: IconChecklist, hint: menuHint('create-task'), action: () => void createTasksFromMail(selectedItems.map((m) => m.id)) }]),
+          : [
+              { label: $t('tasks.createFromMailCount').replace('{n}', n), icon: IconChecklist, hint: menuHint('create-task'), action: () => void createTasksFromMail(selectedItems.map((m) => m.id)) },
+              { label: $t('projects.addToCount').replace('{n}', n), icon: IconLayoutKanban, hint: menuHint('add-to-project'), action: () => pickProjectFor(selectedItems.map((m) => m.id)) },
+            ]),
         { label: $t('messageList.bulk.moveCount').replace('{n}', n), icon: IconFolderSymlink, hint: menuHint('move-to'), action: bulkMove },
         { label: $t('messageList.bulk.archiveCount').replace('{n}', n), icon: IconArchive, hint: menuHint('archive'), action: () => void bulkArchiveSelection() },
         ...(classic ? [] : [{ label: $t('palette.bulk.doneCount').replace('{n}', n), icon: IconCircleCheck, hint: menuHint('done'), action: () => void markDone(selectedItems) }]),
@@ -990,7 +1033,7 @@
         'separator',
         { label: $t('messageList.bulk.deleteCount').replace('{n}', n), icon: IconTrash, danger: true, hint: menuHint('delete-message'), action: () => void bulkDelete() },
       ]
-      openContextMenu(event.clientX, event.clientY, entries)
+      openContextMenu(event.clientX, event.clientY, entries, { place: 'mail.row', items: messageItems(selectedItems.map((m) => m.id)) })
       return
     }
     // right clicking outside the selection is a fresh start: the row under the
@@ -1021,7 +1064,13 @@
       ...organizeEntries(item),
       'separator',
       { label: $t('messageList.menu.snooze'), icon: IconClockPause, hint: menuHint('snooze'), action: () => openSnooze(item.id, item.subject) },
-      ...(classic ? [] : [{ label: $t('shortcut.createTask'), icon: IconChecklist, hint: menuHint('create-task'), action: () => void createTasksFromMail([item.id]) }]),
+      ...(classic
+        ? []
+        : [
+            { label: $t('shortcut.createTask'), icon: IconChecklist, hint: menuHint('create-task'), action: () => void createTasksFromMail([item.id]) },
+            { label: $t('projects.addTo'), icon: IconLayoutKanban, hint: menuHint('add-to-project'), action: () => pickProjectFor([item.id], item.threadId) },
+            { label: $t('scripts.blocks.ruleFromMail'), icon: IconFilterPlus, action: () => void createRuleFromMail(item.id) },
+          ]),
       { label: $t('messageList.menu.moveTo'), icon: IconFolderSymlink, hint: menuHint('move-to'), action: () => openMove(item) },
       ...(classic ? [] : [{ label: $t('shortcut.done'), icon: IconCircleCheck, hint: menuHint('done'), action: () => void markDone([item]) }]),
       ...spamEntry(item),
@@ -1032,7 +1081,7 @@
       'separator',
       { label: $t('action.delete'), icon: IconTrash, danger: true, hint: menuHint('delete-message'), action: () => void remove(item) },
     ]
-    openContextMenu(event.clientX, event.clientY, entries)
+    openContextMenu(event.clientX, event.clientY, entries, { place: 'mail.row', items: messageItems([item.id]) })
   }
 
   // organizeEntries are pin, mute and the private note, in the new design only.
@@ -1113,7 +1162,7 @@
 
 <svelte:window on:resize={onResize} />
 
-<section class="list-col" class:new={!classic}>
+<section class="list-col" class:new={!classic} aria-label={$t('a11y.region.messages')}>
   {#if classic}
     <div class="header">
       <SearchBar value={$searchQuery} on:search={onSearch} on:filter={onFilter} on:sort={onSort} />
@@ -1278,6 +1327,9 @@
     <FollowUpBand items={inboxFollowUps} />
   {/if}
 
+  {#if inSearch}
+    <div class="sr-only" role="status">{searchStatus}</div>
+  {/if}
   <div
     class="rows"
     role="listbox"
@@ -1299,25 +1351,38 @@
     {:else if $messageList.status === 'error'}
       <ErrorState message={$messageList.error} onRetry={() => loadList($selection)} />
     {:else if items.length === 0 && quickOn && loadedItems.length > 0}
-      <EmptyState title={$t('quickFilter.empty')} detail={$t('quickFilter.emptyDetail')}>
-        <IconMail size={28} stroke={1.4} />
-        <button slot="action" type="button" class="load-older-btn" on:click={resetQuickFilter}>{$t('quickFilter.clear')}</button>
-      </EmptyState>
+      <EmptyState
+        kind="filtered"
+        icon={funnelIcon}
+        title={$t('quickFilter.empty')}
+        detail={$t('quickFilter.emptyDetail')}
+        actionLabel={$t('quickFilter.clear')}
+        onAction={resetQuickFilter}
+      />
     {:else if items.length === 0 && inboxShown && splitKey !== ''}
-      <EmptyState title={$t('split.empty')} detail={$t('split.emptyDetail')}>
-        <IconMail size={28} stroke={1.4} />
-      </EmptyState>
+      <EmptyState icon={trayIcon} title={$t('split.empty')} detail={$t('split.emptyDetail')} />
     {:else if items.length === 0 && inboxShown}
       {#if inboxFollowUps.length === 0}
         <InboxZero />
       {/if}
-    {:else if items.length === 0}
+    {:else if items.length === 0 && classic}
       <EmptyState
-        title={$searchQuery || inSearch ? $t('messageList.empty.noMatch') : $t('messageList.empty.noMessages')}
-        detail={$searchQuery || inSearch ? $t('messageList.empty.tryDifferentSearch') : $t('messageList.empty.viewEmpty')}
+        title={$searchQuery ? $t('messageList.empty.noMatch') : $t('messageList.empty.noMessages')}
+        detail={$searchQuery ? $t('messageList.empty.tryDifferentSearch') : $t('messageList.empty.viewEmpty')}
       >
         <IconMail size={28} stroke={1.4} />
       </EmptyState>
+    {:else if items.length === 0 && (inSearch || $searchQuery)}
+      <EmptyState
+        kind="filtered"
+        icon={searchIcon}
+        title={$t('messageList.empty.noMatch')}
+        detail={$t('messageList.empty.searchDetail')}
+        actionLabel={$t('common.clearSearch')}
+        onAction={clearSearch}
+      />
+    {:else if items.length === 0}
+      <EmptyState icon={trayIcon} title={$t('messageList.empty.noMessages')} detail={$t('messageList.empty.folderDetail')} />
     {:else}
       {#if topPad > 0}
         <div class="spacer" style={`height:${topPad}px`} aria-hidden="true"></div>
@@ -1342,8 +1407,11 @@
         {#if groupLabels.includes(index)}
           <div class="group-label" aria-hidden="true">{index === 0 ? $t('pin.group') : $t('pin.groupRest')}</div>
         {/if}
-        <div id={`msg-${item.id}`} use:maildragSource={() => dragItems(item)}>
+        <div data-msg-id={item.id} use:maildragSource={() => dragItems(item)}>
           <MessageRow
+            optionId={`msg-${item.id}`}
+            position={index + 1}
+            setSize={items.length}
             message={item}
             thread={row.thread}
             expanded={row.thread !== null && expanded.has(row.thread.threadId)}
@@ -1354,6 +1422,9 @@
             accountColor={mixedAccounts ? (accountColors[item.accountId] ?? '') : ''}
             selected={item.id === $openMessageId || index === activeIndex}
             checked={$selectedIds.has(item.id)}
+            actions={rowActionList}
+            active={index === activeIndex}
+            on:rowaction={(e) => void onRowAction(item, e.detail.id, e.detail.via)}
             on:click={(e) => onRowClick(e, item.id)}
             on:auxclick={(e) => onRowAux(e, item)}
             on:dblclick={() => void openMessageWindow(item.id, item.subject)}

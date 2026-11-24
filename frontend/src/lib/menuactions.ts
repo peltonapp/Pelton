@@ -49,6 +49,7 @@ import {
   IconBrush,
   IconCommand,
   IconCircleCheck,
+  IconLock,
 } from '@tabler/icons-svelte'
 import type { ShortcutAction } from './shortcuts'
 import { isMac } from './i18n'
@@ -59,7 +60,6 @@ import { isMac } from './i18n'
 export type MenuActionId =
   | ShortcutAction
   | 'about'
-  | 'undo'
   | 'toggle-low-power'
   | 'open-mailboxes'
   | 'open-contacts'
@@ -93,6 +93,7 @@ export interface MenuActionDef {
 export const menuActionCatalog: MenuActionDef[] = [
   { action: 'about', labelKey: 'menu.about', iconName: 'info-circle', icon: IconInfoCircle },
   { action: 'preferences', labelKey: 'menu.preferences', iconName: 'settings', icon: IconSettings },
+  { action: 'lock-app', labelKey: 'shortcut.lockApp', iconName: 'lock', icon: IconLock },
   { action: 'hide-window', labelKey: 'menu.hide', iconName: 'eye-off', icon: IconEyeOff, macOnly: true, hint: 'mod+h' },
   { action: 'quit', labelKey: 'menu.quit', iconName: 'power', icon: IconPower, hint: isMac ? 'mod+q' : undefined },
   { action: 'compose', labelKey: 'menu.compose', iconName: 'pencil', icon: IconPencil },
@@ -105,7 +106,7 @@ export const menuActionCatalog: MenuActionDef[] = [
   { action: 'open-contacts', labelKey: 'menu.contacts', iconName: 'address-book', icon: IconAddressBook },
   { action: 'search', labelKey: 'shortcut.search', iconName: 'search', icon: IconSearch },
   { action: 'command-palette', labelKey: 'shortcut.commandPalette', iconName: 'command', icon: IconCommand },
-  { action: 'undo', labelKey: 'menu.undo', iconName: 'arrow-back-up', icon: IconArrowBackUp, hint: 'mod+z' },
+  { action: 'undo', labelKey: 'menu.undo', iconName: 'arrow-back-up', icon: IconArrowBackUp },
   { action: 'reply', labelKey: 'shortcut.reply', iconName: 'corner-up-left', icon: IconCornerUpLeft, needsMessage: true },
   { action: 'reply-all', labelKey: 'shortcut.replyAll', iconName: 'corner-up-left-double', icon: IconCornerUpLeftDouble, needsMessage: true },
   { action: 'forward', labelKey: 'shortcut.forward', iconName: 'arrow-forward-up', icon: IconArrowForwardUp, needsMessage: true },
@@ -219,6 +220,7 @@ export function defaultMenuLayout(): MenuBarLayout {
           action('about'),
           sep('app', 0),
           action('preferences'),
+          action('lock-app'),
           sep('app', 1),
           action('hide-window'),
           action('quit'),

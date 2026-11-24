@@ -43,6 +43,9 @@ type Opened struct {
 	// Signature is the verdict on any signature found. A message may be
 	// encrypted without being signed, in which case Status is SigNone.
 	Signature Signature
+	// Extended is the verdict when the extra keys given to OpenWith are also
+	// consulted. It equals Signature when none were given or none applied.
+	Extended Signature
 }
 
 // IsProtected reports whether a raw message carries OpenPGP content worth
@@ -70,6 +73,20 @@ func IsProtected(raw []byte) bool {
 		bytes.Contains(body, []byte("-----BEGIN PGP SIGNED MESSAGE-----"))
 }
 
+// IsEncrypted reports whether a raw message is OpenPGP encrypted, as opposed
+// to only signed, with the same cheap structural check as IsProtected.
+func IsEncrypted(raw []byte) bool {
+	headers, body, found := splitHeaders(raw)
+	if !found {
+		return false
+	}
+	mediaType, params := parseContentType(headers)
+	if mediaType == "multipart/encrypted" && strings.EqualFold(params["protocol"], "application/pgp-encrypted") {
+		return true
+	}
+	return mediaType != "multipart/signed" && bytes.Contains(body, []byte("-----BEGIN PGP MESSAGE-----"))
+}
+
 // Open decrypts and verifies a received message.
 //
 // raw is the complete RFC 822 message. passphrase unlocks a private key when
@@ -78,6 +95,20 @@ func IsProtected(raw []byte) bool {
 // the inline armored and clearsigned forms that predate it and are still
 // common.
 func (p *PGP) Open(raw []byte, passphrase []byte) (*Opened, error) {
+	return p.OpenWith(raw, passphrase, nil)
+}
+
+// OpenWith is Open with additional public keys to check signatures against,
+// binary or armored, which never take part in decryption. Opened.Signature
+// stays the verdict the keyring alone gives; Opened.Extended is the verdict
+// with the extra keys as well.
+func (p *PGP) OpenWith(raw []byte, passphrase []byte, extraKeys [][]byte) (*Opened, error) {
+	var extra openpgp.EntityList
+	for _, k := range extraKeys {
+		if list, err := readKeys(k); err == nil {
+			extra = append(extra, list...)
+		}
+	}
 	headers, body, found := splitHeaders(raw)
 	if !found {
 		return nil, ErrNotProtected
@@ -87,18 +118,18 @@ func (p *PGP) Open(raw []byte, passphrase []byte) (*Opened, error) {
 	switch {
 	case mediaType == "multipart/encrypted" &&
 		strings.EqualFold(params["protocol"], "application/pgp-encrypted"):
-		return p.openMIMEEncrypted(body, params["boundary"], passphrase)
+		return p.openMIMEEncrypted(body, params["boundary"], passphrase, extra)
 	case mediaType == "multipart/signed" &&
 		strings.EqualFold(params["protocol"], "application/pgp-signature"):
-		return p.openMIMESigned(body, params["boundary"])
+		return p.openMIMESigned(body, params["boundary"], extra)
 	}
-	return p.openInline(headers, body, passphrase)
+	return p.openInline(headers, body, passphrase, extra)
 }
 
 // openMIMEEncrypted reads an RFC 3156 multipart/encrypted message. The first
 // part is the version marker, which carries nothing worth checking beyond its
 // presence; the second holds the armored ciphertext.
-func (p *PGP) openMIMEEncrypted(body []byte, boundary string, passphrase []byte) (*Opened, error) {
+func (p *PGP) openMIMEEncrypted(body []byte, boundary string, passphrase []byte, extra openpgp.EntityList) (*Opened, error) {
 	if boundary == "" {
 		return nil, ErrMalformedArmor
 	}
@@ -110,13 +141,13 @@ func (p *PGP) openMIMEEncrypted(body []byte, boundary string, passphrase []byte)
 	if !ok {
 		return nil, ErrMalformedArmor
 	}
-	return p.decrypt(ciphertext, passphrase)
+	return p.decrypt(ciphertext, passphrase, extra)
 }
 
 // openMIMESigned reads an RFC 3156 multipart/signed message. The signed part is
 // taken verbatim: the signature covers the bytes as transmitted, so parsing and
 // rebuilding the part would invalidate a signature that is perfectly good.
-func (p *PGP) openMIMESigned(body []byte, boundary string) (*Opened, error) {
+func (p *PGP) openMIMESigned(body []byte, boundary string, extra openpgp.EntityList) (*Opened, error) {
 	if boundary == "" {
 		return nil, ErrMalformedArmor
 	}
@@ -129,28 +160,37 @@ func (p *PGP) openMIMESigned(body []byte, boundary string) (*Opened, error) {
 	if !ok {
 		return nil, ErrMalformedArmor
 	}
-	return &Opened{Body: signed, Signature: p.checkDetached(signed, sigArmor)}, nil
+	keyring, err := p.keys.PublicKeys()
+	if err != nil {
+		keyring = nil
+	}
+	opened := &Opened{Body: signed, Signature: checkDetached(keyring, signed, sigArmor)}
+	opened.Extended = opened.Signature
+	if opened.Signature.Status == SigUntrusted && len(extra) > 0 {
+		opened.Extended = checkDetached(append(append(openpgp.EntityList{}, keyring...), extra...), signed, sigArmor)
+	}
+	return opened, nil
 }
 
 // openInline handles the pre-MIME forms: an armored message or a clearsigned
 // block sitting in an ordinary text body.
-func (p *PGP) openInline(headers, body []byte, passphrase []byte) (*Opened, error) {
+func (p *PGP) openInline(headers, body []byte, passphrase []byte, extra openpgp.EntityList) (*Opened, error) {
 	text, err := decodeBody(headers, body)
 	if err != nil {
 		text = body
 	}
 	switch {
 	case bytes.Contains(text, []byte("-----BEGIN PGP MESSAGE-----")):
-		return p.decrypt(text, passphrase)
+		return p.decrypt(text, passphrase, extra)
 	case bytes.Contains(text, []byte("-----BEGIN PGP SIGNED MESSAGE-----")):
-		return p.openClearsigned(text)
+		return p.openClearsigned(text, extra)
 	}
 	return nil, ErrNotProtected
 }
 
 // openClearsigned verifies an inline clearsigned block and returns the text it
 // covers, with the armor removed.
-func (p *PGP) openClearsigned(text []byte) (*Opened, error) {
+func (p *PGP) openClearsigned(text []byte, extra openpgp.EntityList) (*Opened, error) {
 	block, _ := clearsign.Decode(text)
 	if block == nil {
 		return nil, ErrMalformedArmor
@@ -159,20 +199,26 @@ func (p *PGP) openClearsigned(text []byte) (*Opened, error) {
 	if err != nil {
 		return nil, err
 	}
-	opened := &Opened{Body: block.Bytes}
-	if len(keyring) == 0 {
-		opened.Signature = unknownSigner()
-		return opened, nil
+	check := func(ring openpgp.EntityList) Signature {
+		if len(ring) == 0 {
+			return unknownSigner()
+		}
+		signer, err := openpgp.CheckDetachedSignature(
+			ring, bytes.NewReader(block.Bytes), block.ArmoredSignature.Body, cryptoConfig())
+		return signatureVerdict(signer, err)
 	}
-	signer, err := openpgp.CheckDetachedSignature(
-		keyring, bytes.NewReader(block.Bytes), block.ArmoredSignature.Body, cryptoConfig())
-	opened.Signature = signatureVerdict(signer, err)
+	opened := &Opened{Body: block.Bytes, Signature: check(keyring)}
+	opened.Extended = opened.Signature
+	if opened.Signature.Status == SigUntrusted && len(extra) > 0 {
+		opened.Extended = check(append(append(openpgp.EntityList{}, keyring...), extra...))
+	}
 	return opened, nil
 }
 
 // decrypt opens an armored OpenPGP message with whichever stored private key it
-// was encrypted to, reporting any signature carried inside it.
-func (p *PGP) decrypt(ciphertext, passphrase []byte) (*Opened, error) {
+// was encrypted to, reporting any signature carried inside it. extra keys are
+// consulted for the signature only.
+func (p *PGP) decrypt(ciphertext, passphrase []byte, extra openpgp.EntityList) (*Opened, error) {
 	private, err := p.keys.PrivateKeys()
 	if err != nil {
 		return nil, err
@@ -188,6 +234,8 @@ func (p *PGP) decrypt(ciphertext, passphrase []byte) (*Opened, error) {
 	}
 	keyring := append(openpgp.EntityList{}, private...)
 	keyring = append(keyring, public...)
+	base := keyring
+	keyring = append(append(openpgp.EntityList{}, keyring...), extra...)
 
 	block, err := armor.Decode(bytes.NewReader(ciphertext))
 	if err != nil {
@@ -230,13 +278,18 @@ func (p *PGP) decrypt(ciphertext, passphrase []byte) (*Opened, error) {
 	default:
 		opened.Signature = signatureVerdict(md.SignedBy.Entity, md.SignatureError)
 	}
+	opened.Extended = opened.Signature
+	// a signature only the extra keys could check reads, without them, as one
+	// from an unknown key.
+	if md.IsSigned && md.SignedBy != nil && len(base.KeysById(md.SignedByKeyId)) == 0 {
+		opened.Signature = unknownSigner()
+	}
 	return opened, nil
 }
 
 // checkDetached verifies an armored detached signature over content.
-func (p *PGP) checkDetached(content, sigArmor []byte) Signature {
-	keyring, err := p.keys.PublicKeys()
-	if err != nil || len(keyring) == 0 {
+func checkDetached(keyring openpgp.EntityList, content, sigArmor []byte) Signature {
+	if len(keyring) == 0 {
 		return unknownSigner()
 	}
 	signer, err := openpgp.CheckArmoredDetachedSignature(

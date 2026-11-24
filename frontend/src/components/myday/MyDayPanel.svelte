@@ -14,13 +14,16 @@
   import xIcon from '@phosphor-icons/core/assets/regular/x.svg?raw'
   import lightningIcon from '@phosphor-icons/core/assets/duotone/lightning-duotone.svg?raw'
   import plusIcon from '@phosphor-icons/core/assets/duotone/plus-circle-duotone.svg?raw'
-  import '../calendar/controls.css'
+  import '../../theme/controls.css'
   import Ph from '../common/Ph.svelte'
+  import EmptyState from '../common/EmptyState.svelte'
   import Segmented from '../settings2/ui/Segmented.svelte'
   import TimeGrid from '../calendar/TimeGrid.svelte'
   import TaskCheck from '../tasks/TaskCheck.svelte'
   import { listOccurrences, getEvent } from '../../lib/api'
-  import { addDays, dayKey, minutesOfDay, placeOccurrence, startOfDay, toRFC3339, type Placed } from '../../lib/caldate'
+  import { addDays, dayKey, minutesOfDay, parseEventTime, placeOccurrence, startOfDay, toRFC3339, type Placed } from '../../lib/caldate'
+  import { nextMeeting } from '../../lib/meetingprep'
+  import { openMeetingPrep } from '../../stores/meetingprep'
   import { calendarColor, formatLongDay, formatTime, formatWhen } from '../../lib/calformat'
   import { parsePhrase, type ChronoLike } from '../../lib/eventphrase'
   import { parseTaskPhrase } from '../../lib/taskphrase'
@@ -69,6 +72,10 @@
   $: void load(day)
   $: colors = new Map($calendars.map((c) => [c.id, calendarColor(c)]))
   $: dayTasks = myDayTasks($tasks, day, now)
+  $: next = nextMeeting(
+    occurrences.map((p) => p.occ),
+    now,
+  )
   $: dayOptions = [
     { key: 'today', label: $t('myday.today') },
     { key: 'tomorrow', label: $t('myday.tomorrow') },
@@ -287,6 +294,14 @@
     </button>
   </header>
 
+  {#if next}
+    <div class="next" role="group" aria-label={$t('prep.next')}>
+      <span class="next-when">{formatTime(parseEventTime(next.start, false), timeFormat)}</span>
+      <span class="next-what" title={next.summary}>{next.summary || $t('calendar.untitled')}</span>
+      <button type="button" class="cal-btn" on:click={() => openMeetingPrep(next.eventId, next.recurrenceId)}>{$t('prep.button')}</button>
+    </div>
+  {/if}
+
   <section class="agenda" aria-label={$t('myday.agenda')}>
     {#key dayId}
       <TimeGrid
@@ -310,7 +325,7 @@
   <section class="tasks" aria-label={$t('myday.tasks')} use:maildrop={taskDrop}>
     <h3>{$t('myday.tasks')}</h3>
     {#if dayTasks.length === 0}
-      <p class="empty">{$t(which === 'today' ? 'myday.noTasksToday' : 'myday.noTasksTomorrow')}</p>
+      <EmptyState size="compact" title={$t(which === 'today' ? 'myday.noTasksToday' : 'myday.noTasksTomorrow')} />
     {:else}
       <ul>
         {#each dayTasks as { task, overdue } (task.id)}
@@ -401,6 +416,30 @@
     white-space: nowrap;
   }
 
+  .next {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+    padding: var(--space-2) var(--space-3);
+    border-bottom: var(--hairline) solid var(--border-subtle);
+    background: var(--surface-sunken);
+    font-size: var(--fz-label);
+  }
+
+  .next-when {
+    color: var(--text-secondary);
+    font-variant-numeric: tabular-nums;
+  }
+
+  .next-what {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    font-weight: var(--fw-medium);
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
   .agenda {
     flex: 1 1 60%;
     min-height: 0;
@@ -416,10 +455,6 @@
     border-top: var(--hairline) solid var(--border-subtle);
     border-radius: var(--radius-control);
     transition: background-color var(--motion-fast) var(--ease-out);
-  }
-
-  .tasks:global(.maildrop-over) {
-    background: var(--selection-bg);
   }
 
   h3 {
@@ -480,12 +515,6 @@
 
   .due.overdue {
     color: var(--danger);
-  }
-
-  .empty {
-    margin: 0;
-    color: var(--text-tertiary);
-    font-size: var(--fz-meta);
   }
 
   footer {

@@ -9,9 +9,12 @@
   import { previewTarget, closePreview } from '../../stores/preview'
   import { readAttachment, saveAttachment } from '../../lib/api'
   import { previewKind } from '../../lib/filetype'
+  import { popupIsOpen } from '../../lib/popups'
   import { formatBytes } from '../../lib/format'
+  import { prefs } from '../../stores/prefs'
   import { errorMessage, toastError, toastSuccess } from '../../stores/toast'
   import { t } from '../../lib/i18n'
+  import { calm } from '../../lib/motion'
   import type { AttachmentContent } from '../../lib/types'
   import PdfView from './PdfView.svelte'
 
@@ -26,7 +29,7 @@
 
   // (re)load whenever the target changes.
   $: if ($previewTarget) {
-    const key = `${$previewTarget.messageId}:${$previewTarget.attachment.id}`
+    const key = $previewTarget.key ?? `${$previewTarget.messageId}:${$previewTarget.attachment.id}`
     if (key !== lastKey) {
       lastKey = key
       void load()
@@ -71,7 +74,7 @@
     releaseUrl()
     const key = lastKey
     try {
-      const c = await readAttachment(target.messageId, target.attachment.id)
+      const c = target.read ? await target.read() : await readAttachment(target.messageId, target.attachment.id)
       // the preview was closed or moved to another file while this one was
       // read; its bytes would land under the wrong name
       if (key !== lastKey) {
@@ -117,8 +120,8 @@
       return
     }
     try {
-      const path = await saveAttachment(target.messageId, target.attachment.id)
-      if (path) {
+      const saved = target.save ? await target.save() : await saveAttachment(target.messageId, target.attachment.id)
+      if (saved) {
         toastSuccess($t('detail.attachments.saved').replace('{name}', target.attachment.filename))
       }
     } catch (err) {
@@ -127,7 +130,7 @@
   }
 
   function onKeydown(event: KeyboardEvent): void {
-    if (event.key === 'Escape') {
+    if (event.key === 'Escape' && ($prefs.design === 'classic' || !popupIsOpen())) {
       closePreview()
     }
   }
@@ -139,8 +142,8 @@
 
 {#if $previewTarget}
   <!-- svelte-ignore a11y-click-events-have-key-events a11y-no-static-element-interactions -->
-  <div class="backdrop" transition:fade={{ duration: 120 }} on:click={closePreview}></div>
-  <div class="viewer" role="dialog" aria-modal="true" aria-label={$t('detail.attachments.previewDialogLabel')} transition:scale={{ duration: 150, start: 0.96 }}>
+  <div class="backdrop" transition:fade={{ duration: calm(120) }} on:click={closePreview}></div>
+  <div class="viewer" role="dialog" aria-modal="true" aria-label={$t('detail.attachments.previewDialogLabel')} transition:scale={{ duration: calm(150), start: 0.96 }}>
     <header>
       <span class="name" title={$previewTarget.attachment.filename}>{$previewTarget.attachment.filename}</span>
       <span class="spacer"></span>

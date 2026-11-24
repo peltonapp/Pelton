@@ -20,7 +20,7 @@ Flathub builders have no network access, which means the manifest cannot run
   `-X main.version`
 
 The manifest's only source is that tarball. Inside the sandbox the build is
-`vite build` followed by `go build -mod=vendor -tags "production gtk3"`; the
+`vite build` followed by `go build -mod=vendor -tags "production gtk3 goolm"`; the
 Wails CLI is never needed, because `main.go` embeds `frontend/dist` with
 `go:embed`.
 

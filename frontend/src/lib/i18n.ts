@@ -10,10 +10,11 @@
 // every screen in one pass would be both huge and risky to review, whereas
 // the catalog here is additive and any component can adopt t() incrementally.
 //
-// each language lives in its own file under lib/locales/. english is bundled
-// directly since it is the always-available fallback; the other four are
-// dynamically imported only once the user actually selects them, so nothing
-// unused ships in the initial bundle.
+// each language lives in its own file under lib/locales/, which the build
+// splits into the areas of stringareas.ts. english core strings are bundled,
+// since english is the always-available fallback; every other area loads with
+// the code that shows it (loadStrings, used through lazyload.ts), and another
+// language loads only once the user selects it.
 //
 // on top of the built-ins, custom languages live as json files in the app's
 // locales folder (see the backend's bind_locales.go). the language setting
@@ -21,8 +22,9 @@
 // language the file declares, then english. a file with only a few strings
 // is a per-string override on top of its base.
 
-import { writable, derived } from 'svelte/store'
-import en from './locales/en'
+import { writable, derived, get } from 'svelte/store'
+import * as english from 'virtual:strings/en'
+import { areaOf, type StringArea } from './stringareas'
 import { getUserLocale } from './api'
 import { applyCJK, applyDirection } from '../theme/theme'
 import { isMac, isWindows } from './platform'
@@ -71,34 +73,112 @@ export const localeNames: Record<Locale, string> = {
   'zh-CN': '简体中文',
 }
 
-const loaders: Record<Exclude<Locale, 'en'>, () => Promise<{ default: Record<string, string> }>> = {
-  de: () => import('./locales/de'),
-  fr: () => import('./locales/fr'),
-  nl: () => import('./locales/nl'),
-  es: () => import('./locales/es'),
-  it: () => import('./locales/it'),
-  pl: () => import('./locales/pl'),
-  ru: () => import('./locales/ru'),
-  tr: () => import('./locales/tr'),
-  pt: () => import('./locales/pt'),
-  ar: () => import('./locales/ar'),
-  'zh-CN': () => import('./locales/zh-CN'),
+type Strings = Record<string, string>
+
+/** A language's strings: core inline, every other area behind a loader. */
+type LocaleStrings = { core: Strings; areas: Record<string, () => Promise<{ default: Strings }>> }
+
+const loaders: Record<Exclude<Locale, 'en'>, () => Promise<LocaleStrings>> = {
+  de: () => import('virtual:strings/de'),
+  fr: () => import('virtual:strings/fr'),
+  nl: () => import('virtual:strings/nl'),
+  es: () => import('virtual:strings/es'),
+  it: () => import('virtual:strings/it'),
+  pl: () => import('virtual:strings/pl'),
+  ru: () => import('virtual:strings/ru'),
+  tr: () => import('virtual:strings/tr'),
+  pt: () => import('virtual:strings/pt'),
+  ar: () => import('virtual:strings/ar'),
+  'zh-CN': () => import('virtual:strings/zh-CN'),
 }
 
-// catalogs holds every locale's strings that have been loaded so far. english
-// is present from the start; the rest are filled in by ensureLoaded.
-const catalogs = writable<Partial<Record<Locale, Record<string, string>>>>({ en })
+// catalogs holds every locale's strings that have been loaded so far, merged
+// across areas. english core is present from the start; fill adds the rest.
+const catalogs = writable<Partial<Record<Locale, Strings>>>({ en: english.core })
+
+// the areas this window has asked for, which every language it switches to
+// loads as well.
+const wanted = new Set<StringArea>(['core'])
+
+// per "<locale>/<area>", the strings on their way, and the ones already merged.
+const fetching = new Map<string, Promise<Strings>>()
+const merged = new Set<string>(['en/core'])
+
+function fetchArea(l: Locale, area: StringArea): Promise<Strings> {
+  const id = `${l}/${area}`
+  let strings = fetching.get(id)
+  if (!strings) {
+    strings = (async () => {
+      const mod = l === 'en' ? english : await loaders[l]()
+      if (area === 'core') {
+        return mod.core
+      }
+      const load = mod.areas[area]
+      return load ? (await load()).default : {}
+    })()
+    strings.catch(() => fetching.delete(id))
+    fetching.set(id, strings)
+  }
+  return strings
+}
+
+// fill loads the given areas of the given languages and merges them in one
+// store update, so text that needs several of them appears all at once.
+async function fill(langs: Locale[], areas: StringArea[]): Promise<void> {
+  const jobs: Promise<[Locale, string, Strings]>[] = []
+  for (const l of langs) {
+    for (const area of areas) {
+      const id = `${l}/${area}`
+      if (!merged.has(id)) {
+        jobs.push(fetchArea(l, area).then((s) => [l, id, s]))
+      }
+    }
+  }
+  if (jobs.length === 0) {
+    return
+  }
+  const done = await Promise.all(jobs)
+  catalogs.update((c) => {
+    const next = { ...c }
+    for (const [l, id, s] of done) {
+      if (!merged.has(id)) {
+        merged.add(id)
+        next[l] = { ...next[l], ...s }
+      }
+    }
+    return next
+  })
+}
+
+/**
+ * loadStrings loads the string areas a part of the interface shows, in English
+ * and in the active language, resolving once both are in.
+ */
+export function loadStrings(areas: StringArea[]): Promise<void> {
+  for (const area of areas) {
+    wanted.add(area)
+  }
+  const l = get(locale)
+  return fill(l === 'en' ? ['en'] : ['en', l], areas)
+}
 
 async function ensureLoaded(l: Locale): Promise<void> {
-  if (l === 'en') return
-  let has = false
-  catalogs.update((c) => {
-    has = !!c[l]
-    return c
-  })
-  if (has) return
-  const mod = await loaders[l]()
-  catalogs.update((c) => ({ ...c, [l]: mod.default }))
+  await fill([l], [...wanted])
+}
+
+// unloaded answers a key no loaded catalog has. One whose area nothing has
+// asked for yet means a component shows text it did not declare: the area is
+// loaded so the text still arrives, and the dev server says so. Tests carry
+// all English text as core and check the areas statically (strings.test.ts).
+function unloaded(key: string): string {
+  const area = areaOf(key)
+  if (area && !wanted.has(area)) {
+    if (import.meta.env.DEV && import.meta.env.MODE !== 'test') {
+      console.error(`i18n: "${key}" was shown before the ${area} strings were loaded`)
+    }
+    void loadStrings([area]).catch(() => undefined)
+  }
+  return key
 }
 
 // detectOSLocale reads the browser/OS language, used only to mark a
@@ -196,7 +276,7 @@ async function applyUserLocale(id: string): Promise<void> {
 // reload required. while a locale's catalog is still loading, keys fall back
 // to english until it arrives. a custom language resolves before its base.
 export const t = derived([locale, catalogs, userCatalog], ([$locale, $catalogs, $user]) => (key: string): string => {
-  return $user?.[key] ?? $catalogs[$locale]?.[key] ?? $catalogs.en?.[key] ?? key
+  return $user?.[key] ?? $catalogs[$locale]?.[key] ?? $catalogs.en?.[key] ?? unloaded(key)
 })
 
 export { isMac, isWindows }

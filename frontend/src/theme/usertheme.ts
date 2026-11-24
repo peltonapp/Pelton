@@ -8,6 +8,7 @@
 
 import type { ThemeApply } from '../lib/types'
 import { setIconOverrides } from './icons'
+import { legibleTokens } from './legible'
 
 // the id of the injected style element; one per document, replaced on every
 // apply.
@@ -28,7 +29,7 @@ export function applyUserTheme(theme: ThemeApply | null): void {
   document.documentElement.setAttribute('data-theme', theme.base === 'dark' ? 'dark' : 'light')
   const style = document.createElement('style')
   style.id = styleId
-  style.textContent = tokenBlock(theme.tokens) + theme.css
+  style.textContent = tokenBlock(theme.tokens) + legibleBlock(theme) + theme.css
   document.head.appendChild(style)
   setIconOverrides(theme.icons)
 }
@@ -36,6 +37,18 @@ export function applyUserTheme(theme: ThemeApply | null): void {
 // hasUserTheme reports whether a custom theme is currently injected.
 export function hasUserTheme(): boolean {
   return document.getElementById(styleId) !== null
+}
+
+// legibleBlock lifts the theme's text tokens to aa contrast in the new design
+// only; the classic design keeps the theme's colors as they are.
+function legibleBlock(theme: ThemeApply): string {
+  const lifted = legibleTokens(theme.base === 'dark' ? 'dark' : 'light', theme.tokens)
+  const entries = Object.entries(lifted)
+  if (entries.length === 0) {
+    return ''
+  }
+  const decls = entries.map(([name, value]) => `  --${name}: ${value};`)
+  return `:root[data-design="new"][data-theme] {\n${decls.join('\n')}\n}\n`
 }
 
 // tokenBlock renders the override map as a css declaration block. Values were

@@ -5,7 +5,9 @@
   // (spf/dkim/dmarc) are a documented backend follow-up: they need an on-demand
   // header fetch, so we show an honest placeholder rather than faking a result.
   import { createEventDispatcher } from 'svelte'
-  import { IconX, IconCopy, IconCheck } from '@tabler/icons-svelte'
+  import { IconCopy } from '@tabler/icons-svelte'
+  import Modal from '../common/Modal.svelte'
+  import '../../theme/controls.css'
   import { formatFullDate, formatBytes, type TimeFormat } from '../../lib/format'
   import { prefs } from '../../stores/prefs'
   import { toastSuccess, toastError } from '../../stores/toast'
@@ -32,7 +34,7 @@
     const list: Field[] = [
       { label: $t('detail.infoModal.subject'), value: d.subject || $t('detail.noSubject') },
       { label: $t('detail.infoModal.from'), value: d.fromName ? `${d.fromName} <${d.fromAddress}>` : d.fromAddress },
-      { label: $t('detail.infoModal.to'), value: d.toAddresses || '—' },
+      { label: $t('detail.infoModal.to'), value: d.toAddresses || '-' },
     ]
     if (d.ccAddresses) {
       list.push({ label: $t('detail.infoModal.cc'), value: d.ccAddresses })
@@ -78,26 +80,9 @@
     }
   }
 
-  function onKeydown(event: KeyboardEvent): void {
-    if (event.key === 'Escape') {
-      dispatch('close')
-    }
-  }
 </script>
 
-<svelte:window on:keydown={onKeydown} />
-
-<!-- svelte-ignore a11y-click-events-have-key-events a11y-no-static-element-interactions -->
-<div class="overlay" on:click={() => dispatch('close')}>
-  <!-- svelte-ignore a11y-click-events-have-key-events a11y-no-static-element-interactions a11y-no-noninteractive-element-interactions -->
-  <div class="modal" role="dialog" aria-modal="true" aria-label={$t('detail.infoModal.dialogLabel')} tabindex="-1" on:click|stopPropagation>
-    <header>
-      <span class="title">{$t('detail.infoModal.title')}</span>
-      <button type="button" class="close" aria-label={$t('detail.attachments.close')} on:click={() => dispatch('close')}>
-        <IconX size={18} stroke={1.8} />
-      </button>
-    </header>
-
+<Modal title={$t('detail.infoModal.title')} size="medium" on:close={() => dispatch('close')}>
     <div class="fields selectable">
       {#each fields as field}
         <div class="field">
@@ -117,73 +102,14 @@
       </div>
     </div>
 
-    <footer>
-      <button type="button" class="primary" on:click={copyAll}>
-        <IconCheck size={15} stroke={1.8} />
+    <svelte:fragment slot="footer">
+      <button type="button" class="cal-btn primary" on:click={copyAll}>
         {$t('detail.infoModal.copyAsMarkdown')}
       </button>
-    </footer>
-  </div>
-</div>
+    </svelte:fragment>
+</Modal>
 
 <style>
-  .overlay {
-    position: fixed;
-    inset: 0;
-    z-index: 140;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    padding: var(--space-5);
-    background: var(--scrim, rgba(0, 0, 0, 0.4));
-  }
-
-  .modal {
-    width: 100%;
-    max-width: 520px;
-    max-height: 80vh;
-    display: flex;
-    flex-direction: column;
-    border: var(--hairline) solid var(--border-default);
-    border-radius: var(--radius-card);
-    background: var(--surface-overlay);
-    box-shadow: var(--shadow-overlay);
-    overflow: hidden;
-  }
-
-  header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: var(--space-4) var(--space-5);
-    border-bottom: var(--hairline) solid var(--border-subtle);
-  }
-
-  .title {
-    font-size: var(--fz-heading);
-    font-weight: var(--fw-semibold);
-    color: var(--text-primary);
-  }
-
-  .close {
-    display: inline-flex;
-    border: none;
-    background: transparent;
-    color: var(--text-secondary);
-    cursor: var(--cursor-action);
-    padding: var(--space-1);
-    border-radius: var(--radius-control);
-  }
-
-  .close:hover {
-    background: var(--surface-hover);
-    color: var(--text-primary);
-  }
-
-  .fields {
-    padding: var(--space-3) var(--space-5);
-    overflow-y: auto;
-  }
 
   .field {
     display: grid;
@@ -231,30 +157,5 @@
 
   .note .val {
     grid-column: 2 / span 2;
-  }
-
-  footer {
-    display: flex;
-    justify-content: flex-end;
-    padding: var(--space-4) var(--space-5);
-    border-top: var(--hairline) solid var(--border-subtle);
-  }
-
-  .primary {
-    display: inline-flex;
-    align-items: center;
-    gap: var(--space-2);
-    padding: var(--space-3) var(--space-5);
-    border: none;
-    border-radius: var(--radius-control);
-    background: var(--accent);
-    color: var(--accent-fg);
-    font-size: var(--fz-label);
-    font-weight: var(--fw-medium);
-    cursor: var(--cursor-action);
-  }
-
-  .primary:hover {
-    filter: brightness(1.05);
   }
 </style>

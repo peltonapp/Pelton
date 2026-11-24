@@ -1,0 +1,21 @@
+{
+  "format": 1,
+  "name": "Summarise a long message with AI",
+  "description": "From the menu of an open message: asks a language model for a summary and shows it in the result panel.",
+  "kind": "blocks",
+  "trigger": { "type": "manual", "params": { "scope": "message" } },
+  "permissions": ["mail.read"],
+  "placements": [{ "id": "mail.message" }],
+  "blocks": {
+    "version": 1,
+    "blocks": [
+      { "id": "sum", "kind": "action", "type": "ai.summarise", "args": { "length": { "value": "medium" } } },
+      {
+        "id": "show",
+        "kind": "action",
+        "type": "ui.show",
+        "args": { "text": { "ref": "step:sum.text" }, "title": { "value": "Summary" }, "format": { "value": "markdown" } }
+      }
+    ]
+  }
+}

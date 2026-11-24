@@ -102,6 +102,9 @@ type TaskDTO struct {
 	EventUIDs []string         `json:"eventUids"`
 	// SortOrder is the manual position, shared with other task apps.
 	SortOrder int `json:"sortOrder"`
+	// Estimate is how many minutes the task is expected to take, 0 for no
+	// estimate.
+	Estimate int `json:"estimate"`
 	// Created is rfc3339 from the task's CREATED, empty when it has none.
 	Created   string `json:"created"`
 	ReadOnly  bool   `json:"readOnly"`
@@ -133,6 +136,8 @@ type TaskRequest struct {
 	Contacts   []TaskContactDTO `json:"contacts"`
 	EventUIDs  []string         `json:"eventUids"`
 	SortOrder  int              `json:"sortOrder"`
+	// Estimate is the expected time in minutes, 0 for none.
+	Estimate int `json:"estimate"`
 	// Force writes over the server's copy, for "keep mine" on a conflict.
 	Force bool `json:"force"`
 }
@@ -283,6 +288,14 @@ func (a *App) GetTask(id int64) (TaskDTO, error) {
 
 // CreateTask stores a new task and writes it to its list's server.
 func (a *App) CreateTask(req TaskRequest) (TaskSaveResultDTO, error) {
+	res, err := a.createTask(req)
+	if err == nil {
+		a.scriptTaskSaved(a.ctx, res, true, false)
+	}
+	return res, err
+}
+
+func (a *App) createTask(req TaskRequest) (TaskSaveResultDTO, error) {
 	if err := a.ready(); err != nil {
 		return TaskSaveResultDTO{}, err
 	}
@@ -313,6 +326,15 @@ func (a *App) CreateTask(req TaskRequest) (TaskSaveResultDTO, error) {
 // subtasks, to that list. Completing a repeating task moves it on to its
 // next occurrence.
 func (a *App) UpdateTask(req TaskRequest) (TaskSaveResultDTO, error) {
+	wasDone := a.taskDone(req.ID)
+	res, err := a.updateTask(req)
+	if err == nil {
+		a.scriptTaskSaved(a.ctx, res, false, wasDone)
+	}
+	return res, err
+}
+
+func (a *App) updateTask(req TaskRequest) (TaskSaveResultDTO, error) {
 	if err := a.ready(); err != nil {
 		return TaskSaveResultDTO{}, err
 	}
@@ -348,6 +370,15 @@ func (a *App) UpdateTask(req TaskRequest) (TaskSaveResultDTO, error) {
 // completed moves on to its next occurrence and stays open, which the result
 // says with Advanced.
 func (a *App) SetTaskDone(id int64, done bool) (TaskSaveResultDTO, error) {
+	wasDone := a.taskDone(id)
+	res, err := a.setTaskDone(id, done)
+	if err == nil {
+		a.scriptTaskSaved(a.ctx, res, false, wasDone)
+	}
+	return res, err
+}
+
+func (a *App) setTaskDone(id int64, done bool) (TaskSaveResultDTO, error) {
 	if err := a.ready(); err != nil {
 		return TaskSaveResultDTO{}, err
 	}
@@ -727,6 +758,7 @@ func (a *App) taskFamily(root storage.CalendarEvent, uid string) ([]storage.Cale
 // commitTask stores an edited task and, for a synced list, writes it to the
 // server right away, the way commitEvent does for an event.
 func (a *App) commitTask(ctx context.Context, cal storage.Calendar, row storage.CalendarEvent, obj *ical.TodoObject, force bool) (TaskSaveResultDTO, error) {
+	wasDone := row.TaskCompleted != ""
 	fillTaskRow(&row, obj)
 	row.SyncError = ""
 	if cal.Local() {
@@ -740,6 +772,7 @@ func (a *App) commitTask(ctx context.Context, cal storage.Calendar, row storage.
 	if err := a.store.SaveCalendarEvent(ctx, &row); err != nil {
 		return TaskSaveResultDTO{}, err
 	}
+	a.blocksFollowTask(ctx, row.UID, wasDone, row.TaskCompleted != "")
 	var result TaskSaveResultDTO
 	if !cal.Local() {
 		out, err := a.pushRowNow(ctx, cal, &row, force)
@@ -864,6 +897,7 @@ func applyTaskRequest(t *ical.Todo, req TaskRequest) error {
 		}
 	}
 	t.SortOrder = req.SortOrder
+	t.Estimate = time.Duration(max(0, req.Estimate)) * time.Minute
 	return nil
 }
 
@@ -960,6 +994,7 @@ func taskDTO(row storage.CalendarEvent, cal storage.Calendar, obj *ical.TodoObje
 		Contacts:   []TaskContactDTO{},
 		EventUIDs:  append([]string{}, t.Related...),
 		SortOrder:  t.SortOrder,
+		Estimate:   int(t.Estimate / time.Minute),
 		ReadOnly:   cal.ReadOnly,
 		Pending:    row.Pending != "",
 		Conflict:   row.Conflict,

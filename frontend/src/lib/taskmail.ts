@@ -13,6 +13,7 @@ import { locale, t } from './i18n'
 import { openSpace } from '../stores/space'
 import { defaultListId, emptyDraft, loadTasks, localZone, taskFocus, taskLists, taskSettings } from '../stores/tasks'
 import { errorMessage, pushActions, toastError } from '../stores/toast'
+import { recordHistory, subjectDetail, undoEntry } from '../stores/undohistory'
 import type { MailEventSource, TaskDraft } from './types'
 
 /** The draft a mail turns into: its subject, its link, and the first date its text names. */
@@ -57,6 +58,7 @@ export async function createTasksFromMail(messageIds: number[], due?: string): P
     return []
   }
   const made: number[] = []
+  const subjects: string[] = []
   for (const id of messageIds) {
     try {
       const draft = await draftFromMail(await mailEventSource(id), listId)
@@ -65,6 +67,7 @@ export async function createTasksFromMail(messageIds: number[], due?: string): P
       }
       const result = await createTask(draft)
       made.push(result.task.id)
+      subjects.push(draft.title)
     } catch (err) {
       toastError(errorMessage(err))
     }
@@ -74,20 +77,28 @@ export async function createTasksFromMail(messageIds: number[], due?: string): P
   }
   await loadTasks()
   const message = made.length > 1 ? tr('tasks.fromMailMany').replace('{n}', String(made.length)) : tr('tasks.fromMail')
+  const entry = recordHistory({
+    kind: 'task',
+    label: tr('history.kind.task'),
+    detail: subjectDetail(made.length === 1 ? [subjects[0] ?? ''] : made.map(() => '')),
+    count: made.length,
+    touches: made.map((id) => `task:${id}`),
+    undo: async () => {
+      let failure: unknown = null
+      for (const taskId of made) {
+        await deleteTask(taskId).catch((err) => (failure = failure ?? err))
+      }
+      await loadTasks()
+      if (failure !== null) {
+        throw failure
+      }
+    },
+  })
   pushActions(
     'success',
     message,
     [
-      {
-        label: tr('tasks.undo'),
-        run: () =>
-          void (async () => {
-            for (const taskId of made) {
-              await deleteTask(taskId).catch((err) => toastError(errorMessage(err)))
-            }
-            await loadTasks()
-          })(),
-      },
+      { label: tr('tasks.undo'), run: () => void undoEntry(entry) },
       { label: tr('tasks.open'), run: () => openTask(made[0]) },
     ],
     8000,

@@ -49,6 +49,11 @@ type Server struct {
 	// all. The permission check is the second line, not the only one.
 	w   Writer
 	log *slog.Logger
+	// scripts is nil on a server without the script tools, and then none of
+	// them is registered. scriptLimits outlives a restart when the caller
+	// keeps it, so stopping and starting the server does not reset its caps.
+	scripts      Scripts
+	scriptLimits *ScriptLimiter
 
 	// perms is read on every call rather than captured when a tool is
 	// registered, so changing a permission does not mean restarting the
@@ -78,6 +83,17 @@ func NewWithWriter(mb Mailbox, w Writer, log *slog.Logger) *Server {
 	return s
 }
 
+// WithScripts adds the script tools, held to the caps in lim. Call it before
+// Start. A nil lim uses DefaultScriptLimits.
+func (s *Server) WithScripts(sc Scripts, lim *ScriptLimiter) *Server {
+	if lim == nil {
+		lim = NewScriptLimiter(DefaultScriptLimits())
+	}
+	s.scripts = sc
+	s.scriptLimits = lim
+	return s
+}
+
 // SetPermissions replaces the write permissions in place. Tools read them on
 // every call, so this takes effect immediately, including for an agent that is
 // already connected.
@@ -97,6 +113,17 @@ func (s *Server) Running() bool {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return s.httpSrv != nil
+}
+
+// Addr returns the address the server listens on, "" when it is not running.
+// It tells a caller that started it on port 0 which port it got.
+func (s *Server) Addr() string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.ln == nil {
+		return ""
+	}
+	return s.ln.Addr().String()
 }
 
 // Start begins listening on cfg.Addr. It fails if the token is empty (an
@@ -126,10 +153,11 @@ func (s *Server) Start(cfg Config) error {
 		Name:    serverName,
 		Version: cfg.Version,
 		Title:   "Pelton",
-	}, &mcp.ServerOptions{Instructions: serverInstructions(s.w != nil)})
+	}, &mcp.ServerOptions{Instructions: handshake(s.w != nil, s.scripts != nil)})
 	s.perms.Store(cfg.Permissions)
 	registerTools(mcpSrv, s.mb)
 	registerWriteTools(mcpSrv, s.w, s.permissions)
+	registerScriptTools(mcpSrv, s.scripts, s.scriptLimits, s.permissions)
 
 	// Stateless: every request is self-contained. The read-only tools need no
 	// per-session state, and this makes the server immune to losing a client's

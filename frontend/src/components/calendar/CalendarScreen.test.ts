@@ -252,7 +252,7 @@ describe('cell menu', () => {
     const columns = document.querySelectorAll<HTMLElement>('.col')
     await fireEvent.contextMenu(columns[2], { clientX: 300, clientY: 200 })
     const menu = get(contextMenu)
-    expect(menu?.entries.map((e) => (typeof e === 'object' && 'label' in e ? [e.label, e.hint] : e))).toEqual([
+    expect(menu?.entries.map((e) => (typeof e === 'object' && 'action' in e ? [e.label, e.hint] : e))).toEqual([
       ['Create event...', undefined],
       ['Quick add here...', 'Q'],
     ])
@@ -349,5 +349,36 @@ describe('views', () => {
       expect(new Date(from)).toEqual(new Date(2026, 9, 26))
       expect(new Date(to)).toEqual(new Date(2026, 11, 7))
     })
+  })
+
+  it('loads the whole year in one request for the year view, with the y key', async () => {
+    await ready()
+    screen.getByRole('button', { name: 'Today' }).focus()
+    await userEvent.keyboard('y')
+    await waitFor(() => {
+      const [from, to] = api.listOccurrences.mock.lastCall as [string, string]
+      expect(new Date(from)).toEqual(new Date(2026, 0, 1))
+      expect(new Date(to)).toEqual(new Date(2027, 0, 1))
+    })
+    expect(await screen.findByRole('group', { name: 'Year 2026' })).toBeInTheDocument()
+  })
+
+  it('leaves out the events of a calendar toggled off', async () => {
+    api.listCalendars.mockResolvedValue([home, { ...home, id: 2, name: 'Work', visible: false }])
+    const entry = (id: number, calendarId: number) => ({
+      eventId: id, calendarId, calendarColor: '', uid: `u${id}`, summary: `E${id}`, location: '', start: '2026-11-10T09:00:00+01:00',
+      end: '2026-11-10T10:00:00+01:00', allDay: false, recurring: false, recurrenceId: '', override: false, status: '', transparency: '',
+      readOnly: false, hasReminders: false, pending: false, conflict: false,
+    })
+    api.listOccurrences.mockResolvedValue([entry(1, 1), entry(2, 2)])
+    calendarSettingsLoaded.set(true)
+    calendarView.set('year')
+    await ready()
+    const cell = await waitFor(() => {
+      const el = document.querySelector<HTMLElement>('.year [data-day="2026-11-10"]')
+      expect(el?.getAttribute('aria-label')).toContain('1 event')
+      return el
+    })
+    expect(cell?.getAttribute('aria-label')).not.toContain('2 events')
   })
 })

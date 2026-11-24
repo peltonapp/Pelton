@@ -50,12 +50,13 @@ vi.stubGlobal(
 import TasksScreen from './TasksScreen.svelte'
 import TaskDetail from './TaskDetail.svelte'
 import MonthView from '../calendar/MonthView.svelte'
-import { tasks, taskLists, taskSettings, defaultTaskSettings } from '../../stores/tasks'
+import { tasks, taskLists, taskSettings, defaultTaskSettings, taskClock } from '../../stores/tasks'
 import { runSpaceAction } from '../../stores/space'
 import { spaceSearchProviders } from '../../lib/spacesearch'
 import { toasts } from '../../stores/toast'
 import { monthGrid, placeOccurrence } from '../../lib/caldate'
 import { taskOccurrences } from '../calendar/taskocc'
+import { expectAxeClean } from '../../test/axe'
 
 // Sunday 15 November 2026, 10:07.
 const now = new Date(2026, 10, 15, 10, 7)
@@ -92,6 +93,7 @@ function task(over: Partial<Task> = {}): Task {
     contacts: [],
     eventUids: [],
     sortOrder: 0,
+    estimate: 0,
     created: '',
     readOnly: false,
     pending: false,
@@ -115,6 +117,7 @@ async function ready(): Promise<void> {
 beforeEach(() => {
   vi.useFakeTimers({ toFake: ['Date'] })
   vi.setSystemTime(now)
+  taskClock.set(now)
   vi.clearAllMocks()
   nextId = 1
   stored = [
@@ -177,6 +180,7 @@ describe('smart lists', () => {
     await userEvent.click(screen.getByRole('button', { name: /^Errands/ }))
     expect(await screen.findByText('Plan trip')).toBeInTheDocument()
     expect(screen.getByText('File taxes')).toBeInTheDocument()
+    await expectAxeClean(document.body, { except: ['nested-interactive'] })
   })
 })
 

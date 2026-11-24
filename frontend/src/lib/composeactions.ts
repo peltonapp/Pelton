@@ -7,7 +7,7 @@ import { get } from 'svelte/store'
 import { closeCompose, getSession, restoreSession, updateCompose, type ComposeSession } from '../stores/compose'
 import { composeProtectionStatus, deleteDraft, removeServerDraft, saveDraft, sendMessage, uploadDraft } from './api'
 import { buildRequest, hasRecipients, parseAddressList } from './mailcompose'
-import type { ProtectionStatus } from './types'
+import type { FollowUpInterval, ProtectionStatus } from './types'
 import { loadOutbox } from '../stores/outbox'
 import { scheduleUndo } from '../stores/undosend'
 import { prefs } from '../stores/prefs'
@@ -111,6 +111,11 @@ export interface SendOptions {
   scheduledAt?: Date
   /** Runs once the message is queued, before the composer closes. */
   beforeClose?: () => Promise<void>
+  /**
+   * Runs once the message can no longer be taken back: straight after it is
+   * queued, or when the undo-send window closes without an undo.
+   */
+  afterSent?: () => void
 }
 
 /**
@@ -125,7 +130,7 @@ export async function sendSession(id: number, fallback: ComposeSession, options:
     toastError(tr('compose.error.noRecipients'))
     return false
   }
-  const { scheduledAt, beforeClose } = options
+  const { scheduledAt, beforeClose, afterSent } = options
   const followUp = (getSession(id) ?? fallback).followUpAt
   if (followUp && Date.parse(followUp) <= (scheduledAt ?? new Date()).getTime()) {
     toastError(tr('followUp.tooEarly'))
@@ -148,12 +153,14 @@ export async function sendSession(id: number, fallback: ComposeSession, options:
 
     if (scheduledAt) {
       toastSuccess(tr('compose.sendLater.scheduledToast').replace('{when}', formatSendWhen(scheduledAt)))
+      afterSent?.()
     } else {
       const delay = get(prefs).sendDelaySeconds
       if (delay > 0) {
-        scheduleUndo(queued, snapshot, delay)
+        scheduleUndo(queued, snapshot, delay, afterSent)
       } else {
         toastSuccess(tr('compose.toast.queued'))
+        afterSent?.()
       }
     }
     return true
@@ -248,7 +255,7 @@ export function combineProtection(sign: boolean, encrypt: boolean): string {
 
 /** One entry of the follow-up reminder menu. */
 export interface FollowUpPreset {
-  key: 'tomorrow' | 'threeDays' | 'week'
+  key: FollowUpInterval
   label: string
   when: Date
 }

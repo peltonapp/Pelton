@@ -8,7 +8,7 @@
   import warningIcon from '@phosphor-icons/core/assets/duotone/warning-duotone.svg?raw'
   import plugIcon from '@phosphor-icons/core/assets/duotone/plugs-connected-duotone.svg?raw'
   import lockIcon from '@phosphor-icons/core/assets/duotone/lock-simple-duotone.svg?raw'
-  import './controls.css'
+  import '../../theme/controls.css'
   import Ph from '../common/Ph.svelte'
   import AnchoredPopover from '../common/AnchoredPopover.svelte'
   import MiniMonth from './MiniMonth.svelte'

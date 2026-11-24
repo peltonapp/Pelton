@@ -7,8 +7,10 @@ package main
 import (
 	"embed"
 	"os"
+	"runtime"
 	"slices"
 
+	"github.com/peltonapp/Pelton/internal/cli"
 	"github.com/peltonapp/Pelton/internal/desktop"
 	"github.com/peltonapp/Pelton/internal/storage"
 )
@@ -48,6 +50,14 @@ var version = "dev"
 var channel = ""
 
 func main() {
+	// `pelton status`, `pelton list` and the rest are the command line tool,
+	// answered here before any window exists (internal/cli). Windows builds
+	// the app without a console, so there the tool is cmd/pelton.
+	if runtime.GOOS != "windows" && cli.IsCommand(os.Args[1:]) {
+		self, _ := os.Executable()
+		os.Exit(cli.Run(version, channel, self))
+	}
+
 	// --potatoes-are-nice launches a purely-cosmetic demo mode used for website
 	// screenshots: the ui shows fixed potato-themed sample data instead of real
 	// accounts and mail. Nothing else changes.
