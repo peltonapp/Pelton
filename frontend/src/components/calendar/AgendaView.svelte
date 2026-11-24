@@ -3,10 +3,13 @@
   // events under it in order. days without events are left out, so a quiet
   // month reads as a short list.
   import { createEventDispatcher } from 'svelte'
+  import { openScriptMenu } from '../../lib/scriptmenu'
   import mapPinIcon from '@phosphor-icons/core/assets/duotone/map-pin-duotone.svg?raw'
   import repeatIcon from '@phosphor-icons/core/assets/duotone/repeat-duotone.svg?raw'
   import calendarIcon from '@phosphor-icons/core/assets/duotone/calendar-blank-duotone.svg?raw'
   import Ph from '../common/Ph.svelte'
+  import EmptyState from '../common/EmptyState.svelte'
+  import TaskCheck from '../tasks/TaskCheck.svelte'
   import { addDays, dayKey, eventsOnDay, sameDay, startOfDay, type Placed } from '../../lib/caldate'
   import { formatLongDay, formatTime } from '../../lib/calformat'
   import { occurrenceKey } from './occurrence'
@@ -24,7 +27,7 @@
   export let timeFormat: TimeFormat = 'auto'
   export let selectedKey: string = ''
 
-  const dispatch = createEventDispatcher<{ open: { occ: Occurrence; anchor: HTMLElement }; day: Date; menu: CellMenuAt }>()
+  const dispatch = createEventDispatcher<{ open: { occ: Occurrence; anchor: HTMLElement }; day: Date; menu: CellMenuAt; toggleTask: Occurrence; quickAdd: void }>()
 
   function onDayMenu(event: MouseEvent, day: Date): void {
     if ((event.target as HTMLElement).closest('.row')) {
@@ -68,10 +71,14 @@
 
 <div class="agenda">
   {#if days.length === 0}
-    <div class="empty">
-      <Ph svg={calendarIcon} size={28} />
-      <p>{$t('calendar.agendaEmpty')}</p>
-    </div>
+    <EmptyState
+      icon={calendarIcon}
+      title={$t('calendar.agendaEmptyTitle')}
+      detail={$t('calendar.agendaEmpty')}
+      actionLabel={$t('quickAdd.button')}
+      onAction={() => dispatch('quickAdd')}
+      shortcut="calendar-quick-add"
+    />
   {:else}
     {#each days as { day, items } (dayKey(day))}
       <!-- svelte-ignore a11y-no-static-element-interactions -->
@@ -82,14 +89,28 @@
         </button>
         <ul>
           {#each items as p (occurrenceKey(p.occ))}
-            <li>
+            <li class:task-line={p.occ.task}>
+              {#if p.occ.task}
+                <span class="tick">
+                  <TaskCheck
+                    checked={p.occ.task.done}
+                    label={$t(p.occ.task.done ? 'tasks.inCalendarOpen' : 'tasks.inCalendarDone').replace('{title}', p.occ.summary || $t('tasks.untitled'))}
+                    color={colorOf(p.occ)}
+                    disabled={p.occ.task.readOnly}
+                    on:toggle={() => dispatch('toggleTask', p.occ)}
+                  />
+                </span>
+              {/if}
               <button
                 type="button"
                 class="row"
+                class:task={p.occ.task}
+                class:done={p.occ.task?.done}
                 class:selected={selectedKey === occurrenceKey(p.occ)}
                 class:cancelled={p.occ.status === 'CANCELLED'}
                 style={`--ev:${colorOf(p.occ)}`}
                 on:click={(e) => dispatch('open', { occ: p.occ, anchor: e.currentTarget })}
+                on:contextmenu={(e) => !p.occ.task && openScriptMenu(e, 'calendar.event', { id: String(p.occ.eventId) })}
               >
                 <span class="time">{timeOf(p, day)}</span>
                 <span class="edge" aria-hidden="true"></span>
@@ -116,21 +137,6 @@
     height: 100%;
     overflow-y: auto;
     padding: var(--space-3) var(--space-5) var(--space-6);
-  }
-
-  .empty {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    gap: var(--space-3);
-    height: 100%;
-    color: var(--text-tertiary);
-    font-size: var(--fz-list);
-  }
-
-  .empty p {
-    margin: 0;
   }
 
   .day {
@@ -208,6 +214,32 @@
   .row:hover,
   .row.selected {
     background: var(--surface-hover);
+  }
+
+  /* a task: its checkbox in front, no color edge, a quieter title. */
+  .task-line {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+  }
+
+  .tick {
+    display: inline-flex;
+    padding-inline-start: var(--space-3);
+  }
+
+  .row.task .edge {
+    background: transparent;
+  }
+
+  .row.task .title {
+    font-weight: var(--fw-regular);
+    color: var(--text-secondary);
+  }
+
+  .row.task.done .title {
+    color: var(--text-tertiary);
+    text-decoration: line-through;
   }
 
   .row:focus-visible {

@@ -16,7 +16,7 @@
   import sidebarIcon from '@phosphor-icons/core/assets/duotone/sidebar-simple-duotone.svg?raw'
   import warningIcon from '@phosphor-icons/core/assets/duotone/warning-duotone.svg?raw'
   import lightningIcon from '@phosphor-icons/core/assets/duotone/lightning-duotone.svg?raw'
-  import './controls.css'
+  import '../../theme/controls.css'
   import Ph from '../common/Ph.svelte'
   import PieProgress from '../common/PieProgress.svelte'
   import Segmented from '../settings2/ui/Segmented.svelte'
@@ -24,6 +24,7 @@
   import MonthView from './MonthView.svelte'
   import TimeGrid from './TimeGrid.svelte'
   import AgendaView from './AgendaView.svelte'
+  import YearView from './YearView.svelte'
   import EventPopover from './EventPopover.svelte'
   import QuickCreate from './QuickCreate.svelte'
   import QuickAdd from './QuickAdd.svelte'
@@ -31,6 +32,37 @@
   import CalendarImport from './CalendarImport.svelte'
   import ScopeDialog from './ScopeDialog.svelte'
   import ConflictDialog from './ConflictDialog.svelte'
+  import PlanPane from './PlanPane.svelte'
+  import FindTime from './FindTime.svelte'
+  import BlockDialog from './BlockDialog.svelte'
+  import planIcon from '@phosphor-icons/core/assets/duotone/calendar-check-duotone.svg?raw'
+  import {
+    blockCalendarId,
+    blockOccurrence,
+    blockSettings,
+    changeBlock,
+    dropProposals,
+    duplicateRequest,
+    loadBlocks,
+    loadBlockSettings,
+    loadTaskPlans,
+    makeBlocks,
+    moveBlock,
+    moveProposal,
+    planPaneOpen,
+    proposalOccurrence,
+    proposalRequest,
+    proposals,
+    proposeAll,
+    removeBlocks,
+    requestOf,
+    taskPlans,
+    timeBlocks,
+    watchBlocks,
+  } from './timeblocks'
+  import { blockTimeForMessages, blockTimeForTask, planDay, settleTimeBlockLink } from '../../lib/api'
+  import { revealMessage } from '../../stores/selection'
+  import { sidebar } from '../../stores/accounts'
   import {
     calendars,
     occurrences,
@@ -40,8 +72,10 @@
     calendarSeed,
     calendarQuickAdd,
     calendarImport,
+    timeblockRequest,
     calendarSync,
     calendarSyncError,
+    defaultCalendarId,
     eventConflict,
     loadCalendars,
     loadCalendarSettings,
@@ -53,7 +87,9 @@
     type CellMenuAt,
     type MailDropAt,
   } from '../../stores/calendar'
-  import { createEventDraftFromMessage, getEvent, listAccounts, mailEventSource, openICSFile, readICSFiles } from '../../lib/api'
+  import { createEventDraftFromMessage, getEvent, listAccounts, listOccurrences, mailEventSource, openICSFile, readICSFiles } from '../../lib/api'
+  import { focusSpaceSearch, registerSpaceSearch } from '../../lib/spacesearch'
+  import { searchOccurrences } from '../../lib/calendarsearch'
   import { onFilesDropped } from '../../lib/events'
   import {
     addDays,
@@ -71,22 +107,28 @@
     viewRange,
     weekDays,
   } from '../../lib/caldate'
-  import { calendarColor, formatViewTitle } from '../../lib/calformat'
+  import { calendarColor, formatViewTitle, formatWhen } from '../../lib/calformat'
   import { datesInText, type FoundDate } from '../../lib/eventphrase'
   import { loadChrono } from '../../lib/chronoload'
   import { mailLinkLines } from '../../lib/maillink'
   import { draftFromEvent, localZone, newDraft, occurrenceKey, withTimes } from './occurrence'
   import { popupIsOpen } from '../../lib/popups'
   import { tip } from '../../lib/tip'
-  import { registerSpaceActions } from '../../stores/space'
+  import { openSpace, registerSpaceActions } from '../../stores/space'
+  import { tasks, taskLists, taskSettings, moveTaskDue, toggleDone } from '../../stores/tasks'
+  import { taskOccurrences } from './taskocc'
+  import { moveDue } from '../../lib/tasklogic'
+  import { openTask } from '../../lib/taskmail'
+  import { convertEventToTask } from '../../lib/taskevent'
   import { openContextMenu } from '../../stores/contextmenu'
   import { bindings, menuHint } from '../../stores/shortcuts'
   import { prefs } from '../../stores/prefs'
-  import { errorMessage, pushActions, toastError } from '../../stores/toast'
+  import { errorMessage, pushActions, toastError, toastInfo } from '../../stores/toast'
   import { dur, motion } from '../../lib/motion'
   import { locale, shortcutLabel, t } from '../../lib/i18n'
+  import { isEditableTarget } from '../../lib/editable'
   import type { TimeFormat } from '../../lib/format'
-  import type { CalendarView, EventDraft, EventScope, ICSFile, MailEventSource, Occurrence } from '../../lib/types'
+  import type { CalendarView, EventDraft, EventScope, ICSFile, MailEventSource, Occurrence, Task, TimeBlock } from '../../lib/types'
 
   const narrowWidth = 820
   const undoLimit = 20
@@ -97,6 +139,7 @@
   let now = new Date()
   let clock: ReturnType<typeof setInterval> | undefined
   let unwatch: (() => void) | undefined
+  let unwatchBlocks: (() => void) | undefined
   let unregister: (() => void) | undefined
   let stopDrop: (() => void) | undefined
   let identity: { name: string; email: string } | null = null
@@ -113,11 +156,20 @@
   $: range = viewRange(view, focus, weekStart)
   $: rangeKey = `${toRFC3339(range.from)}|${toRFC3339(range.to)}`
   $: loadRange(rangeKey)
-  $: placed = $occurrences.map(placeOccurrence)
+  $: taskEntries = $taskSettings.showInCalendar ? taskOccurrences($tasks, $taskLists, range.from, range.to) : []
+  $: gridView = view === 'day' || view === 'week'
+  // in the time grid a block written to a calendar is drawn as the block, so
+  // its busy event is left out there; the other views show the event.
+  $: blockEventUids = new Set($timeBlocks.map((b) => b.eventUid).filter(Boolean))
+  $: shownEvents = gridView && blockEventUids.size > 0 ? $occurrences.filter((o) => !blockEventUids.has(o.uid)) : $occurrences
+  $: blockEntries = gridView ? [...$timeBlocks.map(blockOccurrence), ...$proposals.map(proposalOccurrence)] : []
+  $: placed = [...shownEvents, ...taskEntries, ...blockEntries].map(placeOccurrence)
   $: colors = new Map($calendars.map((c) => [c.id, calendarColor(c)]))
   $: writable = $calendars.filter((c) => !c.readOnly)
-  $: defaultCalendar = (writable.find((c) => c.id === $calendarSettings.defaultCalendarId) ?? writable.find((c) => c.default) ?? writable[0])?.id ?? 0
+  $: defaultCalendar = defaultCalendarId($calendars, $calendarSettings)
   $: busyDays = daysWithEvents(placed)
+  $: visibleCalendars = new Set($calendars.filter((c) => c.visible).map((c) => c.id))
+  $: yearPlaced = view === 'year' ? placed.filter((p) => !p.occ.task && visibleCalendars.has(p.occ.calendarId)) : []
   $: title = formatViewTitle(view, range.from, range.to, focus)
   $: rtl = typeof document !== 'undefined' && document.documentElement.dir === 'rtl'
   $: quickAddKey = $bindings['calendar-quick-add'] ? shortcutLabel($bindings['calendar-quick-add']) : ''
@@ -127,6 +179,7 @@
     if (key !== loadedKey) {
       loadedKey = key
       void showRange(toRFC3339(range.from), toRFC3339(range.to))
+      void loadBlocks(toRFC3339(range.from), toRFC3339(range.to))
     }
   }
 
@@ -145,9 +198,18 @@
 
   onMount(async () => {
     unwatch = watchCalendar()
+    unwatchBlocks = watchBlocks()
+    void loadBlockSettings()
+    void loadTaskPlans()
     unregister = registerSpaceActions('calendar', {
+      'plan-day': () => whenFree(() => void planToday()),
+      'block-time': () => whenFree(blockTimeShortcut),
       compose: () => whenFree(newEvent),
-      search: () => whenFree(() => openQuickAdd()),
+      search: () => {
+        if (!focusSpaceSearch()) {
+          whenFree(() => openQuickAdd())
+        }
+      },
       'calendar-quick-add': () => whenFree(() => openQuickAdd()),
       'calendar-import': () => whenFree(() => void pickImport(0)),
       'delete-message': () => whenFree(deleteSelected),
@@ -173,8 +235,71 @@
     }
   })
 
+  // --- the top bar search ---------------------------------------------------------
+
+  const searchBackDays = 366
+  const searchAheadDays = 2 * 366
+  const searchCacheMs = 30_000
+  let searchPool: { at: number; list: Occurrence[] } | null = null
+
+  // every occurrence from a year back to two years ahead, kept for half a
+  // minute so typing does not ask the store for each letter.
+  async function searchablePool(): Promise<Occurrence[]> {
+    const now = Date.now()
+    if (searchPool && now - searchPool.at < searchCacheMs) {
+      return searchPool.list
+    }
+    const day = 86_400_000
+    const list = await listOccurrences(toRFC3339(new Date(now - searchBackDays * day)), toRFC3339(new Date(now + searchAheadDays * day)))
+    searchPool = { at: now, list }
+    return list
+  }
+
+  const searchHits = new Map<string, Occurrence>()
+
+  const stopSearch = registerSpaceSearch('calendar', {
+    placeholderKey: 'calendar.search.placeholder',
+    emptyKey: 'calendar.search.none',
+    search: async (query) => {
+      const found = searchOccurrences(await searchablePool(), query, new Date())
+      searchHits.clear()
+      return found.map((occ) => {
+        const id = occurrenceKey(occ)
+        searchHits.set(id, occ)
+        const start = parseEventTime(occ.start, occ.allDay)
+        const end = parseEventTime(occ.end, occ.allDay)
+        return {
+          id,
+          title: occ.summary || $t('calendar.untitled'),
+          detail: formatWhen(start, end, occ.allDay, timeFormat, $locale),
+          aside: occ.location,
+          color: colors.get(occ.calendarId),
+        }
+      })
+    },
+    open: (result) => {
+      const occ = searchHits.get(result.id)
+      if (occ) {
+        whenFree(() => void openFound(occ))
+      }
+    },
+  })
+
+  async function openFound(occ: Occurrence): Promise<void> {
+    try {
+      const ev = await getEvent(occ.eventId, occ.recurrenceId)
+      closeFloating()
+      showDay(parseEventTime(occ.start, occ.allDay))
+      openEditor(draftFromEvent(ev))
+    } catch (err) {
+      toastError(errorMessage(err))
+    }
+  }
+
   onDestroy(() => {
+    stopSearch()
     unwatch?.()
+    unwatchBlocks?.()
     unregister?.()
     stopDrop?.()
     clearInterval(clock)
@@ -183,7 +308,7 @@
   // an app shortcut acts only while nothing else of the calendar holds the
   // keyboard: an open editor, quick add or dialog takes it first.
   function whenFree(run: () => void): void {
-    if (!editing && !quickAdd && !scopeFor && !importing) {
+    if (!editing && !quickAdd && !scopeFor && !importing && !findFor && !blockEditing) {
       run()
     }
   }
@@ -230,6 +355,13 @@
     calendarView.set('day')
   }
 
+  function openMonth(day: Date): void {
+    closeFloating()
+    direction = 0
+    calendarFocus.set(day)
+    calendarView.set('month')
+  }
+
   function showDay(day: Date): void {
     if (day < range.from || day >= range.to) {
       direction = day > focus ? 1 : -1
@@ -242,6 +374,7 @@
     { key: 'week', label: $t('calendar.view.week') },
     { key: 'month', label: $t('calendar.view.month') },
     { key: 'agenda', label: $t('calendar.view.agenda') },
+    { key: 'year', label: $t('calendar.view.year') },
   ]
 
   // --- popovers -----------------------------------------------------------------
@@ -262,7 +395,35 @@
   function openOccurrence(occ: Occurrence, anchor: HTMLElement): void {
     quick = null
     quickPending = null
+    if (occ.task) {
+      openTask(occ.task.id)
+      return
+    }
+    if (occ.block || occ.proposal) {
+      entryMenu(occ, anchor)
+      return
+    }
     selected = { occ, anchor }
+  }
+
+  // a task's checkbox in a view.
+  function toggleTask(occ: Occurrence): void {
+    if (occ.task && !occ.task.readOnly) {
+      void toggleDone(occ.task)
+    }
+  }
+
+  // a task dragged to another day of the month keeps its time of day.
+  function moveTaskToDay(occ: Occurrence, day: Date): void {
+    if (occ.task && !occ.task.readOnly && dayKey(day) !== dayKey(placeOccurrence(occ).start)) {
+      void moveTaskDue(occ.task, moveDue(occ.task.due, day))
+    }
+  }
+
+  // an event in the popover turned into a task.
+  async function eventToTask(occ: Occurrence): Promise<void> {
+    selected = null
+    await convertEventToTask(occ.eventId)
   }
 
   function canCreate(): boolean {
@@ -546,6 +707,21 @@
   // a drag in the time grid: the occurrence moves at once, then the change is
   // saved, asking first which occurrences it is for when the event repeats.
   function onChange(occ: Occurrence, start: Date, end: Date): void {
+    if (occ.block) {
+      void moveBlockWithUndo(occ.block, start, end)
+      return
+    }
+    if (occ.proposal) {
+      moveProposal(occ.proposal.key, start, end)
+      refocus(occurrenceKey(occ))
+      return
+    }
+    if (occ.task) {
+      if (!occ.task.readOnly) {
+        void moveTaskDue(occ.task, occ.allDay ? dayKey(start) : start.toISOString())
+      }
+      return
+    }
     const apply = async (scope: EventScope | ''): Promise<void> => {
       const key = occurrenceKey(occ)
       const before = $occurrences
@@ -603,7 +779,8 @@
       return { start: startOfDay(seed.at), end: addDays(startOfDay(seed.at), 1), allDay: true }
     }
     const start = seed.at && seed.mode === 'time' ? seed.at : defaultSlot(seed.at ?? focus, new Date())
-    return { start, end: new Date(start.getTime() + 3600000), allDay: false }
+    const end = seed.mode === 'time' && seed.end && seed.end > start ? seed.end : new Date(start.getTime() + 3600000)
+    return { start, end, allDay: false }
   }
 
   async function foundIn(mail: MailEventSource): Promise<FoundDate[]> {
@@ -632,6 +809,10 @@
   async function takeSeed(seed: MailDropAt): Promise<void> {
     calendarSeed.set(null)
     closeFloating()
+    if (seed.alt && seed.messageIds.length > 0) {
+      await blockForMail(seed)
+      return
+    }
     if (!canCreate() || seed.messageIds.length === 0) {
       return
     }
@@ -673,6 +854,333 @@
     }
   }
 
+  // --- time blocking ---------------------------------------------------------------------
+
+  let focusKey = ''
+  let findFor: { task: Task; minutes: number } | null = null
+  let blockEditing: TimeBlock | null = null
+  let planning = false
+  let unplaced: string[] = []
+  let short: string[] = []
+  let announcement = ''
+
+  $: showPlan = gridView && $planPaneOpen && !narrow
+  $: planKey = $bindings['plan-day'] ? shortcutLabel($bindings['plan-day']) : ''
+  $: blockCalendar = blockCalendarId($blockSettings, $calendars, defaultCalendar)
+
+  $: if ($timeblockRequest) {
+    const ask = $timeblockRequest
+    timeblockRequest.set(null)
+    if (ask.kind === 'plan') {
+      void planToday()
+    } else {
+      const task = $tasks.find((x) => x.id === ask.taskId)
+      if (task) {
+        findTime(task)
+      }
+    }
+  }
+
+  // puts the keyboard focus on an entry once the grid has drawn it again.
+  function refocus(key: string): void {
+    focusKey = ''
+    void tick().then(() => (focusKey = key))
+  }
+
+  // says something to assistive technology without moving the focus.
+  function announce(text: string): void {
+    announcement = ''
+    void tick().then(() => (announcement = text))
+  }
+
+  // how long a new block for a task is: what its estimate still needs, else
+  // the whole estimate or the default length.
+  function blockMinutesFor(task: Task): number {
+    const planned = $taskPlans.get(task.uid)?.plannedMinutes ?? 0
+    if (task.estimate > planned) {
+      return task.estimate - planned
+    }
+    return task.estimate || $blockSettings.defaultMinutes
+  }
+
+  // says that blocks were made, with Undo, which the undo key reaches too.
+  function saidMade(made: TimeBlock[], message: string, afterUndo: () => void = () => undefined): void {
+    const ids = made.map((b) => b.id)
+    let undone = false
+    const undo = async (): Promise<void> => {
+      if (!undone) {
+        undone = true
+        await removeBlocks(ids)
+        afterUndo()
+        void loadTaskPlans()
+        announce($t('timeblock.announce.undone'))
+      }
+    }
+    pushUndo(undo)
+    pushActions('success', message, [{ label: $t('quickAdd.undo'), run: () => void undo() }], toastMs)
+    announce(message)
+    void loadTaskPlans()
+  }
+
+  function madeText(made: TimeBlock[]): string {
+    if (made.length > 1) {
+      return $t('timeblock.toast.madeMany').replace('{n}', String(made.length))
+    }
+    return $t('timeblock.toast.made').replace('{when}', formatWhen(new Date(made[0].start), new Date(made[0].end), false, timeFormat, $locale))
+  }
+
+  async function blockTaskAt(task: Task, start: Date, end: Date): Promise<void> {
+    const made = await makeBlocks([
+      { id: 0, title: '', start: toRFC3339(start), end: toRFC3339(end), taskUid: task.uid, messageId: 0, done: false, calendarId: blockCalendar, eventTitle: '' },
+    ])
+    if (made.length > 0) {
+      showDay(start)
+      refocus(occurrenceKey(blockOccurrence(made[0])))
+      saidMade(made, madeText(made))
+    }
+  }
+
+  async function blockNext(task: Task): Promise<void> {
+    try {
+      const made = await blockTimeForTask(task.id, blockMinutesFor(task))
+      timeBlocks.update((list) => [...list, made])
+      showDay(new Date(made.start))
+      refocus(occurrenceKey(blockOccurrence(made)))
+      saidMade([made], madeText([made]))
+    } catch (err) {
+      toastError(errorMessage(err))
+    }
+  }
+
+  function findTime(task: Task): void {
+    closeFloating()
+    findFor = { task, minutes: blockMinutesFor(task) }
+  }
+
+  async function pickSlot(start: Date, end: Date): Promise<void> {
+    const task = findFor?.task
+    findFor = null
+    if (task) {
+      await blockTaskAt(task, start, end)
+    }
+  }
+
+  // mail dropped with Alt held: a block to deal with each mail, from the slot
+  // it was dropped on, or in the next free time.
+  async function blockForMail(seed: MailDropAt): Promise<void> {
+    let at = ''
+    if (seed.at) {
+      at = toRFC3339(seed.mode === 'time' ? seed.at : defaultSlot(seed.at, new Date()))
+    }
+    try {
+      const made = await blockTimeForMessages(seed.messageIds, at)
+      if (made.length > 0) {
+        timeBlocks.update((list) => [...list, ...made])
+        showDay(new Date(made[0].start))
+        refocus(occurrenceKey(blockOccurrence(made[0])))
+        saidMade(made, madeText(made))
+      }
+    } catch (err) {
+      toastError(errorMessage(err))
+    }
+  }
+
+  async function moveBlockWithUndo(b: TimeBlock, start: Date, end: Date): Promise<void> {
+    const saved = await moveBlock(b, start, end)
+    if (saved) {
+      refocus(occurrenceKey(blockOccurrence(saved)))
+      pushUndo(async () => void (await changeBlock(saved, { start: b.start, end: b.end })))
+    }
+  }
+
+  async function deleteBlock(b: TimeBlock): Promise<void> {
+    if (!(await removeBlocks([b.id]))) {
+      return
+    }
+    void loadTaskPlans()
+    const again = { ...requestOf(b), id: 0, messageId: b.messageId }
+    let undone = false
+    const undo = async (): Promise<void> => {
+      if (!undone) {
+        undone = true
+        await makeBlocks([again])
+        void loadTaskPlans()
+      }
+    }
+    pushUndo(undo)
+    pushActions('success', $t('timeblock.deleted'), [{ label: $t('quickAdd.undo'), run: () => void undo() }], toastMs)
+    announce($t('timeblock.deleted'))
+  }
+
+  async function duplicateBlock(b: TimeBlock): Promise<void> {
+    const made = await makeBlocks([{ ...duplicateRequest(b), messageId: b.messageId }])
+    if (made.length > 0) {
+      refocus(occurrenceKey(blockOccurrence(made[0])))
+      saidMade(made, madeText(made))
+    }
+  }
+
+  async function saveBlock(b: TimeBlock, patch: Parameters<typeof changeBlock>[1]): Promise<void> {
+    blockEditing = null
+    const saved = await changeBlock(b, patch)
+    if (saved) {
+      void loadTaskPlans()
+      refocus(occurrenceKey(blockOccurrence(saved)))
+    }
+  }
+
+  async function settle(b: TimeBlock, action: 'follow' | 'rewrite' | 'forget'): Promise<void> {
+    blockEditing = null
+    try {
+      const saved = await settleTimeBlockLink(b.id, action)
+      timeBlocks.update((list) => list.map((x) => (x.id === saved.id ? saved : x)))
+      refocus(occurrenceKey(blockOccurrence(saved)))
+    } catch (err) {
+      toastError(errorMessage(err))
+    }
+  }
+
+  function showMail(b: TimeBlock): void {
+    openSpace('mail')
+    revealMessage(b.messageId, b.accountId, b.folderId, $sidebar.data ?? null)
+  }
+
+  // the menu of a block or a proposal, which is also what clicking one opens.
+  function entryMenu(occ: Occurrence, anchor: HTMLElement): void {
+    const r = anchor.getBoundingClientRect()
+    const x = r.left + Math.min(r.width / 2, 48)
+    const y = r.top + Math.min(r.height, 28)
+    if (occ.proposal) {
+      const key = occ.proposal.key
+      openContextMenu(x, y, [
+        { label: $t('timeblock.review.accept'), action: () => void acceptProposals([key]) },
+        { label: $t('timeblock.review.dismiss'), action: () => dismissProposals([key]) },
+      ])
+      return
+    }
+    const b = occ.block
+    if (!b) {
+      return
+    }
+    const task = $tasks.find((x) => x.id === b.taskId)
+    const entries: Parameters<typeof openContextMenu>[2] = []
+    if (task) {
+      entries.push({ label: $t('timeblock.openTask'), action: () => openTask(task.id) })
+    }
+    if (b.messageId && !b.masked) {
+      entries.push({ label: $t('timeblock.menu.showMail'), action: () => showMail(b) })
+    }
+    if (entries.length > 0) {
+      entries.push('separator')
+    }
+    entries.push(
+      { label: $t(b.done ? 'timeblock.menu.undone' : 'timeblock.menu.done'), action: () => void changeBlock(b, { done: !b.done }) },
+      { label: $t('timeblock.menu.duplicate'), hint: shortcutLabel('mod+d'), action: () => void duplicateBlock(b) },
+      { label: $t('timeblock.menu.details'), action: () => (blockEditing = b) },
+    )
+    if (b.linkState === 'out_of_step') {
+      entries.push({ label: $t('timeblock.settle.follow'), action: () => void settle(b, 'follow') })
+    }
+    if (b.linkState) {
+      entries.push(
+        { label: $t('timeblock.settle.rewrite'), action: () => void settle(b, 'rewrite') },
+        { label: $t('timeblock.settle.forget'), action: () => void settle(b, 'forget') },
+      )
+    }
+    entries.push('separator', { label: $t('timeblock.delete'), danger: true, hint: shortcutLabel('delete'), action: () => void deleteBlock(b) })
+    openContextMenu(x, y, entries)
+  }
+
+  function onBlockAction(occ: Occurrence, action: 'delete' | 'duplicate' | 'menu', anchor: HTMLElement): void {
+    if (action === 'menu') {
+      entryMenu(occ, anchor)
+    } else if (occ.proposal && action === 'delete') {
+      dismissProposals([occ.proposal.key])
+    } else if (occ.block && action === 'delete') {
+      void deleteBlock(occ.block)
+    } else if (occ.block && action === 'duplicate') {
+      void duplicateBlock(occ.block)
+    }
+  }
+
+  // --- plan my day ------------------------------------------------------------
+
+  async function planToday(): Promise<void> {
+    if (planning) {
+      return
+    }
+    planning = true
+    closeFloating()
+    const today = new Date()
+    if (!gridView) {
+      calendarView.set('day')
+    }
+    showDay(today)
+    planPaneOpen.set(true)
+    try {
+      const plan = await planDay(dayKey(today))
+      proposeAll(plan.proposals)
+      unplaced = plan.unplaced
+      short = plan.short
+      if (plan.proposals.length > 0) {
+        announce($t('timeblock.announce.proposed').replace('{n}', String(plan.proposals.length)))
+        refocus(occurrenceKey(proposalOccurrence($proposals[0])))
+      } else {
+        announce($t(plan.tasks === 0 ? 'timeblock.announce.nothing' : 'timeblock.announce.noTime'))
+        if (plan.tasks === 0) {
+          toastInfo($t('timeblock.announce.nothing'))
+        }
+      }
+    } catch (err) {
+      toastError(errorMessage(err))
+    } finally {
+      planning = false
+    }
+  }
+
+  function clearNotesWhenDone(): void {
+    if ($proposals.length === 0) {
+      unplaced = []
+      short = []
+    }
+  }
+
+  async function acceptProposals(keys: string[]): Promise<void> {
+    const chosen = $proposals.filter((p) => keys.includes(p.key))
+    if (chosen.length === 0) {
+      return
+    }
+    const made = await makeBlocks(chosen.map((p) => proposalRequest(p, blockCalendar)))
+    if (made.length === 0) {
+      return
+    }
+    dropProposals(keys)
+    clearNotesWhenDone()
+    const message = made.length > 1 ? $t('timeblock.accepted.many').replace('{n}', String(made.length)) : $t('timeblock.accepted.one')
+    saidMade(made, message, () => proposals.update((list) => [...list, ...chosen]))
+    if ($proposals.length > 0) {
+      refocus(occurrenceKey(proposalOccurrence($proposals[0])))
+    } else {
+      refocus(occurrenceKey(blockOccurrence(made[0])))
+    }
+  }
+
+  function dismissProposals(keys: string[]): void {
+    dropProposals(keys)
+    clearNotesWhenDone()
+    announce($t(keys.length > 1 ? 'timeblock.announce.dismissedMany' : 'timeblock.announce.dismissed').replace('{n}', String(keys.length)))
+  }
+
+  // the block time key in the calendar opens the plan pane and puts the focus
+  // on its first task's "Find time".
+  function blockTimeShortcut(): void {
+    if (!gridView) {
+      calendarView.set('week')
+    }
+    planPaneOpen.set(true)
+    void tick().then(() => document.querySelector<HTMLElement>('.screen aside .tasks button')?.focus())
+  }
+
   // --- importing calendar files -------------------------------------------------------
 
   let importing: { files: ICSFile[]; calendarId: number } | null = null
@@ -712,13 +1220,20 @@
 
   // --- keys -------------------------------------------------------------------------
 
-  function editableTarget(target: EventTarget | null): boolean {
-    const el = target as HTMLElement | null
-    return !!el && (el.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(el.tagName))
-  }
-
   function onKeydown(event: KeyboardEvent): void {
-    if (event.metaKey || event.ctrlKey || event.altKey || editableTarget(event.target) || popupIsOpen() || editing || scopeFor || quickAdd || importing) {
+    if (
+      event.metaKey ||
+      event.ctrlKey ||
+      event.altKey ||
+      isEditableTarget(event.target) ||
+      popupIsOpen() ||
+      editing ||
+      scopeFor ||
+      quickAdd ||
+      importing ||
+      findFor ||
+      blockEditing
+    ) {
       return
     }
     const back = rtl ? 'ArrowRight' : 'ArrowLeft'
@@ -729,12 +1244,15 @@
       w: () => setView('week'),
       m: () => setView('month'),
       a: () => setView('agenda'),
+      y: () => setView('year'),
       n: newEvent,
       [back]: () => go(-1),
       [forward]: () => go(1),
     }
     const run = actions[event.key]
-    if (run && !(event.target as HTMLElement).closest('.mini')) {
+    const target = event.target as HTMLElement
+    const ownsKey = target.closest('.mini') || (target.closest('.year') && event.key.startsWith('Arrow'))
+    if (run && !ownsKey) {
       event.preventDefault()
       event.stopPropagation()
       run()
@@ -809,6 +1327,18 @@
         {/if}
       </button>
       <Segmented value={view} options={viewOptions} label={$t('calendar.viewLabel')} on:change={(e) => setView(e.detail as CalendarView)} />
+      {#if gridView && !narrow}
+        <button
+          type="button"
+          class="cal-icon"
+          aria-label={$t('timeblock.pane.toggle')}
+          aria-pressed={$planPaneOpen}
+          use:tip={{ text: $t('timeblock.pane.toggle') }}
+          on:click={() => planPaneOpen.update((v) => !v)}
+        >
+          <Ph svg={planIcon} size={16} />
+        </button>
+      {/if}
     </header>
 
     <div class="stage" bind:this={stage}>
@@ -831,6 +1361,20 @@
               on:create={(e) => startMonthCreate(e.detail.day, e.detail.anchor)}
               on:mailDrop={(e) => onMailDrop(e.detail)}
               on:menu={(e) => onCellMenu(e.detail)}
+              on:toggleTask={(e) => toggleTask(e.detail)}
+              on:moveTask={(e) => moveTaskToDay(e.detail.occ, e.detail.day)}
+            />
+          {:else if view === 'year'}
+            <YearView
+              year={focus.getFullYear()}
+              {focus}
+              {now}
+              {weekStart}
+              placed={yearPlaced}
+              {colors}
+              {timeFormat}
+              on:day={(e) => openDay(e.detail)}
+              on:month={(e) => openMonth(e.detail)}
             />
           {:else if view === 'agenda'}
             <AgendaView
@@ -844,6 +1388,7 @@
               on:open={(e) => openOccurrence(e.detail.occ, e.detail.anchor)}
               on:day={(e) => openDay(e.detail)}
               on:menu={(e) => onCellMenu(e.detail)}
+              on:toggleTask={(e) => toggleTask(e.detail)}
             />
           {:else}
             <TimeGrid
@@ -858,6 +1403,7 @@
               secondaryZone={$calendarSettings.secondaryTimeZone}
               pending={quickPending}
               {selectedKey}
+              {focusKey}
               busy={floating}
               on:open={(e) => openOccurrence(e.detail.occ, e.detail.anchor)}
               on:create={(e) => startQuick(e.detail.start, e.detail.end, e.detail.allDay)}
@@ -865,12 +1411,39 @@
               on:day={(e) => openDay(e.detail)}
               on:mailDrop={(e) => onMailDrop(e.detail)}
               on:menu={(e) => onCellMenu(e.detail)}
+              on:toggleTask={(e) => toggleTask(e.detail)}
+              on:taskDrop={(e) => void blockTaskAt(e.detail.task, e.detail.start, e.detail.end)}
+              on:blockAction={(e) => onBlockAction(e.detail.occ, e.detail.action, e.detail.anchor)}
+              on:quickAdd={() => openQuickAdd()}
             />
           {/if}
         </div>
       {/key}
     </div>
   </div>
+
+  {#if showPlan}
+    <PlanPane
+      tasks={$tasks}
+      plans={$taskPlans}
+      proposals={$proposals}
+      {unplaced}
+      {short}
+      defaultMinutes={$blockSettings.defaultMinutes}
+      {timeFormat}
+      {planKey}
+      {planning}
+      {now}
+      on:findTime={(e) => findTime(e.detail)}
+      on:blockNext={(e) => void blockNext(e.detail)}
+      on:openTask={(e) => openTask(e.detail.id)}
+      on:plan={() => void planToday()}
+      on:accept={(e) => void acceptProposals(e.detail)}
+      on:dismiss={(e) => dismissProposals(e.detail)}
+    />
+  {/if}
+
+  <div class="sr" aria-live="polite" aria-atomic="true">{announcement}</div>
 
   <div class="drop-veil" aria-hidden="true">{$t('calendar.dropFiles')}</div>
 </section>
@@ -886,6 +1459,7 @@
       on:close={() => (selected = null)}
       on:edit={(e) => editEvent(e.detail)}
       on:remove={(e) => removeFromPopover(e.detail.occ, e.detail.scope)}
+      on:toTask={(e) => void eventToTask(e.detail)}
     />
   {/key}
 {/if}
@@ -944,6 +1518,27 @@
     title={$t(`calendar.scope.title.${scopeFor.kind}`)}
     on:close={() => (scopeFor = null)}
     on:choose={(e) => chooseScope(e.detail)}
+  />
+{/if}
+
+{#if findFor}
+  <FindTime task={findFor.task} minutes={findFor.minutes} {timeFormat} on:close={() => (findFor = null)} on:pick={(e) => void pickSlot(e.detail.start, e.detail.end)} />
+{/if}
+
+{#if blockEditing}
+  {@const editingBlock = blockEditing}
+  <BlockDialog
+    block={editingBlock}
+    calendars={$calendars}
+    settings={$blockSettings}
+    {timeFormat}
+    on:close={() => (blockEditing = null)}
+    on:save={(e) => void saveBlock(editingBlock, e.detail)}
+    on:remove={() => {
+      blockEditing = null
+      void deleteBlock(editingBlock)
+    }}
+    on:settle={(e) => void settle(editingBlock, e.detail)}
   />
 {/if}
 
@@ -1038,6 +1633,15 @@
   .page {
     position: absolute;
     inset: 0;
+  }
+
+  .sr {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
   }
 
   /* files held over the calendar: a dashed outline and a line saying they

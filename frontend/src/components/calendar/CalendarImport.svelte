@@ -5,7 +5,7 @@
   import { createEventDispatcher } from 'svelte'
   import fileIcon from '@phosphor-icons/core/assets/duotone/file-text-duotone.svg?raw'
   import warningIcon from '@phosphor-icons/core/assets/duotone/warning-duotone.svg?raw'
-  import './controls.css'
+  import '../../theme/controls.css'
   import Modal from '../common/Modal.svelte'
   import Select from '../common/Select.svelte'
   import Ph from '../common/Ph.svelte'
@@ -25,8 +25,8 @@
 
   let running = false
 
-  $: readable = files.filter((f) => !f.error && f.events > 0)
-  $: total = readable.reduce((n, f) => n + f.events, 0)
+  $: readable = files.filter((f) => !f.error && f.events + (f.tasks ?? 0) > 0)
+  $: total = readable.reduce((n, f) => n + f.events + (f.tasks ?? 0), 0)
   $: items = calendars.map((c) => ({ value: String(c.id), label: c.name || $t('calendar.defaultName'), color: calendarColor(c) }))
 
   async function run(): Promise<void> {
@@ -36,13 +36,18 @@
     running = true
     let imported = 0
     let skipped = 0
+    let tasks = 0
     try {
       for (const f of readable) {
         const r = await importICSData(calendarId, f.data)
         imported += r.imported + r.updated
         skipped += r.skipped
+        tasks += r.tasks ?? 0
       }
-      const message = $t('calendar.imported').replace('{n}', String(imported))
+      let message = $t('calendar.imported').replace('{n}', String(imported))
+      if (tasks) {
+        message += ` ${$t('calendar.importTasks').replace('{n}', String(tasks))}`
+      }
       toastSuccess(skipped ? `${message} ${$t('calendar.importSkipped').replace('{n}', String(skipped))}` : message)
       dispatch('close')
     } catch (err) {
@@ -56,14 +61,14 @@
 <Modal title={$t('calendar.importTitle')} size="small" closable={!running} on:close>
   <ul class="files">
     {#each files as f, i (i)}
-      <li class="file" class:bad={f.error || f.events === 0}>
+      <li class="file" class:bad={f.error || f.events + (f.tasks ?? 0) === 0}>
         <span class="icon" aria-hidden="true"><Ph svg={f.error ? warningIcon : fileIcon} size={16} /></span>
         <div class="text">
           <span class="name">{f.name}</span>
           {#if f.error}
             <span class="meta">{$t('calendar.importUnreadable')}</span>
           {:else}
-            <span class="meta">{$t('calendar.importCount').replace('{n}', String(f.events))}{f.summaries.length ? `: ${f.summaries.filter(Boolean).join(', ')}` : ''}</span>
+            <span class="meta">{$t('calendar.importCount').replace('{n}', String(f.events))}{f.summaries.length ? `: ${f.summaries.filter(Boolean).join(', ')}` : ''}{f.tasks ? `. ${$t('calendar.importTaskCount').replace('{n}', String(f.tasks))}` : ''}</span>
           {/if}
         </div>
       </li>

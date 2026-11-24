@@ -34,6 +34,7 @@ type JSCalSkip struct {
 // JSCalReport says what a JSCalendar import read.
 type JSCalReport struct {
 	Events  int
+	Tasks   int
 	Skipped []JSCalSkip
 }
 
@@ -73,8 +74,9 @@ func jsTypeKnown(m map[string]any) bool {
 	return false
 }
 
-// FromJSCalendar reads JSCalendar data into a VCALENDAR. Entries it cannot
-// use (tasks, events without a start) are skipped and listed in the report.
+// FromJSCalendar reads JSCalendar data into a VCALENDAR: Events become
+// VEVENTs and Tasks VTODOs. Entries it cannot use (events without a start,
+// anything without a uid) are skipped and listed in the report.
 func FromJSCalendar(data []byte, local *time.Location) (*Component, JSCalReport, error) {
 	var report JSCalReport
 	if len(data) > JSCalMaxBytes {
@@ -92,6 +94,16 @@ func FromJSCalendar(data []byte, local *time.Location) (*Component, JSCalReport,
 	cal.Set("VERSION", "2.0")
 	cal.Set("PRODID", ProdID)
 	for i, entry := range entries {
+		if jsString(entry, "@type") == "Task" {
+			comp, err := jsTaskComponent(entry)
+			if err != nil {
+				report.Skipped = append(report.Skipped, JSCalSkip{Index: i, Reason: err.Error()})
+				continue
+			}
+			cal.Children = append(cal.Children, comp)
+			report.Tasks++
+			continue
+		}
 		comps, err := jsEventComponents(entry, local)
 		if err != nil {
 			report.Skipped = append(report.Skipped, JSCalSkip{Index: i, Reason: err.Error()})
@@ -100,14 +112,14 @@ func FromJSCalendar(data []byte, local *time.Location) (*Component, JSCalReport,
 		cal.Children = append(cal.Children, comps...)
 		report.Events++
 	}
-	if report.Events == 0 {
+	if report.Events == 0 && report.Tasks == 0 {
 		return cal, report, ErrNoEvent
 	}
 	return cal, report, nil
 }
 
-// collectJSEntries flattens Groups into their Events and notes the entries
-// that are not events. It reports false when the root is not JSCalendar.
+// collectJSEntries flattens Groups into their Events and Tasks. It reports
+// false when the root is not JSCalendar.
 func collectJSEntries(v any, out *[]map[string]any, report *JSCalReport, depth int) bool {
 	if depth > jsMaxDepth {
 		return false
@@ -123,7 +135,7 @@ func collectJSEntries(v any, out *[]map[string]any, report *JSCalReport, depth i
 		return found
 	case map[string]any:
 		switch jsString(node, "@type") {
-		case "Event":
+		case "Event", "Task":
 			*out = append(*out, node)
 			return true
 		case "Group":
@@ -132,9 +144,6 @@ func collectJSEntries(v any, out *[]map[string]any, report *JSCalReport, depth i
 					collectJSEntries(item, out, report, depth+1)
 				}
 			}
-			return true
-		case "Task":
-			report.Skipped = append(report.Skipped, JSCalSkip{Index: len(*out) + len(report.Skipped), Reason: "a task, not an event"})
 			return true
 		}
 	}
@@ -536,13 +545,16 @@ func jsExtraProps(c *Component, m map[string]any) {
 	}
 }
 
-// ToJSCalendar renders calendar objects as one JSCalendar Group.
-func ToJSCalendar(objs []*Object, name string) ([]byte, error) {
-	entries := make([]map[string]any, 0, len(objs))
+// ToJSCalendar renders events and tasks as one JSCalendar Group.
+func ToJSCalendar(objs []*Object, todos []*TodoObject, name string) ([]byte, error) {
+	entries := make([]map[string]any, 0, len(objs)+len(todos))
 	for _, obj := range objs {
 		if e := jsFromObject(obj); e != nil {
 			entries = append(entries, e)
 		}
+	}
+	for _, todo := range todos {
+		entries = append(entries, jsFromTodo(todo))
 	}
 	group := map[string]any{"@type": "Group", "entries": entries}
 	if name != "" {

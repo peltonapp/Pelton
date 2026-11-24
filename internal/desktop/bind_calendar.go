@@ -36,7 +36,7 @@ const (
 // The calendar views, the week starts and the time zone displays the settings
 // accept. A week start of -1 follows the locale.
 var (
-	calendarViews        = []string{"month", "week", "day", "agenda"}
+	calendarViews        = []string{"month", "week", "day", "agenda", "year"}
 	calendarZoneDisplays = []string{"off", "label", "dual"}
 )
 
@@ -146,8 +146,8 @@ type CalendarSettingsDTO struct {
 	DefaultReminderMinutes int `json:"defaultReminderMinutes"`
 	// DefaultCalendarID is where new events go, 0 for the first writable one.
 	DefaultCalendarID int64 `json:"defaultCalendarId"`
-	// DefaultView is the view the calendar opens in: month, week, day or
-	// agenda.
+	// DefaultView is the view the calendar opens in: month, week, day,
+	// agenda or year.
 	DefaultView string `json:"defaultView"`
 	// WeekStart is the first day of the week, 0 for Sunday through 6, or -1
 	// to follow the locale.
@@ -332,7 +332,8 @@ func (a *App) RemoveCalendarAccount(id int64) error {
 	return nil
 }
 
-// ListCalendars returns every calendar, local ones first.
+// ListCalendars returns every calendar that holds events, local ones first.
+// Task lists are listed by ListTaskLists.
 func (a *App) ListCalendars() ([]CalendarDTO, error) {
 	if err := a.ready(); err != nil {
 		return nil, err
@@ -341,6 +342,22 @@ func (a *App) ListCalendars() ([]CalendarDTO, error) {
 	if err != nil {
 		return nil, err
 	}
+	names, err := a.calendarAccountNames()
+	if err != nil {
+		return nil, err
+	}
+	def := a.defaultCalendarID(cals)
+	out := make([]CalendarDTO, 0, len(cals))
+	for _, c := range cals {
+		if c.HoldsEvents() {
+			out = append(out, toCalendarDTO(c, names[c.AccountID], c.ID == def))
+		}
+	}
+	return out, nil
+}
+
+// calendarAccountNames maps calendar account ids to the name the ui shows.
+func (a *App) calendarAccountNames() (map[int64]string, error) {
 	accounts, err := a.store.ListCalendarAccounts(a.ctx)
 	if err != nil {
 		return nil, err
@@ -352,12 +369,7 @@ func (a *App) ListCalendars() ([]CalendarDTO, error) {
 			names[acct.ID] = acct.Username
 		}
 	}
-	def := a.defaultCalendarID(cals)
-	out := make([]CalendarDTO, 0, len(cals))
-	for _, c := range cals {
-		out = append(out, toCalendarDTO(c, names[c.AccountID], c.ID == def))
-	}
-	return out, nil
+	return names, nil
 }
 
 // SetCalendarColor sets a calendar's color here. It is not written to the
@@ -451,7 +463,7 @@ func (a *App) DeleteLocalCalendar(id int64) error {
 	}
 	locals := 0
 	for _, c := range cals {
-		if c.Local() {
+		if c.Local() && c.HoldsEvents() == cal.HoldsEvents() {
 			locals++
 		}
 	}
@@ -609,7 +621,7 @@ func (a *App) defaultCalendarID(cals []storage.Calendar) int64 {
 	chosen := int64(a.intSetting(settingCalendarDefaultID, 0))
 	var first int64
 	for _, c := range cals {
-		if c.ReadOnly {
+		if c.ReadOnly || !c.HoldsEvents() {
 			continue
 		}
 		if c.ID == chosen {

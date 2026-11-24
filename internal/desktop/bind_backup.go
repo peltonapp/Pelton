@@ -44,6 +44,20 @@ var backupSkipSettings = map[string]bool{
 	settingRemoteDomains:   true,
 	draftsKey:              true,
 	settingThemesSeeded:    true,
+	// the app lock belongs to this install: a backup must neither carry the
+	// passphrase hash away nor switch the lock off on import.
+	settingAppLock:           true,
+	settingAppLockMethod:     true,
+	settingAppLockPassphrase: true,
+	settingAppLockFailures:   true,
+	// a script's folder is a path on this device the user granted here.
+	settingScriptFolders: true,
+	// AI providers and their keys are set up per device.
+	settingAIProviders:     true,
+	settingAIScriptOptions: true,
+	// a proposal names a script by this install's id.
+	settingScriptProposals: true,
+	settingKeyringCopied:   true,
 }
 
 // whitelistBackup is the trusted-sender allowlist as exported.
@@ -74,6 +88,9 @@ type mailboxBackup struct {
 	IMAPPort      int    `json:"imapPort"`
 	SMTPHost      string `json:"smtpHost"`
 	SMTPPort      int    `json:"smtpPort"`
+	// SyncMaxParallel is the mailbox's own parallel-sync override; absent
+	// means it follows the global setting.
+	SyncMaxParallel *int `json:"syncMaxParallel,omitempty"`
 	// TrustedCerts and CAPEM are the certificates and CA the mailbox trusts
 	// beyond the system roots. They are not secrets, and without them a
 	// restored Proton Bridge or self-hosted mailbox could not connect.
@@ -100,6 +117,9 @@ type BackupFileDTO struct {
 	Whitelist  *whitelistBackup  `json:"whitelist,omitempty"`
 	Mailboxes  []mailboxBackup   `json:"mailboxes,omitempty"`
 	Signatures []signatureBackup `json:"signatures,omitempty"`
+	// Snippets travel in the signatures category: both are reusable text the
+	// composer puts into a message.
+	Snippets []snippetBackup `json:"snippets,omitempty"`
 }
 
 // ExportData writes the selected categories to a user-chosen json file and
@@ -141,6 +161,11 @@ func (a *App) ExportData(categories []string, credentialPassword string) (string
 			return "", err
 		}
 		doc.Signatures = signatures
+		snippets, err := a.exportSnippets()
+		if err != nil {
+			return "", err
+		}
+		doc.Snippets = snippets
 	}
 
 	dest, err := a.saveFileDialog(saveDialogOptions{
@@ -218,6 +243,10 @@ func (a *App) exportMailboxes(credentialPassword string) ([]mailboxBackup, error
 			TrustedCerts:  acc.TrustedCerts,
 			CAPEM:         acc.CAPEM,
 		}
+		if acc.SyncMaxParallel != nil {
+			n := *acc.SyncMaxParallel
+			m.SyncMaxParallel = &n
+		}
 		if credentialPassword != "" {
 			secret, err := credentials.Load(acc.ID)
 			if err != nil && !errors.Is(err, credentials.ErrNotFound) {
@@ -268,6 +297,7 @@ type BackupInfoDTO struct {
 	SettingCount            int    `json:"settingCount"`
 	MailboxCount            int    `json:"mailboxCount"`
 	SignatureCount          int    `json:"signatureCount"`
+	SnippetCount            int    `json:"snippetCount"`
 }
 
 // InspectBackupFile opens a file picker and parses the chosen backup, returning
@@ -297,11 +327,12 @@ func (a *App) InspectBackupFile() (BackupInfoDTO, error) {
 		HasSettings:             len(doc.Settings) > 0,
 		HasWhitelist:            doc.Whitelist != nil,
 		HasMailboxes:            len(doc.Mailboxes) > 0,
-		HasSignatures:           len(doc.Signatures) > 0,
+		HasSignatures:           len(doc.Signatures) > 0 || len(doc.Snippets) > 0,
 		HasEncryptedCredentials: anyMailboxHasSecret(doc.Mailboxes),
 		SettingCount:            len(doc.Settings),
 		MailboxCount:            len(doc.Mailboxes),
 		SignatureCount:          len(doc.Signatures),
+		SnippetCount:            len(doc.Snippets),
 	}, nil
 }
 
@@ -360,16 +391,14 @@ func (a *App) ImportData(path string, categories []string, credentialPassword st
 		// without credentials drop out of both with errNoCredentials, which is
 		// not an error here.
 		for _, acc := range ready {
-			goSafe("syncing an imported mailbox", func() {
-				if err := a.syncAccount(acc); err != nil && !errors.Is(err, errNoCredentials) {
-					a.log.Error("sync imported account", "account", acc.Email, "err", err)
-				}
-				goSafe("waiting for new mail", func() { a.idleLoop(acc) })
-			})
+			a.startAccountWorker(acc.ID)
 		}
 	}
 	if want[backupCategorySignatures] {
 		if err := a.importSignatures(doc.Signatures); err != nil {
+			return err
+		}
+		if err := a.importSnippets(doc.Snippets); err != nil {
 			return err
 		}
 	}
@@ -457,6 +486,13 @@ func (a *App) importMailboxes(mailboxes []mailboxBackup, credentialPassword stri
 		id, err := a.store.CreateAccount(a.ctx, &account)
 		if err != nil {
 			return ready, err
+		}
+		if m.SyncMaxParallel != nil {
+			n := clampSyncMaxParallel(*m.SyncMaxParallel)
+			if err := a.store.SetAccountSyncMaxParallel(a.ctx, id, &n); err != nil {
+				return ready, err
+			}
+			account.SyncMaxParallel = &n
 		}
 		have[m.Email] = id
 		ready = append(ready, account)

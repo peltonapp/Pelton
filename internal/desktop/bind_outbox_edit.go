@@ -44,6 +44,7 @@ func (a *App) EditOutboxMessage(id int64) (OutboxEditDTO, error) {
 		return OutboxEditDTO{}, nil
 	}
 	a.sentRequests.Delete(id)
+	a.dropFollowUpsForOutbox(id)
 	a.emit(EventOutboxChanged, nil)
 	return OutboxEditDTO{Taken: true, Request: stored.(ComposeRequest)}, nil
 }

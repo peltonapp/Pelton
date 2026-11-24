@@ -28,6 +28,7 @@ type ThreadMember struct {
 	Date           time.Time
 	Flags          Flag
 	HasAttachments bool
+	Pinned         bool
 }
 
 // ThreadPage is one conversation in a listing. Head is the newest message of
@@ -49,9 +50,11 @@ const threadKeyExpr = `CASE WHEN thread_id = 0 THEN -id ELSE thread_id END`
 // The order is the flat list's (date, then uid) with the row id as the final
 // tie break, so paging never repeats or skips a thread while nothing changes.
 func (d *DB) QueryThreads(ctx context.Context, q ThreadQuery) ([]ThreadPage, error) {
-	if len(q.Query.FolderIDs) == 0 {
-		return nil, nil
+	ids, err := d.visibleFolderIDs(ctx, q.Query.FolderIDs)
+	if err != nil || len(ids) == 0 {
+		return nil, err
 	}
+	q.Query.FolderIDs = ids
 	where, args := threadWhere(q.Query)
 	query := `
 SELECT id FROM (
@@ -137,12 +140,14 @@ func (d *DB) GroupThreads(ctx context.Context, messages []Message, listedFolderI
 
 // CountThreads returns how many conversations q lists, ignoring its paging.
 func (d *DB) CountThreads(ctx context.Context, q ThreadQuery) (int, error) {
-	if len(q.Query.FolderIDs) == 0 {
-		return 0, nil
+	ids, err := d.visibleFolderIDs(ctx, q.Query.FolderIDs)
+	if err != nil || len(ids) == 0 {
+		return 0, err
 	}
+	q.Query.FolderIDs = ids
 	where, args := threadWhere(q.Query)
 	var n int
-	err := d.sql.QueryRowContext(ctx,
+	err = d.sql.QueryRowContext(ctx,
 		`SELECT COUNT(DISTINCT `+threadKeyExpr+`) FROM messages WHERE `+where, args...).Scan(&n)
 	if err != nil {
 		return 0, fmt.Errorf("storage: count threads: %w", err)
@@ -179,13 +184,26 @@ FROM messages WHERE thread_id = ? AND pending_delete = 0 AND snooze_hidden = 0`
 		}
 		out = append(out, *m)
 	}
-	return out, rows.Err()
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return d.visibleMessages(ctx, out)
 }
 
 // threadWhere is the flat list's filter without the one-copy rule.
 func threadWhere(q MessageQuery) (string, []any) {
 	q.OneCopy = false
+	q.byThread = true
 	return messageWhere(q)
+}
+
+// MessagesByID reads several messages at once, keyed by id. Ids with no
+// message are left out.
+func (d *DB) MessagesByID(ctx context.Context, ids []int64) (map[int64]Message, error) {
+	if len(ids) == 0 {
+		return map[int64]Message{}, nil
+	}
+	return d.messagesByID(ctx, ids)
 }
 
 func (d *DB) messagesByID(ctx context.Context, ids []int64) (map[int64]Message, error) {
@@ -196,29 +214,46 @@ FROM messages WHERE id IN (`+marks+`)`, args...)
 		return nil, fmt.Errorf("storage: messages by id: %w", err)
 	}
 	defer rows.Close()
-	out := make(map[int64]Message, len(ids))
+	var list []Message
 	for rows.Next() {
 		m, err := scanMessage(rows)
 		if err != nil {
 			return nil, fmt.Errorf("storage: scan message: %w", err)
 		}
-		out[m.ID] = *m
+		list = append(list, *m)
 	}
-	return out, rows.Err()
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	list, err = d.visibleMessages(ctx, list)
+	if err != nil {
+		return nil, err
+	}
+	out := make(map[int64]Message, len(list))
+	for _, m := range list {
+		out[m.ID] = m
+	}
+	return out, nil
 }
 
 // threadMembers reads the light member rows of several threads at once,
 // grouped by thread in date order.
 func (d *DB) threadMembers(ctx context.Context, threadIDs, folderIDs []int64) (map[int64][]ThreadMember, error) {
 	out := make(map[int64][]ThreadMember, len(threadIDs))
+	folderIDs, err := d.visibleFolderIDs(ctx, folderIDs)
+	if err != nil {
+		return nil, err
+	}
 	if len(threadIDs) == 0 || len(folderIDs) == 0 {
 		return out, nil
 	}
 	threadMarks, args := inClause(threadIDs)
 	folderMarks, folderArgs := inClause(folderIDs)
 	args = append(args, folderArgs...)
+	var sealed []*Message
+	sealedAt := map[int64][2]int{}
 	rows, err := d.sql.QueryContext(ctx, `
-SELECT id, account_id, folder_id, thread_id, message_id, from_name, from_address, date, flags, has_attachments
+SELECT id, account_id, folder_id, thread_id, message_id, from_name, from_address, date, flags, has_attachments, pinned, vault_id
 FROM messages
 WHERE thread_id IN (`+threadMarks+`) AND folder_id IN (`+folderMarks+`)
   AND pending_delete = 0 AND snooze_hidden = 0
@@ -234,9 +269,11 @@ ORDER BY date ASC, uid ASC, id ASC`, args...)
 			date     string
 			flags    uint8
 			hasAtt   int
+			pinned   int
+			vaultID  int64
 		)
 		if err := rows.Scan(&m.ID, &m.AccountID, &m.FolderID, &threadID, &m.MessageID,
-			&m.FromName, &m.FromAddress, &date, &flags, &hasAtt); err != nil {
+			&m.FromName, &m.FromAddress, &date, &flags, &hasAtt, &pinned, &vaultID); err != nil {
 			return nil, fmt.Errorf("storage: scan thread member: %w", err)
 		}
 		if m.Date, err = parseTime(date); err != nil {
@@ -244,9 +281,37 @@ ORDER BY date ASC, uid ASC, id ASC`, args...)
 		}
 		m.Flags = Flag(flags)
 		m.HasAttachments = hasAtt != 0
+		m.Pinned = pinned != 0
+		if vaultID != 0 {
+			sealed = append(sealed, &Message{ID: m.ID, FolderID: m.FolderID, VaultID: vaultID})
+			sealedAt[m.ID] = [2]int{int(threadID), len(out[threadID])}
+		}
 		out[threadID] = append(out[threadID], m)
 	}
-	return out, rows.Err()
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	if len(sealed) == 0 {
+		return out, nil
+	}
+	_, gate, err := d.vaultFolders(ctx)
+	if err != nil {
+		return nil, err
+	}
+	bad, err := d.openSealed(ctx, gate, sealed)
+	if err != nil {
+		return nil, err
+	}
+	for _, s := range sealed {
+		at := sealedAt[s.ID]
+		member := &out[int64(at[0])][at[1]]
+		if bad[s.ID] {
+			member.MessageID = ""
+			continue
+		}
+		member.MessageID, member.FromName, member.FromAddress = s.MessageID, s.FromName, s.FromAddress
+	}
+	return out, nil
 }
 
 func memberOf(m Message) ThreadMember {
@@ -260,6 +325,7 @@ func memberOf(m Message) ThreadMember {
 		Date:           m.Date,
 		Flags:          m.Flags,
 		HasAttachments: m.HasAttachments,
+		Pinned:         m.Pinned,
 	}
 }
 

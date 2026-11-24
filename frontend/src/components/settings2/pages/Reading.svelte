@@ -6,6 +6,9 @@
   import Row from '../ui/Row.svelte'
   import ToggleSwitch from '../../common/ToggleSwitch.svelte'
   import Select from '../../common/Select.svelte'
+  import SenderFontPreview from '../skeletons/SenderFontPreview.svelte'
+  import BadgesPreview from '../skeletons/BadgesPreview.svelte'
+  import OpeningPreview from '../skeletons/OpeningPreview.svelte'
   import {
     prefs,
     setToggle,
@@ -14,7 +17,15 @@
     setSenderFonts,
     setMarkReadOnOpen,
     setOpenOnArrow,
+    setSenderPanel,
+    setMailDates,
+    setProjectSuggestions,
+    setHtmlColors,
   } from '../../../stores/prefs'
+  import Segmented from '../ui/Segmented.svelte'
+  import { ensureSenderReading, forgetSenderReading, senderReading } from '../../../stores/senderreading'
+  import { errorMessage, toastError, toastSuccess } from '../../../stores/toast'
+  import type { HtmlColors } from '../../../lib/types'
   import { bodyFonts, bodyFontStack } from '../../../lib/fonts'
   import { listSystemFonts, getSetting, setSetting } from '../../../lib/api'
   import { t } from '../../../lib/i18n'
@@ -91,6 +102,23 @@
     void setSetting(charsetKey, charsetFallback)
   }
 
+  $: htmlColorOptions = [
+    { key: 'auto', label: $t('reader.colors.auto') },
+    { key: 'adapt', label: $t('reader.colors.always') },
+    { key: 'original', label: $t('reader.colors.never') },
+  ]
+
+  onMount(() => void ensureSenderReading())
+
+  async function forgetSenders(): Promise<void> {
+    try {
+      const n = await forgetSenderReading()
+      toastSuccess($t('reader.senders.forgotten').replace('{n}', String(n)))
+    } catch (err) {
+      toastError(errorMessage(err))
+    }
+  }
+
   type ToggleKey = 'showMailboxBadge' | 'showPgp' | 'showAuth'
 
   $: techInfo = [
@@ -124,7 +152,21 @@
     />
   </Row>
   <Row id="sender-fonts" label={$t('settingsPanel.toggle.senderFonts')} hint={$t('settingsPanel.hint.senderFonts')}>
+    <SenderFontPreview slot="preview" senderFonts={$prefs.senderFonts} />
     <ToggleSwitch checked={$prefs.senderFonts} label={$t('settingsPanel.toggle.senderFonts')} on:change={(e) => setSenderFonts(e.detail)} />
+  </Row>
+  <Row id="html-colors" label={$t('reader.colors.setting')} hint={$t('reader.colors.settingHint')}>
+    <Segmented
+      label={$t('reader.colors.setting')}
+      value={$prefs.htmlColors}
+      options={htmlColorOptions}
+      on:change={(e) => setHtmlColors(e.detail as HtmlColors)}
+    />
+  </Row>
+  <Row id="sender-reading" label={$t('reader.senders.setting')} hint={$t('reader.senders.settingHint')}>
+    <button type="button" class="s2-btn" disabled={$senderReading.size === 0} on:click={() => void forgetSenders()}>
+      {$t('reader.senders.forget')}
+    </button>
   </Row>
   <Row id="charset-fallback" label={$t('settingsPanel.label.charsetFallback')} hint={$t('settingsPanel.hint.charsetFallback')}>
     <Select
@@ -139,6 +181,7 @@
 <Card title={$t('settingsPanel.techInfo')}>
   {#each techInfo as item (item.key)}
     <Row id={item.id} label={item.label} hint={item.note}>
+      <BadgesPreview slot="preview" />
       <ToggleSwitch checked={$prefs[item.key]} label={item.label} on:change={(e) => setToggle(item.key, e.detail)} />
     </Row>
   {/each}
@@ -146,10 +189,24 @@
 
 <Card title={$t('reading.card.opening')}>
   <Row id="mark-read" label={$t('settingsPanel.toggle.markReadOnOpen')}>
+    <OpeningPreview slot="preview" markRead={$prefs.markReadOnOpen} openOnArrow />
     <ToggleSwitch checked={$prefs.markReadOnOpen} label={$t('settingsPanel.toggle.markReadOnOpen')} on:change={(e) => setMarkReadOnOpen(e.detail)} />
   </Row>
   <Row id="open-on-arrow" label={$t('settingsPanel.toggle.openOnArrow')}>
+    <OpeningPreview slot="preview" markRead={$prefs.markReadOnOpen} openOnArrow={$prefs.openOnArrow} />
     <ToggleSwitch checked={$prefs.openOnArrow} label={$t('settingsPanel.toggle.openOnArrow')} on:change={(e) => setOpenOnArrow(e.detail)} />
+  </Row>
+  <Row id="sender-panel" label={$t('senderPanel.setting')} hint={$t('senderPanel.settingHint')}>
+    <ToggleSwitch checked={$prefs.senderPanel} label={$t('senderPanel.setting')} on:change={(e) => setSenderPanel(e.detail)} />
+  </Row>
+  <Row id="project-suggestions" label={$t('projects.settings.suggestions')} hint={$t('projects.settings.suggestionsHint')}>
+    <ToggleSwitch checked={$prefs.projectSuggestions} label={$t('projects.settings.suggestions')} on:change={(e) => setProjectSuggestions(e.detail)} />
+  </Row>
+</Card>
+
+<Card title={$t('reading.card.dates')}>
+  <Row id="mail-dates" label={$t('reading.mailDates')} hint={$t('reading.mailDates.hint')}>
+    <ToggleSwitch checked={$prefs.mailDates} label={$t('reading.mailDates')} on:change={(e) => setMailDates(e.detail)} />
   </Row>
 </Card>
 

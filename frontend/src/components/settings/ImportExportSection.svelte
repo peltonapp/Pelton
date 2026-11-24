@@ -5,6 +5,10 @@
   // chooses; nothing leaves the machine on its own.
   import { IconDownload, IconUpload, IconFileImport } from '@tabler/icons-svelte'
   import { t } from '../../lib/i18n'
+  import { loadImportDialog, loadGuidedImport } from '../../lib/lazyload'
+
+  /** Opens the New design's guided import instead of the import dialog. */
+  export let guided = false
 
   let exportOpen = false
   let importOpen = false
@@ -44,8 +48,12 @@
   {/await}
 {/if}
 
-{#if importOpen}
-  {#await import('../import/ImportDialog.svelte') then m}
+{#if importOpen && guided}
+  {#await loadGuidedImport() then m}
+    <svelte:component this={m.default} on:close={() => (importOpen = false)} />
+  {/await}
+{:else if importOpen}
+  {#await loadImportDialog() then m}
     <svelte:component this={m.default} on:close={() => (importOpen = false)} />
   {/await}
 {/if}

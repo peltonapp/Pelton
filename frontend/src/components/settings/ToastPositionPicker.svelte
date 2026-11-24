@@ -9,7 +9,7 @@
 
   export let value: string
 
-  const dispatch = createEventDispatcher<{ change: ToastPosition }>()
+  const dispatch = createEventDispatcher<{ change: ToastPosition; hover: ToastPosition | null }>()
 
   const positions: ToastPosition[] = [
     'top-left',
@@ -22,6 +22,8 @@
 
   // the position currently being previewed on hover, or null.
   let preview: ToastPosition | null = null
+
+  $: dispatch('hover', preview)
 
   const positionKeys: Record<ToastPosition, string> = {
     'top-left': 'settingsPanel.posTopLeft',

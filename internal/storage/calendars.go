@@ -25,6 +25,12 @@ const (
 	PendingDelete = "delete"
 )
 
+// The components a calendar object resource carries, and a calendar holds.
+const (
+	KindEvent = "VEVENT"
+	KindTask  = "VTODO"
+)
+
 // CalendarAccount is one CalDAV login. Its password is in the os keyring, or
 // is the one of the address book it shares a server with.
 type CalendarAccount struct {
@@ -63,11 +69,33 @@ type Calendar struct {
 	LastSyncAt string
 	LastError  string
 	CreatedAt  string
+	// Components lists what the calendar holds, comma separated: VEVENT,
+	// VTODO or both.
+	Components string
 }
 
 // Local reports whether the calendar lives only in this database.
 func (c Calendar) Local() bool {
 	return c.AccountID == 0
+}
+
+// HoldsEvents reports whether the calendar takes events.
+func (c Calendar) HoldsEvents() bool {
+	return c.holds(KindEvent)
+}
+
+// HoldsTasks reports whether the calendar takes tasks.
+func (c Calendar) HoldsTasks() bool {
+	return c.holds(KindTask)
+}
+
+func (c Calendar) holds(kind string) bool {
+	for _, part := range strings.Split(c.Components, ",") {
+		if strings.EqualFold(strings.TrimSpace(part), kind) {
+			return true
+		}
+	}
+	return false
 }
 
 // CalendarEvent is one calendar object resource: an event with its overrides,
@@ -92,6 +120,20 @@ type CalendarEvent struct {
 	Conflict  bool
 	SyncError string
 	UpdatedAt string
+	// Kind is KindEvent or KindTask. An empty Kind is stored as an event.
+	Kind string
+	// TaskDue is a task's due date (2006-01-02) or utc instant (rfc3339),
+	// empty for none. TaskCompleted is when it was completed, empty while it
+	// is open. TaskMail holds the Message-IDs of the mails it links to, one
+	// per line. All three are empty for an event.
+	TaskDue       string
+	TaskCompleted string
+	TaskMail      string
+}
+
+// IsTask reports whether the row holds a task.
+func (e CalendarEvent) IsTask() bool {
+	return e.Kind == KindTask
 }
 
 const calendarAccountColumns = `id, coalesce(account_id, 0), coalesce(address_book_id, 0), name, url,
@@ -183,15 +225,19 @@ func (d *DB) RecordCalendarAccountSync(ctx context.Context, id int64, failure st
 }
 
 const calendarColumns = `id, coalesce(calendar_account_id, 0), path, name, description, color, color_set,
-       ctag, sync_token, read_only, visible, position, last_sync_at, last_error, created_at`
+       ctag, sync_token, read_only, visible, position, last_sync_at, last_error, created_at, components`
 
-// CreateCalendar inserts a calendar and returns its new id.
+// CreateCalendar inserts a calendar and returns its new id. Empty Components
+// makes an event calendar.
 func (d *DB) CreateCalendar(ctx context.Context, c *Calendar) (int64, error) {
+	if c.Components == "" {
+		c.Components = KindEvent
+	}
 	res, err := d.sql.ExecContext(ctx, `
-INSERT INTO calendars (calendar_account_id, path, name, description, color, color_set, read_only, visible, position, created_at)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+INSERT INTO calendars (calendar_account_id, path, name, description, color, color_set, read_only, visible, position, created_at, components)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		nullableAccount(c.AccountID), c.Path, c.Name, c.Description, c.Color, boolToInt(c.ColorSet),
-		boolToInt(c.ReadOnly), boolToInt(c.Visible), c.Position, nowText())
+		boolToInt(c.ReadOnly), boolToInt(c.Visible), c.Position, nowText(), c.Components)
 	if err != nil {
 		return 0, fmt.Errorf("storage: insert calendar %q: %w", c.Name, err)
 	}
@@ -246,14 +292,15 @@ func (d *DB) GetCalendar(ctx context.Context, id int64) (*Calendar, error) {
 }
 
 // UpdateCalendar saves a calendar's descriptive fields and flags. The sync
-// markers are written by RecordCalendarSync.
+// markers are written by RecordCalendarSync. Empty Components leaves the
+// stored ones alone.
 func (d *DB) UpdateCalendar(ctx context.Context, c Calendar) error {
 	res, err := d.sql.ExecContext(ctx, `
 UPDATE calendars SET path = ?, name = ?, description = ?, color = ?, color_set = ?, read_only = ?,
-       visible = ?, position = ?
+       visible = ?, position = ?, components = coalesce(nullif(?, ''), components)
 WHERE id = ?`,
 		c.Path, c.Name, c.Description, c.Color, boolToInt(c.ColorSet), boolToInt(c.ReadOnly),
-		boolToInt(c.Visible), c.Position, c.ID)
+		boolToInt(c.Visible), c.Position, c.Components, c.ID)
 	if err != nil {
 		return fmt.Errorf("storage: update calendar %d: %w", c.ID, err)
 	}
@@ -288,23 +335,31 @@ func (d *DB) RecordCalendarSync(ctx context.Context, id int64, ctag, token, fail
 }
 
 const eventColumns = `id, calendar_id, uid, path, etag, data, summary, location, range_start, range_end,
-       recurring, has_alarms, pending, conflict, sync_error, updated_at`
+       recurring, has_alarms, pending, conflict, sync_error, updated_at, kind, task_due, task_completed, task_mail`
 
-// SaveCalendarEvent inserts or updates an event by its calendar and UID.
+// SaveCalendarEvent inserts or updates an event or a task by its calendar and
+// UID.
 func (d *DB) SaveCalendarEvent(ctx context.Context, e *CalendarEvent) error {
+	if e.Kind == "" {
+		e.Kind = KindEvent
+	}
 	const query = `
 INSERT INTO calendar_events (calendar_id, uid, path, etag, data, summary, location, range_start, range_end,
-                             recurring, has_alarms, pending, conflict, sync_error, updated_at)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                             recurring, has_alarms, pending, conflict, sync_error, updated_at,
+                             kind, task_due, task_completed, task_mail)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 ON CONFLICT(calendar_id, uid) DO UPDATE SET
     path = excluded.path, etag = excluded.etag, data = excluded.data, summary = excluded.summary,
     location = excluded.location, range_start = excluded.range_start, range_end = excluded.range_end,
     recurring = excluded.recurring, has_alarms = excluded.has_alarms, pending = excluded.pending,
-    conflict = excluded.conflict, sync_error = excluded.sync_error, updated_at = excluded.updated_at`
+    conflict = excluded.conflict, sync_error = excluded.sync_error, updated_at = excluded.updated_at,
+    kind = excluded.kind, task_due = excluded.task_due, task_completed = excluded.task_completed,
+    task_mail = excluded.task_mail`
 	if _, err := d.sql.ExecContext(ctx, query,
 		e.CalendarID, e.UID, e.Path, e.ETag, e.Data, e.Summary, e.Location,
 		formatTime(e.RangeStart), formatTime(e.RangeEnd), boolToInt(e.Recurring), boolToInt(e.HasAlarms),
-		e.Pending, boolToInt(e.Conflict), e.SyncError, nowText()); err != nil {
+		e.Pending, boolToInt(e.Conflict), e.SyncError, nowText(),
+		e.Kind, e.TaskDue, e.TaskCompleted, e.TaskMail); err != nil {
 		return fmt.Errorf("storage: save event %q: %w", e.UID, err)
 	}
 	var id int64
@@ -328,9 +383,10 @@ func (d *DB) GetCalendarEventByUID(ctx context.Context, calendarID int64, uid st
 }
 
 // FindCalendarEventsByUID returns the events with a UID in any calendar, which
-// is how an invitation update finds the copy an earlier answer stored.
+// is how an invitation update finds the copy an earlier answer stored. Tasks
+// are left out.
 func (d *DB) FindCalendarEventsByUID(ctx context.Context, uid string) ([]CalendarEvent, error) {
-	return d.queryEvents(ctx, `SELECT `+eventColumns+` FROM calendar_events WHERE uid = ? ORDER BY id`, uid)
+	return d.queryEvents(ctx, `SELECT `+eventColumns+` FROM calendar_events WHERE uid = ? AND kind = 'VEVENT' ORDER BY id`, uid)
 }
 
 // GetCalendarEventByPath returns the event stored at a server path, or
@@ -375,12 +431,12 @@ type EventQuery struct {
 }
 
 // QueryCalendarEvents returns the events whose span reaches [From, To),
-// pending deletions left out. The caller expands them: a recurring event is
-// returned once, however many occurrences it has in the window.
+// pending deletions and tasks left out. The caller expands them: a recurring
+// event is returned once, however many occurrences it has in the window.
 func (d *DB) QueryCalendarEvents(ctx context.Context, q EventQuery) ([]CalendarEvent, error) {
 	query := `SELECT ` + prefixed("e.", eventColumns) + `
 FROM calendar_events e JOIN calendars c ON c.id = e.calendar_id
-WHERE e.pending != 'delete' AND e.range_start < ? AND (e.range_end = '' OR e.range_end >= ?)`
+WHERE e.kind = 'VEVENT' AND e.pending != 'delete' AND e.range_start < ? AND (e.range_end = '' OR e.range_end >= ?)`
 	args := []any{formatTime(q.To), formatTime(q.From)}
 	if q.VisibleOnly {
 		query += ` AND c.visible = 1`
@@ -395,6 +451,114 @@ WHERE e.pending != 'delete' AND e.range_start < ? AND (e.range_end = '' OR e.ran
 		}
 	}
 	return d.queryEvents(ctx, query+` ORDER BY e.range_start`, args...)
+}
+
+// TaskQuery selects tasks.
+type TaskQuery struct {
+	// CalendarIDs limits the query to those calendars; empty means all.
+	CalendarIDs []int64
+	// CompletedSince keeps completed tasks only when they were completed at
+	// or after it. Zero keeps every completed task.
+	CompletedSince time.Time
+	// OpenOnly leaves completed tasks out altogether.
+	OpenOnly bool
+	// AlarmsOnly keeps only tasks that carry a reminder.
+	AlarmsOnly bool
+	// VisibleOnly leaves out calendars the user has hidden.
+	VisibleOnly bool
+}
+
+// QueryTasks returns the tasks the query selects, pending deletions left out,
+// in the order they were stored.
+func (d *DB) QueryTasks(ctx context.Context, q TaskQuery) ([]CalendarEvent, error) {
+	query := `SELECT ` + prefixed("e.", eventColumns) + `
+FROM calendar_events e JOIN calendars c ON c.id = e.calendar_id
+WHERE e.kind = 'VTODO' AND e.pending != 'delete'`
+	var args []any
+	switch {
+	case q.OpenOnly:
+		query += ` AND e.task_completed = ''`
+	case !q.CompletedSince.IsZero():
+		query += ` AND (e.task_completed = '' OR e.task_completed >= ?)`
+		args = append(args, formatTime(q.CompletedSince))
+	}
+	if q.AlarmsOnly {
+		query += ` AND e.has_alarms = 1`
+	}
+	if q.VisibleOnly {
+		query += ` AND c.visible = 1`
+	}
+	if len(q.CalendarIDs) > 0 {
+		query += ` AND e.calendar_id IN (` + strings.TrimSuffix(strings.Repeat("?,", len(q.CalendarIDs)), ",") + `)`
+		for _, id := range q.CalendarIDs {
+			args = append(args, id)
+		}
+	}
+	return d.queryEvents(ctx, query+` ORDER BY e.id`, args...)
+}
+
+// TaskMailIDs returns the Message-IDs open and completed tasks link to: each
+// id maps to true while every task linking to it is completed.
+func (d *DB) TaskMailIDs(ctx context.Context) (map[string]bool, error) {
+	rows, err := d.sql.QueryContext(ctx, `
+SELECT task_mail, task_completed FROM calendar_events
+WHERE kind = 'VTODO' AND pending != 'delete' AND task_mail != ''`)
+	if err != nil {
+		return nil, fmt.Errorf("storage: task mail links: %w", err)
+	}
+	defer rows.Close()
+	out := map[string]bool{}
+	for rows.Next() {
+		var mail, completed string
+		if err := rows.Scan(&mail, &completed); err != nil {
+			return nil, fmt.Errorf("storage: scan task mail links: %w", err)
+		}
+		for _, id := range strings.Split(mail, "\n") {
+			if id = strings.TrimSpace(id); id == "" {
+				continue
+			}
+			done, seen := out[id]
+			out[id] = completed != "" && (!seen || done)
+		}
+	}
+	return out, rows.Err()
+}
+
+// MessageIDsByHeader maps Message-IDs, written with or without angle
+// brackets, to the stored messages carrying them. An id no message has is
+// left out.
+func (d *DB) MessageIDsByHeader(ctx context.Context, headerIDs []string) (map[string][]int64, error) {
+	out := map[string][]int64{}
+	const batch = 200
+	for len(headerIDs) > 0 {
+		part := headerIDs[:min(len(headerIDs), batch)]
+		headerIDs = headerIDs[len(part):]
+		args := make([]any, 0, 2*len(part))
+		for _, id := range part {
+			args = append(args, id, "<"+id+">")
+		}
+		rows, err := d.sql.QueryContext(ctx, `SELECT id, message_id FROM messages WHERE message_id IN (`+
+			strings.TrimSuffix(strings.Repeat("?,", len(args)), ",")+`) AND `+notVaulted, args...)
+		if err != nil {
+			return nil, fmt.Errorf("storage: messages by header id: %w", err)
+		}
+		for rows.Next() {
+			var id int64
+			var header string
+			if err := rows.Scan(&id, &header); err != nil {
+				rows.Close()
+				return nil, fmt.Errorf("storage: scan message by header id: %w", err)
+			}
+			key := strings.Trim(header, "<>")
+			out[key] = append(out[key], id)
+		}
+		err = rows.Err()
+		rows.Close()
+		if err != nil {
+			return nil, err
+		}
+	}
+	return out, nil
 }
 
 func prefixed(prefix, columns string) string {
@@ -458,7 +622,8 @@ func scanCalendar(row rowScanner) (*Calendar, error) {
 		colorSet, readOnly, visible int
 	)
 	if err := row.Scan(&c.ID, &c.AccountID, &c.Path, &c.Name, &c.Description, &c.Color, &colorSet,
-		&c.CTag, &c.SyncToken, &readOnly, &visible, &c.Position, &c.LastSyncAt, &c.LastError, &c.CreatedAt); err != nil {
+		&c.CTag, &c.SyncToken, &readOnly, &visible, &c.Position, &c.LastSyncAt, &c.LastError, &c.CreatedAt,
+		&c.Components); err != nil {
 		return nil, err
 	}
 	c.ColorSet, c.ReadOnly, c.Visible = colorSet != 0, readOnly != 0, visible != 0
@@ -473,7 +638,8 @@ func scanEvent(row rowScanner) (*CalendarEvent, error) {
 		conflict          int
 	)
 	if err := row.Scan(&e.ID, &e.CalendarID, &e.UID, &e.Path, &e.ETag, &e.Data, &e.Summary, &e.Location,
-		&start, &end, &recurring, &alarms, &e.Pending, &conflict, &e.SyncError, &e.UpdatedAt); err != nil {
+		&start, &end, &recurring, &alarms, &e.Pending, &conflict, &e.SyncError, &e.UpdatedAt,
+		&e.Kind, &e.TaskDue, &e.TaskCompleted, &e.TaskMail); err != nil {
 		return nil, err
 	}
 	var err error

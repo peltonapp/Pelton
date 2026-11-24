@@ -7,8 +7,9 @@
   import { get } from 'svelte/store'
   import { IconSearch, IconX, IconRotateClockwise } from '@tabler/icons-svelte'
   import { shortcuts as registry, eventToCombo, type ShortcutAction } from '../../lib/shortcuts'
-  import { bindings, recording, setBinding, resetBinding, resetAll, conflictsFor } from '../../stores/shortcuts'
+  import { bindings, recording, setBinding, resetBinding, resetAll, conflictsFor, scriptShortcuts } from '../../stores/shortcuts'
   import { t, shortcutLabel } from '../../lib/i18n'
+  import { prefs } from '../../stores/prefs'
 
   let query = ''
 
@@ -18,13 +19,20 @@
 
   // filter rows by their localized label (and the action key as a fallback).
   // $t is a dependency so this re-filters when the language changes too.
-  $: rows = registry.filter((s) => {
+  $: rows = [...registry, ...$scriptShortcuts].filter((s) => {
+    if (s.newDesignOnly && $prefs.design === 'classic') {
+      return false
+    }
     const q = query.trim().toLowerCase()
     if (!q) {
       return true
     }
-    return $t(s.labelKey).toLowerCase().includes(q) || s.action.includes(q)
+    return nameOf(s).toLowerCase().includes(q) || s.action.includes(q)
   })
+
+  function nameOf(s: { labelKey: string; label?: string }): string {
+    return s.label ?? $t(s.labelKey)
+  }
 
   function startRecord(action: ShortcutAction): void {
     recordingAction = action
@@ -60,7 +68,7 @@
     }
     const clash = conflictsFor(recordingAction, combo)
     if (clash) {
-      conflictMsg = `${get(t)('shortcuts.alreadyUsedBy')} “${get(t)(registryLabel(clash))}”`
+      conflictMsg = `${get(t)('shortcuts.alreadyUsedBy')} “${registryLabel(clash)}”`
       return
     }
     setBinding(recordingAction, combo)
@@ -68,7 +76,8 @@
   }
 
   function registryLabel(action: ShortcutAction): string {
-    return registry.find((s) => s.action === action)?.labelKey ?? action
+    const entry = [...registry, ...get(scriptShortcuts)].find((s) => s.action === action)
+    return entry ? (entry.label ?? get(t)(entry.labelKey)) : action
   }
 </script>
 
@@ -92,7 +101,7 @@
 <ul class="list">
   {#each rows as sc (sc.action)}
     <li>
-      <span class="label">{$t(sc.labelKey)}</span>
+      <span class="label">{nameOf(sc)}</span>
       <div class="controls">
         {#if recordingAction === sc.action}
           <span class="recording">{$t('shortcuts.pressKeys')} <kbd>Esc</kbd> {$t('shortcuts.toCancel')}</span>

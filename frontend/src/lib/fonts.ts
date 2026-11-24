@@ -16,6 +16,7 @@ export interface BodyFont {
 }
 
 export const bodyFonts: BodyFont[] = [
+  { key: 'system', labelKey: 'settingsPanel.bodyFont.system', stack: 'system-ui, -apple-system, "Segoe UI", Roboto, sans-serif' },
   { key: 'default', labelKey: 'settingsPanel.bodyFont.default', stack: null },
   { key: 'serif', labelKey: 'settingsPanel.bodyFont.serif', stack: 'Georgia, "Times New Roman", Times, serif' },
   { key: 'sans', labelKey: 'settingsPanel.bodyFont.sans', stack: 'Helvetica, Arial, sans-serif' },

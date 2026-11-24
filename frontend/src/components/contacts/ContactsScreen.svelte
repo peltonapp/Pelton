@@ -88,6 +88,7 @@
       note: '',
       emails: [{ value: '', label: '' }],
       phones: [],
+      matrixId: '',
       force: false,
     }
   }
@@ -111,6 +112,7 @@
       note: contact.note,
       emails: contact.emails.length ? contact.emails.map((e) => ({ ...e })) : [{ value: '', label: '' }],
       phones: contact.phones.map((p) => ({ ...p })),
+      matrixId: contact.matrixId,
       force: false,
     }
   }

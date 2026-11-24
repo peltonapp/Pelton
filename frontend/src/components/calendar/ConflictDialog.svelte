@@ -1,7 +1,7 @@
 <script lang="ts">
   // a change the server refused because its copy of the event moved on: both
   // versions side by side, and a choice of which one stays.
-  import './controls.css'
+  import '../../theme/controls.css'
   import Modal from '../common/Modal.svelte'
   import { eventConflict, resolveConflict, dismissEventConflict } from '../../stores/calendar'
   import { parseEventTime } from '../../lib/caldate'

@@ -8,16 +8,19 @@
   import TechBadges from '../common/TechBadges.svelte'
   import { prefs } from '../../stores/prefs'
   import { formatFullDate, displayName, type TimeFormat } from '../../lib/format'
-  import { unsubscribeMessage, checkSMIMERevocation } from '../../lib/api'
+  import { unsubscribeMessage, checkSMIMERevocation, noteUnsubscribeLink } from '../../lib/api'
   import { openURL } from '../../lib/browser'
   import { errorMessage, toastError, toastSuccess } from '../../stores/toast'
   import { t } from '../../lib/i18n'
+  import { loadTrustLine } from '../../lib/lazyload'
   import { vipSenders, bareAddress, addVIP, removeVIP } from '../../stores/vip'
   import type { MessageDetail, UnsubscribeInfo, SMIMERevocation } from '../../lib/types'
 
   export let detail: MessageDetail
   /** Drops the subject and sets sender, recipients and date on one address line, for a conversation card. */
   export let compact: boolean = false
+  /** How long the message takes to read, shown beside the date; empty shows nothing. */
+  export let readingTime: string = ''
 
   $: avatarPlacement = $prefs.design === 'classic' ? 'column' : $prefs.avatarPlacement
 
@@ -135,6 +138,9 @@
     confirming = false
     if (unsub.kind === 'link') {
       openURL(unsub.target)
+      if ($prefs.design === 'new' && detail.unsubscribe) {
+        void noteUnsubscribeLink(detail.id)
+      }
       return
     }
     working = true
@@ -199,6 +205,9 @@
       </div>
       {/if}
     </div>
+    {#if readingTime}
+      <span class="reading-time">{readingTime}</span>
+    {/if}
     {#if $prefs.showDateTime}
       <time class="date">{formatFullDate(detail.date, $prefs.timeFormat as TimeFormat)}</time>
     {/if}
@@ -216,12 +225,23 @@
       charsetGuess={detail.charsetGuess}
     />
     {#if unsub}
-      <button type="button" class="unsub" class:confirming disabled={done || working} on:click={onUnsubscribe}>
+      <button
+        type="button"
+        class="unsub"
+        class:confirming
+        disabled={done || working}
+        title={unsub.unverified ? $t('detail.unsubscribe.unverified') : undefined}
+        on:click={onUnsubscribe}
+      >
         {#if done}
           <IconCheck size={13} stroke={2} />
           {$t('detail.unsubscribe.doneLabel')}
         {:else if confirming}
-          {unsub.kind === 'link' ? $t('detail.unsubscribe.confirmOpen') : $t('detail.unsubscribe.confirm')}
+          {unsub.unverified
+            ? $t('detail.unsubscribe.unverified')
+            : unsub.kind === 'link'
+              ? $t('detail.unsubscribe.confirmOpen')
+              : $t('detail.unsubscribe.confirm')}
         {:else}
           <IconMailOff size={13} stroke={1.8} />
           {$t('detail.unsubscribe.button')}
@@ -229,6 +249,11 @@
       </button>
     {/if}
   </div>
+  {#if $prefs.design === 'new'}
+    {#await loadTrustLine() then m}
+      <svelte:component this={m.default} {detail} />
+    {/await}
+  {/if}
 </header>
 
 <style>
@@ -355,6 +380,18 @@
     color: var(--text-tertiary);
     flex-shrink: 0;
     white-space: nowrap;
+  }
+
+  .reading-time {
+    flex-shrink: 0;
+    padding: 0 var(--space-2);
+    border: var(--hairline) solid var(--border-subtle);
+    border-radius: var(--radius-control);
+    font-size: var(--fz-meta);
+    line-height: 1.6;
+    color: var(--text-tertiary);
+    white-space: nowrap;
+    font-variant-numeric: tabular-nums;
   }
 
   /* the conversation card's address line: sender, address and recipients on

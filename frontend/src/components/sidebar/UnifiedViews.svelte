@@ -3,24 +3,16 @@
   // the default selection. flagged shows a total (flagged are not "unread"), the
   // others show unread counts. rows drag to reorder; the order is stored as a
   // list of view keys, since the views themselves are computed, not rows.
-  import {
-    IconInbox,
-    IconMail,
-    IconFlag,
-    IconSend,
-    IconFile,
-    IconArchive,
-    IconAlertTriangle,
-    IconTrash,
-    IconFolder,
-  } from '@tabler/icons-svelte'
+  import { IconTrash, IconPin, IconPinnedOff, IconPaperclip } from '@tabler/icons-svelte'
+  import { attachmentsOpen, openAttachments } from '../../stores/attachments'
+  import { unifiedViewIcon } from '../../lib/unifiedviewicons'
   import SidebarRow from './SidebarRow.svelte'
   import type { UnifiedView, ViewKey } from '../../lib/types'
   import { selection, selectView } from '../../stores/selection'
-  import { prefs } from '../../stores/prefs'
+  import { prefs, railPinIds, toggleRailPin } from '../../stores/prefs'
   import { reorder, type ReorderDetail } from '../../lib/reorder'
   import { refreshSidebar, sidebar } from '../../stores/accounts'
-  import { openContextMenu } from '../../stores/contextmenu'
+  import { openContextMenu, type MenuEntry } from '../../stores/contextmenu'
   import { openEmptyAllTrash } from '../../stores/folderdialog'
   import { reorderUnifiedViews } from '../../lib/api'
   import { toastError, errorMessage } from '../../stores/toast'
@@ -36,17 +28,6 @@
     }
     // reload either way, so the rows end up showing what was actually stored.
     await refreshSidebar()
-  }
-
-  const viewIcons: Record<string, typeof IconFolder> = {
-    inbox: IconInbox,
-    unread: IconMail,
-    flagged: IconFlag,
-    sent: IconSend,
-    drafts: IconFile,
-    archive: IconArchive,
-    junk: IconAlertTriangle,
-    trash: IconTrash,
   }
 
   // flagged and drafts read better as totals; the rest show unread. the flagged
@@ -81,18 +62,28 @@
   // the unified Bin offers to empty the trash of every account at once, the
   // way each account's own trash folder does.
   function onContext(event: MouseEvent, view: UnifiedView): void {
-    if (view.key !== 'trash') {
-      return
+    const entries: MenuEntry[] = []
+    // the new design can keep a view one click away on the rail.
+    if ($prefs.design !== 'classic') {
+      const id = `u:${view.key}`
+      const pinned = railPinIds($prefs.railPins).includes(id)
+      entries.push({
+        label: pinned ? $t('rail.unpin') : $t('rail.pin'),
+        icon: pinned ? IconPinnedOff : IconPin,
+        action: () => toggleRailPin(id),
+      })
     }
-    const trashes = Object.values($sidebar.data?.foldersByAccount ?? {})
-      .flat()
-      .filter((f) => f.role === 'trash' && f.totalCount > 0)
-    if (trashes.length === 0) {
-      return
+    if (view.key === 'trash') {
+      const trashes = Object.values($sidebar.data?.foldersByAccount ?? {})
+        .flat()
+        .filter((f) => f.role === 'trash' && f.totalCount > 0)
+      if (trashes.length > 0) {
+        entries.push({ label: $t('folders.emptyTrash'), icon: IconTrash, danger: true, action: () => openEmptyAllTrash(trashes) })
+      }
     }
-    openContextMenu(event.clientX, event.clientY, [
-      { label: $t('folders.emptyTrash'), icon: IconTrash, danger: true, action: () => openEmptyAllTrash(trashes) },
-    ])
+    if (entries.length > 0) {
+      openContextMenu(event.clientX, event.clientY, entries)
+    }
   }
 </script>
 
@@ -103,16 +94,21 @@
       <SidebarRow
         label={viewLabel(view)}
         count={badgeCount(view, $prefs.showFlaggedCount)}
-        active={$selection.kind === 'view' && $selection.view === view.key}
+        active={!$attachmentsOpen && $selection.kind === 'view' && $selection.view === view.key}
         reorderable
         reorderId={view.key}
         on:select={() => choose(view)}
         on:contextmenu={(e) => onContext(e.detail, view)}
       >
-        <svelte:component this={viewIcons[view.key] ?? IconFolder} size={15} stroke={1.6} />
+        <svelte:component this={unifiedViewIcon(view.key)} size={15} stroke={1.6} />
       </SidebarRow>
     {/each}
   </div>
+  {#if $prefs.design !== 'classic'}
+    <SidebarRow label={$t('attachments.title')} active={$attachmentsOpen} on:select={() => openAttachments()}>
+      <IconPaperclip size={15} stroke={1.6} />
+    </SidebarRow>
+  {/if}
 </nav>
 
 <style>

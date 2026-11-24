@@ -8,6 +8,8 @@
   import ContactAvatar from './ContactAvatar.svelte'
   import envelopeIcon from '@phosphor-icons/core/assets/duotone/envelope-simple-duotone.svg?raw'
   import phoneIcon from '@phosphor-icons/core/assets/duotone/phone-duotone.svg?raw'
+  import chatIcon from '@phosphor-icons/core/assets/duotone/chat-circle-text-duotone.svg?raw'
+  import { chatAvailable, chatWith } from '../../lib/chatavailable'
   import noteIcon from '@phosphor-icons/core/assets/duotone/note-duotone.svg?raw'
   import pencilIcon from '@phosphor-icons/core/assets/duotone/pencil-simple-duotone.svg?raw'
   import trashIcon from '@phosphor-icons/core/assets/duotone/trash-duotone.svg?raw'
@@ -19,6 +21,8 @@
   import { recentMailWith } from '../../lib/contactmail'
   import { formatListDate, formatRelative, type TimeFormat } from '../../lib/format'
   import { dur, motion } from '../../lib/motion'
+  import ContactTasks from '../tasks/ContactTasks.svelte'
+  import NoteMentions from '../notes/NoteMentions.svelte'
   import { t } from '../../lib/i18n'
   import type { Contact, MessageSummary } from '../../lib/types'
 
@@ -96,6 +100,12 @@
             {$t('contacts.action.write')}
           </button>
         {/if}
+        {#if $chatAvailable && contact.matrixId}
+          <button type="button" class="btn" on:click={() => void chatWith(contact.matrixId)}>
+            <Ph svg={chatIcon} size={16} />
+            {$t('contacts.matrix.chat')}
+          </button>
+        {/if}
         {#if !contact.readOnly}
           <button type="button" class="btn" on:click={() => dispatch('edit', contact)}>
             <Ph svg={pencilIcon} size={16} />
@@ -146,11 +156,30 @@
         </section>
       {/if}
 
+      {#if contact.matrixId}
+        <section>
+          <h3><Ph svg={chatIcon} size={14} />{$t('contacts.matrix')}</h3>
+          <ul class="values">
+            <li><span dir="ltr">{contact.matrixId}</span></li>
+          </ul>
+        </section>
+      {/if}
+
       {#if contact.note}
         <section>
           <h3><Ph svg={noteIcon} size={14} />{$t('contacts.field.note')}</h3>
           <p class="note">{contact.note}</p>
         </section>
+      {/if}
+
+      {#if contact.uid || contact.emails.length > 0}
+        <section class="vault-notes">
+          <NoteMentions about={{ kind: 'contact', id: contact.uid || contact.emails[0].value, title: contact.fullName || contact.emails[0]?.value || '' }} />
+        </section>
+      {/if}
+
+      {#if contact.emails.length > 0}
+        <ContactTasks name={contact.fullName} emails={contact.emails.map((e) => e.value)} />
       {/if}
 
       {#if firstEmail}

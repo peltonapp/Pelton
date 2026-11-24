@@ -171,11 +171,20 @@ function visible(el: HTMLElement, spot: Spot): boolean {
   // even though the field underneath still has focus.
   const own = el.getBoundingClientRect()
   const x = Math.min(Math.max(spot.x, own.left + 1), own.right - 1)
+  // tooltips let clicks through, so the hit test below does not see them.
+  for (const tip of document.querySelectorAll('.tip, [role="tooltip"]')) {
+    const box = tip.getBoundingClientRect()
+    if (spot.x >= box.left && spot.x <= box.right && spot.y + spot.h >= box.top && spot.y <= box.bottom) {
+      return false
+    }
+  }
   const top = document.elementFromPoint(x, middle)
   return top === null || el.contains(top)
 }
 
 function hide(): void {
+  // a blink still waiting to start would bring the caret back where it was.
+  clearTimeout(idle)
   caret?.classList.remove('shown', 'blink')
   target = null
   shown = null

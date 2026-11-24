@@ -46,9 +46,9 @@
   let actions: AgentAction[] = []
   let permBusy = false
 
-  // the groups exist so the list reads as three kinds of risk rather than seven
-  // switches. Enforcement is per tool either way.
-  const groupOrder = ['organise', 'delete', 'send']
+  // the groups exist so the list reads as a few kinds of risk rather than a
+  // long row of switches. Enforcement is per tool either way.
+  const groupOrder = ['organise', 'delete', 'send', 'scripts']
   $: permissionGroups = groupOrder
     .map((name) => ({ name, tools: permissions.filter((p) => p.group === name) }))
     .filter((g) => g.tools.length > 0)
@@ -288,7 +288,14 @@
             <p class="hint">{$t(`mcp.group.${group.name}.hint`)}</p>
             {#each group.tools as tool (tool.tool)}
               <div class="perm-row">
-                <span class="row-label">{$t(`mcp.tool.${tool.tool}`)}</span>
+                {#if group.name === 'scripts'}
+                  <span class="row-label">
+                    {$t(`mcp.tool.${tool.tool}`)}
+                    <span class="tool-hint">{$t(`mcp.tool.${tool.tool}.hint`)}</span>
+                  </span>
+                {:else}
+                  <span class="row-label">{$t(`mcp.tool.${tool.tool}`)}</span>
+                {/if}
                 <ToggleSwitch
                   checked={tool.allowed}
                   label={$t(`mcp.tool.${tool.tool}`)}
@@ -421,6 +428,12 @@
     justify-content: space-between;
     gap: var(--space-3);
     padding: var(--space-1) 0;
+  }
+
+  .tool-hint {
+    display: block;
+    font-size: var(--fz-meta);
+    color: var(--text-secondary);
   }
 
   .ghost.small {

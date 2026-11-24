@@ -53,8 +53,12 @@ func TestImportJSCalendarData(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if res.Imported != 1 || res.Skipped != 1 {
+	if res.Imported != 1 || res.Skipped != 0 || res.Tasks != 1 {
 		t.Fatalf("result %+v", res)
+	}
+	tasks, err := a.ListTasks()
+	if err != nil || len(tasks) != 1 || tasks[0].Title != "A task" || tasks[0].ListID == cal {
+		t.Fatalf("imported task went to %+v, %v", tasks, err)
 	}
 	occs := occurrences(t, a, "2026-05-04T00:00:00Z", "2026-05-06T00:00:00Z", cal)
 	if got := summaries(occs); !reflect.DeepEqual(got, []string{"Standup", "Standup"}) {

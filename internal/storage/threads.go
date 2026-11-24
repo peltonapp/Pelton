@@ -99,6 +99,24 @@ ON CONFLICT (account_id, key) DO UPDATE SET thread_id = excluded.thread_id`,
 	return threadAssignment{threadID: target, subject: subject, loose: loose}, nil
 }
 
+// rethread assigns the stored row m.ID its conversation again from m, as a
+// body fill learns the headers a list stub lacked.
+func rethread(ctx context.Context, ex execer, m *Message) error {
+	in := threadInputFor(m)
+	if err := ex.QueryRowContext(ctx, `SELECT account_id FROM messages WHERE id = ?`, m.ID).Scan(&in.accountID); err != nil {
+		return fmt.Errorf("storage: account of message %d: %w", m.ID, err)
+	}
+	assigned, err := resolveThread(ctx, ex, in)
+	if err != nil {
+		return err
+	}
+	if _, err := ex.ExecContext(ctx, `UPDATE messages SET thread_id = ?, thread_subject = ?, thread_loose = ? WHERE id = ?`,
+		assigned.threadID, assigned.subject, boolToInt(assigned.loose), m.ID); err != nil {
+		return fmt.Errorf("storage: rethread message %d: %w", m.ID, err)
+	}
+	return nil
+}
+
 // threadKeys is the message's own id followed by every id it refers to, in a
 // normalized form and without duplicates.
 func threadKeys(in threadInput) []string {
@@ -194,7 +212,7 @@ func subjectRows(ctx context.Context, ex execer, in threadInput, subject string,
 	query := `
 SELECT thread_id, from_address, to_addresses, cc_addresses FROM messages
 WHERE account_id = ? AND thread_subject = ? AND thread_id != 0 AND id != ?
-  AND date >= ? AND date <= ?`
+  AND date >= ? AND date <= ? AND ` + notVaulted
 	if looseOnly {
 		// a headerless reply that already found its parent stays where it is.
 		query += ` AND thread_loose = 1 AND NOT EXISTS (
@@ -245,10 +263,22 @@ func settleThread(ctx context.Context, ex execer, accountID int64, found []int64
 	return target, nil
 }
 
+// mergeThread folds one conversation into another. A mute on either side
+// carries over, and so does a note; two notes are joined into one. Project
+// links and dismissed project suggestions follow the conversation.
 func mergeThread(ctx context.Context, ex execer, from, into int64) error {
 	for _, stmt := range []string{
 		`UPDATE messages SET thread_id = ? WHERE thread_id = ?`,
 		`UPDATE thread_keys SET thread_id = ? WHERE thread_id = ?`,
+		`UPDATE threads SET muted = 1 WHERE id = ?1 AND EXISTS (SELECT 1 FROM threads WHERE id = ?2 AND muted = 1)`,
+		`UPDATE notes SET body = body || char(10) || char(10) || (SELECT o.body FROM notes o WHERE o.thread_id = ?2 AND o.message_key = '')
+		 WHERE thread_id = ?1 AND message_key = '' AND EXISTS (SELECT 1 FROM notes o WHERE o.thread_id = ?2 AND o.message_key = '')`,
+		`DELETE FROM notes WHERE thread_id = ?2 AND message_key = '' AND EXISTS (SELECT 1 FROM notes o WHERE o.thread_id = ?1 AND o.message_key = '')`,
+		`UPDATE notes SET thread_id = ?1 WHERE thread_id = ?2 AND message_key = ''`,
+		`UPDATE project_links SET thread_id = ?1 WHERE thread_id = ?2`,
+		`INSERT OR IGNORE INTO project_dismissals (thread_id, created_at)
+		 SELECT ?1, created_at FROM project_dismissals WHERE thread_id = ?2`,
+		`DELETE FROM project_dismissals WHERE thread_id = ?2`,
 	} {
 		if _, err := ex.ExecContext(ctx, stmt, into, from); err != nil {
 			return fmt.Errorf("storage: merge thread %d into %d: %w", from, into, err)

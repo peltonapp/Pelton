@@ -28,6 +28,10 @@ jobs:
     #   - https://gh.io/using-larger-runners (GitHub.com only)
     # Consider using larger runners or machines with greater resources for possible analysis time improvements.
     runs-on: ${{ (matrix.language == 'swift' && 'macos-latest') || 'ubuntu-latest' }}
+    # goolm selects mautrix's pure Go Olm, so the Go autobuild does not look
+    # for libolm.
+    env:
+      GOFLAGS: -tags=goolm
     permissions:
       # required for all workflows
       security-events: write

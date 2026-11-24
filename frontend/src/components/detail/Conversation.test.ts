@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { render, screen, waitFor, within } from '@testing-library/svelte'
 import userEvent from '@testing-library/user-event'
 import { get } from 'svelte/store'
@@ -9,6 +9,9 @@ const api = vi.hoisted(() => ({
   getMessage: vi.fn(),
   setSeen: vi.fn(),
   setSetting: vi.fn(),
+  listSenderReading: vi.fn(async () => []),
+  setSenderFontSize: vi.fn(async () => undefined),
+  setSenderColors: vi.fn(),
 }))
 
 const actions = vi.hoisted(() => ({ sendSession: vi.fn() }))
@@ -19,6 +22,9 @@ vi.mock('../../lib/api', async (importOriginal) => ({
   getMessage: api.getMessage,
   setSeen: api.setSeen,
   setSetting: api.setSetting,
+  listSenderReading: api.listSenderReading,
+  setSenderFontSize: api.setSenderFontSize,
+  setSenderColors: api.setSenderColors,
 }))
 
 vi.mock('../../lib/composeactions', async (importOriginal) => ({
@@ -30,6 +36,8 @@ import Conversation from './Conversation.svelte'
 import { prefs } from '../../stores/prefs'
 import { invalidateThreads } from '../../stores/threads'
 import { composeSessions, type ComposeSession } from '../../stores/compose'
+import { messageColors, senderReading } from '../../stores/senderreading'
+import { readingView } from '../../stores/readingview'
 
 vi.stubGlobal(
   'ResizeObserver',
@@ -229,11 +237,18 @@ describe('the conversation reader', () => {
     expect(actions.sendSession).not.toHaveBeenCalled()
   })
 
-  it('changes the text size and the reading width', async () => {
+  it('keeps the text size for the sender, with a reset, and changes the reading width', async () => {
     const user = userEvent.setup()
+    const before = get(prefs).messageFontSize
     render(Conversation, { props: { detail: opened } })
     await user.click(await screen.findByRole('button', { name: 'Larger text' }))
-    expect(get(prefs).messageFontSize).toBe(16)
+    expect(api.setSenderFontSize).toHaveBeenCalledWith('ada@example.com', before + 2)
+    expect(get(senderReading).get('ada@example.com')?.fontSize).toBe(before + 2)
+    expect(get(prefs).messageFontSize).toBe(before)
+    await user.click(screen.getByRole('button', { name: 'Reset text size for Ada' }))
+    expect(api.setSenderFontSize).toHaveBeenLastCalledWith('ada@example.com', 0)
+    expect(get(senderReading).has('ada@example.com')).toBe(false)
+    expect(screen.queryByRole('button', { name: 'Reset text size for Ada' })).toBeNull()
     await user.click(screen.getByRole('radio', { name: 'Narrow column' }))
     expect(get(prefs).readerWidth).toBe('narrow')
     expect(api.setSetting).toHaveBeenCalledWith('reader_width', 'narrow')
@@ -257,5 +272,77 @@ describe('the conversation reader', () => {
     expect(await screen.findByText(/Booking it now\./)).toBeInTheDocument()
     expect(api.getThread).not.toHaveBeenCalled()
     expect(screen.getAllByRole('article')).toHaveLength(1)
+  })
+
+  it('says how long a long message takes to read, and nothing for a short one', async () => {
+    prefs.update((p) => ({ ...p, threadedList: false }))
+    const long = full(latest, Array.from({ length: 700 }, (_, i) => `word${i}`).join(' '))
+    const { unmount } = render(Conversation, { props: { detail: long } })
+    expect(await screen.findByText('3 min read')).toBeInTheDocument()
+    unmount()
+    render(Conversation, { props: { detail: opened } })
+    await screen.findByText(/Booking it now\./)
+    expect(screen.queryByText(/min read/)).toBeNull()
+  })
+})
+
+describe('the reading view', () => {
+  it('opens from the reader button', async () => {
+    readingView.set(false)
+    const user = userEvent.setup()
+    render(Conversation, { props: { detail: opened } })
+    await user.click(await screen.findByRole('button', { name: 'Reading view' }))
+    expect(get(readingView)).toBe(true)
+  })
+
+  it('leaves the side material out and offers the way back', async () => {
+    readingView.set(true)
+    const user = userEvent.setup()
+    render(Conversation, { props: { detail: opened, reading: true } })
+    expect(screen.queryByRole('button', { name: 'Reading view' })).toBeNull()
+    expect(screen.queryByRole('button', { name: /sender panel/i })).toBeNull()
+    expect(screen.getByRole('toolbar', { name: 'Message actions' })).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Leave reading view' }))
+    expect(get(readingView)).toBe(false)
+  })
+})
+
+describe('html mail in a dark theme', () => {
+  const html = (body: string): MessageDetail => full(latest, '', { isHtml: true, bodyHtmlSafe: body })
+
+  beforeEach(() => {
+    document.documentElement.setAttribute('data-theme', 'dark')
+    prefs.update((p) => ({ ...p, threadedList: false, htmlColors: 'auto' }))
+    senderReading.set(new Map())
+    messageColors.set(new Map())
+    api.setSenderColors.mockReset().mockResolvedValue(undefined)
+  })
+
+  afterEach(() => {
+    document.documentElement.removeAttribute('data-theme')
+  })
+
+  it('adapts lightly styled mail and lets the message show its own colours', async () => {
+    const user = userEvent.setup()
+    render(Conversation, { props: { detail: html('<p>Hi <span style="color:#000">there</span></p>') } })
+    await user.click(await screen.findByRole('button', { name: 'Show original colors' }))
+    expect(screen.getByRole('button', { name: 'Adapt to theme' })).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Always for Ada' }))
+    expect(api.setSenderColors).toHaveBeenCalledWith('ada@example.com', 'original')
+    expect(screen.getByRole('button', { name: 'Stop remembering for Ada' })).toBeInTheDocument()
+  })
+
+  it('keeps designed mail as sent on its light sheet', async () => {
+    const designed = '<table width="600" bgcolor="#eeeeee"><tr><td><table bgcolor="#0a3d62"><tr><td style="color:#fff">News</td></tr></table></td></tr></table>'
+    render(Conversation, { props: { detail: html(designed) } })
+    expect(await screen.findByRole('button', { name: 'Adapt to theme' })).toBeInTheDocument()
+  })
+
+  it('offers nothing in a light theme', async () => {
+    document.documentElement.setAttribute('data-theme', 'light')
+    render(Conversation, { props: { detail: html('<p>Hi</p>') } })
+    await screen.findAllByRole('article')
+    expect(screen.queryByRole('button', { name: 'Show original colors' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Adapt to theme' })).toBeNull()
   })
 })

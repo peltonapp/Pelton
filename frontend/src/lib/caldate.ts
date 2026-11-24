@@ -207,6 +207,8 @@ export function viewRange(view: CalendarView, focus: Date, weekStart: number): D
       const from = startOfDay(focus)
       return { from, to: addDays(from, agendaDays) }
     }
+    case 'year':
+      return { from: new Date(focus.getFullYear(), 0, 1), to: new Date(focus.getFullYear() + 1, 0, 1) }
   }
 }
 
@@ -221,6 +223,8 @@ export function stepFocus(view: CalendarView, focus: Date, dir: number): Date {
       return addDays(focus, dir)
     case 'agenda':
       return addDays(focus, agendaDays * dir)
+    case 'year':
+      return addMonths(focus, 12 * dir)
   }
 }
 
@@ -390,14 +394,6 @@ export function eventsOnDay<T extends { allDay: boolean }>(events: Placed<T>[], 
   return events
     .filter((p) => p.start < to && (p.end > from || p.start.getTime() === from.getTime()))
     .sort((a, b) => Number(b.occ.allDay) - Number(a.occ.allDay) || a.start.getTime() - b.start.getTime())
-}
-
-/**
- * Moves an event by whole days and minutes, keeping its length: what dragging
- * a box to another slot does.
- */
-export function shiftEvent(start: Date, end: Date, newStart: Date): { start: Date; end: Date } {
-  return { start: newStart, end: new Date(newStart.getTime() + (end.getTime() - start.getTime())) }
 }
 
 /** The minutes of the day a pointer is at, from its offset into a day column. */

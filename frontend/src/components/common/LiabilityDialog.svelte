@@ -7,6 +7,7 @@
   import { createEventDispatcher } from 'svelte'
   import { t } from '../../lib/i18n'
   import { acceptLiability } from '../../lib/liability'
+  import { calm } from '../../lib/motion'
   import { toastError, errorMessage } from '../../stores/toast'
   import LiabilityNotice from './LiabilityNotice.svelte'
 
@@ -29,13 +30,13 @@
   }
 </script>
 
-<div class="backdrop" transition:fade={{ duration: 120 }}></div>
+<div class="backdrop" transition:fade={{ duration: calm(120) }}></div>
 <div
   class="dialog"
   role="dialog"
   aria-modal="true"
   aria-label={$t('liability.continueTitle')}
-  transition:scale={{ duration: 150, start: 0.94 }}
+  transition:scale={{ duration: calm(150), start: 0.94 }}
 >
   <h2>{$t('liability.continueTitle')}</h2>
   <LiabilityNotice bind:accepted />

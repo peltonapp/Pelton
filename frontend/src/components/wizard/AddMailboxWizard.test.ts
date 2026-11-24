@@ -19,6 +19,7 @@ vi.mock('../../lib/browser', () => ({
 }))
 
 import AddMailboxWizard from './AddMailboxWizard.svelte'
+import { prefs } from '../../stores/prefs'
 
 function discovered(over: Partial<Discovered>): Discovered {
   return {
@@ -44,6 +45,7 @@ beforeEach(() => {
   api.addOAuthAccount.mockReset()
   // never resolves: the tests stop at the moment sign-in is requested.
   api.addOAuthAccount.mockReturnValue(new Promise(() => {}))
+  prefs.update((p) => ({ ...p, autoconfigLookup: 'allow' }))
 })
 
 describe('google workspace detection (#445)', () => {

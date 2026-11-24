@@ -24,7 +24,7 @@ func (a *App) MarkSpam(id int64) (ArchiveUndoDTO, error) {
 	if err := a.ready(); err != nil {
 		return ArchiveUndoDTO{}, err
 	}
-	m, err := a.store.GetMessage(a.ctx, id)
+	m, err := a.store.GetMessage(a.mailCtx(), id)
 	if err != nil {
 		return ArchiveUndoDTO{}, err
 	}
@@ -39,6 +39,7 @@ func (a *App) MarkSpam(id int64) (ArchiveUndoDTO, error) {
 	if err != nil {
 		return ArchiveUndoDTO{}, err
 	}
+	a.scriptMoved(a.ctx, m, junk)
 	if m.MessageID != "" {
 		// the move already happened, so losing the record only means a later
 		// "not spam" falls back to the inbox.
@@ -57,7 +58,7 @@ func (a *App) MarkNotSpam(id int64) (ArchiveUndoDTO, error) {
 	if err := a.ready(); err != nil {
 		return ArchiveUndoDTO{}, err
 	}
-	m, err := a.store.GetMessage(a.ctx, id)
+	m, err := a.store.GetMessage(a.mailCtx(), id)
 	if err != nil {
 		return ArchiveUndoDTO{}, err
 	}
@@ -69,6 +70,7 @@ func (a *App) MarkNotSpam(id int64) (ArchiveUndoDTO, error) {
 	if err != nil {
 		return ArchiveUndoDTO{}, err
 	}
+	a.scriptMoved(a.ctx, m, dest)
 	if m.MessageID != "" {
 		if err := a.store.ForgetSpamOrigin(a.ctx, m.AccountID, m.MessageID); err != nil {
 			a.log.Error("not spam: forget origin", "id", m.ID, "err", err)

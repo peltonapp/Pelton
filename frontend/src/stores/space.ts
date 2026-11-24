@@ -1,6 +1,6 @@
 // space.ts holds which top-level area of the app is showing in the new design:
-// mail, contacts or the calendar. the rail, the sidebar footer switcher and the
-// top bar tabs all read and write this one store.
+// mail, contacts, the calendar, tasks, projects, notes or feeds. the rail, the
+// sidebar footer switcher and the top bar tabs all read and write this one store.
 
 import { writable } from 'svelte/store'
 import type { Space } from '../lib/types'
@@ -54,21 +54,56 @@ const mailOnlyActions = new Set<string>([
   'new-folder',
   'rename-folder',
   'delete-folder',
+  'toggle-sender-panel',
+  'reading-view',
+  'create-task',
+  'add-to-project',
+  'done',
+  'toggle-pin',
+  'toggle-mute',
+  'edit-note',
 ])
+
+/** Reports whether an action only means something with the mail panes on screen. */
+export function isMailOnlyAction(action: string): boolean {
+  return mailOnlyActions.has(action)
+}
 
 /**
  * Lets a space answer app actions while it is on screen: compose becomes "new
  * event" in the calendar, search focuses the space's own search, and so on.
- * Returns the function that takes the handlers away again.
+ * Returns the function that takes the handlers away again. labels names what
+ * an action does in the space, for the shortcut sheet, by localization key.
  */
-export function registerSpaceActions(key: Space, handlers: Record<string, SpaceActionHandler>): () => void {
+export function registerSpaceActions(
+  key: Space,
+  handlers: Record<string, SpaceActionHandler>,
+  labels: Record<string, string> = {},
+): () => void {
   const map = new Map(Object.entries(handlers))
   spaceActions.set(key, map)
+  spaceLabels.set(key, labels)
   return () => {
     if (spaceActions.get(key) === map) {
       spaceActions.delete(key)
+      spaceLabels.delete(key)
     }
   }
+}
+
+const spaceLabels = new Map<Space, Record<string, string>>()
+
+/**
+ * The actions a space answers to while it is on screen, with the label key
+ * it gave each, or none to use the action's own.
+ */
+export function spaceActionEntries(key: Space): { action: string; labelKey?: string }[] {
+  const map = spaceActions.get(key)
+  if (!map) {
+    return []
+  }
+  const labels = spaceLabels.get(key) ?? {}
+  return [...map.keys()].map((action) => ({ action, labelKey: labels[action] }))
 }
 
 const mountWaitFrames = 180

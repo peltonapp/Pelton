@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0"
+  xmlns:content="http://purl.org/rss/1.0/modules/content/"
+  xmlns:dc="http://purl.org/dc/elements/1.1/"
+  xmlns:media="http://search.yahoo.com/mrss/"
+  xmlns:atom="http://www.w3.org/2005/Atom"
+  xmlns:itunes="http://www.itunes.com/dtds/podcast-1.0.dtd">
+  <channel>
+    <title>Example &amp; Co. Blog</title>
+    <atom:link href="https://example.com/feed.xml" rel="self" type="application/rss+xml" />
+    <link>https://example.com/</link>
+    <description>Notes from &lt;b&gt;Example&lt;/b&gt;</description>
+    <image><url>/logo.png</url></image>
+    <item>
+      <title>First post</title>
+      <link>/posts/first</link>
+      <guid isPermaLink="false">tag:example.com,2026:1</guid>
+      <pubDate>Tue, 10 Nov 2026 09:30:00 PST</pubDate>
+      <dc:creator>Ada Lovelace</dc:creator>
+      <description>A short summary.</description>
+      <content:encoded><![CDATA[<p>Hello <a href="/about">about</a> <img src="img/a.png" srcset="img/a.png 1x, /img/a2.png 2x"></p><script>alert(1)</script>]]></content:encoded>
+      <enclosure url="/audio/ep1.mp3" type="audio/mpeg" length="12345" />
+      <media:content url="https://cdn.example.com/photo.jpg" medium="image" />
+    </item>
+    <item>
+      <title>Second &lt;em&gt;post&lt;/em&gt;</title>
+      <link>https://example.com/posts/second</link>
+      <pubDate>Monday, 09-Nov-26 08:00:00 GMT</pubDate>
+      <author>bob@example.com (Bob Builder)</author>
+      <description>&lt;p&gt;Escaped &amp;nbsp;html&lt;/p&gt;</description>
+    </item>
+    <item>
+      <title>No link, no guid</title>
+      <pubDate>not a date at all</pubDate>
+      <description>Only text&nbsp;here</description>
+      <media:group>
+        <media:content url="https://video.example.com/v.mp4" type="video/mp4" fileSize="999" />
+        <media:thumbnail url="https://video.example.com/thumb.jpg" />
+      </media:group>
+    </item>
+    <item>
+      <title>Permalink guid</title>
+      <guid>https://example.com/posts/fourth</guid>
+      <pubDate>2026-11-08T10:00:00+01:00</pubDate>
+      <description>Fourth</description>
+    </item>
+  </channel>
+</rss>

@@ -3,23 +3,27 @@
   // action toolbar, sanitized body and attachments, and performs the toolbar
   // actions. empty, loading and error states are explicit.
   import peltonLogo from '../../assets/images/icons/pelton-logo.png'
+  import { seasonalImage } from '../../lib/seasonalmarkimages'
   import DetailHeader from './DetailHeader.svelte'
   import ActionToolbar from './ActionToolbar.svelte'
   import MailBody from './MailBody.svelte'
   import ProtectedNotice from './ProtectedNotice.svelte'
   import PhishingNotice from './PhishingNotice.svelte'
   import AttachmentList from './AttachmentList.svelte'
-  import InviteCard from './InviteCard.svelte'
+  import { loadInviteCard } from '../../lib/lazyload'
   import InfoModal from './InfoModal.svelte'
   import SourceModal from './SourceModal.svelte'
+  import ClassicInfoModal from './classic/InfoModal.svelte'
+  import ClassicSourceModal from './classic/SourceModal.svelte'
   import Spinner from '../common/Spinner.svelte'
   import ErrorState from '../common/ErrorState.svelte'
   import TabBar from './TabBar.svelte'
   import { visibleMessageId, hasTabs, activeTabId, tabs, markTabStale, labelTab, closeTab } from '../../stores/tabs'
-  import { openMessageId } from '../../stores/selection'
-  import { messageDetail, loadMessage, clearMessage } from '../../stores/message'
-  import { setFlagged, deleteMessage, archiveMessage, scanMessage, openMessageWindow } from '../../lib/api'
-  import { reportArchiveExport, dropDeleted, exportEml, markSeen } from '../../lib/messageactions'
+  import { messageDetail, bodyLoading, loadMessage, clearMessage } from '../../stores/message'
+  import { bodyFetchFailed, retryBodyFetch } from '../../stores/bodyfetch'
+  import { deleteMessage, archiveMessage, scanMessage, openMessageWindow } from '../../lib/api'
+  import { reportArchiveExport, dropDeleted, leaveList, exportEml, markFlagged, markSeen } from '../../lib/messageactions'
+  import { editNote, toggleMute, togglePin } from '../../lib/organize'
   import {
     virusTotal,
     scanning,
@@ -29,12 +33,12 @@
     putAttachmentVerdict,
     currentVerdictMessage,
   } from '../../stores/virustotal'
-  import { removeFromList, patchInList } from '../../stores/messages'
   import { recordDeleted } from '../../stores/undodelete'
   import { recordArchived } from '../../stores/undoarchive'
   import { openReply, openForward } from '../../stores/compose'
   import { errorMessage, toastError } from '../../stores/toast'
-  import { prefs } from '../../stores/prefs'
+  import { prefs, setSenderPanel } from '../../stores/prefs'
+  import SenderPanel from './SenderPanel.svelte'
   import { t } from '../../lib/i18n'
   import { get } from 'svelte/store'
   import { tick } from 'svelte'
@@ -51,11 +55,25 @@
     IconInfoCircle,
     IconCode,
     IconTrash,
+    IconChecklist,
+    IconLayoutKanban,
+    IconFilterPlus,
+    IconHeartHandshake,
+    IconMessageShare,
   } from '@tabler/icons-svelte'
+  import { chatAvailable } from '../../lib/chatavailable'
+  import { openShareToChat } from '../../stores/chatshare'
   import Conversation from './Conversation.svelte'
+  import ReadingView from './ReadingView.svelte'
+  import { closeReadingView, readingView } from '../../stores/readingview'
   import { openContextMenu, type MenuEntry } from '../../stores/contextmenu'
   import { menuHint } from '../../stores/shortcuts'
+  import { createTasksFromMail } from '../../lib/taskmail'
+  import { findPromisesIn, promiseSettings } from '../../stores/promises'
+  import { pickProjectFor } from '../../lib/projectpicker'
+  import { createRuleFromMail } from '../automations/blocks/rulefrommail'
   import { forgetCard } from '../../stores/threads'
+  import { readerMinWidth } from '../../lib/myday'
   import type { MessageDetail, EditorMode } from '../../lib/types'
 
   // default editor mode for replies and forwards, from settings.
@@ -63,10 +81,24 @@
 
   // the message whose info or source is shown, null while closed. In the
   // conversation reader it can be any card's.
+  const season = seasonalImage()
   let infoFor: MessageDetail | null = null
   let sourceFor: number | null = null
 
   $: newDesign = $prefs.design !== 'classic'
+
+  // the reading view goes once there is no message left to read in it.
+  $: if ($readingView && (!newDesign || $visibleMessageId === null || $messageDetail.status === 'error')) {
+    closeReadingView()
+  }
+
+  // the sender panel only shows while the reader keeps room for a readable
+  // column beside it; a narrow window leaves it out entirely. The row is
+  // measured after My Day has taken its width, so the two panels share one
+  // budget and the reader never drops below readerMinWidth.
+  const senderPanelWidth = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--sender-panel-width')) || 280
+  let rowWidth = 0
+  $: panelFits = rowWidth === 0 || rowWidth - senderPanelWidth >= readerMinWidth
 
   // onReaderAction runs what a conversation card or the action bar asked for,
   // on the message it was asked for.
@@ -86,6 +118,15 @@
         break
       case 'delete':
         void remove(message)
+        break
+      case 'pin':
+        void togglePin(message)
+        break
+      case 'mute':
+        void toggleMute(message)
+        break
+      case 'note':
+        editNote(message)
         break
       case 'reload':
         if (message.id === $messageDetail.data?.id) {
@@ -108,10 +149,17 @@
         ? { label: $t('messageList.unflag'), icon: IconFlag, hint: menuHint('flag'), action: () => void toggleFlag(message) }
         : { label: $t('messageList.flag'), icon: IconFlagFilled, hint: menuHint('flag'), action: () => void toggleFlag(message) },
       { label: $t('shortcut.markUnread'), icon: IconMailFilled, hint: menuHint('mark-unread'), action: () => void markSeen(message, false) },
+      { label: $t('shortcut.createTask'), icon: IconChecklist, hint: menuHint('create-task'), action: () => void createTasksFromMail([message.id]) },
+      { label: $t('projects.addTo'), icon: IconLayoutKanban, hint: menuHint('add-to-project'), action: () => pickProjectFor([message.id], message.threadId) },
+      ...(newDesign ? [{ label: $t('scripts.blocks.ruleFromMail'), icon: IconFilterPlus, action: () => void createRuleFromMail(message.id) }] : []),
+      ...($prefs.design === 'new' && $promiseSettings.enabled
+        ? [{ label: $t('promises.find'), icon: IconHeartHandshake, action: () => void findPromisesIn(message.id) }]
+        : []),
       'separator',
       { label: $t('messageList.menu.openInWindow'), icon: IconAppWindow, action: () => void openMessageWindow(message.id, message.subject) },
       { label: $t('detail.toolbar.print'), icon: IconPrinter, action: () => printMessage(message) },
       { label: $t('menu.exportEml'), icon: IconFileExport, action: () => void exportEml([message.id]) },
+      ...($chatAvailable ? [{ label: $t('chat.share.action'), icon: IconMessageShare, action: () => openShareToChat(message) }] : []),
       ...(canScan
         ? [{ label: $t('virustotal.scanMessage'), icon: IconShieldSearch, action: () => void runScan(message.id, true, true) }]
         : []),
@@ -120,7 +168,7 @@
       'separator',
       { label: $t('action.delete'), icon: IconTrash, danger: true, hint: menuHint('delete-message'), action: () => void remove(message) },
     ]
-    openContextMenu(x, y, entries)
+    openContextMenu(x, y, entries, { place: 'mail.message', items: [{ id: String(message.id) }] })
   }
 
   // the pane follows whichever message is visible: the active tab's, or the one
@@ -214,18 +262,7 @@
   }
 
   async function toggleFlag(detail: MessageDetail): Promise<void> {
-    const next = !detail.flagged
-    const apply = (flagged: boolean) => {
-      messageDetail.update((s) => (s.data?.id === detail.id ? { ...s, data: { ...s.data, flagged } } : s))
-      patchInList(detail.id, { flagged })
-    }
-    apply(next)
-    try {
-      await setFlagged(detail.id, next)
-    } catch (err) {
-      apply(!next)
-      toastError(errorMessage(err))
-    }
+    await markFlagged(detail, !detail.flagged)
   }
 
   async function remove(detail: MessageDetail): Promise<void> {
@@ -242,25 +279,16 @@
     }
   }
 
-  // dismiss clears a message out of the pane after acting on it. A tab holding
-  // it closes, since acting on a message is done with it; the untabbed pane
-  // only empties if it was showing that message and not something else.
-  function dismiss(id: number): void {
-    closeTab(id)
-    if (get(openMessageId) === id) {
-      openMessageId.set(null)
-    }
-  }
-
   // archive moves the message to the account's Archive folder via the imap move
-  // binding, then closes the pane and drops it from the list.
+  // binding, closes a tab holding it and drops it from the list, moving the
+  // pane on the way a delete does.
   async function archive(detail: MessageDetail): Promise<void> {
     try {
       const undo = await archiveMessage(detail.id)
       reportArchiveExport(undo)
       recordArchived(detail, undo)
-      removeFromList(detail.id)
-      dismiss(detail.id)
+      closeTab(detail.id)
+      leaveList([detail.id])
     } catch (err) {
       toastError(errorMessage(err))
     }
@@ -335,7 +363,7 @@ ${bodyHtml}
   }
 </script>
 
-<section class="detail">
+<section class="detail" aria-label={$t('a11y.region.reader')}>
   {#if $hasTabs}
     <TabBar />
   {/if}
@@ -349,7 +377,11 @@ ${bodyHtml}
       ></div>
     {:else}
       <div class="placeholder">
-        <img class="placeholder-logo" src={$prefs.emptyStateImage || peltonLogo} alt="Pelton" draggable="false" />
+        {#if !$prefs.emptyStateImage && season}
+          <img class="placeholder-logo seasonal" class:tile={season.tile} src={season.src} alt="Pelton" draggable="false" />
+        {:else}
+          <img class="placeholder-logo" src={$prefs.emptyStateImage || peltonLogo} alt="Pelton" draggable="false" />
+        {/if}
       </div>
     {/if}
   {:else if activeTabStale}
@@ -363,12 +395,28 @@ ${bodyHtml}
     <Spinner label={$t('detail.loadingMessage')} />
   {:else if $messageDetail.status === 'error'}
     <ErrorState message={$messageDetail.error} onRetry={() => $visibleMessageId && loadMessage($visibleMessageId)} />
+  {:else if $messageDetail.data && newDesign && $readingView}
+    <ReadingView label={$t('reading.label').replace('{subject}', $messageDetail.data.subject || $t('detail.noSubject'))}>
+      <Conversation
+        detail={$messageDetail.data}
+        reading
+        on:action={(e) => onReaderAction(e.detail.kind, e.detail.message)}
+        on:more={(e) => openReaderMenu(e.detail.message, e.detail.x, e.detail.y)}
+      />
+    </ReadingView>
   {:else if $messageDetail.data && newDesign}
-    <Conversation
-      detail={$messageDetail.data}
-      on:action={(e) => onReaderAction(e.detail.kind, e.detail.message)}
-      on:more={(e) => openReaderMenu(e.detail.message, e.detail.x, e.detail.y)}
-    />
+    <div class="reader-row" bind:clientWidth={rowWidth}>
+      <Conversation
+        detail={$messageDetail.data}
+        senderPanel={$prefs.senderPanel}
+        on:action={(e) => onReaderAction(e.detail.kind, e.detail.message)}
+        on:more={(e) => openReaderMenu(e.detail.message, e.detail.x, e.detail.y)}
+        on:toggleSender={() => setSenderPanel(!$prefs.senderPanel)}
+      />
+      {#if $prefs.senderPanel && panelFits}
+        <SenderPanel detail={$messageDetail.data} on:close={() => setSenderPanel(false)} />
+      {/if}
+    </div>
   {:else if $messageDetail.data}
     {@const detail = $messageDetail.data}
     <div class="toolbar-bar">
@@ -392,12 +440,24 @@ ${bodyHtml}
 
     <div class="scroll selectable" tabindex="-1" bind:this={scrollEl}>
       <DetailHeader {detail} />
+      {#if $bodyLoading}
+        <div class="body-loading" aria-live="polite">
+          <Spinner label={$t('detail.loadingMessage')} />
+        </div>
+      {:else if $bodyFetchFailed === detail.id}
+        <div class="body-failed" role="alert">
+          <span>{$t('detail.bodyFetchFailed')}</span>
+          <button type="button" on:click={() => void retryBodyFetch(detail.id)}>{$t('detail.bodyFetchRetry')}</button>
+        </div>
+      {/if}
       <div class="body-wrap">
         {#if detail.phishing.level !== 'none'}
           <PhishingNotice report={detail.phishing} messageId={detail.id} />
         {/if}
         {#if $prefs.design !== 'classic'}
-          <InviteCard messageId={detail.id} attachments={detail.attachments} />
+          {#await loadInviteCard() then m}
+            <svelte:component this={m.default} messageId={detail.id} attachments={detail.attachments} />
+          {/await}
         {/if}
         {#if detail.pgpState !== '' && detail.pgpState !== 'open'}
           <!-- the body here is still the armor, so showing it would put
@@ -415,12 +475,16 @@ ${bodyHtml}
     </div>
   {/if}
 
-  {#if infoFor}
+  {#if infoFor && newDesign}
     <InfoModal detail={infoFor} on:close={() => (infoFor = null)} />
+  {:else if infoFor}
+    <ClassicInfoModal detail={infoFor} on:close={() => (infoFor = null)} />
   {/if}
 
-  {#if sourceFor !== null}
+  {#if sourceFor !== null && newDesign}
     <SourceModal messageId={sourceFor} on:close={() => (sourceFor = null)} />
+  {:else if sourceFor !== null}
+    <ClassicSourceModal messageId={sourceFor} on:close={() => (sourceFor = null)} />
   {/if}
 </section>
 
@@ -478,11 +542,30 @@ ${bodyHtml}
     -webkit-user-select: none;
   }
 
+  .placeholder-logo.seasonal {
+    width: auto;
+    height: 148px;
+    opacity: 0.9;
+    filter: none;
+  }
+
+  .placeholder-logo.seasonal.tile {
+    border-radius: var(--radius-card);
+    background: #000;
+  }
+
   /* full-bleed variant: the chosen image covers the whole empty pane. */
   .placeholder-full {
     background-size: cover;
     background-position: center;
     background-repeat: no-repeat;
+  }
+
+  .reader-row {
+    flex: 1;
+    display: flex;
+    min-height: 0;
+    min-width: 0;
   }
 
   .toolbar-bar {
@@ -518,5 +601,37 @@ ${bodyHtml}
     margin-top: var(--space-4);
     display: flex;
     flex-direction: column;
+  }
+
+  .body-loading {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    margin-top: var(--space-3);
+    color: var(--text-tertiary);
+    font-size: var(--fz-meta);
+  }
+
+  .body-failed {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+    margin-top: var(--space-3);
+    color: var(--text-secondary);
+    font-size: var(--fz-meta);
+  }
+
+  .body-failed button {
+    padding: var(--space-1) var(--space-3);
+    border: var(--hairline) solid var(--border-default);
+    border-radius: var(--radius-control);
+    background: var(--surface-raised);
+    color: var(--text-primary);
+    font-size: var(--fz-label);
+    cursor: var(--cursor-action);
+  }
+
+  .body-failed button:hover {
+    background: var(--surface-hover);
   }
 </style>

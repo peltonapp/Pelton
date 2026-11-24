@@ -9,25 +9,30 @@ package desktop
 import (
 	"context"
 	"log/slog"
+	"net/netip"
 	"os"
 	"path/filepath"
 	"sync"
 	"sync/atomic"
 	"time"
 
+	"github.com/peltonapp/Pelton/internal/applock"
 	"github.com/peltonapp/Pelton/internal/certtrust"
+	"github.com/peltonapp/Pelton/internal/cliproto"
+	"github.com/peltonapp/Pelton/internal/cliserver"
 	"github.com/peltonapp/Pelton/internal/configsync"
 	pimap "github.com/peltonapp/Pelton/internal/imap"
 	"github.com/peltonapp/Pelton/internal/logging"
 	"github.com/peltonapp/Pelton/internal/mcpserver"
+	"github.com/peltonapp/Pelton/internal/notes"
 	"github.com/peltonapp/Pelton/internal/outbox"
 	"github.com/peltonapp/Pelton/internal/proxy"
+	"github.com/peltonapp/Pelton/internal/scripting"
 	"github.com/peltonapp/Pelton/internal/search"
 	"github.com/peltonapp/Pelton/internal/storage"
 	"github.com/wailsapp/wails/v3/pkg/application"
 	"github.com/wailsapp/wails/v3/pkg/events"
 	"github.com/wailsapp/wails/v3/pkg/services/dock"
-	"github.com/wailsapp/wails/v3/pkg/services/notifications"
 	"golang.org/x/oauth2"
 )
 
@@ -57,13 +62,21 @@ type App struct {
 	// in this run, by outbox id, so a scheduled or failed send can be taken
 	// back into a composer. Memory only; see bind_outbox_edit.go.
 	sentRequests sync.Map
+	// sendWorker is the running outbox worker, nil until it starts. activity
+	// is the memory only log of what it does, for the send activity window.
+	// See bind_outbox_controls.go.
+	sendWorker atomic.Pointer[outbox.Worker]
+	activity   *outbox.ActivityLog
 	// notifier posts the new-mail notifications (notify.go) and dock carries
 	// the unread badge on macOS. Both are nil in tests. notifyReady is set once
 	// the notification service has started (notifier.go).
-	notifier    *notifications.NotificationService
+	notifier    notificationCenter
 	notifyReady atomic.Bool
-	dock        *dock.DockService
-	log         *slog.Logger
+	// notifyCategories holds the ids of the button sets already registered
+	// with the notification service in this run (notify_actions.go).
+	notifyCategories sync.Map
+	dock             *dock.DockService
+	log              *slog.Logger
 	// sentCopies tracks the copies of sent mail still on their way to the Sent
 	// folder (bind_sync.go), which run after the outbox has moved on.
 	sentCopies sync.WaitGroup
@@ -87,9 +100,6 @@ type App struct {
 	// though a nil check keeps it from crashing.
 	storeReady chan struct{}
 	index      *search.Index
-	// syncTally holds the message counts behind the sync progress bar for the
-	// run in flight.
-	syncTally syncTally
 	// streamTick rate-limits the "mail arrived" events a running sync emits, so
 	// a fast first sync fills the list without asking the ui to redraw it
 	// hundreds of times a minute.
@@ -100,9 +110,14 @@ type App struct {
 	// draftsMu serializes draft changes: the drafts live in one settings value
 	// and every change is a load, modify, write.
 	draftsMu sync.Mutex
-	// queuedSyncs holds the ids of accounts with a queueSync waiting for
-	// syncMu, so a burst of changes queues one sync rather than one each.
-	queuedSyncs sync.Map
+	// merges holds this session's contact merges that can still be undone. See
+	// bind_contacts_merge.go.
+	merges mergeHistory
+	// changeSyncs holds the accounts with a sync after a change running
+	// (queueSync); the value is true when another change came in meanwhile
+	// and one more pass is due. changeSyncsMu guards it.
+	changeSyncsMu sync.Mutex
+	changeSyncs   map[int64]bool
 	// rejectedLogins holds the accounts whose credentials the server refused,
 	// which is not something the keyring can tell us: the password is stored,
 	// it is simply wrong. It is in memory on purpose, since the only way to
@@ -187,6 +202,10 @@ type App struct {
 	// real accounts and mail. It never touches the store or the network.
 	demoMode bool
 
+	// sieveMu runs one sieve session at a time, so two saves cannot interleave
+	// their backup, upload and activation. See bind_sieve.go.
+	sieveMu sync.Mutex
+
 	// proxyMu guards proxyCfg, the cached outbound proxy preference (with its
 	// password from the keyring). It is loaded at startup and refreshed by
 	// SetProxyConfig, so the mail and http paths read it without touching the
@@ -200,6 +219,20 @@ type App struct {
 	// never races.
 	mcpMu sync.Mutex
 	mcp   *mcpserver.Server
+	// mcpScriptLimits holds what an agent has used of its script caps. It
+	// lives here rather than in the server so a restart does not reset it.
+	mcpScriptLimits *mcpserver.ScriptLimiter
+	// proposalMu serializes changes to the stored script proposals.
+	proposalMu sync.Mutex
+
+	// cliMu guards cli, the socket the pelton command talks to (cli.go).
+	// cliConfirmer asks about a command line send or permanent delete; nil
+	// asks in the window, tests put an answer here. cliPathsOverride moves
+	// the socket and token out of the state folder, for tests.
+	cliMu            sync.Mutex
+	cli              *cliserver.Server
+	cliConfirmer     scripting.Confirmer
+	cliPathsOverride cliproto.Paths
 
 	// mailto holds a mailto: draft the app was launched with (or received from a
 	// second launch) until the frontend consumes it. See mailto.go.
@@ -213,6 +246,127 @@ type App struct {
 	// waiting for the next sidebar refresh.
 	badgeMu     sync.Mutex
 	unreadBadge int
+
+	// focusMu serialises changes to the stored focus state (bind_focus.go),
+	// which the ticker, the bindings and the new-mail path all write.
+	focusMu sync.Mutex
+
+	// lock is the app lock (applock.go) and sysAuth the system's own
+	// authentication prompt behind it. authMu keeps to one prompt at a time,
+	// and lockHidden, under lockWinMu, names the windows the lock hid.
+	lock       *applock.Locker
+	sysAuth    systemAuth
+	authMu     sync.Mutex
+	lockWinMu  sync.Mutex
+	lockHidden []string
+
+	// quickMu guards quickAccel, the global shortcut registered for quick
+	// compose, empty while none is (quickcompose.go).
+	quickMu    sync.Mutex
+	quickAccel string
+
+	// vault is the notes folder of the notes space, created on first use;
+	// vaultStop ends the scan loop of the folder that is open. See
+	// bind_notes_space.go.
+	vault     *notes.Service
+	vaultMu   sync.Mutex
+	vaultStop context.CancelFunc
+
+	// projectNotesMu runs one move of project notes into the notes folder at
+	// a time; projectNotesMoved is the folder that move finished for. See
+	// bind_project_notes.go.
+	projectNotesMu    sync.Mutex
+	projectNotesMoved string
+
+	// feedState holds the feed fetcher and the refresh lock. See
+	// feeds_refresh.go.
+	feedState feedFetchState
+
+	// chat is the opt in Matrix chat of the active profile (bind_chat.go).
+	chat chatState
+
+	// scripts runs the user's automations, nil until the store is open and
+	// in demo mode; scriptState holds what the bindings around it keep in
+	// memory. See scripts.go and bind_scripts.go.
+	scripts     *scripting.Service
+	scriptState scriptState
+	// recipientConfirmer asks about recipients before-send scripts changed;
+	// nil asks through the window. Tests put an answer here.
+	recipientConfirmer scripting.Confirmer
+	// aiLookup resolves an AI provider's host; nil uses the system resolver.
+	// Tests put a fake here.
+	aiLookup func(ctx context.Context, host string) ([]netip.Addr, error)
+
+	// autoEnc is the state of automatic encryption. See autoencrypt.go.
+	autoEnc autoEncryptState
+
+	// mailVault is which mail vaults are unlocked and their keys. See
+	// mailvault.go.
+	mailVault mailVaultState
+
+	// guided is the guided import that is running, if any. See
+	// bind_migrate.go.
+	guided guidedImportState
+
+	// workersMu guards workers, the per-account sync/idle goroutines.
+	// stopAccountWorker cancels and joins one entry; profile shutdown cancels
+	// the session and joins all.
+	workersMu sync.Mutex
+	workers   map[int64]*accountWorker
+
+	// accountStatesMu guards accountStates and removedAccounts. A state holds
+	// the account's lock, sync hold, tracked IMAP sessions and progress
+	// tally. Entries outlive the account's scheduler so account
+	// removal can abort, hold and lock only that account across the teardown.
+	accountStatesMu sync.Mutex
+	accountStates   map[int64]*accountState
+	// removedAccounts are the ids DeleteAccount removed while the app ran.
+	// Nothing may start sync work for them again.
+	removedAccounts map[int64]struct{}
+
+	// syncsMu guards syncs, one scheduler and sync pool per account. SMTP
+	// send never checks a slot out and pauses nothing.
+	syncsMu sync.Mutex
+	syncs   map[int64]*accountSync
+	// sessionPoolsMu guards sessionPools, the accounts' connection caps and
+	// sessions. They outlive the schedulers in syncs. Taken under syncsMu.
+	sessionPoolsMu sync.Mutex
+	sessionPools   map[int64]*accountSessions
+
+	// syncStateMu guards syncStateRuns, the sync runs of every account going
+	// now: sync:state says running from the first one to the last one's end.
+	syncStateMu   sync.Mutex
+	syncStateRuns int
+
+	// changeSyncForTest, when set, replaces the pass queueSync runs. Tests only.
+	changeSyncForTest func(account storage.Account)
+	// fullReconcileForTest, when set, replaces execFullReconcile. Tests only.
+	fullReconcileForTest func(ctx context.Context, account storage.Account, folder storage.Folder) error
+	// onDemandFetchForTest, when set, replaces the protocol fetch inside
+	// fetchMessageBodyOnDemand. Production leaves it nil.
+	onDemandFetchForTest func(ctx context.Context, account storage.Account, folder storage.Folder, remoteIDs []string) error
+	// bodyRetryDelays, when set, replaces onDemandBodyRetryDelays (tests).
+	bodyRetryDelays []time.Duration
+	// bodyFetches maps the id of a message whose body is being fetched to a
+	// channel closed when that fetch ends, so opening it again, or keeping it
+	// offline, joins the fetch instead of racing it.
+	bodyFetches sync.Map
+	// movedUIDs remembers where recent moves put each message, for undo.
+	movedUIDs movedCopies
+	// emitForTest, when set, receives every event before the wails runtime
+	// (tests).
+	emitForTest func(name string, payload any)
+	// notificationForTest, when set, receives OS notifications instead of the
+	// platform backend (tests).
+	notificationForTest func(notification)
+	// progressHeartbeatEvery, when set, replaces syncProgressHeartbeat (tests).
+	progressHeartbeatEvery time.Duration
+}
+
+// locked reports whether the app lock is engaged. An App built without one,
+// as most tests build it, is never locked.
+func (a *App) locked() bool {
+	return a.lock != nil && a.lock.Locked()
 }
 
 // IsDemoMode reports whether the app was launched in the cosmetic demo mode. The
@@ -235,14 +389,20 @@ func (a *App) IsDevMode() bool {
 // emit runtime events on.
 func newApp(version, channel string) *App {
 	w := logging.NewWriter()
-	return &App{
+	a := &App{
 		logWriter:  w,
 		log:        w.Logger(),
 		version:    version,
 		channel:    channel,
 		startedAt:  time.Now(),
 		storeReady: make(chan struct{}),
+		workers:    make(map[int64]*accountWorker),
 	}
+	a.activity = outbox.NewActivityLog(activityLogSize, a.emitActivity)
+	a.lock = applock.New(nil)
+	a.lock.OnChange(a.onLockChanged)
+	a.sysAuth = newSystemAuth()
+	return a
 }
 
 // ServiceStartup is the wails service startup hook. It opens the store, runs
@@ -290,10 +450,15 @@ func (a *App) startup(ctx context.Context) {
 	}
 	a.store = store
 	a.dataDir = dataDir
+	a.initMailVault()
 	a.applyLogSettings()
 	a.applyCharsetFallback()
 	a.queue = outbox.NewQueue(store)
+	a.copyKeyringSecrets()
 	a.loadProxy()
+	// before the window exists, so a lock that starts locked is in place
+	// before anything can ask for mail.
+	a.initLock()
 	close(a.storeReady)
 
 	// as early as the store allows, so the window opens at its remembered
@@ -347,6 +512,14 @@ func (a *App) startup(ctx context.Context) {
 	goSafe("threading cached mail", a.backfillThreads)
 
 	a.startBackgroundServices()
+	a.startScripts()
+	goSafe("promise clock", a.runPromiseClock)
+	a.startAutoEncrypt()
+	a.startCLI()
+
+	// the notes folder, when the user has one: the mail reader and the other
+	// spaces list the notes about what they show.
+	goSafe("opening the notes folder", a.startVault)
 
 	// off by default; only runs at all if the user turned on a check
 	// frequency in settings. backgrounded so a slow/unreachable network never
@@ -354,8 +527,8 @@ func (a *App) startup(ctx context.Context) {
 	goSafe("checking for updates", func() { a.maybeAutoCheckForUpdates(ctx) })
 
 	// if a bulk offline download was still running when the app last closed,
-	// pick it back up; planDownload skips anything already cached so this is
-	// cheap when most of the range was already fetched.
+	// pick it back up; planDownload skips anything that already has its body so
+	// this is cheap when most of the range was already fetched.
 	a.ResumePendingDownload()
 }
 
@@ -388,8 +561,12 @@ func (a *App) domReady() {
 func (a *App) shutdown() {
 	// before the store closes, and before anything else can fail on the way out.
 	a.saveGeometry()
+	a.lockMailVaults()
 	a.stopTray()
+	a.stopCLI()
 	a.stopMCP()
+	a.stopChat()
+	a.stopScripts()
 	// a message sent just before quitting may still be on its way to Sent.
 	copied := make(chan struct{})
 	go func() {
@@ -401,6 +578,7 @@ func (a *App) shutdown() {
 	case <-time.After(5 * time.Second):
 		a.log.Warn("quit before a sent message was copied to Sent")
 	}
+	a.closeVault()
 	if a.index != nil {
 		if err := a.index.Close(); err != nil {
 			a.log.Error("close search index", "err", err)

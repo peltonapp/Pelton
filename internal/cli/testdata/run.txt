@@ -1,0 +1,2 @@
+run "tidy": ok, 1 change(s), 12 ms
+  call     flag 42

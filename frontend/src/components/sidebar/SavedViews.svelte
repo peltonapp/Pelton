@@ -5,7 +5,9 @@
   // group is only rendered when the user has enabled Views (placement != hidden).
   import { createEventDispatcher } from 'svelte'
   import { dndzone, type DndEvent } from 'svelte-dnd-action'
-  import { IconPlus, IconPencil, IconTrash } from '@tabler/icons-svelte'
+  import { IconPlus, IconPencil, IconTrash, IconPin, IconPinnedOff } from '@tabler/icons-svelte'
+  import { openContextMenu, type MenuEntry } from '../../stores/contextmenu'
+  import { prefs, railPinIds, toggleRailPin } from '../../stores/prefs'
   import type { View } from '../../lib/types'
   import { viewIconComponent, viewColorCss } from '../../lib/viewicons'
   import { selection, selectSavedView, leaveDeletedSavedView } from '../../stores/selection'
@@ -26,6 +28,26 @@
 
   function choose(v: View): void {
     selectSavedView(v.id, v.name)
+  }
+
+  // right-click offers what the row's buttons do, and in the new design a
+  // place on the rail.
+  function onContext(event: MouseEvent, v: View): void {
+    const entries: MenuEntry[] = []
+    if ($prefs.design !== 'classic') {
+      const id = `v:${v.id}`
+      const pinned = railPinIds($prefs.railPins).includes(id)
+      entries.push({
+        label: pinned ? $t('rail.unpin') : $t('rail.pin'),
+        icon: pinned ? IconPinnedOff : IconPin,
+        action: () => toggleRailPin(id),
+      })
+    }
+    entries.push(
+      { label: $t('views.edit'), icon: IconPencil, action: () => dispatch('edit', v) },
+      { label: $t('views.delete'), icon: IconTrash, danger: true, action: () => void remove(v) },
+    )
+    openContextMenu(event.clientX, event.clientY, entries)
   }
 
   function consider(e: CustomEvent<DndEvent<View>>): void {
@@ -72,7 +94,8 @@
   >
     {#each order as view (view.id)}
       {@const active = $selection.kind === 'savedView' && $selection.viewId === view.id}
-      <div class="row" class:active>
+      <!-- svelte-ignore a11y-no-static-element-interactions -->
+      <div class="row" class:active on:contextmenu|preventDefault={(e) => onContext(e, view)}>
         <button type="button" class="main" class:unread={view.unreadCount > 0} on:click={() => choose(view)}>
           <span class="icon" style={`color:${viewColorCss(view.color)}`} aria-hidden="true">
             <svelte:component this={viewIconComponent(view.icon)} size={15} stroke={1.7} />

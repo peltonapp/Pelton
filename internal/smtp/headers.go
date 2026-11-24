@@ -30,6 +30,7 @@ const (
 	headerContentTransferEncoding = "Content-Transfer-Encoding"
 	headerContentDisposition      = "Content-Disposition"
 	headerContentID               = "Content-ID"
+	headerAutocryptGossip         = "Autocrypt-Gossip"
 
 	mimeVersion = "1.0"
 	userAgent   = "Pelton"

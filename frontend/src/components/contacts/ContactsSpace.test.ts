@@ -10,6 +10,7 @@ const api = vi.hoisted(() => ({
   syncContacts: vi.fn(),
   saveContact: vi.fn(),
   deleteContact: vi.fn(),
+  findDuplicateContacts: vi.fn(),
   search: vi.fn(),
   setSetting: vi.fn(),
 }))
@@ -21,6 +22,7 @@ vi.mock('../../lib/api', async (importOriginal) => ({
   syncContacts: api.syncContacts,
   saveContact: api.saveContact,
   deleteContact: api.deleteContact,
+  findDuplicateContacts: api.findDuplicateContacts,
   search: api.search,
   setSetting: api.setSetting,
 }))
@@ -83,6 +85,7 @@ function contact(id: number, fullName: string, patch: Partial<Contact> = {}): Co
     note: '',
     emails: [{ value: `${fullName.split(' ')[0].toLowerCase()}@example.com`, label: 'work' }],
     phones: [],
+    matrixId: '',
     readOnly: false,
     updated: '',
     extra: [],
@@ -102,6 +105,7 @@ beforeEach(() => {
   api.syncContacts.mockReset().mockResolvedValue(undefined)
   api.saveContact.mockReset().mockResolvedValue({ conflict: false })
   api.deleteContact.mockReset().mockResolvedValue({ conflict: false })
+  api.findDuplicateContacts.mockReset().mockResolvedValue({ groups: [], dismissed: 0 })
   api.search.mockReset().mockResolvedValue({ messages: [], total: 0 })
   api.setSetting.mockReset().mockResolvedValue(undefined)
   contactBookFilter.set(0)
@@ -133,7 +137,9 @@ describe('ContactsSpace list', () => {
     expect(screen.getByText('Grace Hopper')).toBeInTheDocument()
     await user.clear(screen.getByRole('searchbox', { name: 'Search contacts' }))
     await user.type(screen.getByRole('searchbox', { name: 'Search contacts' }), 'nobody')
-    expect(screen.getByText('No contact matches that.')).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'No contacts match' })).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Clear filter' }))
+    expect(screen.getByText('Ada Lovelace')).toBeInTheDocument()
   })
 
   it('narrows to an organization picked in the book pane', async () => {

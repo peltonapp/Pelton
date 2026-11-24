@@ -7,12 +7,13 @@ import (
 	"testing"
 
 	"github.com/peltonapp/Pelton/internal/storage"
+	"github.com/peltonapp/Pelton/internal/storage/storagetest"
 )
 
 func newRoleTestApp(t *testing.T) *App {
 	t.Helper()
 	ctx, stopBackground := testContext(t)
-	store, err := storage.Open(filepath.Join(t.TempDir(), "test.db"))
+	store, err := storagetest.Open(filepath.Join(t.TempDir(), "test.db"))
 	if err != nil {
 		t.Fatalf("open store: %v", err)
 	}
@@ -148,5 +149,18 @@ func TestUnknownStoredOverrideIsIgnored(t *testing.T) {
 	f := storage.Folder{Name: "Work", IMAPPath: "Work", RoleOverride: "banana"}
 	if got := folderRole(f); got != roleNormal {
 		t.Errorf("folderRole() = %q, want %q", got, roleNormal)
+	}
+}
+
+// A server that reports \Inbox must win over a path that is not literally INBOX,
+// so special-use detection covers providers that expose a renamed inbox.
+func TestInboxAttributeBeatsPathFallback(t *testing.T) {
+	f := storage.Folder{
+		Name:       "Mb_inbox",
+		IMAPPath:   "Mb_inbox",
+		Attributes: []string{`\Inbox`},
+	}
+	if got := folderRole(f); got != roleInbox {
+		t.Errorf("folderRole() = %q, want %q", got, roleInbox)
 	}
 }

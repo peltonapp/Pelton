@@ -4,8 +4,9 @@
   // back). the target is one message from a row menu and the whole selection
   // from a bulk one, so a folder is picked once for the batch. the folder the
   // messages are already in is excluded; a search box filters long trees.
-  import { fade, scale } from 'svelte/transition'
-  import { IconX, IconFolder, IconSearch } from '@tabler/icons-svelte'
+  import { IconFolder, IconSearch } from '@tabler/icons-svelte'
+  import Modal from '../common/Modal.svelte'
+  import EmptyState from '../common/EmptyState.svelte'
   import { moveTargets, closeMove } from '../../stores/move'
   import { listFolders } from '../../lib/api'
   import { moveToFolder } from '../../lib/messageactions'
@@ -19,24 +20,6 @@
   let busy = false
   let searchInput: HTMLInputElement | null = null
   let list: HTMLUListElement | null = null
-  // where focus was before the dialog took it, to hand it back on close.
-  let returnFocus: HTMLElement | null = null
-
-  // the search box takes focus as the dialog opens, so the dialog works from
-  // the keyboard alone (#494).
-  $: if (first && searchInput && document.activeElement !== searchInput && !list?.contains(document.activeElement)) {
-    if (!returnFocus && document.activeElement instanceof HTMLElement && document.activeElement !== document.body) {
-      returnFocus = document.activeElement
-    }
-    searchInput.focus()
-  }
-  $: if (!first && returnFocus) {
-    const el = returnFocus
-    returnFocus = null
-    if (el.isConnected) {
-      el.focus()
-    }
-  }
 
   // every target comes from the same list, so the first one names the account
   // and the folder to leave out.
@@ -81,12 +64,6 @@
     busy = false
   }
 
-  function onKeydown(event: KeyboardEvent): void {
-    if (event.key === 'Escape') {
-      closeMove()
-    }
-  }
-
   function folderButtons(): HTMLButtonElement[] {
     return Array.from(list?.querySelectorAll<HTMLButtonElement>('button.folder') ?? [])
   }
@@ -119,26 +96,17 @@
   }
 </script>
 
-<svelte:window on:keydown={first ? onKeydown : undefined} />
-
 {#if first}
-  <!-- svelte-ignore a11y-click-events-have-key-events a11y-no-static-element-interactions -->
-  <div class="backdrop" transition:fade={{ duration: 120 }} on:click={closeMove}></div>
-  <div class="dialog" role="dialog" aria-modal="true" aria-label={$t('detail.moveDialog.dialogLabel')} transition:scale={{ duration: 150, start: 0.94 }}>
-    <header>
-      <h2>
-        {count > 1
-          ? $t('detail.moveDialog.titleCount').replace('{n}', String(count))
-          : $t('detail.moveDialog.title')}
-      </h2>
-      <button type="button" class="close" aria-label={$t('detail.attachments.close')} on:click={closeMove}>
-        <IconX size={16} stroke={1.8} />
-      </button>
-    </header>
-
+  <Modal
+    title={count > 1 ? $t('detail.moveDialog.titleCount').replace('{n}', String(count)) : $t('detail.moveDialog.title')}
+    size="small"
+    on:close={closeMove}
+  >
     <div class="search">
       <IconSearch size={15} stroke={1.7} />
+      <!-- svelte-ignore a11y-autofocus -->
       <input
+        autofocus
         type="search"
         placeholder={$t('detail.moveDialog.searchPlaceholder')}
         aria-label={$t('detail.moveDialog.searchPlaceholder')}
@@ -159,63 +127,19 @@
         </li>
       {/each}
       {#if candidates.length === 0}
-        <li class="empty">{query ? $t('detail.moveDialog.noMatches') : $t('detail.moveDialog.noOthers')}</li>
+        <li class="empty" role="presentation">
+          <EmptyState
+            size="compact"
+            kind={query ? 'filtered' : 'empty'}
+            title={query ? $t('detail.moveDialog.noMatches') : $t('detail.moveDialog.noOthers')}
+          />
+        </li>
       {/if}
     </ul>
-  </div>
+  </Modal>
 {/if}
 
 <style>
-  .backdrop {
-    position: fixed;
-    inset: 0;
-    z-index: 300;
-    background: var(--scrim, rgba(0, 0, 0, 0.4));
-    backdrop-filter: blur(2px);
-  }
-
-  .dialog {
-    position: fixed;
-    z-index: 301;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
-    width: min(400px, calc(100vw - 2 * var(--space-5)));
-    max-height: 70vh;
-    padding: var(--space-4);
-    display: flex;
-    flex-direction: column;
-    gap: var(--space-3);
-    border: var(--hairline) solid var(--border-default);
-    border-radius: var(--radius-card);
-    background: var(--surface-overlay);
-    box-shadow: var(--shadow-overlay);
-  }
-
-  header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-  }
-  h2 {
-    margin: 0;
-    font-size: var(--fz-title);
-    font-weight: var(--fw-semibold);
-    color: var(--text-primary);
-  }
-  .close {
-    border: none;
-    background: transparent;
-    color: var(--text-tertiary);
-    cursor: var(--cursor-action);
-    padding: var(--space-1);
-    border-radius: var(--radius-control);
-  }
-  .close:hover {
-    background: var(--surface-hover);
-    color: var(--text-primary);
-  }
-
   .search {
     display: flex;
     align-items: center;
@@ -237,10 +161,8 @@
 
   .list {
     list-style: none;
-    margin: 0;
+    margin: var(--space-3) 0 0;
     padding: 0;
-    overflow-y: auto;
-    min-height: 0;
   }
 
   .folder {
@@ -271,9 +193,4 @@
     white-space: nowrap;
   }
 
-  .empty {
-    padding: var(--space-3);
-    font-size: var(--fz-label);
-    color: var(--text-tertiary);
-  }
 </style>

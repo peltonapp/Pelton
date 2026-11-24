@@ -17,10 +17,8 @@ import './style.css'
 import './theme/design-new.css'
 
 import { mount } from 'svelte'
-import App from './App.svelte'
-import MessageWindow from './MessageWindow.svelte'
-import ComposeWindow from './ComposeWindow.svelte'
-import { isDemoMode, windowMaterialActive } from './lib/api'
+import Root, { loadWindow, windowView } from './Root.svelte'
+import { getLockState, isDemoMode, windowMaterialActive } from './lib/api'
 import { setDemoActive } from './lib/demo'
 import { initSmoothCaret } from './lib/smoothcaret'
 
@@ -28,6 +26,17 @@ const target = document.getElementById('app')
 if (!target) {
   throw new Error('pelton: #app mount point missing')
 }
+
+// a message, a compose or the send activity opened in a window of its own
+// loads the same page with ?window=message&id=N, ?window=compose&token=T or
+// ?window=outbox, and gets that alone instead of the app. ?window=quick is the
+// quick compose window. The view's code loads while the backend answers the
+// questions below.
+const params = new URLSearchParams(window.location.search)
+const messageId = Number(params.get('id')) || 0
+const composeToken = params.get('token') ?? ''
+const view = windowView(params.get('window') ?? '', messageId, composeToken)
+const component = loadWindow(view)
 
 // the cosmetic demo mode (--potatoes-are-nice) has to be known before anything
 // renders. Asking for it from the root component's onMount was too late: a
@@ -49,22 +58,32 @@ await windowMaterialActive()
   .then((on) => document.documentElement.classList.toggle('window-material', on))
   .catch(() => {})
 
-// a message or a compose opened in a window of its own loads the same page
-// with ?window=message&id=N or ?window=compose&token=T, and gets that alone
-// instead of the app.
-const params = new URLSearchParams(window.location.search)
-const messageId = Number(params.get('id'))
-const composeToken = params.get('token') ?? ''
-const app =
-  params.get('window') === 'message' && messageId > 0
-    ? mount(MessageWindow, { target, props: { messageId } })
-    : params.get('window') === 'compose' && composeToken
-      ? mount(ComposeWindow, { target, props: { token: composeToken } })
-      : mount(App, { target })
+// whether the app lock is engaged decides what this window may show at all,
+// so it is known before anything mounts. A failed read mounts as unlocked:
+// the backend refuses every mail call while locked whatever the page thinks.
+const lockState = await getLockState().catch(() => null)
+
+const app = mount(Root, {
+  target,
+  props: {
+    view,
+    component: await component,
+    messageId,
+    composeToken,
+    lockState,
+  },
+})
 
 initSmoothCaret()
 
-// remove the pre-mount splash now that svelte has taken over.
-document.getElementById('splash')?.remove()
+// from here on an error is the app's to show, not the splash's.
+;(window as unknown as { peltonBooted?: boolean }).peltonBooted = true
+
+// fade the pre-mount splash out now that svelte has taken over, then drop it.
+const splash = document.getElementById('splash')
+if (splash) {
+  splash.classList.add('out')
+  setTimeout(() => splash.remove(), 260)
+}
 
 export default app

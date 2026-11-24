@@ -57,6 +57,12 @@ type Options struct {
 	SenderEmail string
 	Recipients  []string
 	Passphrase  []byte
+	// RecipientKeys, when set, are encrypted to in place of looking Recipients
+	// up in the keyring: binary or armored public keys, each named on the
+	// message. HiddenKeys are encrypted to without being named, for Bcc
+	// recipients. Either being set selects this path.
+	RecipientKeys [][]byte
+	HiddenKeys    [][]byte
 }
 
 // Part is the result of a crypto operation: the full Content-Type header value

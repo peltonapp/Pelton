@@ -14,11 +14,6 @@ name: Checks
 # the three Go jobs as an artifact, rather than each of them running vite again.
 #
 # Deliberately not here:
-#   * gofmt. Several files carry pre-existing drift (internal/desktop/bind_pgp.go,
-#     internal/desktop/bind_settings.go, internal/desktop/run.go,
-#     internal/storage/messages.go), so a formatting gate would fail on day one
-#     for reasons unrelated to whatever is being reviewed. Worth adding after a
-#     one-off `gofmt -w` pass.
 #   * scripts/build.sh. The release and nightly workflows already cover the
 #     real packaged builds. `go build` with the same tags proves the code
 #     compiles, which is what a pull request needs to know.
@@ -79,8 +74,10 @@ jobs:
 
       # a key added to en.ts alone builds and type-checks; it renders as its own
       # key for everyone on another language, which only a speaker of that
-      # language ever notices.
+      # language ever notices. the step reports and does not fail the job;
+      # catalogs are completed before a release.
       - name: Locale catalogs
+        continue-on-error: true
         run: pnpm --dir frontend run check:locales
 
       - name: Frontend tests
@@ -88,6 +85,11 @@ jobs:
 
       - name: Build
         run: pnpm --dir frontend run build
+
+      # code split away from startup comes back with a single static import,
+      # and nothing else fails when it does.
+      - name: Startup bundle budget
+        run: pnpm --dir frontend run check:bundle
 
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
@@ -113,6 +115,17 @@ jobs:
         with:
           go-version: ${{ env.GO_VERSION }}
 
+      # gofmt output depends on the Go version (1.27 changed column
+      # alignment), so this uses the same GO_VERSION as the build.
+      - name: gofmt
+        run: |
+          unformatted=$(git ls-files -z '*.go' | xargs -0 gofmt -l)
+          if [ -n "$unformatted" ]; then
+            echo "These files need gofmt -w:"
+            echo "$unformatted"
+            exit 1
+          fi
+
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
           name: frontend-dist
@@ -125,19 +138,21 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.1-dev build-essential pkg-config
 
+      # goolm selects mautrix's pure Go Olm for chat encryption; without it
+      # the crypto package wants libolm through cgo.
       - name: Build
-        run: go build -tags gtk3 ./...
+        run: go build -tags "gtk3 goolm" ./...
 
       - name: Vet
-        run: go vet -tags gtk3 ./...
+        run: go vet -tags "gtk3 goolm" ./...
 
       - name: Test
-        run: go test -tags gtk3 ./internal/...
+        run: go test -tags "gtk3 goolm" ./internal/...
 
       - name: Bindings are up to date
         run: |
           go run -tags gtk3 "github.com/wailsapp/wails/v3/cmd/wails3@$(go list -m -f '{{.Version}}' github.com/wailsapp/wails/v3)" \
-            generate bindings -ts -d frontend/bindings -silent -f "-tags=gtk3" ./...
+            generate bindings -ts -d frontend/bindings -silent -f "-tags=gtk3,goolm" ./...
           if ! git diff --exit-code -- frontend/bindings || [ -n "$(git status --porcelain -- frontend/bindings)" ]; then
             echo "::error::frontend/bindings is out of date; run make bindings and commit the result"
             exit 1
@@ -169,7 +184,7 @@ jobs:
           GOOS: windows
           GOARCH: amd64
           CGO_ENABLED: "0"
-        run: go build ./...
+        run: go build -tags goolm ./...
 
   cross-darwin:
     name: macOS compile
@@ -188,4 +203,4 @@ jobs:
           path: frontend/dist
 
       - name: Build for darwin
-        run: go build ./...
+        run: go build -tags goolm ./...

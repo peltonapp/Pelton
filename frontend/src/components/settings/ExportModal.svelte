@@ -7,6 +7,7 @@
   import { IconDownload } from '@tabler/icons-svelte'
   import { exportData } from '../../lib/api'
   import { toastError, toastSuccess, errorMessage } from '../../stores/toast'
+  import PieProgress from '../common/PieProgress.svelte'
   import { get } from 'svelte/store'
   import { t } from '../../lib/i18n'
 
@@ -130,7 +131,11 @@
       disabled={exporting || (includePasswords && (passwordTooShort || passwordsMismatch || credentialPassword.length === 0))}
       on:click={runExport}
     >
-      <IconDownload size={14} stroke={1.8} />
+      {#if exporting}
+        <PieProgress size={14} label={$t('importExport.exportButton')} />
+      {:else}
+        <IconDownload size={14} stroke={1.8} />
+      {/if}
       {$t('importExport.exportButton')}
     </button>
   </svelte:fragment>

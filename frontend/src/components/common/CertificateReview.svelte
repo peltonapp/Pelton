@@ -32,7 +32,7 @@
   function validity(c: UntrustedCert): string {
     const from = c.notBefore ? new Date(c.notBefore).toLocaleDateString() : '?'
     const until = c.notAfter ? new Date(c.notAfter).toLocaleDateString() : '?'
-    return `${from} – ${until}`
+    return `${from} - ${until}`
   }
 
   function expired(c: UntrustedCert): boolean {
@@ -50,9 +50,9 @@
       <dt>{$t('certs.review.servers')}</dt>
       <dd>{servers.join(', ')}</dd>
       <dt>{$t('certs.review.subject')}</dt>
-      <dd>{cert.subject || '—'}</dd>
+      <dd>{cert.subject || '-'}</dd>
       <dt>{$t('certs.review.issuer')}</dt>
-      <dd>{cert.selfSigned ? $t('certs.review.selfSigned') : cert.issuer || '—'}</dd>
+      <dd>{cert.selfSigned ? $t('certs.review.selfSigned') : cert.issuer || '-'}</dd>
       {#if cert.names.length > 0}
         <dt>{$t('certs.review.names')}</dt>
         <dd>{cert.names.join(', ')}</dd>

@@ -8,11 +8,15 @@
   import { fade, fly } from 'svelte/transition'
   import { cubicOut } from 'svelte/easing'
   import Ph from '../common/Ph.svelte'
+  import EmptyState from '../common/EmptyState.svelte'
+  import PieProgress from '../common/PieProgress.svelte'
   import ContactSidebar from './ContactSidebar.svelte'
   import ContactList from './ContactList.svelte'
   import ContactGrid from './ContactGrid.svelte'
   import ContactPane from './ContactPane.svelte'
   import ContactConflictDialog from './ContactConflictDialog.svelte'
+  import ContactDuplicates from './ContactDuplicates.svelte'
+  import mergeIcon from '@phosphor-icons/core/assets/duotone/git-merge-duotone.svg?raw'
   import bookIcon from '@phosphor-icons/core/assets/duotone/address-book-duotone.svg?raw'
   import syncIcon from '@phosphor-icons/core/assets/duotone/arrows-clockwise-duotone.svg?raw'
   import plusIcon from '@phosphor-icons/core/assets/duotone/plus-duotone.svg?raw'
@@ -30,15 +34,19 @@
     contactSeed,
   } from '../../stores/contacts'
   import { contactOrg, selectedContactId } from '../../stores/contactsview'
+  import { duplicateGroups, loadDuplicates } from '../../stores/duplicates'
   import { sidebar } from '../../stores/accounts'
   import { askConfirm } from '../../stores/confirm'
   import { openSettingsAt } from '../../stores/settingsnav'
   import { openSpace, registerSpaceActions } from '../../stores/space'
+  import { focusSpaceSearch, matchesQuery, registerSpaceSearch } from '../../lib/spacesearch'
 
   let root: HTMLElement | undefined
   import { revealMessage } from '../../stores/selection'
   import { prefs, setContactsView } from '../../stores/prefs'
   import { organizationCounts } from '../../lib/contactlist'
+  import { popupIsOpen } from '../../lib/popups'
+  import { isEditableTarget } from '../../lib/editable'
   import { dur, motion } from '../../lib/motion'
   import { t } from '../../lib/i18n'
   import type { Contact, ContactDraft, ContactsView, MessageSummary } from '../../lib/types'
@@ -57,6 +65,14 @@
   let editing: ContactDraft | null = null
   let dirty = false
   let sideOpen = false
+  let duplicatesOpen = false
+
+  // the badge on the Duplicates button follows the contacts: a sync or an edit
+  // that changes them asks again.
+  $: if (ready) {
+    $contacts
+    void loadDuplicates()
+  }
 
   $: view = $prefs.contactsView as ContactsView
   // an unmeasured window (width 0) is treated as wide.
@@ -87,9 +103,35 @@
     void loadContacts().then(() => (ready = true))
     // while contacts is on screen the app's "new" key makes a contact and its
     // search key goes to the contact search.
-    return registerSpaceActions('contacts', {
+    const stopSearch = registerSpaceSearch('contacts', {
+      placeholderKey: 'contacts.searchPlaceholder',
+      emptyKey: 'contacts.noMatches',
+      search: (query) =>
+        $contacts
+          .filter((c) =>
+            matchesQuery(query, [
+              c.fullName,
+              c.organization,
+              c.title,
+              ...c.emails.map((e) => e.value),
+              ...c.phones.map((p) => p.value),
+            ]),
+          )
+          .slice(0, 20)
+          .map((c) => ({
+            id: String(c.id),
+            title: c.fullName || c.emails[0]?.value || c.organization,
+            detail: c.emails[0]?.value ?? c.phones[0]?.value ?? '',
+            aside: c.organization,
+          })),
+      open: (result) => void select(Number(result.id)),
+    })
+    const stopActions = registerSpaceActions('contacts', {
       compose: () => void startCreate(),
       search: () => {
+        if (focusSpaceSearch()) {
+          return
+        }
         const input = root?.querySelector<HTMLInputElement>('input[type="search"]')
         if (!input) {
           return false
@@ -97,7 +139,16 @@
         input.focus()
         input.select()
       },
+      sync: () => {
+        if (!$contactsLoading) {
+          void refreshContacts()
+        }
+      },
     })
+    return () => {
+      stopSearch()
+      stopActions()
+    }
   })
 
   // a person handed over from elsewhere opens the editor already filled in.
@@ -171,6 +222,7 @@
       note: '',
       emails: [{ value: seed?.email ?? '', label: '' }],
       phones: [],
+      matrixId: '',
       force: false,
     }
   }
@@ -188,6 +240,7 @@
       note: contact.note,
       emails: contact.emails.length ? contact.emails.map((e) => ({ ...e })) : [{ value: '', label: '' }],
       phones: contact.phones.map((p) => ({ ...p })),
+      matrixId: contact.matrixId,
       force: false,
     }
   }
@@ -205,6 +258,16 @@
     if (event.key === 'Escape' && sideOpen) {
       event.stopPropagation()
       sideOpen = false
+    } else if (
+      event.key === 'Escape' &&
+      paneOpen &&
+      editing === null &&
+      (view === 'grid' || mode === 'narrow') &&
+      !popupIsOpen() &&
+      !isEditableTarget(event.target)
+    ) {
+      event.stopPropagation()
+      void dismissPane()
     }
   }
 
@@ -255,8 +318,24 @@
           <Ph svg={gridIcon} size={16} />
         </button>
       </div>
+      <button
+        type="button"
+        class="btn"
+        aria-pressed={duplicatesOpen}
+        aria-label={$duplicateGroups.length > 0 ? $t('contacts.duplicates.buttonCount').replace('{n}', String($duplicateGroups.length)) : $t('contacts.duplicates.button')}
+        disabled={$addressBooks.length === 0}
+        on:click={() => (duplicatesOpen = !duplicatesOpen)}
+      >
+        <Ph svg={mergeIcon} size={16} />
+        {#if mode !== 'narrow'}{$t('contacts.duplicates.button')}{/if}
+        {#if $duplicateGroups.length > 0}<span class="badge" aria-hidden="true">{$duplicateGroups.length}</span>{/if}
+      </button>
       <button type="button" class="btn" on:click={refreshContacts} disabled={$contactsLoading}>
-        <span class="spin" class:on={$contactsLoading}><Ph svg={syncIcon} size={16} /></span>
+        {#if $contactsLoading}
+          <PieProgress size={16} label={$t('contacts.loading')} />
+        {:else}
+          <Ph svg={syncIcon} size={16} />
+        {/if}
         {#if mode !== 'narrow'}{$t('contacts.sync')}{/if}
       </button>
       <button type="button" class="btn primary" on:click={() => startCreate()} disabled={$addressBooks.length === 0}>
@@ -279,11 +358,16 @@
   {/if}
 
   {#if $addressBooks.length === 0 && ready}
-    <div class="empty">
-      <Ph svg={bookIcon} size={32} />
-      <p>{$t('contacts.noBooks')}</p>
-      <button type="button" class="btn primary" on:click={manageBooks}>{$t('contacts.addBook')}</button>
-    </div>
+    <EmptyState
+      kind="setup"
+      icon={bookIcon}
+      title={$t('contacts.noBooksTitle')}
+      detail={$t('contacts.noBooksDetail')}
+      actionLabel={$t('contacts.addBook')}
+      onAction={manageBooks}
+    />
+  {:else if duplicatesOpen}
+    <ContactDuplicates on:back={() => (duplicatesOpen = false)} />
   {:else}
     <div class="content {layout}">
       {#if mode === 'wide'}
@@ -291,9 +375,9 @@
       {/if}
 
       {#if view === 'grid'}
-        <ContactGrid on:select={(e) => select(e.detail)} />
+        <ContactGrid on:select={(e) => select(e.detail)} on:create={() => startCreate()} />
       {:else if mode !== 'narrow' || !paneOpen}
-        <ContactList on:select={(e) => select(e.detail)} />
+        <ContactList on:select={(e) => select(e.detail)} on:create={() => startCreate()} />
       {/if}
 
       {#if view === 'panes' && mode !== 'narrow'}
@@ -372,9 +456,9 @@
     display: flex;
     align-items: center;
     gap: var(--space-3);
-    padding: var(--space-2) var(--space-3);
+    min-height: calc(var(--control-height) + 2 * var(--space-3));
+    padding: var(--space-3) var(--space-4);
     border-bottom: var(--hairline) solid var(--border-default);
-    background: var(--surface-raised);
   }
 
   .title {
@@ -401,7 +485,7 @@
 
   .switch {
     display: inline-flex;
-    padding: 2px;
+    padding: var(--space-1);
     border: var(--hairline) solid var(--border-default);
     border-radius: var(--radius-control);
     background: var(--surface-sunken);
@@ -460,6 +544,21 @@
     transform: scale(0.98);
   }
 
+  .btn[aria-pressed='true'] {
+    background: var(--selection-bg);
+  }
+
+  .badge {
+    min-width: calc(var(--fz-meta) * 1.6);
+    padding: 0 var(--space-1);
+    border-radius: var(--radius-control);
+    background: var(--surface-sunken);
+    color: var(--text-secondary);
+    font-size: var(--fz-meta);
+    font-variant-numeric: tabular-nums;
+    text-align: center;
+  }
+
   .btn.primary {
     border-color: transparent;
     background: var(--accent);
@@ -476,19 +575,6 @@
     cursor: default;
   }
 
-  .spin {
-    display: inline-flex;
-  }
-
-  .spin.on {
-    animation: spin 900ms linear infinite;
-  }
-
-  @keyframes spin {
-    to {
-      transform: rotate(360deg);
-    }
-  }
 
   .icon {
     display: inline-flex;
@@ -590,24 +676,6 @@
 
   .drawer.full {
     width: 100%;
-  }
-
-  .empty {
-    display: flex;
-    flex: 1;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    gap: var(--space-3);
-    padding: var(--space-5);
-    color: var(--text-tertiary);
-    font-size: var(--fz-body);
-    text-align: center;
-  }
-
-  .empty p {
-    margin: 0;
-    max-width: 360px;
   }
 
   @media (prefers-reduced-motion: reduce) {
