@@ -162,6 +162,7 @@ export async function toggleSenderVIP(item: MessageSummary): Promise<void> {
 
 /** Downloads a message for offline reading, or drops the offline copy. */
 export async function setOffline(item: MessageSummary, offline: boolean): Promise<void> {
+  const previous = item.offline
   patchInList(item.id, { offline })
   try {
     if (offline) {
@@ -171,6 +172,8 @@ export async function setOffline(item: MessageSummary, offline: boolean): Promis
       await removeOffline(item.id)
     }
   } catch (err) {
+    // the optimistic flag would otherwise keep claiming a download that failed
+    patchInList(item.id, { offline: previous })
     toastError(errorMessage(err))
   }
 }

@@ -141,6 +141,7 @@ func (a *App) initLock() {
 	if a.wapp != nil {
 		a.wapp.Event.OnApplicationEvent(events.Common.SystemWillSleep, func(*application.ApplicationEvent) {
 			a.lock.Lock()
+			a.lockMailVaults()
 		})
 	}
 	a.watchScreenLock()
@@ -172,6 +173,7 @@ func (a *App) watchIdle() {
 	defer ticker.Stop()
 	for range ticker.C {
 		a.lock.Tick()
+		a.mailVaultTick()
 	}
 }
 
@@ -180,6 +182,7 @@ func (a *App) watchIdle() {
 func (a *App) onLockChanged(locked bool) {
 	a.emit(EventAppLock, AppLockEvent{Locked: locked})
 	if locked {
+		a.lockMailVaults()
 		a.hideWindowsForLock()
 	} else {
 		a.restoreWindowsAfterLock()
@@ -268,6 +271,7 @@ func (a *App) LockNow() {
 // it, throttled, on input.
 func (a *App) NoteActivity() {
 	a.lock.Touch()
+	a.touchMailVault()
 }
 
 // UnlockWithSystem shows the system prompt and unlocks when it passes. reason

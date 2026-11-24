@@ -98,7 +98,7 @@ func (a *App) ListThreads(req ListMessagesRequest) (ThreadListDTO, error) {
 		pq := q
 		pq.Pin = storage.PinOnly
 		pq.Limit = maxPinned
-		pages, err := a.store.QueryThreads(a.ctx, storage.ThreadQuery{Query: pq, MemberFolderIDs: members})
+		pages, err := a.store.QueryThreads(a.mailCtx(), storage.ThreadQuery{Query: pq, MemberFolderIDs: members})
 		if err != nil {
 			return ThreadListDTO{}, err
 		}
@@ -111,11 +111,11 @@ func (a *App) ListThreads(req ListMessagesRequest) (ThreadListDTO, error) {
 	q.Offset = req.Offset
 	tq := storage.ThreadQuery{Query: q, MemberFolderIDs: members}
 
-	pages, err := a.store.QueryThreads(a.ctx, tq)
+	pages, err := a.store.QueryThreads(a.mailCtx(), tq)
 	if err != nil {
 		return ThreadListDTO{}, err
 	}
-	total, err := a.store.CountThreads(a.ctx, tq)
+	total, err := a.store.CountThreads(a.mailCtx(), tq)
 	if err != nil {
 		return ThreadListDTO{}, err
 	}
@@ -273,7 +273,7 @@ func (a *App) GetThread(threadID int64) (ThreadDTO, error) {
 	if err := a.ready(); err != nil {
 		return ThreadDTO{}, err
 	}
-	msgs, err := a.store.ThreadMessages(a.ctx, threadID, nil)
+	msgs, err := a.store.ThreadMessages(a.mailCtx(), threadID, nil)
 	if err != nil {
 		return ThreadDTO{}, err
 	}
@@ -379,7 +379,7 @@ func (a *App) recordReplySources(req ComposeRequest, outgoingID string) error {
 		}
 	}
 	if req.ForwardOf != 0 {
-		m, err := a.store.GetMessage(a.ctx, req.ForwardOf)
+		m, err := a.store.GetMessage(a.mailCtx(), req.ForwardOf)
 		if err != nil {
 			return err
 		}

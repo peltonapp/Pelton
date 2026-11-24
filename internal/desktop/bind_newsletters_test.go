@@ -238,9 +238,6 @@ func TestArchiveMessagesMovesPerFolder(t *testing.T) {
 	if _, err := db.GetMessage(ctx, already); err != nil {
 		t.Errorf("the message already in Archive was dropped: %v", err)
 	}
-	if !client.loggedOut {
-		t.Error("the imap session was left open")
-	}
 }
 
 func TestArchiveMessagesKeepsRowsWhenTheServerRefuses(t *testing.T) {

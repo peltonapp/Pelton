@@ -146,7 +146,7 @@ func (d *DB) FollowUpReplied(ctx context.Context, f FollowUp) (bool, error) {
 	rows, err := d.sql.QueryContext(ctx, `
 SELECT m.in_reply_to, m.[references], m.from_address, a.email
 FROM messages m JOIN accounts a ON a.id = m.account_id
-WHERE m.account_id = ? AND m.thread_id = ? AND m.pending_delete = 0`, f.AccountID, thread)
+WHERE m.account_id = ? AND m.thread_id = ? AND m.pending_delete = 0 AND `+notVaultedM, f.AccountID, thread)
 	if err != nil {
 		return false, fmt.Errorf("storage: replies of follow-up %d: %w", f.ID, err)
 	}
@@ -193,7 +193,7 @@ func (d *DB) CopiesOf(ctx context.Context, accountID int64, messageID string) ([
 	}
 	rows, err := d.sql.QueryContext(ctx, `
 SELECT id, folder_id, thread_id FROM messages
-WHERE account_id = ? AND message_id IN (?, ?) AND pending_delete = 0
+WHERE account_id = ? AND message_id IN (?, ?) AND pending_delete = 0 AND `+notVaulted+`
 ORDER BY id`, accountID, key, "<"+key+">")
 	if err != nil {
 		return nil, fmt.Errorf("storage: copies of %q: %w", key, err)

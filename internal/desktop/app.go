@@ -18,6 +18,8 @@ import (
 
 	"github.com/peltonapp/Pelton/internal/applock"
 	"github.com/peltonapp/Pelton/internal/certtrust"
+	"github.com/peltonapp/Pelton/internal/cliproto"
+	"github.com/peltonapp/Pelton/internal/cliserver"
 	"github.com/peltonapp/Pelton/internal/configsync"
 	pimap "github.com/peltonapp/Pelton/internal/imap"
 	"github.com/peltonapp/Pelton/internal/logging"
@@ -98,9 +100,6 @@ type App struct {
 	// though a nil check keeps it from crashing.
 	storeReady chan struct{}
 	index      *search.Index
-	// syncTally holds the message counts behind the sync progress bar for the
-	// run in flight.
-	syncTally syncTally
 	// streamTick rate-limits the "mail arrived" events a running sync emits, so
 	// a fast first sync fills the list without asking the ui to redraw it
 	// hundreds of times a minute.
@@ -114,9 +113,11 @@ type App struct {
 	// merges holds this session's contact merges that can still be undone. See
 	// bind_contacts_merge.go.
 	merges mergeHistory
-	// queuedSyncs holds the ids of accounts with a queueSync waiting for
-	// syncMu, so a burst of changes queues one sync rather than one each.
-	queuedSyncs sync.Map
+	// changeSyncs holds the accounts with a sync after a change running
+	// (queueSync); the value is true when another change came in meanwhile
+	// and one more pass is due. changeSyncsMu guards it.
+	changeSyncsMu sync.Mutex
+	changeSyncs   map[int64]bool
 	// rejectedLogins holds the accounts whose credentials the server refused,
 	// which is not something the keyring can tell us: the password is stored,
 	// it is simply wrong. It is in memory on purpose, since the only way to
@@ -224,6 +225,15 @@ type App struct {
 	// proposalMu serializes changes to the stored script proposals.
 	proposalMu sync.Mutex
 
+	// cliMu guards cli, the socket the pelton command talks to (cli.go).
+	// cliConfirmer asks about a command line send or permanent delete; nil
+	// asks in the window, tests put an answer here. cliPathsOverride moves
+	// the socket and token out of the state folder, for tests.
+	cliMu            sync.Mutex
+	cli              *cliserver.Server
+	cliConfirmer     scripting.Confirmer
+	cliPathsOverride cliproto.Paths
+
 	// mailto holds a mailto: draft the app was launched with (or received from a
 	// second launch) until the frontend consumes it. See mailto.go.
 	mailto mailtoState
@@ -289,6 +299,68 @@ type App struct {
 
 	// autoEnc is the state of automatic encryption. See autoencrypt.go.
 	autoEnc autoEncryptState
+
+	// mailVault is which mail vaults are unlocked and their keys. See
+	// mailvault.go.
+	mailVault mailVaultState
+
+	// guided is the guided import that is running, if any. See
+	// bind_migrate.go.
+	guided guidedImportState
+
+	// workersMu guards workers, the per-account sync/idle goroutines.
+	// stopAccountWorker cancels and joins one entry; profile shutdown cancels
+	// the session and joins all.
+	workersMu sync.Mutex
+	workers   map[int64]*accountWorker
+
+	// accountStatesMu guards accountStates and removedAccounts. A state holds
+	// the account's lock, sync hold, tracked IMAP sessions and progress
+	// tally. Entries outlive the account's scheduler so account
+	// removal can abort, hold and lock only that account across the teardown.
+	accountStatesMu sync.Mutex
+	accountStates   map[int64]*accountState
+	// removedAccounts are the ids DeleteAccount removed while the app ran.
+	// Nothing may start sync work for them again.
+	removedAccounts map[int64]struct{}
+
+	// syncsMu guards syncs, one scheduler and sync pool per account. SMTP
+	// send never checks a slot out and pauses nothing.
+	syncsMu sync.Mutex
+	syncs   map[int64]*accountSync
+	// sessionPoolsMu guards sessionPools, the accounts' connection caps and
+	// sessions. They outlive the schedulers in syncs. Taken under syncsMu.
+	sessionPoolsMu sync.Mutex
+	sessionPools   map[int64]*accountSessions
+
+	// syncStateMu guards syncStateRuns, the sync runs of every account going
+	// now: sync:state says running from the first one to the last one's end.
+	syncStateMu   sync.Mutex
+	syncStateRuns int
+
+	// changeSyncForTest, when set, replaces the pass queueSync runs. Tests only.
+	changeSyncForTest func(account storage.Account)
+	// fullReconcileForTest, when set, replaces execFullReconcile. Tests only.
+	fullReconcileForTest func(ctx context.Context, account storage.Account, folder storage.Folder) error
+	// onDemandFetchForTest, when set, replaces the protocol fetch inside
+	// fetchMessageBodyOnDemand. Production leaves it nil.
+	onDemandFetchForTest func(ctx context.Context, account storage.Account, folder storage.Folder, remoteIDs []string) error
+	// bodyRetryDelays, when set, replaces onDemandBodyRetryDelays (tests).
+	bodyRetryDelays []time.Duration
+	// bodyFetches maps the id of a message whose body is being fetched to a
+	// channel closed when that fetch ends, so opening it again, or keeping it
+	// offline, joins the fetch instead of racing it.
+	bodyFetches sync.Map
+	// movedUIDs remembers where recent moves put each message, for undo.
+	movedUIDs movedCopies
+	// emitForTest, when set, receives every event before the wails runtime
+	// (tests).
+	emitForTest func(name string, payload any)
+	// notificationForTest, when set, receives OS notifications instead of the
+	// platform backend (tests).
+	notificationForTest func(notification)
+	// progressHeartbeatEvery, when set, replaces syncProgressHeartbeat (tests).
+	progressHeartbeatEvery time.Duration
 }
 
 // locked reports whether the app lock is engaged. An App built without one,
@@ -324,6 +396,7 @@ func newApp(version, channel string) *App {
 		channel:    channel,
 		startedAt:  time.Now(),
 		storeReady: make(chan struct{}),
+		workers:    make(map[int64]*accountWorker),
 	}
 	a.activity = outbox.NewActivityLog(activityLogSize, a.emitActivity)
 	a.lock = applock.New(nil)
@@ -377,9 +450,11 @@ func (a *App) startup(ctx context.Context) {
 	}
 	a.store = store
 	a.dataDir = dataDir
+	a.initMailVault()
 	a.applyLogSettings()
 	a.applyCharsetFallback()
 	a.queue = outbox.NewQueue(store)
+	a.copyKeyringSecrets()
 	a.loadProxy()
 	// before the window exists, so a lock that starts locked is in place
 	// before anything can ask for mail.
@@ -440,6 +515,7 @@ func (a *App) startup(ctx context.Context) {
 	a.startScripts()
 	goSafe("promise clock", a.runPromiseClock)
 	a.startAutoEncrypt()
+	a.startCLI()
 
 	// the notes folder, when the user has one: the mail reader and the other
 	// spaces list the notes about what they show.
@@ -451,8 +527,8 @@ func (a *App) startup(ctx context.Context) {
 	goSafe("checking for updates", func() { a.maybeAutoCheckForUpdates(ctx) })
 
 	// if a bulk offline download was still running when the app last closed,
-	// pick it back up; planDownload skips anything already cached so this is
-	// cheap when most of the range was already fetched.
+	// pick it back up; planDownload skips anything that already has its body so
+	// this is cheap when most of the range was already fetched.
 	a.ResumePendingDownload()
 }
 
@@ -485,7 +561,9 @@ func (a *App) domReady() {
 func (a *App) shutdown() {
 	// before the store closes, and before anything else can fail on the way out.
 	a.saveGeometry()
+	a.lockMailVaults()
 	a.stopTray()
+	a.stopCLI()
 	a.stopMCP()
 	a.stopChat()
 	a.stopScripts()

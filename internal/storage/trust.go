@@ -42,11 +42,13 @@ type MessageTrust struct {
 }
 
 // SetMessageTrust stores the record for one message, replacing any earlier one.
+// A message in a mail vault gets none: the record names its sender in clear.
 func (d *DB) SetMessageTrust(ctx context.Context, t MessageTrust) error {
 	const query = `
 INSERT INTO message_trust (message_id, auth_state, servid, spf, spf_domain, dkim, dkim_domain, dkim_domains,
     dmarc, dmarc_policy, header_from, return_path, sender, signers, unsub_signers, received_spf, arc, read_receipt_to)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+SELECT m.id, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+FROM messages m WHERE m.id = ? AND m.vault_id = 0 AND ` + notVaultedM + `
 ON CONFLICT(message_id) DO UPDATE SET
     auth_state = excluded.auth_state, servid = excluded.servid, spf = excluded.spf,
     spf_domain = excluded.spf_domain, dkim = excluded.dkim, dkim_domain = excluded.dkim_domain,
@@ -54,9 +56,10 @@ ON CONFLICT(message_id) DO UPDATE SET
     header_from = excluded.header_from, return_path = excluded.return_path, sender = excluded.sender,
     signers = excluded.signers, unsub_signers = excluded.unsub_signers, received_spf = excluded.received_spf,
     arc = excluded.arc, read_receipt_to = excluded.read_receipt_to`
-	_, err := d.sql.ExecContext(ctx, query, t.MessageID, t.AuthState, t.ServID, t.SPF, t.SPFDomain, t.DKIM,
+	_, err := d.sql.ExecContext(ctx, query, t.AuthState, t.ServID, t.SPF, t.SPFDomain, t.DKIM,
 		t.DKIMDomain, strings.Join(t.DKIMDomains, " "), t.DMARC, t.DMARCPolicy, t.HeaderFrom, t.ReturnPath,
-		t.Sender, strings.Join(t.Signers, " "), strings.Join(t.UnsubSigners, " "), t.ReceivedSPF, t.ARC, t.ReadReceiptTo)
+		t.Sender, strings.Join(t.Signers, " "), strings.Join(t.UnsubSigners, " "), t.ReceivedSPF, t.ARC, t.ReadReceiptTo,
+		t.MessageID)
 	if err != nil {
 		return fmt.Errorf("storage: set message trust %d: %w", t.MessageID, err)
 	}
@@ -78,10 +81,11 @@ func scanTrust(row rowScanner) (MessageTrust, error) {
 	return t, err
 }
 
-// GetMessageTrust returns a message's record. A message with none returns the
-// zero record and no error.
+// GetMessageTrust returns a message's record. A message with none, which
+// includes every message in a mail vault, returns the zero record and no error.
 func (d *DB) GetMessageTrust(ctx context.Context, messageID int64) (MessageTrust, error) {
-	row := d.sql.QueryRowContext(ctx, `SELECT `+trustColumns+` FROM message_trust WHERE message_id = ?`, messageID)
+	row := d.sql.QueryRowContext(ctx, `SELECT `+trustColumns+` FROM message_trust WHERE message_id = ?
+AND message_id IN (SELECT m.id FROM messages m WHERE m.id = ? AND m.vault_id = 0 AND `+notVaultedM+`)`, messageID, messageID)
 	t, err := scanTrust(row)
 	if errors.Is(err, sql.ErrNoRows) {
 		return MessageTrust{}, nil
@@ -172,7 +176,7 @@ func (d *DB) SenderTrustHistory(ctx context.Context, address string, folderIDs [
 FROM messages m INDEXED BY idx_messages_sender
 LEFT JOIN message_trust t ON t.message_id = m.id
 WHERE ` + strings.ReplaceAll(senderExpr, "from_address", "m.from_address") + ` = ?
-AND m.date <= ? AND m.id <> ? AND m.pending_delete = 0 AND m.folder_id IN (` + folders + `)
+AND m.date <= ? AND m.id <> ? AND m.pending_delete = 0 AND m.folder_id IN (` + folders + `) AND ` + notVaultedM + `
 ORDER BY m.date DESC, m.id DESC
 LIMIT ?`
 	rows, err := d.sql.QueryContext(ctx, query, args...)
@@ -208,7 +212,7 @@ func (d *DB) SentLines(ctx context.Context, folderIDs []int64, contains string, 
 	}
 	folders, args := inClause(folderIDs)
 	query := `SELECT to_addresses, cc_addresses, date FROM messages
-WHERE folder_id IN (` + folders + `) AND pending_delete = 0`
+WHERE folder_id IN (` + folders + `) AND pending_delete = 0 AND ` + notVaulted
 	if contains != "" {
 		query += ` AND lower(to_addresses || ',' || cc_addresses) LIKE ? ESCAPE '\'`
 		args = append(args, "%"+escapeLike(normalizeAddress(contains))+"%")

@@ -79,6 +79,29 @@ func TestTodoEditKeepsUnknownProperties(t *testing.T) {
 	}
 }
 
+func TestTodoEstimate(t *testing.T) {
+	src := strings.Replace(otherClientTodo, "X-APPLE-SORT-ORDER:7\r\n", "X-APPLE-SORT-ORDER:7\r\nESTIMATED-DURATION:PT1H30M\r\n", 1)
+	obj, err := ParseTodoObject([]byte(src), time.UTC)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if obj.Todo.Estimate != 90*time.Minute {
+		t.Fatalf("estimate = %v", obj.Todo.Estimate)
+	}
+	obj.Todo.Estimate = 45 * time.Minute
+	if out := string(obj.Encode()); !strings.Contains(out, "ESTIMATED-DURATION:PT45M\r\n") {
+		t.Errorf("changed estimate not written:\n%s", out)
+	}
+	obj.Todo.Estimate = 0
+	if out := string(obj.Encode()); strings.Contains(out, "ESTIMATED-DURATION") {
+		t.Errorf("cleared estimate kept:\n%s", out)
+	}
+	bad, err := ParseTodoObject([]byte(strings.Replace(src, "PT1H30M", "soon", 1)), time.UTC)
+	if err != nil || bad.Todo.Estimate != 0 {
+		t.Errorf("unreadable estimate = %v, %v", bad.Todo.Estimate, err)
+	}
+}
+
 func TestTodoAdvance(t *testing.T) {
 	obj, err := ParseTodoObject([]byte(otherClientTodo), time.UTC)
 	if err != nil {

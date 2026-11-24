@@ -43,7 +43,7 @@ func (s *scriptMail) Recent(ctx context.Context, folder string, accountID int64,
 			continue
 		}
 		found = true
-		rows, err := a.store.ListMessages(ctx, f.ID, limit)
+		rows, err := a.store.ListMessages(scriptsCtx(ctx), f.ID, limit)
 		if err != nil {
 			return nil, err
 		}

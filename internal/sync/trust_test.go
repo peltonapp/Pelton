@@ -2,40 +2,41 @@ package sync
 
 import (
 	"context"
+	"strconv"
 	"testing"
 
-	"github.com/emersion/go-imap/v2"
-	pimap "github.com/peltonapp/Pelton/internal/imap"
 	"github.com/peltonapp/Pelton/internal/phishing"
 	"github.com/peltonapp/Pelton/internal/rfc822"
 )
 
-type trustClient struct {
-	fakeClient
+// trustAdapter serves raw for every message it is asked for, parsed the way
+// the IMAP adapter parses a fetched body.
+type trustAdapter struct {
+	fakeAdapter
 	raw []byte
 }
 
-func (c *trustClient) FetchMessage(uid imap.UID) (*pimap.Message, error) {
-	parsed, err := rfc822.ParseBody(c.raw)
+func (a *trustAdapter) Fetch(_ context.Context, _ string, remoteIDs []string) ([]Fetched, error) {
+	parsed, err := rfc822.ParseBody(a.raw)
 	if err != nil {
 		return nil, err
 	}
-	return &pimap.Message{
-		UID: uid, MessageID: "trust@example.com", Subject: "trust", From: "PayPal <service@paypal.com>",
-		Text: parsed.Text, Size: parsed.Size, Raw: c.raw,
-		ReplyTo: parsed.ReplyTo, AuthResults: parsed.AuthResults, Claims: parsed.Claims,
-		InReplyTo: parsed.InReplyTo, References: parsed.References,
-	}, nil
+	out := make([]Fetched, 0, len(remoteIDs))
+	for _, id := range remoteIDs {
+		a.fetched = append(a.fetched, id)
+		uid, _ := strconv.ParseUint(id, 10, 32)
+		out = append(out, Fetched{
+			RemoteID: id, LegacyUID: uint32(uid), MessageID: "trust@example.com", Subject: "trust",
+			From: "PayPal <service@paypal.com>", Text: parsed.Text, Size: parsed.Size, Raw: a.raw,
+			ReplyTo: parsed.ReplyTo, AuthResults: parsed.AuthResults, Claims: parsed.Claims,
+			InReplyTo: parsed.InReplyTo, References: parsed.References,
+		})
+	}
+	return out, nil
 }
 
-func (c *trustClient) FetchMessages(uids []imap.UID, fn func(imap.UID, *pimap.Message, error) error) error {
-	for _, uid := range uids {
-		msg, err := c.FetchMessage(uid)
-		if err := fn(uid, msg, err); err != nil {
-			return err
-		}
-	}
-	return nil
+func newTrustAdapter(raw string, uids ...uint32) *trustAdapter {
+	return &trustAdapter{fakeAdapter: fakeAdapter{ids: fakeIDs(uids...)}, raw: []byte(raw)}
 }
 
 // TestSyncStoresTheTrustedRecord: the record is written at sync from the
@@ -49,7 +50,7 @@ func TestSyncStoresTheTrustedRecord(t *testing.T) {
 		"Content-Type: text/plain\r\n\r\nhello\r\n"
 	ctx := context.Background()
 	db, folder := newSyncTestFolder(t)
-	engine := NewEngine(&trustClient{fakeClient: fakeClient{uids: []uint32{3}}, raw: []byte(raw)}, db, nil)
+	engine := NewEngine(newTrustAdapter(raw, 3), db, nil)
 	engine.AuthServ = phishing.ServerFor("me@gmail.com", "imap.gmail.com", "smtp.gmail.com")
 	res, err := engine.SyncFolder(ctx, folder)
 	if err != nil || len(res.NewIDs) != 1 {
@@ -76,7 +77,7 @@ func TestSyncWithoutAuthServTrustsNothing(t *testing.T) {
 	raw := "Authentication-Results: mx.google.com; dmarc=pass header.from=paypal.com\r\nFrom: a@paypal.com\r\n\r\nhi\r\n"
 	ctx := context.Background()
 	db, folder := newSyncTestFolder(t)
-	res, err := NewEngine(&trustClient{fakeClient: fakeClient{uids: []uint32{4}}, raw: []byte(raw)}, db, nil).SyncFolder(ctx, folder)
+	res, err := NewEngine(newTrustAdapter(raw, 4), db, nil).SyncFolder(ctx, folder)
 	if err != nil || len(res.NewIDs) != 1 {
 		t.Fatalf("SyncFolder = %+v, %v", res, err)
 	}

@@ -22,6 +22,31 @@ func offlineOrErr(err error) error {
 	return err
 }
 
+// isOfflineError reports a failure that says the machine has no usable
+// network right now (no DNS, no route), as opposed to one dropped or slow
+// connection, which a retry may get past.
+func isOfflineError(err error) bool {
+	if err == nil {
+		return false
+	}
+	if _, ok := errors.AsType[*net.DNSError](err); ok {
+		return true
+	}
+	msg := strings.ToLower(err.Error())
+	for _, needle := range []string{
+		"no such host",
+		"network is unreachable",
+		"no route to host",
+		"host is down",
+		"lookup ",
+	} {
+		if strings.Contains(msg, needle) {
+			return true
+		}
+	}
+	return false
+}
+
 // isNetworkError reports whether err is a connectivity failure rather than a
 // protocol or credential problem. it checks the typed net errors first, then
 // falls back to the message text for the DNS/dial cases go wraps as opaque
@@ -30,16 +55,13 @@ func isNetworkError(err error) bool {
 	if err == nil {
 		return false
 	}
-	var dnsErr *net.DNSError
-	if errors.As(err, &dnsErr) {
+	if _, ok := errors.AsType[*net.DNSError](err); ok {
 		return true
 	}
-	var netErr net.Error
-	if errors.As(err, &netErr) {
+	if _, ok := errors.AsType[net.Error](err); ok {
 		return true
 	}
-	var opErr *net.OpError
-	if errors.As(err, &opErr) {
+	if _, ok := errors.AsType[*net.OpError](err); ok {
 		return true
 	}
 	msg := strings.ToLower(err.Error())

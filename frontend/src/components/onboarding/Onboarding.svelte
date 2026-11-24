@@ -27,6 +27,7 @@
   import { popupIsOpen } from '../../lib/popups'
   import { toastError, errorMessage } from '../../stores/toast'
   import { shortcutLabel, t } from '../../lib/i18n'
+  import { loadImportDialog } from '../../lib/lazyload'
   import logo from '../../assets/images/icons/pelton-logo.png'
   import type { Account, DesignPref } from '../../lib/types'
 
@@ -287,7 +288,7 @@
             {:else if step === 'list'}
               <ListStep />
             {:else if step === 'mailbox'}
-              <AddMailboxWizard embedded offerImport={false} on:added={onMailboxAdded} on:done={() => go('done', 1)} />
+              <AddMailboxWizard embedded offerImport={false} skipFolderPicker on:added={onMailboxAdded} on:done={() => go('done', 1)} />
               <button type="button" class="import" on:click={() => (showImport = true)}>
                 <Ph svg={importIcon} size={18} />
                 <span class="import-text">
@@ -363,7 +364,7 @@
 {/if}
 
 {#if showImport}
-  {#await import('../import/ImportDialog.svelte') then m}
+  {#await loadImportDialog() then m}
     <svelte:component this={m.default} on:close={() => (showImport = false)} />
   {/await}
 {/if}

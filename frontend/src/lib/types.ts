@@ -46,6 +46,9 @@ export interface Account {
   // the user told the missing-password prompt to stop asking about this
   // account. It still cannot sync; the ui marks it instead of interrupting.
   passwordPromptDismissed: boolean
+  // this account's own parallel sync connection limit (the ui offers 2-10, the backend accepts 1-10), or null/absent
+  // when it follows the global setting.
+  syncMaxParallel?: number | null
   // fingerprints of server certificates the user accepted for this mailbox,
   // formatted for reading, and the subjects of the CA it trusts (#446).
   trustedCerts: string[]
@@ -133,6 +136,12 @@ export interface Folder {
   // syncExcluded means the user unchecked this folder, so sync skips it. What
   // was already fetched stays readable; it just stops being updated (#173).
   syncExcluded: boolean
+  // vaultId is the mail vault the folder is in, 0 or absent for none;
+  // vaultLocked is set while it is locked, vaultHidden when it is also to stay
+  // out of the sidebar then.
+  vaultId?: number
+  vaultLocked?: boolean
+  vaultHidden?: boolean
 }
 
 export interface UnifiedView {
@@ -375,6 +384,9 @@ export interface MessageDetail extends MessageSummary {
   // message appears once its Sent folder has synced.
   replyIds: number[]
   forwardIds: number[]
+  // bodyComplete is false while the row is still a stub and the reading pane
+  // may be showing a preview before the full body arrives.
+  bodyComplete?: boolean
 }
 
 /**
@@ -1134,6 +1146,9 @@ export interface UIPrefs {
   // windowMaterial puts the window over a native material (Liquid Glass on
   // macOS, Mica on Windows) from the next launch on.
   windowMaterial: boolean
+  // ocrLanguages is the "+" joined tesseract language list the pdf viewer
+  // reads with; empty follows the ui language.
+  ocrLanguages: string
   // timeFormat picks the clock for rendered times: auto (locale), 12, or 24.
   timeFormat: string
   // reduceMotion disables ui transitions and animations.
@@ -1226,12 +1241,18 @@ export interface UIPrefs {
   appLockIdleMinutes: number
   appLockOnLaunch: boolean
   appLockHideNotifications: boolean
-  // syncMessageLimit caps how many of a folder's newest messages the first sync
-  // fetches; older mail stays on the server until asked for. 0 means no limit.
+  // syncMessageLimit caps how many of a folder's newest message bodies the
+  // first sync fetches. 0 means no limit.
   syncMessageLimit: number
   // syncAutoBackfill fetches the next batch of older mail automatically on
   // reaching the end of the list. Off puts it behind a button instead.
   syncAutoBackfill: boolean
+  // syncMaxParallel is how many IMAP sessions one mailbox may use at once
+  // (ui 2–10, backend 1–10, default 3), the IDLE one included. Sending does not count.
+  syncMaxParallel: number
+  // syncFullReconcileDays is how many days a folder may go without a full
+  // check against the server before startup re-checks it; 0 = manual Sync only.
+  syncFullReconcileDays: number
   // what the sidebar selects on launch: 'view:<key>' for a unified view,
   // 'folder:<id>' for one account folder, or 'last' to restore the previous
   // session. A target that no longer exists falls back to the unified inbox.
@@ -2188,6 +2209,11 @@ export interface Occurrence {
   conflict: boolean
   // set on an entry the calendar draws for a task due that day.
   task?: Task
+  // set on an entry the calendar draws for a time block.
+  block?: TimeBlock
+  // set on an entry the calendar draws for a proposed block of a day plan;
+  // key names it among the proposals.
+  proposal?: BlockProposal & { key: string }
 }
 
 /**
@@ -2556,6 +2582,8 @@ export interface Task {
   contacts: TaskContact[]
   eventUids: string[]
   sortOrder: number
+  // minutes the task is expected to take, 0 for no estimate.
+  estimate: number
   created: string
   readOnly: boolean
   pending: boolean
@@ -2585,7 +2613,102 @@ export interface TaskDraft {
   contacts: TaskContact[]
   eventUids: string[]
   sortOrder: number
+  estimate: number
   force: boolean
+}
+
+/**
+ * TimeBlock is time set aside in the calendar for a task or a mail. start and
+ * end are rfc3339. title is empty while masked: the block's mail is in a
+ * locked vault and the block says nothing about it.
+ */
+export interface TimeBlock {
+  id: number
+  title: string
+  start: string
+  end: string
+  // the task, 0 when it is not found any more.
+  taskId: number
+  taskUid: string
+  // where the mail lives, all 0 when there is none or it cannot be shown.
+  messageId: number
+  accountId: number
+  folderId: number
+  hasMail: boolean
+  masked: boolean
+  done: boolean
+  // the calendar it is written to, 0 for this device only, and the UID of the
+  // event there.
+  calendarId: number
+  eventUid: string
+  // '' follows the setting, 'generic' or 'title'.
+  eventTitle: string
+  // '' in step, 'out_of_step' or 'event_gone'.
+  linkState: string
+  // the event change waits to reach the server.
+  pending: boolean
+}
+
+/** TimeBlockRequest makes (id 0) or changes a block; calendarId 0 keeps it on this device. */
+export interface TimeBlockRequest {
+  id: number
+  title: string
+  start: string
+  end: string
+  taskUid: string
+  messageId: number
+  done: boolean
+  calendarId: number
+  eventTitle: string
+}
+
+/** TimeBlockSettings are the time blocking preferences. */
+export interface TimeBlockSettings {
+  defaultMinutes: number
+  minSlotMinutes: number
+  bufferMinutes: number
+  // days of the week with working hours, 0 for Sunday.
+  workDays: number[]
+  searchDays: number
+  writeToCalendar: boolean
+  calendarId: number
+  eventTitle: string
+  includeTitle: boolean
+}
+
+/** FreeSlot is a proposed time; afterDue says it ends after the task's due date. */
+export interface FreeSlot {
+  start: string
+  end: string
+  afterDue: boolean
+}
+
+/** BlockProposal is one block of a day plan, not stored yet. */
+export interface BlockProposal {
+  taskId: number
+  taskUid: string
+  title: string
+  start: string
+  end: string
+  part: number
+  parts: number
+}
+
+/** DayPlan is a day laid out as proposals, with the tasks that did not fit. */
+export interface DayPlan {
+  proposals: BlockProposal[]
+  short: string[]
+  unplaced: string[]
+  tasks: number
+}
+
+/** TaskPlan is how much time a task has in blocks, in minutes. */
+export interface TaskPlan {
+  taskUid: string
+  plannedMinutes: number
+  aheadMinutes: number
+  // blocks that have not started.
+  future: number
 }
 
 /** TaskSaveResult is the outcome of a task save. */
@@ -3356,4 +3479,52 @@ export interface KeyLookupLogEntry {
   source: string
   email: string
   outcome: 'found' | 'none' | 'unusable' | 'failed'
+}
+
+/** A folder in a mail vault, or a whole account when folderId is 0. */
+export interface MailVaultMember {
+  accountId: number
+  folderId: number
+}
+
+/**
+ * A mail vault: folders and accounts whose cached mail is encrypted with a
+ * passphrase of its own. pending counts messages still to seal, or to unseal
+ * while the vault is being removed.
+ */
+export interface MailVault {
+  id: number
+  name: string
+  locked: boolean
+  state: 'sealing' | 'ready' | 'unsealing'
+  pending: number
+  sealed: number
+  members: MailVaultMember[]
+  folderIds: number[]
+  autoLockMinutes: number
+  notify: 'none' | 'generic'
+  hideLocked: boolean
+  allowScripts: boolean
+  allowMcp: boolean
+  allowCli: boolean
+  retryAfterMs: number
+}
+
+/** The outcome of a vault passphrase or recovery code. */
+export interface MailVaultAuth {
+  ok: boolean
+  reason?: 'wrong' | 'wait' | 'damaged' | 'weak'
+  retryAfterMs?: number
+}
+
+/** The settings of a vault that need no passphrase to change. */
+export interface MailVaultSettings {
+  id: number
+  name: string
+  autoLockMinutes: number
+  notify: 'none' | 'generic'
+  hideLocked: boolean
+  allowScripts: boolean
+  allowMcp: boolean
+  allowCli: boolean
 }

@@ -12,6 +12,7 @@
   import { openURL } from '../../lib/browser'
   import { errorMessage, toastError, toastSuccess } from '../../stores/toast'
   import { t } from '../../lib/i18n'
+  import { loadTrustLine } from '../../lib/lazyload'
   import { vipSenders, bareAddress, addVIP, removeVIP } from '../../stores/vip'
   import type { MessageDetail, UnsubscribeInfo, SMIMERevocation } from '../../lib/types'
 
@@ -249,7 +250,7 @@
     {/if}
   </div>
   {#if $prefs.design === 'new'}
-    {#await import('./TrustLine.svelte') then m}
+    {#await loadTrustLine() then m}
       <svelte:component this={m.default} {detail} />
     {/await}
   {/if}

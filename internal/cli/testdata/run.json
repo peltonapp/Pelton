@@ -1,0 +1,17 @@
+{
+  "id": 7,
+  "scriptId": 2,
+  "scriptName": "tidy",
+  "dry": false,
+  "status": "ok",
+  "error": "",
+  "changes": 1,
+  "durationMs": 12,
+  "steps": [
+    {
+      "kind": "call",
+      "function": "mail.flag",
+      "summary": "flag 42"
+    }
+  ]
+}

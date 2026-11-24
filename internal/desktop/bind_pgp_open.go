@@ -53,7 +53,7 @@ type protectedResult struct {
 // openProtectedWith is openProtected with extra public keys to check the
 // signature against; sig stays the verdict of the keyring alone.
 func (a *App) openProtectedWith(m storage.Message, extra [][]byte) protectedResult {
-	raw, err := a.store.MessagePGPSource(a.ctx, m.ID)
+	raw, err := a.store.MessagePGPSource(a.mailCtx(), m.ID)
 	if err != nil {
 		// not protected, or cached before the source was kept.
 		return protectedResult{}
@@ -140,7 +140,7 @@ func (a *App) UnlockMessage(messageID int64, passphrase string) error {
 	if err := a.ready(); err != nil {
 		return err
 	}
-	raw, err := a.store.MessagePGPSource(a.ctx, messageID)
+	raw, err := a.store.MessagePGPSource(a.mailCtx(), messageID)
 	if err != nil {
 		return err
 	}

@@ -13,7 +13,7 @@ import { fileURLToPath } from 'node:url'
 
 const KiB = 1024
 const entryBudget = 40 * KiB
-const mainWindowBudget = 1760 * KiB
+const mainWindowBudget = 1590 * KiB
 
 const dist = join(dirname(fileURLToPath(import.meta.url)), '..', 'dist')
 const assets = join(dist, 'assets')

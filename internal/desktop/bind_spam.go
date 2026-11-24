@@ -24,7 +24,7 @@ func (a *App) MarkSpam(id int64) (ArchiveUndoDTO, error) {
 	if err := a.ready(); err != nil {
 		return ArchiveUndoDTO{}, err
 	}
-	m, err := a.store.GetMessage(a.ctx, id)
+	m, err := a.store.GetMessage(a.mailCtx(), id)
 	if err != nil {
 		return ArchiveUndoDTO{}, err
 	}
@@ -58,7 +58,7 @@ func (a *App) MarkNotSpam(id int64) (ArchiveUndoDTO, error) {
 	if err := a.ready(); err != nil {
 		return ArchiveUndoDTO{}, err
 	}
-	m, err := a.store.GetMessage(a.ctx, id)
+	m, err := a.store.GetMessage(a.mailCtx(), id)
 	if err != nil {
 		return ArchiveUndoDTO{}, err
 	}

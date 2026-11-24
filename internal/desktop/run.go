@@ -13,6 +13,7 @@ import (
 	"os"
 	"slices"
 
+	"github.com/peltonapp/Pelton/internal/credentials"
 	"github.com/peltonapp/Pelton/internal/logging"
 	"github.com/peltonapp/Pelton/internal/storage"
 	"github.com/wailsapp/wails/v3/pkg/application"
@@ -45,6 +46,11 @@ func Run(cfg Config) error {
 	// taken the ui with it; this leaves a file behind saying what happened
 	// instead of the window simply disappearing.
 	defer logging.Guard("running the app")
+
+	// a dev run or a nightly numbers its accounts from 1 in its own database,
+	// so it needs its own keyring entries too, or it overwrites the installed
+	// app's passwords.
+	credentials.UseService(storage.DataDirName(cfg.Channel))
 
 	app := newApp(cfg.Version, cfg.Channel)
 	app.debug = debugForced(os.Args[1:])

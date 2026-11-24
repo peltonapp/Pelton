@@ -81,7 +81,21 @@ describe('drop targets during a drag', () => {
     expect(target.classList.contains('maildrop-over')).toBe(true)
     expect(get(mailDrag)?.hint).toBe('Move to Archive')
     pointer('pointerup', window, 40, 10)
-    expect(onDrop).toHaveBeenCalledWith([item], { shift: false })
+    expect(onDrop).toHaveBeenCalledWith([item], { shift: false, alt: false })
+  })
+
+  it('says when Alt was held through the drop', () => {
+    const target = document.createElement('div')
+    document.body.append(target)
+    const onDrop = vi.fn()
+    const hint = vi.fn((_items: unknown, _shift: boolean, alt?: boolean) => (alt ? 'Block time' : 'New event'))
+    maildrop(target, { onDrop, hint })
+    startDrag()
+    under = target
+    window.dispatchEvent(new MouseEvent('pointermove', { clientX: 40, clientY: 10, altKey: true }))
+    expect(get(mailDrag)?.hint).toBe('Block time')
+    window.dispatchEvent(new MouseEvent('pointerup', { clientX: 40, clientY: 10, altKey: true }))
+    expect(onDrop).toHaveBeenCalledWith([item], { shift: false, alt: true })
   })
 
   it('drops nothing when Escape cancels', () => {

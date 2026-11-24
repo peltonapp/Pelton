@@ -45,8 +45,8 @@ func TestProjectIconNodesRoundTrip(t *testing.T) {
 	db := newTestDB(t)
 	ctx := context.Background()
 	var version int
-	if err := db.sql.QueryRowContext(ctx, `SELECT id FROM schema_migrations WHERE id = 97`).Scan(&version); err != nil {
-		t.Fatalf("migration 97 not recorded: %v", err)
+	if err := db.sql.QueryRowContext(ctx, `SELECT id FROM schema_migrations WHERE id = 100`).Scan(&version); err != nil {
+		t.Fatalf("migration 100 not recorded: %v", err)
 	}
 	plain := Project{Name: "Plain", Icon: "rocket"}
 	if err := db.CreateProject(ctx, &plain); err != nil {

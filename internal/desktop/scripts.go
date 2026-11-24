@@ -15,6 +15,7 @@ import (
 	"github.com/emersion/go-imap/v2"
 	"github.com/microcosm-cc/bluemonday"
 
+	"github.com/peltonapp/Pelton/internal/desktop/syncsched"
 	"github.com/peltonapp/Pelton/internal/scripting"
 	"github.com/peltonapp/Pelton/internal/storage"
 )
@@ -148,22 +149,27 @@ func (a *App) scriptMailArrived(ids []int64, firstSync bool) {
 	}
 	for _, id := range ids {
 		ev := scripting.Event{Trigger: scripting.TriggerMailArrived, Data: map[string]any{"message_id": id}, CatchUp: firstSync}
+		m, err := a.store.GetMessage(scriptsCtx(a.ctx), id)
+		if err != nil {
+			continue
+		}
 		if firstSync {
-			m, err := a.store.GetMessage(a.ctx, id)
-			if err != nil {
-				continue
-			}
 			ev.Date = m.Date
 		}
 		a.scripts.Emit(ev)
 	}
 }
 
-// firstScriptSync reports whether this is the account's first full sync of
-// the session, and records that it happened.
+// firstScriptSync reports whether the account's first pass of the session is
+// still going: mail arriving in it is catch-up for the scripts.
 func (a *App) firstScriptSync(accountID int64) bool {
-	_, seen := a.scriptState.synced.LoadOrStore(accountID, true)
-	return !seen
+	_, done := a.scriptState.synced.Load(accountID)
+	return !done
+}
+
+// firstPassDone records that the account's first pass of the session ended.
+func (a *App) firstPassDone(accountID int64) {
+	a.scriptState.synced.Store(accountID, true)
 }
 
 // scriptMoved reports a message that moved; it is a snapshot from before the
@@ -181,8 +187,24 @@ func (a *App) scriptMoved(ctx context.Context, m *storage.Message, dest storage.
 	}))
 }
 
+// scriptSees reports whether scripts may see a folder's mail: anywhere
+// outside a vault, and in a vault only while it is unlocked and allows them.
+func (a *App) scriptSees(folderID int64) bool {
+	ok, err := a.store.FolderVisible(scriptsCtx(a.ctx), folderID)
+	return err == nil && ok
+}
+
+// scriptSeesMessage is scriptSees for a message id.
+func (a *App) scriptSeesMessage(id int64) bool {
+	_, err := a.store.GetMessage(scriptsCtx(a.ctx), id)
+	return err == nil
+}
+
 // scriptFlagChanged reports a read or flag change.
 func (a *App) scriptFlagChanged(ctx context.Context, id int64, flag storage.Flag, on bool) {
+	if !a.scriptSeesMessage(id) {
+		return
+	}
 	switch flag {
 	case storage.FlagSeen:
 		a.emitScript(scripting.EventFrom(ctx, scripting.TriggerMailReadMark, map[string]any{"message_id": id, "read": on}))
@@ -434,6 +456,9 @@ type scriptMail struct {
 }
 
 func (a *App) scriptMessage(m storage.Message) (scripting.Message, error) {
+	if !a.scriptSees(m.FolderID) {
+		return scripting.Message{}, storage.ErrMessageNotFound
+	}
 	folder, err := a.store.GetFolder(a.ctx, m.FolderID)
 	if err != nil {
 		return scripting.Message{}, err
@@ -460,7 +485,7 @@ func (s *scriptMail) Message(_ context.Context, id int64) (scripting.Message, er
 	if err := s.app.ready(); err != nil {
 		return scripting.Message{}, err
 	}
-	m, err := s.app.store.GetMessage(s.app.ctx, id)
+	m, err := s.app.store.GetMessage(scriptsCtx(s.app.ctx), id)
 	if err != nil {
 		return scripting.Message{}, err
 	}
@@ -474,7 +499,7 @@ func htmlText(s string) string {
 }
 
 func (s *scriptMail) Body(_ context.Context, id int64) (string, error) {
-	m, err := s.app.store.GetMessage(s.app.ctx, id)
+	m, err := s.app.store.GetMessage(scriptsCtx(s.app.ctx), id)
 	if err != nil {
 		return "", err
 	}
@@ -509,7 +534,7 @@ func (s *scriptMail) folder(accountID int64, name string) (storage.Folder, error
 
 func (s *scriptMail) moveTo(ctx context.Context, id int64, dest func(m *storage.Message) (storage.Folder, error)) error {
 	a := s.app
-	m, err := a.store.GetMessage(a.ctx, id)
+	m, err := a.store.GetMessage(scriptsCtx(a.ctx), id)
 	if err != nil {
 		return err
 	}
@@ -540,7 +565,7 @@ func (s *scriptMail) Move(ctx context.Context, id int64, folder string) error {
 // journalled, since a copy takes nothing away.
 func (s *scriptMail) Copy(_ context.Context, id int64, folder string) error {
 	a := s.app
-	m, err := a.store.GetMessage(a.ctx, id)
+	m, err := a.store.GetMessage(scriptsCtx(a.ctx), id)
 	if err != nil {
 		return err
 	}
@@ -559,25 +584,13 @@ func (s *scriptMail) Copy(_ context.Context, id int64, folder string) error {
 	if err != nil {
 		return err
 	}
-	cfg, err := a.resolveIMAP(*account)
-	if err != nil {
-		return err
-	}
-	syncMu.Lock()
-	defer syncMu.Unlock()
-	client, err := a.connectIMAP(cfg)
-	if err != nil {
-		return err
-	}
-	defer client.Close()
-	if err := client.Login(); err != nil {
-		return err
-	}
-	defer client.Logout()
-	if _, err := client.Select(source.IMAPPath); err != nil {
-		return fmt.Errorf("copy: select %q: %w", source.IMAPPath, err)
-	}
-	return client.CopyMessages([]imap.UID{imap.UID(m.UID)}, dest.IMAPPath)
+	err = a.runNow(a.ctx, *account, syncsched.KindMove, source.ID, func(_ context.Context, client mailClient) error {
+		if _, err := client.Select(source.IMAPPath); err != nil {
+			return fmt.Errorf("copy: select %q: %w", source.IMAPPath, err)
+		}
+		return client.CopyMessages([]imap.UID{imap.UID(m.UID)}, dest.IMAPPath)
+	})
+	return offlineOrErr(err)
 }
 
 func (s *scriptMail) Archive(ctx context.Context, id int64) error {
@@ -595,7 +608,7 @@ func (s *scriptMail) Delete(ctx context.Context, id int64) error {
 
 func (s *scriptMail) setFlag(ctx context.Context, id int64, flag storage.Flag, on bool) error {
 	a := s.app
-	m, err := a.store.GetMessage(a.ctx, id)
+	m, err := a.store.GetMessage(scriptsCtx(a.ctx), id)
 	if err != nil {
 		return err
 	}
@@ -621,7 +634,7 @@ func (s *scriptMail) SetFlagged(ctx context.Context, id int64, on bool) error {
 
 func (s *scriptMail) SetColor(ctx context.Context, id int64, color int) error {
 	a := s.app
-	m, err := a.store.GetMessage(a.ctx, id)
+	m, err := a.store.GetMessage(scriptsCtx(a.ctx), id)
 	if err != nil {
 		return err
 	}
@@ -635,7 +648,7 @@ func (s *scriptMail) SetColor(ctx context.Context, id int64, color int) error {
 
 func (s *scriptMail) SetPinned(ctx context.Context, id int64, on bool) error {
 	a := s.app
-	m, err := a.store.GetMessage(a.ctx, id)
+	m, err := a.store.GetMessage(scriptsCtx(a.ctx), id)
 	if err != nil {
 		return err
 	}
@@ -649,7 +662,7 @@ func (s *scriptMail) SetPinned(ctx context.Context, id int64, on bool) error {
 
 func (s *scriptMail) Snooze(ctx context.Context, id int64, until time.Time) error {
 	a := s.app
-	m, err := a.store.GetMessage(a.ctx, id)
+	m, err := a.store.GetMessage(scriptsCtx(a.ctx), id)
 	if err != nil {
 		return err
 	}
@@ -678,7 +691,7 @@ func (s *scriptMail) Compose(ctx context.Context, d scripting.Draft, send bool) 
 	req := ComposeRequest{AccountID: d.AccountID, Subject: d.Subject, Text: d.Body,
 		To: addressList(d.To), Cc: addressList(d.Cc), Bcc: addressList(d.Bcc)}
 	if orig := d.ReplyTo + d.Forward; orig != 0 {
-		m, err := a.store.GetMessage(a.ctx, orig)
+		m, err := a.store.GetMessage(scriptsCtx(a.ctx), orig)
 		if err != nil {
 			return 0, err
 		}

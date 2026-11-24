@@ -7,7 +7,7 @@ func (a *App) SetConversationMuted(messageID int64, muted bool) error {
 	if err := a.ready(); err != nil {
 		return err
 	}
-	m, err := a.store.GetMessage(a.ctx, messageID)
+	m, err := a.store.GetMessage(a.mailCtx(), messageID)
 	if err != nil {
 		return err
 	}
@@ -27,7 +27,7 @@ func (a *App) SetPinned(messageID int64, pinned, conversation bool) error {
 	if err := a.ready(); err != nil {
 		return err
 	}
-	m, err := a.store.GetMessage(a.ctx, messageID)
+	m, err := a.store.GetMessage(a.mailCtx(), messageID)
 	if err != nil {
 		return err
 	}

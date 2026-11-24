@@ -44,7 +44,7 @@
     startTasks,
     toggleDone,
   } from '../../stores/tasks'
-  import { calendarFocus, calendarSync, calendarSyncError, calendarSettings, loadCalendarSettings, refreshCalendars } from '../../stores/calendar'
+  import { calendarFocus, calendarSync, calendarSyncError, calendarSettings, findTimeFor, loadCalendarSettings, refreshCalendars } from '../../stores/calendar'
   import { reorderTasks, findEventByUID } from '../../lib/api'
   import { createTasksFromMail } from '../../lib/taskmail'
   import { convertTaskToEvent } from '../../lib/taskevent'
@@ -132,6 +132,11 @@
       },
       'delete-message': () => whenFree(() => void removeSelected()),
       sync: () => void sync(),
+      'block-time': () => {
+        if (selected) {
+          findTimeFor(selected.id)
+        }
+      },
     })
     stopSearch = registerSpaceSearch('tasks', {
       placeholderKey: 'tasks.searchPlaceholder',

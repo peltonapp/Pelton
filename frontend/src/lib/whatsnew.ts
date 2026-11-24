@@ -56,6 +56,7 @@ export const releases: WhatsNewRelease[] = [
       { id: 'auto-encrypt', titleKey: 'whatsnew.autoEncrypt.title', bodyKey: 'whatsnew.autoEncrypt.body', target: { kind: 'settings', anchor: 'encryption#auto-encrypt' } },
       { id: 'sender-passport', titleKey: 'whatsnew.passport.title', bodyKey: 'whatsnew.passport.body', target: { kind: 'space', space: 'mail' } },
       { id: 'privacy-shield', titleKey: 'whatsnew.shield.title', bodyKey: 'whatsnew.shield.body', target: { kind: 'settings', anchor: 'privacy#privacy-counters' } },
+      { id: 'mail-vault', titleKey: 'whatsnew.mailVault.title', bodyKey: 'whatsnew.mailVault.body', target: { kind: 'settings', anchor: 'privacy#mail-vault' } },
     ],
   },
 ]

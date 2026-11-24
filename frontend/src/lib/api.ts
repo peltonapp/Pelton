@@ -106,6 +106,12 @@ import type {
   RemovedTask,
   TaskMailMark,
   TaskSettings,
+  TaskPlan,
+  TimeBlock,
+  TimeBlockRequest,
+  TimeBlockSettings,
+  FreeSlot,
+  DayPlan,
   Feed,
   FeedCandidate,
   FeedEntry,
@@ -217,6 +223,14 @@ import type {
   ScriptRun,
 } from './scripting'
 import type { ScriptProposal } from './assistantScripts'
+import type {
+  ImportEstimate,
+  ImportInventory,
+  ImportJob,
+  ImportPlan,
+  ImportSourceKind,
+  ImportTarget,
+} from './guidedimport'
 
 // isDemoMode reports whether the app launched in the cosmetic --potatoes-are-nice
 // screenshot mode; the frontend reads it once to switch the data layer to samples.
@@ -235,6 +249,28 @@ export function isDevMode(): Promise<boolean> {
 // material (Liquid Glass, Mica), so the ui can let it show through.
 export function windowMaterialActive(): Promise<boolean> {
   return App.WindowMaterialActive()
+}
+
+// the tesseract language files the user added, by code (bind_ocr.go).
+export async function listOCRLanguages(): Promise<string[]> {
+  return (await App.ListOCRLanguages()) ?? []
+}
+
+export function addOCRLanguage(): Promise<string> {
+  return App.AddOCRLanguage()
+}
+
+export function removeOCRLanguage(code: string): Promise<void> {
+  return App.RemoveOCRLanguage(code)
+}
+
+// readOCRLanguage returns a user-added language file as base64.
+export function readOCRLanguage(code: string): Promise<string> {
+  return App.ReadOCRLanguage(code)
+}
+
+export function openOCRFolder(): Promise<void> {
+  return App.OpenOCRFolder()
 }
 
 // isNightly reports whether this is an automated nightly build cut from the dev
@@ -292,6 +328,9 @@ export function updateAccount(req: {
   exportSubfolders: string
   exportNameTemplate: string
   pgpDefault: string
+  // null follows the global setting and clears a stored override, so it is
+  // required: leaving it out would reset the account to the default.
+  syncMaxParallel: number | null
   proxy: AccountProxy
 }): Promise<Account> {
   return App.UpdateAccount(new desktop.UpdateAccountRequest(req))
@@ -1483,7 +1522,7 @@ export function exportMessagePrintView(id: number): Promise<void> {
   if (isDemoActive()) {
     return Promise.resolve()
   }
-  return App.ExportMessagePrintView(id)
+  return withVaultTempConsent(() => App.ExportMessagePrintView(id))
 }
 
 // exportMessageEml asks where to save one message and writes it as an .eml
@@ -1768,7 +1807,7 @@ export function openAttachmentFile(messageId: number, attachmentId: number): Pro
   if (isDemoActive()) {
     return Promise.resolve()
   }
-  return App.OpenAttachmentFile(messageId, attachmentId)
+  return withVaultTempConsent(() => App.OpenAttachmentFile(messageId, attachmentId))
 }
 
 /**
@@ -1871,6 +1910,55 @@ export function importMailFiles(paths: string[]): Promise<void> {
 // keeping their names. Like importMailFiles it runs in the background.
 export function importThunderbirdFolders(paths: string[]): Promise<void> {
   return App.ImportThunderbirdFolders(paths)
+}
+
+// chooseImportSource opens the picker that fits a guided import source. An
+// empty list means it was cancelled.
+export function chooseImportSource(kind: ImportSourceKind): Promise<string[]> {
+  return App.ChooseImportSource(kind).then((paths) => paths ?? [])
+}
+
+// scanImportSource reads what a source holds, changing nothing in it.
+export function scanImportSource(kind: ImportSourceKind, paths: string[]): Promise<ImportInventory> {
+  return App.ScanImportSource(kind, paths) as unknown as Promise<ImportInventory>
+}
+
+// estimateImport says how many messages a plan brings over and their size.
+export function estimateImport(plan: ImportPlan): Promise<ImportEstimate> {
+  return App.EstimateImport(plan as BoundPlan) as unknown as Promise<ImportEstimate>
+}
+
+// importTargets lists the accounts mail can be uploaded into, with their folders.
+export function importTargets(): Promise<ImportTarget[]> {
+  return App.ImportTargets().then((list) => (list ?? []) as unknown as ImportTarget[])
+}
+
+// startImportJob starts a guided import and returns its id; watch onGuidedImport.
+export function startImportJob(plan: ImportPlan): Promise<number> {
+  return App.StartImportJob(plan as BoundPlan)
+}
+
+// BoundPlan is the generated binding's plan type; a plain plan has its shape.
+type BoundPlan = Parameters<typeof App.StartImportJob>[0]
+
+// pauseImportJob stops a running import so it can be resumed later.
+export function pauseImportJob(id: number): Promise<void> {
+  return App.PauseImportJob(id)
+}
+
+// resumeImportJob carries on with a paused import.
+export function resumeImportJob(id: number): Promise<void> {
+  return App.ResumeImportJob(id)
+}
+
+// cancelImportJob stops an import for good; what it imported stays.
+export function cancelImportJob(id: number): Promise<void> {
+  return App.CancelImportJob(id)
+}
+
+// importJobs returns the most recent guided imports, newest first.
+export function importJobs(): Promise<ImportJob[]> {
+  return App.ImportJobs().then((list) => (list ?? []) as unknown as ImportJob[])
 }
 
 // systemColorScheme returns the OS dark/light preference ("dark" | "light"), or
@@ -2034,6 +2122,32 @@ export function disableAppLock(passphrase: string, reason: string): Promise<Lock
 /** Replaces the lock passphrase once the current one has been checked. */
 export function changeLockPassphrase(current: string, next: string): Promise<LockAuthResult> {
   return App.ChangeLockPassphrase(current, next) as unknown as Promise<LockAuthResult>
+}
+
+// --- mail vaults: the rest is in mailvaultapi.ts, which loads on first use ---
+
+let askVaultTempConsent: (() => Promise<boolean>) | null = null
+
+/** Sets what asks the user, once, before a vault file is written to a temporary folder. */
+export function setVaultTempConsent(ask: () => Promise<boolean>): void {
+  askVaultTempConsent = ask
+}
+
+// withVaultTempConsent runs an action that may write a vault file for
+// opening. The first time, the backend refuses until the user has been told;
+// after a yes it is recorded and the action runs again.
+async function withVaultTempConsent(run: () => Promise<void>): Promise<void> {
+  try {
+    await run()
+  } catch (err) {
+    if (!String(err).includes('vault-temp-consent') || !askVaultTempConsent) {
+      throw err
+    }
+    if (await askVaultTempConsent()) {
+      await App.ConsentMailVaultTempFiles()
+      await run()
+    }
+  }
 }
 
 // --- quick compose ---
@@ -2245,6 +2359,7 @@ export const SettingKeys = {
   menuBarInApp: 'menu_bar_in_app',
   menuBarNativeMinimal: 'menu_bar_native_minimal',
   windowMaterial: 'window_material',
+  ocrLanguages: 'ocr_languages',
   menuBarIcons: 'menu_bar_icons',
   menuBarLayout: 'menu_bar_layout',
   paletteUsage: 'palette_usage',
@@ -2288,6 +2403,8 @@ export const SettingKeys = {
   appLockHideNotifications: 'app_lock_hide_notifications',
   syncMessageLimit: 'sync_message_limit',
   syncAutoBackfill: 'sync_auto_backfill',
+  syncMaxParallel: 'sync_max_parallel',
+  syncFullReconcileDays: 'sync_full_reconcile_days',
   startupSelection: 'startup_selection',
   lastSelection: 'last_selection',
   liabilityAccepted: 'liability_accepted',
@@ -3053,6 +3170,77 @@ export function getTaskSettings(): Promise<TaskSettings> {
 /** setTaskSettings saves the task preferences. */
 export function setTaskSettings(settings: TaskSettings): Promise<void> {
   return App.SetTaskSettings(new desktop.TaskSettingsDTO(settings))
+}
+
+/** listTimeBlocks returns the time blocks overlapping [from, to), both rfc3339, by start. */
+export function listTimeBlocks(from: string, to: string): Promise<TimeBlock[]> {
+  if (isDemoActive()) {
+    return Promise.resolve([])
+  }
+  return App.ListTimeBlocks(from, to).then((list) => (list ?? []) as unknown as TimeBlock[])
+}
+
+/** createTimeBlocks makes blocks, writing each to its calendar when it names one. */
+export function createTimeBlocks(reqs: TimeBlockRequest[]): Promise<TimeBlock[]> {
+  return App.CreateTimeBlocks(reqs.map((r) => new desktop.TimeBlockRequest(r))).then((list) => (list ?? []) as unknown as TimeBlock[])
+}
+
+/** updateTimeBlock changes a block's title, times, done state and calendar. */
+export function updateTimeBlock(req: TimeBlockRequest): Promise<TimeBlock> {
+  return App.UpdateTimeBlock(new desktop.TimeBlockRequest(req)) as unknown as Promise<TimeBlock>
+}
+
+/** deleteTimeBlocks deletes blocks, and their calendar events. */
+export function deleteTimeBlocks(ids: number[]): Promise<void> {
+  return App.DeleteTimeBlocks(ids)
+}
+
+/** settleTimeBlockLink settles a block out of step with its event: follow, rewrite or forget. */
+export function settleTimeBlockLink(id: number, action: 'follow' | 'rewrite' | 'forget'): Promise<TimeBlock> {
+  return App.SettleTimeBlockLink(id, action) as unknown as Promise<TimeBlock>
+}
+
+/** listTaskPlans returns how much time each task with blocks has planned. */
+export function listTaskPlans(): Promise<TaskPlan[]> {
+  if (isDemoActive()) {
+    return Promise.resolve([])
+  }
+  return App.ListTaskPlans().then((list) => (list ?? []) as unknown as TaskPlan[])
+}
+
+/** releaseTaskTimeBlocks keeps or deletes the future blocks of a task about to be deleted. */
+export function releaseTaskTimeBlocks(uid: string, deleteFuture: boolean): Promise<void> {
+  return App.ReleaseTaskTimeBlocks(uid, deleteFuture)
+}
+
+/** findFreeSlots proposes times for a block, for a task or a length in minutes. */
+export function findFreeSlots(taskId: number, minutes: number, from = ''): Promise<FreeSlot[]> {
+  return App.FindFreeSlots(new desktop.SlotRequest({ taskId, minutes, from })).then((list) => (list ?? []) as unknown as FreeSlot[])
+}
+
+/** blockTimeForTask blocks the first free time for a task. */
+export function blockTimeForTask(taskId: number, minutes: number): Promise<TimeBlock> {
+  return App.BlockTimeForTask(taskId, minutes) as unknown as Promise<TimeBlock>
+}
+
+/** blockTimeForMessages makes a block for each mail: from at (rfc3339) on, or in the next free time. */
+export function blockTimeForMessages(ids: number[], at = ''): Promise<TimeBlock[]> {
+  return App.BlockTimeForMessages(ids, at).then((list) => (list ?? []) as unknown as TimeBlock[])
+}
+
+/** planDay lays the tasks due on day (2006-01-02, empty for today) into its free time as proposals. */
+export function planDay(day = ''): Promise<DayPlan> {
+  return App.PlanDay(day) as unknown as Promise<DayPlan>
+}
+
+/** getTimeBlockSettings returns the time blocking preferences. */
+export function getTimeBlockSettings(): Promise<TimeBlockSettings> {
+  return App.GetTimeBlockSettings() as unknown as Promise<TimeBlockSettings>
+}
+
+/** setTimeBlockSettings saves the time blocking preferences. */
+export function setTimeBlockSettings(settings: TimeBlockSettings): Promise<void> {
+  return App.SetTimeBlockSettings(new desktop.TimeBlockSettingsDTO(settings))
 }
 
 /** listProjects returns every project in its manual order, with its tile counts. */

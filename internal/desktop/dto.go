@@ -55,6 +55,9 @@ type AccountDTO struct {
 	// prompt to stop asking for this account. The ui marks the mailbox instead
 	// of interrupting.
 	PasswordPromptDismissed bool `json:"passwordPromptDismissed"`
+	// SyncMaxParallel is the account's own parallel-sync limit, or null when
+	// it follows the global setting.
+	SyncMaxParallel *int `json:"syncMaxParallel"`
 	// TrustedCerts are the fingerprints of certificates the user accepted for
 	// this mailbox, formatted for reading. CASubjects name the certificates in
 	// the CA it trusts, empty when it has none.
@@ -88,6 +91,12 @@ type FolderDTO struct {
 	// SyncExcluded means the user unchecked this folder, so sync skips it.
 	// Whatever was already cached stays readable (#173).
 	SyncExcluded bool `json:"syncExcluded"`
+	// VaultID is the mail vault the folder is in, 0 for none. VaultLocked is
+	// set while that vault is locked, and VaultHidden when it also asks for
+	// its folders to stay out of the sidebar then.
+	VaultID     int64 `json:"vaultId"`
+	VaultLocked bool  `json:"vaultLocked"`
+	VaultHidden bool  `json:"vaultHidden"`
 }
 
 // UnifiedViewDTO is a cross account view (inbox/flagged/sent/drafts). The ui
@@ -255,6 +264,9 @@ type MessageDetailDTO struct {
 	// folder has synced.
 	ReplyIDs   []int64 `json:"replyIds"`
 	ForwardIDs []int64 `json:"forwardIds"`
+	// BodyComplete is false while the row is still a list stub whose preview
+	// may be shown before the full body arrives.
+	BodyComplete bool `json:"bodyComplete"`
 }
 
 // TrackingPixelDTO is one remote image the scan thinks exists to report the
@@ -316,6 +328,7 @@ func toAccountDTO(a storage.Account) AccountDTO {
 		Color:              a.Color,
 
 		PasswordPromptDismissed: a.PasswordPromptDismissed,
+		SyncMaxParallel:         a.SyncMaxParallel,
 
 		TrustedCerts: displayPins(a.TrustedCerts),
 		CASubjects:   caSubjects(a.CAPEM),
@@ -369,6 +382,8 @@ func folderRole(f storage.Folder) string {
 	}
 	for _, attr := range f.Attributes {
 		switch strings.ToLower(strings.TrimPrefix(attr, "\\")) {
+		case "inbox":
+			return roleInbox
 		case "sent":
 			return roleSent
 		case "drafts":

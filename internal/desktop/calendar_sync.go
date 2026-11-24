@@ -419,6 +419,9 @@ func (a *App) storeResource(ctx context.Context, cal storage.Calendar, res calda
 		return false, err
 	}
 	a.scriptResourceStored(ctx, cal, *row, created, wasDone)
+	if row.IsTask() {
+		a.blocksFollowTask(ctx, row.UID, wasDone, row.TaskCompleted != "")
+	}
 	return true, nil
 }
 

@@ -8,6 +8,7 @@ import type { Address, ComposeRequest, Draft, EditorMode, MessageDetail, Compose
 import { getSetting, setSetting } from '../lib/api'
 import { noteAction } from '../lib/coach'
 import { guarded, replyCheck } from './trust'
+import { sidebar } from './accounts'
 import { formatAddress, formatAddressList, parseAddressList, renderBody } from '../lib/mailcompose'
 import { formatFullDate } from '../lib/format'
 import { escapeHtml, textToHtml } from '../lib/richtext'
@@ -223,6 +224,13 @@ export function openComposeWith(accountId: number, mode: EditorMode, prefill: Ma
   return session.id
 }
 
+// inSentFolder reports whether the folder is the account's Sent folder. The
+// role carries the user's override and the server's \Sent attribute, so no
+// folder name is matched. Folders not loaded yet count as not Sent.
+function inSentFolder(accountId: number, folderId: number): boolean {
+  return get(sidebar).data?.foldersByAccount[accountId]?.find((f) => f.id === folderId)?.role === 'sent'
+}
+
 /** The recipients a reply or reply all is addressed to. */
 export interface ReplyRecipients {
   to: string
@@ -232,12 +240,19 @@ export interface ReplyRecipients {
 /**
  * replyRecipients addresses a reply to the sender. Reply all adds the original
  * To and Cc recipients, leaving out the account's own address and anyone
- * already listed.
+ * already listed. Reply all to a message in Sent (fromSent) writes to the
+ * people it went to, not back to yourself (#485).
  */
-export function replyRecipients(source: Pick<MessageDetail, 'fromName' | 'fromAddress' | 'toAddresses' | 'ccAddresses' | 'accountEmail'>, replyAll: boolean): ReplyRecipients {
+export function replyRecipients(source: Pick<MessageDetail, 'fromName' | 'fromAddress' | 'toAddresses' | 'ccAddresses' | 'accountEmail'>, replyAll: boolean, fromSent = false): ReplyRecipients {
   const sender: Address = { name: source.fromName, email: source.fromAddress }
   if (!replyAll) {
     return { to: formatAddress(sender), cc: '' }
+  }
+  if (fromSent) {
+    const recipients = parseAddressList(source.toAddresses ?? '')
+    if (recipients.length > 0) {
+      return { to: formatAddressList(recipients), cc: formatAddressList(parseAddressList(source.ccAddresses ?? '')) }
+    }
   }
   const seen = new Set<string>()
   const own = (source.accountEmail ?? '').trim().toLowerCase()
@@ -353,7 +368,7 @@ function replyFields(origin: ComposeOrigin, mode: EditorMode, typed: string): Pa
       references: [],
     }
   }
-  const recipients = replyRecipients(origin, origin.kind === 'replyAll')
+  const recipients = replyRecipients(origin, origin.kind === 'replyAll', inSentFolder(origin.accountId, origin.folderId))
   const full = quoteBody(origin, mode)
   const quote = full.replace(/^(\n|<p><\/p>)+/, '')
   return {

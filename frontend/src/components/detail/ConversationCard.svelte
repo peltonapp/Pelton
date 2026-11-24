@@ -27,6 +27,7 @@
   import { t } from '../../lib/i18n'
   import type { MessageDetail, MessageSummary } from '../../lib/types'
   import { choiceFor, senderReading } from '../../stores/senderreading'
+  import { bodyFetchFailed, retryBodyFetch } from '../../stores/bodyfetch'
   import { countWords, readingMinutes, visibleText } from '../../lib/readingtime'
 
   /** The message as listed, which the closed line is drawn from. */
@@ -146,6 +147,19 @@
           {#await loadPromiseStrip() then m}
             <svelte:component this={m.default} messageId={detail.id} accountId={detail.accountId} mailId={detail.messageId} />
           {/await}
+        {/if}
+        {#if detail.bodyComplete === false}
+          <!-- a stub: the preview shows below while the full body is fetched. -->
+          {#if $bodyFetchFailed === detail.id}
+            <div class="stub failed" role="alert">
+              <span>{$t('detail.bodyFetchFailed')}</span>
+              <button type="button" on:click={() => detail && void retryBodyFetch(detail.id)}>{$t('detail.bodyFetchRetry')}</button>
+            </div>
+          {:else}
+            <div class="stub" aria-live="polite">
+              <Spinner label={$t('detail.loadingMessage')} inline />
+            </div>
+          {/if}
         {/if}
         {#if detail.pgpState !== '' && detail.pgpState !== 'open'}
           <ProtectedNotice state={detail.pgpState} messageId={detail.id} on:opened={() => dispatch('reload')} />
@@ -309,5 +323,32 @@
     margin: 0;
     font-size: var(--fz-label);
     color: var(--danger);
+  }
+
+  .stub {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+    color: var(--text-tertiary);
+    font-size: var(--fz-meta);
+  }
+
+  .stub.failed {
+    color: var(--text-secondary);
+  }
+
+  .stub button {
+    padding: var(--space-1) var(--space-3);
+    border: var(--hairline) solid var(--border-default);
+    border-radius: var(--radius-control);
+    background: var(--surface-raised);
+    color: var(--text-primary);
+    font: inherit;
+    font-size: var(--fz-label);
+    cursor: var(--cursor-action);
+  }
+
+  .stub button:hover {
+    background: var(--surface-hover);
   }
 </style>
