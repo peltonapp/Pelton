@@ -1,7 +1,8 @@
 <script lang="ts">
-  // the Automations space: scripts on the left, the open script in the middle
-  // and the run log on the right. a script file dropped on it opens the import
-  // dialog; "new" (compose) makes a script.
+  // the Automations space: scripts and libraries on the left, the open script,
+  // library or the template gallery in the middle and the run log on the
+  // right. a script file dropped on it opens the import dialog; "new"
+  // (compose) makes a script.
   import { onDestroy, onMount, type ComponentType } from 'svelte'
   import pickIcon from '@phosphor-icons/core/assets/duotone/cursor-click-duotone.svg?raw'
   import errorIcon from '@phosphor-icons/core/assets/duotone/warning-circle-duotone.svg?raw'
@@ -9,8 +10,11 @@
   import Spinner from '../common/Spinner.svelte'
   import ScriptList from './ScriptList.svelte'
   import ScriptEditor from './ScriptEditor.svelte'
+  import LibraryEditor from './LibraryEditor.svelte'
+  import TemplateGallery from './TemplateGallery.svelte'
   import RunLog from './RunLog.svelte'
   import ApproveDialog from './ApproveDialog.svelte'
+  import LibraryReviewDialog from './LibraryReviewDialog.svelte'
   import BlockEditor from './blocks/BlockEditor.svelte'
   import { t } from '../../lib/i18n'
   import { newInput, type ScriptKind } from '../../lib/scripting'
@@ -20,11 +24,17 @@
     approveAndEnable,
     blockEditor,
     catalog,
+    createLibrary,
     createScript,
+    galleryOpen,
+    libraries,
+    libraryReview,
     loadCatalog,
+    loadLibraries,
     loadRuns,
     loadScripts,
     pickImport,
+    selectedLibrary,
     selectedScript,
   } from '../../stores/scripts'
   import { errorMessage, toastError } from '../../stores/toast'
@@ -40,7 +50,7 @@
     narrowAt = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--automation-narrow')) || 0
     stopActions = registerSpaceActions('automations', { compose: () => void create('blocks') }, { compose: 'scripts.new' })
     try {
-      await Promise.all([loadCatalog(), loadScripts(), loadRuns()])
+      await Promise.all([loadCatalog(), loadScripts(), loadRuns(), loadLibraries()])
     } catch (err) {
       failed = errorMessage(err)
     }
@@ -51,6 +61,19 @@
   async function create(kind: ScriptKind): Promise<void> {
     try {
       await createScript(newInput(kind, $t(kind === 'lua' ? 'scripts.untitledLua' : 'scripts.untitledBlocks')))
+    } catch (err) {
+      toastError(errorMessage(err))
+    }
+  }
+
+  async function newLibrary(): Promise<void> {
+    const taken = new Set($libraries.map((l) => l.name))
+    let name = 'helpers'
+    for (let n = 2; taken.has(name); n++) {
+      name = `helpers_${n}`
+    }
+    try {
+      await createLibrary({ name, description: '', source: '-- functions other scripts load with require\nlocal M = {}\n\nreturn M\n' })
     } catch (err) {
       toastError(errorMessage(err))
     }
@@ -76,9 +99,13 @@
     <div class="loading"><Spinner /></div>
   {:else}
     <div class="panes">
-      <ScriptList on:create={(e) => void create(e.detail)} on:import={() => void pickImport().catch((err) => toastError(errorMessage(err)))} />
+      <ScriptList on:create={(e) => void create(e.detail)} on:import={() => void pickImport().catch((err) => toastError(errorMessage(err)))} on:library={() => void newLibrary()} />
       {#if $selectedScript}
         <ScriptEditor script={$selectedScript} catalog={$catalog} />
+      {:else if $selectedLibrary}
+        <LibraryEditor library={$selectedLibrary} catalog={$catalog} />
+      {:else if $galleryOpen}
+        <TemplateGallery catalog={$catalog} />
       {:else}
         <div class="placeholder">
           <EmptyState icon={pickIcon} title={$t('scripts.pick.title')} detail={$t('scripts.pick.detail')} />
@@ -88,6 +115,8 @@
     </div>
     {#if $approvalFor}
       <ApproveDialog script={$approvalFor} catalog={$catalog} on:close={() => approvalFor.set(null)} on:approve={() => void approve()} />
+    {:else if $libraryReview}
+      <LibraryReviewDialog review={$libraryReview} catalog={$catalog} on:close={() => libraryReview.set(null)} />
     {/if}
   {/if}
 </section>

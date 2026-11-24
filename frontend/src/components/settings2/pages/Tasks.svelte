@@ -8,6 +8,7 @@
   import Segmented from '../ui/Segmented.svelte'
   import Select from '../../common/Select.svelte'
   import ToggleSwitch from '../../common/ToggleSwitch.svelte'
+  import PromiseSettings from '../PromiseSettings.svelte'
   import { loadTaskSettings, loadTasks, saveTaskSettings, taskLists, taskSettings } from '../../../stores/tasks'
   import { atMinutes } from '../../../lib/caldate'
   import { formatTime } from '../../../lib/calformat'
@@ -70,3 +71,7 @@
     <Select value={s.sort} items={sortItems} ariaLabel={$t('taskSettings.sort')} on:change={(e) => saveTaskSettings({ sort: e.detail as TaskSort })} />
   </Row>
 </Card>
+
+{#if $prefs.design === 'new'}
+  <PromiseSettings />
+{/if}

@@ -3,16 +3,22 @@
 
 export {
     Action,
+    Arg,
     Catalog,
     CompileError,
     CompileResult,
+    Cond,
     Condition,
     Field,
     FieldCondition,
     Function,
     InputKind,
+    Kind,
     LineRange,
     LiveRun,
+    Match,
+    MatchReport,
+    MatchRequest,
     Module,
     Option,
     Param,
@@ -24,6 +30,12 @@ export {
     ResultAction,
     Step,
     StepKind,
+    Template,
     Trigger,
+    TriggerConfig,
     ValueType
+} from "./models.js";
+
+export type {
+    Tree
 } from "./models.js";

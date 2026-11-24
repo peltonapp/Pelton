@@ -14,6 +14,7 @@ import (
 	"github.com/peltonapp/Pelton/internal/scripting/files"
 	"github.com/peltonapp/Pelton/internal/scripting/spaces"
 	"github.com/peltonapp/Pelton/internal/scripting/system"
+	"github.com/peltonapp/Pelton/internal/scripting/templates"
 	"github.com/peltonapp/Pelton/internal/scripting/web"
 )
 
@@ -46,6 +47,18 @@ func (a *App) registerScriptReach(r *scripting.Registry) error {
 		return err
 	}
 	if err := a.registerScriptAI(r); err != nil {
+		return err
+	}
+	if err := a.registerScriptPromises(r); err != nil {
+		return err
+	}
+	if err := a.registerScriptTrust(r); err != nil {
+		return err
+	}
+	if err := a.registerScriptTimeBlocks(r); err != nil {
+		return err
+	}
+	if err := templates.Register(r); err != nil {
 		return err
 	}
 	spaces.SetChatAvailable(r, a.chatEnabled())

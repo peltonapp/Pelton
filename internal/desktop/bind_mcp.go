@@ -159,7 +159,8 @@ func (a *App) applyMCPState() error {
 		return nil
 	}
 
-	srv := mcpserver.NewWithWriter(&mcpMailbox{app: a}, &mcpWriter{app: a}, a.log)
+	srv := mcpserver.NewWithWriter(&mcpMailbox{app: a}, &mcpWriter{app: a}, a.log).
+		WithScripts(&mcpScripts{app: a}, a.scriptLimiter())
 	cfg := mcpserver.Config{
 		Addr:        fmt.Sprintf("127.0.0.1:%d", a.mcpPort()),
 		Token:       a.mcpToken(),
@@ -223,7 +224,7 @@ func (m *mcpMailbox) ListMessages(ctx context.Context, folderID int64, limit int
 	if limit <= 0 {
 		limit = mcpListLimit
 	}
-	msgs, err := m.app.store.ListMessages(ctx, folderID, limit)
+	msgs, err := m.app.store.ListMessages(mcpCtx(ctx), folderID, limit)
 	if err != nil {
 		return nil, err
 	}
@@ -235,6 +236,7 @@ func (m *mcpMailbox) ListMessages(ctx context.Context, folderID int64, limit int
 }
 
 func (m *mcpMailbox) GetMessage(ctx context.Context, id int64) (*mcpserver.Message, error) {
+	ctx = mcpCtx(ctx)
 	msg, err := m.app.store.GetMessage(ctx, id)
 	if err != nil {
 		return nil, err
@@ -282,7 +284,7 @@ func (m *mcpMailbox) Search(ctx context.Context, params mcpserver.SearchParams) 
 	}
 	out := make([]mcpserver.MessageSummary, 0, len(hits.Hits))
 	for _, h := range hits.Hits {
-		msg, err := m.app.store.GetMessage(ctx, h.ID)
+		msg, err := m.app.store.GetMessage(mcpCtx(ctx), h.ID)
 		if err != nil {
 			continue
 		}

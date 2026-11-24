@@ -38,7 +38,7 @@ describe('ScriptShortcutField', () => {
     await user.click(screen.getByRole('button', { name: 'Change' }))
     await user.keyboard('r')
     expect(get(bindings)['script:5'] ?? '').toBe('')
-    expect(screen.getByText(/Already used by/i)).toBeTruthy()
+    expect(screen.getAllByText(/Already used by/i).length).toBeGreaterThan(0)
   })
 
   it('clears the key', async () => {

@@ -88,4 +88,46 @@ func Localized(t testing.TB, r *scripting.Registry) {
 	if len(missing) > 0 {
 		t.Fatalf("%d keys missing from en.ts:\n%s", len(missing), strings.Join(missing, "\n"))
 	}
+	English(t, r)
+}
+
+// English fails the test for every entry of r without an English label, and
+// every module function without an English description, which the API
+// reference and the AI tool list show.
+func English(t testing.TB, r *scripting.Registry) {
+	t.Helper()
+	c := r.Catalog()
+	var bare []string
+	metas := []scripting.Meta{}
+	for _, x := range c.Triggers {
+		metas = append(metas, x.Meta)
+	}
+	for _, x := range c.Conditions {
+		metas = append(metas, x.Meta)
+	}
+	for _, x := range c.Actions {
+		metas = append(metas, x.Meta)
+	}
+	for _, x := range c.ValueTypes {
+		metas = append(metas, x.Meta)
+	}
+	for _, x := range c.Permissions {
+		metas = append(metas, x.Meta)
+	}
+	for _, m := range c.Modules {
+		metas = append(metas, m.Meta)
+		for _, f := range m.Functions {
+			if f.Description == "" {
+				bare = append(bare, m.ID+"."+f.Name)
+			}
+		}
+	}
+	for _, m := range metas {
+		if m.Label == "" {
+			bare = append(bare, m.ID)
+		}
+	}
+	if len(bare) > 0 {
+		t.Fatalf("%d entries without English text (add their keys to internal/scripting/english.json):\n%s", len(bare), strings.Join(bare, "\n"))
+	}
 }

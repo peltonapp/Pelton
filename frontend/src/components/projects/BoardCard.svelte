@@ -44,6 +44,19 @@
   $: level = priorityLevel(task.priority)
   $: people = task.contacts
   $: title = task.title || $t('tasks.untitled')
+  // the card's description says what its icons and colors show.
+  $: cardState = [
+    task.done ? $t('a11y.done') : '',
+    due ? `${$t('tasks.due')} ${due}` : '',
+    overdue ? $t('a11y.overdue') : '',
+    level !== 'none' ? $t(`projects.priority.${level}`) : '',
+    task.rrule ? $t('tasks.repeats') : '',
+    card.mail ? $t('projects.card.mail').replace('{n}', String(card.mail)) : '',
+    card.events ? $t('projects.card.events').replace('{n}', String(card.events)) : '',
+    card.notes ? $t('projects.card.notes').replace('{n}', String(card.notes)) : '',
+  ]
+    .filter(Boolean)
+    .join(', ')
 
   $: drop = {
     onDrop: (items: { id: number }[]) => void fileMail(card.projectId, items.map((m) => m.id), card.task.uid),
@@ -60,11 +73,15 @@
   tabindex={focusable ? 0 : -1}
   data-card-uid={task.uid}
   aria-label={title}
+  aria-describedby={cardState ? `card-state-${task.uid}` : undefined}
   aria-current={selected ? 'true' : undefined}
   use:maildrop={drop}
   on:click={() => dispatch('open')}
   on:contextmenu|preventDefault={(e) => dispatch('menu', { x: e.clientX, y: e.clientY })}
 >
+  {#if cardState}
+    <span class="sr-only" id={`card-state-${task.uid}`}>{cardState}</span>
+  {/if}
   <div class="top">
     <TaskCheck
       checked={task.done}
@@ -91,7 +108,7 @@
         <span class="mark" title={$t('tasks.repeats')}><Ph svg={repeatIcon} size={12} /></span>
       {/if}
       {#if level !== 'none'}
-        <span class="prio {level}" title={$t(`projects.priority.${level}`)} aria-label={$t(`projects.priority.${level}`)}><Ph svg={flagIcon} size={12} /></span>
+        <span class="prio {level}" role="img" title={$t(`projects.priority.${level}`)} aria-label={$t(`projects.priority.${level}`)}><Ph svg={flagIcon} size={12} /></span>
       {/if}
       {#if card.mail}
         <span class="mark" title={$t('projects.card.mail').replace('{n}', String(card.mail))}><Ph svg={mailIcon} size={12} />{card.mail}</span>
@@ -122,6 +139,7 @@
 
 <style>
   .card {
+    position: relative;
     display: flex;
     flex-direction: column;
     gap: var(--space-2);

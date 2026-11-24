@@ -2,6 +2,7 @@ name: Nightly builds
 
 # Builds the main branch (the trunk) once a day and publishes the installers as
 # a GitHub prerelease tagged nightly-YYYY.MM.DD (#171).
+# It also runs the race tests at their full stress counts (the stress job).
 #
 # Nightlies are untested and must never be mistaken for a release, so:
 #   * the release is always a prerelease. GitHub's /releases/latest API skips
@@ -114,6 +115,35 @@ jobs:
             echo "main HEAD $short has no nightly yet, building"
             echo "build=true" >> "$GITHUB_OUTPUT"
           fi
+
+  # ---------------------------------------------------------------------------
+  # The race tests' stress counts. By default they run a few hundred rounds so
+  # checks.yml stays fast; PELTON_STRESS=1 runs the full counts (10,000 barrier
+  # rounds, 200 shrink rounds) that caught the races in the first place. Both
+  # packages are pure Go, so no frontend or system packages are needed. The
+  # job runs beside the builds and the publish step does not wait for it: a
+  # failure marks the run red without holding back the nightly.
+  # ---------------------------------------------------------------------------
+  stress:
+    needs: check
+    if: needs.check.outputs.build == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: main
+
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+
+      - name: Race tests at stress counts
+        env:
+          PELTON_STRESS: "1"
+        run: >-
+          go test -race -count=1
+          -run 'TestGroupConcurrentBarriersNeverOverlap|TestSessionsShrinkUnderConcurrentLoad'
+          ./internal/desktop/syncsched/ ./internal/sync/pool/
 
   # ---------------------------------------------------------------------------
   # macOS, Apple Silicon. Bundle is "Pelton Nightly.app" with its own bundle id

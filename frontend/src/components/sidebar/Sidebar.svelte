@@ -22,6 +22,7 @@
   import { openSettingsAt } from '../../stores/settingsnav'
   import moreIcon from '@phosphor-icons/core/assets/regular/dots-three.svg?raw'
   import newspaperIcon from '@phosphor-icons/core/assets/duotone/newspaper-duotone.svg?raw'
+  import shieldIcon from '@phosphor-icons/core/assets/duotone/shield-check-duotone.svg?raw'
   import SidebarRow from './SidebarRow.svelte'
   import { mailScreen, openMailScreen, closeMailScreen } from '../../stores/mailscreen'
   import Ph from '../common/Ph.svelte'
@@ -85,7 +86,7 @@
   }
 </script>
 
-<aside class="sidebar">
+<aside class="sidebar" aria-label={$t('a11y.region.folders')}>
   <div class="top">
     <button type="button" class="compose-btn" on:click={() => dispatch('compose')}>
       <IconPencil size={16} stroke={1.8} />
@@ -170,6 +171,13 @@
                 on:select={() => ($mailScreen === 'newsletters' ? closeMailScreen() : openMailScreen('newsletters'))}
               >
                 <Ph svg={newspaperIcon} size={15} />
+              </SidebarRow>
+              <SidebarRow
+                label={$t('privacy.report.title')}
+                active={$mailScreen === 'privacy'}
+                on:select={() => ($mailScreen === 'privacy' ? closeMailScreen() : openMailScreen('privacy'))}
+              >
+                <Ph svg={shieldIcon} size={15} />
               </SidebarRow>
             </nav>
           {/if}

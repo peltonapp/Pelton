@@ -172,8 +172,24 @@
     document.querySelector<HTMLElement>(`[data-task-row="${id}"]`)?.focus()
   }
 
+  // what a keyboard move did, read out politely.
+  let moveStatus = ''
+
   function onRowKey(event: KeyboardEvent, index: number): void {
     const step = event.key === 'ArrowDown' ? 1 : event.key === 'ArrowUp' ? -1 : 0
+    if (step !== 0 && event.altKey && !event.metaKey && !event.ctrlKey && !event.shiftKey) {
+      event.preventDefault()
+      const target = index + step
+      if (!canReorder || target < 0 || target >= rows.length) {
+        return
+      }
+      const ids = rows.map((r) => r.task.id)
+      ;[ids[index], ids[target]] = [ids[target], ids[index]]
+      dispatch('reorder', ids)
+      moveStatus = $t('a11y.movedTo').replace('{n}', String(target + 1)).replace('{total}', String(ids.length))
+      void focusRow(ids[target])
+      return
+    }
     if (step !== 0) {
       event.preventDefault()
       const next = rows[Math.max(0, Math.min(rows.length - 1, index + step))]
@@ -198,6 +214,7 @@
 </script>
 
 <div class="pane">
+  <div class="sr-only" role="status">{moveStatus}</div>
   {#if canAdd}
     <form class="entry" on:submit|preventDefault={submitEntry}>
       <Ph svg={plusIcon} size={14} />
@@ -249,6 +266,7 @@
           style={`--depth:${row.depth};--cal:${calendarColor(listById.get(task.listId) ?? { id: task.listId, color: task.listColor })}`}
           role="option"
           aria-selected={selectedId === task.id}
+          aria-keyshortcuts={canReorder ? 'Alt+ArrowUp Alt+ArrowDown' : undefined}
           tabindex={selectedId === task.id || (selectedId === null && i === 0) ? 0 : -1}
           data-task-row={task.id}
           animate:flip={{ duration: dur(motion.base) }}

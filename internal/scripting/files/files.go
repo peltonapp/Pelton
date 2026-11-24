@@ -103,11 +103,17 @@ func read(c *scripting.Call, root *os.Root) ([]any, error) {
 	if err != nil {
 		return nil, err
 	}
+	if info, err := root.Stat(p); err == nil && !info.Mode().IsRegular() {
+		return nil, fmt.Errorf("%s: %s is not a plain file", c.Function, filepath.ToSlash(p))
+	}
 	f, err := root.Open(p)
 	if err != nil {
 		return []any{nil, cleanErr(err)}, nil
 	}
 	defer f.Close()
+	if info, err := f.Stat(); err != nil || !info.Mode().IsRegular() {
+		return nil, fmt.Errorf("%s: %s is not a plain file", c.Function, filepath.ToSlash(p))
+	}
 	data, err := io.ReadAll(io.LimitReader(f, maxFileBytes+1))
 	if err != nil {
 		return []any{nil, cleanErr(err)}, nil
@@ -166,6 +172,9 @@ func write(appendTo bool) func(c *scripting.Call, root *os.Root) ([]any, error) 
 		}
 		if len(text) > maxFileBytes {
 			return nil, fmt.Errorf("%s: at most %d bytes at a time", c.Function, maxFileBytes)
+		}
+		if info, err := root.Stat(p); err == nil && (!info.Mode().IsRegular() || info.Mode().Perm()&0o111 != 0) {
+			return nil, fmt.Errorf("%s: %s is not a plain file a script may change", c.Function, filepath.ToSlash(p))
 		}
 		flag := os.O_WRONLY | os.O_CREATE | os.O_TRUNC
 		if appendTo {

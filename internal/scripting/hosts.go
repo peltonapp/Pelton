@@ -95,6 +95,15 @@ type MailHost interface {
 	Compose(ctx context.Context, d Draft, send bool) (int64, error)
 }
 
+// MailLister is what a MailHost implements to let scripts and the match
+// tester look through a folder.
+type MailLister interface {
+	// Recent returns up to limit stored messages of a folder, named by path
+	// or role, newest first: of one account, or of every account that has
+	// such a folder when accountID is 0.
+	Recent(ctx context.Context, folder string, accountID int64, limit int) ([]Message, error)
+}
+
 // NotifyHost shows a script's messages to the user.
 type NotifyHost interface {
 	// Toast shows a short in-app message; level is info, success, warning or
@@ -112,6 +121,10 @@ type ConfirmRequest struct {
 	Function string `json:"function"`
 	// Summary says what the call would do, with its arguments.
 	Summary string `json:"summary"`
+	// EveryTime is set for a question that is asked every time, such as a
+	// call an AI model chose, so "allow without asking" is not offered and
+	// an Always answer counts as a plain yes.
+	EveryTime bool `json:"everyTime"`
 }
 
 // ConfirmAnswer is the user's answer. Always means "allow without asking"

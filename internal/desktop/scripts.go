@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"html"
 	"slices"
@@ -14,6 +15,7 @@ import (
 	"github.com/emersion/go-imap/v2"
 	"github.com/microcosm-cc/bluemonday"
 
+	"github.com/peltonapp/Pelton/internal/desktop/syncsched"
 	"github.com/peltonapp/Pelton/internal/scripting"
 	"github.com/peltonapp/Pelton/internal/storage"
 )
@@ -47,8 +49,8 @@ const (
 // settingScriptLogDays is how many days of script runs the log keeps.
 const settingScriptLogDays = "scripts_log_days"
 
-// settingScriptAskSeconds is how long a question of a script nobody started
-// waits before it takes its default.
+// settingScriptAskSeconds is how long a question of a script nobody started,
+// and the before-send recipient confirmation, wait for an answer.
 const settingScriptAskSeconds = "scripts_ask_seconds"
 
 // scriptResultsKept is how many results stay ready for their buttons.
@@ -78,6 +80,9 @@ type scriptState struct {
 	// synced holds the accounts that finished a full sync in this session;
 	// mail a first sync brings in may have arrived while the app was closed.
 	synced sync.Map
+	// sentBy holds, by outbox id, the run that sent a message, so the
+	// after-send event it causes carries that run's chain depth and source.
+	sentBy sync.Map
 }
 
 type runJournal struct {
@@ -144,22 +149,27 @@ func (a *App) scriptMailArrived(ids []int64, firstSync bool) {
 	}
 	for _, id := range ids {
 		ev := scripting.Event{Trigger: scripting.TriggerMailArrived, Data: map[string]any{"message_id": id}, CatchUp: firstSync}
+		m, err := a.store.GetMessage(scriptsCtx(a.ctx), id)
+		if err != nil {
+			continue
+		}
 		if firstSync {
-			m, err := a.store.GetMessage(a.ctx, id)
-			if err != nil {
-				continue
-			}
 			ev.Date = m.Date
 		}
 		a.scripts.Emit(ev)
 	}
 }
 
-// firstScriptSync reports whether this is the account's first full sync of
-// the session, and records that it happened.
+// firstScriptSync reports whether the account's first pass of the session is
+// still going: mail arriving in it is catch-up for the scripts.
 func (a *App) firstScriptSync(accountID int64) bool {
-	_, seen := a.scriptState.synced.LoadOrStore(accountID, true)
-	return !seen
+	_, done := a.scriptState.synced.Load(accountID)
+	return !done
+}
+
+// firstPassDone records that the account's first pass of the session ended.
+func (a *App) firstPassDone(accountID int64) {
+	a.scriptState.synced.Store(accountID, true)
 }
 
 // scriptMoved reports a message that moved; it is a snapshot from before the
@@ -177,8 +187,24 @@ func (a *App) scriptMoved(ctx context.Context, m *storage.Message, dest storage.
 	}))
 }
 
+// scriptSees reports whether scripts may see a folder's mail: anywhere
+// outside a vault, and in a vault only while it is unlocked and allows them.
+func (a *App) scriptSees(folderID int64) bool {
+	ok, err := a.store.FolderVisible(scriptsCtx(a.ctx), folderID)
+	return err == nil && ok
+}
+
+// scriptSeesMessage is scriptSees for a message id.
+func (a *App) scriptSeesMessage(id int64) bool {
+	_, err := a.store.GetMessage(scriptsCtx(a.ctx), id)
+	return err == nil
+}
+
 // scriptFlagChanged reports a read or flag change.
 func (a *App) scriptFlagChanged(ctx context.Context, id int64, flag storage.Flag, on bool) {
+	if !a.scriptSeesMessage(id) {
+		return
+	}
 	switch flag {
 	case storage.FlagSeen:
 		a.emitScript(scripting.EventFrom(ctx, scripting.TriggerMailReadMark, map[string]any{"message_id": id, "read": on}))
@@ -197,7 +223,12 @@ func (a *App) scriptAfterSend(outboxID int64) {
 		return
 	}
 	req := v.(ComposeRequest)
-	a.scripts.Emit(scripting.Event{Trigger: scripting.TriggerAfterSend, Data: map[string]any{"draft": draftEvent(req)}})
+	ev := scripting.Event{Trigger: scripting.TriggerAfterSend, Data: map[string]any{"draft": draftEvent(req)}}
+	if by, ok := a.scriptState.sentBy.LoadAndDelete(outboxID); ok {
+		info := by.(scripting.RunInfo)
+		ev.Depth, ev.Source = info.Depth+1, info.ScriptID
+	}
+	a.scripts.Emit(ev)
 }
 
 // draftEvent is a message being written as the scripts see it.
@@ -282,12 +313,92 @@ func (a *App) beforeSendScripts(ctx context.Context, req ComposeRequest) (Compos
 		}
 		return req, fmt.Errorf("pelton: %s stopped this message", name)
 	}
-	for i := len(runs) - 1; i >= 0; i-- {
-		if runs[i].Event != nil {
-			return applyDraftEvent(req, runs[i].Event), nil
+	out := req
+	var changers []string
+	prev := draftEvent(req)
+	for _, r := range runs {
+		if r.Event == nil {
+			continue
+		}
+		next := applyDraftEvent(req, r.Event)
+		if recipientsText(next) != recipientsText(applyDraftEvent(req, map[string]any{"draft": prev})) {
+			name := fmt.Sprintf("script %d", r.ScriptID)
+			if sc, err := a.scripts.Script(ctx, r.ScriptID); err == nil {
+				name = sc.Name
+			}
+			changers = append(changers, name)
+		}
+		if d, ok := r.Event["draft"].(map[string]any); ok {
+			prev = d
+		}
+		out = next
+	}
+	if recipientsText(out) == recipientsText(req) {
+		return out, nil
+	}
+	if err := a.confirmRecipients(ctx, changers, req, out); err != nil {
+		return req, err
+	}
+	return out, nil
+}
+
+// recipientsText renders who a message goes to, one line per field, for
+// comparing and for the confirmation.
+func recipientsText(req ComposeRequest) string {
+	line := func(label string, list []AddressDTO) string {
+		addrs := make([]string, 0, len(list))
+		for _, ad := range list {
+			addrs = append(addrs, strings.ToLower(strings.TrimSpace(ad.Email)))
+		}
+		if len(addrs) == 0 {
+			addrs = []string{"(nobody)"}
+		}
+		return label + ": " + strings.Join(addrs, ", ")
+	}
+	return line("To", req.To) + "\n" + line("Cc", req.Cc) + "\n" + line("Bcc", req.Bcc)
+}
+
+// errRecipientsHeld is returned when before-send scripts changed the
+// recipients and the user did not confirm the change.
+var errRecipientsHeld = errors.New("pelton: a before-send script changed who this message goes to and it was not confirmed, so the message was not sent")
+
+// confirmRecipients asks the user about recipients the before-send scripts
+// changed, every time: no script setting, allowance or origin skips it. A
+// no, or no answer within the question timeout, holds the message: it is not
+// sent, and a message a script was sending is kept in Drafts as written.
+func (a *App) confirmRecipients(ctx context.Context, scripts []string, before, after ComposeRequest) error {
+	name := strings.Join(scripts, ", ")
+	summary := fmt.Sprintf("Before-send scripts changed who %q goes to.\n\nWritten to:\n%s\n\nWould now go to:\n%s",
+		before.Subject, recipientsText(before), recipientsText(after))
+	if line := a.encryptionSummary(after); line != "" {
+		summary += "\n\n" + line
+	}
+	confirmer := a.recipientConfirmer
+	if confirmer == nil {
+		confirmer = &scriptConfirm{app: a}
+	}
+	askCtx, cancel := context.WithTimeout(ctx, a.scriptAskTimeout())
+	defer cancel()
+	ans, err := confirmer.Confirm(askCtx, scripting.ConfirmRequest{
+		ScriptName: name, Function: "outgoing.recipients", Summary: summary, EveryTime: true,
+	})
+	if err == nil && ans.Allow {
+		return nil
+	}
+	held := errRecipientsHeld
+	if _, fromScript := scripting.RunInfoFrom(ctx); fromScript {
+		if id, derr := a.SaveDraft(0, before); derr == nil {
+			held = fmt.Errorf("%w; it is in Drafts (draft %d)", errRecipientsHeld, id)
 		}
 	}
-	return req, nil
+	a.emit(EventScriptToast, ScriptToastDTO{Script: name, Text: held.Error(), Level: "warning"})
+	return held
+}
+
+// scriptAskTimeout is how long a question of a script nobody started waits.
+func (a *App) scriptAskTimeout() time.Duration {
+	secs := a.intSetting(settingScriptAskSeconds, int(scripting.DefaultAskTimeout/time.Second))
+	return scripting.ClampAskTimeout(time.Duration(secs) * time.Second)
 }
 
 func (a *App) onScriptRun(sc *scripting.Script, r *scripting.Run) {
@@ -345,6 +456,9 @@ type scriptMail struct {
 }
 
 func (a *App) scriptMessage(m storage.Message) (scripting.Message, error) {
+	if !a.scriptSees(m.FolderID) {
+		return scripting.Message{}, storage.ErrMessageNotFound
+	}
 	folder, err := a.store.GetFolder(a.ctx, m.FolderID)
 	if err != nil {
 		return scripting.Message{}, err
@@ -371,7 +485,7 @@ func (s *scriptMail) Message(_ context.Context, id int64) (scripting.Message, er
 	if err := s.app.ready(); err != nil {
 		return scripting.Message{}, err
 	}
-	m, err := s.app.store.GetMessage(s.app.ctx, id)
+	m, err := s.app.store.GetMessage(scriptsCtx(s.app.ctx), id)
 	if err != nil {
 		return scripting.Message{}, err
 	}
@@ -385,7 +499,7 @@ func htmlText(s string) string {
 }
 
 func (s *scriptMail) Body(_ context.Context, id int64) (string, error) {
-	m, err := s.app.store.GetMessage(s.app.ctx, id)
+	m, err := s.app.store.GetMessage(scriptsCtx(s.app.ctx), id)
 	if err != nil {
 		return "", err
 	}
@@ -420,7 +534,7 @@ func (s *scriptMail) folder(accountID int64, name string) (storage.Folder, error
 
 func (s *scriptMail) moveTo(ctx context.Context, id int64, dest func(m *storage.Message) (storage.Folder, error)) error {
 	a := s.app
-	m, err := a.store.GetMessage(a.ctx, id)
+	m, err := a.store.GetMessage(scriptsCtx(a.ctx), id)
 	if err != nil {
 		return err
 	}
@@ -451,7 +565,7 @@ func (s *scriptMail) Move(ctx context.Context, id int64, folder string) error {
 // journalled, since a copy takes nothing away.
 func (s *scriptMail) Copy(_ context.Context, id int64, folder string) error {
 	a := s.app
-	m, err := a.store.GetMessage(a.ctx, id)
+	m, err := a.store.GetMessage(scriptsCtx(a.ctx), id)
 	if err != nil {
 		return err
 	}
@@ -470,25 +584,13 @@ func (s *scriptMail) Copy(_ context.Context, id int64, folder string) error {
 	if err != nil {
 		return err
 	}
-	cfg, err := a.resolveIMAP(*account)
-	if err != nil {
-		return err
-	}
-	syncMu.Lock()
-	defer syncMu.Unlock()
-	client, err := a.connectIMAP(cfg)
-	if err != nil {
-		return err
-	}
-	defer client.Close()
-	if err := client.Login(); err != nil {
-		return err
-	}
-	defer client.Logout()
-	if _, err := client.Select(source.IMAPPath); err != nil {
-		return fmt.Errorf("copy: select %q: %w", source.IMAPPath, err)
-	}
-	return client.CopyMessages([]imap.UID{imap.UID(m.UID)}, dest.IMAPPath)
+	err = a.runNow(a.ctx, *account, syncsched.KindMove, source.ID, func(_ context.Context, client mailClient) error {
+		if _, err := client.Select(source.IMAPPath); err != nil {
+			return fmt.Errorf("copy: select %q: %w", source.IMAPPath, err)
+		}
+		return client.CopyMessages([]imap.UID{imap.UID(m.UID)}, dest.IMAPPath)
+	})
+	return offlineOrErr(err)
 }
 
 func (s *scriptMail) Archive(ctx context.Context, id int64) error {
@@ -506,7 +608,7 @@ func (s *scriptMail) Delete(ctx context.Context, id int64) error {
 
 func (s *scriptMail) setFlag(ctx context.Context, id int64, flag storage.Flag, on bool) error {
 	a := s.app
-	m, err := a.store.GetMessage(a.ctx, id)
+	m, err := a.store.GetMessage(scriptsCtx(a.ctx), id)
 	if err != nil {
 		return err
 	}
@@ -532,7 +634,7 @@ func (s *scriptMail) SetFlagged(ctx context.Context, id int64, on bool) error {
 
 func (s *scriptMail) SetColor(ctx context.Context, id int64, color int) error {
 	a := s.app
-	m, err := a.store.GetMessage(a.ctx, id)
+	m, err := a.store.GetMessage(scriptsCtx(a.ctx), id)
 	if err != nil {
 		return err
 	}
@@ -546,7 +648,7 @@ func (s *scriptMail) SetColor(ctx context.Context, id int64, color int) error {
 
 func (s *scriptMail) SetPinned(ctx context.Context, id int64, on bool) error {
 	a := s.app
-	m, err := a.store.GetMessage(a.ctx, id)
+	m, err := a.store.GetMessage(scriptsCtx(a.ctx), id)
 	if err != nil {
 		return err
 	}
@@ -560,7 +662,7 @@ func (s *scriptMail) SetPinned(ctx context.Context, id int64, on bool) error {
 
 func (s *scriptMail) Snooze(ctx context.Context, id int64, until time.Time) error {
 	a := s.app
-	m, err := a.store.GetMessage(a.ctx, id)
+	m, err := a.store.GetMessage(scriptsCtx(a.ctx), id)
 	if err != nil {
 		return err
 	}
@@ -589,7 +691,7 @@ func (s *scriptMail) Compose(ctx context.Context, d scripting.Draft, send bool) 
 	req := ComposeRequest{AccountID: d.AccountID, Subject: d.Subject, Text: d.Body,
 		To: addressList(d.To), Cc: addressList(d.Cc), Bcc: addressList(d.Bcc)}
 	if orig := d.ReplyTo + d.Forward; orig != 0 {
-		m, err := a.store.GetMessage(a.ctx, orig)
+		m, err := a.store.GetMessage(scriptsCtx(a.ctx), orig)
 		if err != nil {
 			return 0, err
 		}
@@ -720,7 +822,7 @@ func (c *scriptConfirm) Confirm(ctx context.Context, req scripting.ConfirmReques
 		delete(st.confirms, id)
 		st.mu.Unlock()
 	}()
-	a.emit(EventScriptConfirm, ScriptConfirmDTO{ID: id, ScriptID: req.ScriptID, ScriptName: req.ScriptName, Function: req.Function, Summary: req.Summary})
+	a.emit(EventScriptConfirm, ScriptConfirmDTO{ID: id, ScriptID: req.ScriptID, ScriptName: req.ScriptName, Function: req.Function, Summary: req.Summary, EveryTime: req.EveryTime})
 	timer := time.NewTimer(scriptConfirmWait)
 	defer timer.Stop()
 	select {
@@ -739,11 +841,6 @@ func newScriptRequestID() (string, error) {
 		return "", err
 	}
 	return hex.EncodeToString(buf), nil
-}
-
-// scriptAskTimeout is how long a question of a script nobody started waits.
-func (a *App) scriptAskTimeout() time.Duration {
-	return time.Duration(a.intSetting(settingScriptAskSeconds, int(scripting.DefaultAskTimeout/time.Second))) * time.Second
 }
 
 // scriptAsk puts a running script's questions to the user through a dialog

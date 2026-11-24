@@ -52,6 +52,17 @@
       transform var(--motion-fast) var(--ease-press);
   }
 
+  /* the box stays small; the press target around it is the full minimum. */
+  .check {
+    position: relative;
+  }
+
+  :global(:root[data-design="new"]) .check::before {
+    content: '';
+    position: absolute;
+    inset: calc((var(--task-check) - var(--target-min)) / 2);
+  }
+
   .check:hover:not(:disabled) {
     background: color-mix(in srgb, var(--task-color) 14%, transparent);
   }

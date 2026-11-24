@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"fmt"
 	"log/slog"
+	"maps"
 	"slices"
 	"sort"
 	"sync"
@@ -195,7 +196,7 @@ func NewService(cfg Config) (*Service, error) {
 		pending:    map[int64]*catchUp{},
 		live:       map[int64]*liveRun{},
 	}
-	s.engine = &Engine{Registry: reg, Hosts: cfg.Hosts, KV: s.store, Limits: cfg.Limits, OnAllow: s.allowAlways, AskTimeout: cfg.AskTimeout}
+	s.engine = &Engine{Registry: reg, Hosts: cfg.Hosts, KV: s.store, Limits: cfg.Limits, OnAllow: s.allowAlways, AskTimeout: cfg.AskTimeout, Libraries: s.store}
 	return s, nil
 }
 
@@ -701,9 +702,25 @@ func (s *Service) workerFor(id int64) *worker {
 // button, and waits for the result. data is the raw event, e.g. the message
 // the user picked.
 func (s *Service) RunNow(ctx context.Context, id int64, data map[string]any) (*Run, error) {
+	return s.RunNowWithSettings(ctx, id, data, nil)
+}
+
+// RunNowWithSettings is RunNow with some of the script's settings replaced
+// for this one run, checked against its schema. Nothing is stored.
+func (s *Service) RunNowWithSettings(ctx context.Context, id int64, data, settings map[string]any) (*Run, error) {
 	sc, err := s.store.Get(ctx, id)
 	if err != nil {
 		return nil, err
+	}
+	if len(settings) > 0 {
+		merged := maps.Clone(sc.Settings)
+		if merged == nil {
+			merged = map[string]any{}
+		}
+		maps.Copy(merged, settings)
+		if sc.Settings, err = CheckSettings(sc.SettingsSchema, merged); err != nil {
+			return nil, err
+		}
 	}
 	if !sc.Enabled {
 		return nil, fmt.Errorf("scripting: %q is switched off", sc.Name)

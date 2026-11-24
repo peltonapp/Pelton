@@ -24,6 +24,7 @@ import (
 	"github.com/peltonapp/Pelton/internal/outbox"
 	"github.com/peltonapp/Pelton/internal/smtp"
 	"github.com/peltonapp/Pelton/internal/storage"
+	"github.com/peltonapp/Pelton/internal/storage/storagetest"
 )
 
 // submissionServer is enough of a submission server to carry one message:
@@ -128,7 +129,7 @@ func readSubmissionData(r *bufio.Reader) ([]byte, error) {
 func sendingAccount(t *testing.T, client *fakeIMAP, captured ...chan<- []byte) (*App, storage.Account) {
 	t.Helper()
 	ctx, stopBackground := testContext(t)
-	db, err := storage.Open(filepath.Join(t.TempDir(), "test.db"))
+	db, err := storagetest.Open(filepath.Join(t.TempDir(), "test.db"))
 	if err != nil {
 		t.Fatalf("open: %v", err)
 	}
@@ -200,8 +201,11 @@ func TestTransmitAppendsACopyToSent(t *testing.T) {
 	if string(client.appended[0]) != string(raw) {
 		t.Errorf("appended %q, want the message that was sent", client.appended[0])
 	}
-	if !client.loggedOut {
-		t.Error("the imap session opened for the append was left open")
+	// The append ran on a pooled session; stopping the runtime logs it out.
+	app.stopAccountScheduler(account.ID, false)
+	app.accountSessionsFor(account.ID, 0).sessions.WaitClosed(context.Background()) // closes run in the background
+	if !client.loggedOut.Load() {
+		t.Error("the pooled imap session was left open after the runtime stopped")
 	}
 }
 
@@ -289,8 +293,10 @@ func TestTransmitReplyPreservesQueuedBytesInSent(t *testing.T) {
 			t.Errorf("%s References = %q, want <root@example.com> <parent@example.com>", copy.name, got)
 		}
 	}
-	if !client.loggedOut {
-		t.Error("the imap session opened for the append was left open")
+	app.stopAccountScheduler(account.ID, false)
+	app.accountSessionsFor(account.ID, 0).sessions.WaitClosed(context.Background())
+	if !client.loggedOut.Load() {
+		t.Error("the pooled imap session was left open after the runtime stopped")
 	}
 }
 
@@ -315,18 +321,18 @@ func TestTransmitSucceedsWhenTheSentCopyFails(t *testing.T) {
 	app.sentCopies.Wait()
 }
 
-// A sync can hold the imap lock for a long time. The copy to Sent waits for it,
-// but the send must not: the message is delivered, and the outbox has to be
-// free to mark it sent and move on to the next one.
+// Other mail work can hold the account's mutation lock for a while. The copy
+// to Sent waits for it, but the send must not: the message is delivered, and
+// the outbox has to be free to mark it sent and move on to the next one.
 func TestTransmitDoesNotWaitForTheSentCopy(t *testing.T) {
 	client := &fakeIMAP{}
 	app, account := sendingAccount(t, client)
 
-	syncMu.Lock()
+	unlock := app.lockMutations(account.ID)
 	locked := true
 	defer func() {
 		if locked {
-			syncMu.Unlock()
+			unlock()
 		}
 	}()
 
@@ -351,7 +357,7 @@ func TestTransmitDoesNotWaitForTheSentCopy(t *testing.T) {
 		t.Fatal("the copy to Sent ran while a sync held the imap lock")
 	}
 
-	syncMu.Unlock()
+	unlock()
 	locked = false
 	app.sentCopies.Wait()
 	if len(client.appended) != 1 {

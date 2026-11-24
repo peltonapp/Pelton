@@ -10,7 +10,7 @@
   import MarkdownPreview from '../compose/MarkdownPreview.svelte'
   import { t } from '../../lib/i18n'
   import { runScriptResultAction } from '../../lib/api'
-  import { entryDescription, entryLabel, type ScriptCatalog, type ScriptResult } from '../../lib/scripting'
+  import { entryDescription, entryLabel, inertMarkdown, type ScriptCatalog, type ScriptResult } from '../../lib/scripting'
   import { resultHandler } from '../../lib/resulthandlers'
   import { scriptIcon } from '../../lib/scripticons'
   import { errorMessage, toastError, toastSuccess } from '../../stores/toast'
@@ -59,7 +59,7 @@
     {#if result.dry}<p class="badge">{$t('scripts.result.dry')}</p>{/if}
     {#if result.format === 'markdown'}
       <div class="markdown">
-        <MarkdownPreview markdown={result.text} font="" />
+        <MarkdownPreview markdown={inertMarkdown(result.text)} font="" />
       </div>
     {:else}
       <pre class="text">{result.text}</pre>

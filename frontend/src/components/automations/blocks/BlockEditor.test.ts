@@ -3,6 +3,8 @@ import { render, screen, within, waitFor } from '@testing-library/svelte'
 import userEvent from '@testing-library/user-event'
 import type { Block, BlockTree, ScriptRun } from '../../../lib/scripting'
 import { blockCatalog } from '../../../test/scriptfixtures'
+import { expectAccessible } from '../../../test/a11y'
+import { expectAxeClean } from '../../../test/axe'
 
 // jsdom has no ResizeObserver, which bind:clientWidth uses.
 globalThis.ResizeObserver ??= class {
@@ -14,6 +16,7 @@ globalThis.ResizeObserver ??= class {
 const api = vi.hoisted(() => ({
   compileScriptBlocks: vi.fn(),
   searchAddresses: vi.fn(),
+  testScriptMatch: vi.fn(),
 }))
 
 vi.mock('../../../lib/api', async (importOriginal) => ({
@@ -53,6 +56,16 @@ beforeEach(() => {
   ruleDraft.set(null)
 })
 
+describe('BlockEditor announcements', () => {
+  it('says where a block landed after a keyboard move', async () => {
+    const { user } = setup(treeOf([act('a', 'notify.toast', { text: { value: 'hi' } }), act('b', 'notify.toast', { text: { value: 'yo' } })]))
+    const first = screen.getAllByRole('group', { name: /Show a message/ })[0]
+    first.focus()
+    await user.keyboard('{Alt>}{ArrowDown}{/Alt}')
+    await waitFor(() => expect(screen.getAllByRole('status').some((r) => /position 2 of 2/.test(r.textContent ?? ''))).toBe(true))
+  })
+})
+
 describe('BlockEditor', () => {
   it('teaches the first step and starts with an if', async () => {
     const { user, last } = setup(treeOf([]))
@@ -66,7 +79,11 @@ describe('BlockEditor', () => {
     const { user, last } = setup(treeOf([act('a', 'notify.toast', { text: { value: 'hi' } })]))
     const palette = screen.getByRole('complementary', { name: 'Blocks to add' })
     expect(within(palette).getByRole('button', { name: 'Check text' })).toBeInTheDocument()
-    expect(within(palette).getByRole('button', { name: 'Stop sending' })).toHaveAttribute('aria-disabled', 'true')
+    const off = within(palette).getByRole('button', { name: 'Stop sending' })
+    expect(off).toHaveAttribute('aria-disabled', 'true')
+    expect(off).toHaveAccessibleDescription(/\S/)
+    expectAccessible()
+    await expectAxeClean()
     await user.type(within(palette).getByRole('searchbox'), 'move')
     await user.click(within(palette).getByRole('button', { name: 'Move' }))
     expect(last().blocks.map((b) => b.type)).toEqual(['notify.toast', 'mail.move'])
@@ -166,6 +183,25 @@ describe('BlockEditor', () => {
     expect(addhost).toHaveBeenCalled()
     await rerender({ declared: ['net', 'net:example.org'] })
     expect(screen.queryByRole('button', { name: 'Add the host' })).not.toBeInTheDocument()
+  })
+
+  it('tries a condition group on recent mail from the if block', async () => {
+    api.testScriptMatch.mockResolvedValue({ scanned: 5, matched: 2, timedOut: false, matches: [] })
+    const when = { kind: 'all' as const, items: [{ kind: 'condition' as const, type: 'mail.subject', args: { op: { value: 'contains' }, value: { value: 'Invoice' } } }] }
+    const { user } = setup(treeOf([{ id: 'b1', kind: 'if', branches: [{ when, body: [] }] }]))
+    await user.click(screen.getAllByRole('button', { name: 'Try this on recent mail' })[0])
+    const dialog = await screen.findByRole('dialog')
+    await user.click(within(dialog).getByRole('button', { name: 'Try it' }))
+    expect(api.testScriptMatch).toHaveBeenCalledWith(expect.objectContaining({ when: expect.objectContaining({ kind: 'all' }) }))
+    expect((await within(dialog).findAllByText('2 of 5 messages match.'))[0]).toBeInTheDocument()
+  })
+
+  it('shows every permission a block needs', () => {
+    const catalog = { ...blockCatalog, actions: [...blockCatalog.actions, { id: 'ai.draft_reply', labelKey: '', label: 'Draft with AI', descKey: '', category: 'ai', permission: 'mail.read', permissions: ['mail.read', 'mail.compose'], params: [], lua: 'x()' }] }
+    render(BlockEditor, { props: { tree: treeOf([act('d', 'ai.draft_reply')]), catalog, trigger: 'manual' } })
+    const block = screen.getByRole('group', { name: /Draft with AI/ })
+    expect(within(block).getByText('Read mail')).toBeInTheDocument()
+    expect(within(block).getByText('Write drafts')).toBeInTheDocument()
   })
 
   it('switches a rule from a message to another match with one click', async () => {

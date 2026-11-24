@@ -36,9 +36,14 @@
   import { reminderChoices, reminderLabel } from '../calendar/labels'
   import { dueDate, dueHasTime } from '../../lib/tasklogic'
   import { openMailLink } from '../../lib/maillink'
-  import { searchAddresses } from '../../lib/api'
+  import { listTaskPlans, searchAddresses } from '../../lib/api'
   import { draftOf, localZone, saveTask, toggleDone } from '../../stores/tasks'
+  import { findTimeFor } from '../../stores/calendar'
+  import { formatMinutes } from '../calendar/timeblocks'
+  import timerIcon from '@phosphor-icons/core/assets/duotone/timer-duotone.svg?raw'
   import NoteMentions from '../notes/NoteMentions.svelte'
+  import PromiseTaskNote from './PromiseTaskNote.svelte'
+  import { prefs } from '../../stores/prefs'
   import { t } from '../../lib/i18n'
   import type { TimeFormat } from '../../lib/format'
   import type { AddressBookEntry, Reminder, Task, TaskContact, TaskDraft, TaskList } from '../../lib/types'
@@ -205,6 +210,43 @@
     }
     return p < 5 ? '1' : p === 5 ? '5' : '9'
   }
+
+  // --- estimate and planned time -------------------------------------------------------
+
+  const estimateChoices = [15, 30, 45, 60, 90, 120, 180, 240, 360, 480]
+
+  $: estimateItems = [
+    { value: '0', label: $t('tasks.estimate.none') },
+    ...[...new Set([...estimateChoices, task.estimate ?? 0])]
+      .filter((m) => m > 0)
+      .sort((a, b) => a - b)
+      .map((m) => ({ value: String(m), label: formatMinutes(m, $t) })),
+  ]
+
+  let planned = 0
+  let plannedFor = ''
+  $: if (task.uid !== plannedFor) {
+    plannedFor = task.uid
+    void readPlanned(task.uid)
+  }
+
+  async function readPlanned(uid: string): Promise<void> {
+    try {
+      const found = (await listTaskPlans()).find((p) => p.taskUid === uid)
+      if (uid === plannedFor) {
+        planned = found?.plannedMinutes ?? 0
+      }
+    } catch {
+      planned = 0
+    }
+  }
+
+  $: plannedText =
+    (task.estimate ?? 0) > 0
+      ? $t('tasks.estimate.plannedOf').replace('{planned}', formatMinutes(planned, $t)).replace('{estimate}', formatMinutes(task.estimate, $t))
+      : planned > 0
+        ? $t('tasks.estimate.planned').replace('{planned}', formatMinutes(planned, $t))
+        : ''
 
   $: statusItems = [
     { value: 'NEEDS-ACTION', label: $t('tasks.status.needsAction') },
@@ -408,6 +450,17 @@
     </div>
 
     <div class="row">
+      <span class="icon" aria-hidden="true"><Ph svg={timerIcon} size={16} /></span>
+      <div class="cell line">
+        <Select class="ctl" value={String(task.estimate ?? 0)} items={estimateItems} ariaLabel={$t('tasks.estimate')} disabled={readOnly} on:change={(e) => void commit({ estimate: Number(e.detail) })} />
+        <span class="label">{plannedText}</span>
+        {#if !task.done}
+          <button type="button" class="pill" on:click={() => findTimeFor(task.id)}>{$t('tasks.findTime')}</button>
+        {/if}
+      </div>
+    </div>
+
+    <div class="row">
       <span class="icon" aria-hidden="true"><Ph svg={progressIcon} size={16} /></span>
       <div class="cell line">
         <Select class="ctl" value={task.status || (task.done ? 'COMPLETED' : 'NEEDS-ACTION')} items={statusItems} ariaLabel={$t('tasks.status')} disabled={readOnly} on:change={(e) => void commit({ status: e.detail })} />
@@ -497,6 +550,10 @@
         {/if}
       </div>
     </div>
+
+    {#if $prefs.design === 'new'}
+      <PromiseTaskNote {task} />
+    {/if}
 
     {#if task.mailLinks.length > 0 || task.eventUids.length > 0}
       <div class="row">

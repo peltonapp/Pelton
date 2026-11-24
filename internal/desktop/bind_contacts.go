@@ -131,9 +131,12 @@ func (a *App) ListAddressBooks() ([]AddressBookDTO, error) {
 		if err != nil {
 			return nil, err
 		}
-		password, err := credentials.LoadAddressBookPassword(b.ID)
-		if err != nil {
-			a.log.Warn("read address book password", "book", b.ID, "err", err)
+		var password string
+		if !b.Local() {
+			password, err = credentials.LoadAddressBookPassword(b.ID)
+			if err != nil {
+				a.log.Warn("read address book password", "book", b.ID, "err", err)
+			}
 		}
 		out = append(out, AddressBookDTO{
 			ID:             b.ID,
@@ -146,7 +149,8 @@ func (a *App) ListAddressBooks() ([]AddressBookDTO, error) {
 			LastSync:       b.LastSyncAt,
 			LastError:      b.LastError,
 			ContactCount:   len(contacts),
-			HasPassword:    password != "",
+			// a local book has no server, so there is no password to ask for.
+			HasPassword: password != "" || b.Local(),
 		})
 	}
 	return out, nil
@@ -369,6 +373,9 @@ func (a *App) syncAllAddressBooks(ctx context.Context) error {
 	for _, book := range books {
 		if err := ctx.Err(); err != nil {
 			return err
+		}
+		if book.Local() {
+			continue
 		}
 		if err := a.syncAddressBook(ctx, book); err != nil {
 			a.log.Warn("contact sync", "book", book.ID, "err", err)

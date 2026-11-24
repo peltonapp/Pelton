@@ -4,6 +4,8 @@
   // an enum's options. a Lua script declares its settings in a SETTINGS table
   // instead.
   import { createEventDispatcher } from 'svelte'
+  import warnIcon from '@phosphor-icons/core/assets/duotone/warning-circle-duotone.svg?raw'
+  import Ph from '../common/Ph.svelte'
   import Select from '../common/Select.svelte'
   import ParamField from './ParamField.svelte'
   import { t } from '../../lib/i18n'
@@ -51,7 +53,18 @@
     <div class="row">
       <div class="field">
         <label class="label" for={`setting-name-${i}`}>{$t('scripts.settings.name')}</label>
-        <input id={`setting-name-${i}`} class="cal-field mono" class:bad={!namePattern.test(p.name)} value={p.name} on:change={(e) => update(i, { name: e.currentTarget.value.trim() })} />
+        <input
+          id={`setting-name-${i}`}
+          class="cal-field mono"
+          class:bad={!namePattern.test(p.name)}
+          aria-invalid={!namePattern.test(p.name)}
+          aria-describedby={namePattern.test(p.name) ? undefined : `setting-name-${i}-problem`}
+          value={p.name}
+          on:change={(e) => update(i, { name: e.currentTarget.value.trim() })}
+        />
+        {#if !namePattern.test(p.name)}
+          <span class="problem" id={`setting-name-${i}-problem`}><Ph svg={warnIcon} size={12} />{$t('scripts.settings.nameRule')}</span>
+        {/if}
       </div>
       <div class="field">
         <label class="label" for={`setting-type-${i}`}>{$t('scripts.settings.type')}</label>
@@ -107,6 +120,14 @@
 
   .bad {
     border-color: var(--danger);
+  }
+
+  .problem {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-1);
+    font-size: var(--fz-meta);
+    color: var(--danger);
   }
 
   .add,

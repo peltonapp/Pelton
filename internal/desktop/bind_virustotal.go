@@ -309,7 +309,7 @@ func (a *App) scanAttachment(ctx context.Context, client *virustotal.Client, att
 // attachmentDigest is the sha-256 of an attachment's stored bytes, streamed so
 // a large file is never held in memory.
 func (a *App) attachmentDigest(att storage.Attachment) (string, error) {
-	f, err := a.store.OpenAttachment(att.DiskPath)
+	f, err := a.store.OpenAttachment(a.ctx, att)
 	if err != nil {
 		return "", err
 	}

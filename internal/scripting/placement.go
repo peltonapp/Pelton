@@ -73,6 +73,9 @@ type PlacedScript struct {
 // maxPlacedItems caps the values one placed run gets.
 const maxPlacedItems = 500
 
+// maxOptionBytes caps a placement's text option, such as a button's label.
+const maxOptionBytes = 60
+
 // RegisterPlacement adds a place scripts can be started from. A placement
 // that hands over a value adds that value type to the manual trigger's
 // scopes and its event, so scripts can declare they take it.
@@ -86,6 +89,8 @@ func (r *Registry) RegisterPlacement(p Placement) error {
 	if p.List != "" && (p.ValueType == "" || !luaName.MatchString(p.List)) {
 		return fmt.Errorf("scripting: placement %q has an invalid list field %q", p.ID, p.List)
 	}
+	englishMeta(&p.Meta)
+	p.Options = englishParams(p.Options)
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	if err := r.checkParams(p.ID, p.Options); err != nil {
@@ -124,7 +129,7 @@ func (r *Registry) acceptOnManual(p Placement) {
 	}
 	addField := func(f Field) {
 		if !slices.ContainsFunc(t.Event, func(x Field) bool { return x.Name == f.Name }) {
-			t.Event = append(slices.Clone(t.Event), f)
+			t.Event = append(slices.Clone(t.Event), englishFields([]Field{f})...)
 		}
 	}
 	addField(NewField(p.ValueType, p.ValueType))
@@ -202,6 +207,12 @@ func (r *Registry) checkPlacements(sc *Script) error {
 			}
 			if v == nil {
 				continue
+			}
+			if s, ok := v.(string); ok && len(s) > maxOptionBytes {
+				return fmt.Errorf("scripting: placement %q option %q is longer than %d bytes", c.ID, name, maxOptionBytes)
+			}
+			if s, ok := v.(string); ok && HasMarkGlyph(s) {
+				return fmt.Errorf("%w (placement %q option %q)", errMarkGlyph, c.ID, name)
 			}
 			if _, err := literalLua(p.Options[i], v); err != nil {
 				return fmt.Errorf("scripting: placement %q option %q: %w", c.ID, name, err)

@@ -279,6 +279,9 @@ func (a *App) SwitchProfile(id int64) error {
 	// here rather than left on the old profile's values.
 	a.applyLogSettings()
 	a.RebuildMenu()
+	if err := a.applyCLIToken(); err != nil {
+		a.log.Error("command line token", "err", err)
+	}
 
 	a.emit(EventProfileChanged, nil)
 	goSafe("starting the profile's mail sync", a.runInitialSyncAndIdle)
@@ -299,8 +302,8 @@ func (a *App) sessionCtx() context.Context {
 	return a.session
 }
 
-// endProfileSession cancels the current session and clears it, so the next
-// sessionCtx starts a fresh one.
+// endProfileSession cancels the current session, joins every account worker, and
+// clears the session so the next sessionCtx starts a fresh one.
 func (a *App) endProfileSession() {
 	a.sessionMu.Lock()
 	stop := a.sessionStop
@@ -310,6 +313,7 @@ func (a *App) endProfileSession() {
 	if stop != nil {
 		stop()
 	}
+	a.joinAllAccountWorkers()
 }
 
 // toProfileDTO flattens a profile and looks up the accounts it shows.

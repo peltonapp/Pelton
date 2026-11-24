@@ -1,6 +1,7 @@
 package scripting
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"fmt"
@@ -95,11 +96,24 @@ type ResultHost interface {
 // ErrRunCancelled is the cause of a run the user cancelled.
 var ErrRunCancelled = errors.New("scripting: cancelled")
 
-// DefaultAskTimeout is how long a question of a run nobody started waits.
-const DefaultAskTimeout = 2 * time.Minute
+// How long a question of a run nobody started waits: by default, and the
+// shortest and longest the setting or a question's own timeout may set.
+const (
+	DefaultAskTimeout = 2 * time.Minute
+	MinAskTimeout     = 10 * time.Second
+	MaxAskTimeout     = time.Hour
+)
 
-// maxResultText caps the text of one result.
-const maxResultText = 256 << 10
+// ClampAskTimeout keeps d within MinAskTimeout and MaxAskTimeout.
+func ClampAskTimeout(d time.Duration) time.Duration {
+	return min(max(d, MinAskTimeout), MaxAskTimeout)
+}
+
+// maxResultText caps the text of one result, and maxPromptBytes a question.
+const (
+	maxResultText  = 256 << 10
+	maxPromptBytes = 2000
+)
 
 // RegisterInputKind adds an input kind, and with it the block action
 // "ui.<id>" that asks it and outputs the answer as "value".
@@ -113,6 +127,8 @@ func (r *Registry) RegisterInputKind(k InputKind) error {
 	if k.Control == "" || k.Value == "" {
 		return fmt.Errorf("scripting: input kind %q needs a control and a value type", k.ID)
 	}
+	englishMeta(&k.Meta)
+	k.Params = englishParams(k.Params)
 	reserved := []string{"prompt", "default", "timeout"}
 	for _, p := range k.Params {
 		if slices.Contains(reserved, p.Name) {
@@ -152,8 +168,8 @@ func askAction(k InputKind) Action {
 			ID:          "ui." + k.ID,
 			LabelKey:    "scripts.action.ui." + k.ID,
 			DescKey:     "scripts.action.ui." + k.ID + ".desc",
-			Label:       k.Label,
-			Description: k.Description,
+			Label:       cmp.Or(englishFor("scripts.action.ui."+k.ID), k.Label),
+			Description: cmp.Or(englishFor("scripts.action.ui."+k.ID+".desc"), k.Description),
 			Category:    "ui",
 		},
 		Params:  params,
@@ -170,6 +186,7 @@ func (r *Registry) RegisterResultAction(a ResultAction) error {
 	if (a.Client == "") == (a.Run == nil) {
 		return fmt.Errorf("scripting: result action %q needs either a client handler or Run", a.ID)
 	}
+	englishMeta(&a.Meta)
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	if err := r.checkPermission(a.Permission, a.ID); err != nil {
@@ -233,8 +250,9 @@ func (st *runState) ask(c *Call, k InputKind, prompt string, opts map[string]any
 		}
 	}
 	if secs, ok := toFloat(opts["timeout"]); ok && secs > 0 {
-		timeout = time.Duration(secs * float64(time.Second))
+		timeout = time.Duration(min(secs, MaxAskTimeout.Seconds()) * float64(time.Second))
 	}
+	timeout = ClampAskTimeout(timeout)
 	summary := clip(prompt, 120)
 	hosts := st.e.Hosts
 	if hosts == nil || hosts.Ask == nil {
@@ -325,6 +343,7 @@ func uiModule() Module {
 			return nil, fmt.Errorf("ui.ask: there is no question kind %q", kind)
 		}
 		text, _ := prompt.(string)
+		text = clip(text, maxPromptBytes)
 		if opts == nil {
 			opts = map[string]any{}
 		}

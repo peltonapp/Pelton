@@ -1,0 +1,33 @@
+{
+  "format": 1,
+  "name": "Label mail by sender domain",
+  "description": "Gives mail from one domain, such as your company's, a colour label as it arrives.",
+  "kind": "blocks",
+  "trigger": { "type": "mail.arrived", "params": { "folder": "inbox" } },
+  "permissions": ["mail.read", "mail.modify"],
+  "settings": [
+    { "name": "domain", "type": "string", "labelKey": "", "label": "Sender domain", "default": "@example.com" },
+    { "name": "color", "type": "color", "labelKey": "", "label": "Colour label", "default": 4 }
+  ],
+  "blocks": {
+    "version": 1,
+    "blocks": [
+      {
+        "id": "domain",
+        "kind": "if",
+        "branches": [
+          {
+            "when": {
+              "kind": "condition",
+              "type": "mail.from",
+              "args": { "op": { "value": "ends" }, "value": { "ref": "setting:domain" } }
+            },
+            "body": [
+              { "id": "label", "kind": "action", "type": "mail.color", "args": { "color": { "ref": "setting:color" } } }
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}

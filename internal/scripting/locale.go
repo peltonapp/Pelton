@@ -69,6 +69,9 @@ func (c Catalog) LocaleKeys() []string {
 		add(p.LabelKey, p.DescKey)
 		params(p.Options)
 	}
+	for _, t := range c.Templates {
+		add(t.LabelKey, t.DescKey)
+	}
 	out := make([]string, 0, len(seen))
 	for k := range seen {
 		out = append(out, k)

@@ -6,6 +6,7 @@ import (
 )
 
 func TestAccountLabel(t *testing.T) {
+	t.Parallel()
 	tests := []struct {
 		name    string
 		account Account
@@ -50,6 +51,7 @@ func TestAccountLabel(t *testing.T) {
 // TestLocalLabelDefaultsOff is the migration guard: accounts that existed
 // before the column keep showing the name they always did.
 func TestLocalLabelDefaultsOff(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	db, id := newAccountTestDB(t)
 
@@ -65,6 +67,7 @@ func TestLocalLabelDefaultsOff(t *testing.T) {
 // TestUpdateAccountKeepsLabelWhenSwitchedOff covers the reason the toggle is a
 // column of its own: turning it off has to leave the name where it was.
 func TestUpdateAccountKeepsLabelWhenSwitchedOff(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	db, id := newAccountTestDB(t)
 

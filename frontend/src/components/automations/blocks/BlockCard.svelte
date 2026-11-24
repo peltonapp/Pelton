@@ -26,7 +26,7 @@
   import CondView from './CondView.svelte'
   import LuaEditor from '../LuaEditor.svelte'
   import { t } from '../../../lib/i18n'
-  import { entryDescription, entryLabel, permissionDef, type Block, type BlockArg, type ScriptParam } from '../../../lib/scripting'
+  import { entryDescription, entryLabel, needs, permissionDef, type Block, type BlockArg, type ScriptParam } from '../../../lib/scripting'
   import { getEditor } from './context'
   import { scopeAt } from './scope'
   import {
@@ -66,7 +66,7 @@
   $: known = block.kind === 'action' ? !!def : block.kind in icons
   $: title = !known ? $t('scripts.blocks.unknownBlock') : def ? entryLabel($t, def) : $t(`scripts.blocks.kind.${block.kind}`)
   $: desc = def ? entryDescription($t, def) : ''
-  $: perm = def?.permission ? permissionDef($catalog, def.permission) : undefined
+  $: perms = needs(def).flatMap((p) => permissionDef($catalog, p) ?? [])
   $: scope = scopeAt($tree, id, $scopeCtx)
   $: mine = $issues.filter((i) => i.block === id)
   $: ownIssues = mine.filter((i) => !i.cond && !i.param)
@@ -81,7 +81,8 @@
   $: canIndent = indent($tree, id) !== $tree
   $: canOutdent = !!place && place.slot.parent !== null
   $: beingDragged = $dragging?.kind === 'block' && $dragging.id === id
-  $: issueText = mine.map((i) => $t(`scripts.blocks.issue.${i.code}`)).join('. ')
+  $: varOk = varNamePattern.test(block.as ?? '')
+  $: issueText =mine.map((i) => $t(`scripts.blocks.issue.${i.code}`)).join('. ')
   $: if (isSelected && el && document.activeElement !== el && !el.contains(document.activeElement)) {
     el.focus({ preventScroll: false })
   }
@@ -159,9 +160,9 @@
     <span class="icon" aria-hidden="true"><Ph svg={known ? icons[block.kind] : unknownIcon} size={15} /></span>
     <span class="title" title={desc || undefined}>{title}</span>
     {#if !known}<code class="raw">{block.kind === 'action' ? block.type : block.kind}</code>{/if}
-    {#if perm}
+    {#each perms as perm (perm.id)}
       <span class="badge risk-{perm.risk}" title={entryDescription($t, perm)}>{entryLabel($t, perm)}</span>
-    {/if}
+    {/each}
     {#if def?.risky}
       <span class="badge risky" title={$t('scripts.blocks.risky.desc')}><Ph svg={riskIcon} size={12} />{$t('scripts.blocks.risky')}</span>
     {/if}
@@ -172,10 +173,10 @@
       <span class="badge issues" title={issueText}>{$t('scripts.blocks.issueCount').replace('{n}', String(mine.length))}</span>
     {/if}
     <span class="tools">
-      <button type="button" class="tool" disabled={!canUp} aria-label={$t('scripts.blocks.moveUp')} title={$t('scripts.blocks.moveUp')} on:click={() => ed.apply(moveUp($tree, id), id)}><Ph svg={upIcon} size={13} /></button>
-      <button type="button" class="tool" disabled={!canDown} aria-label={$t('scripts.blocks.moveDown')} title={$t('scripts.blocks.moveDown')} on:click={() => ed.apply(moveDown($tree, id), id)}><Ph svg={downIcon} size={13} /></button>
-      <button type="button" class="tool" disabled={!canOutdent} aria-label={$t('scripts.blocks.outdent')} title={$t('scripts.blocks.outdent')} on:click={() => ed.apply(outdent($tree, id), id)}><Ph svg={outdentIcon} size={13} /></button>
-      <button type="button" class="tool" disabled={!canIndent} aria-label={$t('scripts.blocks.indent')} title={$t('scripts.blocks.indent')} on:click={() => ed.apply(indent($tree, id), id)}><Ph svg={indentIcon} size={13} /></button>
+      <button type="button" class="tool" disabled={!canUp} aria-label={$t('scripts.blocks.moveUp')} title={$t('scripts.blocks.moveUp')} on:click={() => ed.move(moveUp($tree, id), id)}><Ph svg={upIcon} size={13} /></button>
+      <button type="button" class="tool" disabled={!canDown} aria-label={$t('scripts.blocks.moveDown')} title={$t('scripts.blocks.moveDown')} on:click={() => ed.move(moveDown($tree, id), id)}><Ph svg={downIcon} size={13} /></button>
+      <button type="button" class="tool" disabled={!canOutdent} aria-label={$t('scripts.blocks.outdent')} title={$t('scripts.blocks.outdent')} on:click={() => ed.move(outdent($tree, id), id)}><Ph svg={outdentIcon} size={13} /></button>
+      <button type="button" class="tool" disabled={!canIndent} aria-label={$t('scripts.blocks.indent')} title={$t('scripts.blocks.indent')} on:click={() => ed.move(indent($tree, id), id)}><Ph svg={indentIcon} size={13} /></button>
       <button type="button" class="tool" aria-label={$t('scripts.blocks.duplicate')} title={$t('scripts.blocks.duplicate')} on:click={dup}><Ph svg={copyIcon} size={13} /></button>
       <button type="button" class="tool danger" aria-label={$t('scripts.blocks.delete')} title={$t('scripts.blocks.delete')} on:click={remove}><Ph svg={trashIcon} size={13} /></button>
     </span>
@@ -246,7 +247,8 @@
     <div class="fields">
       <label class="var">
         <span class="label">{$t('scripts.blocks.foreach.as')}</span>
-        <input class="cal-field mono" value={block.as ?? ''} aria-invalid={!varNamePattern.test(block.as ?? '')} spellcheck="false" on:change={(e) => edit((b) => (b.as = e.currentTarget.value.trim()))} />
+        <input class="cal-field mono" value={block.as ?? ''} aria-invalid={!varOk} aria-describedby={varOk ? undefined : `b-${id}-as-problem`} spellcheck="false" on:change={(e) => edit((b) => (b.as = e.currentTarget.value.trim()))} />
+        {#if !varOk}<span class="var-problem" id={`b-${id}-as-problem`}>{$t('scripts.blocks.issue.noVar')}</span>{/if}
       </label>
       <ArgField param={listParam} arg={block.list} {scope} problem={paramProblem('list')} idBase={`b-${id}`} on:change={(e) => setOwn('list', e.detail)} />
     </div>
@@ -255,7 +257,8 @@
     <div class="fields">
       <label class="var">
         <span class="label">{$t('scripts.blocks.set.as')}</span>
-        <input class="cal-field mono" value={block.as ?? ''} aria-invalid={!varNamePattern.test(block.as ?? '')} spellcheck="false" on:change={(e) => edit((b) => (b.as = e.currentTarget.value.trim()))} />
+        <input class="cal-field mono" value={block.as ?? ''} aria-invalid={!varOk} aria-describedby={varOk ? undefined : `b-${id}-as-problem`} spellcheck="false" on:change={(e) => edit((b) => (b.as = e.currentTarget.value.trim()))} />
+        {#if !varOk}<span class="var-problem" id={`b-${id}-as-problem`}>{$t('scripts.blocks.issue.noVar')}</span>{/if}
       </label>
       <ArgField param={valueParam} arg={block.value} {scope} problem={paramProblem('value')} idBase={`b-${id}`} on:change={(e) => setOwn('value', e.detail)} />
     </div>
@@ -396,7 +399,18 @@
     opacity: 1;
   }
 
+  .tool::after {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: max(100%, var(--target-min));
+    height: max(100%, var(--target-min));
+    transform: translate(-50%, -50%);
+  }
+
   .tool {
+    position: relative;
     display: inline-flex;
     align-items: center;
     justify-content: center;
@@ -445,6 +459,11 @@
     font-size: var(--fz-meta);
     color: var(--text-secondary);
     line-height: var(--chip-height);
+  }
+
+  .var-problem {
+    font-size: var(--fz-meta);
+    color: var(--danger);
   }
 
   .mono {

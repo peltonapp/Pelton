@@ -2,12 +2,20 @@
   // the middle pane of the Automations space: one script's name, trigger,
   // code, permissions and run options, with saving, a test run that changes
   // nothing, running it now, export and delete. a Lua script is edited as
-  // source; a block script shows the block editor (mounted from the store,
-  // see blockEditor) above the Lua its blocks compile to, read only.
+  // source with completion, docs, error marks, the API reference and the
+  // match tester; a block script shows the block editor (mounted from the
+  // store, see blockEditor) above the Lua its blocks compile to, read only.
+  // a script that uses AI picks its providers here and can test asking the
+  // model.
   import { onDestroy, tick } from 'svelte'
   import Select from '../common/Select.svelte'
   import ToggleSwitch from '../common/ToggleSwitch.svelte'
   import LuaEditor from './LuaEditor.svelte'
+  import Live from './Live.svelte'
+  import LuaWorkbench from './LuaWorkbench.svelte'
+  import AiAccess from '../ai/AiAccess.svelte'
+  import AiScriptOptions from '../ai/AiScriptOptions.svelte'
+  import AiTestToggle from '../ai/AiTestToggle.svelte'
   import ParamField from './ParamField.svelte'
   import PermissionList from './PermissionList.svelte'
   import ScriptFolder from './ScriptFolder.svelte'
@@ -16,13 +24,19 @@
   import SettingsForm from './SettingsForm.svelte'
   import SettingsSchemaEditor from './SettingsSchemaEditor.svelte'
   import PlacementEditor from './PlacementEditor.svelte'
+  import AssistantReview from './AssistantReview.svelte'
+  import LibraryNote from './LibraryNote.svelte'
   import { t } from '../../lib/i18n'
   import { checkScriptLua } from '../../lib/api'
+  import { aiTarget, permCloud, permLocal, usesAI } from '../../lib/ai'
+  import { settingNames, syntaxErrorLine } from './lua/assist'
+  import type { LineMark } from './lua/extensions'
   import {
     entryDescription,
     entryLabel,
     inputsDiffer,
     parseTree,
+    permissionMet,
     riskyFunctions,
     serializeTree,
     toInput,
@@ -41,7 +55,9 @@
     convertToLua,
     errorPlace,
     exportToFile,
+    libraries,
     removeScript,
+    runLog,
     runNow,
     runTest,
     saveScript,
@@ -66,6 +82,7 @@
   let compiled: CompileResult | null = null
   let blockPerms: string[] | null = null
   let testOn: 'sample' | 'open' = 'sample'
+  let askModel = false
   let checkTimer: ReturnType<typeof setTimeout> | undefined
 
   $: if (script.id !== lastId || script.updatedAt !== lastUpdated) {
@@ -86,7 +103,22 @@
   $: if (input.kind === 'lua') {
     scheduleCheck(input.source)
   }
-  $: missing = (blockPerms ?? compiled?.permissions ?? []).filter((p) => !input.permissions.includes(p))
+  $: testText = $testRun ? `${$t(`scripts.status.${$testRun.status}`)}${$testRun.error ? `: ${$testRun.error}` : ''}` : ''
+  $: compileText = (tree && !$blockEditor ? compiled?.errors ?? [] : []).map((e) => `${e.block ? `${e.block}: ` : ''}${e.message}`).join('. ')
+  $: missing =(blockPerms ?? compiled?.permissions ?? []).filter((p) => !permissionMet(p, input.permissions))
+  $: ai = usesAI(input.permissions)
+  $: assist = {
+    catalog,
+    trigger: input.trigger.type,
+    settings: input.kind === 'lua' ? settingNames(input.source) : input.settingsSchema.map((p) => p.name),
+    libraries: $libraries.map((l) => l.name),
+    t: $t,
+  }
+  // the last run's error, a test run's or, failing that, the newest logged
+  // run since the script was last saved, so its line still fits the source.
+  $: lastRun = $testRun ?? $runLog.find((r) => r.scriptId === script.id && r.started >= script.updatedAt) ?? null
+  $: runMark = lastRun && !lastRun.errorLibrary && lastRun.errorLine > 0 && lastRun.error ? [{ line: lastRun.errorLine, message: lastRun.error }] : []
+  $: marks = [...(syntax && syntaxErrorLine(syntax) > 0 ? [{ line: syntaxErrorLine(syntax), message: syntax }] : []), ...runMark] as LineMark[]
   $: takesMessage = triggerTakesMessage(catalog, input.trigger.type)
   $: risky = riskyFunctions(catalog, script.permissions)
   $: problems = blockProblems(input)
@@ -153,10 +185,17 @@
     }
   }
 
+  // ticking a provider makes the bare "ai" an AI block declared redundant,
+  // since any provider meets it.
+  function setAIPermissions(next: string[]): void {
+    const targeted = next.some((p) => aiTarget(p) !== '')
+    input = { ...input, permissions: targeted ? next.filter((p) => p !== permCloud && p !== permLocal) : next }
+  }
+
   async function test(): Promise<void> {
     busy = true
     try {
-      await runTest(input, testOn === 'open' ? ($visibleMessageId ?? 0) : 0)
+      await runTest(input, testOn === 'open' ? ($visibleMessageId ?? 0) : 0, ai && askModel, script.id)
     } catch (err) {
       toastError(errorMessage(err))
     } finally {
@@ -228,9 +267,11 @@
   </header>
 
   <div class="scroll">
-    {#if script.origin !== 'user'}
+    {#if script.origin === 'import'}
       <p class="notice">{$t(`scripts.origin.${script.origin}.notice`)}</p>
     {/if}
+    <AssistantReview {script} />
+    <LibraryNote {script} />
 
     <input class="cal-field" aria-label={$t('scripts.description')} placeholder={$t('scripts.description')} bind:value={input.description} />
 
@@ -266,10 +307,9 @@
     <fieldset class="group code">
       <legend>{$t(input.kind === 'lua' ? 'scripts.code' : 'scripts.blocks')}</legend>
       {#if input.kind === 'lua'}
-        <div class="source">
-          <LuaEditor label={$t('scripts.code')} content={input.source} on:change={(e) => (input = { ...input, source: e.detail })} />
-        </div>
-        {#if syntax}<p class="error" role="alert">{syntax}</p>{/if}
+        <LuaWorkbench label={$t('scripts.code')} content={input.source} {catalog} {assist} {marks} on:change={(e) => (input = { ...input, source: e.detail })} />
+        {#if syntax}<p class="error">{syntax}</p>{/if}
+        <Live text={syntax} />
       {:else if tree}
         <!-- the block editor mounts here; see blockEditor in stores/scripts.ts -->
         <div class="blocks" data-block-editor-mount>
@@ -297,7 +337,7 @@
           <button type="button" class="cal-btn" disabled={dirty || (compiled?.errors.length ?? 0) > 0} on:click={() => void convert()}>{$t('scripts.convert')}</button>
         </div>
         {#if compiled && compiled.errors.length > 0}
-          <ul class="errors" role="alert">
+          <ul class="errors">
             {#each compiled.errors as e, i (i)}
               <li>{e.block ? `${e.block}: ` : ''}{e.message}</li>
             {/each}
@@ -320,6 +360,10 @@
       {/if}
       <PermissionList {catalog} declared={input.permissions} editable locked={trigger?.permission ?? ''} on:change={(e) => (input = { ...input, permissions: e.detail })} />
       {#if input.permissions.some((p) => p === 'net' || p.startsWith('net:'))}<NetHosts declared={input.permissions} on:change={(e) => (input = { ...input, permissions: e.detail })} />{/if}
+      {#if ai}<AiAccess declared={input.permissions} on:change={(e) => setAIPermissions(e.detail)} />{/if}
+      {#if ai || usesAI(script.permissions)}
+        {#key script.id}<AiScriptOptions scriptId={script.id} />{/key}
+      {/if}
       {#if script.permissions.some((p) => p.startsWith('files.'))}<ScriptFolder scriptId={script.id} />{/if}
       {#if risky.length > 0}
         <p class="label">{$t('scripts.allowUnasked')}</p>
@@ -370,11 +414,12 @@
           />
         {/if}
         <button type="button" class="cal-btn" disabled={busy} on:click={() => void test()}>{$t('scripts.test.run')}</button>
+        {#if ai}<AiTestToggle bind:checked={askModel} />{/if}
       </div>
+      <Live text={testText} />
+      <Live text={compileText} assertive />
       {#if $testRun}
-        <p class="result {$testRun.status}" role="status">
-          {$t(`scripts.status.${$testRun.status}`)}{$testRun.error ? `: ${$testRun.error}` : ''}
-        </p>
+        <p class="result {$testRun.status}">{testText}</p>
         {#if $testRun.error && errorPlace($testRun, $t)}
           <p class="error-at">{$t('scripts.error.at').replace('{place}', errorPlace($testRun, $t))}</p>
         {/if}

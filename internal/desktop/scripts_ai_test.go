@@ -1,17 +1,22 @@
 package desktop
 
 import (
+	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"net/netip"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 
 	"github.com/peltonapp/Pelton/internal/credentials"
 	"github.com/peltonapp/Pelton/internal/scripting"
+	"github.com/peltonapp/Pelton/internal/scripting/ai"
 )
 
 const aiTestKey = "sk-desktop-test-9f8e7d6c5b4a"
@@ -145,7 +150,26 @@ func TestScriptTestRunAsksTheModelOnlyWhenTold(t *testing.T) {
 	if err != nil || run.Status != "ok" || len(*auths) != 0 {
 		t.Fatalf("%v %s %s, %d requests", err, run.Status, run.Error, len(*auths))
 	}
-	run, err = a.TestScriptAskingAI(in, 0)
+	run, err = a.TestScriptAskingAI(0, in, 0)
+	if err != nil || run.Status != "error" || len(*auths) != 0 {
+		t.Fatalf("an unsaved, unapproved script asked the model: %v %s %s, %d requests", err, run.Status, run.Error, len(*auths))
+	}
+	sc, err := a.CreateScript(in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if run, _ = a.TestScriptAskingAI(sc.ID, in, 0); run.Status != "error" || len(*auths) != 0 {
+		t.Fatalf("a saved script not yet approved asked the model: %s, %d requests", run.Status, len(*auths))
+	}
+	if _, err := a.SetScriptEnabled(sc.ID, true, sc.Permissions); err != nil {
+		t.Fatal(err)
+	}
+	edited := in
+	edited.Source += "\nprint(1)"
+	if run, _ = a.TestScriptAskingAI(sc.ID, edited, 0); run.Status != "error" || len(*auths) != 0 {
+		t.Fatalf("code changed since the approval asked the model: %s, %d requests", run.Status, len(*auths))
+	}
+	run, err = a.TestScriptAskingAI(sc.ID, in, 0)
 	if err != nil || run.Status != "ok" || len(*auths) != 1 {
 		t.Fatalf("%v %s %s, %d requests", err, run.Status, run.Error, len(*auths))
 	}
@@ -157,6 +181,46 @@ func TestScriptTestRunAsksTheModelOnlyWhenTold(t *testing.T) {
 	}
 	if printed[len(printed)-1] != "Friends" {
 		t.Fatalf("printed %v", printed)
+	}
+}
+
+func TestCloudAIProviderNeedsHTTPS(t *testing.T) {
+	a, _ := newScriptTestApp(t)
+	var resolved atomic.Value
+	resolved.Store(netip.MustParseAddr("203.0.113.20"))
+	a.aiLookup = func(context.Context, string) ([]netip.Addr, error) {
+		return []netip.Addr{resolved.Load().(netip.Addr)}, nil
+	}
+	plain := AIProviderInput{Name: "Cloud", Kind: "openai_compatible", BaseURL: "http://ai.example/v1", Model: "m"}
+	if _, err := a.SaveAIProvider(plain); !errors.Is(err, ai.ErrPlainHTTP) {
+		t.Fatalf("saved a cloud provider over http: %v", err)
+	}
+	if _, err := a.TestAIProvider(plain); !errors.Is(err, ai.ErrPlainHTTP) {
+		t.Fatalf("tested a cloud provider over http: %v", err)
+	}
+	if _, err := a.SaveAIProvider(AIProviderInput{Name: "Cloud", Kind: "openai_compatible", BaseURL: "https://ai.example/v1", Model: "m"}); err != nil {
+		t.Fatalf("refused an https provider: %v", err)
+	}
+
+	resolved.Store(netip.MustParseAddr("192.168.4.4"))
+	box, err := a.SaveAIProvider(AIProviderInput{Name: "Box", Kind: "ollama", BaseURL: "http://gpu-box.lan:11434", Model: "m"})
+	if err != nil {
+		t.Fatalf("refused a server on the local network over http: %v", err)
+	}
+	sc, err := a.CreateScript(luaInput(`local r = ai.ask("x", {provider = "box"}) print(r.ok)`, "ai:"+box.ID))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := a.SetScriptEnabled(sc.ID, true, sc.Permissions); err != nil {
+		t.Fatal(err)
+	}
+	resolved.Store(netip.MustParseAddr("203.0.113.21"))
+	run, err := a.RunScript(sc.ID, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if run.Status != "error" || !strings.Contains(run.Error, "https://") {
+		t.Fatalf("a provider that moved off the network was asked over http: %s %s", run.Status, run.Error)
 	}
 }
 

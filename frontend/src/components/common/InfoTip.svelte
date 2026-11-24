@@ -4,6 +4,7 @@
   // on it, so the bubble here is drawn by the app and shows in 150ms.
   import { onDestroy } from 'svelte'
   import { IconInfoCircle } from '@tabler/icons-svelte'
+  import { prefs } from '../../stores/prefs'
 
   /** The explanation the bubble shows. */
   export let text: string
@@ -43,6 +44,7 @@
   on:mouseleave={hide}
   on:focus={show}
   on:blur={hide}
+  on:keydown={(e) => e.key === 'Escape' && open && $prefs.design !== 'classic' && hide()}
   on:click|preventDefault|stopPropagation={toggle}
 >
   <IconInfoCircle size={13} stroke={1.7} />

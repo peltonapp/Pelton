@@ -259,7 +259,7 @@ func (s *scriptCalendar) CreateTask(ctx context.Context, in spaces.TaskInput) (s
 	a := s.app
 	req := TaskRequest{ListID: in.ListID, Title: in.Title, Notes: in.Notes, Due: taskDueText(in.Due), Priority: in.Priority, MailLinks: []string{}}
 	if in.MessageID != 0 {
-		m, err := a.store.GetMessage(a.ctx, in.MessageID)
+		m, err := a.store.GetMessage(scriptsCtx(a.ctx), in.MessageID)
 		if err != nil {
 			return spaces.Task{}, err
 		}
@@ -289,6 +289,7 @@ func (s *scriptCalendar) UpdateTask(ctx context.Context, id int64, ch spaces.Tas
 			Start: dto.Start, TimeZone: dto.TimeZone, Status: dto.Status, Percent: dto.Percent, Priority: dto.Priority,
 			RRule: dto.RRule, Reminders: dto.Reminders, Parent: dto.Parent, Categories: dto.Categories,
 			MailLinks: dto.MailLinks, Contacts: dto.Contacts, EventUIDs: dto.EventUIDs, SortOrder: dto.SortOrder,
+			Estimate: dto.Estimate,
 		}
 		if ch.Title != nil {
 			req.Title = *ch.Title
@@ -320,7 +321,7 @@ func (s *scriptCalendar) UpdateTask(ctx context.Context, id int64, ch spaces.Tas
 
 func (s *scriptCalendar) TaskFromMessage(_ context.Context, messageID int64) (spaces.TaskInput, error) {
 	a := s.app
-	m, err := a.store.GetMessage(a.ctx, messageID)
+	m, err := a.store.GetMessage(scriptsCtx(a.ctx), messageID)
 	if err != nil {
 		return spaces.TaskInput{}, err
 	}

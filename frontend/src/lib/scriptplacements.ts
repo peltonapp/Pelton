@@ -6,8 +6,9 @@
 // section from here.
 
 import { derived, get, type Readable } from 'svelte/store'
-import { IconBolt } from '@tabler/icons-svelte'
 import { registerMenuSection, type MenuContext, type MenuEntry } from '../stores/contextmenu'
+import { t } from './i18n'
+import { scriptText } from './scriptmark'
 import { selectedIds } from '../stores/listselect'
 import { placedScripts, runPlaced } from '../stores/scripts'
 import { visibleMessageId } from '../stores/tabs'
@@ -43,13 +44,23 @@ export function runAt(placement: string, scriptId: number, items: PlacedItem[]):
   void runPlaced(scriptId, placement, items)
 }
 
-/** The menu entries of the scripts placed in a menu, empty when there are none. */
+/** The scripts placed in a menu as their own titled group, nothing when there are none. */
 export function scriptMenuEntries(ctx: MenuContext): MenuEntry[] {
-  return placedNow(ctx.place).map((s) => ({
-    label: s.name,
-    icon: IconBolt,
-    action: () => runAt(ctx.place, s.scriptId, ctx.items),
-  }))
+  const list = placedNow(ctx.place)
+  if (list.length === 0) {
+    return []
+  }
+  return [
+    {
+      kind: 'group',
+      label: get(t)('scripts.menu.heading'),
+      items: list.map((s) => ({
+        label: scriptText(s.name),
+        script: s.name,
+        action: () => runAt(ctx.place, s.scriptId, ctx.items),
+      })),
+    },
+  ]
 }
 
 registerMenuSection(scriptMenuEntries)

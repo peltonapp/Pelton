@@ -218,6 +218,14 @@ export function dropHistoryEntry(id: number): void {
   entries.update((list) => list.filter((e) => e.id !== id))
 }
 
+/** Drops every entry that touched one of the given messages. */
+export function dropHistoryTouching(ids: ReadonlySet<number>): void {
+  if (ids.size === 0) {
+    return
+  }
+  entries.update((list) => list.filter((e) => !e.touches.some((k) => ids.has(Number(k.slice(k.indexOf(':') + 1))))))
+}
+
 /** Empties the history. */
 export function clearHistory(): void {
   entries.set([])

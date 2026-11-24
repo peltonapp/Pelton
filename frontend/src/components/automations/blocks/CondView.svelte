@@ -10,12 +10,16 @@
   import trashIcon from '@phosphor-icons/core/assets/duotone/trash-duotone.svg?raw'
   import plusIcon from '@phosphor-icons/core/assets/duotone/plus-duotone.svg?raw'
   import unknownIcon from '@phosphor-icons/core/assets/duotone/puzzle-piece-duotone.svg?raw'
+  import testIcon from '@phosphor-icons/core/assets/duotone/test-tube-duotone.svg?raw'
+  import Modal from '../../common/Modal.svelte'
   import Ph from '../../common/Ph.svelte'
   import Select from '../../common/Select.svelte'
+  import MatchTester from '../MatchTester.svelte'
   import ArgField from './ArgField.svelte'
   import { t } from '../../../lib/i18n'
-  import { entryLabel, type BlockArg, type BlockCond } from '../../../lib/scripting'
+  import { entryLabel, needs, type BlockArg, type BlockCond } from '../../../lib/scripting'
   import { getEditor } from './context'
+  import { onTestedMessage, testableOnMail } from './matchcond'
   import type { ScopeEntry } from './scope'
   import { condKey, isGroup, removeCond, setArgIn, setCond, shiftCond, unwrapCond, updateCond, wrapCond, type CondPath } from './tree'
   import '../../../theme/controls.css'
@@ -33,6 +37,7 @@
   const { tree, catalog, issues, dropAt, dragging } = ed
 
   let addButton: HTMLButtonElement
+  let testing = false
 
   $: key = condKey(cp)
   $: isRoot = cp.path.length === 0
@@ -46,6 +51,7 @@
   $: items = cond.items ?? []
   $: drop = $dropAt?.kind === 'cond' && condKey($dropAt.group) === key ? $dropAt.index : -1
   $: beingDragged = $dragging?.kind === 'cond' && condKey($dragging.cp) === key
+  $: testable = testableOnMail(cond, $catalog)
   $: kindItems = (['all', 'any', 'not'] as const).map((k) => ({ value: k, label: $t(`scripts.blocks.group.${k}`) }))
 
   function setArg(name: string, arg: BlockArg | undefined): void {
@@ -73,7 +79,7 @@
       {#if !known}<Ph svg={unknownIcon} size={14} />{/if}
       <span class="title">{title}</span>
       {#if !known}<code class="raw">{cond.type ?? cond.kind}</code>{/if}
-      {#if def?.permission}<span class="perm">{def.permission}</span>{/if}
+      {#each needs(def) as p (p)}<span class="perm">{p}</span>{/each}
     {/if}
     <span class="tools">
       {#if !isRoot}
@@ -88,6 +94,9 @@
       {/if}
       {#if group && items.length === 1}
         <button type="button" class="tool text" on:click={() => ed.apply(unwrapCond($tree, cp))}>{$t('scripts.blocks.cond.ungroup')}</button>
+      {/if}
+      {#if testable}
+        <button type="button" class="tool" aria-label={$t('scripts.match.try')} title={$t('scripts.match.try')} on:click={() => (testing = true)}><Ph svg={testIcon} size={13} /></button>
       {/if}
       {#if !isRoot || !group || items.length > 0}
         <button type="button" class="tool danger" aria-label={$t('scripts.blocks.cond.remove')} title={$t('scripts.blocks.cond.remove')} on:click={() => ed.apply(removeCond($tree, cp))}><Ph svg={trashIcon} size={13} /></button>
@@ -126,6 +135,12 @@
     <p class="problem">{$t('scripts.blocks.unknownKept')}</p>
   {/if}
 </div>
+
+{#if testing}
+  <Modal title={$t('scripts.match.title')} size="large" on:close={() => (testing = false)}>
+    <MatchTester when={onTestedMessage(cond, $catalog)} idBase={`m-${key}`} />
+  </Modal>
+{/if}
 
 <style>
   .cond {
@@ -196,7 +211,18 @@
     opacity: 1;
   }
 
+  .tool::after {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: max(100%, var(--target-min));
+    height: max(100%, var(--target-min));
+    transform: translate(-50%, -50%);
+  }
+
   .tool {
+    position: relative;
     display: inline-flex;
     align-items: center;
     justify-content: center;

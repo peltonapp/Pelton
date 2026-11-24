@@ -40,6 +40,9 @@ import {
   type ScriptConfirmRequest,
   type ScriptFile,
   type ScriptInput,
+  type ScriptLibrary,
+  type ScriptLibraryInput,
+  type ScriptRef,
   type ScriptResult,
   type ScriptRun,
 } from '../lib/scripting'
@@ -191,6 +194,10 @@ export async function loadRuns(): Promise<void> {
 /** Opens a script in the editor and its runs in the log. */
 export function selectScript(id: number | null): void {
   selectedScriptId.set(id)
+  if (id !== null) {
+    selectedLibraryId.set(null)
+    galleryOpen.set(false)
+  }
   testRun.set(null)
   void loadRuns().catch((err) => toastError(errorMessage(err)))
 }
@@ -287,15 +294,128 @@ export async function runNow(s: Script, messageId: number): Promise<ScriptRun | 
   }
 }
 
-/** Dry runs a script as written; the result shows in the editor. */
-export async function runTest(input: ScriptInput, messageId: number): Promise<ScriptRun> {
-  const run = await api.testScript(input, messageId)
+/**
+ * Dry runs a script as written; the result shows in the editor. With askModel its AI steps really ask a
+ * model the user approved for the saved script scriptId.
+ */
+export async function runTest(input: ScriptInput, messageId: number, askModel = false, scriptId = 0): Promise<ScriptRun> {
+  const run = askModel ? await api.testScriptAskingAI(scriptId, input, messageId) : await api.testScript(input, messageId)
   testRun.set(run)
   return run
 }
 
+/** Every shared library, by name. */
+export const libraries = writable<ScriptLibrary[]>([])
+
+/** The library open in the editor, or null. */
+export const selectedLibraryId = writable<number | null>(null)
+
+/** The library open in the editor. */
+export const selectedLibrary: Readable<ScriptLibrary | null> = derived(
+  [libraries, selectedLibraryId],
+  ([$libraries, $id]) => $libraries.find((l) => l.id === $id) ?? null,
+)
+
+/** Whether the template gallery is open in the editor pane. */
+export const galleryOpen = writable(false)
+
+function replaceLibrary(l: ScriptLibrary): ScriptLibrary {
+  libraries.update((list) => [...list.filter((x) => x.id !== l.id), l].sort((a, b) => a.name.localeCompare(b.name)))
+  return l
+}
+
+/** Loads the shared libraries. */
+export async function loadLibraries(): Promise<void> {
+  libraries.set(await api.listScriptLibraries())
+}
+
+/** Opens a library in the editor, or closes it with null. */
+export function selectLibrary(id: number | null): void {
+  selectedLibraryId.set(id)
+  if (id !== null) {
+    selectedScriptId.set(null)
+    galleryOpen.set(false)
+  }
+}
+
+/** Opens the template gallery in the editor pane. */
+export function openGallery(): void {
+  selectedScriptId.set(null)
+  selectedLibraryId.set(null)
+  galleryOpen.set(true)
+}
+
+/** Scripts a library change just switched off, for the user to review, or null. */
+export interface LibraryReview {
+  library: string
+  scripts: ScriptRef[]
+}
+
+/** The scripts the last library change switched off, waiting for the review dialog, or null. */
+export const libraryReview = writable<LibraryReview | null>(null)
+
+async function afterLibraryChange(library: string, switchedOff: ScriptRef[]): Promise<void> {
+  if (switchedOff.length === 0) {
+    return
+  }
+  await loadScripts()
+  libraryReview.set({ library, scripts: switchedOff })
+}
+
+/** Stores a new library and opens it. */
+export async function createLibrary(input: ScriptLibraryInput): Promise<ScriptLibrary> {
+  const saved = await api.createScriptLibrary(input)
+  const l = replaceLibrary(saved.library)
+  selectLibrary(l.id)
+  await afterLibraryChange(l.name, saved.switchedOff)
+  return l
+}
+
+/** Saves a library. */
+export async function saveLibrary(id: number, input: ScriptLibraryInput): Promise<ScriptLibrary> {
+  const saved = await api.updateScriptLibrary(id, input)
+  const l = replaceLibrary(saved.library)
+  await afterLibraryChange(l.name, saved.switchedOff)
+  return l
+}
+
+/** Deletes a library. */
+export async function removeLibrary(id: number): Promise<void> {
+  const name = get(libraries).find((l) => l.id === id)?.name ?? ''
+  const switchedOff = await api.deleteScriptLibrary(id)
+  libraries.update((list) => list.filter((l) => l.id !== id))
+  if (get(selectedLibraryId) === id) {
+    selectedLibraryId.set(null)
+  }
+  await afterLibraryChange(name, switchedOff)
+}
+
+/** The switched-on scripts saving a library under name would switch off; id is 0 for a new library. */
+export async function libraryImpact(id: number, name: string): Promise<ScriptRef[]> {
+  return (await api.scriptLibraryImpact(id, name)).filter((s) => s.enabled)
+}
+
+/** Writes a library to a file the user picks. */
+export async function exportLibrary(id: number): Promise<void> {
+  if (await api.exportScriptLibrary(id)) {
+    toastSuccess(get(t)('scripts.toast.libraryExported'))
+  }
+}
+
+/** Makes a script from a gallery template, switched off, and opens it. */
+export async function useTemplate(id: string): Promise<Script> {
+  const s = replace(await api.useScriptTemplate(id))
+  galleryOpen.set(false)
+  selectScript(s.id)
+  toastSuccess(get(t)('scripts.gallery.created').replace('{name}', s.name))
+  return s
+}
+
 /** Where a failed run stopped, for its error message: the Lua line or the block, or ''. */
-export function errorPlace(run: Pick<ScriptRun, 'errorLine' | 'errorBlock'>, say: (key: string) => string): string {
+export function errorPlace(run: Pick<ScriptRun, 'errorLine' | 'errorBlock' | 'errorLibrary'>, say: (key: string) => string): string {
+  if (run.errorLine > 0 && run.errorLibrary) {
+    return say('scripts.error.libraryLine').replace('{n}', String(run.errorLine)).replace('{name}', run.errorLibrary)
+  }
   if (run.errorLine > 0) {
     return say('scripts.error.line').replace('{n}', String(run.errorLine))
   }
@@ -343,10 +463,19 @@ export async function pickImport(): Promise<void> {
   }
 }
 
-/** Stores the previewed script, switched off, and opens it. */
+/** Stores the previewed script, switched off, or the previewed library, and opens it. */
 export async function confirmImport(): Promise<Script | null> {
   const file = get(importPreview)
   if (!file) {
+    return null
+  }
+  if (file.library) {
+    const saved = await api.importScriptLibrary(file.text)
+    const l = replaceLibrary(saved.library)
+    importPreview.set(null)
+    selectLibrary(l.id)
+    toastSuccess(get(t)('scripts.toast.imported').replace('{name}', l.name))
+    await afterLibraryChange(l.name, saved.switchedOff)
     return null
   }
   const s = replace(await api.importScript(file.text))
@@ -415,6 +544,7 @@ export function startScriptEvents(): Unsubscribe {
     }),
     onScriptsChanged(() => {
       void loadScripts().catch(() => undefined)
+      void loadLibraries().catch(() => undefined)
     }),
     onScriptConfirm((req) => pendingConfirms.update((list) => [...list, req])),
     onScriptCatchUp((c) => pendingCatchUps.update((list) => [...list.filter((x) => x.scriptId !== c.scriptId), c])),

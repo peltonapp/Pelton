@@ -18,6 +18,15 @@ export interface MenuItem {
    * has no hint.
    */
   hint?: string
+  /** Set for an entry that runs a script, to the script's name: the entry carries the script mark. */
+  script?: string
+}
+
+// a titled group of entries, such as the scripts placed in a menu.
+export interface MenuGroup {
+  kind: 'group'
+  label: string
+  items: MenuItem[]
 }
 
 // a color-swatch row for picking a message flag color inline. current is the
@@ -28,7 +37,7 @@ export interface MenuColors {
   onPick: (color: number) => void
 }
 
-export type MenuEntry = MenuItem | 'separator' | MenuColors
+export type MenuEntry = MenuItem | 'separator' | MenuColors | MenuGroup
 
 export interface MenuState {
   x: number

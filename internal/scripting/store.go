@@ -13,7 +13,7 @@ import (
 var ErrNotFound = errors.New("scripting: not found")
 
 // Store keeps scripts, their run log and their key value storage in SQLite.
-// The tables come from the storage migrations 0101 to 0103.
+// The tables come from the storage migrations 0101 to 0105.
 type Store struct {
 	db *sql.DB
 }
@@ -132,9 +132,10 @@ VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, '', ?)`,
 
 // runDetail is what a run's log row keeps beside its steps.
 type runDetail struct {
-	ErrorLine  int      `json:"errorLine,omitempty"`
-	ErrorBlock string   `json:"errorBlock,omitempty"`
-	NotReached []string `json:"notReached,omitempty"`
+	ErrorLine    int      `json:"errorLine,omitempty"`
+	ErrorBlock   string   `json:"errorBlock,omitempty"`
+	ErrorLibrary string   `json:"errorLibrary,omitempty"`
+	NotReached   []string `json:"notReached,omitempty"`
 }
 
 func nonNilMap(m map[string]any) map[string]any {
@@ -234,7 +235,7 @@ func (st *Store) FinishRun(ctx context.Context, r *Run) error {
 		}
 		r.ID = id
 	}
-	detail := mustJSON(runDetail{ErrorLine: r.ErrorLine, ErrorBlock: r.ErrorBlock, NotReached: r.NotReached})
+	detail := mustJSON(runDetail{ErrorLine: r.ErrorLine, ErrorBlock: r.ErrorBlock, ErrorLibrary: r.ErrorLibrary, NotReached: r.NotReached})
 	_, err := st.db.ExecContext(ctx, `
 UPDATE script_runs SET duration_ms = ?, status = ?, error = ?, steps = ?, changes = ?, detail = ? WHERE id = ?`,
 		r.Duration.Milliseconds(), string(r.Status), r.Error, steps, r.Changes(), detail, r.ID)
@@ -284,7 +285,7 @@ func (st *Store) Runs(ctx context.Context, scriptID int64, limit int) ([]*Run, e
 			r.Steps = nil
 		}
 		if json.Unmarshal([]byte(detail), &d) == nil {
-			r.ErrorLine, r.ErrorBlock, r.NotReached = d.ErrorLine, d.ErrorBlock, d.NotReached
+			r.ErrorLine, r.ErrorBlock, r.ErrorLibrary, r.NotReached = d.ErrorLine, d.ErrorBlock, d.ErrorLibrary, d.NotReached
 		}
 		out = append(out, &r)
 	}

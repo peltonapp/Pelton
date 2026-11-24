@@ -29,6 +29,7 @@ vi.mock('../../stores/signatures', async (importOriginal) => ({
 }))
 
 import Composer2 from './Composer2.svelte'
+import { expectAxeClean } from '../../test/axe'
 import { availabilityRequest, composeSessions, getSession, openCompose, openReply, updateCompose, type ComposeSession } from '../../stores/compose'
 import { prefs } from '../../stores/prefs'
 import { calendars, calendarSettingsLoaded } from '../../stores/calendar'
@@ -109,11 +110,12 @@ describe('Composer2', () => {
     expect(screen.getByRole('button', { name: 'Send' })).toBeEnabled()
   })
 
-  it('has no editor mode switch', () => {
+  it('has no editor mode switch', async () => {
     const id = openCompose(1, 'wysiwyg')
     mount(id)
     expect(screen.queryByRole('radiogroup', { name: 'Editor mode' })).toBeNull()
     expect(screen.queryByRole('button', { name: 'Markdown' })).toBeNull()
+    await expectAxeClean()
   })
 
   it('reveals Cc from the To row', async () => {

@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/svelte'
 import userEvent from '@testing-library/user-event'
 import type { Attendee, Calendar, EventDraft, FreeBusy, FreeBusyQuery } from '../../lib/types'
+import { formatTimeRange } from '../../lib/calformat'
 
 const api = vi.hoisted(() => ({ lookupFreeBusy: vi.fn() }))
 
@@ -34,6 +35,9 @@ import { toRFC3339 } from '../../lib/caldate'
 
 // Monday 16 November 2026.
 const at = (d: number, h: number, m = 0): Date => new Date(2026, 10, d, h, m)
+
+// the system locale decides whether an early hour is written 8:00 or 08:00.
+const span = (h1: number, m1: number, h2: number, m2: number): string => formatTimeRange(at(16, h1, m1), at(16, h2, m2), '24')
 
 const people: Attendee[] = [
   { email: 'ada@example.com', name: 'Ada Lovelace', role: 'REQ-PARTICIPANT', partStat: 'NEEDS-ACTION', rsvp: true },
@@ -123,7 +127,7 @@ describe('SchedulingAssistant', () => {
 
   it('draws a labelled row per person, and no information quietly', async () => {
     mount()
-    expect(await screen.findByRole('img', { name: 'You: busy 9:00 - 9:30' })).toBeInTheDocument()
+    expect(await screen.findByRole('img', { name: `You: busy ${span(9, 0, 9, 30)}` })).toBeInTheDocument()
     expect(screen.getByRole('img', { name: 'Ada Lovelace: busy 10:30 - 11:30' })).toBeInTheDocument()
     expect(screen.getByRole('img', { name: 'grace@example.com: tentative 13:00 - 14:00' })).toBeInTheDocument()
     const nobody = screen.getByRole('img', { name: 'nobody@example.org: No information' })
@@ -149,7 +153,7 @@ describe('SchedulingAssistant', () => {
     mount({}, { change })
     const group = await screen.findByRole('group', { name: 'Suggested times' })
     const chips = within(group).getAllByRole('button').map((b) => b.textContent?.trim())
-    expect(chips).toEqual(['8:00 - 9:00', '9:30 - 10:30', '11:30 - 12:30', '14:00 - 15:00', '15:00 - 16:00', '16:00 - 17:00'])
+    expect(chips).toEqual([span(8, 0, 9, 0), span(9, 30, 10, 30), '11:30 - 12:30', '14:00 - 15:00', '15:00 - 16:00', '16:00 - 17:00'])
     await userEvent.click(within(group).getByRole('button', { name: '11:30 - 12:30' }))
     expect(change.mock.calls[0][0].detail).toEqual({ start: at(16, 11, 30), end: at(16, 12, 30) })
   })
@@ -279,7 +283,7 @@ describe('EventEditor scheduling view', () => {
     expect((api.lookupFreeBusy.mock.calls[0][0] as FreeBusyQuery).organizer).toBe('me@example.com')
     const group = await screen.findByRole('group', { name: 'Suggested times' })
     await userEvent.click(within(group).getAllByRole('button')[0])
-    await waitFor(() => expect(screen.getByRole('slider', { name: 'Proposed time' })).toHaveAttribute('aria-valuetext', '8:00 - 9:00'))
+    await waitFor(() => expect(screen.getByRole('slider', { name: 'Proposed time' })).toHaveAttribute('aria-valuetext', span(8, 0, 9, 0)))
     await userEvent.click(screen.getByRole('button', { name: 'Save' }))
     const saved = save.mock.calls[0][0].detail as EventDraft
     expect([saved.start, saved.end]).toEqual([toRFC3339(at(16, 8)), toRFC3339(at(16, 9))])

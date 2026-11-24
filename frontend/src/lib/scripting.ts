@@ -7,6 +7,8 @@
 // The block tree types mirror internal/scripting/blocks.go exactly; a block
 // script is stored as that tree's JSON and compiled to Lua by the backend.
 
+import { aiTarget, permCloud } from './ai'
+
 /** How a script is written. A block script compiles to Lua; Lua never turns back into blocks. */
 export type ScriptKind = 'lua' | 'blocks'
 
@@ -111,7 +113,11 @@ export interface ScriptTriggerDef extends RegistryMeta {
 export interface ScriptConditionDef extends RegistryMeta {
   params: ScriptParam[]
   permission?: string
+  /** Every permission it needs, permission first. */
+  permissions?: string[]
   lua: string
+  /** The message field a text condition tests, for the match tester. */
+  field?: string
 }
 
 /** A step a block script can take. */
@@ -119,6 +125,8 @@ export interface ScriptActionDef extends RegistryMeta {
   params: ScriptParam[]
   outputs?: ScriptField[]
   permission?: string
+  /** Every permission it needs, permission first. */
+  permissions?: string[]
   risky?: boolean
   lua: string
   /** The triggers the action works with; empty means all. */
@@ -135,6 +143,8 @@ export interface ScriptFunctionDef {
   params: ScriptParam[]
   returns?: ScriptField[]
   permission?: string
+  /** Every permission it needs, permission first. */
+  permissions?: string[]
   risky?: boolean
   effect?: boolean
 }
@@ -200,6 +210,99 @@ export interface ScriptCatalog {
   inputKinds: ScriptInputKindDef[]
   resultActions: ScriptResultActionDef[]
   placements: ScriptPlacementDef[]
+  /** The ready made scripts of the gallery. */
+  templates?: ScriptTemplateDef[]
+}
+
+/** A ready made script the user copies from the gallery. */
+export interface ScriptTemplateDef extends RegistryMeta {
+  kind: ScriptKind
+  trigger: { type: string; params?: Record<string, unknown> }
+  blocks?: BlockTree
+  source?: string
+  settings?: ScriptParam[]
+  /** What it declares and what its blocks need. */
+  permissions: string[]
+  /** Whether one of those sends data to an AI provider. */
+  ai: boolean
+  /** The libraries it requires. */
+  requires?: string[]
+  /** Why it would not compile now, e.g. an AI step without a provider. */
+  missing?: string
+}
+
+/** A Lua module the user writes once and loads from scripts with require("name"). */
+export interface ScriptLibrary {
+  id: number
+  name: string
+  description: string
+  source: string
+  origin: ScriptOrigin
+  createdAt: string
+  updatedAt: string
+}
+
+/** What the editor saves of a library. */
+export interface ScriptLibraryInput {
+  name: string
+  description: string
+  source: string
+}
+
+/** A script a library change reaches. */
+export interface ScriptRef {
+  id: number
+  name: string
+  enabled: boolean
+}
+
+/** A stored library with the scripts storing it switched off. */
+export interface ScriptLibrarySaved {
+  library: ScriptLibrary
+  switchedOff: ScriptRef[]
+}
+
+/** Why a script was switched off by a change to a library it loads, with that change since its approval. */
+export interface ScriptLibraryNote {
+  scriptId: number
+  /** False when there is no such note. */
+  exists: boolean
+  library: string
+  when: string
+  /** Set when the library was deleted. */
+  deleted: boolean
+  diff: { op: ' ' | '-' | '+'; text: string }[]
+}
+
+/** Asks which recent messages of a folder a pattern or a condition matches. */
+export interface MatchRequest {
+  folder: string
+  accountId: number
+  limit: number
+  /** An RE2 expression tried on field. */
+  pattern: string
+  /** subject, from, to, body or headers.<name>. */
+  field: string
+  /** A condition or group; with it a message matches when the condition holds. */
+  when?: BlockCond
+}
+
+/** One message a match test matched; spans are UTF-16 offsets into text. */
+export interface MatchHit {
+  messageId: number
+  subject: string
+  from: string
+  date: number
+  text?: string
+  spans: [number, number][]
+}
+
+/** What a match test found. */
+export interface MatchReport {
+  scanned: number
+  matched: number
+  matches: MatchHit[]
+  timedOut: boolean
 }
 
 /** A place a script is offered at, with its options. */
@@ -407,6 +510,8 @@ export interface ScriptRun {
   errorLine: number
   /** The block of a block script that was running when it failed. */
   errorBlock: string
+  /** The library errorLine counts in, '' for the script itself. */
+  errorLibrary?: string
   /** The blocks of a block script the run never got to. */
   notReached: string[]
 }
@@ -439,6 +544,8 @@ export interface ScriptConfirmRequest {
   scriptName: string
   function: string
   summary: string
+  /** Asked every time, e.g. a call an AI model chose or changed recipients; offers no "allow without asking". */
+  everyTime?: boolean
 }
 
 /** A script asking whether to run over mail that arrived while Pelton was closed. */
@@ -455,10 +562,15 @@ export interface ScriptToast {
   level: string
 }
 
-/** A script file read for import, before anything is stored. */
+/** A script or library file read for import, before anything is stored. */
 export interface ScriptFile {
   script: Script
+  /** The library a file of kind "library" holds. */
+  library: ScriptLibrary | null
+  kind: string
   text: string
+  /** The libraries the file requires that do not exist here. */
+  missingLibraries: string[]
 }
 
 /** The file extension of an exported script. */
@@ -554,12 +666,35 @@ export function permissionDef(catalog: ScriptCatalog, id: string): ScriptPermiss
   return catalog.permissions.find((p) => p.id === base)
 }
 
+/** Every permission an entry needs: its list, or its single permission. */
+export function needs(def: { permission?: string; permissions?: string[] } | undefined): string[] {
+  if (!def) {
+    return []
+  }
+  if (def.permissions && def.permissions.length > 0) {
+    return def.permissions
+  }
+  return def.permission ? [def.permission] : []
+}
+
+/**
+ * Whether the declared permissions meet one an entry needs: declared as is,
+ * or a base such as "net" met by a targeted form such as "net:example.org".
+ * An AI step's "ai" is met by any provider, "ai:<id>" or "ai_local:<id>".
+ */
+export function permissionMet(perm: string, declared: string[]): boolean {
+  if (perm.includes(':')) {
+    return declared.includes(perm)
+  }
+  return declared.some((p) => p === perm || p.startsWith(`${perm}:`) || (perm === permCloud && aiTarget(p) !== ''))
+}
+
 /** The risky functions a script's declared permissions let it call, for "allow without asking". */
 export function riskyFunctions(catalog: ScriptCatalog, declared: string[]): string[] {
   const out: string[] = []
   for (const m of catalog.modules) {
     for (const f of m.functions) {
-      if (f.risky && (!f.permission || declared.includes(f.permission))) {
+      if (f.risky && needs(f).every((p) => permissionMet(p, declared))) {
         out.push(`${m.id}.${f.name}`)
       }
     }
@@ -596,4 +731,34 @@ export function placementFits(p: ScriptPlacementDef, s: Pick<Script, 'trigger'>)
 /** Whether two inputs differ, for the editor's unsaved state. */
 export function inputsDiffer(a: ScriptInput, b: ScriptInput): boolean {
   return JSON.stringify(a) !== JSON.stringify(b)
+}
+
+/**
+ * Markdown a script wrote with every "<" outside code turned into text, so
+ * none of it renders as html: a meta refresh or a form in a result could
+ * otherwise load a page, and carry what the script read, without the
+ * script's network permission.
+ */
+export function inertMarkdown(md: string): string {
+  let fence = ''
+  return md
+    .split('\n')
+    .map((line) => {
+      const marker = /^\s{0,3}(`{3,}|~{3,})/.exec(line)?.[1]
+      if (fence) {
+        if (marker && marker[0] === fence[0] && marker.length >= fence.length) {
+          fence = ''
+        }
+        return line
+      }
+      if (marker) {
+        fence = marker
+        return line
+      }
+      return line
+        .split(/(`+[^`]*`+)/)
+        .map((part, i) => (i % 2 === 1 ? part : part.replaceAll('<', '&lt;')))
+        .join('')
+    })
+    .join('\n')
 }

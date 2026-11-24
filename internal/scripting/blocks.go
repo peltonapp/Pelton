@@ -241,9 +241,11 @@ func (c *compiler) mark(depth int, id string) {
 	}
 }
 
-func (c *compiler) need(perm string) {
-	if perm != "" && !slices.Contains(c.perms, perm) {
-		c.perms = append(c.perms, perm)
+func (c *compiler) need(perms ...string) {
+	for _, perm := range perms {
+		if perm != "" && !slices.Contains(c.perms, perm) {
+			c.perms = append(c.perms, perm)
+		}
 	}
 }
 
@@ -277,7 +279,7 @@ func (c *compiler) compileBlock(b Block, depth int) {
 			c.fail(b.ID, "%s only works with the trigger %s", b.Type, strings.Join(a.Triggers, ", "))
 			return
 		}
-		c.need(a.Permission)
+		c.need(a.Permissions...)
 		expr, ok := c.fill(b.ID, a.Lua, a.Params, b.Args)
 		if !ok {
 			return
@@ -389,7 +391,7 @@ func (c *compiler) cond(block string, k Cond) string {
 			c.fail(block, "unknown condition %q", k.Type)
 			return "false"
 		}
-		c.need(def.Permission)
+		c.need(def.Permissions...)
 		expr, ok := c.fill(block, def.Lua, def.Params, k.Args)
 		if !ok {
 			return "false"

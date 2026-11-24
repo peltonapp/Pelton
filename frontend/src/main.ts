@@ -17,7 +17,7 @@ import './style.css'
 import './theme/design-new.css'
 
 import { mount } from 'svelte'
-import Root from './Root.svelte'
+import Root, { loadWindow, windowView } from './Root.svelte'
 import { getLockState, isDemoMode, windowMaterialActive } from './lib/api'
 import { setDemoActive } from './lib/demo'
 import { initSmoothCaret } from './lib/smoothcaret'
@@ -26,6 +26,17 @@ const target = document.getElementById('app')
 if (!target) {
   throw new Error('pelton: #app mount point missing')
 }
+
+// a message, a compose or the send activity opened in a window of its own
+// loads the same page with ?window=message&id=N, ?window=compose&token=T or
+// ?window=outbox, and gets that alone instead of the app. ?window=quick is the
+// quick compose window. The view's code loads while the backend answers the
+// questions below.
+const params = new URLSearchParams(window.location.search)
+const messageId = Number(params.get('id')) || 0
+const composeToken = params.get('token') ?? ''
+const view = windowView(params.get('window') ?? '', messageId, composeToken)
+const component = loadWindow(view)
 
 // the cosmetic demo mode (--potatoes-are-nice) has to be known before anything
 // renders. Asking for it from the root component's onMount was too late: a
@@ -52,17 +63,13 @@ await windowMaterialActive()
 // the backend refuses every mail call while locked whatever the page thinks.
 const lockState = await getLockState().catch(() => null)
 
-// a message, a compose or the send activity opened in a window of its own
-// loads the same page with ?window=message&id=N, ?window=compose&token=T or
-// ?window=outbox, and gets that alone instead of the app. ?window=quick is the
-// quick compose window.
-const params = new URLSearchParams(window.location.search)
 const app = mount(Root, {
   target,
   props: {
-    kind: params.get('window') ?? '',
-    messageId: Number(params.get('id')) || 0,
-    composeToken: params.get('token') ?? '',
+    view,
+    component: await component,
+    messageId,
+    composeToken,
     lockState,
   },
 })

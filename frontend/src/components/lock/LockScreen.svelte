@@ -134,6 +134,14 @@
   })
 
   onDestroy(() => clearInterval(waitTimer))
+
+  // the wait is read out once as it starts, not every second it counts down.
+  let waitSaid = ''
+  $: if (waitLeft > 0 && waitSaid === '') {
+    waitSaid = $t('applock.wait').replace('{seconds}', String(waitLeft))
+  } else if (waitLeft <= 0 && waitSaid !== '') {
+    waitSaid = ''
+  }
 </script>
 
 <svelte:window on:focus={autoUnlock} />
@@ -164,6 +172,7 @@
           autocomplete="off"
           spellcheck="false"
           aria-label={$t('applock.passphrase')}
+          aria-invalid={message !== '' ? 'true' : undefined}
           placeholder={$t('applock.passphrase')}
           disabled={busy || waitLeft > 0}
         />
@@ -174,7 +183,8 @@
       </form>
     {/if}
 
-    <p class="message" role="alert">
+    <p class="sr-only" role="alert">{waitLeft > 0 ? waitSaid : message}</p>
+    <p class="message" aria-hidden="true">
       {#if waitLeft > 0}
         {$t('applock.wait').replace('{seconds}', String(waitLeft))}
       {:else}

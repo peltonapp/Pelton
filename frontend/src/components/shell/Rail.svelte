@@ -190,6 +190,18 @@
     return entry.transient ? `${name} (${$t('spaces.notPinned')})` : name
   }
 
+  // the name assistive tech hears: the tip, and what the badge shows.
+  function spaceName(entry: NavEntry): string {
+    const quiet = $focus.active
+    const news =
+      entry.key === 'mail' && unread > 0 && !quiet ? $t('a11y.unreadCount').replace('{count}', String(unread))
+      : entry.key === 'feeds' && $feedsUnread > 0 && !quiet ? $t('a11y.unread')
+      : entry.key === 'tasks' && $taskBadge > 0 ? $t('a11y.badgeCount').replace('{count}', String($taskBadge))
+      : entry.key === 'chat' && $chatUnreadRooms > 0 && !quiet ? $t('a11y.unreadCount').replace('{count}', String($chatUnreadRooms))
+      : ''
+    return news ? `${spaceTip(entry)}, ${news}` : spaceTip(entry)
+  }
+
   /** A view pinned to the middle of the rail. */
   interface Pin {
     id: string
@@ -278,8 +290,9 @@
         data-space={entry.key}
         data-reorder-id={entry.transient ? undefined : entry.key}
         data-reorder-handle={entry.transient ? undefined : ''}
-        aria-label={spaceTip(entry)}
+        aria-label={spaceName(entry)}
         aria-current={$space === entry.key ? 'page' : undefined}
+        aria-keyshortcuts={entry.transient ? undefined : 'Alt+ArrowUp Alt+ArrowDown'}
         use:tip={{ text: spaceTip(entry), shortcut: spaceKeys(entry.key), side: tipSide }}
         use:maildrop={spaceDrop(entry.key)}
         animate:flip={{ duration: dur(motion.base) }}
@@ -326,13 +339,13 @@
   </div>
 
   {#if pins.length > 0}
-    <div class="group pins" aria-label={$t('rail.pins')} bind:this={pinsEl}>
+    <div class="group pins" role="group" aria-label={$t('rail.pins')} bind:this={pinsEl}>
       {#each pins as pin (pin.id)}
         <button
           type="button"
           class="entry pin"
           class:active={pin.active}
-          aria-label={pin.label}
+          aria-label={pin.unread && !$focus.active ? `${pin.label}, ${$t('a11y.unread')}` : pin.label}
           aria-current={pin.active ? 'page' : undefined}
           style={pin.color ? `--pin-color:${pin.color}` : ''}
           use:tip={{ text: pin.label, side: tipSide }}

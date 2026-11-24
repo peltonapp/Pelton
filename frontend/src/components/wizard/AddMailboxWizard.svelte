@@ -44,6 +44,7 @@
   import { classifyConnectionError, type ConnectionProblem } from '../../lib/connectionError'
   import type { AddAccountRequest, Account, Discovered, Folder, TLSMode, UntrustedCert } from '../../lib/types'
   import { t } from '../../lib/i18n'
+  import { loadImportDialog } from '../../lib/lazyload'
 
   const dispatch = createEventDispatcher<{ close: void; added: Account; done: Account }>()
 
@@ -57,6 +58,10 @@
    * instead of the wizard showing its own done screen.
    */
   export let embedded = false
+  // when set, the wizard syncs everything as soon as the account is added and
+  // never shows the folder picker. Onboarding needs this: the folder choice
+  // there is not worth a screen of its own.
+  export let skipFolderPicker = false
 
   type Step = 'email' | 'config' | 'oauth' | 'verify' | 'details' | 'working' | 'folders' | 'done' | 'error'
   let step: Step = 'email'
@@ -117,7 +122,19 @@
   const imapPorts: Record<string, number> = { ssl: 993, starttls: 143 }
   const smtpPorts: Record<string, number> = { ssl: 465, starttls: 587 }
 
+  // server fields the user edited by hand. Autodiscovery never fills these, nor
+  // the rest of the same server, even when it lands later or runs again, so it
+  // cannot undo a tested setup. Reset only when the provider changes.
+  type ServerField = 'imapHost' | 'imapPort' | 'imapTls' | 'smtpHost' | 'smtpPort' | 'smtpTls'
+  let touched = new Set<ServerField>()
+  const imapFields: ServerField[] = ['imapHost', 'imapPort', 'imapTls']
+  const smtpFields: ServerField[] = ['smtpHost', 'smtpPort', 'smtpTls']
+  function touch(...fields: ServerField[]): void {
+    for (const f of fields) touched.add(f)
+  }
+
   function setTLS(mode: TLSMode): void {
+    touch('imapTls', 'imapPort')
     if (draft.imapPort === imapPorts[draft.imapTls]) {
       draft.imapPort = imapPorts[mode]
     }
@@ -125,6 +142,7 @@
   }
 
   function setSMTPTLS(mode: TLSMode): void {
+    touch('smtpTls', 'smtpPort')
     if (draft.smtpPort === smtpPorts[draft.smtpTls]) {
       draft.smtpPort = smtpPorts[mode]
     }
@@ -134,6 +152,11 @@
   function selectPreset(p: ProviderPreset): void {
     preset = p
     draft = blankDraft()
+    touched = new Set()
+    // a discovery still running belongs to the previous provider's draft;
+    // with the same address typed again it would pass the email check and
+    // overwrite this preset's servers.
+    discoverySeq++
     if (p.imapHost) draft.imapHost = p.imapHost
     if (p.imapPort) draft.imapPort = p.imapPort
     if (p.imapTls) draft.imapTls = p.imapTls
@@ -150,16 +173,30 @@
     step = p.kind === 'oauth' ? 'oauth' : 'config'
   }
 
+  // the newest discovery request; an older one that resolves later is stale.
+  let discoverySeq = 0
+
   // applyDiscovered fills the servers autodiscovery found. autoconfig states
   // the security outright; empty means it said nothing usable, so the current
-  // choice stands rather than being overwritten.
+  // choice stands rather than being overwritten. Host, port and security only
+  // work together, so one hand-edited field keeps discovery out of its whole
+  // server: a typed host with a discovered port and TLS mode would describe a
+  // server nobody asked for.
   function applyDiscovered(d: Discovered): void {
-    draft.imapHost = d.imapHost
-    draft.imapPort = d.imapPort
-    draft.smtpHost = d.smtpHost
-    draft.smtpPort = d.smtpPort
-    if (d.imapTls) draft.imapTls = d.imapTls as TLSMode
-    if (d.smtpTls) draft.smtpTls = d.smtpTls as TLSMode
+    const imapTouched = imapFields.some((f) => touched.has(f))
+    const smtpTouched = smtpFields.some((f) => touched.has(f))
+    // assign only real changes: any write to draft re-runs the blocks that
+    // clear a passed test, even when the value is the same.
+    const fill = <K extends ServerField>(key: K, value: AddAccountRequest[K]): void => {
+      const groupTouched = imapFields.includes(key) ? imapTouched : smtpTouched
+      if (!groupTouched && draft[key] !== value) draft[key] = value
+    }
+    fill('imapHost', d.imapHost)
+    fill('imapPort', d.imapPort)
+    fill('smtpHost', d.smtpHost)
+    fill('smtpPort', d.smtpPort)
+    if (d.imapTls) fill('imapTls', d.imapTls as TLSMode)
+    if (d.smtpTls) fill('smtpTls', d.smtpTls as TLSMode)
   }
 
   // switchToGoogle moves a Google-hosted address from the custom form to the
@@ -372,12 +409,19 @@
     if (!preset?.custom || !draft.email.includes('@')) {
       return
     }
-    if (!(await lookupAllowed(draft.email))) {
+    const seq = ++discoverySeq
+    const email = draft.email
+    if (!(await lookupAllowed(email))) {
       return
     }
     discoveredOAuth = ''
     try {
-      const d = await discoverConfig(draft.email)
+      const d = await discoverConfig(email)
+      // discovery is slow and can rerun on every blur: a newer request or a
+      // changed address makes this answer stale.
+      if (seq !== discoverySeq || draft.email !== email) {
+        return
+      }
       discoveredOAuth = d.oauthProvider
       applyDiscovered(d)
     } catch {
@@ -493,6 +537,23 @@
   // ids the user unchecked. Everything starts checked.
   let unchecked = new Set<number>()
   let applying = false
+  // beginSync is reachable from several routes (buttons, teardown); the first
+  // sync must start exactly once whichever gets there first.
+  let syncStarted = false
+
+  // Leaving the folder step by any route the wizard does not control (Escape in
+  // the host window, window close) never confirmed a folder choice, so sync
+  // everything rather than leave the saved account idle. destroyed is set once
+  // the host tore the wizard down; a save still in flight then has nobody to
+  // show the folder step to.
+  let destroyed = false
+  onDestroy(() => {
+    destroyed = true
+    if (addedAccount && !syncStarted) {
+      syncStarted = true
+      void startAccountSync(addedAccount.id).catch((err) => toastError(errorMessage(err)))
+    }
+  })
 
   async function finish(account: Account): Promise<void> {
     addedAccount = account
@@ -503,6 +564,12 @@
       } catch (err) {
         toastError(errorMessage(err))
       }
+    }
+    if (skipFolderPicker || destroyed) {
+      // start before announcing: the embedder may tear the wizard down on 'added'.
+      await beginSync()
+      dispatch('added', account)
+      return
     }
     dispatch('added', account)
     try {
@@ -540,16 +607,24 @@
       step = 'done'
       return
     }
+    if (syncStarted) {
+      return
+    }
+    syncStarted = true
     applying = true
     try {
       for (const id of unchecked) {
         await setFolderSyncExcluded(id, true)
       }
-      await startAccountSync(account.id)
     } catch (err) {
       // the account exists either way, so a failure here is not worth throwing
-      // the user back to the form. It syncs everything, and the folders stay
-      // switchable in settings.
+      // the user back to the form, nor worth leaving it unsynced. The folders
+      // left can still be switched off in settings.
+      toastError(errorMessage(err))
+    }
+    try {
+      await startAccountSync(account.id)
+    } catch (err) {
       toastError(errorMessage(err))
     } finally {
       applying = false
@@ -796,12 +871,12 @@
             {#if showAdvanced}
               <div class="advanced">
                 <div class="servers">
-                  <label class="field"><span>{$t('wizard.field.imapHost')}</span><input type="text" bind:value={draft.imapHost} /></label>
-                  <label class="field narrow"><span>{$t('wizard.field.port')}</span><input type="number" bind:value={draft.imapPort} /></label>
+                  <label class="field"><span>{$t('wizard.field.imapHost')}</span><input type="text" bind:value={draft.imapHost} on:input={() => touch('imapHost')} /></label>
+                  <label class="field narrow"><span>{$t('wizard.field.port')}</span><input type="number" bind:value={draft.imapPort} on:input={() => touch('imapPort')} /></label>
                 </div>
                 <div class="servers">
-                  <label class="field"><span>{$t('wizard.field.smtpHost')}</span><input type="text" bind:value={draft.smtpHost} /></label>
-                  <label class="field narrow"><span>{$t('wizard.field.port')}</span><input type="number" bind:value={draft.smtpPort} /></label>
+                  <label class="field"><span>{$t('wizard.field.smtpHost')}</span><input type="text" bind:value={draft.smtpHost} on:input={() => touch('smtpHost')} /></label>
+                  <label class="field narrow"><span>{$t('wizard.field.port')}</span><input type="number" bind:value={draft.smtpPort} on:input={() => touch('smtpPort')} /></label>
                 </div>
 
                 <label class="field">
@@ -888,7 +963,7 @@
                 {$t('wizard.field.fromName')}
                 <InfoTip text={$t('mailboxes.fromNameHint')} />
               </span>
-              <input type="text" bind:value={draft.displayName} placeholder={$t('wizard.field.displayNamePlaceholder')} />
+              <input type="text" bind:value={draft.displayName} placeholder={$t('wizard.field.displayNamePlaceholder')} aria-label={$t('wizard.field.fromName')} />
             </label>
             <div class="toggle">
               <span>{$t('mailboxes.localLabel.toggle')}</span>
@@ -904,7 +979,7 @@
                   {$t('wizard.field.localLabel')}
                   <InfoTip text={$t('mailboxes.localLabelHint')} />
                 </span>
-                <input type="text" bind:value={draft.localLabel} placeholder={draft.displayName || draft.email} />
+                <input type="text" bind:value={draft.localLabel} placeholder={draft.displayName || draft.email} aria-label={$t('wizard.field.localLabel')} />
               </label>
             {/if}
             <div class="field">
@@ -954,7 +1029,7 @@
                 {$t('wizard.field.fromName')}
                 <InfoTip text={$t('mailboxes.fromNameHint')} />
               </span>
-              <input type="text" bind:value={draft.displayName} placeholder={$t('wizard.field.displayNamePlaceholder')} />
+              <input type="text" bind:value={draft.displayName} placeholder={$t('wizard.field.displayNamePlaceholder')} aria-label={$t('wizard.field.fromName')} />
             </label>
             <div class="toggle">
               <span>{$t('mailboxes.localLabel.toggle')}</span>
@@ -970,7 +1045,7 @@
                   {$t('wizard.field.localLabel')}
                   <InfoTip text={$t('mailboxes.localLabelHint')} />
                 </span>
-                <input type="text" bind:value={draft.localLabel} placeholder={draft.displayName || draft.email} />
+                <input type="text" bind:value={draft.localLabel} placeholder={draft.displayName || draft.email} aria-label={$t('wizard.field.localLabel')} />
               </label>
             {/if}
             <label class="field">
@@ -1077,7 +1152,7 @@
 </div>
 
 {#if showImport}
-  {#await import('../import/ImportDialog.svelte') then m}
+  {#await loadImportDialog() then m}
     <svelte:component this={m.default} on:close={() => (showImport = false)} />
   {/await}
 {/if}

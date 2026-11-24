@@ -173,7 +173,7 @@ func readBack(ctx context.Context, db *storage.DB, accountID, folderID, messageI
 		return err
 	}
 	for _, a := range attachments {
-		content, err := readAttachment(db, a.DiskPath)
+		content, err := readAttachment(db, a)
 		if err != nil {
 			return err
 		}
@@ -183,8 +183,8 @@ func readBack(ctx context.Context, db *storage.DB, accountID, folderID, messageI
 	return nil
 }
 
-func readAttachment(db *storage.DB, diskPath string) (string, error) {
-	rc, err := db.OpenAttachment(diskPath)
+func readAttachment(db *storage.DB, att storage.Attachment) (string, error) {
+	rc, err := db.OpenAttachment(context.Background(), att)
 	if err != nil {
 		return "", err
 	}

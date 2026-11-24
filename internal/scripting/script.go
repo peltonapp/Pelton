@@ -1,6 +1,7 @@
 package scripting
 
 import (
+	"errors"
 	"fmt"
 	"slices"
 	"strings"
@@ -90,12 +91,38 @@ type Script struct {
 	LastRunAt time.Time
 }
 
+// The longest name and description a script may have; both show in menus,
+// toolbars and dialogs.
+const (
+	maxNameBytes        = 200
+	maxDescriptionBytes = 4000
+)
+
+// markGlyphs look like the lightning mark the app draws beside every script
+// it offers. A script's name or a placement's label cannot hold one, so a
+// script can neither draw the mark itself nor pass off its text as it.
+var markGlyphs = []rune{'⚡', '☇', '↯', 'ϟ', '\U0001F5F2'}
+
+var errMarkGlyph = errors.New("scripting: a name or label cannot contain a lightning sign; Pelton marks scripts itself")
+
+// HasMarkGlyph reports whether s holds a character that looks like the
+// script mark.
+func HasMarkGlyph(s string) bool {
+	return strings.ContainsFunc(s, func(r rune) bool { return slices.Contains(markGlyphs, r) })
+}
+
 // Validate checks a script against the registry: a name, a known trigger, a
 // kind with its code, declared permissions that exist, and a settings schema
 // that is well formed.
 func (s *Script) Validate(r *Registry) error {
 	if strings.TrimSpace(s.Name) == "" {
 		return fmt.Errorf("scripting: a script needs a name")
+	}
+	if len(s.Name) > maxNameBytes || len(s.Description) > maxDescriptionBytes {
+		return fmt.Errorf("scripting: a name is at most %d bytes and a description %d", maxNameBytes, maxDescriptionBytes)
+	}
+	if HasMarkGlyph(s.Name) {
+		return errMarkGlyph
 	}
 	t, ok := r.Trigger(s.Trigger.Type)
 	if !ok {
