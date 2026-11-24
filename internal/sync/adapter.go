@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/peltonapp/Pelton/internal/rfc822"
 	"github.com/peltonapp/Pelton/internal/storage"
 )
 
@@ -72,6 +73,7 @@ type Header struct {
 	// (IMAP ENVELOPE). When it is false the engine skips
 	// stub upsert and only stores the message after a full Fetch.
 	HasListMeta   bool
+	MessageID     string // the envelope's Message-ID, or ""
 	Subject       string
 	From          string // display form, e.g. "Ada <ada@ex>" or "ada@ex"
 	FromName      string
@@ -101,7 +103,20 @@ type Fetched struct {
 	AuthResults                                                                          []string
 	// InReplyTo and References are bare message ids in header order.
 	InReplyTo, References []string
-	Attachments           []Attachment
+	// ListID is the List-Id header value, '' when there is none.
+	ListID string
+	// Claims are the sender headers the sender passport keeps.
+	Claims      rfc822.Claims
+	Attachments []Attachment
+}
+
+// PinSource is an optional Adapter capability for pins kept on the server.
+// Pins reports, for the messages the last list of a mailbox named, whether
+// each is pinned, and whether the mailbox can keep a pin at all. SetPin
+// stores one pin.
+type PinSource interface {
+	Pins(mailboxID string) (pins map[string]bool, keeps bool)
+	SetPin(ctx context.Context, mailboxID, remoteID string, pinned bool) error
 }
 
 // RemoteMailbox identifies a mailbox for ListMessages and ListChanges.

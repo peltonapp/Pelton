@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 	"strconv"
 	"strings"
 	"testing"
@@ -196,9 +197,9 @@ func TestAdapterMapsRemoteIDs(t *testing.T) {
 	if h.LegacyUID != 15 {
 		t.Errorf("LegacyUID = %d, want 15", h.LegacyUID)
 	}
-	wantFlags := storage.FlagSeen | storage.FlagFlagged
+	wantFlags := storage.FlagSeen | storage.FlagFlagged | storage.FlagAnswered
 	if h.Flags != wantFlags {
-		t.Errorf("Flags = %v, want %v (\\Answered dropped)", h.Flags, wantFlags)
+		t.Errorf("Flags = %v, want %v (\\Answered kept as reply state)", h.Flags, wantFlags)
 	}
 
 	if err := adapter.SetFlags(ctx, "INBOX", "15", storage.FlagSeen); err != nil {
@@ -209,7 +210,7 @@ func TestAdapterMapsRemoteIDs(t *testing.T) {
 	}
 	for _, flag := range fake.added {
 		if flag == goimap.FlagAnswered {
-			t.Error("SetFlags must not send \\Answered")
+			t.Error("SetFlags must not send \\Answered the mask does not hold")
 		}
 	}
 	// The push only adds: \Flagged or \Deleted on the server may have been
@@ -218,8 +219,8 @@ func TestAdapterMapsRemoteIDs(t *testing.T) {
 		t.Errorf("SetFlags removed %v; the sync push must never remove flags", fake.removed)
 	}
 
-	// RemoveFlags sends -FLAGS for the managed flags only, so \Answered and
-	// keywords the user never touched stay on the server.
+	// RemoveFlags sends -FLAGS for the flags asked only, so the reply state
+	// and keywords the user never touched stay on the server.
 	if err := adapter.RemoveFlags(ctx, "INBOX", "15", storage.FlagFlagged); err != nil {
 		t.Fatalf("RemoveFlags: %v", err)
 	}
@@ -670,5 +671,75 @@ func TestSetFlagsMarksOnlyServerRefusals(t *testing.T) {
 				t.Errorf("text %q, want %q", err, tc.addErr)
 			}
 		})
+	}
+}
+
+func TestImapFlagsToStorageReadsReplyState(t *testing.T) {
+	tests := []struct {
+		name  string
+		flags []goimap.Flag
+		want  storage.Flag
+	}{
+		{"answered", []goimap.Flag{goimap.FlagAnswered}, storage.FlagAnswered},
+		{"forwarded", []goimap.Flag{goimap.FlagForwarded}, storage.FlagForwarded},
+		{"forwarded keyword in another case", []goimap.Flag{"$forwarded"}, storage.FlagForwarded},
+		{"both with seen", []goimap.Flag{goimap.FlagSeen, goimap.FlagAnswered, goimap.FlagForwarded}, storage.FlagSeen | storage.FlagAnswered | storage.FlagForwarded},
+		{"other keywords ignored", []goimap.Flag{"$Label1", "$Junk", goimap.FlagDraft}, 0},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := imapFlagsToStorage(tt.flags); got != tt.want {
+				t.Fatalf("imapFlagsToStorage(%v) = %d, want %d", tt.flags, got, tt.want)
+			}
+		})
+	}
+}
+
+// keywordRefusingClient refuses every keyword, as a server without keyword
+// support does, and takes system flags.
+type keywordRefusingClient struct{ fakeSyncClient }
+
+func (c *keywordRefusingClient) AddFlags(uid goimap.UID, flags ...goimap.Flag) error {
+	for _, f := range flags {
+		if strings.HasPrefix(string(f), "$") {
+			return &goimap.Error{Type: goimap.StatusResponseTypeNo, Text: "keywords not allowed"}
+		}
+	}
+	return c.fakeSyncClient.AddFlags(uid, flags...)
+}
+
+// A refused keyword never fails the push: \Seen and \Answered still reach the
+// server.
+func TestSetFlagsIgnoresARefusedKeyword(t *testing.T) {
+	fake := &keywordRefusingClient{fakeSyncClient{mailbox: &Mailbox{Name: "INBOX", UIDValidity: 9}}}
+	a := newAdapter(fake)
+	if err := a.SetFlags(context.Background(), "INBOX", "3", storage.FlagSeen|storage.FlagAnswered|storage.FlagForwarded); err != nil {
+		t.Fatalf("SetFlags: %v", err)
+	}
+	if !slices.Contains(fake.added, goimap.FlagSeen) || !slices.Contains(fake.added, goimap.FlagAnswered) {
+		t.Fatalf("added %v, want \\Seen and \\Answered", fake.added)
+	}
+}
+
+// Pins come from the $Pinned keyword of the listed messages, with whether
+// the mailbox can keep it; SetPin stores or clears the keyword.
+func TestAdapterPins(t *testing.T) {
+	fake := &fakeSyncClient{
+		mailbox: &Mailbox{Name: "INBOX", UIDValidity: 9, PermanentFlags: []goimap.Flag{goimap.FlagWildcard}},
+		flags:   []MessageHeader{{UID: 1, Flags: []goimap.Flag{"$pinned"}}, {UID: 2}},
+	}
+	a := newAdapter(fake)
+	if _, _, _, err := a.ListMessages(context.Background(), psync.RemoteMailbox{RemoteID: "INBOX"}); err != nil {
+		t.Fatal(err)
+	}
+	pins, keeps := a.Pins("INBOX")
+	if !keeps || !pins["1"] || pins["2"] || len(pins) != 2 {
+		t.Fatalf("pins %v keeps %v", pins, keeps)
+	}
+	if err := a.SetPin(context.Background(), "INBOX", "2", true); err != nil {
+		t.Fatal(err)
+	}
+	if !slices.Contains(fake.added, PinKeyword) {
+		t.Fatalf("added %v, want the pin keyword", fake.added)
 	}
 }

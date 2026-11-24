@@ -318,7 +318,9 @@ type fakeAdapter struct {
 	// flags, when set, is the server's flag set per remote id; SetFlags and
 	// RemoveFlags change it the way a STORE would. flagRemovals records the
 	// ids RemoveFlags was called for.
-	flags        map[string]storage.Flag
+	flags map[string]storage.Flag
+	// messageIDs, when set, is the Message-ID each fetched body carries.
+	messageIDs   map[string]string
 	flagRemovals []string
 }
 
@@ -378,7 +380,7 @@ func (a *fakeAdapter) Fetch(ctx context.Context, _ string, remoteIDs []string) (
 			a.onFetch(id)
 		}
 		a.fetched = append(a.fetched, id)
-		f := Fetched{RemoteID: id, Subject: "test", Flags: a.flags[id]}
+		f := Fetched{RemoteID: id, Subject: "test", Flags: a.flags[id], MessageID: a.messageIDs[id]}
 		if n, err := strconv.ParseUint(id, 10, 32); err == nil {
 			f.LegacyUID = uint32(n)
 		}

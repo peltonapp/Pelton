@@ -408,6 +408,7 @@ func (a *App) fullCheckUnit(ctx context.Context, account storage.Account, folder
 	if rt := a.accountSync(account.ID); rt != nil {
 		rt.addFresh(folder.ID, freshSince(res.ToFetch, c.lastSeen, c.before))
 	}
+	a.afterFlagSync(folder, res)
 	if err != nil {
 		return false, err
 	}
@@ -473,6 +474,8 @@ func (a *App) reconcileList(ctx context.Context, engine *psync.Engine, accountID
 			rt.addFresh(folder.ID, freshIDs(more.ToFetch, before))
 		}
 		res.ToFetch = mergeNewestIDs(more.ToFetch, res.ToFetch)
+		res.ReplyStateChanged += more.ReplyStateChanged
+		res.FlagChanges = append(res.FlagChanges, more.FlagChanges...)
 	}
 }
 

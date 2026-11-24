@@ -42,7 +42,7 @@ beforeEach(() => {
 })
 
 async function addMailboxThroughForm(user: ReturnType<typeof userEvent.setup>) {
-  await user.click(await screen.findByRole('button', { name: /Add a mailbox/i }))
+  await screen.findByLabelText('Email')
   await fillImapFormAndAdd(user, api)
 }
 
@@ -125,5 +125,17 @@ describe('AddMailboxDialog', () => {
     await waitFor(() => expect(api.startAccountSync).toHaveBeenCalledTimes(1))
     expect(api.setFolderSyncExcluded).toHaveBeenCalledWith(2, true)
     expect(await screen.findByRole('button', { name: /^Done$/i })).toBeInTheDocument()
+  })
+
+  // onboarding embeds the wizard and has no room for the folder choice.
+  it('syncs everything at once and never shows the folder picker with skipFolderPicker', async () => {
+    const user = userEvent.setup()
+    const { default: AddMailboxWizard } = await import('./AddMailboxWizard.svelte')
+    render(AddMailboxWizard, { props: { skipFolderPicker: true, offerImport: false } })
+    await addMailboxThroughForm(user)
+
+    await waitFor(() => expect(api.startAccountSync).toHaveBeenCalledWith(7))
+    expect(api.listFolders).not.toHaveBeenCalled()
+    expect(screen.queryByRole('checkbox', { name: 'Archive' })).not.toBeInTheDocument()
   })
 })

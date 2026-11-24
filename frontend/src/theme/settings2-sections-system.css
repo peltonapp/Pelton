@@ -1,0 +1,141 @@
+/*
+  settings2-sections-system.css brings the classic settings sections (proxy,
+  encryption, shortcuts, about) in line with the cards and rows of the new
+  settings screen. a page mounts a section inside <div class="s2-section">; the
+  section keeps its own markup and component styles, and these rules, which win
+  on specificity, only replace surfaces, headings and button shapes.
+*/
+
+:root[data-design="new"] .screen .s2-section {
+  padding: var(--space-4);
+  border: var(--hairline) solid var(--border-default);
+  border-radius: var(--radius-card);
+  background: var(--surface-raised);
+}
+
+:root[data-design="new"] .screen .s2-section h3,
+:root[data-design="new"] .screen .s2-section h4 {
+  margin: 0 0 var(--space-2);
+  font-family: var(--font-mono);
+  font-size: var(--fz-meta);
+  font-weight: var(--fw-medium);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-tertiary);
+}
+
+:root[data-design="new"] .screen .s2-section h4 {
+  margin-top: var(--space-5);
+}
+
+:root[data-design="new"] .screen .s2-section .hint,
+:root[data-design="new"] .screen .s2-section .lead {
+  font-size: var(--fz-label);
+  line-height: 1.4;
+  color: var(--text-tertiary);
+}
+
+:root[data-design="new"] .screen .s2-section .row-label,
+:root[data-design="new"] .screen .s2-section .label {
+  font-size: var(--fz-list);
+}
+
+:root[data-design="new"] .screen .s2-section .field input {
+  background: var(--surface-base);
+}
+
+:root[data-design="new"] .screen .s2-section :is(.primary, .ghost, .action-btn, .reset-all, .change, .links button) {
+  border-radius: var(--radius-control);
+  font-size: var(--fz-label);
+}
+
+:root[data-design="new"] .screen .s2-section :is(.ghost, .action-btn, .reset-all, .change, .links button) {
+  background: var(--surface-raised);
+}
+
+:root[data-design="new"] .screen .s2-section :is(.ghost, .action-btn, .reset-all, .change, .links button):hover {
+  background: var(--surface-hover);
+}
+
+:root[data-design="new"] .screen .s2-section .key,
+:root[data-design="new"] .screen .s2-section .search {
+  background: var(--surface-base);
+}
+
+:root[data-design="new"] .screen .s2-section .list li + li {
+  border-top: var(--hairline) solid var(--border-subtle);
+}
+
+:root[data-design="new"] .screen .s2-section .row {
+  border-top-color: var(--border-subtle);
+}
+
+/* a classic step slider inside a Row: the Row already names the setting. */
+.screen .s2-slider {
+  flex: 1;
+  min-width: 0;
+}
+
+:root[data-design="new"] .screen .s2-slider .setting {
+  padding: 0;
+}
+
+:root[data-design="new"] .screen .s2-slider .head .label {
+  display: none;
+}
+
+:root[data-design="new"] .screen .s2-slider .head {
+  justify-content: flex-end;
+}
+
+/* buttons the new pages draw themselves. */
+.screen .s2-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  height: var(--control-height);
+  padding: 0 var(--space-4);
+  border: var(--hairline) solid var(--border-default);
+  border-radius: var(--radius-control);
+  background: var(--surface-raised);
+  color: var(--text-primary);
+  font-size: var(--fz-label);
+  white-space: nowrap;
+  cursor: var(--cursor-action);
+  transition: background-color var(--motion-fast) var(--ease-out);
+}
+
+.screen .s2-btn:hover {
+  background: var(--surface-hover);
+}
+
+.screen .s2-btn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.screen .s2-btn.danger {
+  border-color: transparent;
+  background: var(--danger);
+  color: var(--text-inverse);
+}
+
+.screen .s2-warn {
+  padding: var(--space-3) var(--space-4);
+  border-inline-start: 2px solid var(--warning);
+  background: var(--warning-bg);
+}
+
+.screen .s2-warn p {
+  margin: 0 0 var(--space-3);
+  font-size: var(--fz-label);
+  line-height: 1.5;
+  color: var(--text-primary);
+}
+
+.screen .s2-warn .actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space-3);
+}

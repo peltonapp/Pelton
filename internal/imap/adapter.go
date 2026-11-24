@@ -56,12 +56,14 @@ var managedFlags = []struct {
 	{storage.FlagSeen, goimap.FlagSeen},
 	{storage.FlagFlagged, goimap.FlagFlagged},
 	{storage.FlagDeleted, goimap.FlagDeleted},
+	{storage.FlagAnswered, goimap.FlagAnswered},
 }
 
 // Adapter presents an IMAP client as a sync.Adapter (and ColorSource).
 type Adapter struct {
 	c        syncClient
 	colors   map[string]map[string]int // mailbox path → remote id → color 1..8
+	pins     map[string]mailboxPins    // mailbox path → pins of the last list
 	requests atomic.Int64              // IMAP commands sent by the list paths, for the sync log
 }
 
@@ -75,12 +77,14 @@ func newAdapter(c syncClient) *Adapter {
 	return &Adapter{
 		c:      c,
 		colors: make(map[string]map[string]int),
+		pins:   make(map[string]mailboxPins),
 	}
 }
 
 var (
 	_ psync.Adapter     = (*Adapter)(nil)
 	_ psync.ColorSource = (*Adapter)(nil)
+	_ psync.PinSource   = (*Adapter)(nil)
 
 	_ psync.DeltaLister     = (*Adapter)(nil)
 	_ psync.ListMetaFetcher = (*Adapter)(nil)
@@ -134,7 +138,28 @@ func (a *Adapter) ListMessages(_ context.Context, box psync.RemoteMailbox) ([]ps
 	}
 	headers, colors := flagHeaders(flags)
 	a.colors[box.RemoteID] = colors
+	a.notePins(box.RemoteID, mbox, flags)
 	return headers, cursorFor(mbox), strconv.FormatUint(uint64(mbox.UIDValidity), 10), nil
+}
+
+// notePins records, for Pins, which of the listed messages carry the pin
+// keyword and whether the mailbox can keep it.
+func (a *Adapter) notePins(mailboxID string, mbox *Mailbox, flags []MessageHeader) {
+	pins := make(map[string]bool, len(flags))
+	for _, h := range flags {
+		pins[strconv.FormatUint(uint64(h.UID), 10)] = hasKeyword(h.Flags, PinKeyword)
+	}
+	a.pins[mailboxID] = mailboxPins{pins: pins, keeps: mbox.KeepsKeyword(PinKeyword)}
+}
+
+// hasKeyword reports whether flags holds keyword, compared case-insensitively.
+func hasKeyword(flags []goimap.Flag, keyword goimap.Flag) bool {
+	for _, f := range flags {
+		if strings.EqualFold(string(f), string(keyword)) {
+			return true
+		}
+	}
+	return false
 }
 
 // flagHeaders turns UID+FLAGS fetch results into headers, highest UID first,
@@ -181,6 +206,7 @@ func (a *Adapter) ListChanges(_ context.Context, box psync.RemoteMailbox, ensure
 	moved := uint32(mbox.UIDNext) != cur.UIDNext || mbox.NumMessages != cur.Messages
 	if !moved && mbox.HighestModSeq == cur.HighestModSeq && len(ensure) == 0 {
 		a.colors[box.RemoteID] = map[string]int{}
+		a.notePins(box.RemoteID, mbox, nil)
 		d.Unchanged = true
 		return d, nil
 	}
@@ -225,6 +251,7 @@ func (a *Adapter) ListChanges(_ context.Context, box psync.RemoteMailbox, ensure
 	var colors map[string]int
 	d.Changed, colors = flagHeaders(changed)
 	a.colors[box.RemoteID] = colors
+	a.notePins(box.RemoteID, mbox, changed)
 
 	if moved {
 		a.requests.Add(1)
@@ -361,6 +388,7 @@ func (a *Adapter) listMeta(ids []string) ([]psync.Header, error) {
 			LegacyUID:   uint32(h.UID),
 			Flags:       imapFlagsToStorage(h.Flags),
 			HasListMeta: true,
+			MessageID:   h.MessageID,
 			Subject:     h.Subject,
 			From:        h.From,
 			FromName:    h.FromName,
@@ -438,13 +466,24 @@ func (a *Adapter) storeFlags(ctx context.Context, mailboxID, remoteID string, fl
 			imapFlags = append(imapFlags, m.flag)
 		}
 	}
-	if len(imapFlags) == 0 {
+	keyword := flags.Has(storage.FlagForwarded)
+	if len(imapFlags) == 0 && !keyword {
 		return nil
 	}
 	if _, err := a.selectBox(mailboxID, psync.ExpectedGeneration(ctx, mailboxID)); err != nil {
 		return refused(err)
 	}
-	return refused(store(uid, imapFlags...))
+	if len(imapFlags) > 0 {
+		if err := store(uid, imapFlags...); err != nil {
+			return refused(err)
+		}
+	}
+	if keyword {
+		// a keyword goes in a store of its own whose refusal is ignored: a
+		// server that takes no keywords must not keep \Seen from reaching it.
+		_ = store(uid, goimap.FlagForwarded)
+	}
+	return nil
 }
 
 // refusedError is a server's NO or BAD to a command; errors.Is matches it
@@ -562,6 +601,39 @@ func (a *Adapter) Colors(mailboxID string) map[string]int {
 	return a.colors[mailboxID]
 }
 
+// PinKeyword is the imap keyword a pinned message carries on the server, so a
+// pin survives a reinstall and shows on another machine.
+const PinKeyword goimap.Flag = "$Pinned"
+
+// mailboxPins is what the last list of a mailbox said about pins.
+type mailboxPins struct {
+	pins  map[string]bool
+	keeps bool
+}
+
+// Pins returns, for the messages the last list of mailboxID named (all of
+// them after a full list, the changed ones after a delta), whether each
+// carries the pin keyword, and whether the mailbox can keep the keyword.
+func (a *Adapter) Pins(mailboxID string) (map[string]bool, bool) {
+	p := a.pins[mailboxID]
+	return p.pins, p.keeps
+}
+
+// SetPin adds or removes the pin keyword on one message.
+func (a *Adapter) SetPin(ctx context.Context, mailboxID, remoteID string, pinned bool) error {
+	uid, err := parseUID(remoteID)
+	if err != nil {
+		return err
+	}
+	if _, err := a.selectBox(mailboxID, psync.ExpectedGeneration(ctx, mailboxID)); err != nil {
+		return refused(err)
+	}
+	if pinned {
+		return refused(a.c.AddFlags(uid, PinKeyword))
+	}
+	return refused(a.c.RemoveFlags(uid, PinKeyword))
+}
+
 func (a *Adapter) delimiterOf(path string) (string, error) {
 	folders, err := a.c.ListFolders()
 	if err != nil {
@@ -632,13 +704,17 @@ func folderSpecialUse(f Folder) string {
 func imapFlagsToStorage(flags []goimap.Flag) storage.Flag {
 	var out storage.Flag
 	for _, f := range flags {
-		switch f {
-		case goimap.FlagSeen:
+		switch {
+		case f == goimap.FlagSeen:
 			out |= storage.FlagSeen
-		case goimap.FlagFlagged:
+		case f == goimap.FlagFlagged:
 			out |= storage.FlagFlagged
-		case goimap.FlagDeleted:
+		case f == goimap.FlagDeleted:
 			out |= storage.FlagDeleted
+		case f == goimap.FlagAnswered:
+			out |= storage.FlagAnswered
+		case strings.EqualFold(string(f), string(goimap.FlagForwarded)):
+			out |= storage.FlagForwarded
 		}
 	}
 	return out
@@ -678,6 +754,8 @@ func messageToFetched(msg *Message) psync.Fetched {
 		AuthResults:         msg.AuthResults,
 		InReplyTo:           msg.InReplyTo,
 		References:          msg.References,
+		ListID:              msg.ListID,
+		Claims:              msg.Claims,
 		Attachments:         fetchedAttachments(msg.Attachments),
 	}
 }

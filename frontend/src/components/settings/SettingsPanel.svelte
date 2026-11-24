@@ -3,7 +3,7 @@
   // category nav on the left and the selected category's controls on the right,
   // so the (many) preferences stay übersichtlich instead of one long scroll.
   // every control has a short hint/tooltip. no preference was removed in the
-  // reorganization — they are only grouped.
+  // reorganization - they are only grouped.
   import {
     IconX,
     IconSearch,
@@ -51,6 +51,7 @@
     setTheme,
     setDensity,
     setCornerStyle,
+    setDesign,
     setUIScale,
     setMessageFontSize,
     setToastPosition,
@@ -134,7 +135,6 @@
   // Linux has none and gets no setting.
   const materialName = isMac ? 'Liquid Glass' : isWindows ? 'Mica' : ''
   import { downloadRange, cancelDownload, openLocalesFolder, saveLocaleTemplate, getLogStatus, openLogFolder, deleteLogs } from '../../lib/api'
-  import en from '../../lib/locales/en'
   import { downloadProgress } from '../../stores/progress'
   import { toastInfo, toastError, errorMessage } from '../../stores/toast'
   import { t } from '../../lib/i18n'
@@ -180,8 +180,9 @@
   // onSaveLocaleTemplate writes a ready-to-translate template: every English
   // string plus the meta fields a language file needs.
   async function onSaveLocaleTemplate(): Promise<void> {
-    const template = JSON.stringify({ name: 'My Language', author: '', base: 'en', strings: en }, null, 2)
     try {
+      const en = (await import('../../lib/locales/en')).default
+      const template = JSON.stringify({ name: 'My Language', author: '', base: 'en', strings: en }, null, 2)
       const path = await saveLocaleTemplate(template)
       if (path) {
         toastInfo($t('language.templateSaved'))
@@ -936,6 +937,16 @@
       {:else if active === 'appearance'}
         <section>
           <h3>{$t('settingsPanel.category.appearance')}</h3>
+          <SegmentedSetting
+            label={$t('design.label')}
+            value={$prefs.design}
+            options={[
+              { key: 'new', label: $t('design.new') },
+              { key: 'classic', label: $t('design.classic') },
+            ]}
+            on:change={(e) => setDesign(e.detail === 'classic' ? 'classic' : 'new')}
+          />
+          <p class="hint">{$t('design.hint')}</p>
           {#if $prefs.themeId}
             <p class="hint">{$t('themes.baseLockedHint')}</p>
           {:else}

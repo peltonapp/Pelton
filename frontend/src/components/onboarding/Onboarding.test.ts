@@ -1,16 +1,12 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { render, screen, waitFor } from '@testing-library/svelte'
+import { render, screen } from '@testing-library/svelte'
 import userEvent from '@testing-library/user-event'
 
 const api = vi.hoisted(() => ({
+  setSetting: vi.fn(),
   defaultMailClientStatus: vi.fn(),
-  setDefaultMailClient: vi.fn(),
-  discoverConfig: vi.fn(),
-  testConnection: vi.fn(),
-  addPasswordAccount: vi.fn(),
-  listFolders: vi.fn(),
-  setFolderSyncExcluded: vi.fn(),
-  startAccountSync: vi.fn(),
+  appVersion: vi.fn(),
+  listUserLocales: vi.fn(),
 }))
 
 vi.mock('../../lib/api', async (importOriginal) => ({
@@ -18,79 +14,72 @@ vi.mock('../../lib/api', async (importOriginal) => ({
   ...api,
 }))
 
-// jsdom has no Element.animate, which Svelte's transitions call.
-vi.mock('svelte/transition', () => ({
-  fade: () => ({ duration: 0 }),
-  scale: () => ({ duration: 0 }),
-}))
-
-const toast = vi.hoisted(() => ({ toastError: vi.fn() }))
-
-vi.mock('../../stores/toast', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('../../stores/toast')>()),
-  ...toast,
-}))
-
-vi.mock('../../lib/liability', () => ({ acceptLiability: vi.fn() }))
-
-vi.mock('../../../wailsjs/runtime/runtime', () => ({
-  BrowserOpenURL: vi.fn(),
+vi.mock('../../lib/browser', () => ({
+  openURL: vi.fn(),
 }))
 
 import Onboarding from './Onboarding.svelte'
-import { account, fillImapFormAndAdd } from '../../test/fixtures'
+import { prefs } from '../../stores/prefs'
 
 beforeEach(() => {
-  for (const fn of Object.values(api)) {
-    fn.mockReset()
-  }
-  toast.toastError.mockReset()
+  api.setSetting.mockResolvedValue(undefined)
   api.defaultMailClientStatus.mockResolvedValue({ known: false, isDefault: false })
-  // two or more folders is what puts the wizard on its folder picker.
-  api.listFolders.mockResolvedValue([
-    { id: 1, accountId: 7, name: 'INBOX' },
-    { id: 2, accountId: 7, name: 'Archive' },
-  ])
-  // Confetti on the done step reads matchMedia, which jsdom lacks, unless motion is reduced.
-  document.documentElement.setAttribute('data-reduce-motion', '')
-  api.startAccountSync.mockResolvedValue(undefined)
-  api.addPasswordAccount.mockResolvedValue(account())
-  api.testConnection.mockResolvedValue({ untrusted: [] })
+  api.appVersion.mockResolvedValue('test')
+  api.listUserLocales.mockResolvedValue([])
+  prefs.update((p) => ({ ...p, design: 'new' }))
 })
 
-async function addMailboxThroughOnboarding(user: ReturnType<typeof userEvent.setup>) {
-  await user.click(await screen.findByRole('button', { name: /Get started/i }))
-  await user.click(await screen.findByRole('checkbox'))
-  await user.click(screen.getByRole('button', { name: /Continue/i }))
-  while (!screen.queryByText('Set up your mail')) {
-    await user.click(await screen.findByRole('button', { name: /Continue/i }))
-  }
-
-  await user.click(screen.getByRole('button', { name: /Add a mailbox/i }))
-  await fillImapFormAndAdd(user, api)
+async function pastLiability(): Promise<void> {
+  await userEvent.click(screen.getByRole('button', { name: 'Get started' }))
+  await userEvent.click(screen.getByRole('checkbox'))
+  await userEvent.click(screen.getByRole('button', { name: 'Continue' }))
 }
 
-describe('Onboarding mailbox step', () => {
-  it('starts the first sync once for a mailbox added there and still reaches the done step', async () => {
-    const user = userEvent.setup({ delay: null })
-    const added = vi.fn()
-    render(Onboarding, { events: { added } })
+describe('onboarding', () => {
+  it('will not pass the acknowledgement until it is given, and stores it', async () => {
+    render(Onboarding)
+    await userEvent.click(screen.getByRole('button', { name: 'Get started' }))
 
-    await addMailboxThroughOnboarding(user)
+    expect(screen.getByRole('heading', { name: 'Before you start' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Continue' })).toBeDisabled()
+    expect(screen.queryByRole('button', { name: 'Skip setup' })).not.toBeInTheDocument()
 
-    await screen.findByRole('button', { name: /Start using Pelton/i })
-    expect(added).toHaveBeenCalledTimes(1)
-    await waitFor(() => expect(api.startAccountSync).toHaveBeenCalledTimes(1))
-    expect(api.startAccountSync).toHaveBeenCalledWith(7)
+    await userEvent.click(screen.getByRole('checkbox'))
+    await userEvent.click(screen.getByRole('button', { name: 'Continue' }))
+
+    expect(screen.getByRole('heading', { name: 'Choose a design' })).toBeInTheDocument()
+    expect(screen.getByText('3 of 8')).toBeInTheDocument()
+    expect(api.setSetting).toHaveBeenCalledWith('liability_accepted', expect.stringContaining('"terms"'))
   })
 
-  it('still reaches the done step and reports the error when the first sync fails to start', async () => {
-    const user = userEvent.setup({ delay: null })
-    api.startAccountSync.mockRejectedValue(new Error('sync refused'))
+  it('drops the layout and navigation steps for the classic design', async () => {
     render(Onboarding)
-    await addMailboxThroughOnboarding(user)
+    await pastLiability()
 
-    await screen.findByRole('button', { name: /Start using Pelton/i })
-    expect(toast.toastError).toHaveBeenCalledWith('sync refused')
+    await userEvent.click(screen.getByRole('radio', { name: /Classic/ }))
+    expect(screen.getByText('3 of 6')).toBeInTheDocument()
+    await userEvent.click(screen.getByRole('button', { name: 'Continue' }))
+
+    expect(screen.getByRole('heading', { name: 'Set the look' })).toBeInTheDocument()
+  })
+
+  it('moves on with Enter and back with Escape', async () => {
+    render(Onboarding)
+    await pastLiability()
+
+    await userEvent.keyboard('{Enter}')
+    expect(screen.getByRole('heading', { name: 'Mail layout' })).toBeInTheDocument()
+
+    await userEvent.keyboard('{Escape}')
+    expect(screen.getByRole('heading', { name: 'Choose a design' })).toBeInTheDocument()
+  })
+
+  it('finishes from Skip setup', async () => {
+    const finish = vi.fn()
+    render(Onboarding, { events: { finish } })
+    await pastLiability()
+
+    await userEvent.click(screen.getByRole('button', { name: 'Skip setup' }))
+    expect(finish).toHaveBeenCalled()
   })
 })

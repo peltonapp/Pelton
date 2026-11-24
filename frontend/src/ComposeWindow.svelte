@@ -6,10 +6,16 @@
   // closes it, and its close button asks the way the pane's own button does.
   import { onDestroy, onMount } from 'svelte'
   import Compose from './components/compose/Compose.svelte'
+  import Composer2 from './components/compose/Composer2.svelte'
   import Toasts from './components/common/Toasts.svelte'
   import ContextMenu from './components/common/ContextMenu.svelte'
   import ConfirmDialog from './components/common/ConfirmDialog.svelte'
-  import { initPrefs } from './stores/prefs'
+  import CommandPalette from './components/common/CommandPalette.svelte'
+  import { initPrefs, prefs } from './stores/prefs'
+  import { bindings, initShortcuts, recording } from './stores/shortcuts'
+  import { initPalette, paletteOpen, togglePalette } from './stores/palette'
+  import { extraPaletteCommands } from './lib/palettesources'
+  import { comboMatches } from './lib/shortcuts'
   import {
     initComposePrefs,
     composeSessions,
@@ -19,8 +25,9 @@
     type ComposeSession,
   } from './stores/compose'
   import { loadSignatures } from './stores/signatures'
+  import { loadSnippets } from './stores/snippets'
   import { loadSidebar } from './stores/accounts'
-  import { closeCurrentWindow, setWindowTitle, takeComposeSession, titleBarDoubleClick } from './lib/api'
+  import { applyTrafficLights, closeCurrentWindow, setWindowTitle, takeComposeSession, titleBarDoubleClick } from './lib/api'
   import { onComposeCloseRequest } from './lib/events'
   import { isMac, t } from './lib/i18n'
 
@@ -28,6 +35,7 @@
   export let token: string
 
   let ready = false
+  $: classic = $prefs.design === 'classic'
   const stopCloseRequests = onComposeCloseRequest(() => {
     const session = $composeSessions[0]
     if (session) {
@@ -44,8 +52,16 @@
       document.documentElement.dataset.titlebar = 'mac'
     }
     await initPrefs()
+    if (isMac && $prefs.design !== 'classic') {
+      // the composer's toolbar is this window's title bar, so it is sized to
+      // put the window buttons on its centre line.
+      void applyTrafficLights(token, true)
+    }
     await initComposePrefs()
+    await initShortcuts()
+    void initPalette()
     void loadSignatures()
+    void loadSnippets()
     // the account picker and the From line read the accounts from here.
     await loadSidebar()
     const session = await takeComposeSession<ComposeSession>(token).catch(() => null)
@@ -65,9 +81,24 @@
   $: if (ready) {
     setWindowTitle($composeSessions[0]?.subject || $t('compose.title.untitled'))
   }
+
+  // the palette here holds what a compose window can do: the composer's own
+  // actions, registered by the composer.
+  function onKeydown(event: KeyboardEvent): void {
+    const combo = $bindings['command-palette']
+    if (classic || $recording || !combo || !comboMatches(event, combo)) {
+      return
+    }
+    event.preventDefault()
+    togglePalette()
+  }
 </script>
 
-{#if isMac}
+<svelte:window on:keydown={onKeydown} />
+
+<!-- the new composer's toolbar is the title bar of its window, so only the
+     classic pane needs the strip. -->
+{#if isMac && classic}
   <!-- svelte-ignore a11y-no-static-element-interactions -->
   <div
     class="titlebar-drag"
@@ -78,12 +109,19 @@
 {/if}
 
 {#each $composeSessions as session (session.id)}
-  <Compose {session} />
+  {#if classic}
+    <Compose {session} />
+  {:else}
+    <Composer2 {session} layout="window" />
+  {/if}
 {/each}
 
 <Toasts />
 <ContextMenu />
 <ConfirmDialog />
+{#if !classic}
+  <CommandPalette commands={$paletteOpen ? extraPaletteCommands($t) : []} />
+{/if}
 
 <style>
   .titlebar-drag {

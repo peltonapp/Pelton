@@ -94,6 +94,19 @@ a:hover {
   text-decoration: underline;
 }
 
+/* text for assistive tech only: read out, never drawn. */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+
 /* a single, consistent focus ring for keyboard users, using the accent. */
 :focus-visible {
   outline: 2px solid var(--accent);
@@ -123,6 +136,73 @@ a:hover {
   user-select: text;
 }
 
+/* the tooltip bubble lib/tip.ts appends to the body. */
+.tip {
+  position: fixed;
+  z-index: 900;
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-3);
+  border: var(--hairline) solid var(--border-default);
+  border-radius: var(--radius-control);
+  background: var(--surface-overlay);
+  box-shadow: var(--shadow-overlay);
+  color: var(--text-primary);
+  font-size: var(--fz-label);
+  line-height: 1.3;
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0;
+  transform: translateY(2px);
+  transition:
+    opacity var(--motion-fast) var(--ease-out),
+    transform var(--motion-fast) var(--ease-out);
+}
+
+.tip[data-side="right"] {
+  transform: translateX(-2px);
+}
+
+.tip[data-side="left"] {
+  transform: translateX(2px);
+}
+
+.tip.shown {
+  opacity: 1;
+  transform: none;
+}
+
+.tip kbd {
+  font-family: var(--font-mono);
+  font-size: var(--fz-meta);
+  color: var(--text-tertiary);
+}
+
+/* while mail is being dragged (stores/maildrag.ts) the pointer is a closed
+   hand everywhere, and the place it would land in says so. */
+.mail-dragging,
+.mail-dragging * {
+  cursor: grabbing !important;
+}
+
+/* one look for every place mail can land: a strong selection fill and an
+   accent ring, the same on a folder, a rail space, a project, a card or a
+   calendar slot. what will not take the mail fades back instead. */
+.maildrop-over {
+  background: var(--selection-bg-strong) !important;
+  box-shadow: inset 0 0 0 calc(var(--hairline) * 2) var(--accent) !important;
+  border-radius: var(--radius-control);
+  transition:
+    background-color var(--motion-fast) var(--ease-out),
+    box-shadow var(--motion-fast) var(--ease-out);
+}
+
+.maildrop-refuse {
+  opacity: 0.4;
+  transition: opacity var(--motion-fast) var(--ease-out);
+}
+
 /* reduce motion: freeze animations and transitions when the user asked for it,
    either through the in-app setting (data-reduce-motion on the root) or the
    os-level preference. near-zero durations instead of `none` so animation and
@@ -134,6 +214,63 @@ a:hover {
   animation-iteration-count: 1 !important;
   transition-duration: 0.01ms !important;
   scroll-behavior: auto !important;
+}
+
+/* the gliding caret (lib/smoothcaret.ts). one element for the window, placed
+   over whichever text field has focus; that field gives up its own caret. */
+[data-smooth-caret],
+[data-smooth-caret] * {
+  caret-color: transparent;
+}
+
+.smooth-caret {
+  position: fixed;
+  top: 0;
+  left: 0;
+  z-index: 2000;
+  width: 2px;
+  margin-left: -1px;
+  border-radius: 1px;
+  background: var(--accent);
+  opacity: 0;
+  pointer-events: none;
+  will-change: transform;
+  transition: opacity var(--motion-fast) var(--ease-out);
+}
+
+.smooth-caret.shown {
+  opacity: 1;
+}
+
+.smooth-caret.blink {
+  animation: smooth-caret-blink 1.2s ease-in-out infinite;
+}
+
+/* the blink fades in and out rather than switching. */
+@keyframes smooth-caret-blink {
+  0%,
+  35% {
+    opacity: 1;
+  }
+  60%,
+  80% {
+    opacity: 0;
+  }
+  100% {
+    opacity: 1;
+  }
+}
+
+/* the hidden copy of a field's text that the caret is measured against. */
+.smooth-caret-mirror {
+  position: absolute;
+  top: 0;
+  left: -9999px;
+  visibility: hidden;
+  overflow: hidden;
+  pointer-events: none;
+  border-style: solid;
+  border-color: transparent;
 }
 
 @media (prefers-reduced-motion: reduce) {

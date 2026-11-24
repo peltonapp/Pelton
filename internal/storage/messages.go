@@ -47,6 +47,10 @@ const (
 	FlagSeen Flag = 1 << iota
 	FlagFlagged
 	FlagDeleted
+	// FlagAnswered mirrors imap \Answered.
+	FlagAnswered
+	// FlagForwarded mirrors the $Forwarded keyword.
+	FlagForwarded
 )
 
 // Has reports whether mask contains flag.
@@ -99,6 +103,10 @@ type Message struct {
 	// ListUnsubscribePost marks RFC 8058 one-click support.
 	ListUnsubscribe     string
 	ListUnsubscribePost bool
+	// ListID is the List-Id header value. It is written on insert, classifies
+	// the message for the split inbox, and is read only by the newsletter
+	// aggregates, never by a message read.
+	ListID string
 	// SMIME describes the message's s/mime signature as verified when it was
 	// synced. The zero value means no signature, which is most mail.
 	SMIME SMIMESignature
@@ -119,6 +127,27 @@ type Message struct {
 	// headers were fetched and contained no IDs.
 	InReplyTo  []string
 	References []string
+	// ThreadID groups the messages of one conversation within an account. It is
+	// assigned on insert; 0 means the row predates threading and the background
+	// backfill has not reached it yet.
+	ThreadID int64
+	// MailKind is the split inbox classification worked out on insert, a mask
+	// of MailKindList and MailKindAutomated.
+	MailKind MailKind
+	// Pinned keeps the message at the top of the list.
+	Pinned bool
+	// Muted and HasNote are read, never written through this struct: Muted
+	// when the message's conversation is muted, HasNote when the message or
+	// its conversation carries a private note.
+	Muted   bool
+	HasNote bool
+	// VaultID is the mail vault the row is sealed to, 0 for mail in clear.
+	// A sealed row read through a context its vault admits arrives opened.
+	VaultID int64
+	// PGPSource, when set on insert, is stored as the message's pgp source:
+	// sealed with the rest of it in a vaulted folder. It is never read back
+	// into this struct.
+	PGPSource []byte
 }
 
 // MessageAuth is the stored Authentication-Results verdict for one message.
@@ -152,19 +181,49 @@ type SMIMESignature struct {
 }
 
 // IncomingAttachment is attachment metadata together with its content, handed
-// to InsertMessageWithAttachments. Content is read once and written to disk.
+// to InsertMessageWithAttachments. Content is read once and written to disk. A
+// nil Content records the part without its bytes, with Size as its size, so it
+// can be listed and fetched from the server later.
 type IncomingAttachment struct {
 	Filename    string
 	ContentType string
 	ContentID   string
 	Content     io.Reader
+	Size        int64
 }
 
-// InsertMessage inserts a single message row and returns its new id. This is a
-// full write, so the row is marked body-complete.
+// InsertMessage inserts a single message row, assigning it to a conversation
+// thread, and returns its new id. This is a full write, so the row is marked
+// body-complete.
 func (d *DB) InsertMessage(ctx context.Context, m *Message) (int64, error) {
 	m.BodyComplete = true
-	return insertMessage(ctx, d.sql, m)
+	tx, err := d.sql.BeginTx(ctx, nil)
+	if err != nil {
+		return 0, fmt.Errorf("storage: begin message insert: %w", err)
+	}
+	defer tx.Rollback()
+	target, err := vaultTargetFor(ctx, tx, m.FolderID)
+	if err != nil {
+		return 0, err
+	}
+	var id int64
+	if target != nil {
+		hasAtts := m.HasAttachments
+		id, _, err = d.insertSealed(ctx, tx, m, nil, target)
+		if err == nil && hasAtts {
+			_, err = tx.ExecContext(ctx, `UPDATE messages SET has_attachments = 1 WHERE id = ?`, id)
+		}
+		m.HasAttachments = hasAtts
+	} else {
+		id, err = insertMessage(ctx, tx, m)
+	}
+	if err != nil {
+		return 0, err
+	}
+	if err := tx.Commit(); err != nil {
+		return 0, fmt.Errorf("storage: commit message insert: %w", err)
+	}
+	return id, nil
 }
 
 // UpsertMessageListMeta inserts a header-only stub or refreshes list columns for
@@ -293,17 +352,27 @@ func upsertListMeta(ctx context.Context, tx *sql.Tx, m *Message) (int64, error) 
 		bodyHTML  string
 		old       Message
 		oldDate   string
+		vaultID   int64
 	)
 	err := tx.QueryRowContext(ctx,
-		`SELECT id, body_plain, body_html, subject, from_address, from_name, to_addresses, date
+		`SELECT id, body_plain, body_html, subject, from_address, from_name, to_addresses, date, vault_id
 		   FROM messages WHERE folder_id = ? AND remote_id = ?`,
 		m.FolderID, remoteID,
-	).Scan(&id, &bodyPlain, &bodyHTML, &old.Subject, &old.FromAddress, &old.FromName, &old.ToAddresses, &oldDate)
+	).Scan(&id, &bodyPlain, &bodyHTML, &old.Subject, &old.FromAddress, &old.FromName, &old.ToAddresses, &oldDate, &vaultID)
 	if errors.Is(err, sql.ErrNoRows) {
 		stub := *m
 		stub.RemoteID = remoteID
 		stub.BodyComplete = false
-		newID, err := insertMessage(ctx, tx, &stub)
+		target, err := vaultTargetFor(ctx, tx, m.FolderID)
+		if err != nil {
+			return 0, err
+		}
+		var newID int64
+		if target != nil {
+			newID, err = insertListSealed(ctx, tx, &stub, target)
+		} else {
+			newID, err = insertMessage(ctx, tx, &stub)
+		}
 		if err != nil {
 			return 0, err
 		}
@@ -312,6 +381,19 @@ func upsertListMeta(ctx context.Context, tx *sql.Tx, m *Message) (int64, error) 
 	}
 	if err != nil {
 		return 0, fmt.Errorf("storage: lookup message %q: %w", remoteID, err)
+	}
+	if vaultID != 0 {
+		// a sealed row keeps its sealed envelope; only list state refreshes.
+		if _, err := tx.ExecContext(ctx, `
+UPDATE messages SET
+  date = ?, flags = CASE WHEN pending_flags = 0 THEN ? ELSE flags END,
+  size_bytes = ?, has_attachments = ?, uid = CASE WHEN uid = 0 AND ? != 0 THEN ? ELSE uid END
+WHERE id = ?`,
+			formatTime(m.Date), uint8(m.Flags), m.SizeBytes, boolToInt(m.HasAttachments), m.UID, m.UID, id); err != nil {
+			return 0, fmt.Errorf("storage: update sealed list meta %d: %w", id, err)
+		}
+		m.ID = id
+		return id, nil
 	}
 
 	preview := m.BodyPlain
@@ -351,7 +433,8 @@ WHERE id = ?`,
 }
 
 // InsertMessageWithAttachments inserts a message and its attachments
-// atomically. When (folder_id, remote_id) already exists as an incomplete
+// atomically. A message for a folder in a mail vault is sealed before
+// anything is written. When (folder_id, remote_id) already exists as an incomplete
 // stub (body_complete = 0), the row is filled in place as FillMessageBody
 // does. A row that is already body-complete is left unchanged and
 // ErrMessageBodyComplete is returned, so import and download cannot wipe a
@@ -402,15 +485,48 @@ func (d *DB) InsertFetchedMessage(ctx context.Context, want BodyTarget, m *Messa
 		return 0, err
 	}
 
+	m.BodyComplete = true
+	target, err := vaultTargetFor(ctx, tx, m.FolderID)
+	if err != nil {
+		return 0, err
+	}
+	if target != nil {
+		id, written, err := d.insertSealed(ctx, tx, m, atts, target)
+		if err != nil {
+			d.removeAttachmentFiles(written)
+			return 0, err
+		}
+		if err := tx.Commit(); err != nil {
+			d.removeAttachmentFiles(written)
+			return 0, fmt.Errorf("storage: commit message insert: %w", err)
+		}
+		return id, nil
+	}
+
 	m.HasAttachments = len(atts) > 0
 	m.BodyComplete = true
 	id, err := insertMessage(ctx, tx, m)
 	if err != nil {
 		return 0, err
 	}
+	if len(m.PGPSource) > 0 {
+		if _, err := tx.ExecContext(ctx, `INSERT INTO message_pgp (message_id, raw) VALUES (?, ?)
+ON CONFLICT(message_id) DO UPDATE SET raw = excluded.raw`, id, m.PGPSource); err != nil {
+			return 0, fmt.Errorf("storage: store pgp source for message %d: %w", id, err)
+		}
+	}
 
 	var writtenPaths []string
 	for _, in := range atts {
+		if in.Content == nil {
+			row := &Attachment{MessageID: id, Filename: sanitizeFilename(in.Filename),
+				ContentType: in.ContentType, ContentID: in.ContentID, SizeBytes: in.Size}
+			if err := insertAttachment(ctx, tx, row); err != nil {
+				d.removeAttachmentFiles(writtenPaths)
+				return 0, err
+			}
+			continue
+		}
 		saved, err := d.writeAttachmentFile(m.AccountID, id, in.Filename, in.Content)
 		if err != nil {
 			d.removeAttachmentFiles(writtenPaths)
@@ -559,6 +675,14 @@ func (d *DB) replaceMessageBody(ctx context.Context, want BodyTarget, id int64, 
 			flags = Flag(stored)
 		}
 
+		target, err := vaultTargetFor(ctx, tx, m.FolderID)
+		if err != nil {
+			return nil, err
+		}
+		if target != nil {
+			return d.fillSealed(ctx, tx, id, m, flags, atts, target)
+		}
+
 		hasAttachments := len(atts) > 0
 		// a From header without a display name keeps the name the list stub
 		// already got from the envelope.
@@ -572,7 +696,7 @@ UPDATE messages SET
   smime_status = ?, smime_signer = ?, smime_email = ?, smime_issuer = ?, smime_detail = ?,
   smime_certs = ?, smime_fingerprint = ?,
   reply_to = ?, auth_spf = ?, auth_dkim = ?, auth_dmarc = ?, auth_spf_domain = ?, auth_dkim_domain = ?,
-  charset_guess = ?, in_reply_to = ?, [references] = ?, body_complete = 1, `+textRewritten+`
+  charset_guess = ?, in_reply_to = ?, [references] = ?, list_id = ?, mail_kind = ?, body_complete = 1, `+textRewritten+`
 WHERE id = ? AND body_complete = 0`,
 			m.UID, m.UID,
 			m.MessageID, m.Subject, m.FromAddress, m.FromName, m.FromName,
@@ -582,7 +706,8 @@ WHERE id = ? AND body_complete = 0`,
 			m.SMIME.Status, m.SMIME.Signer, m.SMIME.Email, m.SMIME.Issuer, m.SMIME.Detail,
 			orEmptyBlob(m.SMIME.Certs), m.SMIME.Fingerprint,
 			m.ReplyTo, m.Auth.SPF, m.Auth.DKIM, m.Auth.DMARC, m.Auth.SPFDomain, m.Auth.DKIMDomain,
-			m.CharsetGuess, encodeThreadingIDs(m.InReplyTo), encodeThreadingIDs(m.References), id,
+			m.CharsetGuess, encodeThreadingIDs(m.InReplyTo), encodeThreadingIDs(m.References),
+			m.ListID, mailKindFor(m), id,
 		)
 		if err != nil {
 			return nil, fmt.Errorf("storage: update message body %d: %w", id, err)
@@ -592,9 +717,30 @@ WHERE id = ? AND body_complete = 0`,
 		} else if n != 1 {
 			return nil, ErrMessageBodyComplete
 		}
+		// the stub was threaded from its envelope alone; the full headers
+		// may name the conversation it belongs to.
+		filled := *m
+		filled.ID = id
+		if err := rethread(ctx, tx, &filled); err != nil {
+			return nil, err
+		}
+		if len(m.PGPSource) > 0 {
+			if _, err := tx.ExecContext(ctx, `INSERT INTO message_pgp (message_id, raw) VALUES (?, ?)
+ON CONFLICT(message_id) DO UPDATE SET raw = excluded.raw`, id, m.PGPSource); err != nil {
+				return nil, fmt.Errorf("storage: store pgp source for message %d: %w", id, err)
+			}
+		}
 
 		written := make([]string, 0, len(atts))
 		for _, in := range atts {
+			if in.Content == nil {
+				row := &Attachment{MessageID: id, Filename: sanitizeFilename(in.Filename),
+					ContentType: in.ContentType, ContentID: in.ContentID, SizeBytes: in.Size}
+				if err := insertAttachment(ctx, tx, row); err != nil {
+					return written, err
+				}
+				continue
+			}
 			saved, err := d.writeAttachmentFile(m.AccountID, id, in.Filename, in.Content)
 			if err != nil {
 				return written, err
@@ -630,7 +776,15 @@ func orEmptyBlob(b []byte) []byte {
 	return b
 }
 
+// insertMessage writes the row and its thread assignment. ex must be a
+// transaction, so the thread lookup and the row land together.
 func insertMessage(ctx context.Context, ex execer, m *Message) (int64, error) {
+	assigned, err := resolveThread(ctx, ex, threadInputFor(m))
+	if err != nil {
+		return 0, err
+	}
+	m.ThreadID = assigned.threadID
+	m.MailKind = mailKindFor(m)
 	remoteID := m.RemoteID
 	if remoteID == "" && m.UID != 0 {
 		remoteID = strconv.FormatUint(uint64(m.UID), 10)
@@ -643,8 +797,9 @@ INSERT INTO messages (
     smime_status, smime_signer, smime_email, smime_issuer, smime_detail,
     smime_certs, smime_fingerprint,
     reply_to, auth_spf, auth_dkim, auth_dmarc, auth_spf_domain, auth_dkim_domain,
-    charset_guess, body_complete, in_reply_to, [references]
-) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+    charset_guess, body_complete, in_reply_to, [references], thread_id, thread_subject, thread_loose,
+    mail_kind, pinned, list_id, vault_id
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
 	res, err := ex.ExecContext(ctx, query,
 		m.AccountID, m.FolderID, m.UID, remoteID, m.MessageID, m.Subject, m.FromAddress,
 		m.FromName, m.ToAddresses, m.CcAddresses, formatTime(m.Date), uint8(m.Flags),
@@ -653,7 +808,9 @@ INSERT INTO messages (
 		m.SMIME.Status, m.SMIME.Signer, m.SMIME.Email, m.SMIME.Issuer, m.SMIME.Detail,
 		orEmptyBlob(m.SMIME.Certs), m.SMIME.Fingerprint,
 		m.ReplyTo, m.Auth.SPF, m.Auth.DKIM, m.Auth.DMARC, m.Auth.SPFDomain, m.Auth.DKIMDomain,
-		m.CharsetGuess, boolToInt(m.BodyComplete), encodeThreadingIDs(m.InReplyTo), encodeThreadingIDs(m.References))
+		m.CharsetGuess, boolToInt(m.BodyComplete), encodeThreadingIDs(m.InReplyTo), encodeThreadingIDs(m.References),
+		assigned.threadID, assigned.subject, boolToInt(assigned.loose),
+		int(m.MailKind), boolToInt(m.Pinned), m.ListID, m.VaultID)
 	if err != nil {
 		return 0, fmt.Errorf("storage: insert message uid %d: %w", m.UID, err)
 	}
@@ -666,7 +823,8 @@ INSERT INTO messages (
 	return id, nil
 }
 
-// GetMessage returns one message by id, or ErrMessageNotFound.
+// GetMessage returns one message by id, or ErrMessageNotFound. A message in
+// a mail vault is found only through a context its unlocked vault admits.
 func (d *DB) GetMessage(ctx context.Context, id int64) (*Message, error) {
 	m, err := scanMessage(d.sql.QueryRowContext(ctx, selectMessageByID, id))
 	if errors.Is(err, sql.ErrNoRows) {
@@ -674,6 +832,9 @@ func (d *DB) GetMessage(ctx context.Context, id int64) (*Message, error) {
 	}
 	if err != nil {
 		return nil, fmt.Errorf("storage: get message %d: %w", id, err)
+	}
+	if err := d.visibleMessage(ctx, m); err != nil {
+		return nil, err
 	}
 	return m, nil
 }
@@ -853,8 +1014,12 @@ func (d *DB) MessageNeedsBody(ctx context.Context, id int64) (bool, error) {
 }
 
 // ListMessages returns messages in a folder, newest first, capped at limit
-// (limit <= 0 means no cap).
+// (limit <= 0 means no cap). A vaulted folder the context may not see is
+// empty.
 func (d *DB) ListMessages(ctx context.Context, folderID int64, limit int) ([]Message, error) {
+	if visible, err := d.FolderVisible(ctx, folderID); err != nil || !visible {
+		return nil, err
+	}
 	const query = selectMessageColumns + `
 FROM messages WHERE folder_id = ? ORDER BY date DESC, uid DESC LIMIT ?`
 	rows, err := d.sql.QueryContext(ctx, query, folderID, normalizeLimit(limit))
@@ -874,15 +1039,16 @@ FROM messages WHERE folder_id = ? ORDER BY date DESC, uid DESC LIMIT ?`
 	if err := rows.Err(); err != nil {
 		return nil, fmt.Errorf("storage: iterate messages: %w", err)
 	}
-	return messages, nil
+	return d.visibleMessages(ctx, messages)
 }
 
 // ListMessagesForIndex returns messages with id greater than afterID, ordered by
 // id ascending, up to limit. The search layer uses it to backfill and to index
-// newly synced mail incrementally by walking the id watermark forward.
+// newly synced mail incrementally by walking the id watermark forward. Mail in
+// a vault is never indexed.
 func (d *DB) ListMessagesForIndex(ctx context.Context, afterID int64, limit int) ([]Message, error) {
 	const query = selectMessageColumns + `
-FROM messages WHERE id > ? ORDER BY id ASC LIMIT ?`
+FROM messages WHERE id > ? AND vault_id = 0 AND ` + notVaulted + ` ORDER BY id ASC LIMIT ?`
 	rows, err := d.sql.QueryContext(ctx, query, afterID, normalizeLimit(limit))
 	if err != nil {
 		return nil, fmt.Errorf("storage: list messages for index after %d: %w", afterID, err)
@@ -974,25 +1140,55 @@ FROM messages WHERE id IN (` + reindexIDs + `) ORDER BY id ASC`
 // not indexed (a list refresh changed their headers, or a pass that read them
 // lost to a rewrite). Rows past the watermark are the new-row pass's.
 // Ordered by id, up to limit; pass the last id seen as afterID to page.
+// Mail in a vault is never indexed, as in ListMessagesForIndex, whether the
+// vault is open or not; a batch that held only such mail reads on, so an empty
+// result still means there is no more.
 func (d *DB) ListMessagesForReindex(ctx context.Context, afterID, upToID int64, limit int) ([]Message, error) {
+	for {
+		messages, lastID, err := d.reindexBatch(ctx, afterID, upToID, limit)
+		if err != nil || len(messages) == 0 {
+			return messages, err
+		}
+		folders, _, err := d.vaultFolders(ctx)
+		if err != nil {
+			return nil, err
+		}
+		kept := messages[:0]
+		for _, m := range messages {
+			if m.VaultID == 0 && folders[m.FolderID] == 0 {
+				kept = append(kept, m)
+			}
+		}
+		if len(kept) > 0 {
+			return kept, nil
+		}
+		afterID = lastID
+	}
+}
+
+// reindexBatch reads one batch of ListMessagesForReindex and the last id it
+// read.
+func (d *DB) reindexBatch(ctx context.Context, afterID, upToID int64, limit int) ([]Message, int64, error) {
 	rows, err := d.sql.QueryContext(ctx, listForReindexQuery, afterID, upToID, normalizeLimit(limit))
 	if err != nil {
-		return nil, fmt.Errorf("storage: list messages for reindex: %w", err)
+		return nil, 0, fmt.Errorf("storage: list messages for reindex: %w", err)
 	}
 	defer rows.Close()
 
 	var messages []Message
+	var lastID int64
 	for rows.Next() {
 		m, err := scanMessage(rows)
 		if err != nil {
-			return nil, fmt.Errorf("storage: scan message for reindex: %w", err)
+			return nil, 0, fmt.Errorf("storage: scan message for reindex: %w", err)
 		}
 		messages = append(messages, *m)
+		lastID = m.ID
 	}
 	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("storage: iterate reindex messages: %w", err)
+		return nil, 0, fmt.Errorf("storage: iterate reindex messages: %w", err)
 	}
-	return messages, nil
+	return messages, lastID, nil
 }
 
 // IndexRead is what an index pass read of a row: its search state and the
@@ -1054,7 +1250,13 @@ SELECT id, account_id, folder_id, uid, remote_id, message_id, subject, from_addr
        smime_status, smime_signer, smime_email, smime_issuer, smime_detail,
        smime_fingerprint, reply_to, auth_spf, auth_dkim, auth_dmarc, auth_spf_domain,
        auth_dkim_domain, charset_guess, body_complete, search_state, text_rev,
-       in_reply_to, [references]`
+       in_reply_to, [references], thread_id,
+       mail_kind, pinned, vault_id,
+       EXISTS (SELECT 1 FROM threads t WHERE t.id = messages.thread_id AND t.muted = 1) AS muted,
+       (EXISTS (SELECT 1 FROM notes n WHERE n.account_id = messages.account_id AND n.message_key != ''
+                AND n.message_key = ` + noteKeyExpr + `)
+        OR EXISTS (SELECT 1 FROM notes n WHERE messages.thread_id != 0 AND n.thread_id = messages.thread_id
+                   AND n.message_key = '')) AS has_note`
 
 const selectMessageByID = selectMessageColumns + `
 FROM messages WHERE id = ?`
@@ -1071,6 +1273,10 @@ func scanMessage(row rowScanner) (*Message, error) {
 		bodyComplete int
 		inReplyTo    sql.NullString
 		references   sql.NullString
+		mailKind     int
+		pinned       int
+		muted        int
+		hasNote      int
 	)
 	if err := row.Scan(&m.ID, &m.AccountID, &m.FolderID, &m.UID, &m.RemoteID, &m.MessageID,
 		&m.Subject, &m.FromAddress, &m.FromName, &m.ToAddresses, &m.CcAddresses,
@@ -1080,9 +1286,14 @@ func scanMessage(row rowScanner) (*Message, error) {
 		&m.SMIME.Status, &m.SMIME.Signer, &m.SMIME.Email, &m.SMIME.Issuer,
 		&m.SMIME.Detail, &m.SMIME.Fingerprint, &m.ReplyTo, &m.Auth.SPF, &m.Auth.DKIM, &m.Auth.DMARC,
 		&m.Auth.SPFDomain, &m.Auth.DKIMDomain, &m.CharsetGuess, &bodyComplete, &m.SearchState, &m.TextRev,
-		&inReplyTo, &references); err != nil {
+		&inReplyTo, &references,
+		&m.ThreadID, &mailKind, &pinned, &m.VaultID, &muted, &hasNote); err != nil {
 		return nil, err
 	}
+	m.MailKind = MailKind(mailKind)
+	m.Pinned = pinned != 0
+	m.Muted = muted != 0
+	m.HasNote = hasNote != 0
 	t, err := parseTime(date)
 	if err != nil {
 		return nil, err

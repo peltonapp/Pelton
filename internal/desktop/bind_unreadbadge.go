@@ -17,11 +17,12 @@ func (a *App) SetUnreadBadge(unread int) {
 }
 
 // applyUnreadBadge pushes the remembered count to the platform, or clears the
-// badge when the setting is off. Also called when that setting changes, so
-// turning it back on does not wait for the next sidebar refresh. The lock is
-// held through the push so two calls racing cannot land an older count last.
+// badge when the setting is off or focus mode is on. Also called when either
+// changes, so turning it back on does not wait for the next sidebar refresh.
+// The lock is held through the push so two calls racing cannot land an older
+// count last.
 func (a *App) applyUnreadBadge() {
-	enabled := a.boolSetting(settingUnreadBadge, true)
+	enabled := a.boolSetting(settingUnreadBadge, true) && !a.focusQuiet()
 
 	a.badgeMu.Lock()
 	defer a.badgeMu.Unlock()

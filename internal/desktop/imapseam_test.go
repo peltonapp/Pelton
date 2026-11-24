@@ -27,7 +27,9 @@ import (
 // migrated database the test stores are copied from.
 func TestMain(m *testing.M) {
 	keyring.MockInit()
-	os.Exit(storagetest.Main(m))
+	code := storagetest.Main(m)
+	removeBenchData()
+	os.Exit(code)
 }
 
 // fakeIMAP records the commands a binding sends and answers them from canned
@@ -37,8 +39,11 @@ func TestMain(m *testing.M) {
 type fakeIMAP struct {
 	// selected is every mailbox SELECT was called on, in order.
 	selected []string
-	// moved records each Move as the uid it was given and the destination.
-	moved []movedMessage
+	// moved records each Move as the uid it was given and the destination, and
+	// moveCalls counts the MoveMessages commands.
+	moved     []movedMessage
+	copied    []movedMessage
+	moveCalls int
 	// searchResult is what SearchByMessageID returns.
 	searchResult []imap.UID
 	// created, renamed and deleted record the mailbox management commands.
@@ -80,6 +85,10 @@ type fakeIMAP struct {
 	permanentFlags []imap.Flag
 	// flagOps records each STORE as "+flag" or "-flag", in order.
 	flagOps []string
+	// message is what FetchMessage answers, and fetchedUIDs records each call.
+	message     *pimap.Message
+	fetchedUIDs []imap.UID
+	appends     []appendCall
 }
 
 type draftCall struct {
@@ -89,6 +98,18 @@ type draftCall struct {
 
 func (f *fakeIMAP) ReplaceDraft(mailbox string, raw []byte, messageID string) error {
 	f.drafts = append(f.drafts, draftCall{mailbox, messageID, raw})
+	return nil
+}
+
+type appendCall struct {
+	mailbox string
+	raw     []byte
+	flags   []imap.Flag
+	date    time.Time
+}
+
+func (f *fakeIMAP) AppendMessage(mailbox string, raw []byte, flags []imap.Flag, date time.Time) error {
+	f.appends = append(f.appends, appendCall{mailbox, raw, flags, date})
 	return nil
 }
 
@@ -145,9 +166,13 @@ func (f *fakeIMAP) DeleteFolder(path string) error {
 
 func (f *fakeIMAP) FetchMessages(uids []imap.UID, fn func(imap.UID, *pimap.Message, error) error) error {
 	for _, uid := range uids {
+		f.fetchedUIDs = append(f.fetchedUIDs, uid)
 		msg, ok := f.messages[uid]
 		if !ok {
-			continue
+			if f.message == nil {
+				continue
+			}
+			msg = f.message
 		}
 		if err := fn(uid, msg, nil); err != nil {
 			return err
@@ -190,8 +215,25 @@ func (f *fakeIMAP) Move(uid imap.UID, mailbox string) error {
 	return nil
 }
 
-func (f *fakeIMAP) MoveMessages([]imap.UID, string) error { return nil }
-func (f *fakeIMAP) DeleteMessages(...imap.UID) error      { return nil }
+func (f *fakeIMAP) MoveMessages(uids []imap.UID, mailbox string) error {
+	if f.failMove != nil {
+		return f.failMove
+	}
+	for _, uid := range uids {
+		f.moved = append(f.moved, movedMessage{uid: uid, dest: mailbox})
+	}
+	f.moveCalls++
+	return nil
+}
+
+func (f *fakeIMAP) CopyMessages(uids []imap.UID, mailbox string) error {
+	for _, uid := range uids {
+		f.copied = append(f.copied, movedMessage{uid: uid, dest: mailbox})
+	}
+	return nil
+}
+
+func (f *fakeIMAP) DeleteMessages(...imap.UID) error { return nil }
 
 func (f *fakeIMAP) SearchByMessageID(string) ([]imap.UID, error) { return f.searchResult, nil }
 
@@ -624,7 +666,7 @@ func TestUndoMovesTheCopyCOPYUIDNamed(t *testing.T) {
 	if _, err := db.GetMessage(a.ctx, rows[7]); err == nil {
 		t.Error("the moved copy is still listed in the archive")
 	}
-	if _, err := a.store.OpenAttachment(atts[0].DiskPath); err == nil {
+	if _, err := a.store.OpenAttachment(a.ctx, atts[0]); err == nil {
 		t.Error("the moved copy's attachment files are still on disk")
 	}
 	if _, err := db.GetMessage(a.ctx, rows[9]); err != nil {

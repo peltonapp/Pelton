@@ -70,8 +70,8 @@ func TestStoreFetchedWithoutAttachmentsFillsStubAndKeepsPGPSource(t *testing.T) 
 	if err != nil {
 		t.Fatalf("attachments: %v", err)
 	}
-	if len(atts) != 0 {
-		t.Errorf("stored %d attachments, want none", len(atts))
+	if len(atts) != 1 || db.AttachmentOnDisk(atts[0].DiskPath) {
+		t.Errorf("attachments %+v, want the part recorded with no file", atts)
 	}
 	src, err := db.MessagePGPSource(ctx, id)
 	if err != nil {
@@ -212,8 +212,13 @@ func TestFetchBodiesWithoutAttachments(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if want := map[bool]int{false: 1, true: 0}[without]; len(atts) != want {
-			t.Fatalf("without=%v: %d attachments, want %d", without, len(atts), want)
+		// without attachments the part is recorded, its bytes left on the
+		// server until it is wanted.
+		if len(atts) != 1 {
+			t.Fatalf("without=%v: %d attachments, want 1", without, len(atts))
+		}
+		if onDisk := db.AttachmentOnDisk(atts[0].DiskPath); onDisk == without {
+			t.Fatalf("without=%v: attachment on disk %v", without, onDisk)
 		}
 	}
 }

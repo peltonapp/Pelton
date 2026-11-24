@@ -151,8 +151,14 @@ type mailtoState struct {
 // live it emits the compose event immediately; otherwise it stashes the draft
 // for the frontend to pick up on startup.
 func (a *App) deliverMailto(raw string) {
-	draft := parseMailto(raw)
-	if a.ctx != nil {
+	a.deliverDraft(parseMailto(raw))
+}
+
+// deliverDraft opens a composer with draft, or keeps it for the frontend to
+// collect once it is up.
+func (a *App) deliverDraft(draft MailtoDraft) {
+	// while locked nothing is listening; the unlocked window picks it up.
+	if a.ctx != nil && !a.locked() {
 		a.emit(EventMailtoCompose, draft)
 		return
 	}

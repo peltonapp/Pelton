@@ -124,6 +124,11 @@ type Query struct {
 	// means relevance, which is what every caller wanted before there was a
 	// choice.
 	Sort Sort
+	// OnlyIDs limits the matches to these message ids when RestrictIDs is
+	// set; an empty list then matches nothing. Matches that come from
+	// outside the index, such as private notes, narrow a search this way.
+	OnlyIDs     []int64
+	RestrictIDs bool
 }
 
 // Hit is one search result: the message id and its relevance score.
@@ -260,6 +265,16 @@ func (i *Index) build(q Query) query.Query {
 	}
 	if !q.After.IsZero() || !q.Before.IsZero() {
 		parts = append(parts, dateQuery(q.After, q.Before))
+	}
+	if q.RestrictIDs {
+		if len(q.OnlyIDs) == 0 {
+			return bleve.NewMatchNoneQuery()
+		}
+		ids := make([]string, 0, len(q.OnlyIDs))
+		for _, id := range q.OnlyIDs {
+			ids = append(ids, docID(id))
+		}
+		parts = append(parts, bleve.NewDocIDQuery(ids))
 	}
 
 	switch len(parts) {

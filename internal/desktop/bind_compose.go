@@ -10,6 +10,8 @@ import (
 	"time"
 
 	"github.com/peltonapp/Pelton/internal/desktop/syncsched"
+	"github.com/peltonapp/Pelton/internal/outbox"
+	"github.com/peltonapp/Pelton/internal/scripting"
 	"github.com/peltonapp/Pelton/internal/smtp"
 	"github.com/peltonapp/Pelton/internal/storage"
 )
@@ -66,6 +68,23 @@ type ComposeRequest struct {
 	// until one has been uploaded. It is only for replacing that copy: a sent
 	// message gets a Message-ID of its own.
 	DraftMessageID string `json:"draftMessageId"`
+	// ForwardOf is the local id of the message this one forwards, 0 when it
+	// forwards nothing. Once sent, that message is marked forwarded.
+	ForwardOf int64 `json:"forwardOf"`
+	// FollowUpAt is an optional RFC3339 time to be reminded at if nobody has
+	// replied by then. Empty sets no reminder. It must come after the send.
+	FollowUpAt string `json:"followUpAt"`
+	// ProjectID files the message under a project once it is queued, with
+	// the replies it gets. 0 files it nowhere.
+	ProjectID int64 `json:"projectId"`
+	// AutoEncrypt marks a message from the composer of automatic encryption:
+	// keys come from everything Pelton learned rather than the keyring alone,
+	// Bcc recipients are hidden, and a reply to encrypted mail is not sent in
+	// the clear without PlaintextConfirmed.
+	AutoEncrypt bool `json:"autoEncrypt"`
+	// PlaintextConfirmed is the user's deliberate choice to send a reply to an
+	// encrypted message without encryption.
+	PlaintextConfirmed bool `json:"plaintextConfirmed"`
 }
 
 // SendMessage builds the mime message and enqueues it in the durable outbox. The
@@ -80,7 +99,18 @@ type ComposeRequest struct {
 // quietly putting a message the user marked as protected on the wire in
 // plaintext.
 func (a *App) SendMessage(req ComposeRequest) (int64, error) {
+	return a.sendMessage(a.ctx, req)
+}
+
+// sendMessage is SendMessage for a caller with a context of its own: a
+// script's send carries its run, so the before-send scripts it sets off know
+// how deep the chain is.
+func (a *App) sendMessage(ctx context.Context, req ComposeRequest) (int64, error) {
 	if err := a.ready(); err != nil {
+		return 0, err
+	}
+	req, err := a.beforeSendScripts(ctx, req)
+	if err != nil {
 		return 0, err
 	}
 
@@ -89,7 +119,12 @@ func (a *App) SendMessage(req ComposeRequest) (int64, error) {
 		return 0, err
 	}
 
-	notBefore, err := resolveNotBefore(req.SendAt, a.intSetting(settingSendDelay, 0), time.Now().UTC())
+	now := time.Now().UTC()
+	notBefore, err := resolveNotBefore(req.SendAt, a.intSetting(settingSendDelay, 0), now)
+	if err != nil {
+		return 0, err
+	}
+	followUp, err := resolveFollowUp(req.FollowUpAt, notBefore, now)
 	if err != nil {
 		return 0, err
 	}
@@ -98,8 +133,15 @@ func (a *App) SendMessage(req ComposeRequest) (int64, error) {
 	if err != nil {
 		return 0, err
 	}
-	mode, opts, engine, err := a.protectionOptions(*account, req)
+	mode, opts, engine, used, err := a.messageProtection(*account, req, msg)
 	if err != nil {
+		return 0, err
+	}
+
+	if msg.MessageID, err = smtp.NewMessageID(account.Email); err != nil {
+		return 0, err
+	}
+	if err := a.recordReplySources(req, msg.MessageID); err != nil {
 		return 0, err
 	}
 
@@ -107,7 +149,15 @@ func (a *App) SendMessage(req ComposeRequest) (int64, error) {
 	if err != nil {
 		return 0, err
 	}
+	a.sentRequests.Store(id, req)
+	a.pinUsedKeys(used)
+	if info, ok := scripting.RunInfoFrom(ctx); ok {
+		a.scriptState.sentBy.Store(id, info)
+	}
+	a.activity.Add(outbox.Entry{MessageID: id, Step: outbox.StepQueued, Recipients: msg.Recipients()})
 	a.emit(EventOutboxChanged, nil)
+	a.recordFollowUp(req, id, msg.MessageID, followUp, notBefore)
+	a.recordProjectMail(req, msg.MessageID)
 
 	// harvest every recipient into the address book so autocomplete learns from
 	// who the user writes to. best effort: a failure here must not fail the send.
@@ -119,6 +169,7 @@ func (a *App) SendMessage(req ComposeRequest) (int64, error) {
 			}
 		}
 	}
+	forgetKnownPeople()
 	return id, nil
 }
 
@@ -144,6 +195,7 @@ func (a *App) CancelSend(id int64) (bool, error) {
 		return false, err
 	}
 	if cancelled {
+		a.dropFollowUpsForOutbox(id)
 		a.emit(EventOutboxChanged, nil)
 	}
 	return cancelled, nil
@@ -178,6 +230,7 @@ func (a *App) DiscardFailedSend(id int64) (bool, error) {
 		return false, err
 	}
 	if discarded {
+		a.dropFollowUpsForOutbox(id)
 		a.emit(EventOutboxChanged, nil)
 	}
 	return discarded, nil
@@ -686,7 +739,7 @@ func (a *App) OpenDraft(messageID int64) (DraftDTO, error) {
 	if err := a.ready(); err != nil {
 		return DraftDTO{}, err
 	}
-	m, err := a.store.GetMessage(a.ctx, messageID)
+	m, err := a.store.GetMessage(a.mailCtx(), messageID)
 	if err != nil {
 		return DraftDTO{}, err
 	}
@@ -721,6 +774,11 @@ type OutboxRowDTO struct {
 	LastError     string   `json:"lastError"`
 	NextAttemptAt string   `json:"nextAttemptAt"`
 	CreatedAt     string   `json:"createdAt"`
+	// Editable is set when the message was sent in this run, so its compose
+	// request is still known and EditOutboxMessage can take it back.
+	Editable bool `json:"editable"`
+	// Priority orders the queue: a higher one goes before older messages.
+	Priority int `json:"priority"`
 }
 
 // ListOutbox returns the current outbox, so the ui can show queued, sending and
@@ -733,9 +791,12 @@ func (a *App) ListOutbox() ([]OutboxRowDTO, error) {
 	if err != nil {
 		return nil, err
 	}
+	a.pruneSentRequests(rows)
 	out := make([]OutboxRowDTO, 0, len(rows))
 	for _, r := range rows {
+		_, editable := a.sentRequests.Load(r.ID)
 		out = append(out, OutboxRowDTO{
+			Editable:      editable,
 			ID:            r.ID,
 			AccountID:     r.AccountID,
 			Recipients:    r.Recipients,
@@ -744,6 +805,7 @@ func (a *App) ListOutbox() ([]OutboxRowDTO, error) {
 			LastError:     r.LastError,
 			NextAttemptAt: formatDate(r.NextAttemptAt),
 			CreatedAt:     formatDate(r.CreatedAt),
+			Priority:      r.Priority,
 		})
 	}
 	return out, nil

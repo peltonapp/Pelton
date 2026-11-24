@@ -11,7 +11,7 @@ export type TimeFormat = 'auto' | '12' | '24'
 // the locale decide. The 24 hour clock is asked for as the h23 cycle rather
 // than hour12:false, which some locales turn into h24 and show midnight as
 // "24:05".
-function clockOf(timeFormat: TimeFormat): Intl.DateTimeFormatOptions {
+export function clockOf(timeFormat: TimeFormat): Intl.DateTimeFormatOptions {
   if (timeFormat === '12') {
     return { hour12: true }
   }
@@ -59,6 +59,11 @@ export function formatStatusClock(date: Date, timeFormat: TimeFormat = 'auto'): 
   return `${day} ${time}`
 }
 
+/** Renders a time of day alone, in the user's clock preference. */
+export function formatClockTime(date: Date, timeFormat: TimeFormat = 'auto'): string {
+  return date.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit', ...clockOf(timeFormat) })
+}
+
 // formatFullDate renders a full, unambiguous date for the message header.
 export function formatFullDate(iso: string, timeFormat: TimeFormat = 'auto'): string {
   if (!iso) {
@@ -75,6 +80,16 @@ export function formatFullDate(iso: string, timeFormat: TimeFormat = 'auto'): st
     year: 'numeric',
     hour: '2-digit',
     minute: '2-digit',
+    ...clockOf(timeFormat),
+  })
+}
+
+// formatLogTime renders a time with seconds, for lines of an activity log.
+export function formatLogTime(date: Date, timeFormat: TimeFormat = 'auto'): string {
+  return date.toLocaleTimeString(undefined, {
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
     ...clockOf(timeFormat),
   })
 }
@@ -180,7 +195,8 @@ export function formatRelative(epochMs: number, t: (key: string) => string): str
 
 // displayName returns the best label for a sender: name if present, else email.
 export function displayName(name: string, email: string): string {
-  return name.trim() || email
+  // a name that needed quoting in the header ("Arne K.") is shown without them.
+  return name.trim().replace(/^\\?["“”]([^"“”\\]*)\\?["“”]/, '$1') || email
 }
 
 // AccountNames is the part of an Account that names it. Taking the fields

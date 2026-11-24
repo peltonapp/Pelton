@@ -1262,6 +1262,7 @@ func (a *App) listStubPage(ctx context.Context, account storage.Account, folder 
 		if rt != nil {
 			rt.addFresh(folder.ID, since.fresh(res.ToFetch))
 		}
+		a.afterFlagSync(folder, res)
 		// Bodies will not run for this attempt. Repair and color still
 		// happen, matching SyncFolder after a list failure.
 		if err != nil && ctx.Err() == nil {

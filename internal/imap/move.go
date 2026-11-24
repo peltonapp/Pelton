@@ -12,6 +12,21 @@ func (c *Client) Move(uid imap.UID, mailbox string) error {
 	return c.MoveMessages([]imap.UID{uid}, mailbox)
 }
 
+// CopyMessages copies the given UIDs to another mailbox, leaving them where
+// they are. A mailbox must be selected.
+func (c *Client) CopyMessages(uids []imap.UID, mailbox string) error {
+	if len(uids) == 0 {
+		return nil
+	}
+	if c.selectedMailbox() == nil {
+		return fmt.Errorf("imap: no mailbox selected for copy")
+	}
+	if _, err := c.raw.Copy(imap.UIDSetNum(uids...), mailbox).Wait(); err != nil {
+		return fmt.Errorf("imap: copy %d uid(s) to %q: %w", len(uids), mailbox, err)
+	}
+	return nil
+}
+
 // MoveUID moves the message with the given UID to another mailbox, like Move,
 // and reports the UID the server gave the message there and the destination's
 // UIDVALIDITY, from the COPYUID response code (RFC 4315 UIDPLUS). Both are 0

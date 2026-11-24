@@ -233,6 +233,7 @@
   on:click={() => (open ? closeList() : openList())}
   on:keydown={onButtonKeydown}
 >
+  {#if selected?.color}<span class="dot" style:--dot={selected.color} aria-hidden="true"></span>{/if}
   <span class="label">{label}</span>
   <IconChevronDown size={14} stroke={1.8} class="chevron" />
 </button>
@@ -275,6 +276,7 @@
             <span class="tick">
               {#if row.option.value === value}<IconCheck size={13} stroke={2} />{/if}
             </span>
+            {#if row.option.color}<span class="dot" style:--dot={row.option.color} aria-hidden="true"></span>{/if}
             <span class="opt-label">{row.option.label}</span>
           </li>
         {/if}
@@ -314,7 +316,16 @@
     outline-offset: 1px;
   }
 
+  .dot {
+    flex-shrink: 0;
+    width: var(--space-3);
+    height: var(--space-3);
+    border-radius: 50%;
+    background: var(--dot);
+  }
+
   .label {
+    flex: 1;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;

@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"io/fs"
 	"os"
+	"slices"
 
 	"github.com/peltonapp/Pelton/internal/credentials"
 	"github.com/peltonapp/Pelton/internal/logging"
@@ -57,7 +58,9 @@ func Run(cfg Config) error {
 	app.programLicense = cfg.ProgramLicense
 	app.trayIcon = cfg.TrayIcon
 	app.demoMode = cfg.DemoMode
-	app.startedHidden = startHidden(os.Args[1:], cfg.Channel)
+	// --quick-compose opens the quick compose window alone (quickcompose.go).
+	quickAtLaunch := slices.Contains(os.Args[1:], quickComposeFlag)
+	app.startedHidden = quickAtLaunch || startHidden(os.Args[1:], cfg.Channel)
 
 	// a mailto: click that launched the app arrives as argv on Linux/Windows.
 	// stash it so the first webview mount can open the prefilled compose. macOS
@@ -65,6 +68,8 @@ func Run(cfg Config) error {
 	if raw := firstMailtoArg(os.Args[1:]); raw != "" {
 		app.setPendingMailto(parseMailto(raw))
 	}
+	// so does an .ics file opened with Pelton.
+	app.deliverICS(firstICSArgs(os.Args[1:]))
 
 	// a dev build (PELTON_DEV) and a nightly both run against their own data and
 	// must not share the single-instance lock with an installed Pelton, or
@@ -84,8 +89,9 @@ func Run(cfg Config) error {
 
 	// new-mail notifications and the macOS Dock badge, through the Wails
 	// services rather than per-platform code of Pelton's own (#568).
-	app.notifier = notifications.New()
-	app.notifier.OnNotificationResponse(app.onNotificationResponse)
+	notifier := notifications.New()
+	notifier.OnNotificationResponse(app.onNotificationResponse)
+	app.notifier = notifier
 	app.dock = dock.New()
 
 	dist, err := fs.Sub(cfg.Assets, "frontend/dist")
@@ -104,6 +110,9 @@ func Run(cfg Config) error {
 		},
 		Assets: application.AssetOptions{
 			Handler: application.AssetFileServerFS(dist),
+			// while the app lock is engaged, bound calls are refused here
+			// (lockgate.go).
+			Middleware: newLockGate(app.locked).middleware,
 		},
 		// saving the window frame and closing the store happen here, before
 		// wails tears the window down.
@@ -114,9 +123,14 @@ func Run(cfg Config) error {
 		SingleInstance: &application.SingleInstanceOptions{
 			UniqueID: instanceID,
 			OnSecondInstanceLaunch: func(data application.SecondInstanceData) {
+				if slices.Contains(data.Args, quickComposeFlag) {
+					app.openQuickCompose()
+					return
+				}
 				if raw := firstMailtoArg(data.Args); raw != "" {
 					app.deliverMailto(raw)
 				}
+				app.deliverICS(firstICSArgs(data.Args))
 				app.showWindow()
 			},
 		},
@@ -135,11 +149,19 @@ func Run(cfg Config) error {
 		},
 	})
 	app.wapp = wapp
+	app.startQuickCompose(quickAtLaunch)
 
 	// macOS delivers a mailto: click as an Apple event, not argv.
 	wapp.Event.OnApplicationEvent(events.Common.ApplicationLaunchedWithUrl, func(e *application.ApplicationEvent) {
 		app.deliverMailto(e.Context().URL())
 		app.showWindow()
+	})
+	// and an .ics file opened from Finder as an open-file event.
+	wapp.Event.OnApplicationEvent(events.Common.ApplicationOpenedWithFile, func(e *application.ApplicationEvent) {
+		if path := e.Context().Filename(); isICSPath(path) {
+			app.deliverICS([]string{path})
+			app.showWindow()
+		}
 	})
 
 	if menu := app.initialMenu(); menu != nil {
@@ -162,6 +184,9 @@ func Run(cfg Config) error {
 		// the frontend paints. the real colors come from the css token theme.
 		BackgroundColour: application.NewRGB(17, 18, 20),
 		URL:              "/",
+		// files dropped on an element marked data-file-drop-target, such as
+		// the import dialog, reach the page as EventFilesDropped.
+		EnableFileDrop: true,
 		Mac: application.MacWindow{
 			// draw the ui all the way to the top of the window instead of under an
 			// opaque native title bar, which never matches the theme. the frontend

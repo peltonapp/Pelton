@@ -38,7 +38,7 @@ func (a *App) SetFlagColor(id int64, color int) error {
 // clearing a color leaves a single (or no) label. Failures are logged only; the
 // local color is already saved and authoritative.
 func (a *App) pushColorKeyword(id int64, color int) {
-	m, err := a.store.GetMessage(a.ctx, id)
+	m, err := a.store.GetMessage(a.mailCtx(), id)
 	if err != nil {
 		a.log.Error("color sync: load message", "id", id, "err", err)
 		return
@@ -108,16 +108,23 @@ func (a *App) UnsnoozeMessage(id int64) error {
 
 // runSnoozePoller wakes periodically to revive messages whose snooze time has
 // passed, marking them unread and unhiding them, then nudges the ui to refresh.
+// The same tick settles follow-up reminders (bind_followups.go), and ends an
+// elapsed focus and starts a scheduled one.
 func (a *App) runSnoozePoller() {
 	ticker := time.NewTicker(30 * time.Second)
 	defer ticker.Stop()
-	a.reviveDueSnoozes() // catch any that came due while the app was closed
+	// catch any that came due while the app was closed
+	a.reviveDueSnoozes()
+	a.checkFollowUps(time.Now().UTC())
+	a.advanceFocus(time.Now())
 	for {
 		select {
 		case <-a.ctx.Done():
 			return
 		case <-ticker.C:
 			a.reviveDueSnoozes()
+			a.checkFollowUps(time.Now().UTC())
+			a.advanceFocus(time.Now())
 		}
 	}
 }

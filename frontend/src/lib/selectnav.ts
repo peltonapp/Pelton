@@ -12,6 +12,8 @@ export interface SelectOption {
   value: string
   label: string
   disabled?: boolean
+  /** A color shown as a dot before the label, such as a calendar's. */
+  color?: string
 }
 
 /** A labelled run of options, rendered as a heading that cannot be chosen. */

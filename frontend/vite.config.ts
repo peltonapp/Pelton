@@ -3,6 +3,9 @@ import {svelte} from '@sveltejs/vite-plugin-svelte'
 import {fileURLToPath} from 'node:url'
 import fs from 'node:fs'
 import path from 'node:path'
+import vm from 'node:vm'
+import type {Plugin} from 'vite'
+import {areaOf} from './src/lib/stringareas.ts'
 import {bundledOCRCodes} from './src/lib/ocrlanguages'
 
 // @tabler/icons ships its full icon geometry as tabler-nodes-outline.json, but
@@ -47,6 +50,102 @@ const flagUrlDev = {
     }
     const resolved = await this.resolve(source, importer, { skipSelf: true })
     return resolved ? resolved.id.replace(/flagurl\.ts$/, 'flagurl.dev.ts') : null
+  },
+}
+
+// in development, an error that keeps the app from starting is posted here by
+// the splash (index.html) and printed in the terminal, since the webview's
+// console is not otherwise visible.
+const bootErrors = {
+  name: 'boot-errors',
+  configureServer(server: { middlewares: { use: (fn: (req: { url?: string, method?: string, on: (ev: string, cb: (chunk?: Buffer) => void) => void }, res: { statusCode: number, end: (b?: string) => void }, next: () => void) => void) => void } }) {
+    server.middlewares.use((req, res, next) => {
+      if (req.url !== '/__boot_error' || req.method !== 'POST') {
+        next()
+        return
+      }
+      const chunks: Buffer[] = []
+      req.on('data', (chunk) => chunk && chunks.push(chunk))
+      req.on('end', () => {
+        console.error(`\n[boot error]\n${Buffer.concat(chunks).toString('utf8').slice(0, 8000)}\n`)
+        res.statusCode = 204
+        res.end()
+      })
+    })
+  },
+}
+
+// each catalog in src/lib/locales is served split into the areas of
+// src/lib/stringareas.ts. virtual:strings/<locale> holds the core strings and a
+// loader for every other area, virtual:strings/<locale>/<area> one area's
+// strings. Under vitest all English text is core, so a component test renders
+// without loading anything first.
+const localesDir = fileURLToPath(new URL('./src/lib/locales/', import.meta.url))
+const stringsPrefix = 'virtual:strings/'
+
+const splitCache = new Map<string, {mtime: number, areas: Map<string, Record<string, string>>}>()
+
+function splitCatalog(locale: string): Map<string, Record<string, string>> {
+  const file = path.join(localesDir, `${locale}.ts`)
+  const mtime = fs.statSync(file).mtimeMs
+  const cached = splitCache.get(locale)
+  if (cached?.mtime === mtime) {
+    return cached.areas
+  }
+  const source = fs.readFileSync(file, 'utf8')
+  const start = /^const \w+: Record<string, string> = \{$/m.exec(source)
+  if (!start) {
+    throw new Error(`string-chunks: ${locale}.ts does not open with its catalog object`)
+  }
+  const body = source.slice(start.index + start[0].length - 1, source.lastIndexOf('}') + 1)
+  const catalog = vm.runInNewContext(`(${body})`) as Record<string, string>
+  const areas = new Map<string, Record<string, string>>()
+  for (const [key, text] of Object.entries(catalog)) {
+    const area = process.env.VITEST && locale === 'en' ? 'core' : (areaOf(key) ?? 'core')
+    if (!areas.has(area)) {
+      areas.set(area, {})
+    }
+    areas.get(area)![key] = text
+  }
+  splitCache.set(locale, {mtime, areas})
+  return areas
+}
+
+const unsafeInScript = new RegExp(`[<>/${String.fromCharCode(0x2028, 0x2029)}]`, 'g')
+
+function jsLiteral(value: unknown): string {
+  return JSON.stringify(value).replace(unsafeInScript, (c) => `${String.fromCharCode(92)}u${c.charCodeAt(0).toString(16).padStart(4, '0')}`)
+}
+
+const stringChunks: Plugin = {
+  name: 'string-chunks',
+  resolveId(source) {
+    return source.startsWith(stringsPrefix) ? `\0${source}` : null
+  },
+  load(id) {
+    if (!id.startsWith(`\0${stringsPrefix}`)) {
+      return null
+    }
+    const [locale, area] = id.slice(stringsPrefix.length + 1).split('/')
+    if (!/^[A-Za-z]{2,3}(-[A-Za-z0-9]{2,8})*$/.test(locale)) {
+      throw new Error(`string-chunks: ${locale} is not a locale name`)
+    }
+    this.addWatchFile(path.join(localesDir, `${locale}.ts`))
+    const areas = splitCatalog(locale)
+    if (area) {
+      return `export default ${jsLiteral(areas.get(area) ?? {})}`
+    }
+    const loaders = [...areas.keys()]
+      .filter((a) => a !== 'core')
+      .map((a) => `${jsLiteral(a)}: () => import(${jsLiteral(`${stringsPrefix}${locale}/${a}`)})`)
+    return `export const core = ${jsLiteral(areas.get('core') ?? {})}\nexport const areas = {${loaders.join(',')}}\n`
+  },
+  handleHotUpdate({file, server}) {
+    if (file.startsWith(localesDir)) {
+      server.moduleGraph.invalidateAll()
+      server.ws.send({type: 'full-reload'})
+      return []
+    }
   },
 }
 
@@ -108,7 +207,7 @@ const runtimeAssets = {
 
 // https://vitejs.dev/config/
 export default defineConfig({
-  plugins: [svelte(), dropLegacyWoff, flagUrlDev, runtimeAssets],
+  plugins: [svelte(), stringChunks, dropLegacyWoff, flagUrlDev, runtimeAssets, bootErrors],
   resolve: {
     alias: {
       'tabler-nodes-outline': tablerNodesOutline,
@@ -116,6 +215,11 @@ export default defineConfig({
     // under vitest, svelte otherwise resolves to its server build, where mount()
     // does not exist and every component test fails before it renders.
     ...(process.env.VITEST ? { conditions: ['browser'] } : {}),
+  },
+  // the date scanning worker loads chrono's locales on demand, which needs
+  // module workers to split into chunks.
+  worker: {
+    format: 'es',
   },
   build: {
     // the flag set is globbed whole so a new locale needs no asset work, and

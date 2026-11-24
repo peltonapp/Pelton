@@ -44,6 +44,19 @@ var backupSkipSettings = map[string]bool{
 	settingRemoteDomains:   true,
 	draftsKey:              true,
 	settingThemesSeeded:    true,
+	// the app lock belongs to this install: a backup must neither carry the
+	// passphrase hash away nor switch the lock off on import.
+	settingAppLock:           true,
+	settingAppLockMethod:     true,
+	settingAppLockPassphrase: true,
+	settingAppLockFailures:   true,
+	// a script's folder is a path on this device the user granted here.
+	settingScriptFolders: true,
+	// AI providers and their keys are set up per device.
+	settingAIProviders:     true,
+	settingAIScriptOptions: true,
+	// a proposal names a script by this install's id.
+	settingScriptProposals: true,
 	settingKeyringCopied:   true,
 }
 
@@ -104,6 +117,9 @@ type BackupFileDTO struct {
 	Whitelist  *whitelistBackup  `json:"whitelist,omitempty"`
 	Mailboxes  []mailboxBackup   `json:"mailboxes,omitempty"`
 	Signatures []signatureBackup `json:"signatures,omitempty"`
+	// Snippets travel in the signatures category: both are reusable text the
+	// composer puts into a message.
+	Snippets []snippetBackup `json:"snippets,omitempty"`
 }
 
 // ExportData writes the selected categories to a user-chosen json file and
@@ -145,6 +161,11 @@ func (a *App) ExportData(categories []string, credentialPassword string) (string
 			return "", err
 		}
 		doc.Signatures = signatures
+		snippets, err := a.exportSnippets()
+		if err != nil {
+			return "", err
+		}
+		doc.Snippets = snippets
 	}
 
 	dest, err := a.saveFileDialog(saveDialogOptions{
@@ -276,6 +297,7 @@ type BackupInfoDTO struct {
 	SettingCount            int    `json:"settingCount"`
 	MailboxCount            int    `json:"mailboxCount"`
 	SignatureCount          int    `json:"signatureCount"`
+	SnippetCount            int    `json:"snippetCount"`
 }
 
 // InspectBackupFile opens a file picker and parses the chosen backup, returning
@@ -305,11 +327,12 @@ func (a *App) InspectBackupFile() (BackupInfoDTO, error) {
 		HasSettings:             len(doc.Settings) > 0,
 		HasWhitelist:            doc.Whitelist != nil,
 		HasMailboxes:            len(doc.Mailboxes) > 0,
-		HasSignatures:           len(doc.Signatures) > 0,
+		HasSignatures:           len(doc.Signatures) > 0 || len(doc.Snippets) > 0,
 		HasEncryptedCredentials: anyMailboxHasSecret(doc.Mailboxes),
 		SettingCount:            len(doc.Settings),
 		MailboxCount:            len(doc.Mailboxes),
 		SignatureCount:          len(doc.Signatures),
+		SnippetCount:            len(doc.Snippets),
 	}, nil
 }
 
@@ -373,6 +396,9 @@ func (a *App) ImportData(path string, categories []string, credentialPassword st
 	}
 	if want[backupCategorySignatures] {
 		if err := a.importSignatures(doc.Signatures); err != nil {
+			return err
+		}
+		if err := a.importSnippets(doc.Snippets); err != nil {
 			return err
 		}
 	}

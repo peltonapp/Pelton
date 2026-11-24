@@ -118,19 +118,20 @@ func TestFetchAndPinPreservesThreadingMetadata(t *testing.T) {
 				if !reflect.DeepEqual(client.fetched, []uint32{73}) {
 					t.Errorf("fetched = %v, want only uncached UID 73", client.fetched)
 				}
+				// without attachments the part is still recorded, with no file,
+				// so it can be listed and fetched later.
 				atts, err := db.ListAttachments(app.ctx, m.ID)
-				want := 0
-				if includeAttachments {
-					want = 1
-				}
-				if err != nil || len(atts) != want || m.HasAttachments != includeAttachments {
+				if err != nil || len(atts) != 1 || !m.HasAttachments {
 					t.Fatalf("stored attachments = %+v, %v; hasAttachments=%t", atts, err, m.HasAttachments)
+				}
+				if !includeAttachments && (atts[0].DiskPath != "" || atts[0].Filename != "note.txt" || atts[0].SizeBytes == 0) {
+					t.Fatalf("metadata-only attachment = %+v", atts[0])
 				}
 				if includeAttachments {
 					if atts[0].Filename != "note.txt" {
 						t.Fatalf("attachment filename = %q", atts[0].Filename)
 					}
-					r, err := db.OpenAttachment(atts[0].DiskPath)
+					r, err := db.OpenAttachment(app.ctx, atts[0])
 					if err != nil {
 						t.Fatal(err)
 					}

@@ -38,10 +38,27 @@ type DiscoveredDTO struct {
 	Source        string `json:"source"`
 }
 
+// settingAutoconfigLookup is whether the add-mailbox wizard may look a typed
+// address's domain up: "allow", "manual" (never, settings are typed by hand)
+// or "ask" (the default, the wizard asks first).
+const settingAutoconfigLookup = "autoconfig_lookup"
+
+// errLookupNotAllowed is returned while the user has not allowed lookups.
+var errLookupNotAllowed = fmt.Errorf("server lookups are not allowed")
+
 // DiscoverConfig resolves likely imap/smtp settings for an email address using
-// autoconfig (ISPDB, the domain's well-known/autoconfig, then a guess). The
-// wizard pre-fills the form with this; the user can still edit before testing.
+// autoconfig (ISPDB, the domain's well-known/autoconfig, its MX records, then a
+// guess). Only the domain leaves the machine, and only once the user allowed
+// lookups; until then it returns errLookupNotAllowed without any network use.
+// The wizard pre-fills the form with this; the user can still edit before
+// testing.
 func (a *App) DiscoverConfig(email string) (DiscoveredDTO, error) {
+	if err := a.ready(); err != nil {
+		return DiscoveredDTO{}, err
+	}
+	if a.stringSetting(settingAutoconfigLookup, "ask") != "allow" {
+		return DiscoveredDTO{}, errLookupNotAllowed
+	}
 	d, err := autoconfig.Discover(a.ctx, a.httpClient(10*time.Second), email)
 	if err != nil {
 		return DiscoveredDTO{}, err

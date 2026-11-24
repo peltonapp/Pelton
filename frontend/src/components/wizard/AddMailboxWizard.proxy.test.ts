@@ -18,6 +18,7 @@ vi.mock('../../lib/browser', () => ({
 }))
 
 import AddMailboxWizard from './AddMailboxWizard.svelte'
+import { prefs } from '../../stores/prefs'
 
 beforeEach(() => {
   for (const fn of Object.values(api)) {
@@ -30,6 +31,7 @@ beforeEach(() => {
   api.testConnection.mockResolvedValue({ untrusted: [] })
   // never resolves: the test stops at the moment sign-in is requested.
   api.addOAuthAccount.mockReturnValue(new Promise(() => {}))
+  prefs.update((p) => ({ ...p, autoconfigLookup: 'allow' }))
 })
 
 // a mailbox only reachable through its own proxy has to be testable, and

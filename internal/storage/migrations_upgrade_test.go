@@ -318,7 +318,7 @@ func TestMigrationUpgradeFromMain(t *testing.T) {
 	checkUpgradeHealth(t, db, "after use")
 
 	// The narrowed update trigger must list every FTS column.
-	trigger := regexp.MustCompile(`(?is)AFTER UPDATE OF (.*?) ON messages`).FindStringSubmatch(schemaOf(t, db))
+	trigger := regexp.MustCompile(`(?is)TRIGGER messages_fts_au AFTER UPDATE OF (.*?) ON messages`).FindStringSubmatch(schemaOf(t, db))
 	if trigger == nil {
 		t.Fatal("messages_fts_au: no UPDATE OF column list")
 	}
@@ -431,6 +431,9 @@ func TestMigrationUpgradeReclaimsSpace(t *testing.T) {
 			t.Cleanup(func() { reclaimMinFree = old })
 			db := openDBThrough(t, mainVersion)
 			seedMain(t, db)
+			// enough text that the tables later migrations create cannot use
+			// up every page the rebuild frees.
+			upExec(t, db.sql, `UPDATE messages SET body_html = hex(randomblob(16384))`)
 			if tc.disk != nil {
 				oldDisk := diskFree
 				t.Cleanup(func() { diskFree = oldDisk })

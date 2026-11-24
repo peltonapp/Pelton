@@ -54,6 +54,10 @@ const (
 	// too large for the fast lane. The user waits for it: it runs in the top
 	// class and waits for no list or body work of its folder.
 	KindOpenedBody
+	// KindUpload appends one imported message to a folder of the account.
+	// A guided import's upload is a run of these, so it shares the account's
+	// sessions with sync instead of opening its own.
+	KindUpload
 
 	// Fast lane.
 
@@ -80,7 +84,7 @@ const (
 )
 
 var kindNames = [...]string{
-	"folder-tree", "list", "bodies", "empty-trash", "offline", "full-check", "opened-body",
+	"folder-tree", "list", "bodies", "empty-trash", "offline", "full-check", "opened-body", "upload",
 	"on-demand-body", "attachment", "source", "move", "flags", "folder-op", "sent-copy", "new-mail", "load-older",
 }
 
@@ -129,7 +133,7 @@ func DefaultClass(k Kind) Class {
 		return ClassBodies
 	case KindEmptyTrash:
 		return ClassEmptyTrash
-	case KindOffline:
+	case KindOffline, KindUpload:
 		return ClassOffline
 	case KindFullCheck:
 		return ClassFullCheck

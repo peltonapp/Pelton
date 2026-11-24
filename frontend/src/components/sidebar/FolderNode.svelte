@@ -6,6 +6,8 @@
   // the whole node (row plus children) is one element so the parent's reorder
   // container sees exactly one child per folder. this node's own children are a
   // separate container, which is what keeps a drag inside its sibling group.
+  import { slide } from 'svelte/transition'
+  import { dur, motion } from '../../lib/motion'
   import {
     IconInbox,
     IconSend,
@@ -23,6 +25,9 @@
     IconRefreshOff,
   } from '@tabler/icons-svelte'
   import SidebarRow from './SidebarRow.svelte'
+  import { maildrop, maildragSpring } from '../../stores/maildrag'
+  import { moveToFolder } from '../../lib/messageactions'
+  import type { MessageSummary } from '../../lib/types'
   import Self from './FolderNode.svelte'
   import type { Folder } from '../../lib/types'
   import { reorder, type ReorderDetail } from '../../lib/reorder'
@@ -42,6 +47,9 @@
   import { reorderFolders, setFolderPinned, setFolderSyncExcluded } from '../../lib/api'
   import { toastError, errorMessage } from '../../stores/toast'
   import { t } from '../../lib/i18n'
+  import { openVaultUnlock } from '../../stores/vaultdialog'
+  import Ph from '../common/Ph.svelte'
+  import lockIcon from '@phosphor-icons/core/assets/duotone/lock-simple-duotone.svg?raw'
 
   export let folder: Folder
   export let folders: Folder[]
@@ -59,6 +67,18 @@
   // emptying is only offered on the trash, and only when there is something in
   // it, so the menu never carries an action that would do nothing.
   $: emptiable = folder.role === 'trash' && folder.totalCount > 0
+
+  // a folder of a locked vault: the classic design leaves it out, and so does
+  // the new one when the vault asks to be hidden; otherwise it is a locked
+  // entry without counts that opens the unlock dialog.
+  $: locked = folder.vaultLocked
+  $: hiddenLocked = locked && ($prefs.design === 'classic' || folder.vaultHidden)
+
+  function protect(): void {
+    import('../../stores/mailvault')
+      .then((m) => m.protectWithVault({ accountId: folder.accountId, folderId: folder.id }))
+      .catch((err) => toastError(errorMessage(err)))
+  }
 
   async function onReorder(event: CustomEvent<ReorderDetail>): Promise<void> {
     try {
@@ -148,6 +168,10 @@
         action: () => openDeleteFolder(folder),
       })
     }
+    if ($prefs.design === 'new' && !folder.vaultId) {
+      entries.push('separator')
+      entries.push({ label: $t('mailvault.protect'), icon: IconFolder, action: protect })
+    }
     openContextMenu(event.clientX, event.clientY, entries)
   }
 
@@ -168,9 +192,42 @@
   // a setting because a mailbox with many excluded folders does not need a row
   // of icons repeating what its owner already knows.
   $: unsynced = folder.syncExcluded && $prefs.showUnsyncedFolder
+
+  // mail dragged from the list lands here when it belongs to this folder's
+  // account and is not all in the folder already.
+  $: mailDrop = {
+    accepts: (items: MessageSummary[]) =>
+      items.every((m) => m.accountId === folder.accountId) && items.some((m) => m.folderId !== folder.id),
+    onDrop: (items: MessageSummary[]) => void moveToFolder(items, folder),
+    hint: () => $t('folders.drop.move').replace('{folder}', folder.name),
+  }
+
+  // mail held over a closed folder opens it, so a subfolder can take the drop.
+  function springOpen(): void {
+    if (children.length > 0) {
+      expanded = true
+    }
+  }
 </script>
 
 <div class="node" data-reorder-id={folder.id}>
+  {#if locked}
+    {#if !hiddenLocked}
+      <SidebarRow
+        label={folder.name}
+        title={$t('mailvault.lockedFolder')}
+        {depth}
+        expandable={children.length > 0}
+        {expanded}
+        on:select={() => openVaultUnlock(folder.vaultId ?? 0)}
+        on:toggle={() => (expanded = !expanded)}
+        on:contextmenu={(e) => openContextMenu(e.detail.clientX, e.detail.clientY, [{ label: $t('mailvault.unlock'), action: () => openVaultUnlock(folder.vaultId ?? 0) }])}
+      >
+        <Ph svg={lockIcon} size={15} />
+      </SidebarRow>
+    {/if}
+  {:else}
+  <div use:maildrop={mailDrop} use:maildragSpring={springOpen}>
   <SidebarRow
     label={folder.name}
     title={unsynced ? $t('folders.notSyncing') : ''}
@@ -191,9 +248,12 @@
       {/if}
     </span>
   </SidebarRow>
+  </div>
+  {/if}
 
   {#if expanded && children.length > 0}
     <div
+      transition:slide|local={{ duration: dur(motion.base) }}
       use:reorder
       on:reorderstart={() => startFolderDrag(folder.accountId)}
       on:reorderend={endFolderDrag}

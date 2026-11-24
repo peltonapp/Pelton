@@ -6,11 +6,13 @@
 
 import { writable } from 'svelte/store'
 import type { MessageSummary } from '../lib/types'
+import { noteAction } from '../lib/coach'
 
 // the messages waiting for a destination, empty when the dialog is closed.
 export const moveTargets = writable<MessageSummary[]>([])
 
 export function openMove(message: MessageSummary): void {
+  noteAction('move-to')
   moveTargets.set([message])
 }
 
@@ -18,6 +20,7 @@ export function openMoveMany(messages: MessageSummary[]): void {
   if (messages.length === 0) {
     return
   }
+  noteAction('move-to')
   moveTargets.set([...messages])
 }
 

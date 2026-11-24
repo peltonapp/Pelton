@@ -43,14 +43,14 @@ describe('reply recipients (#485)', () => {
     expect(session.cc).toBe('cat@example.com')
   })
 
-  it('replies to the sender everywhere else', () => {
+  it('replies to the sender first everywhere else', () => {
     sidebar.set(ready({ accounts: [], foldersByAccount: { 7: [inbox, sent] }, views: [], pinned: [] }))
 
-    expect(replyTo(inbox.id, true).to).toBe('me@example.com')
+    expect(replyTo(inbox.id, true).to).toBe('me@example.com, ann@example.com, bob@example.com')
     expect(replyTo(sent.id, false).to).toBe('me@example.com')
   })
 
-  it('falls back to the sender while the folders are not loaded', () => {
-    expect(replyTo(sent.id, true).to).toBe('me@example.com')
+  it('falls back to the sender first while the folders are not loaded', () => {
+    expect(replyTo(sent.id, true).to).toBe('me@example.com, ann@example.com, bob@example.com')
   })
 })

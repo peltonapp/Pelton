@@ -1,0 +1,88 @@
+/*
+  design-new.css restyles the parts of the classic shell that the new design
+  reuses as they are: the sidebar, the status bar and the menu bar. they keep
+  their own component styles for the classic design; here they give up their
+  own background and edges so they sit on the window's chrome surface.
+*/
+
+:root[data-design="new"] .sidebar {
+  background: transparent;
+  border-inline-end: none;
+}
+
+:root[data-design="new"] .sidebar > .top {
+  border-bottom: none;
+  padding-bottom: var(--space-2);
+}
+
+:root[data-design="new"] .statusbar {
+  background: transparent;
+  border-top: none;
+}
+
+/* inside the top bar the menu is one item of the bar, not a row of its own. */
+:root[data-design="new"] .topbar .menubar {
+  height: auto;
+  padding: 0;
+  background: transparent;
+  border-bottom: none;
+}
+
+/* the soft pane style puts the sidebar on a raised panel of its own. */
+:root[data-design="new"][data-panes="soft"] .statusbar {
+  padding-top: var(--space-1);
+}
+
+/* a flat toolbar button of the new composer and its popovers: an icon with an
+   optional label, a hover fill, and a slight press. */
+.c2-tool {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  height: var(--control-height);
+  min-width: var(--control-height);
+  padding: 0 var(--space-3);
+  flex-shrink: 0;
+  border: none;
+  border-radius: var(--radius-control);
+  background: transparent;
+  color: var(--text-secondary);
+  font-family: var(--font-ui);
+  font-size: var(--fz-label);
+  white-space: nowrap;
+  cursor: var(--cursor-action);
+  --wails-draggable: no-drag;
+  transition:
+    background-color var(--motion-fast) var(--ease-out),
+    color var(--motion-fast) var(--ease-out),
+    transform var(--motion-fast) var(--ease-press);
+}
+
+.c2-tool.compact {
+  padding: 0;
+}
+
+.c2-tool:hover:not(:disabled) {
+  background: var(--surface-hover);
+  color: var(--text-primary);
+}
+
+.c2-tool:active:not(:disabled) {
+  transform: scale(var(--press-scale));
+}
+
+.c2-tool:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.c2-tool:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+:root[data-design="new"] .list-col,
+:root[data-design="new"] .detail {
+  transition: background-color var(--motion-base) var(--ease-out);
+}

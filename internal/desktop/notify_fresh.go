@@ -89,16 +89,19 @@ func freshIDs(toFetch []string, before map[string]struct{}) []string {
 	})
 }
 
-// notifyFresh notifies for the fresh ids among a fetched batch that the
-// fetch stored, and forgets every fresh id of the batch. notify false only
-// forgets them (an opened message is not news).
+// notifyFresh runs the new-mail work for the fresh ids among a fetched batch
+// that the fetch stored, and forgets every fresh id of the batch. The work
+// needs the whole message, so it runs here, once, when the body is in, never
+// for a stub. notify false leaves out the OS notification only (an opened
+// message is not news); the scripts, promises and privacy shield still hear
+// of it.
 func (a *App) notifyFresh(ctx context.Context, folder storage.Folder, batch []string, stored []int64, notify bool) {
 	rt := a.accountSync(folder.AccountID)
 	if rt == nil {
 		return
 	}
 	fresh := rt.takeFresh(folder.ID, batch)
-	if !notify || len(fresh) == 0 || len(stored) == 0 {
+	if len(fresh) == 0 || len(stored) == 0 {
 		return
 	}
 	var ids []int64
@@ -108,7 +111,20 @@ func (a *App) notifyFresh(ctx context.Context, folder storage.Folder, batch []st
 			ids = append(ids, id)
 		}
 	}
-	if len(ids) > 0 {
+	if len(ids) == 0 {
+		return
+	}
+	if notify {
 		goSafe("announcing new mail", func() { a.notifyNewMail(folder, ids) })
 	}
+	a.afterArrival(folder, ids)
+}
+
+// afterArrival hands new mail whose body is stored to the scripts, the
+// promise scan and the privacy shield. Mail in a mail vault is left out by
+// each of them.
+func (a *App) afterArrival(folder storage.Folder, ids []int64) {
+	a.scriptMailArrived(ids, a.firstScriptSync(folder.AccountID))
+	a.promisesAfterSync(folder, ids)
+	a.privacyAfterSync(folder, ids)
 }

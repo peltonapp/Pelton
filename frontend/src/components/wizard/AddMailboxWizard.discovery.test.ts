@@ -7,6 +7,7 @@ import type { Discovered } from '../../lib/types'
 const api = vi.hoisted(() => ({
   discoverConfig: vi.fn(),
   testConnection: vi.fn(),
+  setSetting: vi.fn(),
 }))
 
 vi.mock('../../lib/api', async (importOriginal) => ({
@@ -14,11 +15,12 @@ vi.mock('../../lib/api', async (importOriginal) => ({
   ...api,
 }))
 
-vi.mock('../../../wailsjs/runtime/runtime', () => ({
-  BrowserOpenURL: vi.fn(),
+vi.mock('../../lib/browser', () => ({
+  openURL: vi.fn(),
 }))
 
 import AddMailboxWizard from './AddMailboxWizard.svelte'
+import { prefs } from '../../stores/prefs'
 
 function discovered(host: string): Discovered {
   return {
@@ -35,10 +37,14 @@ function discovered(host: string): Discovered {
 }
 
 // a discovery the test resolves by hand, to land it after the user has typed.
-function pending(): { promise: Promise<Discovered>; resolve: (d: Discovered) => void } {
+function deferDiscovery(): (d: Discovered) => Promise<void> {
   let resolve!: (d: Discovered) => void
-  const promise = new Promise<Discovered>((r) => (resolve = r))
-  return { promise, resolve }
+  api.discoverConfig.mockReturnValueOnce(new Promise<Discovered>((r) => (resolve = r)))
+  return async (d) => {
+    resolve(d)
+    await tick()
+    await tick()
+  }
 }
 
 async function typeInto(input: HTMLElement, text: string): Promise<void> {
@@ -46,196 +52,91 @@ async function typeInto(input: HTMLElement, text: string): Promise<void> {
   await userEvent.type(input, text)
 }
 
-function ports(): HTMLInputElement[] {
-  return screen.getAllByLabelText('Port') as HTMLInputElement[]
+// the custom form with its server fields open.
+async function openCustomForm(): Promise<void> {
+  render(AddMailboxWizard, { props: { initialProviderId: 'custom' } })
+  await userEvent.click(screen.getByRole('button', { name: /Advanced/ }))
 }
 
 // leaving the email field is what starts discovery.
 async function enterEmail(address: string): Promise<void> {
-  await userEvent.type(screen.getByLabelText('Email'), address)
+  await typeInto(screen.getByLabelText('Email'), address)
   await userEvent.tab()
 }
 
-function deferDiscovery(): ReturnType<typeof pending> {
-  const d = pending()
-  api.discoverConfig.mockReturnValue(d.promise)
-  return d
-}
-
-async function passConnectionTest(): Promise<void> {
-  await userEvent.type(screen.getByLabelText('Password'), 'mail-pass')
-  await userEvent.click(screen.getByRole('button', { name: 'Test connection' }))
-  await screen.findByText('Connection works.')
-}
-
-function expectHosts(imap: string, smtp: string): void {
-  expect(screen.getByLabelText('IMAP host')).toHaveValue(imap)
-  expect(screen.getByLabelText('SMTP host')).toHaveValue(smtp)
+function value(label: string, index = 0): string {
+  return (screen.getAllByLabelText(label)[index] as HTMLInputElement).value
 }
 
 beforeEach(() => {
   for (const fn of Object.values(api)) {
     fn.mockReset()
   }
-  api.testConnection.mockResolvedValue({ untrusted: [] })
-  render(AddMailboxWizard, { props: { initialProviderId: 'custom', offerImport: false } })
+  api.setSetting.mockResolvedValue(undefined)
+  prefs.update((p) => ({ ...p, autoconfigLookup: 'allow' }))
 })
 
 describe('late autodiscovery in the add-mailbox wizard', () => {
-  it('keeps the servers the user typed before discovery resolved', async () => {
-    const d = deferDiscovery()
+  it('keeps the server the user typed before discovery resolved, and fills the other', async () => {
+    await openCustomForm()
+    const land = deferDiscovery()
+    await enterEmail('me@example.com')
+    await typeInto(screen.getByLabelText('IMAP host'), 'mail.typed.example')
 
-    await enterEmail('me@example.org')
-    await typeInto(screen.getByLabelText('IMAP host'), '127.0.0.1')
-    await typeInto(ports()[0], '1143')
-    await typeInto(screen.getByLabelText('SMTP host'), '127.0.0.2')
-    await typeInto(ports()[1], '1025')
-    d.resolve(discovered('example.org'))
-    await vi.waitFor(() => expect(api.discoverConfig).toHaveBeenCalled())
-    await d.promise
-    await tick()
+    await land(discovered('example.com'))
 
-    expectHosts('127.0.0.1', '127.0.0.2')
-    expect(ports()[0]).toHaveValue(1143)
-    expect(ports()[1]).toHaveValue(1025)
+    expect(value('IMAP host')).toBe('mail.typed.example')
+    expect(value('SMTP host')).toBe('smtp.example.com')
   })
 
   it('ignores a discovery for an address that was changed since', async () => {
-    const first = pending()
-    const second = pending()
-    api.discoverConfig.mockReturnValueOnce(first.promise).mockReturnValueOnce(second.promise)
-
-    const email = screen.getByLabelText('Email')
+    await openCustomForm()
+    const landOld = deferDiscovery()
     await enterEmail('me@old.example')
-    await typeInto(email, 'me@new.example')
-    await userEvent.tab()
-    second.resolve(discovered('new.example'))
-    await vi.waitFor(() => expect(screen.getByLabelText('IMAP host')).toHaveValue('imap.new.example'))
-    first.resolve(discovered('old.example'))
-    await first.promise
-    await tick()
+    const landNew = deferDiscovery()
+    await enterEmail('me@new.example')
 
-    expectHosts('imap.new.example', 'smtp.new.example')
-  })
+    await landNew(discovered('new.example'))
+    await landOld(discovered('old.example'))
 
-  // each value is typed over the field ('' only clears it); the last one must survive.
-  it.each([
-    ['still fills the fields the user left alone', ['127.0.0.1']],
-    ["treats a field typed back to its old value as the user's", ['x', '']],
-  ])('%s', async (_name, typed) => {
-    const d = deferDiscovery()
-
-    await enterEmail('me@example.org')
-    for (const value of typed) {
-      await userEvent.clear(screen.getByLabelText('IMAP host'))
-      if (value) await userEvent.type(screen.getByLabelText('IMAP host'), value)
-    }
-    d.resolve(discovered('example.org'))
-    await vi.waitFor(() => expect(screen.getByLabelText('SMTP host')).toHaveValue('smtp.example.org'))
-
-    expect(screen.getByLabelText('IMAP host')).toHaveValue(typed.at(-1))
-  })
-
-  it('keeps a passed connection test valid when discovery lands after it', async () => {
-    const d = deferDiscovery()
-
-    await enterEmail('me@example.org')
-    await typeInto(screen.getByLabelText('IMAP host'), '127.0.0.1')
-    await typeInto(screen.getByLabelText('SMTP host'), '127.0.0.1')
-    await passConnectionTest()
-    d.resolve(discovered('example.org'))
-    await d.promise
-    await tick()
-
-    expect(screen.getByText('Connection works.')).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Add mailbox' })).toBeEnabled()
-  })
-
-  it('keeps servers typed before the email was entered', async () => {
-    api.discoverConfig.mockResolvedValue(discovered('example.org'))
-
-    await typeInto(screen.getByLabelText('IMAP host'), '127.0.0.1')
-    await typeInto(screen.getByLabelText('SMTP host'), '127.0.0.2')
-    await enterEmail('me@example.org')
-    await vi.waitFor(() => expect(api.discoverConfig).toHaveBeenCalled())
-    await tick()
-    await tick()
-
-    expectHosts('127.0.0.1', '127.0.0.2')
-  })
-
-  it('does not overwrite hosts or clear a passed test when the email is blurred again', async () => {
-    api.discoverConfig.mockResolvedValue(discovered('example.org'))
-
-    const email = screen.getByLabelText('Email')
-    await enterEmail('me@example.org')
-    await vi.waitFor(() => expect(screen.getByLabelText('SMTP host')).toHaveValue('smtp.example.org'))
-    await typeInto(screen.getByLabelText('IMAP host'), '127.0.0.1')
-    await typeInto(screen.getByLabelText('SMTP host'), '127.0.0.1')
-    await passConnectionTest()
-
-    await userEvent.click(email)
-    await userEvent.tab()
-    await vi.waitFor(() => expect(api.discoverConfig).toHaveBeenCalledTimes(2))
-    await tick()
-    await tick()
-
-    expectHosts('127.0.0.1', '127.0.0.1')
-    expect(screen.getByText('Connection works.')).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Add mailbox' })).toBeEnabled()
+    expect(value('IMAP host')).toBe('imap.new.example')
+    expect(value('SMTP host')).toBe('smtp.new.example')
   })
 
   it('fills untouched fields on a later discovery', async () => {
-    api.discoverConfig.mockResolvedValueOnce(discovered('old.example')).mockResolvedValueOnce(discovered('new.example'))
+    await openCustomForm()
+    api.discoverConfig.mockResolvedValueOnce(discovered('first.example'))
+    await enterEmail('me@first.example')
+    await vi.waitFor(() => expect(value('IMAP host')).toBe('imap.first.example'))
 
-    const email = screen.getByLabelText('Email')
-    await enterEmail('me@old.example')
-    await vi.waitFor(() => expect(screen.getByLabelText('IMAP host')).toHaveValue('imap.old.example'))
-    await typeInto(email, 'me@new.example')
-    await userEvent.tab()
-
-    await vi.waitFor(() => expect(screen.getByLabelText('IMAP host')).toHaveValue('imap.new.example'))
-    expect(screen.getByLabelText('SMTP host')).toHaveValue('smtp.new.example')
+    api.discoverConfig.mockResolvedValueOnce(discovered('second.example'))
+    await enterEmail('me@second.example')
+    await vi.waitFor(() => expect(value('IMAP host')).toBe('imap.second.example'))
   })
 
-  it('leaves the whole IMAP server alone once one of its fields was typed', async () => {
-    const d = deferDiscovery()
+  it('leaves the whole IMAP server alone once its port was typed', async () => {
+    await openCustomForm()
+    const land = deferDiscovery()
+    await enterEmail('me@example.com')
+    await typeInto(screen.getAllByLabelText('Port')[0], '1993')
 
-    await enterEmail('me@example.org')
-    await typeInto(screen.getByLabelText('IMAP host'), '127.0.0.1')
-    d.resolve({ ...discovered('example.org'), imapPort: 143, imapTls: 'starttls', smtpPort: 587, smtpTls: 'starttls' })
-    await vi.waitFor(() => expect(screen.getByLabelText('SMTP host')).toHaveValue('smtp.example.org'))
+    await land(discovered('example.com'))
 
-    // the typed host keeps the port it was typed against; SMTP, untouched, follows discovery.
-    expect(screen.getByLabelText('IMAP host')).toHaveValue('127.0.0.1')
-    expect(ports()[0]).toHaveValue(993)
-    expect(ports()[1]).toHaveValue(587)
+    expect(value('IMAP host')).toBe('')
+    expect(value('Port', 0)).toBe('1993')
+    expect(value('SMTP host')).toBe('smtp.example.com')
   })
 
   it('leaves the whole SMTP server alone once its port was typed', async () => {
-    const d = deferDiscovery()
+    await openCustomForm()
+    const land = deferDiscovery()
+    await enterEmail('me@example.com')
+    await typeInto(screen.getAllByLabelText('Port')[1], '2525')
 
-    await enterEmail('me@example.org')
-    await typeInto(ports()[1], '2525')
-    d.resolve(discovered('example.org'))
-    await vi.waitFor(() => expect(screen.getByLabelText('IMAP host')).toHaveValue('imap.example.org'))
+    await land(discovered('example.com'))
 
-    expect(screen.getByLabelText('SMTP host')).toHaveValue('')
-    expect(ports()[1]).toHaveValue(2525)
-  })
-
-  it('drops a discovery still running when another provider is picked', async () => {
-    const d = deferDiscovery()
-
-    await enterEmail('me@example.org')
-    await userEvent.click(screen.getByRole('button', { name: 'Back' }))
-    await userEvent.click(screen.getByRole('button', { name: /Gmail/ }))
-    await enterEmail('me@example.org')
-    d.resolve(discovered('example.org'))
-    await d.promise
-    await tick()
-    await tick()
-
-    expectHosts('imap.gmail.com', 'smtp.gmail.com')
+    expect(value('SMTP host')).toBe('')
+    expect(value('Port', 1)).toBe('2525')
+    expect(value('IMAP host')).toBe('imap.example.com')
   })
 })

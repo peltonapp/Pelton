@@ -8,7 +8,7 @@ func (a *App) GetMessageSource(id int64) (string, error) {
 	if err := a.ready(); err != nil {
 		return "", err
 	}
-	m, err := a.store.GetMessage(a.ctx, id)
+	m, err := a.store.GetMessage(a.mailCtx(), id)
 	if err != nil {
 		return "", err
 	}

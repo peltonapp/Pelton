@@ -14,8 +14,8 @@ import (
 	"path"
 	"strings"
 	"time"
-	"uuid"
 
+	"github.com/google/uuid"
 	pcarddav "github.com/peltonapp/Pelton/internal/carddav"
 	"github.com/peltonapp/Pelton/internal/credentials"
 	"github.com/peltonapp/Pelton/internal/storage"
@@ -67,8 +67,10 @@ type ContactDTO struct {
 	Note         string            `json:"note"`
 	Emails       []ContactValueDTO `json:"emails"`
 	Phones       []ContactValueDTO `json:"phones"`
-	ReadOnly     bool              `json:"readOnly"`
-	Updated      string            `json:"updated"`
+	// MatrixID is the person's Matrix user id, from the card's IMPP entry.
+	MatrixID string `json:"matrixId"`
+	ReadOnly bool   `json:"readOnly"`
+	Updated  string `json:"updated"`
 	// Extra lists the vCard properties Pelton has no field for but keeps on
 	// every write, so the editor can say the card carries more than this.
 	Extra []string `json:"extra"`
@@ -129,9 +131,12 @@ func (a *App) ListAddressBooks() ([]AddressBookDTO, error) {
 		if err != nil {
 			return nil, err
 		}
-		password, err := credentials.LoadAddressBookPassword(b.ID)
-		if err != nil {
-			a.log.Warn("read address book password", "book", b.ID, "err", err)
+		var password string
+		if !b.Local() {
+			password, err = credentials.LoadAddressBookPassword(b.ID)
+			if err != nil {
+				a.log.Warn("read address book password", "book", b.ID, "err", err)
+			}
 		}
 		out = append(out, AddressBookDTO{
 			ID:             b.ID,
@@ -144,7 +149,8 @@ func (a *App) ListAddressBooks() ([]AddressBookDTO, error) {
 			LastSync:       b.LastSyncAt,
 			LastError:      b.LastError,
 			ContactCount:   len(contacts),
-			HasPassword:    password != "",
+			// a local book has no server, so there is no password to ask for.
+			HasPassword: password != "" || b.Local(),
 		})
 	}
 	return out, nil
@@ -368,6 +374,9 @@ func (a *App) syncAllAddressBooks(ctx context.Context) error {
 		if err := ctx.Err(); err != nil {
 			return err
 		}
+		if book.Local() {
+			continue
+		}
 		if err := a.syncAddressBook(ctx, book); err != nil {
 			a.log.Warn("contact sync", "book", book.ID, "err", err)
 			failed = err
@@ -484,7 +493,7 @@ func contactPath(collection, uid string) string {
 // newContactUID is the identity a contact keeps for life, independent of where
 // it is stored.
 func newContactUID() string {
-	return uuid.NewV4().String()
+	return uuid.NewString()
 }
 
 func toStoredValues(values []pcarddav.Labelled) []storage.ContactValue {
@@ -542,7 +551,12 @@ func (a *App) addressBookDTO(id int64) (AddressBookDTO, error) {
 
 func toContactDTO(c storage.Contact, books map[int64]storage.AddressBook) ContactDTO {
 	book := books[c.BookID]
+	matrixID := ""
+	if parsed, err := pcarddav.ParseCard(c.Card); err == nil {
+		matrixID = parsed.MatrixID
+	}
 	return ContactDTO{
+		MatrixID:     matrixID,
 		ID:           c.ID,
 		BookID:       c.BookID,
 		BookName:     book.Name,
@@ -570,6 +584,9 @@ func extraProperties(card string) []string {
 	var out []string
 	for name := range parsed.Card {
 		if knownProperty(name) {
+			continue
+		}
+		if strings.EqualFold(name, "IMPP") && pcarddav.OnlyMatrixIMPP(parsed.Card) {
 			continue
 		}
 		out = append(out, name)

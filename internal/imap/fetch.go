@@ -41,14 +41,17 @@ func (m *Mailbox) KeepsKeyword(keyword imap.Flag) bool {
 
 // MessageHeader is the envelope-level summary used for listings.
 type MessageHeader struct {
-	SeqNum   uint32
-	UID      imap.UID
-	Subject  string
-	From     string
-	FromName string
-	To       string
-	Date     time.Time
-	Flags    []imap.Flag
+	SeqNum uint32
+	UID    imap.UID
+	// MessageID is the envelope's Message-ID, so a list stub can be found
+	// and threaded by it before its body arrives.
+	MessageID string
+	Subject   string
+	From      string
+	FromName  string
+	To        string
+	Date      time.Time
+	Flags     []imap.Flag
 	// Size is RFC822.SIZE when the fetch asked for it, else 0.
 	Size int64
 	// HasEnvelope is true when this header was filled from a FETCH ENVELOPE.
@@ -80,12 +83,16 @@ type Message struct {
 	// support via List-Unsubscribe-Post.
 	ListUnsubscribe     string
 	ListUnsubscribePost bool
+	// ListID is the List-Id header value, '' when there is none.
+	ListID string
 	// ReplyTo is the Reply-To header value ('' when there is none), and
 	// AuthResults every Authentication-Results header in the order they appear.
 	// Both are read here because the raw bytes are dropped after storing, so
 	// nothing downstream can go back for them.
 	ReplyTo     string
 	AuthResults []string
+	// Claims are the sender headers the sender passport keeps.
+	Claims rfc822.Claims
 	// CharsetGuess names what the body was read as when the message declared no
 	// charset or one nothing knows, and is empty for mail that was right about
 	// itself. It is kept so the reader can be told the text was guessed at.
@@ -384,6 +391,7 @@ func headerFromBuffer(b *imapclient.FetchMessageBuffer) MessageHeader {
 	h := MessageHeader{SeqNum: b.SeqNum, UID: b.UID, Flags: b.Flags, Size: b.RFC822Size}
 	if b.Envelope != nil {
 		h.HasEnvelope = true
+		h.MessageID = b.Envelope.MessageID
 		h.Subject, _ = charsetguess.Text(b.Envelope.Subject)
 		h.From = formatAddresses(b.Envelope.From)
 		h.FromName = envelopeName(b.Envelope.From)
@@ -417,8 +425,10 @@ func parseBody(raw []byte, msg *Message) error {
 	msg.Attachments = parsed.Attachments
 	msg.ListUnsubscribe = parsed.ListUnsubscribe
 	msg.ListUnsubscribePost = parsed.ListUnsubscribePost
+	msg.ListID = parsed.ListID
 	msg.ReplyTo = parsed.ReplyTo
 	msg.AuthResults = parsed.AuthResults
+	msg.Claims = parsed.Claims
 	msg.InReplyTo = parsed.InReplyTo
 	msg.References = parsed.References
 	return nil

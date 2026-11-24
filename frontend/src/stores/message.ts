@@ -7,6 +7,7 @@ import type { MessageDetail } from '../lib/types'
 import { getMessage } from '../lib/api'
 import { type AsyncState, idle, loading, ready, failed } from '../lib/async'
 import { errorMessage } from './toast'
+import { setCardBody } from './threads'
 
 export const messageDetail = writable<AsyncState<MessageDetail>>(idle())
 
@@ -108,10 +109,11 @@ export function clearMessage(): void {
   messageDetail.set(idle())
 }
 
-// setBodyHtml swaps the rendered body, used after loading remote images. It
-// names the message the html belongs to: the load is a round trip, and if
-// another message opened meanwhile this one's body must not land under it.
+// setBodyHtml swaps the rendered body of message id, used after loading remote
+// images, in the pane and in a conversation card showing it. The load is a
+// round trip, so the pane is left alone if another message is open by then.
 export function setBodyHtml(id: number, html: string): void {
+  setCardBody(id, html)
   messageDetail.update((s) => {
     if (s.status !== 'ready' || !s.data || s.data.id !== id) {
       return s

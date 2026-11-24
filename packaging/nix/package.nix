@@ -26,7 +26,7 @@ buildGoModule (finalAttrs: {
 
   proxyVendor = true;
 
-  vendorHash = "sha256-vWQAz/aiuv2gIAooxK1MXY8kBibCfqy1C3VKFDasYrU=";
+  vendorHash = "sha256-o82weFX6AfGONOAnQKijHiVMquA0V86f7XnSVMyCgIM=";
 
   nativeBuildInputs = [
     pkg-config
@@ -53,7 +53,7 @@ buildGoModule (finalAttrs: {
       src = "${finalAttrs.src}/frontend";
       pnpm = pnpm_10;
       fetcherVersion = 3;
-      hash = "sha256-ScVuYXDorAyBvPtwU+ZBdzkF/YyLOU/4FvSniwJcO/w=";
+      hash = "sha256-jA2jMjOc2O7/ydIOcCBg0IAibtcZvtkE3r7RqX16lt8=";
     };
     pnpmRoot = "frontend";
   };

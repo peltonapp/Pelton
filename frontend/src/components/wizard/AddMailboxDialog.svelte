@@ -7,6 +7,7 @@
   import { t } from '../../lib/i18n'
   import { refreshSidebar } from '../../stores/accounts'
   import { toastInfo } from '../../stores/toast'
+  import { loadAddMailboxWizard } from '../../lib/lazyload'
 
   const dispatch = createEventDispatcher<{ close: void; added: void }>()
 
@@ -16,6 +17,6 @@
   }
 </script>
 
-{#await import('./AddMailboxWizard.svelte') then m}
+{#await loadAddMailboxWizard() then m}
   <svelte:component this={m.default} on:close on:added={onAdded} />
 {/await}

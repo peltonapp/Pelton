@@ -1,0 +1,2 @@
+ID  DATE                  FROM                SUBJECT
+42  2026-03-10 09:30  UA  Ada \u202eLovelace  Hi \x1b[2J<there>

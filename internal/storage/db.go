@@ -63,6 +63,9 @@ type DB struct {
 	// scope is the profile the store reads and writes profile-owned rows for.
 	// See profilescope.go.
 	scope scope
+	// vault is which folders are in a mail vault and who may see them. See
+	// mailvault.go.
+	vault *vaultState
 	// deleteTxHook runs after a staged cache mutation (delete or stub body
 	// fill) has executed its statements, before commit. Tests set it to
 	// inject a failure; production leaves it nil.
@@ -144,6 +147,7 @@ func Open(path string) (*DB, error) {
 		sql:            sqlDB,
 		path:           path,
 		attachmentsDir: filepath.Join(baseDir, attachmentsDirName),
+		vault:          &vaultState{},
 	}, nil
 }
 
@@ -158,6 +162,13 @@ func (d *DB) OthersActive() bool {
 // Path returns the database file this DB was opened on.
 func (d *DB) Path() string {
 	return d.path
+}
+
+// Handle returns the connection pool, for a package that keeps its own
+// tables in this database (internal/scripting). The tables still come from
+// the migrations here.
+func (d *DB) Handle() *sql.DB {
+	return d.sql
 }
 
 // maxOpenConns caps the connection pool. One writer at a time is all sqlite

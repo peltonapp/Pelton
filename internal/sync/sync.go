@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"time"
 
+	"github.com/peltonapp/Pelton/internal/phishing"
 	"github.com/peltonapp/Pelton/internal/storage"
 )
 
@@ -57,6 +58,14 @@ type Engine struct {
 	// OnStored, when set, is called as messages are stored rather than only when
 	// the folder finishes, so a first sync fills the list as mail arrives.
 	OnStored func(folder storage.Folder, ids []int64)
+	// AuthServ names the account's own receiving servers, whose
+	// Authentication-Results headers the sender passport trusts. The zero
+	// value trusts none, so every record is stored as untrusted.
+	AuthServ phishing.AuthServ
+	// ObserveRaw, when set, is handed each message's raw bytes when its body
+	// is stored, the only moment they exist, for reading headers nothing else
+	// keeps. It runs on the sync goroutine, so it must return quickly.
+	ObserveRaw func(folder storage.Folder, raw []byte)
 	// beforeListStub, when set, runs before each list-stub upsert; a non-nil
 	// error counts as a failed upsert. Tests cancel the context or fail a
 	// write here. Nil in production.
@@ -129,10 +138,30 @@ type FolderSyncResult struct {
 	HasOlder        bool    // the server still holds messages below the sync window
 	Repaired        int     // messages refetched because their cached text was broken
 	RepairedIDs     []int64 // storage ids of those messages, for reindexing
+	// ReplyStateChanged counts cached messages whose answered or forwarded
+	// state this sync changed, so an open list can show it.
+	ReplyStateChanged int
+	// FlagChanges lists the server flag changes adopted locally, the first
+	// maxFlagChanges of them.
+	FlagChanges []FlagChange
 	// removed is the remote ids executePlan deleted from the cache. Not part
 	// of the public result; absorbArrivals uses it to drop them from the queue.
 	removed []string
 }
+
+// FlagChange is a cached message whose flags a sync took from the server.
+type FlagChange struct {
+	ID     int64
+	Before storage.Flag
+	After  storage.Flag
+}
+
+// maxFlagChanges caps FlagChanges, so a folder resync after another client
+// marked thousands of messages read keeps a short list.
+const maxFlagChanges = 200
+
+// replyStateFlags are the bits that say a message was answered or forwarded.
+const replyStateFlags = storage.FlagAnswered | storage.FlagForwarded
 
 // StubSyncResult is the list/reconcile half of a folder sync. ToFetch is the
 // remote ids that still need bodies, newest first. Those ids are already
@@ -148,7 +177,10 @@ type StubSyncResult struct {
 	Conflicts       int
 	Pushed          int
 	GenerationReset bool
-	removed         []string // remote ids deleted locally by the delta plan
+	// ReplyStateChanged and FlagChanges are as in FolderSyncResult.
+	ReplyStateChanged int
+	FlagChanges       []FlagChange
+	removed           []string // remote ids deleted locally by the delta plan
 	// unstubbed is the ToFetch ids listed without list metadata, so no stub
 	// row holds their place. Their body is the only write that can store them.
 	unstubbed []string
@@ -281,6 +313,8 @@ func (e *Engine) syncFolder(ctx context.Context, folder storage.Folder, backfill
 	stub, stubErr := e.SyncFolderStubs(ctx, folder, backfill)
 	res.Deleted = stub.Deleted
 	res.FlagUpdated = stub.FlagUpdated
+	res.ReplyStateChanged = stub.ReplyStateChanged
+	res.FlagChanges = stub.FlagChanges
 	res.Conflicts = stub.Conflicts
 	res.Pushed = stub.Pushed
 	res.GenerationReset = stub.GenerationReset
@@ -339,6 +373,7 @@ func (e *Engine) CompleteFolder(ctx context.Context, folder storage.Folder) (Fol
 			e.adoptColors(ctx, folder, src.Colors(folder.RemoteID))
 		}
 	}
+	e.syncPins(ctx, folder)
 	return res, nil
 }
 
@@ -523,6 +558,8 @@ func (e *Engine) syncFolderFull(ctx context.Context, folder storage.Folder, stat
 	res.unstubbed = outcome.unstubbed
 	res.Deleted = planRes.Deleted
 	res.FlagUpdated = planRes.FlagUpdated
+	res.ReplyStateChanged = planRes.ReplyStateChanged
+	res.FlagChanges = planRes.FlagChanges
 	res.Conflicts = planRes.Conflicts
 	res.Pushed = planRes.Pushed
 
@@ -598,6 +635,8 @@ func (e *Engine) syncFolderDelta(ctx context.Context, folder storage.Folder, sta
 	res.unstubbed = outcome.unstubbed
 	res.Deleted = planRes.Deleted
 	res.FlagUpdated = planRes.FlagUpdated
+	res.ReplyStateChanged = planRes.ReplyStateChanged
+	res.FlagChanges = planRes.FlagChanges
 	res.Conflicts = planRes.Conflicts
 	res.Pushed = planRes.Pushed
 	res.removed = planRes.removed
@@ -957,6 +996,12 @@ func (e *Engine) executePlan(ctx context.Context, folder storage.Folder, plan []
 			return out
 		}
 
+		if d.Action == ActionAdoptServerFlags || d.Action == ActionPushFlags || d.Action == ActionClearPending {
+			if (localByID[d.RemoteID].Flags^d.Flags)&replyStateFlags != 0 {
+				res.ReplyStateChanged++
+			}
+		}
+
 		switch d.Action {
 		case ActionNone:
 
@@ -981,6 +1026,10 @@ func (e *Engine) executePlan(ctx context.Context, folder storage.Folder, plan []
 			}
 			if applied {
 				res.FlagUpdated++
+				if len(res.FlagChanges) < maxFlagChanges {
+					s := localByID[d.RemoteID]
+					res.FlagChanges = append(res.FlagChanges, FlagChange{ID: s.ID, Before: s.Flags, After: d.Flags})
+				}
 			}
 
 		case ActionPushFlags:

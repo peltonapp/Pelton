@@ -128,10 +128,11 @@ func TestMessageFailsAfterMaxAttempts(t *testing.T) {
 	// drive attempts directly so we do not have to wait out the backoff windows.
 	for i := range MaxAttempts {
 		m := findByID(t, q, id)
-		retry, err := q.markAttemptFailed(ctx, m, "boom")
+		next, err := q.markAttemptFailed(ctx, m, "boom")
 		if err != nil {
 			t.Fatalf("mark attempt failed: %v", err)
 		}
+		retry := !next.IsZero()
 		if i < MaxAttempts-1 && !retry {
 			t.Fatalf("attempt %d should still retry", i+1)
 		}
@@ -241,6 +242,44 @@ func TestDiscardOnlyRemovesFailedMessages(t *testing.T) {
 	}
 	if len(list) != 0 {
 		t.Errorf("outbox still holds %d rows after discarding the only one", len(list))
+	}
+}
+
+func TestSendNowMakesAScheduledMessageDue(t *testing.T) {
+	ctx := context.Background()
+	q, accountID := newTestQueue(t)
+
+	m := sampleMessage(accountID)
+	m.NotBefore = time.Now().UTC().Add(24 * time.Hour)
+	id, err := q.Enqueue(ctx, m)
+	if err != nil {
+		t.Fatalf("enqueue: %v", err)
+	}
+	if got, _ := q.claimDue(ctx, time.Now().UTC()); got != nil {
+		t.Fatal("a message scheduled for tomorrow was due already")
+	}
+
+	moved, err := q.SendNow(ctx, id)
+	if err != nil {
+		t.Fatalf("send now: %v", err)
+	}
+	if !moved {
+		t.Fatal("send now did not move a queued message")
+	}
+	got, err := q.claimDue(ctx, time.Now().UTC().Add(time.Second))
+	if err != nil {
+		t.Fatalf("claim: %v", err)
+	}
+	if got == nil || got.ID != id {
+		t.Fatalf("claimed %+v, want message %d due now", got, id)
+	}
+
+	moved, err = q.SendNow(ctx, id)
+	if err != nil {
+		t.Fatalf("send now while sending: %v", err)
+	}
+	if moved {
+		t.Error("send now reported a change on a message already sending")
 	}
 }
 

@@ -36,6 +36,12 @@ export const contactsLoading = writable<boolean>(false)
 export const contactConflict = writable<ContactConflict | null>(null)
 
 /** Loads the books and the contacts for the current filter. */
+/**
+ * A person to start a new contact from, set by whatever hands one over (mail
+ * dropped on Contacts) and taken by the contacts screen when it shows.
+ */
+export const contactSeed = writable<{ name: string; email: string } | null>(null)
+
 export async function loadContacts(): Promise<void> {
   contactsLoading.set(true)
   try {

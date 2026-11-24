@@ -7,28 +7,23 @@
 // and every request goes through the app's proxy-aware http client.
 //
 // Discovery, the sync-collection report and multiget come from
-// github.com/emersion/go-webdav; the conditional PUT and DELETE are written
-// here because that library's client sends neither If-Match nor If-None-Match,
-// and without those a save would silently overwrite whatever another device
-// wrote in the meantime.
+// github.com/emersion/go-webdav; the conditional PUT and DELETE come from
+// internal/dav because that library's client sends neither If-Match nor
+// If-None-Match, and without those a save would silently overwrite whatever
+// another device wrote in the meantime.
 package carddav
 
 import (
 	"context"
 	"errors"
 	"fmt"
-	"io"
 	"net/http"
-	"net/url"
-	"strings"
 
 	"github.com/emersion/go-vcard"
 	"github.com/emersion/go-webdav"
 	"github.com/emersion/go-webdav/carddav"
+	"github.com/peltonapp/Pelton/internal/dav"
 )
-
-// methodPropfind is the webdav verb net/http has no constant for.
-const methodPropfind = "PROPFIND"
 
 // ErrConflict means the resource changed on the server since the copy being
 // written was fetched, so the write was refused. The caller shows the user both
@@ -54,12 +49,9 @@ type Config struct {
 
 // Client is a connection to one CardDAV server.
 type Client struct {
-	dav  *carddav.Client
-	http *http.Client
-	// base is the endpoint every returned path is resolved against.
-	base *url.URL
-	// user and pass are kept for the raw requests this package makes itself.
-	user, pass string
+	dav *carddav.Client
+	// conn makes the raw requests this package sends itself.
+	conn *dav.Conn
 }
 
 // Book is one address book collection on the server.
@@ -91,19 +83,20 @@ func Connect(ctx context.Context, cfg Config) (*Client, error) {
 	if cfg.HTTP == nil {
 		return nil, errors.New("carddav: no http client")
 	}
-	endpoint, err := endpointURL(cfg.URL)
+	endpoint, err := dav.Endpoint(cfg.URL)
 	if err != nil {
 		return nil, err
 	}
 	httpClient := webdav.HTTPClientWithBasicAuth(cfg.HTTP, cfg.Username, cfg.Password)
-	dav, err := carddav.NewClient(httpClient, endpoint.String())
+	client, err := carddav.NewClient(httpClient, endpoint.String())
 	if err != nil {
 		return nil, fmt.Errorf("carddav: connect %s: %w", endpoint.Host, err)
 	}
-	if err := dav.HasSupport(ctx); err != nil {
+	if err := client.HasSupport(ctx); err != nil {
 		return nil, fmt.Errorf("carddav: %s does not offer contacts: %w", endpoint.Host, err)
 	}
-	return &Client{dav: dav, http: cfg.HTTP, base: endpoint, user: cfg.Username, pass: cfg.Password}, nil
+	conn := &dav.Conn{HTTP: cfg.HTTP, Base: endpoint, User: cfg.Username, Pass: cfg.Password}
+	return &Client{dav: client, conn: conn}, nil
 }
 
 // Discover resolves the CardDAV endpoint for an email address's domain through
@@ -111,40 +104,9 @@ func Connect(ctx context.Context, cfg Config) (*Client, error) {
 // be offered their own server. An error means the domain advertises nothing,
 // which is not a failure: the caller falls back to asking for a url.
 func Discover(ctx context.Context, client *http.Client, address string) (string, error) {
-	domain := address
-	if _, after, ok := strings.CutLast(address, "@"); ok {
-		domain = after
-	}
-	domain = strings.TrimSpace(domain)
-	if domain == "" {
-		return "", errors.New("carddav: no domain to discover")
-	}
 	// go-webdav's discovery uses the default resolver and client, which would
-	// step outside the user's proxy, so the well-known request is made here.
-	target := (&url.URL{Scheme: "https", Host: domain, Path: "/.well-known/carddav"}).String()
-	req, err := http.NewRequestWithContext(ctx, methodPropfind, target, nil)
-	if err != nil {
-		return "", err
-	}
-	resp, err := noRedirect(client).Do(req)
-	if err != nil {
-		return "", fmt.Errorf("carddav: discover %s: %w", domain, err)
-	}
-	defer drain(resp)
-
-	if location := resp.Header.Get("Location"); location != "" {
-		resolved, err := resp.Request.URL.Parse(location)
-		if err != nil {
-			return "", fmt.Errorf("carddav: discover %s: %w", domain, err)
-		}
-		return resolved.String(), nil
-	}
-	// no redirect, but a server answering PROPFIND on the well-known path at
-	// all is the endpoint.
-	if resp.StatusCode < 400 {
-		return target, nil
-	}
-	return "", fmt.Errorf("carddav: %s advertises no address book (%s)", domain, resp.Status)
+	// step outside the user's proxy, so the well-known request is made by dav.
+	return dav.DiscoverWellKnown(ctx, client, address, "carddav")
 }
 
 // Books lists the address books the configured user has, resolving the
@@ -209,19 +171,19 @@ func (c *Client) Get(ctx context.Context, path string) (Contact, error) {
 }
 
 // Precondition is what a write requires of the server's current state.
-type Precondition int
+type Precondition = dav.Precondition
 
 const (
 	// PreconditionNew refuses the write if anything already exists at the path,
 	// so two clients creating the same contact at once cannot silently become
 	// one.
-	PreconditionNew Precondition = iota
+	PreconditionNew = dav.PreconditionNew
 	// PreconditionMatch refuses the write unless the server's copy is still the
 	// one the caller started from.
-	PreconditionMatch
+	PreconditionMatch = dav.PreconditionMatch
 	// PreconditionNone writes regardless. It is only for a user who has been
 	// shown the other version and chose theirs.
-	PreconditionNone
+	PreconditionNone = dav.PreconditionNone
 )
 
 // Put writes a contact under the given precondition, reporting ErrConflict when
@@ -232,112 +194,22 @@ func (c *Client) Put(ctx context.Context, path string, card vcard.Card, pre Prec
 	if err != nil {
 		return "", err
 	}
-	req, err := c.request(ctx, http.MethodPut, path, strings.NewReader(body))
-	if err != nil {
-		return "", err
-	}
-	req.Header.Set("Content-Type", vcard.MIMEType)
-	switch pre {
-	case PreconditionNew:
-		req.Header.Set("If-None-Match", "*")
-	case PreconditionMatch:
-		if etag != "" {
-			req.Header.Set("If-Match", etag)
-		}
-	}
-
-	resp, err := c.http.Do(req)
-	if err != nil {
-		return "", fmt.Errorf("carddav: put %s: %w", path, err)
-	}
-	defer drain(resp)
-
-	switch {
-	case resp.StatusCode == http.StatusPreconditionFailed:
+	newETag, err := c.conn.Put(ctx, path, vcard.MIMEType, []byte(body), pre, etag)
+	if errors.Is(err, dav.ErrPreconditionFailed) {
 		return "", ErrConflict
-	case resp.StatusCode >= 400:
-		return "", fmt.Errorf("carddav: put %s: %s", path, resp.Status)
 	}
-	return resp.Header.Get("ETag"), nil
+	return newETag, err
 }
 
 // Delete removes a contact, refusing while the server's copy is newer than the
 // one the caller saw. A path the server does not have reports ErrNotFound.
 func (c *Client) Delete(ctx context.Context, path, ifMatch string) error {
-	req, err := c.request(ctx, http.MethodDelete, path, nil)
-	if err != nil {
-		return err
-	}
-	if ifMatch != "" {
-		req.Header.Set("If-Match", ifMatch)
-	}
-	resp, err := c.http.Do(req)
-	if err != nil {
-		return fmt.Errorf("carddav: delete %s: %w", path, err)
-	}
-	defer drain(resp)
-
+	err := c.conn.Delete(ctx, path, ifMatch)
 	switch {
-	case resp.StatusCode == http.StatusPreconditionFailed:
+	case errors.Is(err, dav.ErrPreconditionFailed):
 		return ErrConflict
-	case resp.StatusCode == http.StatusNotFound:
+	case errors.Is(err, dav.ErrNotFound):
 		return ErrNotFound
-	case resp.StatusCode >= 400:
-		return fmt.Errorf("carddav: delete %s: %s", path, resp.Status)
 	}
-	return nil
-}
-
-// request builds an authenticated request against a server path.
-func (c *Client) request(ctx context.Context, method, path string, body io.Reader) (*http.Request, error) {
-	target, err := c.base.Parse(path)
-	if err != nil {
-		return nil, fmt.Errorf("carddav: bad path %q: %w", path, err)
-	}
-	req, err := http.NewRequestWithContext(ctx, method, target.String(), body)
-	if err != nil {
-		return nil, err
-	}
-	if c.user != "" || c.pass != "" {
-		req.SetBasicAuth(c.user, c.pass)
-	}
-	return req, nil
-}
-
-// endpointURL turns whatever the user pasted into a url. A bare host gets
-// https, never http: a plain-text address book would put the user's contacts
-// and their password on the wire.
-func endpointURL(raw string) (*url.URL, error) {
-	raw = strings.TrimSpace(raw)
-	if raw == "" {
-		return nil, errors.New("carddav: no server address")
-	}
-	if !strings.Contains(raw, "://") {
-		raw = "https://" + raw
-	}
-	parsed, err := url.Parse(raw)
-	if err != nil {
-		return nil, fmt.Errorf("carddav: %q is not a server address: %w", raw, err)
-	}
-	if parsed.Host == "" {
-		return nil, fmt.Errorf("carddav: %q has no host", raw)
-	}
-	return parsed, nil
-}
-
-// noRedirect copies a client with redirects left to the caller, so discovery
-// can read the Location header the well-known path answers with.
-func noRedirect(client *http.Client) *http.Client {
-	copied := *client
-	copied.CheckRedirect = func(*http.Request, []*http.Request) error {
-		return http.ErrUseLastResponse
-	}
-	return &copied
-}
-
-// drain closes a response body, reading what is left so the connection can be
-// reused rather than dropped.
-func drain(resp *http.Response) {
-	_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, 1<<16))
-	resp.Body.Close()
+	return err
 }

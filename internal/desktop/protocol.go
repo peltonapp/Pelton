@@ -39,6 +39,11 @@ type mailProtocol interface {
 	// is stored on the message before the move. The driver takes the account
 	// lock itself, so callers must not hold it.
 	moveMessage(m *storage.Message, source, dest storage.Folder, account storage.Account, kw *keywordChange) (ArchiveUndoDTO, error)
+	// moveMessages moves msgs, which all sit in source, to dest in one task
+	// and one server command, then runs finish for each in the same task:
+	// raw is its source when the move also exports it. An error means the
+	// server moved none of them.
+	moveMessages(msgs []*storage.Message, source, dest storage.Folder, account storage.Account, finish func(i int, raw []byte, exportError string)) error
 	// moveBack undoes a move: from is where the action put the message. A
 	// non-nil kw is stored on it before it moves back.
 	moveBack(rfcMessageID string, from, dest storage.Folder, account storage.Account, kw *keywordChange) error

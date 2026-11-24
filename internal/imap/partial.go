@@ -107,6 +107,8 @@ func (a *Adapter) ParseChunked(f psync.Fetched) (psync.Fetched, error) {
 	f.AuthResults = msg.AuthResults
 	f.InReplyTo = msg.InReplyTo
 	f.References = msg.References
+	f.ListID = msg.ListID
+	f.Claims = msg.Claims
 	f.Attachments = fetchedAttachments(msg.Attachments)
 	f.Size = int64(len(f.Raw))
 	return f, nil

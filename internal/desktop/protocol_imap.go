@@ -45,6 +45,7 @@ func (p imapProtocol) firstSync(ctx context.Context, account storage.Account) {
 	// shows at once. At N=1 the scheduler keeps the only session on the
 	// pass and checks new mail between tasks.
 	err := a.syncIMAPInitial(ctx, account, startIdle)
+	a.firstPassDone(account.ID)
 	if err != nil {
 		if errors.Is(err, errNoCredentials) {
 			a.log.Warn("mailbox has no password, not syncing", "account", account.Email)
@@ -100,7 +101,11 @@ func (p imapProtocol) transmit(ctx context.Context, account storage.Account, m o
 			}()
 		}),
 	)
-	return sender.Transmit(ctx, m)
+	if err := sender.Transmit(ctx, m); err != nil {
+		return err
+	}
+	t.app.afterSent(ctx, m)
+	return nil
 }
 
 func (p imapProtocol) moveMessage(m *storage.Message, source, dest storage.Folder, account storage.Account, kw *keywordChange) (ArchiveUndoDTO, error) {
@@ -126,7 +131,7 @@ func (p imapProtocol) moveMessage(m *storage.Message, source, dest storage.Folde
 			raw         []byte
 			exportError string
 		)
-		if exportWanted(account, dest) {
+		if exportWanted(account, dest) && !a.inMailVault(m.FolderID) {
 			var err error
 			raw, err = client.FetchRawMessage(imap.UID(m.UID))
 			if err != nil {
@@ -147,6 +152,44 @@ func (p imapProtocol) moveMessage(m *storage.Message, source, dest storage.Folde
 		return ArchiveUndoDTO{}, err
 	}
 	return undo, localErr
+}
+
+func (p imapProtocol) moveMessages(msgs []*storage.Message, source, dest storage.Folder, account storage.Account, finish func(i int, raw []byte, exportError string)) error {
+	a := p.a
+	if len(msgs) == 0 {
+		return nil
+	}
+	return a.runNow(a.ctx, account, syncsched.KindMove, source.ID, func(_ context.Context, client mailClient) error {
+		unlock := a.lockMutations(account.ID)
+		defer unlock()
+		if _, err := client.Select(source.IMAPPath); err != nil {
+			return fmt.Errorf("move: select %q: %w", source.IMAPPath, err)
+		}
+		export := exportWanted(account, dest) && !a.inMailVault(source.ID)
+		raws := make([][]byte, len(msgs))
+		exportErrs := make([]string, len(msgs))
+		uids := make([]imap.UID, len(msgs))
+		for i, m := range msgs {
+			uids[i] = imap.UID(m.UID)
+			if !export {
+				continue
+			}
+			raw, err := client.FetchRawMessage(imap.UID(m.UID))
+			if err != nil {
+				exportErrs[i] = err.Error()
+				a.log.Error("archive export: fetch source", "id", m.ID, "err", err)
+				continue
+			}
+			raws[i] = raw
+		}
+		if err := client.MoveMessages(uids, dest.IMAPPath); err != nil {
+			return err
+		}
+		for i := range msgs {
+			finish(i, raws[i], exportErrs[i])
+		}
+		return nil
+	})
 }
 
 // moveBack moves the copy the move made back to dest. It is found by the

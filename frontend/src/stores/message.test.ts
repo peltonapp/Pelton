@@ -52,6 +52,11 @@ function detail(id: number, over: Partial<MessageDetail> = {}): MessageDetail {
     unsubscribe: null,
     charsetGuess: '',
     pgpState: '',
+    replyIds: [],
+    forwardIds: [],
+    threadId: 0,
+    answered: false,
+    forwarded: false,
     bodyComplete: false,
     ...over,
   }

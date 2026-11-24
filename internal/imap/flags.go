@@ -16,11 +16,6 @@ func (c *Client) RemoveFlags(uid imap.UID, flags ...imap.Flag) error {
 	return c.store(uid, imap.StoreFlagsDel, flags)
 }
 
-// SetFlags replaces the message's entire flag set.
-func (c *Client) SetFlags(uid imap.UID, flags ...imap.Flag) error {
-	return c.store(uid, imap.StoreFlagsSet, flags)
-}
-
 // store issues a UID STORE; UID keeps the target stable across changes.
 func (c *Client) store(uid imap.UID, op imap.StoreFlagsOp, flags []imap.Flag) error {
 	if len(flags) == 0 {

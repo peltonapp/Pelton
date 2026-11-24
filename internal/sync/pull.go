@@ -83,7 +83,49 @@ func (e *Engine) storeMessage(ctx context.Context, folder storage.Folder, msg Fe
 			"folder", folder.IMAPPath, "remote_id", msg.RemoteID, "err", err)
 		return 0, nil
 	}
+	if err == nil && id != 0 {
+		e.afterBodyStored(ctx, folder, id, msg)
+	}
 	return id, err
+}
+
+// afterBodyStored runs the work that needs a message's whole source, once,
+// when its body has just been stored: the sender passport and the raw-header
+// observers. A stub has neither until then. Mail in a vault gets no passport
+// record and no observers: each would put its sender in clear outside the
+// vault.
+func (e *Engine) afterBodyStored(ctx context.Context, folder storage.Folder, id int64, msg Fetched) {
+	vaulted, err := e.store.FolderVault(ctx, folder.ID)
+	if err != nil {
+		e.log.Error("vault of folder", "folder", folder.IMAPPath, "err", err)
+		return
+	}
+	if vaulted != 0 {
+		return
+	}
+	// a failure costs this message its passport, which then reads as not
+	// checked, not the sync.
+	if err := e.store.SetMessageTrust(ctx, trustRecord(id, msg, e.AuthServ)); err != nil {
+		e.log.Error("store message trust", "remote_id", msg.RemoteID, "err", err)
+	}
+	if e.ObserveRaw != nil && len(msg.Raw) > 0 {
+		e.ObserveRaw(folder, msg.Raw)
+	}
+}
+
+// trustRecord reads what the account's own server said about a message, by
+// the rule in phishing.ReadAuth, together with the sender's claims.
+func trustRecord(id int64, msg Fetched, serv phishing.AuthServ) storage.MessageTrust {
+	rec := phishing.ReadAuth(msg.AuthResults, serv)
+	c := msg.Claims
+	return storage.MessageTrust{
+		MessageID: id, AuthState: rec.State, ServID: rec.ServID,
+		SPF: rec.SPF, SPFDomain: rec.SPFDomain,
+		DKIM: rec.DKIM, DKIMDomain: rec.DKIMDomain, DKIMDomains: rec.DKIMDomains,
+		DMARC: rec.DMARC, DMARCPolicy: rec.DMARCPolicy, HeaderFrom: rec.HeaderFrom,
+		ReturnPath: c.ReturnPath, Sender: c.Sender, Signers: c.Signers, UnsubSigners: c.UnsubSigners,
+		ReceivedSPF: c.ReceivedSPF, ARC: c.ARC, ReadReceiptTo: c.ReadReceiptTo,
+	}
 }
 
 // StoreFetched writes one fetched message to the cache the way sync does: a
@@ -127,24 +169,34 @@ func storeFetched(ctx context.Context, store *storage.DB, log *slog.Logger, fold
 
 		ListUnsubscribe:     msg.ListUnsubscribe,
 		ListUnsubscribePost: msg.ListUnsubscribePost,
+		ListID:              msg.ListID,
 
 		ReplyTo: msg.ReplyTo,
 		Auth:    storedAuth(msg.AuthResults),
 
 		SMIME: verifySignature(msg.Raw, msg.From),
 	}
+	// pgp mail keeps its source, since decrypting and verifying need the exact
+	// bytes and nothing else caches them. It goes in with the row, so a
+	// message in a mail vault has it sealed with the rest.
+	if crypto.IsProtected(msg.Raw) {
+		stored.PGPSource = msg.Raw
+	}
 
-	var atts []storage.IncomingAttachment
-	if withAttachments {
-		atts = make([]storage.IncomingAttachment, 0, len(msg.Attachments))
-		for _, a := range msg.Attachments {
-			atts = append(atts, storage.IncomingAttachment{
-				Filename:    a.Filename,
-				ContentType: a.ContentType,
-				ContentID:   a.ContentID,
-				Content:     bytes.NewReader(a.Content),
-			})
+	// without attachments the parts are still recorded, bytes left out, so
+	// they can be listed and fetched when they are wanted.
+	atts := make([]storage.IncomingAttachment, 0, len(msg.Attachments))
+	for _, a := range msg.Attachments {
+		in := storage.IncomingAttachment{
+			Filename:    a.Filename,
+			ContentType: a.ContentType,
+			ContentID:   a.ContentID,
+			Size:        int64(len(a.Content)),
 		}
+		if withAttachments {
+			in.Content = bytes.NewReader(a.Content)
+		}
+		atts = append(atts, in)
 	}
 
 	var (
@@ -166,13 +218,9 @@ func storeFetched(ctx context.Context, store *storage.DB, log *slog.Logger, fold
 		return 0, fmt.Errorf("sync: store message %q: %w", msg.RemoteID, err)
 	}
 
-	if crypto.IsProtected(msg.Raw) {
-		if err := store.SetMessagePGPSource(ctx, id, msg.Raw); err != nil {
-			log.Error("store pgp source", "remote_id", msg.RemoteID, "err", err)
-		}
-	}
-
-	if logging.MessageMetadata() {
+	// mail in a vault gets no metadata log: it would put its sender and
+	// subject in clear outside the vault.
+	if vaulted, verr := store.FolderVault(ctx, folder.ID); verr == nil && vaulted == 0 && logging.MessageMetadata() {
 		log.Debug("message stored",
 			"folder", folder.IMAPPath, "remote_id", msg.RemoteID, "id", id,
 			"from", msg.From, "subject", msg.Subject, "date", msg.Date)

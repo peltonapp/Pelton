@@ -12,6 +12,7 @@ import (
 	"github.com/peltonapp/Pelton/internal/desktop/syncsched"
 	pimap "github.com/peltonapp/Pelton/internal/imap"
 	"github.com/peltonapp/Pelton/internal/outbox"
+	"github.com/peltonapp/Pelton/internal/phishing"
 	"github.com/peltonapp/Pelton/internal/storage"
 	psync "github.com/peltonapp/Pelton/internal/sync"
 	"github.com/peltonapp/Pelton/internal/sync/pool"
@@ -358,8 +359,12 @@ func (a *App) startBackgroundServices() {
 	goSafe("collecting addresses", a.harvestAddressBook)
 	goSafe("the periodic sync", a.runAutoSyncLoop)
 	goSafe("checking folders", a.runDueReconcileLoop)
+	goSafe("the calendar sync", a.runCalendarSyncLoop)
+	goSafe("calendar reminders", a.runReminderLoop)
+	goSafe("refreshing feeds", a.runFeedLoop)
 	a.startMCPIfEnabled()
 	goSafe("counting unread mail", a.refreshViewCounts)
+	goSafe("starting chat", a.startChatIfEnabled)
 }
 
 // runAutoSyncLoop periodically runs a full sync pass across every account, on
@@ -400,6 +405,7 @@ func (a *App) runOutboxWorker() {
 	transmitter := &accountTransmitter{app: a}
 	worker := outbox.NewWorker(a.queue, transmitter,
 		outbox.WithLogger(a.log),
+		outbox.WithActivity(a.activity),
 		// emit after every state change so the ui reflects sending -> sent/failed
 		// promptly. without this the outbox banner stayed stuck on "sending".
 		outbox.WithOnChange(func() {
@@ -409,6 +415,7 @@ func (a *App) runOutboxWorker() {
 	if _, err := a.queue.RequeueStuck(a.ctx); err != nil {
 		a.log.Error("requeue stuck outbox", "err", err)
 	}
+	a.sendWorker.Store(worker)
 	if err := worker.Run(a.ctx); err != nil && a.ctx.Err() == nil {
 		a.log.Error("outbox worker stopped", "err", err)
 	}
@@ -694,6 +701,8 @@ func (a *App) newSyncEngine(adapter psync.Adapter, accountID int64) *psync.Engin
 	// Stored ids are announced as they land, so the list fills as mail arrives
 	// rather than staying empty until the whole folder is down.
 	engine.OnStored = a.announceStored
+	// Autocrypt headers are read once a message's whole source is stored.
+	engine.ObserveRaw = a.observeIncoming
 	// the counts behind the progress bar. The account and server are captured
 	// here because the engine does not know them and the line names them.
 	email := a.accountEmail(accountID)
@@ -712,6 +721,9 @@ func (a *App) newSyncEngine(adapter psync.Adapter, accountID int64) *psync.Engin
 			engine.TrashRemoteID = trash.IMAPPath
 		}
 		engine.TrashFolderID = trash.ID
+	}
+	if acc, err := a.store.GetAccount(a.ctx, accountID); err == nil {
+		engine.AuthServ = phishing.ServerFor(acc.Email, acc.IMAPHost, acc.SMTPHost)
 	}
 	return engine
 }
@@ -1086,6 +1098,27 @@ func (a *App) findTrashFolder(accountID int64) (storage.Folder, bool) {
 		}
 	}
 	return storage.Folder{}, false
+}
+
+// afterFlagSync reports what a list adopted from the server's flags: the
+// reply state to the open lists, and flag changes made elsewhere to the
+// scripts once the account's first pass is over.
+func (a *App) afterFlagSync(folder storage.Folder, res psync.StubSyncResult) {
+	a.afterReplyStateSync(folder, res.ReplyStateChanged)
+	if !a.firstScriptSync(folder.AccountID) {
+		a.scriptServerFlags(res.FlagChanges)
+	}
+}
+
+// afterReplyStateSync reloads open lists when a sync changed whether messages
+// in a folder were answered or forwarded.
+func (a *App) afterReplyStateSync(folder storage.Folder, changed int) {
+	if changed == 0 {
+		return
+	}
+	a.emit(EventMailRepaired, MailRepairedEvent{
+		AccountID: folder.AccountID, FolderID: folder.ID, Count: changed,
+	})
 }
 
 // afterRepairs deals with messages whose text was fetched again because what

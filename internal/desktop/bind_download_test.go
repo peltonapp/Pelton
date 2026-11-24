@@ -143,16 +143,18 @@ func downloadStubWithChoice(t *testing.T, include bool) {
 	newInWindowID := stateIDByUID(t, db, inbox.ID, 4)
 	for id, withFiles := range map[int64]bool{inWindowID: true, belowID: include, newID: include, newInWindowID: true} {
 		m := mustGetMessage(t, db, id)
-		if !m.BodyComplete || !m.Offline || m.HasAttachments != withFiles {
-			t.Errorf("include=%v: message %q body complete %v offline %v has attachments %v, want attachments %v",
-				include, m.Subject, m.BodyComplete, m.Offline, m.HasAttachments, withFiles)
+		if !m.BodyComplete || !m.Offline || !m.HasAttachments {
+			t.Errorf("include=%v: message %q body complete %v offline %v has attachments %v, want all",
+				include, m.Subject, m.BodyComplete, m.Offline, m.HasAttachments)
 		}
+		// without the files the part is still recorded, its bytes fetched
+		// when wanted.
 		atts, err := db.ListAttachments(ctx, id)
 		if err != nil {
 			t.Fatal(err)
 		}
-		if want := map[bool]int{false: 0, true: 1}[withFiles]; len(atts) != want {
-			t.Errorf("include=%v: message %q has %d attachments, want %d", include, m.Subject, len(atts), want)
+		if len(atts) != 1 || db.AttachmentOnDisk(atts[0].DiskPath) != withFiles {
+			t.Errorf("include=%v: message %q attachments %+v, want one with a file %v", include, m.Subject, atts, withFiles)
 		}
 	}
 }
@@ -201,8 +203,8 @@ func TestDownloadFillsAStubListedAfterThePlanByTheWindow(t *testing.T) {
 	for _, tc := range []struct {
 		name  string
 		floor uint32
-		want  int
-	}{{"in window", 0, 1}, {"below the window", 5, 0}} {
+		file  bool
+	}{{"in window", 0, true}, {"below the window", 5, false}} {
 		t.Run(tc.name, func(t *testing.T) {
 			a, db, ctx, accountID, inbox := downloadInbox(t)
 			if err := db.SetFolderSyncFloorUID(ctx, inbox.ID, tc.floor); err != nil {
@@ -234,8 +236,8 @@ func TestDownloadFillsAStubListedAfterThePlanByTheWindow(t *testing.T) {
 			if !m.BodyComplete || !m.Offline {
 				t.Errorf("stub body complete %v offline %v, want both", m.BodyComplete, m.Offline)
 			}
-			if atts, err := db.ListAttachments(ctx, stubID); err != nil || len(atts) != tc.want {
-				t.Errorf("stub has %d attachments (%v), want %d", len(atts), err, tc.want)
+			if atts, err := db.ListAttachments(ctx, stubID); err != nil || len(atts) != 1 || db.AttachmentOnDisk(atts[0].DiskPath) != tc.file {
+				t.Errorf("stub attachments %+v (%v), want one with a file %v", atts, err, tc.file)
 			}
 		})
 	}

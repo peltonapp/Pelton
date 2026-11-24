@@ -32,6 +32,8 @@ import {
   PAGE_SIZE,
 } from './messages'
 import { refreshCountsSoon } from './sidebarcounts'
+import { threadMessages } from './threads'
+import { prefs } from './prefs'
 
 const refreshed = vi.mocked(refreshCountsSoon)
 
@@ -59,6 +61,9 @@ function summary(id: number, over: Partial<MessageSummary> = {}): MessageSummary
     snoozeUntil: '',
     senderVip: false,
     smime: { status: '', signer: '', email: '', issuer: '', detail: '' },
+    threadId: id,
+    answered: false,
+    forwarded: false,
     ...over,
   }
 }
@@ -82,6 +87,8 @@ function ids(): number[] {
 beforeEach(() => {
   api.listFolderMessages.mockReset()
   api.fetchOlderMessages.mockReset()
+  // the paging tests read the flat list; grouped lists have tests of their own.
+  prefs.update((p) => ({ ...p, threadedList: false }))
   messageList.set(idle())
   refreshed.mockClear()
 })
@@ -184,7 +191,8 @@ describe('refreshListHead', () => {
       hasOlder: false,
     })
     await loadMore()
-    expect(api.listFolderMessages).toHaveBeenLastCalledWith(1, PAGE_SIZE, PAGE_SIZE)
+    // the last argument is the split inbox tab, none here.
+    expect(api.listFolderMessages).toHaveBeenLastCalledWith(1, PAGE_SIZE, PAGE_SIZE, '')
 
     // two rows left and one arrived: the server's rows shifted up by one.
     const head = [summary(0), ...firstPage.filter((m) => m.id !== 3 && m.id !== 7), summary(51)]
@@ -193,7 +201,25 @@ describe('refreshListHead', () => {
 
     api.listFolderMessages.mockResolvedValueOnce({ messages: [], total: 119, hasOlder: false })
     await loadMore()
-    expect(api.listFolderMessages).toHaveBeenLastCalledWith(1, PAGE_SIZE, 2 * PAGE_SIZE - 1)
+    expect(api.listFolderMessages).toHaveBeenLastCalledWith(1, PAGE_SIZE, 2 * PAGE_SIZE - 1, '')
+  })
+
+  // the Pinned group comes with the first page and is not paged, so it does
+  // not move the next page, and a head refresh keeps it in front.
+  it('pages past the Pinned group by the rows the server pages', async () => {
+    const firstPage = Array.from({ length: PAGE_SIZE }, (_, i) => summary(i + 1))
+    const pinned = [summary(500, { pinned: true })]
+    api.listFolderMessages.mockResolvedValueOnce({ messages: firstPage, pinned, total: 120, hasOlder: false })
+    await loadList(inbox)
+    expect(ids()[0]).toBe(500)
+
+    api.listFolderMessages.mockResolvedValueOnce({ messages: [], pinned, total: 120, hasOlder: false })
+    await loadMore()
+    expect(api.listFolderMessages).toHaveBeenLastCalledWith(1, PAGE_SIZE, PAGE_SIZE, '')
+
+    api.listFolderMessages.mockResolvedValueOnce({ messages: [summary(0), ...firstPage], pinned, total: 121, hasOlder: false })
+    await refreshListHead(inbox)
+    expect(ids().slice(0, 3)).toEqual([500, 0, 1])
   })
 
   it('queues one refresh while the next page loads and runs it after', async () => {
@@ -443,6 +469,58 @@ describe('neighbourInList', () => {
 
   it('returns null while the list is not loaded', () => {
     expect(neighbourInList(1)).toBeNull()
+  })
+})
+
+describe('a list grouped into conversations', () => {
+  function loadGrouped(): void {
+    const head = summary(1, { seen: true, threadId: 5 })
+    messageList.set(
+      ready({
+        items: [head],
+        total: 1,
+        searching: false,
+        hasOlder: false,
+        backfilling: false,
+        threads: {
+          1: {
+            threadId: 5,
+            head,
+            count: 3,
+            unreadCount: 1,
+            participants: ['Ada'],
+            hasAttachments: false,
+            flagged: false,
+            answered: false,
+            forwarded: false,
+            messageIds: [3, 2, 1],
+          },
+        },
+      }),
+    )
+    threadMessages.set(new Map([[5, [3, 2, 1].map((id) => ({ ...summary(id, { threadId: 5, seen: id !== 2 }), folderRole: 'inbox', fromMe: false }))]]))
+  }
+
+  function thread() {
+    return get(messageList).data?.threads?.[1]
+  }
+
+  it('counts a reply read in its conversation', () => {
+    loadGrouped()
+    patchInList(2, { seen: true })
+    expect(thread()?.unreadCount).toBe(0)
+    patchInList(2, { seen: false })
+    expect(thread()?.unreadCount).toBe(1)
+  })
+
+  it('drops a reply that left the folder from its conversation', () => {
+    loadGrouped()
+    removeFromList(2)
+    expect(thread()?.count).toBe(2)
+    expect(thread()?.unreadCount).toBe(0)
+    expect(thread()?.messageIds).toEqual([3, 1])
+    expect(get(threadMessages).get(5)?.map((m) => m.id)).toEqual([3, 1])
+    expect(ids()).toEqual([1])
   })
 })
 

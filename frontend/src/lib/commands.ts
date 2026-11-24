@@ -28,7 +28,19 @@ import { accountLabel } from './format'
 import type { Account, Folder, UnifiedView, View, MessageSummary, ThemeInfo, Profile } from './types'
 
 /** Which section of the palette an entry belongs to. */
-export type CommandGroup = 'action' | 'navigate' | 'setting' | 'mail'
+export type CommandGroup =
+  | 'action'
+  | 'navigate'
+  | 'setting'
+  | 'mail'
+  | 'calendar'
+  | 'contacts'
+  | 'tasks'
+  | 'projects'
+  | 'notes'
+  | 'feeds'
+  | 'chat'
+  | 'automations'
 
 /**
  * A second stage of the palette: picking a folder for "Rename mailbox", a
@@ -57,6 +69,8 @@ export interface PaletteCommand {
   icon: ComponentType
   /** A colour dot rendered instead of the icon, for the flag colours. */
   swatch?: string
+  /** Set for an entry that runs a script, to the script's name: the entry carries the script mark. */
+  script?: string
   danger?: boolean
   /** Runs the entry, or returns the step to descend into. */
   run: () => CommandStep | void | Promise<void>
@@ -113,6 +127,7 @@ export type MessageOp =
   | 'flag-color'
   | 'delete'
   | 'archive'
+  | 'done'
   | 'download-offline'
   | 'remove-offline'
 
@@ -420,6 +435,7 @@ function bulkCommands(ctx: CommandContext): PaletteCommand[] {
   const flag = menuActionCatalog.find((d) => d.action === 'flag')!
   const del = menuActionCatalog.find((d) => d.action === 'delete-message')!
   const arch = menuActionCatalog.find((d) => d.action === 'archive')!
+  const done = menuActionCatalog.find((d) => d.action === 'done')!
   const offline = menuActionCatalog.find((d) => d.action === 'download-offline')!
 
   return [
@@ -435,6 +451,7 @@ function bulkCommands(ctx: CommandContext): PaletteCommand[] {
       run: () => colorStep(ctx, (color) => ctx.onBulk('flag-color', items, color)),
     },
     entry('archive', count('palette.bulk.archiveCount'), arch.icon, 'archive'),
+    entry('done', count('palette.bulk.doneCount'), done.icon, 'done'),
     entry('download-offline', count('palette.bulk.downloadCount'), offline.icon, 'download-offline'),
     entry('delete', count('messageList.bulk.deleteCount'), del.icon, 'delete', true),
   ]

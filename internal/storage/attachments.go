@@ -1,6 +1,7 @@
 package storage
 
 import (
+	"bytes"
 	"context"
 	"database/sql"
 	"errors"
@@ -41,6 +42,10 @@ const (
 	stagingLockName = ".owner"
 )
 
+// ErrAttachmentNotLocal is returned for an attachment whose bytes were never
+// stored, because its message was cached without attachments.
+var ErrAttachmentNotLocal = errors.New("storage: attachment not downloaded")
+
 // Attachment is attachment metadata. The bytes live on disk at DiskPath, which
 // is relative to the attachments root so the config dir stays portable.
 type Attachment struct {
@@ -53,39 +58,61 @@ type Attachment struct {
 	DiskPath    string
 }
 
-// ListAttachments returns the attachment rows for a message.
+// ListAttachments returns the attachment rows for a message. A message in a
+// vault the context may not see has none; a sealed one the context may see
+// comes back with its names and types opened.
 func (d *DB) ListAttachments(ctx context.Context, messageID int64) ([]Attachment, error) {
-	const query = `
-SELECT id, message_id, filename, content_type, size_bytes, content_id, disk_path
-FROM attachments WHERE message_id = ? ORDER BY id`
-	rows, err := d.sql.QueryContext(ctx, query, messageID)
+	_, env, _, err := d.sealedKey(ctx, messageID)
+	if errors.Is(err, ErrMessageNotFound) {
+		return nil, nil
+	}
 	if err != nil {
-		return nil, fmt.Errorf("storage: list attachments for message %d: %w", messageID, err)
+		return nil, err
 	}
-	defer rows.Close()
-
-	var attachments []Attachment
-	for rows.Next() {
-		var a Attachment
-		if err := rows.Scan(&a.ID, &a.MessageID, &a.Filename, &a.ContentType,
-			&a.SizeBytes, &a.ContentID, &a.DiskPath); err != nil {
-			return nil, fmt.Errorf("storage: scan attachment: %w", err)
+	attachments, err := attachmentRows(ctx, d.sql, messageID)
+	if err != nil || env == nil {
+		return attachments, err
+	}
+	for i := range attachments {
+		if i >= len(env.Attachments) {
+			return nil, ErrSealedTampered
 		}
-		attachments = append(attachments, a)
-	}
-	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("storage: iterate attachments: %w", err)
+		meta := env.Attachments[i]
+		attachments[i].Filename, attachments[i].ContentType = meta.Filename, meta.ContentType
+		attachments[i].ContentID, attachments[i].SizeBytes = meta.ContentID, meta.Size
 	}
 	return attachments, nil
 }
 
-// OpenAttachment opens an attachment file for reading given its stored relative
-// DiskPath. The caller must close the returned reader.
-func (d *DB) OpenAttachment(diskPath string) (io.ReadCloser, error) {
-	full := filepath.Join(d.attachmentsDir, filepath.FromSlash(diskPath))
+// OpenAttachment opens an attachment's bytes for reading. A sealed
+// attachment opens only through a context its unlocked vault admits, and
+// comes back decrypted in memory. The caller must close the returned reader.
+func (d *DB) OpenAttachment(ctx context.Context, att Attachment) (io.ReadCloser, error) {
+	if att.DiskPath == "" {
+		return nil, ErrAttachmentNotLocal
+	}
+	full := filepath.Join(d.attachmentsDir, filepath.FromSlash(att.DiskPath))
+	if idx, sealed := sealedFileIndex(att.DiskPath); sealed {
+		mk, _, _, err := d.sealedKey(ctx, att.MessageID)
+		if err != nil {
+			return nil, err
+		}
+		if mk == nil {
+			return nil, ErrSealedTampered
+		}
+		box, err := os.ReadFile(full)
+		if err != nil {
+			return nil, fmt.Errorf("storage: open attachment %q: %w", att.DiskPath, err)
+		}
+		plain, err := mk.Open(box, attachmentBinding(att.MessageID, idx)...)
+		if err != nil {
+			return nil, ErrSealedTampered
+		}
+		return io.NopCloser(bytes.NewReader(plain)), nil
+	}
 	f, err := os.Open(full)
 	if err != nil {
-		return nil, fmt.Errorf("storage: open attachment %q: %w", diskPath, err)
+		return nil, fmt.Errorf("storage: open attachment %q: %w", att.DiskPath, err)
 	}
 	return f, nil
 }

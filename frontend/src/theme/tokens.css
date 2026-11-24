@@ -95,10 +95,167 @@
   --accent-fg: #ffffff;
   --selection-bg: color-mix(in srgb, var(--accent) 14%, transparent);
   --selection-bg-strong: color-mix(in srgb, var(--accent) 22%, transparent);
+  /* a hover fill that can lie over content. */
+  --hover-tint: color-mix(in srgb, var(--text-primary) 6%, transparent);
   --link: var(--accent);
 
   /* elevation, used sparingly for overlays and popovers. */
   --shadow-overlay: 0 8px 24px rgba(0, 0, 0, 0.18);
+
+  /* motion. every transition and animation takes its duration and curve from
+     here; reduce motion collapses them in style.css. */
+  --motion-fast: 110ms;
+  --motion-base: 170ms;
+  --motion-slow: 260ms;
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-in-out: cubic-bezier(0.65, 0, 0.35, 1);
+  --ease-press: cubic-bezier(0.3, 0, 0.5, 1);
+
+  /* shell geometry of the new design. the pane gap and radius are zero unless a
+     pane style below sets them, so the classic design never sees them. */
+  --topbar-height: 38px;
+  --topsearch-width: 560px;
+  --topsearch-min-width: 140px;
+  --suggest-max-height: 420px;
+  --popover-width: 256px;
+  --chip-height: 20px;
+  --rail-width: 40px;
+  --pane-gap: 0px;
+  --pane-radius: 0px;
+  --chrome-bg: var(--surface-base);
+
+  /* the new composer: the docked panel's size, the label column the header
+     fields line up on, the send button's width (fixed so it does not jump as
+     it turns into a loader and a check) and the popovers' width. */
+  --compose-dock-width: 640px;
+  --compose-dock-height: 620px;
+  --compose-label-width: 64px;
+  --compose-send-width: 92px;
+  --popover-width: 340px;
+  --popover-max-height: 440px;
+  /* the smallest press target a control gets, drawn or not (wcag 2.5.8). */
+  --target-min: 24px;
+  /* a pressed button sinks by this much. */
+  --press-scale: 0.96;
+
+  /* the calendar: its sidebar, the gutter the hour labels sit in, one line of
+     a month cell or the all-day lane, the width of an event's color edge, and
+     the event popover and editor. the hour height follows the density below. */
+  --cal-sidebar-width: 236px;
+  /* the plan pane of tasks beside the day and week views. */
+  --cal-plan-width: 264px;
+  --cal-gutter: 56px;
+  --cal-lane-height: 20px;
+  --cal-edge: 3px;
+  /* the year view: four neutral steps a day is shaded in by how busy it is,
+     the thickness of a multi-day bar and the width of the day popover. */
+  --year-busy-1: color-mix(in srgb, var(--text-primary) 5%, transparent);
+  --year-busy-2: color-mix(in srgb, var(--text-primary) 10%, transparent);
+  --year-busy-3: color-mix(in srgb, var(--text-primary) 17%, transparent);
+  --year-busy-4: color-mix(in srgb, var(--text-primary) 26%, transparent);
+  --year-bar: 3px;
+  --year-popover-width: 240px;
+  --cal-popover-width: 320px;
+  --cal-editor-width: 600px;
+  --cal-hour-height: 46px;
+  /* the colors a calendar gets when its server named none, in picker order.
+     events tint them against the surface, so one set reads in both themes. */
+  --cal-1: #3b6fd4;
+  --cal-2: #1d9488;
+  --cal-3: #4f8f2b;
+  --cal-4: #c08516;
+  --cal-5: #d0642a;
+  --cal-6: #c9394a;
+  --cal-7: #b9428a;
+  --cal-8: #7552c4;
+  /* tasks: the checkbox, how far a subtask is indented per level, and the
+     detail pane beside the list. the sidebar shares the calendar's width. */
+  --task-check: 16px;
+  --task-indent: 22px;
+  --task-detail-width: 340px;
+  /* projects: a board column (fixed, the board scrolls sideways rather than
+     squeezing it), the tiles of the project list, the card panel beside the
+     board, the notes list and how far a card being dragged leans. */
+  --project-column-width: 280px;
+  --project-tile-width: 264px;
+  --project-detail-width: 380px;
+  --project-notes-width: 260px;
+  --project-drag-tilt: -2.5deg;
+  /* the shortcut coach: the sheet's width, columns and filter field, and how
+     far the hint sits off the bottom edge. the focus menu's width. */
+  --coach-sheet-width: 720px;
+  --coach-sheet-columns: 2;
+  --coach-filter-width: 200px;
+  --coach-hint-offset: 20px;
+  --focus-menu-width: 248px;
+  /* calendar in mail: the preview a date in a mail opens and the hour height
+     of its slice of the day, the My Day panel beside the mail, and the
+     availability panel of the composer with the height of its week's hours. */
+  --date-peek-width: 320px;
+  --date-peek-hour: 22px;
+  --myday-width: 300px;
+  --avail-width: 460px;
+  --avail-hour: 14px;
+  /* the app lock screen: the width of its column and the size of the mark. */
+  --lock-width: 300px;
+  --lock-mark: 56px;
+  /* conversations: the column the expand control sits in, which replies are
+     indented by, and the widths the reading column can be capped at. */
+  --thread-twisty: 16px;
+  --reader-width-narrow: 640px;
+  --reader-width-medium: 820px;
+  /* a message row's quick buttons, and the fade they lie over the text with. */
+  --row-action-size: 26px;
+  --row-action-fade: 32px;
+  /* a swiped row settling back, with a little give. */
+  --ease-spring: cubic-bezier(0.34, 1.4, 0.64, 1);
+  /* the reading view: the column's measure and the room around it. */
+  --reading-measure: 720px;
+  --reading-margin: 72px;
+  --reading-leading: 1.7;
+
+  /* the sender panel beside the reader, and the attachments browser's preview
+     column and grid tiles. */
+  --sender-panel-width: 280px;
+  --attachments-preview-width: 380px;
+  --attachments-tile: 132px;
+  --sender-avatar: 48px;
+  /* triage and writing: the empty inbox's mark and the snippet picker's
+     list. */
+  --inbox-zero-mark: 40px;
+  --snippet-list-height: 280px;
+  /* feeds: the entry list beside the reader, a feed's icon in the sidebar
+     and the list, the thumbnail a list row carries, and the add dialog. */
+  --feed-list-width: 380px;
+  --feed-icon: 16px;
+  --feed-thumb: 56px;
+  --feed-dialog-width: 520px;
+  /* chat: the room list and the room info panel beside the timeline, the
+     avatar beside a message group and in the room list, the widest window
+     the space still shows list and room side by side in, the largest inline
+     image, and the tallest the composer grows before it scrolls. */
+  --chat-list-width: 280px;
+  --chat-info-width: 300px;
+  --chat-avatar: 32px;
+  --chat-room-avatar: 28px;
+  --chat-narrow: 720px;
+  --chat-media-width: 360px;
+  --chat-media-height: 280px;
+  --chat-composer-max: 200px;
+  /* automations: the script list and the run log beside the editor, the
+     gutter of the Lua editor, the tallest a run's step list grows in a
+     dialog, and the widest the space shows all three panes side by side. */
+  --automation-list-width: 260px;
+  --automation-log-width: 320px;
+  --automation-gutter: 40px;
+  --automation-steps-max: 360px;
+  --automation-narrow: 960px;
+  /* the block editor: its palette and Lua panel beside the canvas, and the
+     widest it is before both fold away below the canvas. */
+  --block-palette-width: 200px;
+  --block-lua-width: 300px;
+  --block-narrow: 720px;
+  --chat-signin-width: 420px;
 
   /* default density (medium) row + pane spacing. overridden per density below. */
   --row-pad-y: 8px;
@@ -145,6 +302,10 @@
 
   /* the dim behind a modal. */
   --scrim: rgba(0, 0, 0, 0.4);
+
+  /* search matches marked in list rows and the reading pane. */
+  --highlight-bg: color-mix(in srgb, var(--accent) 24%, transparent);
+  --highlight-fg: inherit;
 }
 
 /* dark theme. every token has a dark value so the toggle never leaves a gap. */
@@ -183,7 +344,50 @@
 
   --scrim: rgba(0, 0, 0, 0.55);
 
+  --highlight-bg: color-mix(in srgb, var(--accent) 40%, transparent);
+  --highlight-fg: var(--text-primary);
+
   --shadow-overlay: 0 8px 24px rgba(0, 0, 0, 0.5);
+}
+
+/* scoping classes that pin the surface, text and border tokens of one theme
+   onto an element, whatever the live theme is. settings pictures use them to
+   show light and dark side by side. the values below must stay in step with the
+   :root[data-theme] sets above. */
+.theme-light {
+  --surface-base: #f6f6f7;
+  --surface-raised: #ffffff;
+  --surface-overlay: #ffffff;
+  --surface-sunken: #efeff1;
+  --surface-hover: #ececef;
+
+  --text-primary: #1a1b1e;
+  --text-secondary: #4a4d54;
+  --text-tertiary: #797d86;
+
+  --border-subtle: rgba(0, 0, 0, 0.06);
+  --border-default: rgba(0, 0, 0, 0.12);
+  --border-strong: rgba(0, 0, 0, 0.22);
+
+  --selection-bg: color-mix(in srgb, var(--accent) 14%, transparent);
+}
+
+.theme-dark {
+  --surface-base: #111214;
+  --surface-raised: #1a1c1f;
+  --surface-overlay: #222428;
+  --surface-sunken: #161719;
+  --surface-hover: #25282d;
+
+  --text-primary: #ecedee;
+  --text-secondary: #b4b7bd;
+  --text-tertiary: #7e828b;
+
+  --border-subtle: rgba(255, 255, 255, 0.06);
+  --border-default: rgba(255, 255, 255, 0.12);
+  --border-strong: rgba(255, 255, 255, 0.22);
+
+  --selection-bg: color-mix(in srgb, var(--accent) 22%, transparent);
 }
 
 /* density variants. these swap only spacing and line-height tokens, so every
@@ -196,6 +400,7 @@
   --pane-pad: 12px;
   --control-height: 27px;
   --stack-gap: 8px;
+  --cal-hour-height: 38px;
 }
 
 :root[data-density="medium"] {
@@ -216,6 +421,7 @@
   --pane-pad: 22px;
   --control-height: 34px;
   --stack-gap: 14px;
+  --cal-hour-height: 56px;
 }
 
 /* corner style variants. these swap only the radius tokens, so every
@@ -228,6 +434,45 @@
 :root[data-corners="round"] {
   --radius-control: 10px;
   --radius-card: 12px;
+}
+
+/* the new design. the window itself is the sunken surface and the panes sit on
+   it; how they sit there is the pane style: hybrid raises the list and reader
+   as one rounded surface, soft raises every pane on its own, flat keeps them
+   edge to edge with hairlines. */
+:root[data-design="new"] {
+  /* the window chrome (top bar, rail, status bar) is a hair off the folder
+     pane, which keeps the sunken surface itself. */
+  --chrome-bg: color-mix(in srgb, var(--text-primary) 2.5%, var(--surface-sunken));
+  --sidebar-bg: var(--surface-sunken);
+  --radius-card: 7px;
+}
+
+/* the new design lifts the text tokens that fall short of 4.5:1 on a surface.
+   theme packs get theirs computed in legible.ts, whose BASE_TOKENS must stay in
+   step with these values. */
+:root[data-design="new"]:not([data-theme="dark"]) {
+  --text-tertiary: #676a72;
+  --success: #197a48;
+  --warning: #916100;
+}
+
+:root[data-design="new"][data-theme="dark"] {
+  --text-tertiary: #8b8f97;
+}
+
+:root[data-design="new"][data-panes="hybrid"],
+:root[data-design="new"][data-panes="soft"] {
+  --pane-gap: 6px;
+  --pane-radius: 9px;
+}
+
+:root[data-design="new"][data-corners="square"] {
+  --pane-radius: 0px;
+}
+
+:root[data-design="new"][data-corners="round"] {
+  --pane-radius: 14px;
 }
 
 /* cursor variant. the default is the arrow on every platform, matching native
@@ -245,4 +490,7 @@
   --titlebar-lights: calc(28px / var(--ui-scale, 1));
   --titlebar-inset: calc(78px / var(--ui-scale, 1));
   --titlebar-nudge: calc(3px / var(--ui-scale, 1));
+  /* the centre line of the traffic lights. this is where older releases put
+     them; the app replaces it with the measured value once it knows. */
+  --titlebar-lights-center: calc(11px / var(--ui-scale, 1));
 }

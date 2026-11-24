@@ -8,15 +8,28 @@
   import AccountTree from './AccountTree.svelte'
   import PinnedFolders from './PinnedFolders.svelte'
   import SavedViews from './SavedViews.svelte'
+  import SidebarProjects from './SidebarProjects.svelte'
   import Spinner from '../common/Spinner.svelte'
   import ErrorState from '../common/ErrorState.svelte'
   import EmptyState from '../common/EmptyState.svelte'
+  import PieProgress from '../common/PieProgress.svelte'
+  import mailboxIcon from '@phosphor-icons/core/assets/duotone/tray-duotone.svg?raw'
   import { sidebar, loadSidebar } from '../../stores/accounts'
   import { views, openViewEditor, editViewInEditor } from '../../stores/views'
   import { syncing } from '../../stores/outbox'
-  import { prefs } from '../../stores/prefs'
+  import { prefs, setPaneLocked } from '../../stores/prefs'
+  import { openContextMenu } from '../../stores/contextmenu'
+  import { openSettingsAt } from '../../stores/settingsnav'
+  import moreIcon from '@phosphor-icons/core/assets/regular/dots-three.svg?raw'
+  import newspaperIcon from '@phosphor-icons/core/assets/duotone/newspaper-duotone.svg?raw'
+  import shieldIcon from '@phosphor-icons/core/assets/duotone/shield-check-duotone.svg?raw'
+  import SidebarRow from './SidebarRow.svelte'
+  import { mailScreen, openMailScreen, closeMailScreen } from '../../stores/mailscreen'
+  import Ph from '../common/Ph.svelte'
+  import { tip } from '../../lib/tip'
   import { selection } from '../../stores/selection'
   import { reorder, type ReorderDetail } from '../../lib/reorder'
+  import { maildragScroll } from '../../stores/maildrag'
   import { reorderAccounts } from '../../lib/api'
   import { toastError, errorMessage } from '../../stores/toast'
   import type { View } from '../../lib/types'
@@ -49,6 +62,22 @@
     await loadSidebar()
   }
 
+  // the folder pane's own menu, in the new design: what you would otherwise
+  // go looking for in settings while standing in front of the folders.
+  function openOptions(event: MouseEvent): void {
+    const anchor = (event.currentTarget as HTMLElement).getBoundingClientRect()
+    openContextMenu(anchor.left, anchor.bottom + 4, [
+      { label: $t('addMailbox.cta'), action: () => dispatch('addMailbox') },
+      { label: $t('views.new'), action: openNew },
+      'separator',
+      {
+        label: $prefs.paneLocked ? $t('sidebar.options.unlockPanes') : $t('settings.lockPanes'),
+        action: () => setPaneLocked(!$prefs.paneLocked),
+      },
+      { label: $t('sidebar.options.settings'), action: () => openSettingsAt('layout') },
+    ])
+  }
+
   function openNew(): void {
     openViewEditor()
   }
@@ -57,7 +86,7 @@
   }
 </script>
 
-<aside class="sidebar">
+<aside class="sidebar" aria-label={$t('a11y.region.folders')}>
   <div class="top">
     <button type="button" class="compose-btn" on:click={() => dispatch('compose')}>
       <IconPencil size={16} stroke={1.8} />
@@ -73,15 +102,41 @@
     >
       <IconRefresh size={16} stroke={1.8} />
     </button>
+    {#if $prefs.design !== 'classic'}
+      <button
+        type="button"
+        class="sync-btn"
+        aria-label={$t('sidebar.options')}
+        aria-haspopup="menu"
+        use:tip={{ text: $t('sidebar.options'), side: 'bottom' }}
+        on:click={openOptions}
+      >
+        <Ph svg={moreIcon} size={16} />
+      </button>
+    {/if}
   </div>
 
-  <div class="scroll">
+  <div class="scroll" use:maildragScroll>
     {#if $sidebar.status === 'loading' && !$sidebar.data}
-      <Spinner label={$t('sidebar.loading.mailboxes')} />
+      {#if $prefs.design === 'classic'}
+        <Spinner label={$t('sidebar.loading.mailboxes')} />
+      {:else}
+        <div class="loading"><PieProgress size={20} label={$t('sidebar.loading.mailboxes')} /></div>
+      {/if}
     {:else if $sidebar.status === 'error'}
       <ErrorState message={$sidebar.error} onRetry={loadSidebar} />
     {:else if $sidebar.data}
-      {#if $sidebar.data.accounts.length === 0}
+      {#if $sidebar.data.accounts.length === 0 && $prefs.design !== 'classic'}
+        <EmptyState
+          kind="setup"
+          icon={mailboxIcon}
+          title={$t('sidebar.empty.title')}
+          detail={$t('sidebar.empty.setupDetail')}
+          actionLabel={$t('addMailbox.cta')}
+          onAction={() => dispatch('addMailbox')}
+          shortcut="add-mailbox"
+        />
+      {:else if $sidebar.data.accounts.length === 0}
         <EmptyState
           title={$t('sidebar.empty.title')}
           detail={$t('sidebar.empty.detail')}
@@ -108,8 +163,29 @@
         {:else}
           <PinnedFolders folders={$sidebar.data.pinned} {accountEmails} />
           <UnifiedViews views={$sidebar.data.views} />
+          {#if $prefs.design !== 'classic'}
+            <nav class="tools" aria-label={$t('sidebar.tools')}>
+              <SidebarRow
+                label={$t('newsletters.title')}
+                active={$mailScreen === 'newsletters'}
+                on:select={() => ($mailScreen === 'newsletters' ? closeMailScreen() : openMailScreen('newsletters'))}
+              >
+                <Ph svg={newspaperIcon} size={15} />
+              </SidebarRow>
+              <SidebarRow
+                label={$t('privacy.report.title')}
+                active={$mailScreen === 'privacy'}
+                on:select={() => ($mailScreen === 'privacy' ? closeMailScreen() : openMailScreen('privacy'))}
+              >
+                <Ph svg={shieldIcon} size={15} />
+              </SidebarRow>
+            </nav>
+          {/if}
           {#if placement === 'sidebar'}
             <SavedViews views={$views} on:new={openNew} on:edit={(e) => openEdit(e.detail)} />
+          {/if}
+          {#if $prefs.design !== 'classic'}
+            <SidebarProjects />
           {/if}
           <div use:reorder on:reorder={onReorderAccounts}>
             {#each $sidebar.data.accounts as account (account.id)}
@@ -130,6 +206,12 @@
     background: var(--surface-base);
     border-inline-end: var(--hairline) solid var(--border-default);
     min-width: 0;
+  }
+
+  .tools {
+    display: flex;
+    flex-direction: column;
+    margin-top: var(--space-2);
   }
 
   .top {
@@ -176,6 +258,35 @@
     color: var(--text-primary);
   }
 
+  /* the new design: writing a message is the one accent action of the pane,
+     and its buttons press in. */
+  :global(:root[data-design='new']) .compose-btn {
+    border-color: var(--accent);
+    background: var(--accent);
+    color: var(--accent-fg);
+    transition:
+      filter var(--motion-fast) var(--ease-out),
+      transform var(--motion-fast) var(--ease-press);
+  }
+
+  :global(:root[data-design='new']) .compose-btn:hover {
+    background: var(--accent);
+    filter: brightness(1.08);
+  }
+
+  :global(:root[data-design='new']) .compose-btn:active,
+  :global(:root[data-design='new']) .sync-btn:active {
+    transform: scale(0.97);
+  }
+
+  :global(:root[data-design='new']) .sync-btn {
+    border-color: transparent;
+    background: transparent;
+    transition:
+      background-color var(--motion-fast) var(--ease-out),
+      transform var(--motion-fast) var(--ease-press);
+  }
+
   .sync-btn.spinning :global(svg) {
     /* svg transform-origin defaults differ across the webviews wails embeds
        per platform (webkit vs webview2); pin it explicitly so the icon spins
@@ -199,6 +310,12 @@
     min-height: 0;
     overflow-y: auto;
     padding: var(--space-3) var(--space-2);
+  }
+
+  .loading {
+    display: flex;
+    justify-content: center;
+    padding: var(--space-5);
   }
 
   .tabs {

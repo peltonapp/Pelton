@@ -78,7 +78,7 @@ func newReindexBacklog(t *testing.T, n int) (*DB, []int64) {
 	return db, ids
 }
 
-// queryIDStmts holds the statements queryIDs prepared, per test, store and
+// queryIDStmts holds the statements reindexBatchIDs prepared, per test, store and
 // query. The walks run a query hundreds of times, and preparing it again each
 // time was most of their cost (far more under -race).
 var queryIDStmts sync.Map
@@ -89,7 +89,7 @@ type queryIDStmtKey struct {
 	query string
 }
 
-func queryIDs(t *testing.T, db *DB, query string, afterID, upToID int64, limit int) []int64 {
+func reindexBatchIDs(t *testing.T, db *DB, query string, afterID, upToID int64, limit int) []int64 {
 	t.Helper()
 	key := queryIDStmtKey{t, db, query}
 	var stmt *sql.Stmt
@@ -155,11 +155,11 @@ func TestListMessagesForReindexMatchesUnboundedQuery(t *testing.T) {
 	for _, upTo := range []int64{ids[0] - 1, ids[0], ids[len(ids)/2], ids[len(ids)-1], ids[len(ids)-1] + 10} {
 		for _, limit := range []int{1, 2, 7, 50, 500, 0} {
 			t.Run(fmt.Sprintf("up to %d limit %d", upTo, limit), func(t *testing.T) {
-				want := queryIDs(t, db, reindexQueryUnbounded, 0, upTo, -1)
+				want := reindexBatchIDs(t, db, reindexQueryUnbounded, 0, upTo, -1)
 				var got, gotStorage []int64
 				for afterID := int64(0); ; {
-					batch := queryIDs(t, db, reindexQueryBounded, afterID, upTo, limit)
-					old := queryIDs(t, db, reindexQueryUnbounded, afterID, upTo, limit)
+					batch := reindexBatchIDs(t, db, reindexQueryBounded, afterID, upTo, limit)
+					old := reindexBatchIDs(t, db, reindexQueryUnbounded, afterID, upTo, limit)
 					if !slices.Equal(batch, old) {
 						t.Fatalf("batch after %d = %v, unbounded query gives %v", afterID, batch, old)
 					}
@@ -195,7 +195,7 @@ func TestListMessagesForReindexWalksOneBatch(t *testing.T) {
 	const limit = 10
 	db, ids := newReindexBacklog(t, 600)
 	upTo := ids[len(ids)-1]
-	backlog := len(queryIDs(t, db, reindexQueryUnbounded, 0, upTo, -1))
+	backlog := len(reindexBatchIDs(t, db, reindexQueryUnbounded, 0, upTo, -1))
 	if backlog < 20*limit {
 		t.Fatalf("backlog = %d rows, want well over one batch of %d", backlog, limit)
 	}

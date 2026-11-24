@@ -117,7 +117,7 @@ func TestMessageThreadingRoundTrip(t *testing.T) {
 				if len(atts) != 1 || atts[0].Filename != "note.txt" {
 					t.Fatalf("attachment missing after insert: %+v", atts)
 				}
-				file, err := db.OpenAttachment(atts[0].DiskPath)
+				file, err := db.OpenAttachment(ctx, atts[0])
 				if err != nil {
 					t.Fatal(err)
 				}

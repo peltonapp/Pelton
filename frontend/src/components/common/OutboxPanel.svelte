@@ -10,35 +10,11 @@
   import { prefs } from '../../stores/prefs'
   import { IconSend, IconClock, IconAlertTriangle, IconX, IconRefresh } from '@tabler/icons-svelte'
   import { createEventDispatcher } from 'svelte'
-  import { outbox, loadOutbox } from '../../stores/outbox'
-  import { cancelSend, retrySend, discardFailedSend } from '../../lib/api'
-  import { errorMessage, toastError, toastInfo } from '../../stores/toast'
-  import type { OutboxRow } from '../../lib/types'
+  import { outbox } from '../../stores/outbox'
+  import { cancelScheduled as cancelRow, discard as discardRow, isScheduled, recipientLabel, retry as retryRow } from '../../lib/outboxactions'
   import { t } from '../../lib/i18n'
 
   const dispatch = createEventDispatcher<{ close: void }>()
-
-  // rows queued for longer than this out from now count as an explicitly
-  // scheduled send rather than sitting in the short undo-send window.
-  const SCHEDULED_THRESHOLD_MS = 60 * 1000
-
-  function recipientLabel(row: OutboxRow, tFn: (key: string) => string): string {
-    if (row.recipients.length === 0) {
-      return tFn('common.outboxPanel.noRecipients')
-    }
-    if (row.recipients.length === 1) {
-      return row.recipients[0]
-    }
-    return `${row.recipients[0]} +${row.recipients.length - 1}`
-  }
-
-  // isScheduled reports whether a queued row is a future "send later" send.
-  function isScheduled(row: OutboxRow): boolean {
-    if (row.state !== 'queued' || !row.nextAttemptAt) {
-      return false
-    }
-    return new Date(row.nextAttemptAt).getTime() - Date.now() > SCHEDULED_THRESHOLD_MS
-  }
 
   function formatScheduled(iso: string): string {
     return formatWeekdayTime(new Date(iso), $prefs.timeFormat as TimeFormat)
@@ -46,22 +22,10 @@
 
   let cancelling: number | null = null
 
-  // cancelScheduled pulls a still-queued scheduled send back out of the outbox.
   async function cancelScheduled(id: number): Promise<void> {
     cancelling = id
-    try {
-      const cancelled = await cancelSend(id)
-      if (cancelled) {
-        toastInfo($t('common.outboxPanel.scheduledCancelled'))
-      } else {
-        toastError($t('common.outboxPanel.scheduledCancelTooLate'))
-      }
-    } catch (err) {
-      toastError(errorMessage(err))
-    } finally {
-      cancelling = null
-      await loadOutbox()
-    }
+    await cancelRow(id)
+    cancelling = null
   }
 
   // a failed message is out of retries, so it sits here until it is dealt with
@@ -74,29 +38,15 @@
 
   async function retry(id: number): Promise<void> {
     busy = id
-    try {
-      if (await retrySend(id)) {
-        toastInfo($t('common.outboxPanel.retrying'))
-      }
-    } catch (err) {
-      toastError(errorMessage(err))
-    } finally {
-      busy = null
-      await loadOutbox()
-    }
+    await retryRow(id)
+    busy = null
   }
 
   async function discard(id: number): Promise<void> {
     busy = id
     confirmingDiscard = null
-    try {
-      await discardFailedSend(id)
-    } catch (err) {
-      toastError(errorMessage(err))
-    } finally {
-      busy = null
-      await loadOutbox()
-    }
+    await discardRow(id)
+    busy = null
   }
 </script>
 

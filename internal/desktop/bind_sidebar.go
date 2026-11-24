@@ -51,14 +51,16 @@ func (a *App) ListPinnedFolders() ([]FolderDTO, error) {
 		return nil, err
 	}
 	out := make([]FolderDTO, 0, len(folders))
+	mark := a.vaultMarker()
 	for _, f := range folders {
 		dto := toFolderDTO(f)
-		total, unread, err := a.store.FolderCounts(a.ctx, f.ID)
+		total, unread, err := a.folderCounts(f)
 		if err != nil {
 			return nil, err
 		}
 		dto.TotalCount = total
 		dto.UnreadCount = unread
+		mark(&dto)
 		out = append(out, dto)
 	}
 	return out, nil

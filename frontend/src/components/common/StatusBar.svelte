@@ -181,7 +181,8 @@
         <span>{unreadLabel}</span>
       </button>
     {/if}
-    {#if pending.length > 0 || failed.length > 0}
+    <!-- the new design keeps the outbox in the top bar's activity popover. -->
+    {#if $prefs.design === 'classic' && (pending.length > 0 || failed.length > 0)}
       <button type="button" class="outbox-btn" class:has-failed={failed.length > 0} on:click={() => (panelOpen = !panelOpen)}>
         {#if pending.length > 0}
           <IconSend size={13} stroke={1.7} />
@@ -194,7 +195,7 @@
       </button>
     {/if}
 
-    {#if panelOpen}
+    {#if panelOpen && $prefs.design === 'classic'}
       <div class="popover">
         <OutboxPanel on:close={() => (panelOpen = false)} />
       </div>

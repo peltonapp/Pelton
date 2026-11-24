@@ -33,6 +33,7 @@ func (a *App) trayMenuItems(show func()) []trayMenuItem {
 		{label: s.syncNow, action: func() {
 			a.emit(EventMenu, "sync")
 		}},
+		{label: s.lockVaults, action: a.lockMailVaults},
 		{},
 		{label: s.quit, action: a.quitApp},
 	}

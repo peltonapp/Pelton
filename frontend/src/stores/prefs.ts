@@ -5,12 +5,13 @@
 // source of truth.
 
 import { writable } from 'svelte/store'
-import type { UIPrefs, ThemePref, DensityPref, EditorMode, ViewsPlacement, CloseAction, LogLevel, SelectAllScope, SearchKind, SearchSortPref } from '../lib/types'
-import { getUIPrefs, setSetting, SettingKeys, systemColorScheme, setWindowTheme, getThemeApply } from '../lib/api'
-import { applyTheme, applyDensity, applyAccent, applyScale, applyReduceMotion, applyHandCursor, setThemeSchedule, applyUIFont, applyMonoFont, applyCorners, watchSystemTheme, setSystemSchemeOverride, resolveTheme } from '../theme/theme'
+import type { QuickComposeStatus, UIPrefs, ThemePref, DensityPref, EditorMode, ViewsPlacement, CloseAction, LogLevel, SelectAllScope, SearchKind, SearchSortPref, DesignPref, LayoutMode, NavStyle, RailSide, PaneStyle, AvatarPlacement, ContactsView, ComposeOpenIn, ReaderWidth, AfterMove, AfterReplySend, FollowUpInterval, ProjectsView, NoteEditorMode, ChatNotifyMode, HtmlColors, AutoconfigLookup, KeySources } from '../lib/types'
+import { getUIPrefs, setSetting, SettingKeys, systemColorScheme, setWindowTheme, getThemeApply, setQuickCompose, enableAutoEncrypt } from '../lib/api'
+import { applyTheme, applyDensity, applyAccent, applyScale, applyReduceMotion, applyHandCursor, setThemeSchedule, applyUIFont, applyMonoFont, applyCorners, applyDesign, watchSystemTheme, setSystemSchemeOverride, resolveTheme } from '../theme/theme'
 import { applyUserTheme } from '../theme/usertheme'
 import { uiFontStack, monoFontStack } from '../lib/fonts'
 import { setLocale } from '../lib/i18n'
+import { refreshWindowFrame } from './windowframe'
 import { SYNC_PARALLEL_DEFAULT, clampSyncParallel } from '../lib/syncparallel'
 
 // defaults match the backend defaults so the ui renders sanely even before the
@@ -30,6 +31,9 @@ const defaults: UIPrefs = {
   sendDelaySeconds: 0,
   flagHighlight: 'flag',
   showShortcutHints: true,
+  coachHints: true,
+  coachHold: true,
+  showTips: true,
   harvestAddresses: true,
   showAccountEmail: false,
   alwaysLoadImages: false,
@@ -60,6 +64,13 @@ const defaults: UIPrefs = {
   swipeEnabled: true,
   swipeLeftAction: 'delete',
   swipeRightAction: 'unread',
+  swipeLeftShort: 'archive',
+  swipeLeftLong: 'delete',
+  swipeRightShort: 'read',
+  swipeRightLong: 'snooze',
+  rowActions: true,
+  rowActionList: 'archive,delete,done,snooze,pin',
+  htmlColors: 'auto',
   composeVimMode: false,
   downloadIncludeAttachments: true,
   appVimMode: false,
@@ -69,10 +80,46 @@ const defaults: UIPrefs = {
   defaultEditorMode: 'plaintext',
   composeAutocomplete: true,
   composeChips: true,
+  composeMarkdown: false,
+  smoothCaret: true,
   updateCheckFrequency: 'off',
   emptyStateImage: '',
   emptyStateFullscreen: false,
   cornerStyle: 'default',
+  design: 'new',
+  layoutMode: 'columns',
+  navStyle: 'rail',
+  railSide: 'left',
+  railPins: '',
+  spaceOrder: '',
+  hiddenSpaces: '',
+  paneStyle: 'hybrid',
+  avatarPlacement: 'inline',
+  contactsView: 'panes',
+  listHeight: 320,
+  nativeTitlebar: false,
+  quickFilterBar: false,
+  composeOpenIn: 'window',
+  threadedList: true,
+  afterMove: 'older',
+  afterReplySend: 'nothing',
+  sendRemindAfter: 'threeDays',
+  warnMissingAttachment: true,
+  warnEmptySubject: true,
+  splitInbox: false,
+  splitTabs: 'important,newsletters,notifications',
+  splitActive: '',
+  readerWidth: 'full',
+  senderPanel: false,
+  mailDates: true,
+  myDayPanel: false,
+  projectsView: 'grid',
+  projectSuggestions: true,
+  feedsRefreshMinutes: 30,
+  feedsKeepDays: 90,
+  feedsKeepCount: 500,
+  feedsLoadImages: false,
+  feedsMarkReadOnScroll: false,
   themeId: '',
   menuBarInApp: false,
   menuBarNativeMinimal: false,
@@ -85,20 +132,39 @@ const defaults: UIPrefs = {
   unreadBadge: true,
   themeDarkStart: '19:00',
   themeDarkEnd: '07:00',
-  bodyFont: 'default',
+  bodyFont: 'system',
   senderFonts: true,
   uiFont: 'default',
   monoFont: 'default',
   notifyNewMail: false,
+  notifyActionArchive: true,
+  notifyActionMarkRead: true,
+  notifyActionReply: true,
+  cleanLinks: false,
+  privacyCounters: true,
+  unsubscribeGraceDays: 10,
+  autoconfigLookup: 'ask',
   verboseSync: false,
   syncProgressBar: true,
   statusClock: true,
   statusUnread: true,
+  chatEnabled: false,
+  autoEncrypt: false,
+  chatSendReceipts: true,
+  chatSendTyping: true,
+  chatNotify: 'mentions',
+  chatMarkdown: true,
   markReadOnOpen: true,
   openOnArrow: false,
   signatureAboveQuote: false,
   closeAction: 'background',
   startHidden: false,
+  quickCompose: false,
+  quickComposeShortcut: '',
+  appLock: false,
+  appLockIdleMinutes: 5,
+  appLockOnLaunch: true,
+  appLockHideNotifications: true,
   syncMessageLimit: 100,
   syncAutoBackfill: true,
   syncMaxParallel: SYNC_PARALLEL_DEFAULT,
@@ -108,6 +174,15 @@ const defaults: UIPrefs = {
   logLevel: 'info',
   logMessageMetadata: false,
   crashLogs: false,
+  notesVault: '',
+  notesDailyFolder: 'Daily',
+  notesDailyFormat: 'YYYY-MM-DD',
+  notesDailyTemplate: '',
+  notesTemplatesFolder: 'Templates',
+  notesAttachmentsFolder: 'Attachments',
+  notesProjectsFolder: 'Projects',
+  notesEditorMode: 'live',
+  notesLineWidth: 'medium',
 }
 
 export const prefs = writable<UIPrefs>(defaults)
@@ -131,6 +206,7 @@ function applyAll(p: UIPrefs): void {
   applyUIFont(uiFontStack(p.uiFont))
   applyMonoFont(monoFontStack(p.monoFont))
   applyCorners(p.cornerStyle)
+  applyDesign(p.design, p.paneStyle)
   setLocale(p.language)
 }
 
@@ -153,6 +229,7 @@ export async function initPrefs(): Promise<void> {
   }
 
   applyAll(loaded)
+  void refreshWindowFrame()
 
   // a persisted custom theme applies after the base prefs so its base wins.
   // a missing or broken theme folder falls back to the default silently; the
@@ -232,6 +309,221 @@ export function setCornerStyle(value: string): void {
   void setSetting(SettingKeys.cornerStyle, value)
 }
 
+/** Switches between the redesign and the classic interface. */
+export function setDesign(design: DesignPref): void {
+  let pane: PaneStyle = defaults.paneStyle
+  prefs.update((p) => {
+    pane = p.paneStyle
+    return { ...p, design }
+  })
+  applyDesign(design, pane)
+  void setSetting(SettingKeys.design, design).then(refreshWindowFrame)
+}
+
+/** Arranges the mail panes side by side or with the list above the reader. */
+export function setLayoutMode(layoutMode: LayoutMode): void {
+  prefs.update((p) => ({ ...p, layoutMode }))
+  void setSetting(SettingKeys.layoutMode, layoutMode)
+}
+
+/** Places the Mail/Contacts/Calendar switcher. */
+export function setNavStyle(navStyle: NavStyle): void {
+  prefs.update((p) => ({ ...p, navStyle }))
+  void setSetting(SettingKeys.navStyle, navStyle)
+}
+
+/** The ids of the views pinned to the rail, in display order. */
+export function railPinIds(railPins: string): string[] {
+  return railPins === '' ? [] : railPins.split(',')
+}
+
+/** Pins a view to the rail, or takes it off again. */
+export function toggleRailPin(id: string): void {
+  prefs.update((p) => {
+    const ids = railPinIds(p.railPins)
+    const next = ids.includes(id) ? ids.filter((x) => x !== id) : [...ids, id]
+    const railPins = next.join(',')
+    void setSetting(SettingKeys.railPins, railPins)
+    return { ...p, railPins }
+  })
+}
+
+/** Stores the order of the spaces in the navigation, as a comma list of keys. */
+export function setSpaceOrder(spaceOrder: string): void {
+  prefs.update((p) => ({ ...p, spaceOrder }))
+  void setSetting(SettingKeys.spaceOrder, spaceOrder)
+}
+
+/** Stores the spaces left out of the navigation, as a comma list of keys. */
+export function setHiddenSpaces(hiddenSpaces: string): void {
+  prefs.update((p) => ({ ...p, hiddenSpaces }))
+  void setSetting(SettingKeys.hiddenSpaces, hiddenSpaces)
+}
+
+/** Moves the rail to the left or right window edge. */
+export function setRailSide(railSide: RailSide): void {
+  prefs.update((p) => ({ ...p, railSide }))
+  void setSetting(SettingKeys.railSide, railSide)
+}
+
+/** Picks how the panes are drawn in the new design. */
+export function setPaneStyle(paneStyle: PaneStyle): void {
+  let design: DesignPref = defaults.design
+  prefs.update((p) => {
+    design = p.design
+    return { ...p, paneStyle }
+  })
+  applyDesign(design, paneStyle)
+  void setSetting(SettingKeys.paneStyle, paneStyle)
+}
+
+/** Puts the sender picture in its own column, inline, or hides it. */
+export function setAvatarPlacement(avatarPlacement: AvatarPlacement): void {
+  prefs.update((p) => ({ ...p, avatarPlacement }))
+  void setSetting(SettingKeys.avatarPlacement, avatarPlacement)
+}
+
+/** Persists the message list height of the stacked layout. */
+export function setListHeight(listHeight: number): void {
+  prefs.update((p) => ({ ...p, listHeight }))
+  void setSetting(SettingKeys.listHeight, String(Math.round(listHeight)))
+}
+
+/** Chooses between the integrated title bar and the operating system's. */
+export function setNativeTitlebar(nativeTitlebar: boolean): void {
+  prefs.update((p) => ({ ...p, nativeTitlebar }))
+  void setSetting(SettingKeys.nativeTitlebar, String(nativeTitlebar)).then(refreshWindowFrame)
+}
+
+/** Shows or hides the quick filter bar above the message list. */
+export function setQuickFilterBar(quickFilterBar: boolean): void {
+  prefs.update((p) => ({ ...p, quickFilterBar }))
+  void setSetting(SettingKeys.quickFilterBar, String(quickFilterBar))
+}
+
+/** Chooses between the list with a detail pane and the card grid in Contacts. */
+export function setContactsView(contactsView: ContactsView): void {
+  prefs.update((p) => ({ ...p, contactsView }))
+  void setSetting(SettingKeys.contactsView, contactsView)
+}
+
+/** Picks where a new message, reply or forward opens in the new design. */
+export function setComposeOpenIn(composeOpenIn: ComposeOpenIn): void {
+  prefs.update((p) => ({ ...p, composeOpenIn }))
+  void setSetting(SettingKeys.composeOpenIn, composeOpenIn)
+}
+
+/** Groups the message list into conversations, or lists every message. */
+export function setThreadedList(threadedList: boolean): void {
+  prefs.update((p) => ({ ...p, threadedList }))
+  void setSetting(SettingKeys.threadedList, String(threadedList))
+}
+
+/** Picks what the reader opens after the open message is archived, deleted or moved. */
+export function setAfterMove(afterMove: AfterMove): void {
+  prefs.update((p) => ({ ...p, afterMove }))
+  void setSetting(SettingKeys.afterMove, afterMove)
+}
+
+/** Picks what plain Send does with the conversation a reply answered. */
+export function setAfterReplySend(afterReplySend: AfterReplySend): void {
+  prefs.update((p) => ({ ...p, afterReplySend }))
+  void setSetting(SettingKeys.afterReplySend, afterReplySend)
+}
+
+/** Picks when Send and remind sets its reminder. */
+export function setSendRemindAfter(sendRemindAfter: FollowUpInterval): void {
+  prefs.update((p) => ({ ...p, sendRemindAfter }))
+  void setSetting(SettingKeys.sendRemindAfter, sendRemindAfter)
+}
+
+/** Turns the missing attachment check before sending on or off. */
+export function setWarnMissingAttachment(warnMissingAttachment: boolean): void {
+  prefs.update((p) => ({ ...p, warnMissingAttachment }))
+  void setSetting(SettingKeys.warnMissingAttachment, String(warnMissingAttachment))
+}
+
+/** Turns the empty subject check before sending on or off. */
+export function setWarnEmptySubject(warnEmptySubject: boolean): void {
+  prefs.update((p) => ({ ...p, warnEmptySubject }))
+  void setSetting(SettingKeys.warnEmptySubject, String(warnEmptySubject))
+}
+
+/** Turns the split inbox on or off. */
+export function setSplitInbox(splitInbox: boolean): void {
+  prefs.update((p) => ({ ...p, splitInbox }))
+  void setSetting(SettingKeys.splitInbox, String(splitInbox))
+}
+
+/** Stores the split inbox tab order, comma separated, without the catch-all. */
+export function setSplitTabs(splitTabs: string): void {
+  prefs.update((p) => ({ ...p, splitTabs }))
+  void setSetting(SettingKeys.splitTabs, splitTabs)
+}
+
+/** Remembers the split inbox tab last shown. */
+export function setSplitActive(splitActive: string): void {
+  prefs.update((p) => ({ ...p, splitActive }))
+  void setSetting(SettingKeys.splitActive, splitActive)
+}
+
+/** Picks how wide the reading column runs in the new design. */
+export function setReaderWidth(readerWidth: ReaderWidth): void {
+  prefs.update((p) => ({ ...p, readerWidth }))
+  void setSetting(SettingKeys.readerWidth, readerWidth)
+}
+
+/** Shows or hides the sender panel beside the reader in the new design. */
+export function setSenderPanel(senderPanel: boolean): void {
+  prefs.update((p) => ({ ...p, senderPanel }))
+  void setSetting(SettingKeys.senderPanel, String(senderPanel))
+}
+
+/** Turns the marking of dates in an open mail on or off. */
+export function setMailDates(mailDates: boolean): void {
+  prefs.update((p) => ({ ...p, mailDates }))
+  void setSetting(SettingKeys.mailDates, String(mailDates))
+}
+
+/** Shows or hides the My Day panel beside the mail surface. */
+export function setMyDayPanel(myDayPanel: boolean): void {
+  prefs.update((p) => ({ ...p, myDayPanel }))
+  void setSetting(SettingKeys.myDayPanel, String(myDayPanel))
+}
+
+/** Lists projects as a grid of tiles or as rows. */
+export function setProjectsView(projectsView: ProjectsView): void {
+  prefs.update((p) => ({ ...p, projectsView }))
+  void setSetting(SettingKeys.projectsView, projectsView)
+}
+
+/** Turns the reader's "add to project" suggestions on or off. */
+export function setProjectSuggestions(projectSuggestions: boolean): void {
+  prefs.update((p) => ({ ...p, projectSuggestions }))
+  void setSetting(SettingKeys.projectSuggestions, String(projectSuggestions))
+}
+
+/** The Feeds preferences a setter takes, by name. */
+export type FeedPrefs = Pick<UIPrefs, 'feedsRefreshMinutes' | 'feedsKeepDays' | 'feedsKeepCount' | 'feedsLoadImages' | 'feedsMarkReadOnScroll'>
+
+/** Saves one Feeds preference: refresh interval, retention, images or mark on scroll. */
+export function setFeedPref<K extends keyof FeedPrefs>(key: K, value: FeedPrefs[K]): void {
+  prefs.update((p) => ({ ...p, [key]: value }))
+  void setSetting(SettingKeys[key], String(value))
+}
+
+/** Turns the gliding caret of the compose editor on or off. */
+export function setSmoothCaret(smoothCaret: boolean): void {
+  prefs.update((p) => ({ ...p, smoothCaret }))
+  void setSetting(SettingKeys.smoothCaret, String(smoothCaret))
+}
+
+/** Turns Markdown conversion in the compose editor on or off. */
+export function setComposeMarkdown(composeMarkdown: boolean): void {
+  prefs.update((p) => ({ ...p, composeMarkdown }))
+  void setSetting(SettingKeys.composeMarkdown, String(composeMarkdown))
+}
+
 export function setDensity(density: DensityPref): void {
   prefs.update((p) => ({ ...p, density }))
   applyDensity(density)
@@ -275,6 +567,49 @@ export function setFlagColorSync(value: boolean): void {
 export function setNotifyNewMail(value: boolean): void {
   prefs.update((p) => ({ ...p, notifyNewMail: value }))
   void setSetting(SettingKeys.notifyNewMail, String(value))
+}
+
+/** The buttons a new-mail notification can carry. */
+export type NotifyAction = 'archive' | 'markRead' | 'reply'
+
+const notifyActionKeys = {
+  archive: ['notifyActionArchive', SettingKeys.notifyActionArchive],
+  markRead: ['notifyActionMarkRead', SettingKeys.notifyActionMarkRead],
+  reply: ['notifyActionReply', SettingKeys.notifyActionReply],
+} as const
+
+// setNotifyAction shows or hides one button on new-mail notifications.
+export function setNotifyAction(action: NotifyAction, value: boolean): void {
+  const [field, key] = notifyActionKeys[action]
+  prefs.update((p) => ({ ...p, [field]: value }))
+  void setSetting(key, String(value))
+}
+
+// setCleanLinks turns tracking and redirect cleaning of opened links on or off.
+export function setCleanLinks(value: boolean): void {
+  prefs.update((p) => ({ ...p, cleanLinks: value }))
+  void setSetting(SettingKeys.cleanLinks, String(value))
+}
+
+/** Turns the tracking report's counters on or off. */
+export function setPrivacyCounters(value: boolean): void {
+  prefs.update((p) => ({ ...p, privacyCounters: value }))
+  void setSetting(SettingKeys.privacyCounters, String(value))
+}
+
+/** Sets how many days after an unsubscribe mail may still come. */
+export function setUnsubscribeGraceDays(days: number): void {
+  prefs.update((p) => ({ ...p, unsubscribeGraceDays: days }))
+  void setSetting(SettingKeys.unsubscribeGraceDays, String(days))
+}
+
+/**
+ * Sets whether the add-mailbox wizard may look up a typed address's domain.
+ * Resolves once stored, since the backend refuses lookups until it is.
+ */
+export function setAutoconfigLookup(value: AutoconfigLookup): Promise<void> {
+  prefs.update((p) => ({ ...p, autoconfigLookup: value }))
+  return setSetting(SettingKeys.autoconfigLookup, value)
 }
 
 // setShowOfflineIndicator toggles the little downloaded badge on pinned messages.
@@ -349,6 +684,33 @@ export function setSwipeRightAction(action: string): void {
   void setSetting(SettingKeys.swipeRightAction, action)
 }
 
+/** The four swipe slots of the new design. */
+export type SwipeSlot = 'swipeLeftShort' | 'swipeLeftLong' | 'swipeRightShort' | 'swipeRightLong'
+
+/** Sets what one swipe of the new design does: a row action id or 'none'. */
+export function setSwipeSlot(slot: SwipeSlot, action: string): void {
+  prefs.update((p) => ({ ...p, [slot]: action }))
+  void setSetting(SettingKeys[slot], action)
+}
+
+/** Turns the quick buttons over a hovered row on or off. */
+export function setRowActions(value: boolean): void {
+  prefs.update((p) => ({ ...p, rowActions: value }))
+  void setSetting(SettingKeys.rowActions, String(value))
+}
+
+/** Stores which quick buttons a row shows, in order, comma separated. */
+export function setRowActionList(value: string): void {
+  prefs.update((p) => ({ ...p, rowActionList: value }))
+  void setSetting(SettingKeys.rowActionList, value)
+}
+
+/** Sets how html mail is coloured in a dark theme. */
+export function setHtmlColors(value: HtmlColors): void {
+  prefs.update((p) => ({ ...p, htmlColors: value }))
+  void setSetting(SettingKeys.htmlColors, value)
+}
+
 // setComposeVimMode toggles vim keybindings in the compose editor.
 export function setComposeVimMode(value: boolean): void {
   prefs.update((p) => ({ ...p, composeVimMode: value }))
@@ -401,6 +763,8 @@ export function setComposeChips(value: boolean): void {
   prefs.update((p) => ({ ...p, composeChips: value }))
   void setSetting(SettingKeys.composeChips, String(value))
 }
+
+/** Sets whether the composer formats Markdown as it is typed. */
 
 // setUpdateCheckFrequency persists how often the app checks GitHub releases
 // for a newer version: 'off', 'startup', 'weekly', or 'monthly'.
@@ -567,6 +931,48 @@ export function setStatusUnread(value: boolean): void {
   void setSetting(SettingKeys.statusUnread, String(value))
 }
 
+// setChatEnabled turns the chat space on or off. The backend starts or stops
+// the chat account to match.
+export function setChatEnabled(value: boolean): void {
+  prefs.update((p) => ({ ...p, chatEnabled: value }))
+  void setSetting(SettingKeys.chatEnabled, String(value))
+}
+
+// setAutoEncrypt switches automatic encryption on with the sources the user
+// allowed in its setup, or off. The backend makes the keys.
+export async function setAutoEncrypt(value: boolean, sources?: KeySources): Promise<void> {
+  if (value && sources) {
+    await enableAutoEncrypt(sources)
+  } else {
+    await setSetting(SettingKeys.autoEncrypt, String(value))
+  }
+  prefs.update((p) => ({ ...p, autoEncrypt: value }))
+}
+
+// setChatSendReceipts picks public (on) or private (off) chat read receipts.
+export function setChatSendReceipts(value: boolean): void {
+  prefs.update((p) => ({ ...p, chatSendReceipts: value }))
+  void setSetting(SettingKeys.chatSendReceipts, String(value))
+}
+
+// setChatSendTyping picks whether chat rooms see the user typing.
+export function setChatSendTyping(value: boolean): void {
+  prefs.update((p) => ({ ...p, chatSendTyping: value }))
+  void setSetting(SettingKeys.chatSendTyping, String(value))
+}
+
+// setChatNotify picks which chat messages raise a notification.
+export function setChatNotify(value: ChatNotifyMode): void {
+  prefs.update((p) => ({ ...p, chatNotify: value }))
+  void setSetting(SettingKeys.chatNotify, value)
+}
+
+// setChatMarkdown picks whether chat messages are sent as Markdown.
+export function setChatMarkdown(value: boolean): void {
+  prefs.update((p) => ({ ...p, chatMarkdown: value }))
+  void setSetting(SettingKeys.chatMarkdown, String(value))
+}
+
 // setMarkReadOnOpen picks whether opening a message marks it read.
 export function setMarkReadOnOpen(value: boolean): void {
   prefs.update((p) => ({ ...p, markReadOnOpen: value }))
@@ -596,6 +1002,42 @@ export function setCloseAction(value: CloseAction): void {
 export function setStartHidden(value: boolean): void {
   prefs.update((p) => ({ ...p, startHidden: value }))
   void setSetting(SettingKeys.startHidden, String(value))
+}
+
+/**
+ * Turns quick compose on or off with a shortcut. The store follows only what
+ * the backend actually registered and stored; the returned status says why a
+ * shortcut was refused.
+ */
+export async function setQuickComposePref(enabled: boolean, shortcut: string): Promise<QuickComposeStatus> {
+  const status = await setQuickCompose(enabled, shortcut)
+  if (!status.error) {
+    prefs.update((p) => ({ ...p, quickCompose: status.enabled, quickComposeShortcut: status.shortcut }))
+  }
+  return status
+}
+
+/** Records in the store that the app lock was turned on or off by the backend. */
+export function noteAppLock(on: boolean): void {
+  prefs.update((p) => ({ ...p, appLock: on }))
+}
+
+/** Sets how many idle minutes lock the app; 0 locks only on demand and at launch. */
+export function setAppLockIdleMinutes(value: number): void {
+  prefs.update((p) => ({ ...p, appLockIdleMinutes: value }))
+  void setSetting(SettingKeys.appLockIdleMinutes, String(value))
+}
+
+/** Picks whether Pelton starts locked while the lock is on. */
+export function setAppLockOnLaunch(value: boolean): void {
+  prefs.update((p) => ({ ...p, appLockOnLaunch: value }))
+  void setSetting(SettingKeys.appLockOnLaunch, String(value))
+}
+
+/** Picks whether notifications leave out senders and subjects while locked. */
+export function setAppLockHideNotifications(value: boolean): void {
+  prefs.update((p) => ({ ...p, appLockHideNotifications: value }))
+  void setSetting(SettingKeys.appLockHideNotifications, String(value))
 }
 
 // setSyncMessageLimit sets how many of each folder's newest message bodies are
@@ -668,6 +1110,24 @@ export function setFlagHighlight(style: string): void {
 export function setShortcutHints(value: boolean): void {
   prefs.update((p) => ({ ...p, showShortcutHints: value }))
   void setSetting(SettingKeys.shortcutHints, String(value))
+}
+
+/** Turns the hint that names the key after a mouse action on or off. */
+export function setCoachHints(value: boolean): void {
+  prefs.update((p) => ({ ...p, coachHints: value }))
+  void setSetting(SettingKeys.coachHints, String(value))
+}
+
+/** Turns the shortcut sheet shown while the modifier is held on or off. */
+export function setCoachHold(value: boolean): void {
+  prefs.update((p) => ({ ...p, coachHold: value }))
+  void setSetting(SettingKeys.coachHold, String(value))
+}
+
+/** Turns the one-time tips on or off. */
+export function setShowTips(value: boolean): void {
+  prefs.update((p) => ({ ...p, showTips: value }))
+  void setSetting(SettingKeys.showTips, String(value))
 }
 
 // setHarvestAddresses toggles learning addresses from mail for autocomplete.
@@ -771,6 +1231,38 @@ export function setLogMessageMetadata(value: boolean): void {
 export function setCrashLogs(value: boolean): void {
   prefs.update((p) => ({ ...p, crashLogs: value }))
   void setSetting(SettingKeys.crashLogs, String(value))
+}
+
+/** The notes preferences that are plain strings, settable through setNotesPref. */
+export type NotesPrefKey =
+  | 'notesDailyFolder'
+  | 'notesDailyFormat'
+  | 'notesDailyTemplate'
+  | 'notesTemplatesFolder'
+  | 'notesAttachmentsFolder'
+  | 'notesProjectsFolder'
+
+/** setNotesPref stores one of the notes space's folder and naming settings. */
+export function setNotesPref(key: NotesPrefKey, value: string): void {
+  prefs.update((p) => ({ ...p, [key]: value }))
+  void setSetting(SettingKeys[key], value)
+}
+
+/** setNotesEditorMode sets the mode a note opens in. */
+export function setNotesEditorMode(value: NoteEditorMode): void {
+  prefs.update((p) => ({ ...p, notesEditorMode: value }))
+  void setSetting(SettingKeys.notesEditorMode, value)
+}
+
+/** setNotesLineWidth caps how wide a note's text runs. */
+export function setNotesLineWidth(value: ReaderWidth): void {
+  prefs.update((p) => ({ ...p, notesLineWidth: value }))
+  void setSetting(SettingKeys.notesLineWidth, value)
+}
+
+/** setNotesVaultPref mirrors the notes folder after the backend changed it. */
+export function setNotesVaultPref(value: string): void {
+  prefs.update((p) => ({ ...p, notesVault: value }))
 }
 
 // setSidebarIndentGuides toggles the nested-folder guide lines.
