@@ -63,18 +63,56 @@ func (a *App) scriptLimiter() *mcpserver.ScriptLimiter {
 	return a.mcpScriptLimits
 }
 
-// englishText resolves a localization key from the embedded English catalog.
-func (a *App) englishText(key string) string {
-	a.englishOnce.Do(func() { a.english = scriptref.EnglishStrings(a.englishStrings) })
-	return a.english[key]
-}
-
 func (m *mcpScripts) Reference(context.Context) (*scriptref.Reference, error) {
 	svc, err := m.app.scriptService()
 	if err != nil {
 		return nil, err
 	}
-	return scriptref.Build(svc.Registry(), m.app.englishText), nil
+	return scriptref.Build(svc.Registry()), nil
+}
+
+func templateSummary(t scripting.Template) mcpserver.ScriptTemplate {
+	return mcpserver.ScriptTemplate{ID: t.ID, Name: t.Label, Description: t.Description, Kind: string(t.Kind), Trigger: t.Trigger.Type}
+}
+
+// ListScriptTemplates lists the gallery's templates that compile with what
+// this app offers now.
+func (m *mcpScripts) ListScriptTemplates(context.Context) ([]mcpserver.ScriptTemplate, error) {
+	svc, err := m.app.scriptService()
+	if err != nil {
+		return nil, err
+	}
+	out := []mcpserver.ScriptTemplate{}
+	for _, t := range svc.Registry().Templates() {
+		if t.Missing == "" {
+			out = append(out, templateSummary(t))
+		}
+	}
+	return out, nil
+}
+
+// GetScriptTemplate hands out one template as a draft for create_script.
+func (m *mcpScripts) GetScriptTemplate(_ context.Context, id string) (*mcpserver.ScriptTemplateDetail, error) {
+	svc, err := m.app.scriptService()
+	if err != nil {
+		return nil, err
+	}
+	t, ok := svc.Registry().Template(id)
+	if !ok {
+		return nil, fmt.Errorf("there is no template %q; list_script_templates lists them", id)
+	}
+	d := mcpserver.ScriptDraft{
+		Name: t.Label, Description: t.Description, Kind: string(t.Kind), Source: t.Source,
+		Trigger:     mcpserver.ScriptTrigger{Type: t.Trigger.Type, Params: t.Trigger.Params},
+		Permissions: orEmpty(t.Permissions),
+	}
+	if t.Blocks != nil {
+		d.Blocks = t.Blocks
+	}
+	if len(t.Settings) > 0 {
+		d.Settings = anyList(t.Settings)
+	}
+	return &mcpserver.ScriptTemplateDetail{ScriptTemplate: templateSummary(t), Script: d}, nil
 }
 
 func (m *mcpScripts) ListScripts(ctx context.Context) ([]mcpserver.ScriptSummary, error) {
@@ -532,8 +570,10 @@ type ScriptProposalDTO struct {
 	AddedPermissions   []string `json:"addedPermissions"`
 	RemovedPermissions []string `json:"removedPermissions"`
 	// ResetsApproval says accepting switches the script off and clears its
-	// approvals and allowances, because its code or permissions change.
-	ResetsApproval bool `json:"resetsApproval"`
+	// approvals and allowances, and ResetReasons says which changes do that:
+	// code, trigger, permissions, triggerParams or placements.
+	ResetsApproval bool     `json:"resetsApproval"`
+	ResetReasons   []string `json:"resetReasons"`
 	// Problem is set when the proposal can no longer be applied, e.g. it
 	// names a trigger that is gone; it can still be rejected.
 	Problem string `json:"problem"`
@@ -557,7 +597,7 @@ func (a *App) loadProposal(svc *scripting.Service, id int64) (*scriptProposal, *
 // ScriptProposal returns the change an agent proposed to a script, with a
 // line diff against the script as it is.
 func (a *App) ScriptProposal(id int64) (ScriptProposalDTO, error) {
-	out := ScriptProposalDTO{ScriptID: id, Diff: []ScriptDiffLineDTO{}, AddedPermissions: []string{}, RemovedPermissions: []string{}}
+	out := ScriptProposalDTO{ScriptID: id, Diff: []ScriptDiffLineDTO{}, AddedPermissions: []string{}, RemovedPermissions: []string{}, ResetReasons: []string{}}
 	svc, err := a.scriptService()
 	if err != nil {
 		return out, err
@@ -586,20 +626,24 @@ func (a *App) ScriptProposal(id int64) (ScriptProposalDTO, error) {
 			out.RemovedPermissions = append(out.RemovedPermissions, perm)
 		}
 	}
-	out.ResetsApproval = codeChanged(cur, next) && (cur.Enabled || len(cur.Approved) > 0 || len(cur.AllowUnasked) > 0)
+	if cur.Enabled || len(cur.Approved) > 0 || len(cur.AllowUnasked) > 0 {
+		reasons, err := svc.AssistantChanges(a.ctx, next)
+		if err != nil {
+			out.Problem = err.Error()
+			return out, nil
+		}
+		out.ResetReasons = orEmpty(reasons)
+		out.ResetsApproval = len(reasons) > 0
+	}
 	return out, nil
 }
 
 // AcceptScriptProposal applies a proposed change. When it changes the code,
-// the trigger or the declared permissions of a script that was on or
-// approved, the script is switched off and its approvals and allowances are
-// cleared, so the user approves the new version afresh.
+// the trigger or its parameters, the declared permissions or where the
+// script is placed, the update switches the script off and clears its
+// approvals and allowances, so the user approves the new version afresh.
 func (a *App) AcceptScriptProposal(id int64) (ScriptDTO, error) {
 	svc, err := a.scriptService()
-	if err != nil {
-		return ScriptDTO{}, err
-	}
-	cur, err := svc.Script(a.ctx, id)
 	if err != nil {
 		return ScriptDTO{}, err
 	}
@@ -610,19 +654,9 @@ func (a *App) AcceptScriptProposal(id int64) (ScriptDTO, error) {
 	if p == nil {
 		return ScriptDTO{}, fmt.Errorf("pelton: there is no proposed change to this script")
 	}
-	reset := codeChanged(cur, next)
-	out, err := svc.Update(a.ctx, next)
+	out, _, err := svc.UpdateFromAssistant(a.ctx, next)
 	if err != nil {
 		return ScriptDTO{}, err
-	}
-	if reset && (out.Enabled || len(out.Approved) > 0 || len(out.AllowUnasked) > 0) {
-		out.Enabled, out.Approved, out.AllowUnasked = false, nil, nil
-		if err := svc.Store().Update(a.ctx, out); err != nil {
-			return ScriptDTO{}, err
-		}
-		if out, err = svc.SetEnabled(a.ctx, id, false, nil); err != nil {
-			return ScriptDTO{}, err
-		}
 	}
 	a.dropScriptProposal(id)
 	a.recordAgentAction(mcpserver.ToolUpdateScript, 0, fmt.Sprintf("you accepted a proposed change to the script %q", out.Name), nil)
@@ -639,21 +673,6 @@ func (a *App) RejectScriptProposal(id int64) error {
 	a.recordAgentAction(mcpserver.ToolUpdateScript, 0, "you rejected a proposed change to a script", nil)
 	a.emit(EventAssistantScript, AssistantScriptDTO{ScriptID: id, Action: "rejected"})
 	return nil
-}
-
-// codeChanged reports whether next differs from cur in what a run does or
-// may do: kind, code, trigger or declared permissions.
-func codeChanged(cur, next *scripting.Script) bool {
-	if cur.Kind != next.Kind || cur.Source != next.Source || cur.Trigger.Type != next.Trigger.Type {
-		return true
-	}
-	if mustJSONText(cur.Blocks) != mustJSONText(next.Blocks) || mustJSONText(cur.Trigger.Params) != mustJSONText(next.Trigger.Params) {
-		return true
-	}
-	a, b := slices.Clone(cur.Permissions), slices.Clone(next.Permissions)
-	slices.Sort(a)
-	slices.Sort(b)
-	return !slices.Equal(a, b)
 }
 
 func mustJSONText(v any) string {

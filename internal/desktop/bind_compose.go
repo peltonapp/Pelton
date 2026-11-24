@@ -9,7 +9,9 @@ import (
 	"strings"
 	"time"
 
+	"github.com/peltonapp/Pelton/internal/desktop/syncsched"
 	"github.com/peltonapp/Pelton/internal/outbox"
+	"github.com/peltonapp/Pelton/internal/scripting"
 	"github.com/peltonapp/Pelton/internal/smtp"
 	"github.com/peltonapp/Pelton/internal/storage"
 )
@@ -75,6 +77,14 @@ type ComposeRequest struct {
 	// ProjectID files the message under a project once it is queued, with
 	// the replies it gets. 0 files it nowhere.
 	ProjectID int64 `json:"projectId"`
+	// AutoEncrypt marks a message from the composer of automatic encryption:
+	// keys come from everything Pelton learned rather than the keyring alone,
+	// Bcc recipients are hidden, and a reply to encrypted mail is not sent in
+	// the clear without PlaintextConfirmed.
+	AutoEncrypt bool `json:"autoEncrypt"`
+	// PlaintextConfirmed is the user's deliberate choice to send a reply to an
+	// encrypted message without encryption.
+	PlaintextConfirmed bool `json:"plaintextConfirmed"`
 }
 
 // SendMessage builds the mime message and enqueues it in the durable outbox. The
@@ -123,7 +133,7 @@ func (a *App) sendMessage(ctx context.Context, req ComposeRequest) (int64, error
 	if err != nil {
 		return 0, err
 	}
-	mode, opts, engine, err := a.protectionOptions(*account, req)
+	mode, opts, engine, used, err := a.messageProtection(*account, req, msg)
 	if err != nil {
 		return 0, err
 	}
@@ -140,6 +150,10 @@ func (a *App) sendMessage(ctx context.Context, req ComposeRequest) (int64, error
 		return 0, err
 	}
 	a.sentRequests.Store(id, req)
+	a.pinUsedKeys(used)
+	if info, ok := scripting.RunInfoFrom(ctx); ok {
+		a.scriptState.sentBy.Store(id, info)
+	}
 	a.activity.Add(outbox.Entry{MessageID: id, Step: outbox.StepQueued, Recipients: msg.Recipients()})
 	a.emit(EventOutboxChanged, nil)
 	a.recordFollowUp(req, id, msg.MessageID, followUp, notBefore)
@@ -155,6 +169,7 @@ func (a *App) sendMessage(ctx context.Context, req ComposeRequest) (int64, error
 			}
 		}
 	}
+	forgetKnownPeople()
 	return id, nil
 }
 
@@ -623,13 +638,8 @@ func (a *App) UploadDraft(id int64) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	cfg, err := a.resolveIMAP(*account)
-	if err != nil {
-		return "", err
-	}
-	// no syncMu: a sync can hold it for minutes, and saving a draft must not
-	// wait for that. A second short login is the cheaper cost.
-	if err := a.withIMAPSession(cfg, func(client mailClient) error {
+	// a fast-lane task: it does not wait behind a long sync.
+	if err := a.runNow(a.ctx, *account, syncsched.KindSentCopy, 0, func(_ context.Context, client mailClient) error {
 		return client.ReplaceDraft(mailbox, raw, messageID)
 	}); err != nil {
 		return "", err
@@ -682,12 +692,7 @@ func (a *App) RemoveServerDraft(accountID int64, messageID string) error {
 	if err != nil {
 		return err
 	}
-	cfg, err := a.resolveIMAP(*account)
-	if err != nil {
-		return err
-	}
-	// no syncMu, for the same reason as UploadDraft.
-	if err := a.withIMAPSession(cfg, func(client mailClient) error {
+	if err := a.runNow(a.ctx, *account, syncsched.KindMove, 0, func(_ context.Context, client mailClient) error {
 		return client.RemoveDraft(mailbox, messageID)
 	}); err != nil {
 		return err
@@ -734,7 +739,7 @@ func (a *App) OpenDraft(messageID int64) (DraftDTO, error) {
 	if err := a.ready(); err != nil {
 		return DraftDTO{}, err
 	}
-	m, err := a.store.GetMessage(a.ctx, messageID)
+	m, err := a.store.GetMessage(a.mailCtx(), messageID)
 	if err != nil {
 		return DraftDTO{}, err
 	}

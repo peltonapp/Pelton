@@ -38,12 +38,8 @@ type Reference struct {
 	entries  []Entry
 }
 
-// Texts resolves a localization key to English text, "" when unknown.
-type Texts func(key string) string
-
 // builder collects one section's introduction and entries.
 type builder struct {
-	text    Texts
 	section string
 	title   string
 	intro   string
@@ -72,19 +68,16 @@ func (b *builder) done() (Section, []Entry) {
 	return Section{ID: b.section, Title: b.title, Body: strings.TrimRight(body.String(), "\n") + "\n"}, all
 }
 
-// Build renders r. text resolves the localization keys the built-in entries
-// carry instead of English text; nil leaves those descriptions out.
-func Build(r *scripting.Registry, text Texts) *Reference {
-	if text == nil {
-		text = func(string) string { return "" }
-	}
+// Build renders r. The English text comes from the entries themselves, which
+// registration fills from the scripting package's English catalog.
+func Build(r *scripting.Registry) *Reference {
 	cat := r.Catalog()
 	ref := &Reference{}
 	for _, f := range []func(*builder, scripting.Catalog){
 		overview, luaSection, modules, triggers, conditions, actions, valueTypes,
 		permissions, blocksSection, settingsSection, uiSection, placements, limitsSection, formatSection,
 	} {
-		b := &builder{text: text}
+		b := &builder{}
 		f(b, cat)
 		s, entries := b.done()
 		ref.sections = append(ref.sections, s)
@@ -170,19 +163,9 @@ func (ref *Reference) Search(query string, limit int) []Entry {
 	return out
 }
 
-func (b *builder) label(m scripting.Meta) string {
-	if m.Label != "" {
-		return m.Label
-	}
-	return b.text(m.LabelKey)
-}
+func (b *builder) label(m scripting.Meta) string { return m.Label }
 
-func (b *builder) desc(m scripting.Meta) string {
-	if m.Description != "" {
-		return m.Description
-	}
-	return b.text(m.DescKey)
-}
+func (b *builder) desc(m scripting.Meta) string { return m.Description }
 
 // heading names an entry with its label when there is one.
 func (b *builder) heading(id string, m scripting.Meta) string {
@@ -229,17 +212,10 @@ func (b *builder) param(p scripting.Param) string {
 	}
 	line := fmt.Sprintf("- %s: %s; %s", p.Name, typ, strings.Join(notes, "; "))
 	label := p.Label
-	if label == "" {
-		label = b.text(p.LabelKey)
-	}
 	if strings.EqualFold(label, p.Name) || strings.EqualFold(label, string(p.Type)) {
 		label = ""
 	}
-	d := p.Description
-	if d == "" && p.DescKey != "" {
-		d = b.text(p.DescKey)
-	}
-	if extra := strings.TrimSpace(strings.Join(nonEmpty(label, d), ". ")); extra != "" {
+	if extra := strings.TrimSpace(strings.Join(nonEmpty(label, p.Description), ". ")); extra != "" {
 		line += ". " + extra
 	}
 	return line
@@ -277,12 +253,8 @@ func (b *builder) fields(title string, fs []scripting.Field) string {
 			typ += " of " + f.Of
 		}
 		line := fmt.Sprintf("- %s: %s", f.Name, typ)
-		label := f.Label
-		if label == "" {
-			label = b.text(f.LabelKey)
-		}
-		if label != "" {
-			line += ". " + label
+		if f.Label != "" {
+			line += ". " + f.Label
 		}
 		lines = append(lines, line)
 	}
@@ -314,7 +286,7 @@ Scripts an assistant creates or changes arrive switched off, marked as written b
 
 func luaSection(b *builder, _ scripting.Catalog) {
 	b.section, b.title = "lua", "Lua environment"
-	b.intro = `Scripts run in Lua 5.1 (gopher-lua) in a sandbox. Available standard globals: assert, error, ipairs, next, pairs, pcall, rawequal, rawget, rawset, select, setmetatable, getmetatable, tonumber, tostring, type, unpack, xpcall, _G, _VERSION, and the string, table and math libraries. There is no os, io, debug, load, loadstring, dofile, require or coroutine.
+	b.intro = `Scripts run in Lua 5.1 (gopher-lua) in a sandbox. Available standard globals: assert, error, ipairs, next, pairs, pcall, rawequal, rawget, rawset, select, setmetatable, getmetatable, tonumber, tostring, type, unpack, xpcall, _G, _VERSION, and the string, table and math libraries. There is no os, io, debug, load, loadstring, dofile or coroutine. require("name") loads a shared library the user wrote, by its name written out in the code; it runs with the calling script's permissions, once per run.
 
 string.dump is removed. string.find only searches plain text (pass true as the 4th argument). string.match, gmatch, gfind and gsub are refused: Lua patterns are not available; use text.match, text.find_all and text.replace, which take RE2 regular expressions. string.rep and string.format results are capped.
 
@@ -345,10 +317,6 @@ func modules(b *builder, cat scripting.Catalog) {
 			for _, p := range f.Params {
 				names = append(names, p.Name)
 			}
-			d := f.Description
-			if d == "" {
-				d = b.text(f.DescKey)
-			}
 			var flags []string
 			if f.Permission != "" {
 				flags = append(flags, "needs permission "+f.Permission)
@@ -369,7 +337,7 @@ func modules(b *builder, cat scripting.Catalog) {
 			}
 			b.add(full, paragraph(
 				fmt.Sprintf("#### %s(%s)", full, strings.Join(names, ", ")),
-				d,
+				f.Description,
 				b.params("Parameters", f.Params),
 				b.fields("Returns", f.Returns),
 				flagLine,

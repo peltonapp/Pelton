@@ -4,6 +4,7 @@
   // part marked. the backend runs it with the same RE2 engine and condition
   // code a script does, read only and within a time limit.
   import Select from '../common/Select.svelte'
+  import Live from './Live.svelte'
   import { t } from '../../lib/i18n'
   import { testScriptMatch } from '../../lib/api'
   import { formatDateTimeMedium } from '../../lib/format'
@@ -40,7 +41,11 @@
       .map((f) => f.imapPath || f.name),
   ].filter((f, i, all) => all.indexOf(f) === i)
   $: fieldItems = ['subject', 'from', 'to', 'body', 'headers'].map((f) => ({ value: f, label: $t(`scripts.match.field.${f}`) }))
-  $: patternProblem = !when && pattern ? re2Problem(pattern) : ''
+  $: summaryText =
+    report && !error
+      ? `${$t('scripts.match.count').replace('{n}', String(report.matched)).replace('{m}', String(report.scanned))}${report.timedOut ? `. ${$t('scripts.match.timedOut')}` : ''}`
+      : ''
+  $: patternProblem =!when && pattern ? re2Problem(pattern) : ''
 
   async function run(): Promise<void> {
     busy = true
@@ -87,7 +92,7 @@
     <div class="row">
       <label class="field grow">
         <span class="label">{$t('scripts.match.pattern')}</span>
-        <input class="cal-field mono" type="text" spellcheck="false" autocomplete="off" bind:value={pattern} aria-invalid={!!patternProblem} />
+        <input class="cal-field mono" type="text" spellcheck="false" autocomplete="off" bind:value={pattern} aria-invalid={!!patternProblem} aria-describedby={patternProblem ? `${idBase}-problem` : undefined} />
       </label>
       <div class="field">
         <span class="label" id={`${idBase}-field`}>{$t('scripts.match.field')}</span>
@@ -100,7 +105,7 @@
         </label>
       {/if}
     </div>
-    {#if patternProblem}<p class="problem">{$t(patternProblem)}</p>{/if}
+    {#if patternProblem}<p class="problem" id={`${idBase}-problem`}>{$t(patternProblem)}</p>{/if}
   {/if}
   <div class="row">
     <label class="field grow">
@@ -117,10 +122,12 @@
     <button type="submit" class="cal-btn primary" disabled={busy || (!when && (!pattern || !!patternProblem))}>{$t('scripts.match.run')}</button>
   </div>
 
+  <Live text={error} assertive />
+  <Live text={summaryText} />
   {#if error}
-    <p class="problem" role="alert">{error}</p>
+    <p class="problem">{error}</p>
   {:else if report}
-    <p class="summary" role="status">
+    <p class="summary">
       {$t('scripts.match.count').replace('{n}', String(report.matched)).replace('{m}', String(report.scanned))}
       {#if report.timedOut}<span class="warn">{$t('scripts.match.timedOut')}</span>{/if}
     </p>

@@ -13,7 +13,8 @@
   import PieProgress from '../common/PieProgress.svelte'
   import AnchoredPopover from '../common/AnchoredPopover.svelte'
   import OutboxList from './OutboxList.svelte'
-  import { outbox, syncing, syncCounts, syncFolder, lastSynced } from '../../stores/outbox'
+  import { outbox, syncing, syncCounts, syncFolder, syncPhase, lastSynced } from '../../stores/outbox'
+  import { buildSyncLabel } from '../../lib/syncstatus'
   import { errorMessage, toastError } from '../../stores/toast'
   import { isScheduled } from '../../lib/outboxactions'
   import { openOutboxWindow } from '../../lib/api'
@@ -49,10 +50,10 @@
       : waiting > 0
         ? $t('topbar.sending').replace('{count}', String(waiting))
         : $t('common.outboxPanel.title')
-  $: syncLine = $syncing
-    ? $syncFolder
-      ? $t('common.statusBar.syncingMailbox').replace('{mailbox}', $syncFolder)
-      : $t('common.statusBar.syncing')
+  // the phase of the run (listing, bodies, the background folder check) is
+  // said the way the status bar says it.
+  $: syncLine = $syncing || $syncPhase === 'verify'
+    ? buildSyncLabel(true, $syncPhase, $syncFolder, '', '', $syncCounts, $t)
     : $lastSynced
       ? `${$t('common.statusBar.synced')} ${relative($lastSynced, now)}`
       : ''

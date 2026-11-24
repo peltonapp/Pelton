@@ -91,7 +91,18 @@
     white-space: nowrap;
   }
 
+  .close::after {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: max(100%, var(--target-min));
+    height: max(100%, var(--target-min));
+    transform: translate(-50%, -50%);
+  }
+
   .close {
+    position: relative;
     display: inline-flex;
     margin-inline-start: auto;
     padding: var(--space-1);

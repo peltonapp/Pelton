@@ -1,7 +1,8 @@
 <script lang="ts">
   // the key a script placed as a shortcut answers to. It records and clears
   // through the same bindings store and conflict check as Settings > Shortcuts.
-  import { onDestroy } from 'svelte'
+  import { onDestroy, tick } from 'svelte'
+  import Live from './Live.svelte'
   import { get } from 'svelte/store'
   import { eventToCombo, scriptAction, shortcuts as registry } from '../../lib/shortcuts'
   import { shortcutLabel, t } from '../../lib/i18n'
@@ -12,14 +13,21 @@
 
   let capturing = false
   let conflict = ''
+  let said = ''
 
   $: action = scriptAction(scriptId)
   $: combo = $bindings[action] ?? ''
+
+  function say(text: string): void {
+    said = ''
+    void tick().then(() => (said = text))
+  }
 
   function start(): void {
     capturing = true
     conflict = ''
     recording.set(true)
+    say(`${get(t)('shortcuts.pressKeys')} Esc ${get(t)('shortcuts.toCancel')}`)
   }
 
   function stop(): void {
@@ -47,6 +55,7 @@
     event.stopPropagation()
     if (event.key === 'Escape') {
       stop()
+      say(get(t)('scripts.shortcut.cancelled'))
       return
     }
     const next = eventToCombo(event)
@@ -56,20 +65,24 @@
     const clash = conflictsFor(action, next)
     if (clash) {
       conflict = `${get(t)('shortcuts.alreadyUsedBy')} “${nameOf(clash)}”`
+      say(`${conflict}. ${get(t)('shortcuts.pickDifferent')}`)
       return
     }
     setBinding(action, next)
     stop()
+    say(get(t)('scripts.shortcut.set').replace('{combo}', shortcutLabel(next)))
   }
 
   function clear(): void {
     setBinding(action, '')
+    say(get(t)('scripts.shortcut.cleared'))
   }
 </script>
 
 <svelte:window on:keydown|capture={onKey} />
 
 <div class="field">
+  <Live text={said} />
   <div class="line">
     {#if capturing}
       <span class="recording">{$t('shortcuts.pressKeys')} <kbd>Esc</kbd> {$t('shortcuts.toCancel')}</span>

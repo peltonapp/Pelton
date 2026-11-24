@@ -8,7 +8,16 @@ import (
 	"testing"
 
 	"github.com/peltonapp/Pelton/internal/scripting"
+	"github.com/peltonapp/Pelton/internal/scripting/scriptingtest"
 )
+
+// TestAppRegistryIsLocalized checks the registry as the app builds it, every
+// package's entries included: each key is in en.ts and each entry has its
+// English text.
+func TestAppRegistryIsLocalized(t *testing.T) {
+	a, _ := newScriptTestApp(t)
+	scriptingtest.Localized(t, a.scripts.Registry())
+}
 
 func TestScriptsListAFolderAndTestMatches(t *testing.T) {
 	a, id := newScriptTestApp(t)
@@ -98,12 +107,92 @@ func TestTemplatesAndLibrariesThroughTheBindings(t *testing.T) {
 	if _, err := a.ImportScriptLibrary(file.Text); err != nil {
 		t.Fatal(err)
 	}
-	if err := a.DeleteScriptLibrary(lib.ID); err != nil {
+	if _, err := a.DeleteScriptLibrary(lib.Library.ID); err != nil {
 		t.Fatal(err)
 	}
 	run, err = a.TestScript(luaInput(`require("greet")`), 0)
 	if err != nil || run.Status != "error" || !strings.Contains(run.Error, `no library "greet"`) {
 		t.Fatalf("after delete: %+v %v", run, err)
+	}
+}
+
+// TestLibraryChangeTellsWhichScriptsItSwitchedOff checks that saving,
+// creating and deleting a library list the scripts they switch off, that the
+// impact is known before saving, and that each script keeps a note with the
+// change since its approval until it is switched on again.
+func TestLibraryChangeTellsWhichScriptsItSwitchedOff(t *testing.T) {
+	a, _ := newScriptTestApp(t)
+	lib, err := a.CreateScriptLibrary(ScriptLibraryInput{Name: "util", Source: "return { a = 1 }"})
+	if err != nil || len(lib.SwitchedOff) != 0 {
+		t.Fatalf("%+v %v", lib, err)
+	}
+	enabled := func(src string) ScriptDTO {
+		t.Helper()
+		sc, err := a.CreateScript(luaInput(src, scripting.PermNotify))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if sc, err = a.SetScriptEnabled(sc.ID, true, sc.Permissions); err != nil {
+			t.Fatal(err)
+		}
+		return sc
+	}
+	uses := enabled(`local u = require("util")`)
+	other := enabled(`print(1)`)
+
+	impact, err := a.ScriptLibraryImpact(lib.Library.ID, "util")
+	if err != nil || len(impact) != 1 || impact[0].ID != uses.ID || !impact[0].Enabled {
+		t.Fatalf("impact %+v %v", impact, err)
+	}
+	if note, _ := a.ScriptLibraryNote(uses.ID); note.Exists {
+		t.Fatalf("a note before any change: %+v", note)
+	}
+
+	saved, err := a.UpdateScriptLibrary(lib.Library.ID, ScriptLibraryInput{Name: "util", Source: "return { a = 2 }"})
+	if err != nil || len(saved.SwitchedOff) != 1 || saved.SwitchedOff[0].ID != uses.ID || saved.SwitchedOff[0].Name != uses.Name {
+		t.Fatalf("saved %+v %v", saved, err)
+	}
+	if _, err := a.UpdateScriptLibrary(lib.Library.ID, ScriptLibraryInput{Name: "util", Source: "return { a = 3 }"}); err != nil {
+		t.Fatal(err)
+	}
+	note, err := a.ScriptLibraryNote(uses.ID)
+	if err != nil || !note.Exists || note.Library != "util" || note.Deleted {
+		t.Fatalf("note %+v %v", note, err)
+	}
+	want := []ScriptDiffLineDTO{{Op: "-", Text: "return { a = 1 }"}, {Op: "+", Text: "return { a = 3 }"}}
+	if !slices.Equal(note.Diff, want) {
+		t.Fatalf("the note shows %+v, want the change since the approval", note.Diff)
+	}
+	if n, _ := a.ScriptLibraryNote(other.ID); n.Exists {
+		t.Fatal("a script that does not load the library got a note")
+	}
+
+	if _, err := a.SetScriptEnabled(uses.ID, true, uses.Permissions); err != nil {
+		t.Fatal(err)
+	}
+	if n, _ := a.ScriptLibraryNote(uses.ID); n.Exists {
+		t.Fatal("the note outlived the new approval")
+	}
+
+	gone, err := a.DeleteScriptLibrary(lib.Library.ID)
+	if err != nil || len(gone) != 1 || gone[0].ID != uses.ID {
+		t.Fatalf("deleted %+v %v", gone, err)
+	}
+	if n, _ := a.ScriptLibraryNote(uses.ID); !n.Exists || !n.Deleted {
+		t.Fatalf("note after delete %+v", n)
+	}
+	if _, err := a.SetScriptEnabled(uses.ID, true, uses.Permissions); err != nil {
+		t.Fatal(err)
+	}
+	back, err := a.CreateScriptLibrary(ScriptLibraryInput{Name: "util", Source: "return {}"})
+	if err != nil || len(back.SwitchedOff) != 1 {
+		t.Fatalf("recreated %+v %v", back, err)
+	}
+	if err := a.DeleteScript(uses.ID); err != nil {
+		t.Fatal(err)
+	}
+	if n, _ := a.ScriptLibraryNote(uses.ID); n.Exists {
+		t.Fatal("the note outlived its script")
 	}
 }
 
@@ -126,8 +215,8 @@ func TestDeletingAScriptDropsItsAIOptions(t *testing.T) {
 
 func TestScriptReference(t *testing.T) {
 	a, _ := newScriptTestApp(t)
-	md, err := a.ScriptReference(true)
-	if err != nil || !strings.Contains(md, "## Modules") || !strings.Contains(md, "### calendar") || !strings.Contains(md, "ai.draft_reply") {
+	md, err := a.ScriptReference()
+	if err != nil || !strings.Contains(md, "## Lua modules and functions") || !strings.Contains(md, "### module calendar") || !strings.Contains(md, "ai.draft_reply") {
 		t.Fatalf("markdown reference: %v\n%.400s", err, md)
 	}
 }

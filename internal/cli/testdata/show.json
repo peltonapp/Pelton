@@ -1,0 +1,31 @@
+{
+  "id": 42,
+  "accountId": 1,
+  "folderId": 3,
+  "folder": "INBOX",
+  "date": "2026-03-10T09:30:00Z",
+  "from": {
+    "name": "Ada \u202eLovelace",
+    "email": "ada@example.org"
+  },
+  "subject": "Hi \u001b[2J<there>",
+  "unread": true,
+  "flagged": false,
+  "attachments": true,
+  "to": "me@example.org",
+  "cc": "",
+  "replyTo": "",
+  "messageId": "<a@b>",
+  "text": "body\n",
+  "html": "",
+  "attachmentList": [
+    {
+      "id": 9,
+      "name": "a.pdf",
+      "contentType": "application/pdf",
+      "size": 3,
+      "inline": false
+    }
+  ],
+  "vault": false
+}

@@ -7,8 +7,10 @@ package main
 import (
 	"embed"
 	"os"
+	"runtime"
 	"slices"
 
+	"github.com/peltonapp/Pelton/internal/cli"
 	"github.com/peltonapp/Pelton/internal/desktop"
 	"github.com/peltonapp/Pelton/internal/storage"
 )
@@ -26,12 +28,6 @@ var licenseManifest string
 
 //go:embed LICENSE
 var programLicense string
-
-// englishStrings is the frontend's English catalog, which the scripting
-// reference an MCP agent reads takes its descriptions from.
-//
-//go:embed frontend/src/lib/locales/en.ts
-var englishStrings string
 
 // trayIcon is the tray icon for Windows and Linux (see the desktop package's
 // tray_windows.go and tray_linux.go). Embedded on every platform - it is a
@@ -54,6 +50,14 @@ var version = "dev"
 var channel = ""
 
 func main() {
+	// `pelton status`, `pelton list` and the rest are the command line tool,
+	// answered here before any window exists (internal/cli). Windows builds
+	// the app without a console, so there the tool is cmd/pelton.
+	if runtime.GOOS != "windows" && cli.IsCommand(os.Args[1:]) {
+		self, _ := os.Executable()
+		os.Exit(cli.Run(version, channel, self))
+	}
+
 	// --potatoes-are-nice launches a purely-cosmetic demo mode used for website
 	// screenshots: the ui shows fixed potato-themed sample data instead of real
 	// accounts and mail. Nothing else changes.
@@ -70,7 +74,6 @@ func main() {
 		Channel:         channel,
 		LicenseManifest: licenseManifest,
 		ProgramLicense:  programLicense,
-		EnglishStrings:  englishStrings,
 		TrayIcon:        tray,
 		DemoMode:        demoMode,
 	}); err != nil {

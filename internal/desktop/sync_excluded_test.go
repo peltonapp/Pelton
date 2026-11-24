@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/peltonapp/Pelton/internal/storage"
+	"github.com/peltonapp/Pelton/internal/storage/storagetest"
 )
 
 // TestExcludedFoldersAreNotSynced covers the filtering syncFolders does before
@@ -13,7 +14,7 @@ import (
 // 30k-message archive costs no round trips at all (#173).
 func TestExcludedFoldersAreNotSynced(t *testing.T) {
 	ctx, stopBackground := testContext(t)
-	db, err := storage.Open(filepath.Join(t.TempDir(), "test.db"))
+	db, err := storagetest.Open(filepath.Join(t.TempDir(), "test.db"))
 	if err != nil {
 		t.Fatalf("open: %v", err)
 	}

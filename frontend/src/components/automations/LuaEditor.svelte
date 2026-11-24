@@ -7,7 +7,7 @@
   import { createEventDispatcher, onDestroy, onMount } from 'svelte'
   import { EditorView, keymap, lineNumbers, highlightActiveLine, drawSelection } from '@codemirror/view'
   import { EditorSelection, EditorState, Compartment } from '@codemirror/state'
-  import { defaultKeymap, history, historyKeymap, indentWithTab } from '@codemirror/commands'
+  import { defaultKeymap, history, historyKeymap, indentLess, indentMore } from '@codemirror/commands'
   import riskIcon from '@phosphor-icons/core/assets/duotone/warning-duotone.svg?raw'
   import Ph from '../common/Ph.svelte'
   import { luaHighlight } from './lua/highlight'
@@ -40,6 +40,61 @@
   let problem = ''
 
   const complete = luaCompletion(() => (readonly ? null : assist))
+  const uid = `lua-${Math.random().toString(36).slice(2, 9)}`
+
+  // escape then tab leaves the editor; tab alone indents.
+  let leaving = false
+  let announced = ''
+  let announceTimer: ReturnType<typeof setTimeout> | undefined
+
+  const tabKeys = keymap.of([
+    {
+      key: 'Escape',
+      run: () => {
+        leaving = true
+        return false
+      },
+    },
+    { key: 'Tab', run: (v) => (leaving ? ((leaving = false), false) : indentMore(v)) },
+    { key: 'Shift-Tab', run: (v) => (leaving ? ((leaving = false), false) : indentLess(v)) },
+  ])
+
+  const resetLeaving = EditorView.domEventHandlers({
+    keydown: (e) => {
+      if (e.key !== 'Escape' && e.key !== 'Tab' && e.key !== 'Shift') {
+        leaving = false
+      }
+      return false
+    },
+    blur: () => {
+      leaving = false
+      return false
+    },
+  })
+
+  const assistAttrs = EditorView.contentAttributes.of((v) => {
+    if (!assist || readonly) {
+      return {}
+    }
+    const open = complete.current(v.state)
+    const attrs: Record<string, string> = {
+      'aria-haspopup': 'listbox',
+      'aria-autocomplete': 'list',
+      'aria-describedby': `${uid}-hint`,
+    }
+    if (open) {
+      attrs['aria-controls'] = `${uid}-list`
+      attrs['aria-activedescendant'] = `${uid}-opt-${open.selected}`
+    }
+    return attrs
+  })
+
+  // the docs line is read out once the caret rests, so moving through code
+  // does not chatter.
+  function announce(text: string): void {
+    clearTimeout(announceTimer)
+    announceTimer = setTimeout(() => (announced = text), 700)
+  }
 
   const theme = EditorView.theme({
     '&': { height: '100%', backgroundColor: 'transparent', color: 'var(--text-primary)' },
@@ -97,6 +152,7 @@
     const line = view.state.doc.lineAt(head)
     problem = markOn(view.state, line.number)
     doc = docAt(line.text, head - line.from, assist)
+    announce(problem || (doc ? [doc.title, doc.description].filter(Boolean).join('. ') : ''))
   }
 
   onMount(() => {
@@ -111,7 +167,10 @@
           drawSelection(),
           history(),
           complete.extension,
-          keymap.of([...defaultKeymap, ...historyKeymap, indentWithTab]),
+          resetLeaving,
+          tabKeys,
+          keymap.of([...defaultKeymap, ...historyKeymap]),
+          assistAttrs,
           EditorState.tabSize.of(2),
           editable.of(editableExt(readonly)),
           colours.of(luaHighlight(modules)),
@@ -132,6 +191,7 @@
   })
 
   onDestroy(() => {
+    clearTimeout(announceTimer)
     view?.destroy()
     view = null
   })
@@ -170,8 +230,12 @@
 
 <div class="lua-wrap">
   <div class="lua" class:readonly bind:this={el}></div>
+  {#if !readonly}
+    <p class="tab-hint" id={`${uid}-hint`}>{$t('scripts.lua.tabHint')}</p>
+  {/if}
+  <div class="sr-only" role="status">{announced}</div>
   {#if assist && !readonly && (problem || doc)}
-    <div class="docs" role="status" aria-live="polite">
+    <div class="docs">
       {#if problem}
         <span class="problem">{problem}</span>
       {:else if doc}
@@ -186,10 +250,10 @@
 </div>
 
 {#if completion && completionAt && view}
-  <div class="complete" role="listbox" aria-label={$t('scripts.lua.suggestions')} style={`left:${completionAt.left}px;top:${completionAt.top}px`}>
+  <div class="complete" id={`${uid}-list`} role="listbox" aria-label={$t('scripts.lua.suggestions')} style={`left:${completionAt.left}px;top:${completionAt.top}px`}>
     {#each completion.items as item, i (i)}
       <!-- svelte-ignore a11y-click-events-have-key-events -->
-      <div class="item" role="option" aria-selected={i === completion.selected} tabindex="-1" on:mousedown|preventDefault={() => view && complete.accept(view, i)}>
+      <div class="item" id={`${uid}-opt-${i}`} role="option" aria-selected={i === completion.selected} tabindex="-1" on:mousedown|preventDefault={() => view && complete.accept(view, i)}>
         <span class="label kind-{item.kind}">{item.label}</span>
         {#if item.detail}<span class="detail">{item.detail}</span>{/if}
       </div>
@@ -225,6 +289,12 @@
 
   .lua :global(.cm-editor) {
     height: 100%;
+  }
+
+  .tab-hint {
+    margin: 0;
+    font-size: var(--fz-meta);
+    color: var(--text-tertiary);
   }
 
   .docs {

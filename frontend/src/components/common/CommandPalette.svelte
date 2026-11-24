@@ -28,6 +28,10 @@
   import { space } from '../../stores/space'
   import { highlightRuns } from '../../lib/fuzzy'
   import { t, isMac, shortcutLabel } from '../../lib/i18n'
+  import { scriptEntryName, scriptText } from '../../lib/scriptmark'
+  import ScriptMark from './ScriptMark.svelte'
+  import { prefs } from '../../stores/prefs'
+  import { calm } from '../../lib/motion'
 
   /** Every command currently available, rebuilt by the parent as state changes. */
   export let commands: PaletteCommand[] = []
@@ -60,6 +64,40 @@
   $: if ($paletteOpen) {
     void focusInput()
   }
+
+  // the new design hands focus back to where it was when the palette closes.
+  let restoreTo: HTMLElement | null = null
+  let wasOpen = false
+  $: onOpenChange($paletteOpen)
+
+  function onOpenChange(open: boolean): void {
+    if (open === wasOpen) {
+      return
+    }
+    wasOpen = open
+    if ($prefs.design === 'classic') {
+      return
+    }
+    if (open) {
+      restoreTo = document.activeElement as HTMLElement | null
+      return
+    }
+    const target = restoreTo
+    restoreTo = null
+    void tick().then(() => {
+      const now = document.activeElement
+      if (target?.isConnected && (!now || now === document.body)) {
+        target.focus()
+      }
+    })
+  }
+
+  $: resultsStatus =
+    results.length > 0
+      ? $t('a11y.results').replace('{count}', String(results.length))
+      : parsed.text !== '' && !(prefix === 'mail' && $paletteMailBusy)
+        ? $t('palette.noResults')
+        : ''
 
   // group headers only earn their space when more than one group is showing.
   $: groups = groupRuns(results)
@@ -226,6 +264,12 @@
 
   function onKeydown(event: KeyboardEvent): void {
     switch (event.key) {
+      case 'Tab':
+        // the input is the palette's only stop; the page behind is inert.
+        if ($prefs.design !== 'classic') {
+          event.preventDefault()
+        }
+        break
       case 'Escape':
         event.preventDefault()
         back()
@@ -287,13 +331,13 @@
 
 {#if $paletteOpen}
   <!-- svelte-ignore a11y-click-events-have-key-events a11y-no-static-element-interactions -->
-  <div class="backdrop" transition:fade={{ duration: 100 }} on:click={closePalette}></div>
+  <div class="backdrop" transition:fade={{ duration: calm(100) }} on:click={closePalette}></div>
   <div
     class="palette"
     role="dialog"
     aria-modal="true"
     aria-label={$t('palette.title')}
-    transition:fly={{ y: -8, duration: 140 }}
+    transition:fly={{ y: -8, duration: calm(140) }}
   >
     <div class="field">
       {#if $paletteStep}
@@ -336,13 +380,16 @@
               id="palette-row-{i}"
               role="option"
               aria-selected={i === active}
+              title={entry.command.script !== undefined ? scriptEntryName(entry.command.label, entry.command.script, $t) : undefined}
               data-active={i === active}
               tabindex="-1"
               on:click={() => void run(entry.command)}
               on:mousemove={() => (active = i)}
             >
               <span class="icon">
-                {#if entry.command.swatch}
+                {#if entry.command.script !== undefined}
+                  <ScriptMark size={16} />
+                {:else if entry.command.swatch}
                   <span class="swatch" style="background: {entry.command.swatch}"></span>
                 {:else}
                   <svelte:component this={entry.command.icon} size={16} stroke={1.6} />
@@ -351,7 +398,7 @@
               <span class="label">
                 {#each highlightRuns(entry.command.label, entry.positions) as part}
                   {#if part.hit}<mark>{part.text}</mark>{:else}{part.text}{/if}
-                {/each}
+                {/each}{#if entry.command.script !== undefined}<span class="sr-only">, {$t('scripts.mark.name').replace('{name}', scriptText(entry.command.script))}</span>{/if}
               </span>
               {#if entry.command.hint}
                 <span class="hint">{entry.command.hint}</span>
@@ -370,6 +417,7 @@
     {/if}
   </div>
 {/if}
+<div class="sr-only" role="status">{$paletteOpen ? resultsStatus : ''}</div>
 
 <style>
   .backdrop {

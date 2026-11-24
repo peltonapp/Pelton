@@ -18,6 +18,7 @@
   const ed = getEditor()
 
   let query = ''
+  let why = ''
   let listEl: HTMLDivElement
 
   $: groups = paletteGroups(items, query, $t)
@@ -70,20 +71,27 @@
             type="button"
             class="item {item.section}"
             aria-disabled={!!item.unavailable}
+            aria-describedby={item.unavailable ? `palette-why-${item.key}` : undefined}
             title={item.unavailable || item.description || undefined}
             on:pointerdown={(e) => press(e, item)}
             on:click={() => !item.unavailable && dispatch('add', item)}
+            on:focus={() => (why = item.unavailable || '')}
+            on:blur={() => (why = '')}
+            on:mouseenter={() => (why = item.unavailable || '')}
+            on:mouseleave={() => (why = '')}
           >
             <span class="dot" aria-hidden="true"></span>
             <span class="label">{item.label}</span>
             {#if item.risky}<span class="risk" aria-label={$t('scripts.blocks.risky')}><Ph svg={riskIcon} size={12} /></span>{/if}
           </button>
+          {#if item.unavailable}<span class="sr-only" id={`palette-why-${item.key}`}>{item.unavailable}</span>{/if}
         {/each}
       </section>
     {:else}
       <p class="none">{$t('scripts.blocks.palette.none')}</p>
     {/each}
   </div>
+  {#if why}<p class="why" aria-hidden="true">{why}</p>{/if}
 </aside>
 
 <style>
@@ -200,6 +208,14 @@
   .risk {
     display: inline-flex;
     color: var(--danger);
+  }
+
+  .why {
+    margin: 0;
+    padding: var(--space-1) var(--space-2);
+    border-top: var(--hairline) solid var(--border-subtle);
+    font-size: var(--fz-meta);
+    color: var(--text-secondary);
   }
 
   .none {

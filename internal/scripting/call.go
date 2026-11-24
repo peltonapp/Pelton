@@ -59,7 +59,36 @@ func (c *Call) Invoke(full string, args []any) ([]any, error) {
 	if !ok {
 		return nil, fmt.Errorf("%s: there is no function %q", c.Function, full)
 	}
-	return c.st.invoke(nil, full, f, args)
+	return c.st.invoke(false, full, f, args)
+}
+
+// InvokeForModel calls a registered function an AI model chose, as Invoke
+// does, except that a risky one asks the user every time, even when the
+// script may make it without asking.
+func (c *Call) InvokeForModel(full string, args []any) ([]any, error) {
+	f, ok := c.st.e.Registry.Function(full)
+	if !ok {
+		return nil, fmt.Errorf("%s: there is no function %q", c.Function, full)
+	}
+	return c.st.invoke(true, full, f, args)
+}
+
+// Approved reports whether the user approved perm for this script, which a
+// dry run does not otherwise ask for.
+func (c *Call) Approved(perm string) bool {
+	return c.st.req.Script.granted(perm, false)
+}
+
+// Count adds one to a counter of this run and returns the new count, for a
+// cap a host function keeps across the calls of one run.
+func (c *Call) Count(key string) int {
+	c.st.mu.Lock()
+	defer c.st.mu.Unlock()
+	if c.st.counts == nil {
+		c.st.counts = map[string]int{}
+	}
+	c.st.counts[key]++
+	return c.st.counts[key]
 }
 
 // Ending reports whether the run is being ended, by a refused permission, a

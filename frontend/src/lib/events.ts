@@ -13,8 +13,10 @@ import type {
   ChatVerification,
   ChatMediaProgress,
 } from './types'
+import type { SyncPhase } from './syncstatus'
 import type { LiveRun, ScriptAsk, ScriptCatchUp, ScriptConfirmRequest, ScriptResult, ScriptRun, ScriptToast } from './scripting'
 import type { AssistantScriptEvent } from './assistantScripts'
+import type { ImportJob } from './guidedimport'
 
 // EventsOn subscribes to a backend event and hands the callback its payload.
 function EventsOn<T>(name: string, cb: (data: T) => void): () => void {
@@ -25,6 +27,8 @@ function EventsOn<T>(name: string, cb: (data: T) => void): () => void {
 export const EventNames = {
   mailNew: 'mail:new',
   mailRepaired: 'mail:repaired',
+  mailUpdated: 'mail:updated',
+  mailBodyFailed: 'mail:bodyFailed',
   syncProgress: 'sync:progress',
   syncState: 'sync:state',
   accountSyncState: 'sync:accounts',
@@ -39,18 +43,23 @@ export const EventNames = {
   foldersChanged: 'folders:changed',
   profileChanged: 'profile:changed',
   importProgress: 'import:progress',
+  guidedImport: 'import:job',
   filesDropped: 'files:dropped',
   agentProposals: 'agent:proposals',
   openMessage: 'message:open',
   replyMessage: 'message:reply',
   composeCloseRequest: 'compose:close-request',
   appLock: 'applock:changed',
+  mailVault: 'mailvault:changed',
   calendarSync: 'calendar:sync',
   calendarChanged: 'calendar:changed',
+  timeBlocksChanged: 'timeblocks:changed',
   calendarReminder: 'calendar:reminder',
   icsOpen: 'calendar:open-files',
   taskReminder: 'tasks:reminder',
   followUpsChanged: 'followups:changed',
+  promisesChanged: 'promises:changed',
+  privacyChanged: 'privacy:changed',
   focusChanged: 'focus:changed',
   focusEnded: 'focus:ended',
   projectsChanged: 'projects:changed',
@@ -76,6 +85,7 @@ export const EventNames = {
   scriptResult: 'scripts:result',
   scriptProgress: 'scripts:progress',
   assistantScript: 'scripts:assistant',
+  autoEncryptChanged: 'autoencrypt:changed',
   // sent between windows by the frontend, not by go.
   archiveAfterSend: 'compose:archive-after-send',
 } as const
@@ -109,6 +119,11 @@ export interface VaultChangeEvent {
 /** onVaultChanged fires when notes in the notes folder changed. */
 export function onVaultChanged(cb: (e: VaultChangeEvent) => void): Unsubscribe {
   return EventsOn(EventNames.vaultChanged, (e: VaultChangeEvent) => cb(e))
+}
+
+/** onAutoEncryptChanged fires when own keys were made or renewed or a lookup found keys. */
+export function onAutoEncryptChanged(cb: () => void): () => void {
+  return EventsOn(EventNames.autoEncryptChanged, () => cb())
 }
 
 /** onICSOpen fires when the system asks the running app to open .ics files; collect them with consumePendingICS. */
@@ -185,8 +200,20 @@ export interface SyncProgressEvent {
   // mailboxes rather than messages.
   foldersDone: number
   foldersTotal: number
+  phase?: SyncPhase
 }
 
+/** Payload of mail:updated: the id of a message row that changed in place, such as a stub that gained its body. */
+export interface MailUpdatedEvent {
+  messageId: number
+}
+
+/** Payload of mail:bodyFailed: the id of a message whose body could not be fetched after every retry. */
+export interface MailBodyFailedEvent {
+  messageId: number
+}
+
+/** Payload of the sync state event: whether background sync is running, and the error that ended it, if any. */
 export interface SyncStateEvent {
   running: boolean
   error: string
@@ -199,6 +226,7 @@ export interface AccountSyncStateEvent {
   states: AccountSyncState[]
 }
 
+/** Payload of the bulk download progress event: counts, percent and ETA of a running download. */
 export interface DownloadProgressEvent {
   running: boolean
   done: number
@@ -209,6 +237,7 @@ export interface DownloadProgressEvent {
   error: string
 }
 
+/** Payload of the attachment save progress event: bytes and files done out of the total. */
 export interface AttachmentProgressEvent {
   running: boolean
   attachmentId: number
@@ -292,6 +321,16 @@ export function onMailRepaired(cb: (e: MailRepairedEvent) => void): Unsubscribe 
   return EventsOn(EventNames.mailRepaired, (e: MailRepairedEvent) => cb(e))
 }
 
+/** Subscribes to mail:updated; returns the unsubscribe function. */
+export function onMailUpdated(cb: (e: MailUpdatedEvent) => void): Unsubscribe {
+  return EventsOn(EventNames.mailUpdated, (e: MailUpdatedEvent) => cb(e))
+}
+
+/** Subscribes to mail:bodyFailed; returns the unsubscribe function. */
+export function onMailBodyFailed(cb: (e: MailBodyFailedEvent) => void): Unsubscribe {
+  return EventsOn(EventNames.mailBodyFailed, (e: MailBodyFailedEvent) => cb(e))
+}
+
 // onSyncProgress fires per folder as a sync runs.
 export function onSyncProgress(cb: (e: SyncProgressEvent) => void): Unsubscribe {
   return EventsOn(EventNames.syncProgress, (e: SyncProgressEvent) => cb(e))
@@ -322,6 +361,16 @@ export function onOutboxLog(cb: (e: OutboxLogEntry) => void): Unsubscribe {
 // answered or is cancelled. It carries no payload; subscribers refetch.
 export function onFollowUpsChanged(cb: () => void): Unsubscribe {
   return EventsOn(EventNames.followUpsChanged, () => cb())
+}
+
+/** Fires when promises were found, accepted, dismissed or closed. Subscribers refetch. */
+export function onPromisesChanged(cb: () => void): Unsubscribe {
+  return EventsOn(EventNames.promisesChanged, () => cb())
+}
+
+/** Fires when the tracking counters or an unsubscribe's state changed. Subscribers refetch. */
+export function onPrivacyChanged(cb: () => void): Unsubscribe {
+  return EventsOn(EventNames.privacyChanged, () => cb())
 }
 
 // onMenu fires when a native menubar item is chosen. the payload is a short
@@ -356,6 +405,12 @@ export function onMailtoCompose(cb: (e: MailtoDraft) => void): Unsubscribe {
 // with running false when the job ends.
 export function onImportProgress(cb: (e: ImportProgressEvent) => void): Unsubscribe {
   return EventsOn(EventNames.importProgress, (e: ImportProgressEvent) => cb(e))
+}
+
+// onGuidedImport fires while a guided import runs, and once more when it
+// pauses, is cancelled, fails or finishes.
+export function onGuidedImport(cb: (job: ImportJob) => void): Unsubscribe {
+  return EventsOn(EventNames.guidedImport, (job: ImportJob) => cb(job))
 }
 
 /** FilesDroppedEvent names the drop target files from the system landed on. */
@@ -480,9 +535,19 @@ export function onAppLock(cb: (e: { locked: boolean }) => void): Unsubscribe {
   return EventsOn(EventNames.appLock, (e: { locked: boolean }) => cb(e))
 }
 
+/** onMailVault fires when a mail vault locks, unlocks, changes or moves along sealing. */
+export function onMailVault(cb: (e: { id: number; locked: boolean; removed: boolean }) => void): Unsubscribe {
+  return EventsOn(EventNames.mailVault, (e: { id: number; locked: boolean; removed: boolean }) => cb(e))
+}
+
 /** onCalendarSync fires as calendars sync, and once more when the run ends. */
 export function onCalendarSync(cb: (e: CalendarSyncEvent) => void): Unsubscribe {
   return EventsOn(EventNames.calendarSync, (e: CalendarSyncEvent) => cb(e))
+}
+
+/** onTimeBlocksChanged fires when a time block was made, changed or deleted. Subscribers refetch. */
+export function onTimeBlocksChanged(cb: () => void): Unsubscribe {
+  return EventsOn(EventNames.timeBlocksChanged, () => cb())
 }
 
 /** onCalendarChanged fires when events or calendars changed, from a sync or an edit. */

@@ -7,6 +7,7 @@
   import Modal from '../common/Modal.svelte'
   import Select from '../common/Select.svelte'
   import WhereDataGoes from './WhereDataGoes.svelte'
+  import Live from '../automations/Live.svelte'
   import { fetchAIModels, saveAIProvider, testAIProvider } from '../../lib/api'
   import { isLocalAddress, newProviderInput, providerInput, type AIKind, type AIProvider, type AIProviderInput } from '../../lib/ai'
   import { errorMessage } from '../../stores/toast'
@@ -149,11 +150,13 @@
   </form>
 
   {#if tested}
-    <p class="result" class:ok={tested.ok} role="status">{tested.text}</p>
+    <p class="result" class:ok={tested.ok}>{tested.text}</p>
   {/if}
   {#if error}
-    <p class="result" role="alert">{error}</p>
+    <p class="result">{error}</p>
   {/if}
+  <Live text={tested?.text ?? ''} />
+  <Live text={error} assertive />
 
   <div slot="footer" class="buttons">
     <button type="button" class="cal-btn" disabled={busy !== '' || needsKey || input.model.trim() === ''} on:click={test}>

@@ -80,6 +80,9 @@ func (st *runState) require(L *lua.LState) int {
 		L.Push(v)
 		return 1
 	}
+	if !st.requirable[name] {
+		L.RaiseError("require: %q is not named in the code; a library is loaded by its name written out, as in require(%q)", name, "name")
+	}
 	if i := slices.Index(st.loading, name); i >= 0 {
 		chain := append(slices.Clone(st.loading[i:]), name)
 		L.RaiseError("require: libraries load each other in a circle: %s", strings.Join(chain, " -> "))
@@ -97,6 +100,9 @@ func (st *runState) require(L *lua.LState) int {
 	fn, err := L.Load(strings.NewReader(lib.Source), libraryChunk(name))
 	if err != nil {
 		L.RaiseError("require %q: %s", name, cleanLuaError(err))
+	}
+	for _, n := range RequiredLibraries(lib.Source) {
+		st.requirable[n] = true
 	}
 	st.loading = append(st.loading, name)
 	L.Push(fn)
@@ -224,41 +230,141 @@ func (s *Service) Library(ctx context.Context, id int64) (*Library, error) {
 	return s.store.GetLibrary(ctx, id)
 }
 
-// CreateLibrary validates and stores a new library.
-func (s *Service) CreateLibrary(ctx context.Context, l *Library) (*Library, error) {
+// CreateLibrary validates and stores a new library. A script that already
+// requires a library of that name loses its approval, since it would now
+// run code the user did not see when approving it. It returns the scripts
+// that lost theirs.
+func (s *Service) CreateLibrary(ctx context.Context, l *Library) (*Library, []*Script, error) {
 	if l.Origin == "" {
 		l.Origin = OriginUser
 	}
 	if err := l.Validate(); err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	id, err := s.store.CreateLibrary(ctx, l)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
+	}
+	revoked, err := s.revokeRequiring(ctx, l.Name)
+	if err != nil {
+		return nil, nil, err
 	}
 	s.changed()
-	return s.store.GetLibrary(ctx, id)
+	out, err := s.store.GetLibrary(ctx, id)
+	return out, revoked, err
 }
 
-// UpdateLibrary saves a library's name, description and source.
-func (s *Service) UpdateLibrary(ctx context.Context, l *Library) (*Library, error) {
+// UpdateLibrary saves a library's name, description and source. A change to
+// the source or the name takes back the approval of every script that loads
+// the library, directly or through another library. It returns the scripts
+// that lost theirs.
+func (s *Service) UpdateLibrary(ctx context.Context, l *Library) (*Library, []*Script, error) {
 	if err := l.Validate(); err != nil {
-		return nil, err
+		return nil, nil, err
+	}
+	cur, err := s.store.GetLibrary(ctx, l.ID)
+	if err != nil {
+		return nil, nil, err
+	}
+	var revoked []*Script
+	if cur.Source != l.Source || cur.Name != l.Name {
+		if revoked, err = s.revokeRequiring(ctx, cur.Name, l.Name); err != nil {
+			return nil, nil, err
+		}
 	}
 	if err := s.store.UpdateLibrary(ctx, l); err != nil {
+		return nil, nil, err
+	}
+	s.changed()
+	out, err := s.store.GetLibrary(ctx, l.ID)
+	return out, revoked, err
+}
+
+// DeleteLibrary removes a library, taking back the approval of the scripts
+// that load it, so a library of that name written later is not run unseen.
+// It returns the scripts that lost theirs.
+func (s *Service) DeleteLibrary(ctx context.Context, id int64) ([]*Script, error) {
+	cur, err := s.store.GetLibrary(ctx, id)
+	if errors.Is(err, ErrNotFound) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	revoked, err := s.revokeRequiring(ctx, cur.Name)
+	if err != nil {
+		return nil, err
+	}
+	if err := s.store.DeleteLibrary(ctx, id); err != nil {
 		return nil, err
 	}
 	s.changed()
-	return s.store.GetLibrary(ctx, l.ID)
+	return revoked, nil
 }
 
-// DeleteLibrary removes a library.
-func (s *Service) DeleteLibrary(ctx context.Context, id int64) error {
-	if err := s.store.DeleteLibrary(ctx, id); err != nil {
-		return err
+// LibraryDependents returns the scripts that load one of names, directly or
+// through another library, and are on or hold an approval: those a change to
+// one of those libraries switches off.
+func (s *Service) LibraryDependents(ctx context.Context, names ...string) ([]*Script, error) {
+	libs, err := s.store.ListLibraries(ctx)
+	if err != nil {
+		return nil, err
 	}
-	s.changed()
-	return nil
+	sources := map[string]string{}
+	for _, l := range libs {
+		sources[l.Name] = l.Source
+	}
+	list, err := s.store.List(ctx)
+	if err != nil {
+		return nil, err
+	}
+	var out []*Script
+	for _, sc := range list {
+		if !sc.Enabled && len(sc.Approved) == 0 && len(sc.AllowUnasked) == 0 {
+			continue
+		}
+		loaded := librariesLoaded(sc, sources)
+		if slices.ContainsFunc(names, func(n string) bool { return slices.Contains(loaded, n) }) {
+			out = append(out, sc)
+		}
+	}
+	return out, nil
+}
+
+// librariesLoaded lists the libraries a script's code loads, directly or
+// through other libraries, as they stand now.
+func librariesLoaded(sc *Script, sources map[string]string) []string {
+	var out []string
+	queue := scriptRequires(sc)
+	for len(queue) > 0 {
+		name := queue[0]
+		queue = queue[1:]
+		if slices.Contains(out, name) {
+			continue
+		}
+		out = append(out, name)
+		queue = append(queue, RequiredLibraries(sources[name])...)
+	}
+	return out
+}
+
+// revokeRequiring switches off and takes back the approvals of every script
+// that loads one of names, and returns them as they were.
+func (s *Service) revokeRequiring(ctx context.Context, names ...string) ([]*Script, error) {
+	list, err := s.LibraryDependents(ctx, names...)
+	if err != nil || len(list) == 0 {
+		return nil, err
+	}
+	out := make([]*Script, 0, len(list))
+	for _, sc := range list {
+		was := *sc
+		out = append(out, &was)
+		revoke(sc)
+		if err := s.store.Update(ctx, sc); err != nil {
+			return nil, err
+		}
+	}
+	return out, s.load(ctx)
 }
 
 // MissingLibraries returns the names among names that no library has.
@@ -316,11 +422,12 @@ func ParseLibraryFile(data []byte) (*Library, []string, error) {
 }
 
 // ImportLibrary stores the library in a file. A library of the same name is
-// not replaced: the import fails and says so.
-func (s *Service) ImportLibrary(ctx context.Context, data []byte) (*Library, error) {
+// not replaced: the import fails and says so. It returns the scripts that
+// lost their approval, as CreateLibrary does.
+func (s *Service) ImportLibrary(ctx context.Context, data []byte) (*Library, []*Script, error) {
 	l, _, err := ParseLibraryFile(data)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	return s.CreateLibrary(ctx, l)
 }

@@ -30,6 +30,7 @@ function proposal(over: Partial<ScriptProposal> = {}): ScriptProposal {
     addedPermissions: ['mail.send'],
     removedPermissions: [],
     resetsApproval: true,
+    resetReasons: ['code', 'permissions'],
     problem: '',
     ...over,
   }

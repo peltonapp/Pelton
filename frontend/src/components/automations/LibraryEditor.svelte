@@ -5,10 +5,11 @@
   // permissions, so it declares none of its own.
   import { onDestroy } from 'svelte'
   import LuaWorkbench from './LuaWorkbench.svelte'
+  import Live from './Live.svelte'
   import { t } from '../../lib/i18n'
   import { checkScriptLua } from '../../lib/api'
-  import type { ScriptCatalog, ScriptLibrary, ScriptLibraryInput } from '../../lib/scripting'
-  import { exportLibrary, libraries, removeLibrary, runLog, saveLibrary, testRun } from '../../stores/scripts'
+  import type { ScriptCatalog, ScriptLibrary, ScriptLibraryInput, ScriptRef } from '../../lib/scripting'
+  import { exportLibrary, libraries, libraryImpact, removeLibrary, runLog, saveLibrary, testRun } from '../../stores/scripts'
   import { askConfirm } from '../../stores/confirm'
   import { errorMessage, toastError, toastSuccess } from '../../stores/toast'
   import { syntaxErrorLine } from './lua/assist'
@@ -62,9 +63,28 @@
 
   onDestroy(() => clearTimeout(timer))
 
+  function impactText(affected: ScriptRef[]): string {
+    return $t(affected.length === 1 ? 'scripts.library.impact.body.one' : 'scripts.library.impact.body')
+      .replace('{n}', String(affected.length))
+      .replace('{list}', affected.map((s) => s.name).join(', '))
+  }
+
   async function save(): Promise<void> {
     busy = true
     try {
+      if (input.source !== library.source || input.name !== library.name) {
+        const affected = await libraryImpact(library.id, input.name)
+        if (affected.length > 0) {
+          const ok = await askConfirm({
+            title: $t(affected.length === 1 ? 'scripts.library.impact.title.one' : 'scripts.library.impact.title').replace('{n}', String(affected.length)),
+            body: impactText(affected),
+            confirmLabel: $t('scripts.library.impact.confirm'),
+          })
+          if (!ok) {
+            return
+          }
+        }
+      }
       await saveLibrary(library.id, input)
       toastSuccess($t('scripts.toast.saved'))
     } catch (err) {
@@ -75,9 +95,10 @@
   }
 
   async function remove(): Promise<void> {
+    const affected = await libraryImpact(library.id, library.name).catch(() => [] as ScriptRef[])
     const ok = await askConfirm({
       title: $t('scripts.library.delete.title').replace('{name}', library.name),
-      body: $t('scripts.library.delete.body'),
+      body: affected.length > 0 ? `${$t('scripts.library.delete.body')} ${impactText(affected)}` : $t('scripts.library.delete.body'),
       confirmLabel: $t('scripts.delete'),
       danger: true,
     })
@@ -89,7 +110,7 @@
 
 <section class="editor" aria-label={$t('scripts.library.editor')}>
   <header class="bar">
-    <input class="cal-field name" aria-label={$t('scripts.library.name')} aria-invalid={!nameOk} spellcheck="false" bind:value={input.name} />
+    <input class="cal-field name" aria-label={$t('scripts.library.name')} aria-invalid={!nameOk} aria-describedby={nameOk ? undefined : 'library-name-rule'} spellcheck="false" bind:value={input.name} />
     <div class="actions">
       <button type="button" class="cal-btn" on:click={() => void exportLibrary(library.id).catch((err) => toastError(errorMessage(err)))}>{$t('scripts.export')}</button>
       <button type="button" class="cal-btn danger" on:click={() => void remove()}>{$t('scripts.delete')}</button>
@@ -97,14 +118,16 @@
     </div>
   </header>
   <div class="scroll">
-    {#if !nameOk}<p class="error" role="alert">{$t('scripts.library.nameRule')}</p>{/if}
+    {#if !nameOk}<p class="error" id="library-name-rule">{$t('scripts.library.nameRule')}</p>{/if}
+    <Live text={nameOk ? '' : $t('scripts.library.nameRule')} assertive />
     {#if library.origin !== 'user'}
       <p class="notice">{$t(`scripts.origin.${library.origin}.notice`)}</p>
     {/if}
     <input class="cal-field" aria-label={$t('scripts.library.description')} placeholder={$t('scripts.library.description')} bind:value={input.description} />
     <p class="hint">{$t('scripts.library.hint').replace('{use}', `local ${input.name || 'lib'} = require("${input.name}")`)}</p>
     <LuaWorkbench label={$t('scripts.code')} content={input.source} {catalog} {assist} {marks} on:change={(e) => (input = { ...input, source: e.detail })} />
-    {#if syntax}<p class="error" role="alert">{syntax}</p>{/if}
+    {#if syntax}<p class="error">{syntax}</p>{/if}
+    <Live text={syntax} />
   </div>
 </section>
 

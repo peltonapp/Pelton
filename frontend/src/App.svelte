@@ -12,7 +12,6 @@
   import MenuBar from './components/common/MenuBar.svelte'
   import MessageList from './components/list/MessageList.svelte'
   import MessageDetail from './components/detail/MessageDetail.svelte'
-  import Compose from './components/compose/Compose.svelte'
   import Toasts from './components/common/Toasts.svelte'
   import StatusBar from './components/common/StatusBar.svelte'
   import ContextMenu from './components/common/ContextMenu.svelte'
@@ -23,27 +22,22 @@
   import { space, openSpace, runSpaceAction, isMailOnlyAction } from './stores/space'
   import { meetingPrepTarget, openMeetingPrep, closeMeetingPrep } from './stores/meetingprep'
   import { mailScreen, openMailScreen, closeMailScreen } from './stores/mailscreen'
-  import { IconMailX, IconChartBar } from '@tabler/icons-svelte'
+  import { IconMailX, IconChartBar, IconShieldCheck } from '@tabler/icons-svelte'
   import { orderedSpaces, visibleSpaces } from './lib/spaces'
   import { startChat, stopChat } from './stores/chat'
   import { popupIsOpen } from './lib/popups'
-  import { calendarFocus, calendarImport, calendarQuickAdd } from './stores/calendar'
+  import { openMenuFromKeyboard } from './lib/keymenu'
+  import { blockMailRequest, calendarFocus, calendarImport, calendarQuickAdd, planMyDay } from './stores/calendar'
+  import { blockTimeForMail } from './lib/timeblockmail'
   import { formatTime } from './lib/calformat'
   import type { TimeFormat } from './lib/format'
   import { frameIntegrated } from './stores/windowframe'
   import { setDraft, submitSearch, searchOpenedId } from './stores/search'
-  import SnoozeDialog from './components/detail/SnoozeDialog.svelte'
-  import ClassicSnoozeDialog from './components/detail/classic/SnoozeDialog.svelte'
   import DragStack from './components/list/DragStack.svelte'
   import ConfirmDialog from './components/common/ConfirmDialog.svelte'
-  import SyncFailureDialog from './components/common/SyncFailureDialog.svelte'
   import { loadSyncStates, watchSyncStates } from './stores/syncfailures'
-  import FolderDialog from './components/sidebar/FolderDialog.svelte'
-  import ClassicFolderDialog from './components/sidebar/classic/FolderDialog.svelte'
-  import AttachmentPreview from './components/detail/AttachmentPreview.svelte'
-  import MoveDialog from './components/detail/MoveDialog.svelte'
-  import ClassicMoveDialog from './components/detail/classic/MoveDialog.svelte'
-  import CommandPalette from './components/common/CommandPalette.svelte'
+  import AddMailboxDialog from './components/wizard/AddMailboxDialog.svelte'
+  import { createMailtoHold } from './lib/mailtohold'
 
   import { initPrefs, prefs, setPaneWidths, setListHeight, setLowPowerMode } from './stores/prefs'
   import { applyScale } from './theme/theme'
@@ -53,13 +47,46 @@
   import { loadSignatures } from './stores/signatures'
   import { loadVIPSenders } from './stores/vip'
   import { loadVirusTotalConfig } from './stores/virustotal'
-  import { loadOutbox, syncing, lastSynced, syncFolder, syncServer, syncAccount, syncCounts, emptySyncCounts } from './stores/outbox'
+  import { loadOutbox, syncing, lastSynced, syncFolder, syncServer, syncAccount, syncCounts, syncPhase, emptySyncCounts } from './stores/outbox'
   import { selection, applyStartupSelection, searchQuery } from './stores/selection'
-  import { loadList, messageList } from './stores/messages'
+  import { loadList, listIsPaginated, messageList, refreshListHead } from './stores/messages'
+  import { refreshListOnMailNew } from './lib/maillistrefresh'
   import { initProgress } from './stores/progress'
   import { composeSessions, openCompose, openComposeWith, initComposePrefs, openReply, openForward, requestComposeClose, setForcedComposeMode, updateCompose } from './stores/compose'
   import { routeComposeSessions } from './stores/composeroute'
-  import Composer2 from './components/compose/Composer2.svelte'
+  import {
+    loadAccountPasswordDialog,
+    loadAttachmentsBrowser,
+    loadAutomationsOverlay,
+    loadAutomationsSpace,
+    loadCalendarScreen,
+    loadChatSpace,
+    loadClassicCompose,
+    loadComposer,
+    loadContactsSpace,
+    loadDatePeek,
+    loadEncryptionIndicator,
+    loadFeedsScreen,
+    loadInviteCard,
+    loadMeetingPrep,
+    loadMenuBarEditor,
+    loadMyDayPanel,
+    loadNewsletterManager,
+    loadNightlyDialog,
+    loadNotesScreen,
+    loadOnboarding,
+    loadProjectsScreen,
+    loadPromiseStrip,
+    loadSettingsPanel,
+    loadSettingsScreen,
+    loadSetup,
+    loadShareToChatDialog,
+    loadSyncFailureDialog,
+    loadTasksScreen,
+    loadVaultDialogs,
+    loadVerificationDialog,
+    warmUp,
+  } from './lib/lazyload'
   import ComposeTabLayer from './components/compose/ComposeTabLayer.svelte'
   import { openSnooze, openSnoozeMany } from './stores/snooze'
   import { patchInList } from './stores/messages'
@@ -72,7 +99,6 @@
     setWindowTitle,
     deleteMessage,
     getMessage,
-    downloadMessageOffline,
     archiveMessage,
     setMailActionsEnabled,
     isDemoMode,
@@ -96,9 +122,13 @@
   import { liabilityAccepted } from './lib/liability'
   import { setDemoActive } from './lib/demo'
   import { recordArchived } from './stores/undoarchive'
-  import { onMailNew, onMailRepaired, onSyncState, onSyncProgress, onOutboxChanged, onMenu, onViewsChanged, onFoldersChanged, onProfileChanged, onMailtoCompose, onAgentProposals, onOpenMessage, onReplyMessage, onArchiveAfterSend, onFeedsOpen, onCalendarReminder, onTaskReminder, onICSOpen, onAssistantScript, type Unsubscribe, type MailtoDraft, type CalendarReminderEvent, type TaskReminderEvent } from './lib/events'
+  import { accountPhase, applyProgressEvent, applySyncState, currentProgress, currentVerify, isSyncing, startProgressSweep, type SyncView } from './lib/syncprogress'
+  import { onMailNew, onMailRepaired, onMailUpdated, onMailBodyFailed, onMailVault, onSyncState, onSyncProgress, onOutboxChanged, onMenu, onViewsChanged, onFoldersChanged, onProfileChanged, onMailtoCompose, onAgentProposals, onOpenMessage, onReplyMessage, onArchiveAfterSend, onFeedsOpen, onCalendarReminder, onTaskReminder, onICSOpen, onAssistantScript, type Unsubscribe, type MailtoDraft, type CalendarReminderEvent, type TaskReminderEvent } from './lib/events'
   import { assistantToastKey } from './lib/assistantScripts'
   import { selectScript } from './stores/scripts'
+  import { refreshMessage } from './stores/message'
+  import { refreshCard } from './stores/threads'
+  import { markBodyFetchFailed, clearBodyFetchFailed } from './stores/bodyfetch'
   import { loadViews, editingView, closeViewEditor, openViewEditor, views as savedViews } from './stores/views'
   import { selectSavedView } from './stores/selection'
   import { isMac } from './lib/i18n'
@@ -168,7 +198,6 @@
   } from './stores/listselect'
   import { selectFolder, selectView, revealMessage } from './stores/selection'
   import { setTheme, setThemeId, setMyDayPanel } from './stores/prefs'
-  import MyDayPanel from './components/myday/MyDayPanel.svelte'
   import { myDayFits } from './lib/myday'
   import { openCreateFolder, openRenameFolder, openDeleteFolder, openEmptyTrash } from './stores/folderdialog'
   import { setFolderPinned, listThemes } from './lib/api'
@@ -195,24 +224,25 @@
   } from './lib/messageactions'
   import { markAnsweredDone, markDone } from './lib/triage'
   import { watchFollowUps } from './stores/followups'
+  import { lockVaultsNow, openVaultUnlock, vaultDialog } from './stores/vaultdialog'
   import { loadSnippets } from './stores/snippets'
   import { editNote, toggleMute, togglePin } from './lib/organize'
-  import { buildCommands, mailCommands, type CommandContext, type MessageOp, type FolderOp } from './lib/commands'
+  import { buildCommands, mailCommands, type CommandContext, type MessageOp, type FolderOp, type PaletteCommand } from './lib/commands'
   import { extraPaletteCommands, registerPaletteSource } from './lib/palettesources'
   import './lib/palette-calendar'
   import './lib/palette-contacts'
   import './lib/palette-attachments'
   import './lib/palette-sieve'
-  import AttachmentsBrowser from './components/attachments/AttachmentsBrowser.svelte'
   import { attachmentsOpen, toggleAttachments } from './stores/attachments'
   import { setSenderPanel } from './stores/prefs'
   import { toggleReadingView } from './stores/readingview'
   import './lib/palette-tasks'
+  import './lib/palette-promises'
+  import { startPromises } from './stores/promises'
   import './lib/palette-notes'
   import { reloadVault, requestNotes, startNotes } from './stores/notes'
   import './lib/palette-chat'
   import './lib/palette-chatshare'
-  import ShareToChatDialog from './components/chat/ShareToChatDialog.svelte'
   import './lib/palette-availability'
   import './lib/palette-projects'
   import { startProjects, fileMailRequest } from './stores/projects'
@@ -246,11 +276,11 @@
     paletteMail,
     paletteQuery,
   } from './stores/palette'
-  import AccountPasswordDialog from './components/settings/AccountPasswordDialog.svelte'
   import DevOverlays from './components/dev/DevOverlays.svelte'
   import peltonLogo from './assets/images/icons/pelton-logo.png'
   import {
     passwordPrompt,
+    passwordPromptSyncFollows,
     answerPasswordPrompt,
     promptForMissingPasswords,
     refreshMissingPasswords,
@@ -273,8 +303,8 @@
     settingsDesign = $prefs.design
     const load: Promise<{ default: ComponentType }> =
       $prefs.design === 'classic'
-        ? import('./components/settings/SettingsPanel.svelte')
-        : import('./components/settings2/SettingsScreen.svelte')
+        ? loadSettingsPanel()
+        : loadSettingsScreen()
     settingsPanel = load.catch((err) => {
       settingsPanel = null
       settingsOpen = false
@@ -304,6 +334,30 @@
   // onboarding, and the acknowledgement is deliberately never remembered.
   let nightlyOpen = false
   const unsubscribers: Unsubscribe[] = []
+  let syncView: SyncView = { progress: new Map(), verify: new Map(), running: false }
+  // pushes the view into the status bar's stores. A running sync owns the line;
+  // the background folder check shows only when nothing else runs.
+  function publishSyncView(view: SyncView): void {
+    const running = isSyncing(view)
+    syncing.set(running)
+    const cur = currentProgress(view.progress) ?? (running ? null : currentVerify(view))
+    syncFolder.set(cur ? cur.folder : '')
+    syncServer.set(cur ? cur.server : '')
+    syncAccount.set(cur ? cur.accountEmail : '')
+    syncPhase.set(cur?.phase ? cur.phase : '')
+    syncCounts.set(
+      cur
+        ? {
+            done: cur.done,
+            total: cur.total,
+            folderDone: cur.folderDone,
+            folderTotal: cur.folderTotal,
+            foldersDone: cur.foldersDone,
+            foldersTotal: cur.foldersTotal,
+          }
+        : emptySyncCounts,
+    )
+  }
 
   // set when the app mounts again after the app lock was opened. The stores
   // still hold the session, so the launch-only steps (the startup folder,
@@ -498,6 +552,23 @@
     void createTasksFromMail(ids)
   }
 
+  // blocks the next free time to deal with the open mail, or each selected one.
+  function blockTimeForOpenMail(): void {
+    const ids = selectedMessages.length > 1 ? selectedMessages.map((m) => m.id) : [currentMessage()?.id].filter((id): id is number => id !== undefined)
+    if (ids.length === 0) {
+      toastInfo(get(t)('app.toast.openMessageFirst'))
+      return
+    }
+    void blockTimeForMail(ids)
+  }
+
+  $: if ($blockMailRequest) {
+    blockMailRequest.set(false)
+    if (!classic) {
+      blockTimeForOpenMail()
+    }
+  }
+
   // files the open conversation, or the selected ones, under a project.
   function addToProject(): void {
     const items = selectedMessages.length > 1 ? selectedMessages : [currentMessage()].filter((m): m is MessageSummary => m !== null)
@@ -529,6 +600,16 @@
   } else if (classic && stopTasks) {
     stopTasks()
     stopTasks = undefined
+  }
+
+  // the promises found in mail feed the reader's suggestions and the task
+  // lists "I owe" and "Owed to me", in the new design only.
+  let stopPromises: (() => void) | undefined
+  $: if ($prefs.design === 'new' && !stopPromises) {
+    stopPromises = startPromises()
+  } else if ($prefs.design !== 'new' && stopPromises) {
+    stopPromises()
+    stopPromises = undefined
   }
   onDestroy(() => stopTasks?.())
 
@@ -624,8 +705,8 @@
     }
   })
 
-  // the newsletter manager and the insights page in the palette, with their
-  // live shortcut as the hint.
+  // the newsletter manager, the insights page and the tracking report in the
+  // palette, with their live shortcut as the hint.
   registerPaletteSource('mailtools', (tr) => {
     const hint = (action: 'open-newsletters' | 'open-insights'): string => {
       const combo = get(bindings)[action]
@@ -650,8 +731,32 @@
         icon: IconChartBar,
         run: () => openSettingsAt('insights'),
       },
+      {
+        id: 'open-privacy-report',
+        group: 'navigate',
+        label: tr('privacy.report.title'),
+        keywords: tr('privacy.report.keywords'),
+        hint: '',
+        icon: IconShieldCheck,
+        run: () => openMailScreen('privacy'),
+      },
+      ...vaultPaletteCommands(tr),
     ]
   })
+
+  // the vault's palette entries come from the vault marks on the folders.
+  function vaultPaletteCommands(tr: (key: string) => string): PaletteCommand[] {
+    const folders = Object.values(get(sidebar).data?.foldersByAccount ?? {}).flat()
+    const locked = folders.find((f) => f.vaultLocked)
+    return [
+      ...(folders.some((f) => f.vaultId && !f.vaultLocked)
+        ? [{ id: 'mailvault:lock', group: 'action' as const, label: tr('mailvault.lockNow'), icon: IconShieldCheck, run: lockVaultsNow }]
+        : []),
+      ...(locked
+        ? [{ id: 'mailvault:unlock', group: 'action' as const, label: tr('mailvault.unlock'), icon: IconShieldCheck, run: () => openVaultUnlock(locked.vaultId ?? 0) }]
+        : []),
+    ]
+  }
 
   // the newsletter manager or the attachments browser fills the mail surface
   // in place of the list and the reader.
@@ -679,6 +784,15 @@
     await initPrefs()
     await initSidebarState()
     await initComposePrefs()
+    warmUp([
+      get(prefs).design === 'classic' ? loadClassicCompose : loadComposer,
+      ...(get(prefs).design === 'classic' ? [] : [loadAttachmentsBrowser]),
+      ...(showMenuBar ? [loadMenuBarEditor] : []),
+      loadEncryptionIndicator,
+      loadDatePeek,
+      ...(get(prefs).design === 'classic' ? [] : [loadInviteCard]),
+      ...(get(prefs).design === 'classic' ? [] : [loadPromiseStrip, loadMyDayPanel]),
+    ])
     void initShortcuts()
     void initCoach().then((stop) => unsubscribers.push(stop))
     void initFirstTips()
@@ -746,9 +860,22 @@
     }
 
     unsubscribers.push(
-      onMailNew(() => {
+      onMailNew((e) => {
+        void refreshSidebar()
+        refreshListOnMailNew(e.accountId, {
+          selection: () => get(selection),
+          phase: (id) => accountPhase(syncView, id),
+          paginated: listIsPaginated,
+          loadList,
+          refreshListHead,
+        })
+      }),
+    )
+    unsubscribers.push(
+      onMailVault((e) => {
         void refreshSidebar()
         void loadList(get(selection))
+        void import('./stores/mailvault').then((m) => m.vaultChanged(e.locked))
       }),
     )
     unsubscribers.push(
@@ -762,15 +889,31 @@
       }),
     )
     unsubscribers.push(
+      onMailUpdated((e) => {
+        clearBodyFetchFailed(e.messageId)
+        const open = get(visibleMessageId)
+        if (open === e.messageId) {
+          void refreshMessage(e.messageId)
+        }
+        void refreshCard(e.messageId)
+      }),
+    )
+    unsubscribers.push(
+      onMailBodyFailed((e) => {
+        if (get(visibleMessageId) === e.messageId) {
+          markBodyFetchFailed(e.messageId)
+        }
+      }),
+    )
+    unsubscribers.push(
       onSyncState((e) => {
-        syncing.set(e.running)
+        // fires once per account run, so it cannot clear the status line;
+        // only the progress closing events do that.
+        syncView = applySyncState(syncView, e.running, Date.now())
+        syncing.set(isSyncing(syncView))
         // record the moment a sync finishes for the status bar's last-synced time.
         if (!e.running) {
           lastSynced.set(Date.now())
-          syncFolder.set('')
-          syncServer.set('')
-          syncAccount.set('')
-          syncCounts.set(emptySyncCounts)
           // a password the server refuses is only discovered by trying, so the
           // markers can only be right after a sync has run.
           void refreshMissingPasswords()
@@ -779,26 +922,18 @@
     )
     unsubscribers.push(
       onSyncProgress((e) => {
-        // the closing event carries no folder name; that is what says the run
-        // is over, rather than the counts, which for a resync of a cached
-        // mailbox can be 0 of 0 the whole way through.
-        const running = e.folder !== ''
-        syncFolder.set(running ? e.folder : '')
-        syncServer.set(running ? e.server : '')
-        syncAccount.set(running ? e.accountEmail : '')
-        syncCounts.set(
-          running
-            ? {
-                done: e.done,
-                total: e.total,
-                folderDone: e.folderDone,
-                folderTotal: e.folderTotal,
-                foldersDone: e.foldersDone,
-                foldersTotal: e.foldersTotal,
-              }
-            : emptySyncCounts,
-        )
+        // accounts sync concurrently, so the line follows whichever is still
+        // running instead of going blank when the first one closes.
+        syncView = applyProgressEvent(syncView, e, Date.now())
+        publishSyncView(syncView)
       }),
+    )
+    unsubscribers.push(
+      startProgressSweep(
+        () => syncView,
+        (v) => (syncView = v),
+        publishSyncView,
+      ),
     )
     unsubscribers.push(watchSyncStates())
     unsubscribers.push(
@@ -983,33 +1118,41 @@
     }
   }
 
-  // a mailto: link waiting for a mailbox to exist. onboarding-first: if the link
-  // arrives before any account is set up, it is held here and opened once
-  // onboarding finishes, rather than being dropped.
-  let pendingMailto: MailtoDraft | null = null
+  // a mailto: link waiting for a mailbox to exist, and for the wizard or
+  // onboarding to get out of the way. If the link arrives before any account is
+  // set up, it is held and opened once that flow closes, rather than dropped.
+  const mailtoHold = createMailtoHold({
+    accountId: composeAccountId,
+    covered: () => wizardOpen || onboardingOpen,
+    open: (accountId, draft) => openComposeWith(accountId, editorMode, draft),
+  })
 
-  // openMailtoDraft opens a prefilled compose from a mailto: link, or defers it
-  // until a mailbox exists (see pendingMailto).
+  // openMailtoDraft opens a prefilled compose from a mailto: link, or holds it.
   function openMailtoDraft(draft: MailtoDraft): void {
-    const accountId = composeAccountId()
-    if (accountId === null) {
-      pendingMailto = draft
-      return
-    }
-    openComposeWith(accountId, editorMode, draft)
+    mailtoHold.offer(draft)
   }
 
-  // flushPendingMailto opens a held mailto draft once a mailbox is available.
-  function flushPendingMailto(): void {
-    if (pendingMailto && composeAccountId() !== null) {
-      const draft = pendingMailto
-      pendingMailto = null
-      openComposeWith(composeAccountId() as number, editorMode, draft)
-    }
+  // the sidebar's mailbox list is what compose sends from. A held link opens
+  // when it goes from empty to not, which covers the wizard inside Settings.
+  unsubscribers.push(
+    sidebar.subscribe((s) => {
+      if (s.status === 'ready' && s.data) {
+        mailtoHold.accountsChanged(s.data.accounts.length)
+      }
+    }),
+  )
+
+  // closeWizard closes the add-mailbox wizard and opens a held mailto link once
+  // the sidebar lists the mailbox it may have added, now that compose is no
+  // longer hidden under the wizard.
+  function closeWizard(): void {
+    wizardOpen = false
+    void mailtoHold.releaseAfter(refreshSidebar())
   }
 
   async function runSync(): Promise<void> {
-    await promptForMissingPasswords()
+    // the sync below covers every account, so the prompts leave it to us.
+    await promptForMissingPasswords(true)
     syncing.set(true)
     try {
       await triggerSync()
@@ -1030,19 +1173,13 @@
     wizardOpen = true
   }
 
-  function onMailboxAdded(): void {
-    wizardOpen = false
-    void refreshSidebar().then(flushPendingMailto)
-    toastInfo(get(t)('app.toast.mailboxAdded'))
-  }
-
   // onboarding completion is persisted so it shows only once. re-run clears it
   // from settings and reopens the flow.
   function finishOnboarding(): void {
     onboardingOpen = false
     setupNeedsLegal = false
     void setSetting(SettingKeys.onboarded, 'true')
-    flushPendingMailto()
+    mailtoHold.release()
   }
 
   // the setup flow reports where to land; its first run also counts as having
@@ -1062,8 +1199,9 @@
     onboardingOpen = true
   }
 
+  // the held mailto link waits for finishOnboarding: onboarding is still open.
   function onboardingAddedMailbox(): void {
-    void refreshSidebar().then(flushPendingMailto)
+    void refreshSidebar()
   }
 
   function focusSearch(): void {
@@ -1193,8 +1331,7 @@
           openSnooze(msg.id, msg.subject)
           break
         case 'download-offline':
-          patchInList(msg.id, { offline: true })
-          await downloadMessageOffline(msg.id)
+          await setOffline(msg, true)
           break
         case 'delete-message':
           await deleteMessage(msg.id)
@@ -1388,6 +1525,18 @@
       case 'go-tasks':
         if (!classic) {
           openSpace('tasks')
+        }
+        break
+      case 'plan-day':
+        if (!classic) {
+          planMyDay()
+        }
+        break
+      case 'block-time':
+        // the calendar and tasks take it themselves; in mail it blocks time
+        // for the open or selected mail.
+        if (!classic && $space === 'mail') {
+          blockTimeForOpenMail()
         }
         break
       case 'go-notes':
@@ -1846,7 +1995,7 @@
       return
     }
     if (wizardOpen) {
-      wizardOpen = false
+      closeWizard()
       return
     }
     // a reading-pane tab is the next thing in, the way a browser tab is: with
@@ -2109,6 +2258,9 @@
     if (event.key === 'Escape' && (anyDialogOpen() || overlayOpen || popupIsOpen())) {
       event.preventDefault()
     }
+    if ($prefs.design !== 'classic' && openMenuFromKeyboard(event)) {
+      return
+    }
     if (tryVimNav(event)) {
       event.preventDefault()
       return
@@ -2323,6 +2475,8 @@
       <div
         class="mail"
         class:with-myday={showMyDay}
+        role="main"
+        aria-label={$t('space.mail')}
         style={`grid-template-columns: ${sidebarW}px 0 minmax(0, 1fr)${showMyDay ? ' var(--myday-width)' : ''}`}
         bind:clientWidth={mailWidth}
       >
@@ -2341,7 +2495,13 @@
         <Resizer disabled={locked} label={$t('app.pane.resizeSidebar')} on:resize={resizeSidebar} on:end={commitPanes} />
         {#if $mailScreen === 'newsletters'}
           <div class="screen">
-            {#await import('./components/newsletters/NewsletterManager.svelte') then m}
+            {#await loadNewsletterManager() then m}
+              <svelte:component this={m.default} on:close={closeMailScreen} />
+            {/await}
+          </div>
+        {:else if $mailScreen === 'privacy'}
+          <div class="screen">
+            {#await import('./components/privacy/PrivacyReport.svelte') then m}
               <svelte:component this={m.default} on:close={closeMailScreen} />
             {/await}
           </div>
@@ -2357,7 +2517,9 @@
               : `grid-template-columns: ${listW}px 0 minmax(0, 1fr)`}
         >
           {#if $attachmentsOpen}
-            <AttachmentsBrowser />
+            {#await loadAttachmentsBrowser() then m}
+              <svelte:component this={m.default} />
+            {/await}
           {:else}
             <MessageList />
             {#if stacked}
@@ -2371,12 +2533,14 @@
         </div>
         {/if}
         {#if showMyDay}
-          <MyDayPanel on:close={() => setMyDayPanel(false)} />
+          {#await loadMyDayPanel() then m}
+            <svelte:component this={m.default} on:close={() => setMyDayPanel(false)} />
+          {/await}
         {/if}
       </div>
     {:else if $space === 'contacts'}
-      <div class="space-host">
-        {#await import('./components/contacts/ContactsSpace.svelte') then m}
+      <div class="space-host" role="main" aria-label={$t(`space.${$space}`)}>
+        {#await loadContactsSpace() then m}
           <svelte:component
             this={m.default}
             on:compose={(e) => { openSpace('mail'); startComposeTo(e.detail) }}
@@ -2384,20 +2548,20 @@
         {/await}
       </div>
     {:else if $space === 'calendar'}
-      <div class="space-host">
-        {#await import('./components/calendar/CalendarScreen.svelte') then m}
+      <div class="space-host" role="main" aria-label={$t(`space.${$space}`)}>
+        {#await loadCalendarScreen() then m}
           <svelte:component this={m.default} />
         {/await}
       </div>
     {:else if $space === 'tasks'}
-      <div class="space-host">
-        {#await import('./components/tasks/TasksScreen.svelte') then m}
+      <div class="space-host" role="main" aria-label={$t(`space.${$space}`)}>
+        {#await loadTasksScreen() then m}
           <svelte:component this={m.default} />
         {/await}
       </div>
     {:else if $space === 'projects'}
-      <div class="space-host">
-        {#await import('./components/projects/ProjectsScreen.svelte') then m}
+      <div class="space-host" role="main" aria-label={$t(`space.${$space}`)}>
+        {#await loadProjectsScreen() then m}
           <svelte:component
             this={m.default}
             on:compose={(e) => { openSpace('mail'); startComposeTo(e.detail.email, '', e.detail.projectId) }}
@@ -2405,26 +2569,26 @@
         {/await}
       </div>
     {:else if $space === 'notes'}
-      <div class="space-host">
-        {#await import('./components/notes/NotesScreen.svelte') then m}
+      <div class="space-host" role="main" aria-label={$t(`space.${$space}`)}>
+        {#await loadNotesScreen() then m}
           <svelte:component this={m.default} />
         {/await}
       </div>
     {:else if $space === 'feeds'}
-      <div class="space-host">
-        {#await import('./components/feeds/FeedsScreen.svelte') then m}
+      <div class="space-host" role="main" aria-label={$t(`space.${$space}`)}>
+        {#await loadFeedsScreen() then m}
           <svelte:component this={m.default} on:compose={(e) => shareFromFeeds(e.detail)} />
         {/await}
       </div>
     {:else if $space === 'chat' && chatWanted}
-      <div class="space-host">
-        {#await import('./components/chat/ChatSpace.svelte') then m}
+      <div class="space-host" role="main" aria-label={$t(`space.${$space}`)}>
+        {#await loadChatSpace() then m}
           <svelte:component this={m.default} />
         {/await}
       </div>
     {:else if $space === 'automations'}
-      <div class="space-host">
-        {#await import('./components/automations/AutomationsSpace.svelte') then m}
+      <div class="space-host" role="main" aria-label={$t(`space.${$space}`)}>
+        {#await loadAutomationsSpace() then m}
           <svelte:component this={m.default} />
         {/await}
       </div>
@@ -2460,18 +2624,23 @@
   <div class="compose-layer">
     {#each $composeSessions as session (session.id)}
       {#if classic}
-        <Compose {session} />
+        {#await loadClassicCompose() then m}
+          <svelte:component this={m.default} {session} />
+        {/await}
       {:else if session.placement === 'docked'}
-        <Composer2 {session} layout="docked" mainWindow />
+        {#await loadComposer() then m}
+          <svelte:component this={m.default} {session} layout="docked" mainWindow />
+        {/await}
       {/if}
     {/each}
   </div>
 {/if}
 
 <!-- settings and the wizard are code-split: their js/css load only when opened,
-     so they cost nothing at startup. compose stays eager (used constantly). -->
+     so they cost nothing at startup. compose is split too, and loaded once the
+     window has settled so it is ready before it is first opened. -->
 {#if automationsOpen && classic}
-  {#await import('./components/automations/AutomationsOverlay.svelte') then m}
+  {#await loadAutomationsOverlay() then m}
     <svelte:component this={m.default} on:close={() => (automationsOpen = false)} />
   {/await}
 {/if}
@@ -2503,7 +2672,7 @@
 
 <!-- the nightly-build warning, above everything else and shown every launch. -->
 {#if nightlyOpen}
-  {#await import('./components/common/NightlyDialog.svelte') then m}
+  {#await loadNightlyDialog() then m}
     <svelte:component this={m.default} on:accepted={() => (nightlyOpen = false)} />
   {/await}
 {/if}
@@ -2517,11 +2686,11 @@
 
 <!-- onboarding is code-split too: shown only on first run or when re-run. -->
 {#if onboardingOpen && onboardingClassic}
-  {#await import('./components/onboarding/Onboarding.svelte') then m}
+  {#await loadOnboarding() then m}
     <svelte:component this={m.default} on:finish={finishOnboarding} on:added={onboardingAddedMailbox} />
   {/await}
 {:else if onboardingOpen}
-  {#await import('./components/onboarding/Setup.svelte') then m}
+  {#await loadSetup() then m}
     <svelte:component
       this={m.default}
       rerun={onboardingRerun}
@@ -2541,9 +2710,7 @@
 {/if}
 
 {#if wizardOpen}
-  {#await import('./components/wizard/AddMailboxWizard.svelte') then m}
-    <svelte:component this={m.default} on:close={() => (wizardOpen = false)} on:added={onMailboxAdded} />
-  {/await}
+  <AddMailboxDialog on:close={closeWizard} />
 {/if}
 
 {#if $editingView}
@@ -2559,7 +2726,7 @@
 {/if}
 
 {#if !classic && $meetingPrepTarget}
-  {#await import('./components/calendar/MeetingPrep.svelte') then m}
+  {#await loadMeetingPrep() then m}
     <svelte:component
       this={m.default}
       target={$meetingPrepTarget}
@@ -2573,21 +2740,45 @@
 <ContextMenu />
 <ConfirmDialog />
 <DragStack />
+<!-- the dialogs below show only when asked for, so their code loads after the
+     window's first paint. -->
 {#if classic}
-  <ClassicSnoozeDialog />
-  <ClassicFolderDialog />
+  {#await import('./components/detail/classic/SnoozeDialog.svelte') then m}
+    <svelte:component this={m.default} />
+  {/await}
+  {#await import('./components/sidebar/classic/FolderDialog.svelte') then m}
+    <svelte:component this={m.default} />
+  {/await}
 {:else}
-  <SnoozeDialog />
-  <FolderDialog />
+  {#await import('./components/detail/SnoozeDialog.svelte') then m}
+    <svelte:component this={m.default} />
+  {/await}
+  {#await import('./components/sidebar/FolderDialog.svelte') then m}
+    <svelte:component this={m.default} />
+  {/await}
 {/if}
-<AttachmentPreview />
+{#await import('./components/detail/AttachmentPreview.svelte') then m}
+  <svelte:component this={m.default} />
+{/await}
 {#if classic}
-  <ClassicMoveDialog />
+  {#await import('./components/detail/classic/MoveDialog.svelte') then m}
+    <svelte:component this={m.default} />
+  {/await}
 {:else}
-  <MoveDialog />
+  {#await import('./components/detail/MoveDialog.svelte') then m}
+    <svelte:component this={m.default} />
+  {/await}
 {/if}
 
-<CommandPalette commands={paletteCommands} mail={paletteMailCommands} />
+{#await import('./components/common/CommandPalette.svelte') then m}
+  <svelte:component this={m.default} commands={paletteCommands} mail={paletteMailCommands} />
+{/await}
+
+{#if $vaultDialog}
+  {#await loadVaultDialogs() then m}
+    <svelte:component this={m.default} />
+  {/await}
+{/if}
 
 {#if !classic}
   <CoachLayer suspended={overlayOpen} />
@@ -2595,15 +2786,21 @@
 {/if}
 
 {#if chatWanted}
-  <ShareToChatDialog />
-  {#await import('./components/chat/VerificationDialog.svelte') then m}
+  {#await loadShareToChatDialog() then m}
+    <svelte:component this={m.default} />
+  {/await}
+  {#await loadVerificationDialog() then m}
     <svelte:component this={m.default} />
   {/await}
 {/if}
 
-<AccountPasswordDialog account={$passwordPrompt} onDone={answerPasswordPrompt} />
+{#await loadAccountPasswordDialog() then m}
+  <svelte:component this={m.default} account={$passwordPrompt} syncOnSave={!$passwordPromptSyncFollows} onDone={answerPasswordPrompt} />
+{/await}
 
-<SyncFailureDialog />
+{#await loadSyncFailureDialog() then m}
+  <svelte:component this={m.default} />
+{/await}
 
 <DevOverlays />
 

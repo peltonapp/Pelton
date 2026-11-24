@@ -2,7 +2,7 @@
   // a compose tab: while the active tab is one, it covers the whole content
   // area (list and reader) with the tab bar and the composer. switching to
   // another tab in the bar uncovers the panes as they were left.
-  import Composer2 from './Composer2.svelte'
+  import { loadComposer } from '../../lib/lazyload'
   import TabBar from '../detail/TabBar.svelte'
   import { composeSessions } from '../../stores/compose'
   import { activeComposeId } from '../../stores/tabs'
@@ -14,7 +14,9 @@
   <div class="compose-tab">
     <TabBar />
     {#key session.id}
-      <Composer2 {session} layout="tab" mainWindow />
+      {#await loadComposer() then m}
+        <svelte:component this={m.default} {session} layout="tab" mainWindow />
+      {/await}
     {/key}
   </div>
 {/if}

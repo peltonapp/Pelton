@@ -3,8 +3,6 @@ package desktop
 import (
 	"context"
 	"net/http"
-	"os"
-	"path/filepath"
 	"strconv"
 	"strings"
 	"testing"
@@ -30,9 +28,6 @@ func (b bearer) RoundTrip(r *http.Request) (*http.Response, error) {
 func mcpScriptSession(t *testing.T) (*App, int64, *mcp.ClientSession) {
 	t.Helper()
 	a, msgID := newScriptTestApp(t)
-	if data, err := os.ReadFile(filepath.Join("..", "..", "frontend", "src", "lib", "locales", "en.ts")); err == nil {
-		a.englishStrings = string(data)
-	}
 	for _, tool := range mcpPermissionTools() {
 		if err := a.store.Set(a.ctx, mcpPermissionKey(tool), "true"); err != nil {
 			t.Fatal(err)
@@ -103,6 +98,15 @@ func everyScriptOff(t *testing.T, a *App, except ...int64) {
 			t.Errorf("script %d %q is on or approved: %+v", sc.ID, sc.Name, sc)
 		}
 	}
+}
+
+// storedScript reads one script as the bindings hand it out.
+func (a *App) storedScript(id int64) (ScriptDTO, error) {
+	sc, err := a.scripts.Script(a.ctx, id)
+	if err != nil {
+		return ScriptDTO{}, err
+	}
+	return toScriptDTO(sc), nil
 }
 
 func containsID(list []int64, id int64) bool {
@@ -190,7 +194,7 @@ func TestAssistantCannotEnableOrApprove(t *testing.T) {
 		}
 	}
 	everyScriptOff(t, a)
-	sc, _ := a.GetScript(id)
+	sc, _ := a.storedScript(id)
 	if sc.Origin != string(scripting.OriginAssistant) {
 		t.Errorf("origin became %s", sc.Origin)
 	}
@@ -309,7 +313,7 @@ func TestUpdateOfUsersScriptIsAProposal(t *testing.T) {
 	if !strings.Contains(out, `"status": "proposed"`) {
 		t.Fatalf("update %s", out)
 	}
-	cur, _ := a.GetScript(user.ID)
+	cur, _ := a.storedScript(user.ID)
 	if cur.Source != "print('one')\nprint('two')" || !cur.Enabled {
 		t.Fatalf("the user's script was changed: %+v", cur)
 	}
@@ -348,11 +352,98 @@ func TestUpdateOfUsersScriptIsAProposal(t *testing.T) {
 	if err := a.RejectScriptProposal(user.ID); err != nil {
 		t.Fatal(err)
 	}
-	if cur, _ := a.GetScript(user.ID); cur.Source != "print('one')\nprint('three')" {
+	if cur, _ := a.storedScript(user.ID); cur.Source != "print('one')\nprint('three')" {
 		t.Errorf("rejecting changed the script: %q", cur.Source)
 	}
 	if p, _ := a.ScriptProposal(user.ID); p.Exists {
 		t.Error("proposal kept after rejecting")
+	}
+}
+
+// approvedScript stores a script the user wrote, switched on, approved and
+// allowed a risky call, with the given trigger and placements.
+func approvedScript(t *testing.T, a *App, trigger ScriptTriggerDTO, placements ...scripting.PlacementConfig) ScriptDTO {
+	t.Helper()
+	sc, err := a.CreateScript(ScriptInput{Name: "Mine", Kind: "lua", Trigger: trigger, Source: "print('one')", Permissions: []string{scripting.PermNotify}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(placements) > 0 {
+		if _, err := a.SetScriptPlacements(sc.ID, placements); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if _, err := a.SetScriptEnabled(sc.ID, true, []string{scripting.PermNotify}); err != nil {
+		t.Fatal(err)
+	}
+	if sc, err = a.SetScriptAllowUnasked(sc.ID, "mail.send", true); err != nil {
+		t.Fatal(err)
+	}
+	return sc
+}
+
+// A change an assistant proposes to a trigger's parameters or, through
+// them, to where the script is placed switches the script off once the user
+// accepts it, and the proposal says why beforehand. The user's own change to
+// the same things keeps the approval.
+func TestAcceptedAssistantChangeToTriggerOrPlacementsResetsApproval(t *testing.T) {
+	a, _, cs := mcpScriptSession(t)
+	propose := func(id int64, trigger map[string]any) ScriptProposalDTO {
+		t.Helper()
+		d := draft("Mine", "print('one')", scripting.PermNotify)
+		d["trigger"] = trigger
+		if out := mustCall(t, cs, mcpserver.ToolUpdateScript, map[string]any{"id": id, "script": d}); !strings.Contains(out, `"status": "proposed"`) {
+			t.Fatalf("update %s", out)
+		}
+		p, err := a.ScriptProposal(id)
+		if err != nil || !p.Exists {
+			t.Fatalf("proposal %+v %v", p, err)
+		}
+		return p
+	}
+	off := func(sc ScriptDTO) bool { return !sc.Enabled && len(sc.Approved) == 0 && len(sc.AllowUnasked) == 0 }
+
+	every := ScriptTriggerDTO{Type: scripting.TriggerEvery, Params: map[string]any{"minutes": 60}}
+	sched := approvedScript(t, a, every)
+	p := propose(sched.ID, map[string]any{"type": scripting.TriggerEvery, "params": map[string]any{"minutes": 1}})
+	if !p.ResetsApproval || strings.Join(p.ResetReasons, ",") != scripting.ChangeTriggerParams {
+		t.Fatalf("proposal %+v", p)
+	}
+	got, err := a.AcceptScriptProposal(sched.ID)
+	if err != nil || !off(got) {
+		t.Fatalf("accepted a new schedule and stayed approved: %+v %v", got, err)
+	}
+
+	placed := approvedScript(t, a, ScriptTriggerDTO{Type: scripting.TriggerManual, Params: map[string]any{"scope": "message"}}, scripting.PlacementConfig{ID: "mail.row"})
+	if len(placed.Placements) != 1 {
+		t.Fatalf("placements %+v", placed.Placements)
+	}
+	p = propose(placed.ID, map[string]any{"type": scripting.TriggerManual, "params": map[string]any{"scope": "none"}})
+	if !p.ResetsApproval || strings.Join(p.ResetReasons, ",") != scripting.ChangeTriggerParams+","+scripting.ChangePlacements {
+		t.Fatalf("proposal %+v", p)
+	}
+	if got, err = a.AcceptScriptProposal(placed.ID); err != nil || !off(got) || len(got.Placements) != 0 {
+		t.Fatalf("accepted a change that drops a placement and stayed approved: %+v %v", got, err)
+	}
+
+	same := approvedScript(t, a, every)
+	d := draft("Renamed", "print('one')", scripting.PermNotify)
+	d["trigger"] = map[string]any{"type": scripting.TriggerEvery, "params": map[string]any{"minutes": 60}}
+	mustCall(t, cs, mcpserver.ToolUpdateScript, map[string]any{"id": same.ID, "script": d})
+	if p, _ := a.ScriptProposal(same.ID); p.ResetsApproval || len(p.ResetReasons) != 0 {
+		t.Fatalf("a rename resets the approval: %+v", p)
+	}
+	if got, err = a.AcceptScriptProposal(same.ID); err != nil || !got.Enabled || len(got.AllowUnasked) != 1 || got.Name != "Renamed" {
+		t.Fatalf("a rename switched the script off: %+v %v", got, err)
+	}
+
+	own := approvedScript(t, a, ScriptTriggerDTO{Type: scripting.TriggerManual, Params: map[string]any{"scope": "message"}}, scripting.PlacementConfig{ID: "mail.row"})
+	edited, err := a.UpdateScript(own.ID, ScriptInput{Name: "Mine", Kind: "lua", Trigger: ScriptTriggerDTO{Type: scripting.TriggerManual, Params: map[string]any{"scope": "none"}}, Source: "print('one')", Permissions: []string{scripting.PermNotify}})
+	if err != nil || !edited.Enabled || len(edited.Approved) != 1 {
+		t.Fatalf("the user's own trigger change took the approval: %+v %v", edited, err)
+	}
+	if edited, err = a.SetScriptPlacements(own.ID, []scripting.PlacementConfig{{ID: "palette"}}); err != nil || !edited.Enabled || len(edited.AllowUnasked) != 1 {
+		t.Fatalf("the user's own placement change took the approval: %+v %v", edited, err)
 	}
 }
 
@@ -368,7 +459,7 @@ func TestUpdateOfAssistantsScript(t *testing.T) {
 	if !strings.Contains(out, `"status": "updated"`) {
 		t.Fatalf("update %s", out)
 	}
-	if sc, _ := a.GetScript(id); sc.Source != "print(2)" || sc.Enabled {
+	if sc, _ := a.storedScript(id); sc.Source != "print(2)" || sc.Enabled {
 		t.Fatalf("after update %+v", sc)
 	}
 
@@ -382,7 +473,7 @@ func TestUpdateOfAssistantsScript(t *testing.T) {
 	if !strings.Contains(out, `"status": "proposed"`) {
 		t.Fatalf("an approved script was changed directly: %s", out)
 	}
-	if sc, _ := a.GetScript(id); sc.Source != "print(2)" {
+	if sc, _ := a.storedScript(id); sc.Source != "print(2)" {
 		t.Fatal("changed despite the approval")
 	}
 	got, err := a.AcceptScriptProposal(id)
@@ -434,8 +525,8 @@ func TestScriptPermissionsListedOff(t *testing.T) {
 			}
 		}
 	}
-	if scripts != len(mcpserver.ScriptTools) {
-		t.Errorf("listed %d script tools, want %d", scripts, len(mcpserver.ScriptTools))
+	if want := len(mcpserver.ScriptTools) + len(mcpserver.ScriptTemplateTools); scripts != want {
+		t.Errorf("listed %d script tools, want %d", scripts, want)
 	}
 	if err := a.SetMCPPermission(mcpserver.ToolCreateScript, true); err != nil {
 		t.Fatal(err)

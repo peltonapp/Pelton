@@ -8,6 +8,8 @@
   import { portal } from '../../lib/portal'
   import { popPopup, pushPopup } from '../../lib/popups'
   import { currentUIScale } from '../../theme/theme'
+  import { get } from 'svelte/store'
+  import { prefs } from '../../stores/prefs'
 
   /** The control the panel hangs off. */
   export let anchor: HTMLElement
@@ -78,13 +80,59 @@
     }
   }
 
+  // the new design moves focus into the panel, keeps Tab inside it, walks a
+  // menu with the arrows and hands focus back to the anchor however it closes.
+  const managed = get(prefs).design !== 'classic'
+  const focusable = 'button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), a[href], [tabindex]:not([tabindex="-1"]), [role^="menuitem"]:not([aria-disabled="true"])'
+
+  function controls(): HTMLElement[] {
+    return panel ? [...panel.querySelectorAll<HTMLElement>(focusable)].filter((el) => !el.closest('[hidden], [inert]')) : []
+  }
+
+  function menuItems(): HTMLElement[] {
+    return panel ? [...panel.querySelectorAll<HTMLElement>('[role^="menuitem"]:not([aria-disabled="true"])')] : []
+  }
+
   function onKeydown(event: KeyboardEvent): void {
     if (event.key === 'Escape') {
       event.preventDefault()
       event.stopPropagation()
       dispatch('close')
       anchor?.focus()
+      return
     }
+    if (!managed) {
+      return
+    }
+    if (event.key === 'Tab') {
+      const list = controls()
+      if (list.length === 0) {
+        event.preventDefault()
+        return
+      }
+      const edge = event.shiftKey ? list[0] : list[list.length - 1]
+      const current = document.activeElement as HTMLElement | null
+      if (current === edge || current === panel || !list.includes(current as HTMLElement)) {
+        event.preventDefault()
+        ;(event.shiftKey ? list[list.length - 1] : list[0]).focus()
+      }
+      return
+    }
+    if (role !== 'menu' || !['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key)) {
+      return
+    }
+    const items = menuItems()
+    if (items.length === 0) {
+      return
+    }
+    event.preventDefault()
+    const at = items.indexOf(document.activeElement as HTMLElement)
+    const next =
+      event.key === 'Home' ? 0
+      : event.key === 'End' ? items.length - 1
+      : event.key === 'ArrowDown' ? (at + 1) % items.length
+      : at <= 0 ? items.length - 1 : at - 1
+    items[next].focus()
   }
 
   onMount(() => {
@@ -92,12 +140,27 @@
     void place()
     window.addEventListener('pointerdown', onPointerDown, true)
     window.addEventListener('resize', place)
+    if (managed) {
+      void tick().then(() => {
+        if (!panel || panel.contains(document.activeElement)) {
+          return
+        }
+        const first = panel.querySelector<HTMLElement>('[autofocus]') ?? (role === 'menu' ? menuItems()[0] : controls()[0])
+        ;(first ?? panel).focus()
+      })
+    }
   })
 
   onDestroy(() => {
     popPopup()
     window.removeEventListener('pointerdown', onPointerDown, true)
     window.removeEventListener('resize', place)
+    if (managed && anchor?.isConnected) {
+      const active = document.activeElement
+      if (!active || active === document.body || panel?.contains(active)) {
+        anchor.focus()
+      }
+    }
   })
 
   /** Measures again, for content that changed size while open. */

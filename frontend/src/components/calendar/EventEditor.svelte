@@ -449,7 +449,7 @@
           <button type="button" class="link" on:click={() => setEndDay(addDays(startDay, 1))}>{$t('calendar.endsLater')}</button>
         {/if}
         {#if invalid}
-          <p class="error"><Ph svg={warningIcon} size={13} />{$t('calendar.endBeforeStart')}</p>
+          <p class="error" role="alert"><Ph svg={warningIcon} size={13} />{$t('calendar.endBeforeStart')}</p>
         {/if}
       </div>
     </div>

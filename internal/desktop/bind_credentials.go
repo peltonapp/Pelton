@@ -138,6 +138,17 @@ func (a *App) freshAccessToken(account storage.Account, secret credentials.Secre
 	return token.AccessToken, nil
 }
 
+// noPassword reports an account with no stored secret and no environment
+// fallback: nothing it tries can log in until the user types a password.
+func (a *App) noPassword(account storage.Account) bool {
+	_, err := credentials.Load(account.ID)
+	if !errors.Is(err, credentials.ErrNotFound) {
+		return false
+	}
+	_, err = a.imapFromEnv(pimap.Config{Username: loginName(account)})
+	return errors.Is(err, errNoCredentials)
+}
+
 // imapFromEnv applies environment credentials to a config when they match the
 // account, otherwise reports that none are available.
 func (a *App) imapFromEnv(cfg pimap.Config) (pimap.Config, error) {

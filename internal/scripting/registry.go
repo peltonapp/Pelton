@@ -265,7 +265,7 @@ func NewRegistry() *Registry {
 var (
 	idPattern  = regexp.MustCompile(`^[a-z][a-z0-9_]*(\.[a-z][a-z0-9_]*)*$`)
 	luaName    = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
-	permPatten = regexp.MustCompile(`^[a-z][a-z0-9_.]*(:[A-Za-z0-9_.*-]+)?$`)
+	permPatten = regexp.MustCompile(`^[a-z][a-z0-9_.]*(:[A-Za-z0-9_.-]+)?$`)
 	holeRE     = regexp.MustCompile(`\{\{([A-Za-z_][A-Za-z0-9_]*)\}\}`)
 )
 

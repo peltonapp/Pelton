@@ -42,6 +42,7 @@ import {
   type ScriptInput,
   type ScriptLibrary,
   type ScriptLibraryInput,
+  type ScriptRef,
   type ScriptResult,
   type ScriptRun,
 } from '../lib/scripting'
@@ -293,9 +294,12 @@ export async function runNow(s: Script, messageId: number): Promise<ScriptRun | 
   }
 }
 
-/** Dry runs a script as written; the result shows in the editor. With askModel its AI steps really ask the model. */
-export async function runTest(input: ScriptInput, messageId: number, askModel = false): Promise<ScriptRun> {
-  const run = askModel ? await api.testScriptAskingAI(input, messageId) : await api.testScript(input, messageId)
+/**
+ * Dry runs a script as written; the result shows in the editor. With askModel its AI steps really ask a
+ * model the user approved for the saved script scriptId.
+ */
+export async function runTest(input: ScriptInput, messageId: number, askModel = false, scriptId = 0): Promise<ScriptRun> {
+  const run = askModel ? await api.testScriptAskingAI(scriptId, input, messageId) : await api.testScript(input, messageId)
   testRun.set(run)
   return run
 }
@@ -341,25 +345,54 @@ export function openGallery(): void {
   galleryOpen.set(true)
 }
 
+/** Scripts a library change just switched off, for the user to review, or null. */
+export interface LibraryReview {
+  library: string
+  scripts: ScriptRef[]
+}
+
+/** The scripts the last library change switched off, waiting for the review dialog, or null. */
+export const libraryReview = writable<LibraryReview | null>(null)
+
+async function afterLibraryChange(library: string, switchedOff: ScriptRef[]): Promise<void> {
+  if (switchedOff.length === 0) {
+    return
+  }
+  await loadScripts()
+  libraryReview.set({ library, scripts: switchedOff })
+}
+
 /** Stores a new library and opens it. */
 export async function createLibrary(input: ScriptLibraryInput): Promise<ScriptLibrary> {
-  const l = replaceLibrary(await api.createScriptLibrary(input))
+  const saved = await api.createScriptLibrary(input)
+  const l = replaceLibrary(saved.library)
   selectLibrary(l.id)
+  await afterLibraryChange(l.name, saved.switchedOff)
   return l
 }
 
 /** Saves a library. */
 export async function saveLibrary(id: number, input: ScriptLibraryInput): Promise<ScriptLibrary> {
-  return replaceLibrary(await api.updateScriptLibrary(id, input))
+  const saved = await api.updateScriptLibrary(id, input)
+  const l = replaceLibrary(saved.library)
+  await afterLibraryChange(l.name, saved.switchedOff)
+  return l
 }
 
 /** Deletes a library. */
 export async function removeLibrary(id: number): Promise<void> {
-  await api.deleteScriptLibrary(id)
+  const name = get(libraries).find((l) => l.id === id)?.name ?? ''
+  const switchedOff = await api.deleteScriptLibrary(id)
   libraries.update((list) => list.filter((l) => l.id !== id))
   if (get(selectedLibraryId) === id) {
     selectedLibraryId.set(null)
   }
+  await afterLibraryChange(name, switchedOff)
+}
+
+/** The switched-on scripts saving a library under name would switch off; id is 0 for a new library. */
+export async function libraryImpact(id: number, name: string): Promise<ScriptRef[]> {
+  return (await api.scriptLibraryImpact(id, name)).filter((s) => s.enabled)
 }
 
 /** Writes a library to a file the user picks. */
@@ -437,10 +470,12 @@ export async function confirmImport(): Promise<Script | null> {
     return null
   }
   if (file.library) {
-    const l = replaceLibrary(await api.importScriptLibrary(file.text))
+    const saved = await api.importScriptLibrary(file.text)
+    const l = replaceLibrary(saved.library)
     importPreview.set(null)
     selectLibrary(l.id)
     toastSuccess(get(t)('scripts.toast.imported').replace('{name}', l.name))
+    await afterLibraryChange(l.name, saved.switchedOff)
     return null
   }
   const s = replace(await api.importScript(file.text))

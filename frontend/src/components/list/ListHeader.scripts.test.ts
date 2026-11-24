@@ -26,12 +26,15 @@ describe('ListHeader scripts', () => {
     })
     selectedIds.set(new Set([11, 12]))
     render(ListHeader, { title: 'Inbox' })
-    await userEvent.setup().click(screen.getByRole('button', { name: 'Triage selected' }))
+    const button = screen.getByRole('button', { name: 'Triage selected, Script: Triage' })
+    expect(button.querySelector('[data-script-mark]')).not.toBeNull()
+    await userEvent.setup().click(button)
     expect(run).toHaveBeenCalledWith(6, 'toolbar.list', [{ id: '11' }, { id: '12' }])
   })
 
   it('renders none when nothing is placed', () => {
     render(ListHeader, { title: 'Inbox' })
-    expect(screen.queryByRole('button', { name: 'Triage selected' })).toBeNull()
+    expect(screen.queryByRole('button', { name: /Triage selected/ })).toBeNull()
+    expect(document.querySelector('[data-script-mark]')).toBeNull()
   })
 })

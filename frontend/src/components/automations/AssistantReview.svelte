@@ -44,6 +44,7 @@
 
   async function settle(accept: boolean): Promise<void> {
     busy = true
+    const resets = proposal?.resetsApproval ?? false
     try {
       if (accept) {
         await acceptScriptProposal(script.id)
@@ -51,7 +52,7 @@
         await rejectScriptProposal(script.id)
       }
       proposal = null
-      toastSuccess($t(accept ? 'scripts.assistant.accepted' : 'scripts.assistant.rejected'))
+      toastSuccess($t(accept ? (resets ? 'scripts.assistant.acceptedOff' : 'scripts.assistant.accepted') : 'scripts.assistant.rejected'))
     } catch (err) {
       toastError(errorMessage(err))
     } finally {
@@ -76,6 +77,9 @@
     {/if}
     {#if proposal.resetsApproval}
       <p class="meta">{$t('scripts.assistant.resets')}</p>
+      {#if proposal.resetReasons.length > 0}
+        <p class="meta">{$t('scripts.assistant.resetsBecause').replace('{list}', proposal.resetReasons.map((r) => $t(`scripts.assistant.reason.${r}`)).join(', '))}</p>
+      {/if}
     {/if}
     {#if proposal.problem}
       <p class="meta problem" role="alert">{proposal.problem}</p>

@@ -11,6 +11,7 @@
   import Select from '../common/Select.svelte'
   import ToggleSwitch from '../common/ToggleSwitch.svelte'
   import LuaEditor from './LuaEditor.svelte'
+  import Live from './Live.svelte'
   import LuaWorkbench from './LuaWorkbench.svelte'
   import AiAccess from '../ai/AiAccess.svelte'
   import AiScriptOptions from '../ai/AiScriptOptions.svelte'
@@ -24,6 +25,7 @@
   import SettingsSchemaEditor from './SettingsSchemaEditor.svelte'
   import PlacementEditor from './PlacementEditor.svelte'
   import AssistantReview from './AssistantReview.svelte'
+  import LibraryNote from './LibraryNote.svelte'
   import { t } from '../../lib/i18n'
   import { checkScriptLua } from '../../lib/api'
   import { aiTarget, permCloud, permLocal, usesAI } from '../../lib/ai'
@@ -101,7 +103,9 @@
   $: if (input.kind === 'lua') {
     scheduleCheck(input.source)
   }
-  $: missing = (blockPerms ?? compiled?.permissions ?? []).filter((p) => !permissionMet(p, input.permissions))
+  $: testText = $testRun ? `${$t(`scripts.status.${$testRun.status}`)}${$testRun.error ? `: ${$testRun.error}` : ''}` : ''
+  $: compileText = (tree && !$blockEditor ? compiled?.errors ?? [] : []).map((e) => `${e.block ? `${e.block}: ` : ''}${e.message}`).join('. ')
+  $: missing =(blockPerms ?? compiled?.permissions ?? []).filter((p) => !permissionMet(p, input.permissions))
   $: ai = usesAI(input.permissions)
   $: assist = {
     catalog,
@@ -191,7 +195,7 @@
   async function test(): Promise<void> {
     busy = true
     try {
-      await runTest(input, testOn === 'open' ? ($visibleMessageId ?? 0) : 0, ai && askModel)
+      await runTest(input, testOn === 'open' ? ($visibleMessageId ?? 0) : 0, ai && askModel, script.id)
     } catch (err) {
       toastError(errorMessage(err))
     } finally {
@@ -267,6 +271,7 @@
       <p class="notice">{$t(`scripts.origin.${script.origin}.notice`)}</p>
     {/if}
     <AssistantReview {script} />
+    <LibraryNote {script} />
 
     <input class="cal-field" aria-label={$t('scripts.description')} placeholder={$t('scripts.description')} bind:value={input.description} />
 
@@ -303,7 +308,8 @@
       <legend>{$t(input.kind === 'lua' ? 'scripts.code' : 'scripts.blocks')}</legend>
       {#if input.kind === 'lua'}
         <LuaWorkbench label={$t('scripts.code')} content={input.source} {catalog} {assist} {marks} on:change={(e) => (input = { ...input, source: e.detail })} />
-        {#if syntax}<p class="error" role="alert">{syntax}</p>{/if}
+        {#if syntax}<p class="error">{syntax}</p>{/if}
+        <Live text={syntax} />
       {:else if tree}
         <!-- the block editor mounts here; see blockEditor in stores/scripts.ts -->
         <div class="blocks" data-block-editor-mount>
@@ -331,7 +337,7 @@
           <button type="button" class="cal-btn" disabled={dirty || (compiled?.errors.length ?? 0) > 0} on:click={() => void convert()}>{$t('scripts.convert')}</button>
         </div>
         {#if compiled && compiled.errors.length > 0}
-          <ul class="errors" role="alert">
+          <ul class="errors">
             {#each compiled.errors as e, i (i)}
               <li>{e.block ? `${e.block}: ` : ''}{e.message}</li>
             {/each}
@@ -410,10 +416,10 @@
         <button type="button" class="cal-btn" disabled={busy} on:click={() => void test()}>{$t('scripts.test.run')}</button>
         {#if ai}<AiTestToggle bind:checked={askModel} />{/if}
       </div>
+      <Live text={testText} />
+      <Live text={compileText} assertive />
       {#if $testRun}
-        <p class="result {$testRun.status}" role="status">
-          {$t(`scripts.status.${$testRun.status}`)}{$testRun.error ? `: ${$testRun.error}` : ''}
-        </p>
+        <p class="result {$testRun.status}">{testText}</p>
         {#if $testRun.error && errorPlace($testRun, $t)}
           <p class="error-at">{$t('scripts.error.at').replace('{place}', errorPlace($testRun, $t))}</p>
         {/if}

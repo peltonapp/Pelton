@@ -2,7 +2,9 @@ import { describe, expect, it } from 'vitest'
 import type { ScriptCatalog } from '../../../lib/scripting'
 import { blockCatalog } from '../../../test/scriptfixtures'
 import { completionsAt, docAt, settingNames, signature, syntaxErrorLine, type LuaContext } from './assist'
-import { tokenizeLines } from './highlight'
+import { ensureSyntaxTree } from '@codemirror/language'
+import { EditorState } from '@codemirror/state'
+import { luaLanguage, luaTokens } from './highlight'
 import { referenceSections, searchReference } from './reference'
 
 const catalog: ScriptCatalog = {
@@ -106,18 +108,25 @@ describe('docs', () => {
   })
 })
 
+function tokens(doc: string, modules: string[]) {
+  const state = EditorState.create({ doc, extensions: luaLanguage })
+  ensureSyntaxTree(state, state.doc.length, 5000)
+  return luaTokens(state, new Set(modules))
+}
+
 describe('highlight', () => {
   it('colours keywords, strings, numbers, comments, builtins and modules', () => {
-    const [line] = tokenizeLines(['local n = mail.move(x, "Archive", 3) -- done'], new Set(['mail']))
-    const kinds = line.map((t) => t.kind)
-    expect(kinds).toEqual(['keyword', 'module', 'string', 'number', 'comment'])
+    const line = tokens('local n = mail.move(x, "Archive", 3) -- done', ['mail'])
+    expect(line.map((t) => t.kind)).toEqual(['keyword', 'module', 'string', 'number', 'comment'])
     expect(line[1]).toEqual({ from: 10, to: 19, kind: 'module' })
   })
 
   it('carries a long comment over lines', () => {
-    const lines = tokenizeLines(['--[[ start', 'still comment', ']] print(1)'], new Set())
-    expect(lines[1]).toEqual([{ from: 0, to: 13, kind: 'comment' }])
-    expect(lines[2].map((t) => t.kind)).toEqual(['comment', 'builtin', 'number'])
+    const doc = '--[[ start\nstill comment\n]] print(1)'
+    const toks = tokens(doc, [])
+    const third = doc.lastIndexOf('\n') + 1
+    expect(toks.filter((t) => t.from < third).map((t) => t.kind)).toEqual(['comment', 'comment'])
+    expect(toks.filter((t) => t.from >= third).map((t) => t.kind)).toEqual(['comment', 'builtin', 'number'])
   })
 })
 

@@ -1,6 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { fireEvent, render, screen, within } from '@testing-library/svelte'
 import { get } from 'svelte/store'
+import { expectAccessible } from '../../test/a11y'
+import { expectAxeClean } from '../../test/axe'
 
 const setSetting = vi.fn(async () => {})
 vi.mock('../../lib/api', async (importOriginal) => ({ ...(await importOriginal<typeof import('../../lib/api')>()), setSetting }))
@@ -45,6 +47,13 @@ describe('Rail', () => {
     await fireEvent.contextMenu(screen.getByRole('button', { name: 'Calendar' }))
     const labels = get(contextMenu)?.entries.map((e) => (typeof e === 'object' && 'label' in e ? e.label : e))
     expect(labels).toEqual(['Move up', 'Move down', 'Hide from navigation', 'separator', 'Customize navigation…'])
+  })
+
+  it('says the unread count its badge only shows as a dot', async () => {
+    render(Rail, { props: { unread: 3 } })
+    expect(screen.getByRole('button', { name: 'Mail, 3 unread' })).toBeInTheDocument()
+    expectAccessible()
+    await expectAxeClean()
   })
 
   it('moves the focused entry with alt and an arrow', async () => {

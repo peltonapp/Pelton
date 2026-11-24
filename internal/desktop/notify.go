@@ -155,6 +155,10 @@ type notifyStrings struct {
 	// the body that stands in for any notification while the app is locked
 	// with notifications hidden (applock.go).
 	locked string
+	// the body of a notification for mail in a locked vault, and in an
+	// unlocked one (mailvault.go).
+	vaultMail     string
+	vaultMailOpen string
 	// the Feeds space (feeds_refresh.go).
 	feeds   string // title of a summary over several feeds
 	feedNew string // %d new entries
@@ -167,8 +171,9 @@ var notifyLocales = map[string]notifyStrings{
 		focusEnded: "Focus ended", focusOne: "1 new message", focusOneVIP: "1 new message, from a VIP",
 		focusManyVIP: "%d new messages, %d from VIPs", focusManyOneVIP: "%d new messages, 1 from a VIP",
 		actionArchive: "Archive", actionMarkRead: "Mark read", actionReply: "Reply",
-		locked: "Unlock Pelton to see what is new.",
-		feeds:  "Feeds", feedNew: "%d new articles",
+		locked:    "Unlock Pelton to see what is new.",
+		vaultMail: "New mail in a locked folder", vaultMailOpen: "New mail in a vault folder",
+		feeds: "Feeds", feedNew: "%d new articles",
 	},
 	"de": {
 		newMail: "Neue Nachricht", vipNewMail: "Neue Nachricht von einem VIP", noSubject: "(kein Betreff)", fromUnknown: "Unbekannter Absender", summary: "%d neue Nachrichten",
@@ -274,10 +279,46 @@ var notifyLocales = map[string]notifyStrings{
 // notifyStringsFor returns the notification text table for lang, falling back to
 // English for an unknown or empty code.
 func notifyStringsFor(lang string) notifyStrings {
-	if s, ok := notifyLocales[lang]; ok {
-		return s
+	s, ok := notifyLocales[lang]
+	if !ok {
+		return notifyLocales["en"]
 	}
-	return notifyLocales["en"]
+	if s.vaultMail == "" {
+		s.vaultMail, s.vaultMailOpen = notifyLocales["en"].vaultMail, notifyLocales["en"].vaultMailOpen
+	}
+	return s
+}
+
+// notifyMailVault raises the one notification vault mail may have: that
+// something arrived, never from whom or about what, whether the vault is
+// locked or not, since the system keeps its own record of notifications. A
+// vault set to notify nothing stays silent.
+func (a *App) notifyMailVault(folder storage.Folder) {
+	if n, ok := a.mailVaultNotification(folder); ok {
+		a.sendNotification(n)
+	}
+}
+
+// mailVaultNotification is the notification notifyMailVault raises, or false
+// when it raises none.
+func (a *App) mailVaultNotification(folder storage.Folder) (notification, bool) {
+	if !a.boolSetting(settingNotifyNewMail, false) {
+		return notification{}, false
+	}
+	vaultID, err := a.store.FolderVault(a.ctx, folder.ID)
+	if err != nil {
+		return notification{}, false
+	}
+	v, err := a.store.GetMailVault(a.ctx, vaultID)
+	if err != nil || v.Notify == storage.MailVaultNotifyNone {
+		return notification{}, false
+	}
+	s := notifyStringsFor(a.stringSetting(settingLanguage, "en"))
+	body := s.vaultMail
+	if a.mailVaultUnlocked(vaultID) {
+		body = s.vaultMailOpen
+	}
+	return notification{title: "Pelton", body: body}, true
 }
 
 // notifyNewMail raises OS notifications for messages freshly pulled into a
@@ -289,6 +330,10 @@ func notifyStringsFor(lang string) notifyStrings {
 // for the summary raised when focus ends.
 func (a *App) notifyNewMail(folder storage.Folder, ids []int64) {
 	if len(ids) == 0 || !strings.EqualFold(folder.IMAPPath, "INBOX") {
+		return
+	}
+	if a.inMailVault(folder.ID) {
+		a.notifyMailVault(folder)
 		return
 	}
 	focused := a.advanceFocus(time.Now()).Active
@@ -381,6 +426,10 @@ func notifyBody(m *storage.Message, s notifyStrings) string {
 // and notify_other.go.
 func (a *App) sendNotification(n notification) {
 	n = a.maskForLock(n)
+	if a.notificationForTest != nil {
+		a.notificationForTest(n)
+		return
+	}
 	if err := a.deliverNotification(n); err != nil {
 		a.log.Warn("notify", "err", err)
 	}

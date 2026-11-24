@@ -195,9 +195,9 @@ func textModule() Module {
 			if err != nil {
 				return nil, err
 			}
-			out := re.ReplaceAllString(s, with)
-			if len(out) > maxBuiltString {
-				return nil, fmt.Errorf("text.replace would build more than %d bytes", maxBuiltString)
+			out, err := boundedReplace(re, s, with, maxBuiltString)
+			if err != nil {
+				return nil, err
 			}
 			return []any{out}, nil
 		}, param("text", TypeText), param("pattern", TypeRegex), param("with", TypeString)),
@@ -206,6 +206,34 @@ func textModule() Module {
 		fns[i].DescKey = modDesc("text", fns[i].Name)
 	}
 	return Module{Meta: meta("module", "text", "utility"), Functions: fns}
+}
+
+// boundedReplace is re.ReplaceAllString that gives up as soon as the result
+// passes limit bytes, instead of building it first.
+func boundedReplace(re *regexp.Regexp, s, with string, limit int) (string, error) {
+	tooLong := fmt.Errorf("text.replace would build more than %d bytes", limit)
+	if with == "" {
+		return re.ReplaceAllString(s, ""), nil
+	}
+	matches := re.FindAllStringSubmatchIndex(s, limit+1)
+	if len(matches) > limit {
+		return "", tooLong
+	}
+	var out []byte
+	last := 0
+	for _, m := range matches {
+		out = append(out, s[last:m[0]]...)
+		out = re.ExpandString(out, with, s, m)
+		last = m[1]
+		if len(out) > limit {
+			return "", tooLong
+		}
+	}
+	out = append(out, s[last:]...)
+	if len(out) > limit {
+		return "", tooLong
+	}
+	return string(out), nil
 }
 
 func textAndRegexp(c *Call) (string, *regexp.Regexp, error) {

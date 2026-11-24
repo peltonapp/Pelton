@@ -320,6 +320,10 @@ func refLua(ref string) (string, error) {
 			if !refSegment.MatchString(seg) {
 				return "", bad
 			}
+			if slices.Contains(luaKeywords, seg) {
+				out += "[" + LuaString(seg) + "]"
+				continue
+			}
 			out += "." + seg
 		}
 		return out, nil

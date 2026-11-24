@@ -22,6 +22,7 @@ vi.mock('../../stores/confirm', () => ({ askConfirm: vi.fn().mockResolvedValue(t
 import FeedSidebar from './FeedSidebar.svelte'
 import { feedSidebar, newsletterUnread } from '../../stores/feeds'
 import type { Feed, FeedSidebar as Sidebar } from '../../lib/types'
+import { expectAxeClean } from '../../test/axe'
 
 function feed(id: number, patch: Partial<Feed> = {}): Feed {
   return {
@@ -69,6 +70,11 @@ describe('the Feeds sidebar', () => {
     expect(screen.getByRole('button', { name: /Today\s*2/ })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /Newsletters\s*5/ })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /^Read later$/ })).toBeInTheDocument()
+  })
+
+  it('passes axe', async () => {
+    render(FeedSidebar, { props: { scope: { kind: 'feed', id: 2 } } })
+    await expectAxeClean()
   })
 
   it('shows feeds in and out of folders, a folder with its total, and why a feed failed', () => {
