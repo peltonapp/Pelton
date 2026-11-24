@@ -10,14 +10,17 @@
   import ProtectedNotice from './ProtectedNotice.svelte'
   import PhishingNotice from './PhishingNotice.svelte'
   import AttachmentList from './AttachmentList.svelte'
-  import InviteCard from './InviteCard.svelte'
+  import { loadInviteCard } from '../../lib/lazyload'
   import InfoModal from './InfoModal.svelte'
   import SourceModal from './SourceModal.svelte'
+  import ClassicInfoModal from './classic/InfoModal.svelte'
+  import ClassicSourceModal from './classic/SourceModal.svelte'
   import Spinner from '../common/Spinner.svelte'
   import ErrorState from '../common/ErrorState.svelte'
   import TabBar from './TabBar.svelte'
   import { visibleMessageId, hasTabs, activeTabId, tabs, markTabStale, labelTab, closeTab } from '../../stores/tabs'
-  import { messageDetail, loadMessage, clearMessage } from '../../stores/message'
+  import { messageDetail, bodyLoading, loadMessage, clearMessage } from '../../stores/message'
+  import { bodyFetchFailed, retryBodyFetch } from '../../stores/bodyfetch'
   import { deleteMessage, archiveMessage, scanMessage, openMessageWindow } from '../../lib/api'
   import { reportArchiveExport, dropDeleted, leaveList, exportEml, markFlagged, markSeen } from '../../lib/messageactions'
   import { editNote, toggleMute, togglePin } from '../../lib/organize'
@@ -54,6 +57,8 @@
     IconTrash,
     IconChecklist,
     IconLayoutKanban,
+    IconFilterPlus,
+    IconHeartHandshake,
     IconMessageShare,
   } from '@tabler/icons-svelte'
   import { chatAvailable } from '../../lib/chatavailable'
@@ -64,7 +69,9 @@
   import { openContextMenu, type MenuEntry } from '../../stores/contextmenu'
   import { menuHint } from '../../stores/shortcuts'
   import { createTasksFromMail } from '../../lib/taskmail'
+  import { findPromisesIn, promiseSettings } from '../../stores/promises'
   import { pickProjectFor } from '../../lib/projectpicker'
+  import { createRuleFromMail } from '../automations/blocks/rulefrommail'
   import { forgetCard } from '../../stores/threads'
   import { readerMinWidth } from '../../lib/myday'
   import type { MessageDetail, EditorMode } from '../../lib/types'
@@ -144,6 +151,10 @@
       { label: $t('shortcut.markUnread'), icon: IconMailFilled, hint: menuHint('mark-unread'), action: () => void markSeen(message, false) },
       { label: $t('shortcut.createTask'), icon: IconChecklist, hint: menuHint('create-task'), action: () => void createTasksFromMail([message.id]) },
       { label: $t('projects.addTo'), icon: IconLayoutKanban, hint: menuHint('add-to-project'), action: () => pickProjectFor([message.id], message.threadId) },
+      ...(newDesign ? [{ label: $t('scripts.blocks.ruleFromMail'), icon: IconFilterPlus, action: () => void createRuleFromMail(message.id) }] : []),
+      ...($prefs.design === 'new' && $promiseSettings.enabled
+        ? [{ label: $t('promises.find'), icon: IconHeartHandshake, action: () => void findPromisesIn(message.id) }]
+        : []),
       'separator',
       { label: $t('messageList.menu.openInWindow'), icon: IconAppWindow, action: () => void openMessageWindow(message.id, message.subject) },
       { label: $t('detail.toolbar.print'), icon: IconPrinter, action: () => printMessage(message) },
@@ -157,7 +168,7 @@
       'separator',
       { label: $t('action.delete'), icon: IconTrash, danger: true, hint: menuHint('delete-message'), action: () => void remove(message) },
     ]
-    openContextMenu(x, y, entries)
+    openContextMenu(x, y, entries, { place: 'mail.message', items: [{ id: String(message.id) }] })
   }
 
   // the pane follows whichever message is visible: the active tab's, or the one
@@ -352,7 +363,7 @@ ${bodyHtml}
   }
 </script>
 
-<section class="detail">
+<section class="detail" aria-label={$t('a11y.region.reader')}>
   {#if $hasTabs}
     <TabBar />
   {/if}
@@ -429,12 +440,24 @@ ${bodyHtml}
 
     <div class="scroll selectable" tabindex="-1" bind:this={scrollEl}>
       <DetailHeader {detail} />
+      {#if $bodyLoading}
+        <div class="body-loading" aria-live="polite">
+          <Spinner label={$t('detail.loadingMessage')} />
+        </div>
+      {:else if $bodyFetchFailed === detail.id}
+        <div class="body-failed" role="alert">
+          <span>{$t('detail.bodyFetchFailed')}</span>
+          <button type="button" on:click={() => void retryBodyFetch(detail.id)}>{$t('detail.bodyFetchRetry')}</button>
+        </div>
+      {/if}
       <div class="body-wrap">
         {#if detail.phishing.level !== 'none'}
           <PhishingNotice report={detail.phishing} messageId={detail.id} />
         {/if}
         {#if $prefs.design !== 'classic'}
-          <InviteCard messageId={detail.id} attachments={detail.attachments} />
+          {#await loadInviteCard() then m}
+            <svelte:component this={m.default} messageId={detail.id} attachments={detail.attachments} />
+          {/await}
         {/if}
         {#if detail.pgpState !== '' && detail.pgpState !== 'open'}
           <!-- the body here is still the armor, so showing it would put
@@ -452,12 +475,16 @@ ${bodyHtml}
     </div>
   {/if}
 
-  {#if infoFor}
+  {#if infoFor && newDesign}
     <InfoModal detail={infoFor} on:close={() => (infoFor = null)} />
+  {:else if infoFor}
+    <ClassicInfoModal detail={infoFor} on:close={() => (infoFor = null)} />
   {/if}
 
-  {#if sourceFor !== null}
+  {#if sourceFor !== null && newDesign}
     <SourceModal messageId={sourceFor} on:close={() => (sourceFor = null)} />
+  {:else if sourceFor !== null}
+    <ClassicSourceModal messageId={sourceFor} on:close={() => (sourceFor = null)} />
   {/if}
 </section>
 
@@ -574,5 +601,37 @@ ${bodyHtml}
     margin-top: var(--space-4);
     display: flex;
     flex-direction: column;
+  }
+
+  .body-loading {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    margin-top: var(--space-3);
+    color: var(--text-tertiary);
+    font-size: var(--fz-meta);
+  }
+
+  .body-failed {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+    margin-top: var(--space-3);
+    color: var(--text-secondary);
+    font-size: var(--fz-meta);
+  }
+
+  .body-failed button {
+    padding: var(--space-1) var(--space-3);
+    border: var(--hairline) solid var(--border-default);
+    border-radius: var(--radius-control);
+    background: var(--surface-raised);
+    color: var(--text-primary);
+    font-size: var(--fz-label);
+    cursor: var(--cursor-action);
+  }
+
+  .body-failed button:hover {
+    background: var(--surface-hover);
   }
 </style>

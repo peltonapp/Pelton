@@ -20,8 +20,19 @@ type mcpWriter struct {
 	app *App
 }
 
-func (w *mcpWriter) MarkRead(_ context.Context, id int64, read bool) error {
-	err := w.app.SetSeen(id, read)
+// reach checks that an MCP client may touch a message at all: one in a vault
+// is out of reach unless that vault is unlocked and allows MCP, so a guessed
+// id acts on nothing it could not read.
+func (w *mcpWriter) reach(ctx context.Context, id int64) error {
+	_, err := w.app.store.GetMessage(mcpCtx(ctx), id)
+	return err
+}
+
+func (w *mcpWriter) MarkRead(ctx context.Context, id int64, read bool) error {
+	err := w.reach(ctx, id)
+	if err == nil {
+		err = w.app.SetSeen(id, read)
+	}
 	state := "unread"
 	if read {
 		state = "read"
@@ -29,18 +40,27 @@ func (w *mcpWriter) MarkRead(_ context.Context, id int64, read bool) error {
 	return w.record(mcpserver.ToolMarkRead, id, "marked "+state, err)
 }
 
-func (w *mcpWriter) Move(_ context.Context, id, folderID int64) error {
-	_, err := w.app.MoveMessage(id, folderID)
+func (w *mcpWriter) Move(ctx context.Context, id, folderID int64) error {
+	err := w.reach(ctx, id)
+	if err == nil {
+		_, err = w.app.MoveMessage(id, folderID)
+	}
 	return w.record(mcpserver.ToolMoveMessage, id, "moved to "+w.folderName(folderID), err)
 }
 
-func (w *mcpWriter) Archive(_ context.Context, id int64) error {
-	_, err := w.app.ArchiveMessage(id)
+func (w *mcpWriter) Archive(ctx context.Context, id int64) error {
+	err := w.reach(ctx, id)
+	if err == nil {
+		_, err = w.app.ArchiveMessage(id)
+	}
 	return w.record(mcpserver.ToolArchive, id, "archived", err)
 }
 
-func (w *mcpWriter) Flag(_ context.Context, id int64, flagged bool) error {
-	err := w.app.SetFlagged(id, flagged)
+func (w *mcpWriter) Flag(ctx context.Context, id int64, flagged bool) error {
+	err := w.reach(ctx, id)
+	if err == nil {
+		err = w.app.SetFlagged(id, flagged)
+	}
 	action := "unstarred"
 	if flagged {
 		action = "starred"
@@ -48,8 +68,11 @@ func (w *mcpWriter) Flag(_ context.Context, id int64, flagged bool) error {
 	return w.record(mcpserver.ToolFlagMessage, id, action, err)
 }
 
-func (w *mcpWriter) SetFlagColor(_ context.Context, id int64, color int) error {
-	err := w.app.SetFlagColor(id, color)
+func (w *mcpWriter) SetFlagColor(ctx context.Context, id int64, color int) error {
+	err := w.reach(ctx, id)
+	if err == nil {
+		err = w.app.SetFlagColor(id, color)
+	}
 	action := "cleared the colour label"
 	if color != 0 {
 		action = fmt.Sprintf("set colour label %d", color)
@@ -59,8 +82,11 @@ func (w *mcpWriter) SetFlagColor(_ context.Context, id int64, color int) error {
 
 // Delete moves to the trash. There is deliberately no path from here to an
 // expunge: emptying the trash stays with the person at the keyboard.
-func (w *mcpWriter) Delete(_ context.Context, id int64) error {
-	err := w.app.DeleteMessage(id)
+func (w *mcpWriter) Delete(ctx context.Context, id int64) error {
+	err := w.reach(ctx, id)
+	if err == nil {
+		err = w.app.DeleteMessage(id)
+	}
 	return w.record(mcpserver.ToolDeleteMessage, id, "moved to the trash", err)
 }
 

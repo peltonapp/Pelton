@@ -427,7 +427,7 @@
       { label: $t('notes.menu.copyLink'), action: () => void navigator.clipboard?.writeText(`[[${linkText($noteResolver, path)}]]`) },
       'separator',
       { label: $t('notes.menu.delete'), action: () => void deleteNote(path), danger: true },
-    ])
+    ], { place: 'notes.note', items: [{ id: path }] })
   }
 
   function folderMenu(path: string, x: number, y: number): void {
@@ -465,7 +465,7 @@
       { label: $t('notes.menu.rescan'), action: () => void vaultRescan() },
       'separator',
       { label: $t('notes.menu.delete'), action: () => void deleteNote(path), danger: true },
-    ])
+    ], { place: 'notes.note', items: [{ id: path }] })
   }
 
   async function submitPrompt(): Promise<void> {

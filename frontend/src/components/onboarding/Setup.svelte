@@ -16,14 +16,13 @@
   import MailboxStep from './MailboxStep.svelte'
   import DavStep from './DavStep.svelte'
   import NotesStep from './NotesStep.svelte'
-  import FeedsStep from './FeedsStep.svelte'
   import ChatStep from './ChatStep.svelte'
   import KeysStep from './KeysStep.svelte'
   import SummaryStep from './SummaryStep.svelte'
   import { prefs, setDesign, setHiddenSpaces, setLanguage } from '../../stores/prefs'
   import { sidebar } from '../../stores/accounts'
   import { chatSignedIn } from '../../stores/chat'
-  import { getSetting, listAddressBooks, listCalendarAccounts, listFeedSidebar, setSetting, SettingKeys } from '../../lib/api'
+  import { getSetting, listAddressBooks, listCalendarAccounts, setSetting, SettingKeys } from '../../lib/api'
   import { spaces } from '../../lib/spaces'
   import {
     alreadySet,
@@ -45,6 +44,9 @@
     type SetupStep,
   } from '../../lib/setupplan'
   import { popupIsOpen } from '../../lib/popups'
+  import { acceptLiability } from '../../lib/liability'
+  import { errorMessage } from '../../stores/toast'
+  import LiabilityNotice from '../common/LiabilityNotice.svelte'
   import { t } from '../../lib/i18n'
   import logo from '../../assets/images/icons/pelton-logo.png'
   import type { Account, Space } from '../../lib/types'
@@ -53,12 +55,16 @@
   export let rerun = false
   /** A dialog above the flow has the keyboard, so Enter is left alone. */
   export let blocked = false
+  /** The warranty and liability acknowledgement is owed, so it comes first. */
+  export let legal = false
+
+  let legalTicked = false
+  let legalError = ''
 
   const dispatch = createEventDispatcher<{ finish: { landing: Space; rerun: boolean }; added: Account; classic: void }>()
 
   let progress: SetupProgress | null = null
   let davCount = 0
-  let feedCount = 0
   let visited = new Set<SetupStep>()
   let direction: 1 | -1 = 1
   let hoverScene: Space | null = null
@@ -71,11 +77,10 @@
     mailboxes: accounts.length,
     davAccounts: davCount,
     vaultChosen: $prefs.notesVault !== '',
-    feeds: feedCount,
     chatSignedIn: $chatSignedIn,
   } satisfies SetupState
   $: chosen = progress ? spacesFor(progress.purpose, progress.custom) : []
-  $: steps = planSteps(chosen)
+  $: steps = planSteps(chosen, legal)
   $: step = progress?.step ?? 'purpose'
   $: index = steps.indexOf(step)
   let counted: SetupStep[] = []
@@ -91,7 +96,7 @@
     if (s === 'dav') {
       return list.includes('calendar') ? 'calendar' : list.includes('contacts') ? 'contacts' : 'tasks'
     }
-    if (s === 'notes' || s === 'feeds' || s === 'chat') {
+    if (s === 'notes' || s === 'chat') {
       return s
     }
     return 'mail'
@@ -106,14 +111,13 @@
       stored = null
     }
     const start = stored ?? startProgress(rerun, shownSpaces($prefs.hiddenSpaces, $prefs.chatEnabled))
-    const plan = planSteps(spacesFor(start.purpose, start.custom))
+    const plan = planSteps(spacesFor(start.purpose, start.custom), legal)
     progress = { ...start, rerun: start.rerun || rerun, step: resumeStep(start, plan) }
     visited = new Set([progress.step])
     persist()
     void focusStep()
-    const [cals, books, feeds] = await Promise.allSettled([listCalendarAccounts(), listAddressBooks(), listFeedSidebar()])
+    const [cals, books] = await Promise.allSettled([listCalendarAccounts(), listAddressBooks()])
     davCount = (cals.status === 'fulfilled' ? cals.value.length : 0) + (books.status === 'fulfilled' ? books.value.length : 0)
-    feedCount = feeds.status === 'fulfilled' ? feeds.value.feeds.length : 0
   })
 
   function persist(): void {
@@ -159,7 +163,27 @@
     }
   }
 
+  // the acknowledgement is stored before anything else becomes reachable; a
+  // failed write keeps the flow on this step.
+  async function confirmLegal(): Promise<void> {
+    if (!legalTicked) {
+      return
+    }
+    legalError = ''
+    try {
+      await acceptLiability()
+    } catch (err) {
+      legalError = errorMessage(err)
+      return
+    }
+    goTo(steps[index + 1], 'done')
+  }
+
   function next(): void {
+    if (step === 'legal') {
+      void confirmLegal()
+      return
+    }
     if (!progress || index < 0) {
       return
     }
@@ -231,25 +255,25 @@
   }
 
   $: titles = {
+    legal: $t('liability.title'),
     purpose: $t('setup.purpose.title'),
     language: $t('onboarding.language'),
     look: $t('onboarding.v2.look.title'),
     mailbox: $t('onboarding.mailboxTitle'),
     dav: $t('setup.dav.title'),
     notes: $t('setup.notes.title'),
-    feeds: $t('setup.feeds.title'),
     chat: $t('setup.chat.title'),
     keys: $t('setup.keys.title'),
     summary: rerun ? $t('setup.summary.titleAgain') : $t('setup.summary.title'),
   } as Record<SetupStep, string>
   $: ledes = {
+    legal: '',
     purpose: $t('setup.purpose.lede'),
     language: $t('setup.language.lede'),
     look: $t('onboarding.v2.look.lede'),
     mailbox: $t('onboarding.mailboxSub'),
     dav: $t('setup.dav.lede'),
     notes: $t('setup.notes.lede'),
-    feeds: $t('setup.feeds.lede'),
     chat: $t('setup.chat.lede'),
     keys: $t('setup.keys.lede'),
     summary: $t('setup.summary.lede'),
@@ -277,7 +301,7 @@
         <img src={logo} alt="" draggable="false" />
         <span class="wordmark">Pelton</span>
       </span>
-      {#if progress && step !== 'summary'}
+      {#if progress && step !== 'summary' && step !== 'legal'}
         <FlowButton variant="quiet" on:click={finish}>{$t('onboarding.v2.skipAll')}</FlowButton>
       {/if}
     </header>
@@ -308,7 +332,14 @@
                 <p class="lede">{ledes[s]}</p>
               {/if}
               <div class="choice">
-                {#if s === 'purpose'}
+                {#if s === 'legal'}
+                  <div class="legal">
+                    <LiabilityNotice bind:accepted={legalTicked} />
+                  </div>
+                  {#if legalError}
+                    <p class="legal-error" role="alert">{legalError}</p>
+                  {/if}
+                {:else if s === 'purpose'}
                   <PurposeStep bind:purpose={progress.purpose} bind:custom={progress.custom} on:scene={(e) => (hoverScene = e.detail)} />
                   {#if !progress.rerun}
                     <p class="aside">
@@ -330,8 +361,6 @@
                   <DavStep mailbox={accounts[0] ?? null} existing={davCount} on:added={() => markDone('dav')} />
                 {:else if s === 'notes'}
                   <NotesStep on:done={() => markDone('notes')} />
-                {:else if s === 'feeds'}
-                  <FeedsStep existing={feedCount} on:added={() => markDone('feeds')} />
                 {:else if s === 'chat'}
                   <ChatStep on:enabled={(e) => chatToggled(e.detail)} on:signedin={() => markDone('chat')} />
                 {:else if s === 'keys'}
@@ -350,7 +379,7 @@
           <FlowButton variant="quiet" on:click={back}>{$t('onboarding.back')}</FlowButton>
         {/if}
         <span class="keys" aria-hidden="true">{step === 'mailbox' ? '' : $t('setup.keysHint')}</span>
-        <FlowButton variant={action === 'skip' ? 'secondary' : 'primary'} on:click={next}>{primaryLabel}</FlowButton>
+        <FlowButton variant={action === 'skip' ? 'secondary' : 'primary'} disabled={step === 'legal' && !legalTicked} on:click={next}>{primaryLabel}</FlowButton>
       </footer>
     {/if}
   </div>
@@ -541,6 +570,17 @@
 
   .label.spaced {
     margin-top: var(--space-6);
+  }
+
+  .legal {
+    max-width: 52ch;
+  }
+
+  .legal-error {
+    margin: var(--space-3) 0 0;
+    font-size: var(--fz-label);
+    color: var(--danger);
+    overflow-wrap: anywhere;
   }
 
   .aside {

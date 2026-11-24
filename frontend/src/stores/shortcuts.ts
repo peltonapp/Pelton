@@ -6,9 +6,10 @@
 
 import { writable, derived, get } from 'svelte/store'
 import { getSetting, setSetting } from '../lib/api'
-import { shortcuts as defaults, type ShortcutAction } from '../lib/shortcuts'
+import { shortcuts as defaults, scriptAction, scriptOfAction, type Shortcut, type ShortcutAction } from '../lib/shortcuts'
 import { shortcutLabel } from '../lib/i18n'
 import { prefs } from './prefs'
+import { placedScripts } from './scripts'
 
 const KEY = 'keyboard_shortcuts'
 
@@ -36,7 +37,7 @@ export async function initShortcuts(): Promise<void> {
     const { value, found } = await getSetting(KEY)
     if (found && value) {
       const parsed = JSON.parse(value) as Partial<Bindings>
-      bindings.set({ ...defaultBindings(), ...parsed })
+      bindings.set({ ...defaultBindings(), ...parsed } as Bindings)
     }
   } catch {
     // ignore: keep the defaults.
@@ -49,7 +50,7 @@ function persist(map: Bindings): void {
   const base = defaultBindings()
   const overrides: Partial<Bindings> = {}
   for (const action of Object.keys(map) as ShortcutAction[]) {
-    if (map[action] !== base[action]) {
+    if (map[action] !== (base[action] ?? '')) {
       overrides[action] = map[action]
     }
   }
@@ -68,7 +69,7 @@ export function setBinding(action: ShortcutAction, combo: string): void {
 // resetBinding restores one action to its default combo.
 export function resetBinding(action: ShortcutAction): void {
   const base = defaultBindings()
-  setBinding(action, base[action])
+  setBinding(action, base[action] ?? '')
 }
 
 // resetAll restores every shortcut to its default.
@@ -78,10 +79,30 @@ export function resetAll(): void {
   persist(base)
 }
 
+/**
+ * The scripts placed as shortcuts as actions without a default key, named
+ * for the script. An action of a script no longer placed is not among them.
+ */
+export const scriptShortcuts = derived(placedScripts, ($placed): Shortcut[] =>
+  ($placed['shortcut'] ?? []).map((s) => ({ action: scriptAction(s.scriptId), combo: '', labelKey: '', label: s.name })),
+)
+
+/** The bindings with the keys of scripts that are not placed as shortcuts left out. */
+export const activeBindings = derived([bindings, scriptShortcuts], ([$bindings, $scripts]) => {
+  const live = new Set<string>($scripts.map((s) => s.action))
+  const out: Record<string, string> = {}
+  for (const [action, combo] of Object.entries($bindings)) {
+    if (scriptOfAction(action) === null || live.has(action)) {
+      out[action] = combo
+    }
+  }
+  return out as Bindings
+})
+
 // conflictsFor returns the action currently bound to combo other than the given
 // one, or null. used by the editor to warn before assigning a duplicate.
 export function conflictsFor(action: ShortcutAction, combo: string): ShortcutAction | null {
-  const map = get(bindings)
+  const map = get(activeBindings)
   for (const other of Object.keys(map) as ShortcutAction[]) {
     if (other !== action && map[other] === combo) {
       return other

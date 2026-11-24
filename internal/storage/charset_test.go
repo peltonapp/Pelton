@@ -6,6 +6,7 @@ import (
 )
 
 func TestMarkMangledMessagesFindsOnlyBrokenText(t *testing.T) {
+	t.Parallel()
 	db := newTestDB(t)
 	ctx := context.Background()
 	account, _ := db.EnsureLocalAccount(ctx)
@@ -51,6 +52,7 @@ func TestMarkMangledMessagesFindsOnlyBrokenText(t *testing.T) {
 }
 
 func TestRepairMessageTextClearsTheMark(t *testing.T) {
+	t.Parallel()
 	db := newTestDB(t)
 	ctx := context.Background()
 	account, _ := db.EnsureLocalAccount(ctx)
@@ -91,6 +93,7 @@ func TestRepairMessageTextClearsTheMark(t *testing.T) {
 // a message the server no longer has can never be repaired, so the mark comes
 // off anyway rather than being retried on every sync forever.
 func TestClearRefetchMark(t *testing.T) {
+	t.Parallel()
 	db := newTestDB(t)
 	ctx := context.Background()
 	account, _ := db.EnsureLocalAccount(ctx)

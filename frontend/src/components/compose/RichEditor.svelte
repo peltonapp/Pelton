@@ -19,6 +19,7 @@
     IconHeading,
   } from '@tabler/icons-svelte'
   import { t } from '../../lib/i18n'
+  import { get } from 'svelte/store'
   import { caretMark } from '../../lib/richtext'
   import { looksLikeMarkdown, renderMarkdown } from '../../lib/markdown'
 
@@ -67,6 +68,7 @@
       enablePasteRules: inputRules,
       editorProps: {
         handlePaste: (_view, event) => pasteAsMarkdown(event),
+        attributes: { 'aria-label': get(t)('a11y.messageBody'), 'aria-multiline': 'true' },
       },
       onUpdate: ({ editor }) => {
         dispatch('change', editor.getHTML())

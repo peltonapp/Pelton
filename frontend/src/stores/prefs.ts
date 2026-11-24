@@ -5,13 +5,14 @@
 // source of truth.
 
 import { writable } from 'svelte/store'
-import type { QuickComposeStatus, UIPrefs, ThemePref, DensityPref, EditorMode, ViewsPlacement, CloseAction, LogLevel, SelectAllScope, SearchKind, SearchSortPref, DesignPref, LayoutMode, NavStyle, RailSide, PaneStyle, AvatarPlacement, ContactsView, ComposeOpenIn, ReaderWidth, AfterMove, AfterReplySend, FollowUpInterval, ProjectsView, NoteEditorMode, ChatNotifyMode, HtmlColors } from '../lib/types'
-import { getUIPrefs, setSetting, SettingKeys, systemColorScheme, setWindowTheme, getThemeApply, setQuickCompose } from '../lib/api'
+import type { QuickComposeStatus, UIPrefs, ThemePref, DensityPref, EditorMode, ViewsPlacement, CloseAction, LogLevel, SelectAllScope, SearchKind, SearchSortPref, DesignPref, LayoutMode, NavStyle, RailSide, PaneStyle, AvatarPlacement, ContactsView, ComposeOpenIn, ReaderWidth, AfterMove, AfterReplySend, FollowUpInterval, ProjectsView, NoteEditorMode, ChatNotifyMode, HtmlColors, AutoconfigLookup, KeySources } from '../lib/types'
+import { getUIPrefs, setSetting, SettingKeys, systemColorScheme, setWindowTheme, getThemeApply, setQuickCompose, enableAutoEncrypt } from '../lib/api'
 import { applyTheme, applyDensity, applyAccent, applyScale, applyReduceMotion, applyHandCursor, setThemeSchedule, applyUIFont, applyMonoFont, applyCorners, applyDesign, watchSystemTheme, setSystemSchemeOverride, resolveTheme } from '../theme/theme'
 import { applyUserTheme } from '../theme/usertheme'
 import { uiFontStack, monoFontStack } from '../lib/fonts'
 import { setLocale } from '../lib/i18n'
 import { refreshWindowFrame } from './windowframe'
+import { SYNC_PARALLEL_DEFAULT, clampSyncParallel } from '../lib/syncparallel'
 
 // defaults match the backend defaults so the ui renders sanely even before the
 // first load resolves.
@@ -124,6 +125,7 @@ const defaults: UIPrefs = {
   menuBarNativeMinimal: false,
   menuBarIcons: false,
   windowMaterial: false,
+  ocrLanguages: '',
   timeFormat: 'auto',
   reduceMotion: false,
   handCursor: false,
@@ -139,11 +141,15 @@ const defaults: UIPrefs = {
   notifyActionMarkRead: true,
   notifyActionReply: true,
   cleanLinks: false,
+  privacyCounters: true,
+  unsubscribeGraceDays: 10,
+  autoconfigLookup: 'ask',
   verboseSync: false,
   syncProgressBar: true,
   statusClock: true,
   statusUnread: true,
   chatEnabled: false,
+  autoEncrypt: false,
   chatSendReceipts: true,
   chatSendTyping: true,
   chatNotify: 'mentions',
@@ -159,8 +165,10 @@ const defaults: UIPrefs = {
   appLockIdleMinutes: 5,
   appLockOnLaunch: true,
   appLockHideNotifications: true,
-  syncMessageLimit: 50,
+  syncMessageLimit: 100,
   syncAutoBackfill: true,
+  syncMaxParallel: SYNC_PARALLEL_DEFAULT,
+  syncFullReconcileDays: 7,
   startupSelection: 'view:inbox',
   logToFile: false,
   logLevel: 'info',
@@ -583,6 +591,27 @@ export function setCleanLinks(value: boolean): void {
   void setSetting(SettingKeys.cleanLinks, String(value))
 }
 
+/** Turns the tracking report's counters on or off. */
+export function setPrivacyCounters(value: boolean): void {
+  prefs.update((p) => ({ ...p, privacyCounters: value }))
+  void setSetting(SettingKeys.privacyCounters, String(value))
+}
+
+/** Sets how many days after an unsubscribe mail may still come. */
+export function setUnsubscribeGraceDays(days: number): void {
+  prefs.update((p) => ({ ...p, unsubscribeGraceDays: days }))
+  void setSetting(SettingKeys.unsubscribeGraceDays, String(days))
+}
+
+/**
+ * Sets whether the add-mailbox wizard may look up a typed address's domain.
+ * Resolves once stored, since the backend refuses lookups until it is.
+ */
+export function setAutoconfigLookup(value: AutoconfigLookup): Promise<void> {
+  prefs.update((p) => ({ ...p, autoconfigLookup: value }))
+  return setSetting(SettingKeys.autoconfigLookup, value)
+}
+
 // setShowOfflineIndicator toggles the little downloaded badge on pinned messages.
 export function setShowOfflineIndicator(value: boolean): void {
   prefs.update((p) => ({ ...p, showOfflineIndicator: value }))
@@ -800,9 +829,6 @@ export function setThemeDarkTimes(start: string, end: string): void {
   void setSetting(SettingKeys.themeDarkEnd, end)
 }
 
-// setMenuBarInApp shows the in-app menu bar on macOS. setMenuBarNativeMinimal
-// reduces the native macOS menu to the app menu while the in-app bar is on;
-// the backend rebuilds the native menu when either setting is written.
 // setWindowMaterial stores the native window material preference (Liquid
 // Glass on macOS, Mica on Windows). The window takes it at the next launch.
 export function setWindowMaterial(value: boolean): void {
@@ -810,6 +836,16 @@ export function setWindowMaterial(value: boolean): void {
   void setSetting(SettingKeys.windowMaterial, String(value))
 }
 
+// setOCRLanguages picks the pdf viewer's tesseract languages, "+" joined,
+// where "" follows the ui language.
+export function setOCRLanguages(value: string): void {
+  prefs.update((p) => ({ ...p, ocrLanguages: value }))
+  void setSetting(SettingKeys.ocrLanguages, value)
+}
+
+// setMenuBarInApp shows the in-app menu bar on macOS. setMenuBarNativeMinimal
+// reduces the native macOS menu to the app menu while the in-app bar is on;
+// the backend rebuilds the native menu when either setting is written.
 export function setMenuBarInApp(value: boolean): void {
   prefs.update((p) => ({ ...p, menuBarInApp: value }))
   void setSetting(SettingKeys.menuBarInApp, String(value))
@@ -900,6 +936,17 @@ export function setStatusUnread(value: boolean): void {
 export function setChatEnabled(value: boolean): void {
   prefs.update((p) => ({ ...p, chatEnabled: value }))
   void setSetting(SettingKeys.chatEnabled, String(value))
+}
+
+// setAutoEncrypt switches automatic encryption on with the sources the user
+// allowed in its setup, or off. The backend makes the keys.
+export async function setAutoEncrypt(value: boolean, sources?: KeySources): Promise<void> {
+  if (value && sources) {
+    await enableAutoEncrypt(sources)
+  } else {
+    await setSetting(SettingKeys.autoEncrypt, String(value))
+  }
+  prefs.update((p) => ({ ...p, autoEncrypt: value }))
 }
 
 // setChatSendReceipts picks public (on) or private (off) chat read receipts.
@@ -993,12 +1040,30 @@ export function setAppLockHideNotifications(value: boolean): void {
   void setSetting(SettingKeys.appLockHideNotifications, String(value))
 }
 
-// setSyncMessageLimit caps how many of a folder's newest messages a first sync
-// fetches. It only applies to folders that have not synced yet, so lowering it
-// never discards mail that is already cached.
+// setSyncMessageLimit sets how many of each folder's newest message bodies are
+// kept locally (0 = all). Raising it fetches the extra bodies in the
+// background; lowering it never discards mail that is already cached.
 export function setSyncMessageLimit(value: number): void {
   prefs.update((p) => ({ ...p, syncMessageLimit: value }))
   void setSetting(SettingKeys.syncMessageLimit, String(value))
+}
+
+// setSyncMaxParallel sets how many connections one mailbox may use at once,
+// the one listening for new mail included. User input is clamped to the
+// ui's 2–10; the backend accepts 1–10 and clamps again on write.
+export function setSyncMaxParallel(value: number): void {
+  const n = clampSyncParallel(value)
+  prefs.update((p) => ({ ...p, syncMaxParallel: n }))
+  void setSetting(SettingKeys.syncMaxParallel, String(n))
+}
+
+// setSyncFullReconcileDays sets how many days a folder may go without a full
+// check before startup re-checks it in the background. 0 leaves it to manual
+// Sync. Values outside 0–365 are clamped; the backend clamps again on write.
+export function setSyncFullReconcileDays(value: number): void {
+  const n = Math.min(365, Math.max(0, value))
+  prefs.update((p) => ({ ...p, syncFullReconcileDays: n }))
+  void setSetting(SettingKeys.syncFullReconcileDays, String(n))
 }
 
 // setSyncAutoBackfill toggles fetching the next batch of older mail

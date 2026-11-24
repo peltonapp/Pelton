@@ -20,3 +20,4 @@ here by name, feel free to add yourself in the same PR or a follow-up one.
 - [tchilov](https://github.com/tchilov) worked on UI improvements.
 - [Bitlitas](https://github.com/Bitlitas) fixed sending through servers that
   only offer SMTP AUTH LOGIN.
+- [snowlander](https://github.com/snowlander) full translated into Russian, bug detection, improvement ideas.

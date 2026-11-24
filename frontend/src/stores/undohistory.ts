@@ -34,6 +34,7 @@ export type HistoryKind =
   | 'project'
   | 'task'
   | 'event'
+  | 'script'
 
 /** The most entries kept; the oldest fall off first. */
 export const historyCap = 50
@@ -215,6 +216,14 @@ export function offerUndo(since: number): void {
 /** Takes an entry out of the history, for an action that became permanent. */
 export function dropHistoryEntry(id: number): void {
   entries.update((list) => list.filter((e) => e.id !== id))
+}
+
+/** Drops every entry that touched one of the given messages. */
+export function dropHistoryTouching(ids: ReadonlySet<number>): void {
+  if (ids.size === 0) {
+    return
+  }
+  entries.update((list) => list.filter((e) => !e.touches.some((k) => ids.has(Number(k.slice(k.indexOf(':') + 1))))))
 }
 
 /** Empties the history. */

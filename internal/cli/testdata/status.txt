@@ -1,0 +1,15 @@
+Pelton 2026.5 is running.
+Locked: no
+Command line access: on
+
+SWITCH          STATE  NAME
+read            on     Read mail
+search          on     Search mail
+change          on     Change mail
+send            on     Send mail
+send_unasked    off    Send without asking
+delete_unasked  off    Delete permanently without asking
+scripts         on     Run automations
+export          on     Export mail
+pim_read        on     Read calendar, tasks and contacts
+pim_change      on     Add tasks

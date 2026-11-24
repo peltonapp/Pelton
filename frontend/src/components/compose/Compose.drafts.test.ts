@@ -170,7 +170,8 @@ describe('saving a draft to the server', () => {
   it('brings back the pane already editing the draft rather than a second one when the upload fails', async () => {
     let fail!: () => void
     api.uploadDraft.mockReturnValueOnce(new Promise((_, reject) => (fail = () => reject(new Error('no Drafts folder')))))
-    openPane()
+    const id = openPane()
+    updateCompose(id, { subject: 'Changed' })
     await click('Close compose')
     await click('Save to drafts')
     await vi.waitFor(() => expect(api.uploadDraft).toHaveBeenCalled())
@@ -224,6 +225,35 @@ describe('saving a draft to the server', () => {
     await click('Close compose')
     expect(getSession(id)).toBeUndefined()
     expect(screen.queryByRole('button', { name: 'Discard' })).toBeNull()
+  })
+
+  it('closes an untouched pane with a prefilled recipient without asking', async () => {
+    const id = openPane()
+
+    await click('Close compose')
+
+    expect(getSession(id)).toBeUndefined()
+    expect(screen.queryByRole('button', { name: 'Discard' })).toBeNull()
+  })
+
+  it('closes without asking when an edit is undone', async () => {
+    const id = openPane()
+    updateCompose(id, { subject: 'Changed' })
+    updateCompose(id, { subject: 'Hi' })
+
+    await click('Close compose')
+
+    expect(getSession(id)).toBeUndefined()
+  })
+
+  it('still asks to save a pane edited after it opened', async () => {
+    const id = openPane()
+    updateCompose(id, { body: 'a few words' })
+
+    await click('Close compose')
+
+    expect(getSession(id)).toBeDefined()
+    expect(screen.getByRole('button', { name: 'Discard' })).toBeTruthy()
   })
 
   it('removes the plaintext server copy once the draft is switched to encrypted', async () => {

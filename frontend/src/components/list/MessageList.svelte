@@ -31,6 +31,7 @@
     IconClockPause,
     IconChecklist,
     IconLayoutKanban,
+    IconFilterPlus,
     IconDownload,
     IconDownloadOff,
     IconFolderSymlink,
@@ -99,12 +100,14 @@
   import { prefs, setSearchSort, setSplitActive } from '../../stores/prefs'
   import { createTasksFromMail } from '../../lib/taskmail'
   import { pickProjectFor } from '../../lib/projectpicker'
+  import { createRuleFromMail } from '../automations/blocks/rulefrommail'
   import { maildragSource } from '../../stores/maildrag'
   import { threadedOn, threadMessages, loadThread } from '../../stores/threads'
   import { listRows, threadAware, type ListRow } from '../../lib/threadrows'
   import { motion } from '../../lib/motion'
   import { parseRowActions, rowActionView, type RowActionId } from '../../lib/rowactions'
   import { runRowAction } from '../../lib/rowactionrun'
+  import { messageItems } from '../../lib/scriptplacements'
   import { newestHistoryId, offerUndo } from '../../stores/undohistory'
   import { noteAction } from '../../lib/coach'
   import {
@@ -120,7 +123,7 @@
   import { openMove, openMoveMany } from '../../stores/move'
   import { recordArchived } from '../../stores/undoarchive'
   import { openContextMenu, type MenuEntry } from '../../stores/contextmenu'
-  import { bindings, menuHint, shortcutTitle } from '../../stores/shortcuts'
+  import { activeBindings, bindings, menuHint, shortcutTitle } from '../../stores/shortcuts'
   import { matchShortcut } from '../../lib/shortcuts'
   import { openInTab } from '../../stores/tabs'
   import { errorMessage, toastError } from '../../stores/toast'
@@ -211,7 +214,7 @@
       return
     }
     await tick()
-    const el = listEl?.querySelector<HTMLElement>(`[id="msg-${id}"]`)
+    const el = listEl?.querySelector<HTMLElement>(`[data-msg-id="${id}"]`)
     if (el) {
       bandTop = el.offsetTop
       bandHeight = el.offsetHeight
@@ -226,7 +229,7 @@
     if (!bandOn || event.pointerType !== 'mouse') {
       return
     }
-    const el = (event.target as HTMLElement).closest<HTMLElement>('[id^="msg-"]')
+    const el = (event.target as HTMLElement).closest<HTMLElement>('[data-msg-id]')
     if (!el) {
       hoverShown = false
       return
@@ -311,6 +314,13 @@
   // the new design searches from the top bar; classic keeps its own bar here.
   $: classic = $prefs.design === 'classic'
   $: inSearch = !classic && $activeSearch !== null
+  // a finished search says how much it found; browsing a folder stays quiet.
+  $: searchStatus =
+    inSearch && $messageList.status !== 'loading'
+      ? items.length === 0
+        ? $t('messageList.empty.noMatch')
+        : $t('a11y.results').replace('{count}', String(items.length))
+      : ''
 
   let searchFilter: SearchFilter = emptyFilter
   let lastKey = ''
@@ -733,7 +743,7 @@
   // on them, which the global handler then runs alone.
   async function onKeydown(event: KeyboardEvent): Promise<void> {
     const vim = $prefs.appVimMode
-    const bound = matchShortcut(event, $bindings)
+    const bound = matchShortcut(event, $activeBindings)
     if (splitOn && (bound === 'next-split' || bound === 'prev-split')) {
       event.preventDefault()
       stepSplit(bound === 'next-split' ? 1 : -1)
@@ -756,7 +766,7 @@
     }
     if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
       const extend = event.shiftKey && $prefs.multiSelectEnabled
-      if (extend && (vim || matchShortcut(event, $bindings) !== null)) {
+      if (extend && (vim || matchShortcut(event, $activeBindings) !== null)) {
         return
       }
       event.preventDefault()
@@ -803,7 +813,7 @@
       event.key === ' ' &&
       $prefs.multiSelectEnabled &&
       activeIndex >= 0 &&
-      matchShortcut(event, $bindings) === null
+      matchShortcut(event, $activeBindings) === null
     ) {
       event.preventDefault()
       toggleSelect(items[activeIndex].id)
@@ -948,7 +958,7 @@
     }
     const hadFocus = listEl?.contains(document.activeElement) ?? false
     const since = newestHistoryId()
-    await runRowAction(id, item)
+    await runRowAction(id, item, via)
     if (via === 'swipe') {
       offerUndo(since)
     }
@@ -1023,7 +1033,7 @@
         'separator',
         { label: $t('messageList.bulk.deleteCount').replace('{n}', n), icon: IconTrash, danger: true, hint: menuHint('delete-message'), action: () => void bulkDelete() },
       ]
-      openContextMenu(event.clientX, event.clientY, entries)
+      openContextMenu(event.clientX, event.clientY, entries, { place: 'mail.row', items: messageItems(selectedItems.map((m) => m.id)) })
       return
     }
     // right clicking outside the selection is a fresh start: the row under the
@@ -1059,6 +1069,7 @@
         : [
             { label: $t('shortcut.createTask'), icon: IconChecklist, hint: menuHint('create-task'), action: () => void createTasksFromMail([item.id]) },
             { label: $t('projects.addTo'), icon: IconLayoutKanban, hint: menuHint('add-to-project'), action: () => pickProjectFor([item.id], item.threadId) },
+            { label: $t('scripts.blocks.ruleFromMail'), icon: IconFilterPlus, action: () => void createRuleFromMail(item.id) },
           ]),
       { label: $t('messageList.menu.moveTo'), icon: IconFolderSymlink, hint: menuHint('move-to'), action: () => openMove(item) },
       ...(classic ? [] : [{ label: $t('shortcut.done'), icon: IconCircleCheck, hint: menuHint('done'), action: () => void markDone([item]) }]),
@@ -1070,7 +1081,7 @@
       'separator',
       { label: $t('action.delete'), icon: IconTrash, danger: true, hint: menuHint('delete-message'), action: () => void remove(item) },
     ]
-    openContextMenu(event.clientX, event.clientY, entries)
+    openContextMenu(event.clientX, event.clientY, entries, { place: 'mail.row', items: messageItems([item.id]) })
   }
 
   // organizeEntries are pin, mute and the private note, in the new design only.
@@ -1151,7 +1162,7 @@
 
 <svelte:window on:resize={onResize} />
 
-<section class="list-col" class:new={!classic}>
+<section class="list-col" class:new={!classic} aria-label={$t('a11y.region.messages')}>
   {#if classic}
     <div class="header">
       <SearchBar value={$searchQuery} on:search={onSearch} on:filter={onFilter} on:sort={onSort} />
@@ -1316,6 +1327,9 @@
     <FollowUpBand items={inboxFollowUps} />
   {/if}
 
+  {#if inSearch}
+    <div class="sr-only" role="status">{searchStatus}</div>
+  {/if}
   <div
     class="rows"
     role="listbox"
@@ -1393,8 +1407,11 @@
         {#if groupLabels.includes(index)}
           <div class="group-label" aria-hidden="true">{index === 0 ? $t('pin.group') : $t('pin.groupRest')}</div>
         {/if}
-        <div id={`msg-${item.id}`} use:maildragSource={() => dragItems(item)}>
+        <div data-msg-id={item.id} use:maildragSource={() => dragItems(item)}>
           <MessageRow
+            optionId={`msg-${item.id}`}
+            position={index + 1}
+            setSize={items.length}
             message={item}
             thread={row.thread}
             expanded={row.thread !== null && expanded.has(row.thread.threadId)}

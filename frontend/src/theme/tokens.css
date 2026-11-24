@@ -133,6 +133,8 @@
   --compose-send-width: 92px;
   --popover-width: 340px;
   --popover-max-height: 440px;
+  /* the smallest press target a control gets, drawn or not (wcag 2.5.8). */
+  --target-min: 24px;
   /* a pressed button sinks by this much. */
   --press-scale: 0.96;
 
@@ -140,6 +142,8 @@
      a month cell or the all-day lane, the width of an event's color edge, and
      the event popover and editor. the hour height follows the density below. */
   --cal-sidebar-width: 236px;
+  /* the plan pane of tasks beside the day and week views. */
+  --cal-plan-width: 264px;
   --cal-gutter: 56px;
   --cal-lane-height: 20px;
   --cal-edge: 3px;
@@ -238,6 +242,19 @@
   --chat-media-width: 360px;
   --chat-media-height: 280px;
   --chat-composer-max: 200px;
+  /* automations: the script list and the run log beside the editor, the
+     gutter of the Lua editor, the tallest a run's step list grows in a
+     dialog, and the widest the space shows all three panes side by side. */
+  --automation-list-width: 260px;
+  --automation-log-width: 320px;
+  --automation-gutter: 40px;
+  --automation-steps-max: 360px;
+  --automation-narrow: 960px;
+  /* the block editor: its palette and Lua panel beside the canvas, and the
+     widest it is before both fold away below the canvas. */
+  --block-palette-width: 200px;
+  --block-lua-width: 300px;
+  --block-narrow: 720px;
   --chat-signin-width: 420px;
 
   /* default density (medium) row + pane spacing. overridden per density below. */
@@ -429,6 +446,19 @@
   --chrome-bg: color-mix(in srgb, var(--text-primary) 2.5%, var(--surface-sunken));
   --sidebar-bg: var(--surface-sunken);
   --radius-card: 7px;
+}
+
+/* the new design lifts the text tokens that fall short of 4.5:1 on a surface.
+   theme packs get theirs computed in legible.ts, whose BASE_TOKENS must stay in
+   step with these values. */
+:root[data-design="new"]:not([data-theme="dark"]) {
+  --text-tertiary: #676a72;
+  --success: #197a48;
+  --warning: #916100;
+}
+
+:root[data-design="new"][data-theme="dark"] {
+  --text-tertiary: #8b8f97;
 }
 
 :root[data-design="new"][data-panes="hybrid"],

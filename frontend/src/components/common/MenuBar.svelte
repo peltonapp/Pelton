@@ -11,14 +11,14 @@
   import { createEventDispatcher, tick } from 'svelte'
   import ThemedIcon from './ThemedIcon.svelte'
   import MenuGlyph from './MenuGlyph.svelte'
-  import MenuBarEditor from './MenuBarEditor.svelte'
+  import { loadMenuBarEditor } from '../../lib/lazyload'
   import { IconChevronRight } from '@tabler/icons-svelte'
   import { t, shortcutLabel, isMac } from '../../lib/i18n'
   import { assignAccessKeys, splitAccessKey } from '../../lib/accesskeys'
   import { matchShortcut } from '../../lib/shortcuts'
   import { titleBarDoubleClick } from '../../lib/api'
   import { prefs } from '../../stores/prefs'
-  import { bindings } from '../../stores/shortcuts'
+  import { activeBindings, bindings } from '../../stores/shortcuts'
   import { openMessageId } from '../../stores/selection'
   import { menuBarLayout, menuBarEditing, resolveBar, type RenderItem } from '../../stores/menubar'
 
@@ -190,7 +190,7 @@
     }
     // a user binding wins: somebody who deliberately bound alt+f in settings
     // keeps it, and the access key only fires when the combo is free.
-    if (matchShortcut(event, $bindings)) {
+    if (matchShortcut(event, $activeBindings)) {
       return
     }
     const idx = letters.indexOf(event.key.toLowerCase())
@@ -307,7 +307,9 @@
 <svelte:window on:keydown={onWindowKeydown} on:keyup={onWindowKeyup} on:blur={onWindowBlur} />
 
 {#if $menuBarEditing}
-  <MenuBarEditor />
+  {#await loadMenuBarEditor() then m}
+    <svelte:component this={m.default} />
+  {/await}
 {:else}
   {#if openKey !== null}
     <!-- svelte-ignore a11y-click-events-have-key-events a11y-no-static-element-interactions -->

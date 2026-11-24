@@ -1,0 +1,178 @@
+# label	sentence
+# label is commit (the author promises), request (the author asks the reader) or none.
+commit	I'll send you the revised contract by Friday.
+commit	I will get back to you tomorrow with the numbers.
+commit	We'll ship the update next week.
+commit	I'll call you at 3pm to go over the details.
+commit	Let me check with the team and come back to you.
+commit	I'll review the draft over the weekend.
+commit	I will forward the invoice to accounting today.
+commit	We will deliver the remaining units by March 15.
+commit	I'll take care of the booking.
+commit	I'm going to prepare the slides for Monday's meeting.
+commit	I'll follow up with legal on Thursday.
+commit	I'll let you know by end of day.
+commit	We are going to deploy the fix tonight.
+commit	I'll have the report ready by next Tuesday.
+commit	I promise to send the photos this week.
+none	I'll share the recording once it's uploaded.
+commit	I'll double-check the figures and confirm in two days.
+commit	We'll set up the account for you by the end of the week.
+commit	I'll book the meeting room for the 12th of May.
+commit	I will pay the remaining balance at the end of the month.
+commit	I'll look into the login issue first thing tomorrow.
+commit	I'll make sure the documents are signed before Friday.
+commit	We plan to release version 2.4 on 2026-12-01.
+commit	I'll draft a proposal and send it over by Wednesday.
+commit	Let me look into it and get back to you.
+commit	I'll ping Sarah about the access rights today.
+commit	I'll keep you posted.
+commit	I'll update the spreadsheet tonight.
+commit	I'll put together a short summary for the board.
+commit	We'll fix the typo in the next release.
+commit	I'll reach out to the vendor on Monday.
+commit	I'll be in touch next week about the budget.
+commit	I will submit the expense report by 11/30.
+commit	You'll have the final version by Thursday.
+commit	I'll bring the signed copy to the office tomorrow.
+commit	I will email you the address later today.
+commit	We'll organise the offsite for early next week.
+commit	I'll go through your comments this afternoon.
+commit	I'll arrange a call with their CTO.
+commit	I'll also send you the slides from yesterday.
+commit	The replacement part will be shipped by Monday.
+commit	I'm gonna fix that bug before the demo on Friday.
+commit	We will refund the full amount within 5 business days.
+commit	I'll print the handouts before the workshop.
+commit	I'll write up the meeting notes and share them by EOD.
+commit	I’ll send the agenda around tomorrow.
+commit	Sure, I'll take a look at the PR today.
+commit	No problem, I'll handle the customer call.
+commit	I will confirm the venue by the end of next week.
+commit	Thanks for the reminder, I'll pay the invoice today.
+request	Can you send me the latest numbers by Friday?
+request	Could you please review the attached draft before Monday?
+request	Please confirm your attendance by March 3.
+request	Would you mind... could you check the server logs today?
+request	Please send the signed contract back to me.
+request	Can you call me tomorrow at 10am?
+request	Could you forward this to the finance team?
+request	I need you to finish the migration by the end of the week.
+request	Let me know by Thursday whether the date works.
+request	Please fill out the form before the deadline on 12/15.
+request	Kindly provide the missing documents within two weeks.
+request	Can you take a look at the PR when you get a chance?
+request	Could you book a table for six on Saturday?
+request	Please update the ticket once more today.
+request	Will you share the recording with the rest of the team?
+request	I'd like you to prepare a short demo for next Tuesday.
+request	We need the final figures by Wednesday noon.
+request	Send me the slides by tomorrow.
+request	Please, review the budget and get back to me.
+request	Don't forget to sign the NDA before the meeting.
+request	Can you double-check the totals in column F?
+request	Could you sort out the access rights for the new hire?
+request	Make sure to submit your timesheet by Friday.
+request	Can we ask you to approve the purchase order?
+request	Could you have a look at the design this week?
+request	Please pay the outstanding invoice by the 30th of November.
+request	Would you be able to... can you confirm the shipping address?
+request	Pls send the logs over.
+request	Can you let me know your availability by EOD?
+request	Anna, could you schedule a follow-up call for next week?
+request	Please reply to the customer before 5pm.
+request	Can you upload the files to the shared drive?
+request	Could you please answer the questions in the survey by Monday?
+request	You'll need to renew your passport before December 1.
+request	Please return the equipment by next Friday.
+request	Could you remind Tom about the deadline?
+request	Please review and sign the attached agreement by tomorrow.
+request	Can you check if the invoice was paid?
+none	Thanks for sending the report yesterday.
+none	I sent the contract last week.
+none	I've already forwarded the invoice to accounting.
+none	Did you send the slides to the client?
+none	Have you reviewed the draft yet?
+none	I will be out of office until Monday.
+none	I'll be there at 3pm.
+none	If you send me the file, I'll review it tonight.
+none	I'll send it over once I have the final numbers.
+none	I won't be able to send the report by Friday.
+none	I can't make it to the meeting tomorrow.
+none	I'll try to send it by the end of the week.
+none	Maybe I'll call you tomorrow.
+none	I might review it over the weekend.
+none	Please find attached the signed contract.
+none	Attached is the invoice for October.
+none	Here is the report I promised.
+none	Can you believe how fast this year went?
+none	Could you have sent it to the wrong address?
+none	The meeting is on Friday at 10am.
+none	Our office will be closed on Monday.
+none	We will be closed for the holidays from December 24.
+none	He said "I'll send it tomorrow" but nothing came.
+none	Shall I send you the slides?
+none	Should I call you tomorrow?
+none	Will I get a copy of the minutes?
+none	Let me know if you have any questions.
+none	Please let me know if anything is unclear.
+none	Feel free to reach out if you need anything.
+none	Hope you had a great weekend.
+none	Looking forward to seeing you next week.
+none	The deadline was last Friday.
+none	I'm not sure I'll be able to review it this week.
+none	We did not ship the update last week.
+none	I didn't get the invoice.
+none	Unless something comes up, I'll send it on Monday.
+none	In case you need it, I'll forward the link.
+none	As soon as I'm back I'll call you.
+none	I hope to send it next week.
+none	I'd love to help but I'm swamped.
+none	I would send it but the file is too large.
+none	Great work on the release!
+none	The package was delivered yesterday.
+none	The report was sent to the board on Tuesday.
+none	It will be sunny tomorrow.
+none	I'll be on vacation next week.
+none	I will be happy to help.
+none	We're excited to announce our new pricing.
+none	Can you hear me now?
+none	Could you imagine doing this every day?
+none	Do you know who owns the budget?
+none	What time works for you on Friday?
+none	Just checking in to see how things are going.
+none	I'll do my best to make it.
+none	Perhaps we'll ship next week.
+none	I already sent the slides this morning.
+none	Thank you for confirming.
+none	Sounds good to me.
+none	Happy to discuss on our call tomorrow.
+none	Nobody will send the report this week.
+none	Whenever you're ready, I'll review it.
+none	I'll probably finish it tomorrow.
+none	Hopefully I'll get back to you by Friday.
+none	I'm sending the files now via WeTransfer, here's the link.
+none	Here's the summary you asked for.
+none	The invoice below is due on December 1.
+none	I'm on leave tomorrow.
+none	Our team will grow next year.
+none	Please note that the office moves next month.
+none	Please be aware the system is down for maintenance.
+none	Have you been able to check the logs?
+none	Did anyone call the vendor?
+none	We had a call on Monday.
+none	I called you this morning.
+none	Thanks, I will.
+none	You did a great job on the slides.
+none	I think we should ship next week.
+none	Maybe you could send it later?
+none	If possible, please send the files by Friday.
+none	The customer said they would send the payment.
+none	They'll probably call you tomorrow.
+none	Tom will send the slides tomorrow.
+none	Who will send the invoice?
+none	When can you send the report?
+none	It would be great to catch up sometime.
+none	Let me know what you think.
+none	I'd appreciate your feedback.
+none	Please don't hesitate to contact me.

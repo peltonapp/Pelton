@@ -41,7 +41,10 @@
   import AfterMoveSkeleton from '../skeletons/AfterMoveSkeleton.svelte'
   import SplitEditor from '../../list/SplitEditor.svelte'
   import RowActionsEditor from '../../list/RowActionsEditor.svelte'
-  import { rowActionIds, rowActionSettingKey } from '../../../lib/rowactions'
+  import { rowActionIds, rowActionSettingKey, scriptRowAction } from '../../../lib/rowactions'
+  import { placed } from '../../../lib/scriptplacements'
+
+  const swipeScripts = placed('row.swipe')
   import { t } from '../../../lib/i18n'
   import { pfpDataUri, type PfpStyle } from '../../../lib/pfp'
   import { initials } from '../../../lib/format'
@@ -138,6 +141,7 @@
   $: swipeActionItems = [
     { value: 'none', label: $t('swipe.off') },
     ...rowActionIds.map((id) => ({ value: id, label: $t(rowActionSettingKey(id)) })),
+    ...$swipeScripts.map((s) => ({ value: scriptRowAction(s.scriptId), label: s.name })),
   ]
 
   const swipeSlots: { key: SwipeSlot; id: string; label: string; dir: 'left' | 'right'; long: boolean }[] = [

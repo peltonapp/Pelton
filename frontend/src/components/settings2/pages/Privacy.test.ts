@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { render, screen } from '@testing-library/svelte'
 import userEvent from '@testing-library/user-event'
 import { get } from 'svelte/store'
+import { expectAxeClean } from '../../../test/axe'
 
 const api = vi.hoisted(() => ({
   setSetting: vi.fn(),
@@ -23,10 +24,11 @@ beforeEach(() => {
 })
 
 describe('Privacy page link cleaning', () => {
-  it('is off by default and says it can break sign-in links', () => {
+  it('is off by default and says it can break sign-in links', async () => {
     render(Privacy)
     expect(screen.getByRole('switch', { name: 'Clean links opened from mail' })).not.toBeChecked()
     expect(screen.getByText(/sign-in, verification or unsubscribe links are never changed/)).toBeInTheDocument()
+    await expectAxeClean()
   })
 
   it('saves the choice', async () => {

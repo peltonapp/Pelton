@@ -10,6 +10,7 @@ import projectsIcon from '@phosphor-icons/core/assets/duotone/kanban-duotone.svg
 import notesIcon from '@phosphor-icons/core/assets/duotone/notebook-duotone.svg?raw'
 import feedsIcon from '@phosphor-icons/core/assets/duotone/rss-duotone.svg?raw'
 import chatIcon from '@phosphor-icons/core/assets/duotone/chats-circle-duotone.svg?raw'
+import automationsIcon from '@phosphor-icons/core/assets/duotone/lightning-duotone.svg?raw'
 import { derived, get } from 'svelte/store'
 import { IconAdjustmentsHorizontal, IconArrowDown, IconArrowLeft, IconArrowRight, IconArrowUp, IconEye, IconEyeOff } from '@tabler/icons-svelte'
 import { prefs, setHiddenSpaces, setSpaceOrder } from '../stores/prefs'
@@ -24,6 +25,7 @@ import { taskSeed } from '../stores/tasks'
 import { openSpace, space } from '../stores/space'
 import { mailDropHint } from '../components/calendar/maildrop'
 import { createTasksFromMail } from './taskmail'
+import { blockTimeForMail } from './timeblockmail'
 import { pickProjectFor } from './projectpicker'
 import { dropMailOnNotes } from './notemail'
 import { activeNote } from '../stores/notes'
@@ -57,7 +59,9 @@ export function spaceDrop(key: Space): MailDropOptions {
         contactSeed.set({ name: first.fromName, email: first.fromAddress })
         openSpace('contacts')
       }
-      if (key === 'calendar' && first) {
+      if (key === 'calendar' && first && info.alt) {
+        void blockTimeForMail(items.map((m) => m.id))
+      } else if (key === 'calendar' && first) {
         calendarSeed.set({ messageIds: items.map((m) => m.id), at: null, mode: 'time', shift: info.shift })
         openSpace('calendar')
       }
@@ -75,9 +79,9 @@ export function spaceDrop(key: Space): MailDropOptions {
         pickProjectFor(items.map((m) => m.id))
       }
     },
-    hint: (items, shift) => {
+    hint: (items, shift, alt) => {
       if (key === 'calendar') {
-        return mailDropHint(items.length, shift, false)
+        return mailDropHint(items.length, shift, false, alt)
       }
       if (key === 'tasks') {
         const tr = get(t)
@@ -108,6 +112,7 @@ export const spaces: SpaceEntry[] = [
   { key: 'notes', labelKey: 'space.notes', icon: notesIcon },
   { key: 'feeds', labelKey: 'space.feeds', icon: feedsIcon },
   { key: 'chat', labelKey: 'space.chat', icon: chatIcon },
+  { key: 'automations', labelKey: 'space.automations', icon: automationsIcon },
 ]
 
 /** Whether a space is switched on: chat only shows once the user turned it on. */

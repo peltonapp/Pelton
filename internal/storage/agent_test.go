@@ -7,6 +7,7 @@ import (
 )
 
 func TestAgentActionLog(t *testing.T) {
+	t.Parallel()
 	db := newTestDB(t)
 	ctx := context.Background()
 
@@ -43,6 +44,7 @@ func TestAgentActionLog(t *testing.T) {
 // A failed action is recorded too. An attempt that did not work is exactly what
 // somebody looking at this log wants to see.
 func TestAgentActionKeepsTheError(t *testing.T) {
+	t.Parallel()
 	db := newTestDB(t)
 	ctx := context.Background()
 
@@ -61,6 +63,7 @@ func TestAgentActionKeepsTheError(t *testing.T) {
 }
 
 func TestAgentProposalLifecycle(t *testing.T) {
+	t.Parallel()
 	db := newTestDB(t)
 	ctx := context.Background()
 	acctID, err := db.CreateAccount(ctx, &Account{Email: "me@example.com"})

@@ -7,6 +7,7 @@
   // message.
   import { createEventDispatcher, onDestroy, onMount } from 'svelte'
   import AnchoredPopover from '../common/AnchoredPopover.svelte'
+  import { openScriptMenu } from '../../lib/scriptmenu'
   import { maildrop, type MailDropOptions } from '../../stores/maildrag'
   import { mailDropHint } from './maildrop'
   import { dayKey, eventsOnDay, isLaneEvent, layoutRow, parseDayKey, rowOverflow, sameDay, startOfDay, type Placed, type RowSpan } from '../../lib/caldate'
@@ -207,6 +208,7 @@
               type="button"
               class="num"
               aria-label={formatLongDay(day)}
+              aria-current={sameDay(day, today) ? 'date' : undefined}
               on:click|stopPropagation={() => dispatch('day', day)}
             >
               {day.getDate() === 1 ? day.toLocaleDateString(undefined, { day: 'numeric', month: 'short' }) : day.getDate()}
@@ -246,6 +248,7 @@
               class:cancelled={occ.status === 'CANCELLED'}
               style={`grid-column:${s.col + 1} / span ${s.span};grid-row:${s.lane + 1};--ev:${colorOf(occ)}`}
               on:click={(e) => dispatch('open', { occ, anchor: e.currentTarget })}
+              on:contextmenu={(e) => !occ.task && openScriptMenu(e, 'calendar.event', { id: String(occ.eventId) })}
             >
               {#if !isBar(s)}
                 <span class="dot" aria-hidden="true"></span>

@@ -224,6 +224,7 @@ func (a *App) refreshFeed(ctx context.Context, f storage.Feed, fetcher *feeds.Fe
 	if err != nil {
 		return nil, err
 	}
+	a.scriptFeedItems(added)
 	return added, a.store.RecordFeedFetch(a.ctx, f.ID, storage.FeedFetch{At: now, Next: nextOK(resp.MaxAge), ETag: resp.ETag, LastModified: resp.LastModified})
 }
 
