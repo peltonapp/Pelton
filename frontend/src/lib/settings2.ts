@@ -18,6 +18,9 @@ import snippetsIcon from '@phosphor-icons/core/assets/duotone/text-indent-duoton
 import contactsIcon from '@phosphor-icons/core/assets/duotone/address-book-duotone.svg?raw'
 import calendarIcon from '@phosphor-icons/core/assets/duotone/calendar-blank-duotone.svg?raw'
 import tasksIcon from '@phosphor-icons/core/assets/duotone/list-checks-duotone.svg?raw'
+import notesIcon from '@phosphor-icons/core/assets/duotone/notebook-duotone.svg?raw'
+import feedsIcon from '@phosphor-icons/core/assets/duotone/rss-duotone.svg?raw'
+import chatIcon from '@phosphor-icons/core/assets/duotone/chats-circle-duotone.svg?raw'
 import accountsIcon from '@phosphor-icons/core/assets/duotone/at-duotone.svg?raw'
 import vacationIcon from '@phosphor-icons/core/assets/duotone/airplane-takeoff-duotone.svg?raw'
 import filtersIcon from '@phosphor-icons/core/assets/duotone/funnel-duotone.svg?raw'
@@ -29,6 +32,7 @@ import notificationsIcon from '@phosphor-icons/core/assets/duotone/bell-duotone.
 import insightsIcon from '@phosphor-icons/core/assets/duotone/chart-bar-duotone.svg?raw'
 import shortcutsIcon from '@phosphor-icons/core/assets/duotone/keyboard-duotone.svg?raw'
 import syncIcon from '@phosphor-icons/core/assets/duotone/arrows-clockwise-duotone.svg?raw'
+import aiIcon from '@phosphor-icons/core/assets/duotone/sparkle-duotone.svg?raw'
 import aboutIcon from '@phosphor-icons/core/assets/duotone/info-duotone.svg?raw'
 
 /** One page of the settings screen. */
@@ -86,6 +90,9 @@ export const settingsPages2: SettingsPage[] = [
   { key: 'notifications', group: 'mail', labelKey: 'settings2.page.notifications', icon: notificationsIcon },
   { key: 'calendar', group: 'people', labelKey: 'settings2.page.calendar', icon: calendarIcon },
   { key: 'tasks', group: 'people', labelKey: 'settings2.page.tasks', icon: tasksIcon },
+  { key: 'notes', group: 'people', labelKey: 'settings2.page.notes', icon: notesIcon },
+  { key: 'feeds', group: 'people', labelKey: 'settings2.page.feeds', icon: feedsIcon },
+  { key: 'chat', group: 'people', labelKey: 'settings2.page.chat', icon: chatIcon },
   { key: 'insights', group: 'mail', labelKey: 'settings2.page.insights', icon: insightsIcon },
   { key: 'contacts', group: 'people', labelKey: 'settings2.page.contacts', icon: contactsIcon },
   { key: 'accounts', group: 'accounts', labelKey: 'settings2.page.accounts', icon: accountsIcon },
@@ -97,6 +104,7 @@ export const settingsPages2: SettingsPage[] = [
   { key: 'encryption', group: 'privacy', labelKey: 'settings2.page.encryption', icon: encryptionIcon },
   { key: 'shortcuts', group: 'system', labelKey: 'settings2.page.shortcuts', icon: shortcutsIcon },
   { key: 'sync', group: 'system', labelKey: 'settings2.page.sync', icon: syncIcon },
+  { key: 'ai', group: 'system', labelKey: 'settings2.page.ai', icon: aiIcon },
   { key: 'about', group: 'system', labelKey: 'settings2.page.about', icon: aboutIcon },
 ]
 

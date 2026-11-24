@@ -33,7 +33,39 @@ export function push(kind: ToastKind, message: string): void {
   const id = nextId++
   toasts.update((list) => [...list, { id, kind, message }])
   const ttl = kind === 'error' ? 6000 : 3000
-  setTimeout(() => dismiss(id), ttl)
+  expireAfter(id, ttl)
+}
+
+interface Expiry {
+  handle: ReturnType<typeof setTimeout> | null
+  remaining: number
+  started: number
+}
+
+const expiries = new Map<number, Expiry>()
+
+function expireAfter(id: number, ttl: number): void {
+  expiries.set(id, { handle: setTimeout(() => dismiss(id), ttl), remaining: ttl, started: Date.now() })
+}
+
+/** Holds a toast on screen while the pointer or focus is on it. */
+export function pauseToast(id: number): void {
+  const e = expiries.get(id)
+  if (e?.handle) {
+    clearTimeout(e.handle)
+    e.handle = null
+    e.remaining = Math.max(0, e.remaining - (Date.now() - e.started))
+  }
+}
+
+/** Lets a held toast run out its remaining time, with a little added to read it again. */
+export function resumeToast(id: number): void {
+  const e = expiries.get(id)
+  if (e && !e.handle) {
+    e.remaining = Math.max(e.remaining, 1500)
+    e.started = Date.now()
+    e.handle = setTimeout(() => dismiss(id), e.remaining)
+  }
 }
 
 // pushAction adds a toast carrying an inline action button and a caller-chosen
@@ -43,7 +75,7 @@ export function pushAction(kind: ToastKind, message: string, action: ToastAction
   const id = nextId++
   toasts.update((list) => [...list, { id, kind, message, action }])
   if (ttl > 0) {
-    setTimeout(() => dismiss(id), ttl)
+    expireAfter(id, ttl)
   }
   return id
 }
@@ -55,7 +87,7 @@ export function pushActions(kind: ToastKind, message: string, actions: ToastActi
   const [first, ...rest] = actions.map(wrap)
   toasts.update((list) => [...list, { id, kind, message, action: first, more: rest }])
   if (ttl > 0) {
-    setTimeout(() => dismiss(id), ttl)
+    expireAfter(id, ttl)
   }
   return id
 }
@@ -90,6 +122,11 @@ export function updateToast(id: number, message: string): void {
 }
 
 export function dismiss(id: number): void {
+  const e = expiries.get(id)
+  if (e?.handle) {
+    clearTimeout(e.handle)
+  }
+  expiries.delete(id)
   toasts.update((list) => list.filter((t) => t.id !== id))
 }
 

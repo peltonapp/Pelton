@@ -3,6 +3,8 @@
 // and the chips become the structured SearchFilter the backend runs. Free text
 // travels beside them as the query.
 
+import { dayKey } from './caldate'
+
 /** A field a chip constrains. account only comes from the results filters. */
 export type ChipField = 'from' | 'to' | 'subject' | 'in' | 'has' | 'is' | 'before' | 'after' | 'note' | 'account'
 
@@ -155,12 +157,6 @@ export function toggleChip(chips: SearchChip[], chip: SearchChip): SearchChip[] 
 /** Looks a folder up by the name typed after in:. */
 export type FolderResolver = (name: string) => { id: number; label: string } | null
 
-/** Formats a date as YYYY-MM-DD in local time. */
-export function isoDate(d: Date): string {
-  const pad = (n: number): string => String(n).padStart(2, '0')
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
-}
-
 /** The date shortcuts offered for before: and after:. */
 export const dateShortcuts = ['today', 'yesterday', 'thisWeek', 'lastMonth'] as const
 
@@ -181,7 +177,7 @@ export function shortcutDate(shortcut: DateShortcut, now: Date = new Date()): st
     d.setDate(1)
     d.setMonth(d.getMonth() - 1)
   }
-  return isoDate(d)
+  return dayKey(d)
 }
 
 function parseDateValue(raw: string, now: Date): string | null {

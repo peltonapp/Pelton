@@ -216,13 +216,6 @@ func (d *DB) SetActiveProfile(ctx context.Context, id int64) error {
 	return nil
 }
 
-// SetProfilePositions rewrites the order the switcher lists profiles in. The
-// switcher is the one list that is not per profile, for the obvious reason, so
-// this ignores the layout profile the helper passes as ?1.
-func (d *DB) SetProfilePositions(ctx context.Context, orderedIDs []int64) error {
-	return d.setLayoutPositions(ctx, `UPDATE profiles SET position = ?3 WHERE id = ?2`, orderedIDs, "profiles")
-}
-
 // ProfileAccountIDs returns the accounts a profile shows.
 func (d *DB) ProfileAccountIDs(ctx context.Context, profileID int64) ([]int64, error) {
 	const query = `SELECT account_id FROM profile_accounts WHERE profile_id = ? ORDER BY account_id`

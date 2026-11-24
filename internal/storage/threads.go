@@ -99,6 +99,24 @@ ON CONFLICT (account_id, key) DO UPDATE SET thread_id = excluded.thread_id`,
 	return threadAssignment{threadID: target, subject: subject, loose: loose}, nil
 }
 
+// rethread assigns the stored row m.ID its conversation again from m, as a
+// body fill learns the headers a list stub lacked.
+func rethread(ctx context.Context, ex execer, m *Message) error {
+	in := threadInputFor(m)
+	if err := ex.QueryRowContext(ctx, `SELECT account_id FROM messages WHERE id = ?`, m.ID).Scan(&in.accountID); err != nil {
+		return fmt.Errorf("storage: account of message %d: %w", m.ID, err)
+	}
+	assigned, err := resolveThread(ctx, ex, in)
+	if err != nil {
+		return err
+	}
+	if _, err := ex.ExecContext(ctx, `UPDATE messages SET thread_id = ?, thread_subject = ?, thread_loose = ? WHERE id = ?`,
+		assigned.threadID, assigned.subject, boolToInt(assigned.loose), m.ID); err != nil {
+		return fmt.Errorf("storage: rethread message %d: %w", m.ID, err)
+	}
+	return nil
+}
+
 // threadKeys is the message's own id followed by every id it refers to, in a
 // normalized form and without duplicates.
 func threadKeys(in threadInput) []string {
@@ -194,7 +212,7 @@ func subjectRows(ctx context.Context, ex execer, in threadInput, subject string,
 	query := `
 SELECT thread_id, from_address, to_addresses, cc_addresses FROM messages
 WHERE account_id = ? AND thread_subject = ? AND thread_id != 0 AND id != ?
-  AND date >= ? AND date <= ?`
+  AND date >= ? AND date <= ? AND ` + notVaulted
 	if looseOnly {
 		// a headerless reply that already found its parent stays where it is.
 		query += ` AND thread_loose = 1 AND NOT EXISTS (

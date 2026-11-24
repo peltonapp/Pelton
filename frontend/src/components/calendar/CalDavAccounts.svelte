@@ -8,9 +8,10 @@
   import plusIcon from '@phosphor-icons/core/assets/regular/plus.svg?raw'
   import warningIcon from '@phosphor-icons/core/assets/duotone/warning-duotone.svg?raw'
   import cloudIcon from '@phosphor-icons/core/assets/duotone/cloud-check-duotone.svg?raw'
-  import './controls.css'
+  import '../../theme/controls.css'
   import Ph from '../common/Ph.svelte'
   import PieProgress from '../common/PieProgress.svelte'
+  import EmptyState from '../common/EmptyState.svelte'
   import { calendarAccounts, loadCalendars, refreshCalendars, calendarSync } from '../../stores/calendar'
   import { addCalendarAccount, discoverCalendars, removeCalendarAccount, updateCalendarAccount } from '../../lib/api'
   import { errorMessage, toastError, toastSuccess } from '../../stores/toast'
@@ -114,7 +115,7 @@
 
 <div class="accounts">
   {#if $calendarAccounts.length === 0 && !form}
-    <p class="empty">{$t('caldav.none')}</p>
+    <EmptyState size="compact" kind="setup" title={$t('caldav.noneTitle')} detail={$t('caldav.none')} />
   {/if}
   {#each $calendarAccounts as account (account.id)}
     <div class="account">
@@ -218,13 +219,6 @@
   .accounts {
     display: flex;
     flex-direction: column;
-  }
-
-  .empty {
-    margin: 0;
-    padding: var(--space-4);
-    font-size: var(--fz-label);
-    color: var(--text-tertiary);
   }
 
   .account {

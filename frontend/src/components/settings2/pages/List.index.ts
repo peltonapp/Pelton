@@ -20,9 +20,13 @@ const entries: SettingsIndexEntry[] = [
   { page: 'list', id: 'search-sort-filtered', labelKey: 'settingsPanel.searchSort.filtered', keywords: 'search sort order filter relevance newest oldest' },
   { page: 'list', id: 'avatar-source', labelKey: 'settingsPanel.label.senderPhotos', keywords: 'avatar gravatar bimi sender photos logo generated' },
   { page: 'list', id: 'avatar-style', labelKey: 'settingsPanel.label.generatedStyle', keywords: 'avatar style initials mono pixel geometric generated' },
+  { page: 'list', id: 'row-actions', labelKey: 'rowActions.toggle', keywords: 'hover quick actions buttons row archive delete done snooze pin' },
+  { page: 'list', id: 'row-action-list', labelKey: 'rowActions.choose', keywords: 'hover quick actions buttons order reorder choose' },
   { page: 'list', id: 'swipe-enabled', labelKey: 'settingsPanel.toggle.swipeEnabled', keywords: 'swipe gesture trackpad' },
-  { page: 'list', id: 'swipe-left', labelKey: 'settingsPanel.label.swipeLeft', keywords: 'swipe left gesture trackpad action' },
-  { page: 'list', id: 'swipe-right', labelKey: 'settingsPanel.label.swipeRight', keywords: 'swipe right gesture trackpad action' },
+  { page: 'list', id: 'swipe-left-short', labelKey: 'swipe.leftShort', keywords: 'swipe left short gesture trackpad action' },
+  { page: 'list', id: 'swipe-left-long', labelKey: 'swipe.leftLong', keywords: 'swipe left long gesture trackpad action' },
+  { page: 'list', id: 'swipe-right-short', labelKey: 'swipe.rightShort', keywords: 'swipe right short gesture trackpad action' },
+  { page: 'list', id: 'swipe-right-long', labelKey: 'swipe.rightLong', keywords: 'swipe right long gesture trackpad action' },
 ]
 
 export default entries

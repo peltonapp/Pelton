@@ -12,7 +12,7 @@
   import calendarPlusIcon from '@phosphor-icons/core/assets/duotone/calendar-plus-duotone.svg?raw'
   import checkIcon from '@phosphor-icons/core/assets/duotone/check-square-duotone.svg?raw'
   import openIcon from '@phosphor-icons/core/assets/duotone/arrow-square-out-duotone.svg?raw'
-  import '../calendar/controls.css'
+  import '../../theme/controls.css'
   import Ph from '../common/Ph.svelte'
   import DaySlice from '../calendar/DaySlice.svelte'
   import TaskCheck from '../tasks/TaskCheck.svelte'

@@ -86,7 +86,7 @@ func (d *DB) HasLocalMessage(ctx context.Context, folderID int64, messageID stri
 	if messageID == "" {
 		return false, nil
 	}
-	const query = `SELECT 1 FROM messages WHERE folder_id = ? AND message_id = ? LIMIT 1`
+	const query = `SELECT 1 FROM messages WHERE folder_id = ? AND message_id = ? AND ` + notVaulted + ` LIMIT 1`
 	var found int
 	err := d.sql.QueryRowContext(ctx, query, folderID, messageID).Scan(&found)
 	if errors.Is(err, sql.ErrNoRows) {

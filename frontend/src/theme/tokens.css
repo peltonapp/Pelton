@@ -133,6 +133,8 @@
   --compose-send-width: 92px;
   --popover-width: 340px;
   --popover-max-height: 440px;
+  /* the smallest press target a control gets, drawn or not (wcag 2.5.8). */
+  --target-min: 24px;
   /* a pressed button sinks by this much. */
   --press-scale: 0.96;
 
@@ -140,6 +142,8 @@
      a month cell or the all-day lane, the width of an event's color edge, and
      the event popover and editor. the hour height follows the density below. */
   --cal-sidebar-width: 236px;
+  /* the plan pane of tasks beside the day and week views. */
+  --cal-plan-width: 264px;
   --cal-gutter: 56px;
   --cal-lane-height: 20px;
   --cal-edge: 3px;
@@ -200,6 +204,15 @@
   --thread-twisty: 16px;
   --reader-width-narrow: 640px;
   --reader-width-medium: 820px;
+  /* a message row's quick buttons, and the fade they lie over the text with. */
+  --row-action-size: 26px;
+  --row-action-fade: 32px;
+  /* a swiped row settling back, with a little give. */
+  --ease-spring: cubic-bezier(0.34, 1.4, 0.64, 1);
+  /* the reading view: the column's measure and the room around it. */
+  --reading-measure: 720px;
+  --reading-margin: 72px;
+  --reading-leading: 1.7;
 
   /* the sender panel beside the reader, and the attachments browser's preview
      column and grid tiles. */
@@ -211,6 +224,38 @@
      list. */
   --inbox-zero-mark: 40px;
   --snippet-list-height: 280px;
+  /* feeds: the entry list beside the reader, a feed's icon in the sidebar
+     and the list, the thumbnail a list row carries, and the add dialog. */
+  --feed-list-width: 380px;
+  --feed-icon: 16px;
+  --feed-thumb: 56px;
+  --feed-dialog-width: 520px;
+  /* chat: the room list and the room info panel beside the timeline, the
+     avatar beside a message group and in the room list, the widest window
+     the space still shows list and room side by side in, the largest inline
+     image, and the tallest the composer grows before it scrolls. */
+  --chat-list-width: 280px;
+  --chat-info-width: 300px;
+  --chat-avatar: 32px;
+  --chat-room-avatar: 28px;
+  --chat-narrow: 720px;
+  --chat-media-width: 360px;
+  --chat-media-height: 280px;
+  --chat-composer-max: 200px;
+  /* automations: the script list and the run log beside the editor, the
+     gutter of the Lua editor, the tallest a run's step list grows in a
+     dialog, and the widest the space shows all three panes side by side. */
+  --automation-list-width: 260px;
+  --automation-log-width: 320px;
+  --automation-gutter: 40px;
+  --automation-steps-max: 360px;
+  --automation-narrow: 960px;
+  /* the block editor: its palette and Lua panel beside the canvas, and the
+     widest it is before both fold away below the canvas. */
+  --block-palette-width: 200px;
+  --block-lua-width: 300px;
+  --block-narrow: 720px;
+  --chat-signin-width: 420px;
 
   /* default density (medium) row + pane spacing. overridden per density below. */
   --row-pad-y: 8px;
@@ -401,6 +446,19 @@
   --chrome-bg: color-mix(in srgb, var(--text-primary) 2.5%, var(--surface-sunken));
   --sidebar-bg: var(--surface-sunken);
   --radius-card: 7px;
+}
+
+/* the new design lifts the text tokens that fall short of 4.5:1 on a surface.
+   theme packs get theirs computed in legible.ts, whose BASE_TOKENS must stay in
+   step with these values. */
+:root[data-design="new"]:not([data-theme="dark"]) {
+  --text-tertiary: #676a72;
+  --success: #197a48;
+  --warning: #916100;
+}
+
+:root[data-design="new"][data-theme="dark"] {
+  --text-tertiary: #8b8f97;
 }
 
 :root[data-design="new"][data-panes="hybrid"],

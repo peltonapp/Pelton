@@ -29,11 +29,18 @@ type notification struct {
 	// actions asks for the Archive, Mark read and Reply buttons the user left
 	// on (notify_actions.go). Only a notification about one message has them.
 	actions bool
+	// feedEntryID is set instead for a new feed entry.
+	feedEntryID int64
+	// chatRoom is the chat room a chat notification is about.
+	chatRoom string
 }
 
 // notifyDataMessageID is the key of the message id in a notification's data.
 // The OS hands the data back on a click.
 const notifyDataMessageID = "messageId"
+
+// notifyDataChatRoom is the key of the chat room id in a notification's data.
+const notifyDataChatRoom = "chatRoom"
 
 // notifySeq makes notification ids unique within a run.
 var notifySeq atomic.Int64
@@ -43,8 +50,13 @@ var notifySeq atomic.Int64
 // names no message. The data has been through JSON on some platforms, so the
 // id can come back as any of the shapes a number takes there.
 func notifyMessageID(data map[string]any) (int64, bool) {
+	return notifyDataID(data, notifyDataMessageID)
+}
+
+// notifyDataID reads a positive id stored under key in a notification's data.
+func notifyDataID(data map[string]any, key string) (int64, bool) {
 	var id int64
-	switch v := data[notifyDataMessageID].(type) {
+	switch v := data[key].(type) {
 	case int64:
 		id = v
 	case int:
@@ -73,6 +85,12 @@ func (a *App) deliverNotification(n notification) error {
 	data := map[string]any{}
 	if n.messageID > 0 {
 		data[notifyDataMessageID] = n.messageID
+	}
+	if n.feedEntryID > 0 {
+		data[notifyDataFeedEntry] = n.feedEntryID
+	}
+	if n.chatRoom != "" {
+		data[notifyDataChatRoom] = n.chatRoom
 	}
 	options := notifications.NotificationOptions{
 		ID:    "pelton-" + strconv.FormatInt(notifySeq.Add(1), 10),
@@ -137,6 +155,13 @@ type notifyStrings struct {
 	// the body that stands in for any notification while the app is locked
 	// with notifications hidden (applock.go).
 	locked string
+	// the body of a notification for mail in a locked vault, and in an
+	// unlocked one (mailvault.go).
+	vaultMail     string
+	vaultMailOpen string
+	// the Feeds space (feeds_refresh.go).
+	feeds   string // title of a summary over several feeds
+	feedNew string // %d new entries
 }
 
 var notifyLocales = map[string]notifyStrings{
@@ -146,7 +171,9 @@ var notifyLocales = map[string]notifyStrings{
 		focusEnded: "Focus ended", focusOne: "1 new message", focusOneVIP: "1 new message, from a VIP",
 		focusManyVIP: "%d new messages, %d from VIPs", focusManyOneVIP: "%d new messages, 1 from a VIP",
 		actionArchive: "Archive", actionMarkRead: "Mark read", actionReply: "Reply",
-		locked: "Unlock Pelton to see what is new.",
+		locked:    "Unlock Pelton to see what is new.",
+		vaultMail: "New mail in a locked folder", vaultMailOpen: "New mail in a vault folder",
+		feeds: "Feeds", feedNew: "%d new articles",
 	},
 	"de": {
 		newMail: "Neue Nachricht", vipNewMail: "Neue Nachricht von einem VIP", noSubject: "(kein Betreff)", fromUnknown: "Unbekannter Absender", summary: "%d neue Nachrichten",
@@ -155,6 +182,7 @@ var notifyLocales = map[string]notifyStrings{
 		focusManyVIP: "%d neue Nachrichten, %d von VIPs", focusManyOneVIP: "%d neue Nachrichten, 1 von einem VIP",
 		actionArchive: "Archivieren", actionMarkRead: "Als gelesen markieren", actionReply: "Antworten",
 		locked: "Entsperre Pelton, um zu sehen, was neu ist.",
+		feeds:  "Feeds", feedNew: "%d neue Artikel",
 	},
 	"fr": {
 		newMail: "Nouveau message", vipNewMail: "Nouveau message d'un VIP", noSubject: "(sans objet)", fromUnknown: "Expéditeur inconnu", summary: "%d nouveaux messages",
@@ -163,6 +191,7 @@ var notifyLocales = map[string]notifyStrings{
 		focusManyVIP: "%d nouveaux messages, dont %d de VIP", focusManyOneVIP: "%d nouveaux messages, dont 1 d'un VIP",
 		actionArchive: "Archiver", actionMarkRead: "Marquer comme lu", actionReply: "Répondre",
 		locked: "Déverrouille Pelton pour voir les nouveautés.",
+		feeds:  "Flux", feedNew: "%d nouveaux articles",
 	},
 	"nl": {
 		newMail: "Nieuw bericht", vipNewMail: "Nieuw bericht van een VIP", noSubject: "(geen onderwerp)", fromUnknown: "Onbekende afzender", summary: "%d nieuwe berichten",
@@ -171,6 +200,7 @@ var notifyLocales = map[string]notifyStrings{
 		focusManyVIP: "%d nieuwe berichten, %d van VIP's", focusManyOneVIP: "%d nieuwe berichten, 1 van een VIP",
 		actionArchive: "Archiveren", actionMarkRead: "Markeer als gelezen", actionReply: "Beantwoorden",
 		locked: "Ontgrendel Pelton om te zien wat er nieuw is.",
+		feeds:  "Feeds", feedNew: "%d nieuwe artikelen",
 	},
 	"es": {
 		newMail: "Nuevo mensaje", vipNewMail: "Nuevo mensaje de un VIP", noSubject: "(sin asunto)", fromUnknown: "Remitente desconocido", summary: "%d mensajes nuevos",
@@ -179,6 +209,7 @@ var notifyLocales = map[string]notifyStrings{
 		focusManyVIP: "%d mensajes nuevos, %d de VIP", focusManyOneVIP: "%d mensajes nuevos, 1 de un VIP",
 		actionArchive: "Archivar", actionMarkRead: "Marcar como leído", actionReply: "Responder",
 		locked: "Desbloquea Pelton para ver las novedades.",
+		feeds:  "Fuentes", feedNew: "%d artículos nuevos",
 	},
 	"it": {
 		newMail: "Nuova email", vipNewMail: "Nuova email da un VIP", noSubject: "(nessun oggetto)", fromUnknown: "Mittente sconosciuto", summary: "%d nuove email",
@@ -187,6 +218,7 @@ var notifyLocales = map[string]notifyStrings{
 		focusManyVIP: "%d nuove email, %d da VIP", focusManyOneVIP: "%d nuove email, 1 da un VIP",
 		actionArchive: "Archivia", actionMarkRead: "Segna come letto", actionReply: "Rispondi",
 		locked: "Sblocca Pelton per vedere le novità.",
+		feeds:  "Feed", feedNew: "%d nuovi articoli",
 	},
 	"pl": {
 		newMail: "Nowa wiadomość", vipNewMail: "Nowa wiadomość od VIP-a", noSubject: "(bez tematu)", fromUnknown: "Nieznany nadawca", summary: "Nowe wiadomości: %d",
@@ -195,6 +227,7 @@ var notifyLocales = map[string]notifyStrings{
 		focusManyVIP: "Nowe wiadomości: %d, od VIP-ów: %d", focusManyOneVIP: "Nowe wiadomości: %d, od VIP-a: 1",
 		actionArchive: "Archiwizuj", actionMarkRead: "Oznacz jako przeczytane", actionReply: "Odpowiedz",
 		locked: "Odblokuj Pelton, aby zobaczyć, co nowego.",
+		feeds:  "Kanały", feedNew: "Nowe artykuły: %d",
 	},
 	"ru": {
 		newMail: "Новая почта", vipNewMail: "Новая почта от VIP-отправителя", noSubject: "(без темы)", fromUnknown: "Неизвестный отправитель", summary: "Новых писем: %d",
@@ -203,6 +236,7 @@ var notifyLocales = map[string]notifyStrings{
 		focusManyVIP: "Новых писем: %d, от VIP: %d", focusManyOneVIP: "Новых писем: %d, от VIP: 1",
 		actionArchive: "В архив", actionMarkRead: "Прочитано", actionReply: "Ответить",
 		locked: "Разблокируйте Pelton, чтобы увидеть новое.",
+		feeds:  "Ленты", feedNew: "Новых статей: %d",
 	},
 	"tr": {
 		newMail: "Yeni posta", vipNewMail: "Bir VIP'ten yeni posta", noSubject: "(konu yok)", fromUnknown: "Bilinmeyen gönderici", summary: "%d yeni posta",
@@ -211,6 +245,7 @@ var notifyLocales = map[string]notifyStrings{
 		focusManyVIP: "%d yeni posta, %d tanesi VIP'lerden", focusManyOneVIP: "%d yeni posta, 1 tanesi bir VIP'ten",
 		actionArchive: "Arşivle", actionMarkRead: "Okundu işaretle", actionReply: "Yanıtla",
 		locked: "Yenilikleri görmek için Pelton'un kilidini açın.",
+		feeds:  "Akışlar", feedNew: "%d yeni makale",
 	},
 	"pt": {
 		newMail: "Correio novo", vipNewMail: "Correio novo de um VIP", noSubject: "(sem assunto)", fromUnknown: "Remetente desconhecido", summary: "%d mensagens novas",
@@ -219,6 +254,7 @@ var notifyLocales = map[string]notifyStrings{
 		focusManyVIP: "%d mensagens novas, %d de VIPs", focusManyOneVIP: "%d mensagens novas, 1 de um VIP",
 		actionArchive: "Arquivar", actionMarkRead: "Marcar como lida", actionReply: "Responder",
 		locked: "Desbloqueie o Pelton para ver as novidades.",
+		feeds:  "Feeds", feedNew: "%d artigos novos",
 	},
 	"ar": {
 		newMail: "بريد جديد", vipNewMail: "بريد جديد من جهة مهمة", noSubject: "(بلا موضوع)", fromUnknown: "مرسل غير معروف", summary: "رسائل جديدة: %d",
@@ -227,6 +263,7 @@ var notifyLocales = map[string]notifyStrings{
 		focusManyVIP: "رسائل جديدة: %d، من جهات مهمة: %d", focusManyOneVIP: "رسائل جديدة: %d، من جهة مهمة: 1",
 		actionArchive: "أرشفة", actionMarkRead: "تعليم كمقروء", actionReply: "رد",
 		locked: "افتح قفل Pelton لرؤية الجديد.",
+		feeds:  "الخلاصات", feedNew: "مقالات جديدة: %d",
 	},
 	"zh-CN": {
 		newMail: "新邮件", vipNewMail: "来自 VIP 的新邮件", noSubject: "（无主题）", fromUnknown: "未知发件人", summary: "%d 封新邮件",
@@ -235,16 +272,53 @@ var notifyLocales = map[string]notifyStrings{
 		focusManyVIP: "%d 封新邮件，其中 %d 封来自 VIP", focusManyOneVIP: "%d 封新邮件，其中 1 封来自 VIP",
 		actionArchive: "归档", actionMarkRead: "标为已读", actionReply: "回复",
 		locked: "解锁 Pelton 以查看新内容。",
+		feeds:  "订阅源", feedNew: "%d 篇新文章",
 	},
 }
 
 // notifyStringsFor returns the notification text table for lang, falling back to
 // English for an unknown or empty code.
 func notifyStringsFor(lang string) notifyStrings {
-	if s, ok := notifyLocales[lang]; ok {
-		return s
+	s, ok := notifyLocales[lang]
+	if !ok {
+		return notifyLocales["en"]
 	}
-	return notifyLocales["en"]
+	if s.vaultMail == "" {
+		s.vaultMail, s.vaultMailOpen = notifyLocales["en"].vaultMail, notifyLocales["en"].vaultMailOpen
+	}
+	return s
+}
+
+// notifyMailVault raises the one notification vault mail may have: that
+// something arrived, never from whom or about what, whether the vault is
+// locked or not, since the system keeps its own record of notifications. A
+// vault set to notify nothing stays silent.
+func (a *App) notifyMailVault(folder storage.Folder) {
+	if n, ok := a.mailVaultNotification(folder); ok {
+		a.sendNotification(n)
+	}
+}
+
+// mailVaultNotification is the notification notifyMailVault raises, or false
+// when it raises none.
+func (a *App) mailVaultNotification(folder storage.Folder) (notification, bool) {
+	if !a.boolSetting(settingNotifyNewMail, false) {
+		return notification{}, false
+	}
+	vaultID, err := a.store.FolderVault(a.ctx, folder.ID)
+	if err != nil {
+		return notification{}, false
+	}
+	v, err := a.store.GetMailVault(a.ctx, vaultID)
+	if err != nil || v.Notify == storage.MailVaultNotifyNone {
+		return notification{}, false
+	}
+	s := notifyStringsFor(a.stringSetting(settingLanguage, "en"))
+	body := s.vaultMail
+	if a.mailVaultUnlocked(vaultID) {
+		body = s.vaultMailOpen
+	}
+	return notification{title: "Pelton", body: body}, true
 }
 
 // notifyNewMail raises OS notifications for messages freshly pulled into a
@@ -256,6 +330,10 @@ func notifyStringsFor(lang string) notifyStrings {
 // for the summary raised when focus ends.
 func (a *App) notifyNewMail(folder storage.Folder, ids []int64) {
 	if len(ids) == 0 || !strings.EqualFold(folder.IMAPPath, "INBOX") {
+		return
+	}
+	if a.inMailVault(folder.ID) {
+		a.notifyMailVault(folder)
 		return
 	}
 	focused := a.advanceFocus(time.Now()).Active
@@ -348,6 +426,10 @@ func notifyBody(m *storage.Message, s notifyStrings) string {
 // and notify_other.go.
 func (a *App) sendNotification(n notification) {
 	n = a.maskForLock(n)
+	if a.notificationForTest != nil {
+		a.notificationForTest(n)
+		return
+	}
 	if err := a.deliverNotification(n); err != nil {
 		a.log.Warn("notify", "err", err)
 	}

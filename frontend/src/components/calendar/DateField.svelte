@@ -4,7 +4,7 @@
   // one kind of control.
   import { createEventDispatcher } from 'svelte'
   import { IconChevronDown } from '@tabler/icons-svelte'
-  import './controls.css'
+  import '../../theme/controls.css'
   import AnchoredPopover from '../common/AnchoredPopover.svelte'
   import MiniMonth from './MiniMonth.svelte'
 

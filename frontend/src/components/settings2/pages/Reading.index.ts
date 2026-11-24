@@ -4,6 +4,8 @@ const entries: SettingsIndexEntry[] = [
   { page: 'reading', id: 'message-font-size', labelKey: 'onboarding.extras.fontSize', keywords: 'message font size text zoom larger smaller reading' },
   { page: 'reading', id: 'body-font', labelKey: 'settingsPanel.label.bodyFont', keywords: 'font typeface message body serif sans' },
   { page: 'reading', id: 'sender-fonts', labelKey: 'settingsPanel.toggle.senderFonts', keywords: 'font email typeface sender' },
+  { page: 'reading', id: 'html-colors', labelKey: 'reader.colors.setting', keywords: 'dark mode html mail colors colours theme adapt original newsletter invert' },
+  { page: 'reading', id: 'sender-reading', labelKey: 'reader.senders.setting', keywords: 'sender zoom text size colors remembered forget reset' },
   { page: 'reading', id: 'charset-fallback', labelKey: 'settingsPanel.label.charsetFallback', keywords: 'encoding charset unicode gibberish mojibake utf8 latin' },
   { page: 'reading', id: 'mailbox-badge', labelKey: 'settingsPanel.mailboxBadge', keywords: 'technical info account badge mailbox' },
   { page: 'reading', id: 'pgp-status', labelKey: 'settingsPanel.pgpStatus', keywords: 'technical info pgp gpg signature badge encrypted' },

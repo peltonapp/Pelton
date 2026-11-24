@@ -24,6 +24,33 @@ export function reminderLabel(minutes: number, t: (key: string) => string): stri
   return t('calendar.reminder.minutes').replace('{n}', String(minutes))
 }
 
+/** What an event block shows by color, icon or style, as words for its accessible name. */
+export interface EventLabelParts {
+  title: string
+  when: string
+  calendar: string
+  status?: string
+  free?: boolean
+  conflict?: boolean
+  recurring?: boolean
+}
+
+/** The accessible name of an event block: title, time, calendar and the states drawn on it. */
+export function eventLabel(p: EventLabelParts, t: (key: string) => string): string {
+  return [
+    p.title,
+    p.when,
+    p.calendar,
+    p.status === 'TENTATIVE' ? t('a11y.event.tentative') : '',
+    p.status === 'CANCELLED' ? t('a11y.event.cancelled') : '',
+    p.free ? t('a11y.event.free') : '',
+    p.conflict ? t('a11y.event.conflict') : '',
+    p.recurring ? t('a11y.event.recurring') : '',
+  ]
+    .filter(Boolean)
+    .join(', ')
+}
+
 /** The localization key of an attendee's answer. */
 export function partStatKey(partStat: string): string {
   switch (partStat) {

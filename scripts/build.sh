@@ -25,6 +25,10 @@ if [ -n "$channel" ]; then
   ldflags="$ldflags -X main.channel=$channel"
 fi
 
+# goolm selects mautrix's pure Go Olm for chat encryption instead of libolm
+# through cgo. Every build of the app needs it.
+gotags="goolm"
+
 product="Pelton"
 nightly=()
 if [ "$channel" = "nightly" ]; then
@@ -61,7 +65,7 @@ darwin)
   # private_mac_apis: the only way to a transparent webview, which the Liquid
   # Glass setting needs. It rules out the Mac App Store, which Pelton does not
   # ship through.
-  go build -tags "production private_mac_apis" -trimpath -ldflags "$ldflags -extldflags=-mmacosx-version-min=13.0" -o "$app/Contents/MacOS/$product" .
+  go build -tags "production private_mac_apis $gotags" -trimpath -ldflags "$ldflags -extldflags=-mmacosx-version-min=13.0" -o "$app/Contents/MacOS/$product" .
   meta "$product" build/darwin/Info.plist >"$app/Contents/Info.plist"
   icns=build/icons/pelton.icns
   if [ "$channel" = "nightly" ]; then
@@ -84,7 +88,7 @@ windows)
   meta "$exe" -numeric build/windows/info.json >"$work/info.json"
   wails3 generate syso -arch "$goarch" -icon build/windows/icon.ico \
     -manifest build/windows/wails.exe.manifest -info "$work/info.json" -out "$syso"
-  go build -tags production -trimpath -ldflags "$ldflags -H windowsgui" -o "$out/$exe.exe" .
+  go build -tags "production $gotags" -trimpath -ldflags "$ldflags -H windowsgui" -o "$out/$exe.exe" .
   echo "built $out/$exe.exe"
 
   if [ "${NSIS:-}" = "1" ]; then
@@ -103,7 +107,7 @@ windows)
 linux)
   # gtk3: Pelton's own GTK code and the packages target GTK 3 and
   # webkit2gtk-4.1, where Wails v3 defaults to GTK 4.
-  go build -tags "production gtk3" -trimpath -ldflags "$ldflags" -o "$out/Pelton" .
+  go build -tags "production gtk3 $gotags" -trimpath -ldflags "$ldflags" -o "$out/Pelton" .
   echo "built $out/Pelton"
   ;;
 

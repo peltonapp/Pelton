@@ -12,7 +12,7 @@
   import syncIcon from '@phosphor-icons/core/assets/duotone/arrows-clockwise-duotone.svg?raw'
   import sidebarIcon from '@phosphor-icons/core/assets/duotone/sidebar-simple-duotone.svg?raw'
   import warningIcon from '@phosphor-icons/core/assets/duotone/warning-duotone.svg?raw'
-  import '../calendar/controls.css'
+  import '../../theme/controls.css'
   import Ph from '../common/Ph.svelte'
   import Select from '../common/Select.svelte'
   import Modal from '../common/Modal.svelte'
@@ -26,6 +26,8 @@
     taskSettings,
     taskSeed,
     taskFocus,
+    taskScopeRequest,
+    openTaskId,
     taskForContact,
     taskConflict,
     taskClock,
@@ -42,7 +44,7 @@
     startTasks,
     toggleDone,
   } from '../../stores/tasks'
-  import { calendarFocus, calendarSync, calendarSyncError, calendarSettings, loadCalendarSettings, refreshCalendars } from '../../stores/calendar'
+  import { calendarFocus, calendarSync, calendarSyncError, calendarSettings, findTimeFor, loadCalendarSettings, refreshCalendars } from '../../stores/calendar'
   import { reorderTasks, findEventByUID } from '../../lib/api'
   import { createTasksFromMail } from '../../lib/taskmail'
   import { convertTaskToEvent } from '../../lib/taskevent'
@@ -51,15 +53,18 @@
   import type { ChronoLike } from '../../lib/eventphrase'
   import { dayKey, parseEventTime, resolveWeekStart } from '../../lib/caldate'
   import { describeRRule } from '../../lib/recurrence'
-  import { dueDate, dueHasTime, moveDue, taskRows, tasksInScope, type TaskScope } from '../../lib/tasklogic'
+  import { dueDate, dueHasTime, moveDue, promiseLists, taskRows, tasksInScope, type TaskScope } from '../../lib/tasklogic'
+  import { owedByTask } from '../../stores/promises'
   import { focusSpaceSearch, matchesQuery, registerSpaceSearch } from '../../lib/spacesearch'
   import { registerSpaceActions, openSpace } from '../../stores/space'
   import { openContextMenu } from '../../stores/contextmenu'
+  import { menuHint } from '../../stores/shortcuts'
   import { popupIsOpen } from '../../lib/popups'
   import { prefs } from '../../stores/prefs'
   import { errorMessage, toastError } from '../../stores/toast'
   import { dur, motion } from '../../lib/motion'
   import { locale, t } from '../../lib/i18n'
+  import { isEditableTarget } from '../../lib/editable'
   import type { TimeFormat } from '../../lib/format'
   import type { Task, TaskSort } from '../../lib/types'
 
@@ -91,17 +96,21 @@
   $: weekStart = resolveWeekStart($calendarSettings.weekStart, navigator.language)
   $: now = $taskClock
   $: sort = $taskSettings.sort
-  $: scoped = tasksInScope($tasks, scope, now)
+  $: scoped = tasksInScope($tasks, scope, now, $owedByTask)
   $: visible = filter.trim() ? scoped.filter((x) => matchesTask(x, filter)) : scoped
   $: rows = taskRows(visible, sort, !(scope.kind === 'smart' && scope.key === 'completed'))
   $: selected = $tasks.find((x) => x.id === selectedId) ?? null
+  $: openTaskId.set(selected?.id ?? null)
   $: subtasks = selected ? $tasks.filter((x) => x.listId === selected?.listId && x.parent === selected?.uid) : []
   $: currentList = scope.kind === 'list' ? $taskLists.find((l) => scope.kind === 'list' && l.id === scope.id) : undefined
   $: targetList = currentList && !currentList.readOnly ? currentList.id : defaultListId($taskLists, $taskSettings)
-  $: canAdd = targetList !== 0 && !(scope.kind === 'smart' && scope.key === 'completed')
+  $: canAdd = targetList !== 0 && !(scope.kind === 'smart' && (scope.key === 'completed' || promiseLists.includes(scope.key)))
   $: canReorder = scope.kind === 'list' && sort === 'manual' && !filter.trim() && !currentList?.readOnly
   $: title = scope.kind === 'smart' ? $t(`tasks.smart.${scope.key}`) : currentList?.name || $t('tasks.defaultList')
-  $: emptyText = filter.trim() ? $t('tasks.noMatches') : $t(scope.kind === 'smart' ? `tasks.empty.${scope.key}` : 'tasks.empty.list')
+  $: emptyKey = scope.kind === 'smart' ? scope.key : 'list'
+  $: empty = filter.trim()
+    ? { title: $t('tasks.noMatches'), detail: $t('tasks.noMatchesDetail'), filtered: true }
+    : { title: $t(`tasks.empty.${emptyKey}`), detail: $t(`tasks.emptyDetail.${emptyKey}`), filtered: false }
   $: preview = describeEntry(entryText, chrono, contactForNew)
 
   function matchesTask(task: Task, query: string): boolean {
@@ -123,6 +132,11 @@
       },
       'delete-message': () => whenFree(() => void removeSelected()),
       sync: () => void sync(),
+      'block-time': () => {
+        if (selected) {
+          findTimeFor(selected.id)
+        }
+      },
     })
     stopSearch = registerSpaceSearch('tasks', {
       placeholderKey: 'tasks.searchPlaceholder',
@@ -151,6 +165,7 @@
     unregister?.()
     stopSearch?.()
     stopTasks?.()
+    openTaskId.set(null)
   })
 
   // a shortcut acts only while no dialog of the screen holds the keyboard.
@@ -196,7 +211,7 @@
       })
       return
     }
-    if (!tasksInScope([task], scope, now).length) {
+    if (!tasksInScope([task], scope, now, $owedByTask).length) {
       scope = { kind: 'list', id: task.listId }
     }
     filter = ''
@@ -207,6 +222,11 @@
     const id = $taskFocus
     taskFocus.set(null)
     showTask(id)
+  }
+
+  $: if ($taskScopeRequest !== null) {
+    scope = $taskScopeRequest
+    taskScopeRequest.set(null)
   }
 
   // --- making tasks -----------------------------------------------------------------
@@ -362,7 +382,7 @@
         { label: $t('tasks.toEvent'), action: () => void convertTaskToEvent(task) },
       )
     }
-    openContextMenu(x, y, [...entries, ...(task.readOnly ? [] : ['separator' as const, { label: $t('tasks.delete'), action: () => void remove(task), danger: true }])])
+    openContextMenu(x, y, [...entries, ...(task.readOnly ? [] : ['separator' as const, { label: $t('tasks.delete'), action: () => void remove(task), danger: true, hint: menuHint('delete-message') }])], { place: 'tasks.task', items: [{ id: String(task.id) }] })
   }
 
   async function openEvent(uid: string): Promise<void> {
@@ -388,21 +408,16 @@
 
   // --- keys -------------------------------------------------------------------------
 
-  function editableTarget(target: EventTarget | null): boolean {
-    const el = target as HTMLElement | null
-    return !!el && (el.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(el.tagName))
-  }
-
   function onKeydown(event: KeyboardEvent): void {
     if (event.metaKey || event.ctrlKey || event.altKey || popupIsOpen() || $taskConflict) {
       return
     }
-    if (event.key === 'Escape' && detailOpen && !editableTarget(event.target)) {
+    if (event.key === 'Escape' && detailOpen && !isEditableTarget(event.target)) {
       event.preventDefault()
       detailOpen = false
       return
     }
-    if (editableTarget(event.target) || (event.target as HTMLElement).closest('.detail')) {
+    if (isEditableTarget(event.target) || (event.target as HTMLElement).closest('.detail')) {
       return
     }
     const run: Record<string, () => void> = {
@@ -479,7 +494,7 @@
       {canAdd}
       {timeFormat}
       {now}
-      {emptyText}
+      {empty}
       {preview}
       entryPlaceholder={$t('tasks.entryPlaceholder')}
       on:select={(e) => select(e.detail)}
@@ -490,6 +505,7 @@
       on:reorder={(e) => void reorder(e.detail)}
       on:drop={(e) => void dropOn(e.detail.task, e.detail.target)}
       on:menu={(e) => rowMenu(e.detail.task, e.detail.x, e.detail.y)}
+      on:clearFilter={() => (filter = '')}
     />
   </div>
 

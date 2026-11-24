@@ -17,16 +17,19 @@
   import AddMailboxWizard from '../wizard/AddMailboxWizard.svelte'
   import LookStep from './LookStep.svelte'
   import ListStep from './ListStep.svelte'
+  import LayoutCards from './LayoutCards.svelte'
+  import NavCards from './NavCards.svelte'
   import importIcon from '@phosphor-icons/core/assets/duotone/tray-arrow-down-duotone.svg?raw'
   import arrowIcon from '@phosphor-icons/core/assets/duotone/arrow-right-duotone.svg?raw'
-  import { prefs, setDesign, setLayoutMode, setNavStyle, setRailSide, setLanguage } from '../../stores/prefs'
+  import { prefs, setDesign, setLanguage } from '../../stores/prefs'
   import { defaultMailClientStatus, setDefaultMailClient } from '../../lib/api'
   import { acceptLiability } from '../../lib/liability'
   import { popupIsOpen } from '../../lib/popups'
   import { toastError, errorMessage } from '../../stores/toast'
   import { shortcutLabel, t } from '../../lib/i18n'
+  import { loadImportDialog } from '../../lib/lazyload'
   import logo from '../../assets/images/icons/pelton-logo.png'
-  import type { Account, DesignPref, LayoutMode, NavStyle, RailSide } from '../../lib/types'
+  import type { Account, DesignPref } from '../../lib/types'
 
   const dispatch = createEventDispatcher<{ finish: void; added: Account }>()
 
@@ -176,21 +179,6 @@
     { key: 'new', label: $t('design.new'), hint: $t('design.new.hint') },
     { key: 'classic', label: $t('design.classic'), hint: $t('design.classic.hint') },
   ]
-  $: layouts = [
-    { key: 'columns', label: $t('layout.columns'), hint: $t('layout.columns.hint') },
-    { key: 'stacked', label: $t('layout.stacked'), hint: $t('layout.stacked.hint') },
-  ]
-  $: navs = [
-    { key: 'rail', label: $t('nav.rail'), hint: $t('nav.rail.hint') },
-    { key: 'footer', label: $t('nav.footer'), hint: $t('nav.footer.hint') },
-    { key: 'tabs', label: $t('nav.tabs'), hint: $t('nav.tabs.hint') },
-    { key: 'hidden', label: $t('nav.hidden'), hint: $t('nav.hidden.hint') },
-  ]
-  $: sides = [
-    { key: 'left', label: $t('nav.side.left') },
-    { key: 'right', label: $t('nav.side.right') },
-  ]
-
   $: titles = {
     welcome: $t('onboarding.welcome'),
     liability: $t('liability.title'),
@@ -292,64 +280,15 @@
                 />
               </ChoiceCards>
             {:else if step === 'layout'}
-              <ChoiceCards
-                label={$t('layout.label')}
-                value={$prefs.layoutMode}
-                options={layouts}
-                minWidth={180}
-                on:change={(e) => setLayoutMode(e.detail as LayoutMode)}
-                let:option
-              >
-                <ShellSkeleton
-                  layout={option.key as LayoutMode}
-                  nav={$prefs.navStyle}
-                  railSide={$prefs.railSide}
-                  panes={$prefs.paneStyle}
-                  height={88}
-                />
-              </ChoiceCards>
+              <LayoutCards />
             {:else if step === 'nav'}
-              <ChoiceCards
-                label={$t('nav.label')}
-                value={$prefs.navStyle}
-                options={navs}
-                minWidth={150}
-                on:change={(e) => setNavStyle(e.detail as NavStyle)}
-                let:option
-              >
-                <ShellSkeleton
-                  layout={$prefs.layoutMode}
-                  nav={option.key as NavStyle}
-                  railSide={$prefs.railSide}
-                  panes={$prefs.paneStyle}
-                  height={72}
-                />
-              </ChoiceCards>
-              {#if $prefs.navStyle === 'rail'}
-                <h3 class="label spaced">{$t('nav.side.label')}</h3>
-                <ChoiceCards
-                  label={$t('nav.side.label')}
-                  value={$prefs.railSide}
-                  options={sides}
-                  minWidth={150}
-                  on:change={(e) => setRailSide(e.detail as RailSide)}
-                  let:option
-                >
-                  <ShellSkeleton
-                    layout={$prefs.layoutMode}
-                    nav="rail"
-                    railSide={option.key as RailSide}
-                    panes={$prefs.paneStyle}
-                    height={56}
-                  />
-                </ChoiceCards>
-              {/if}
+              <NavCards />
             {:else if step === 'look'}
               <LookStep bind:this={look} />
             {:else if step === 'list'}
               <ListStep />
             {:else if step === 'mailbox'}
-              <AddMailboxWizard embedded offerImport={false} on:added={onMailboxAdded} on:done={() => go('done', 1)} />
+              <AddMailboxWizard embedded offerImport={false} skipFolderPicker on:added={onMailboxAdded} on:done={() => go('done', 1)} />
               <button type="button" class="import" on:click={() => (showImport = true)}>
                 <Ph svg={importIcon} size={18} />
                 <span class="import-text">
@@ -425,7 +364,7 @@
 {/if}
 
 {#if showImport}
-  {#await import('../import/ImportDialog.svelte') then m}
+  {#await loadImportDialog() then m}
     <svelte:component this={m.default} on:close={() => (showImport = false)} />
   {/await}
 {/if}
@@ -567,10 +506,6 @@
     letter-spacing: 0.06em;
     text-transform: uppercase;
     color: var(--text-tertiary);
-  }
-
-  .label.spaced {
-    margin-top: var(--space-6);
   }
 
   .muted {

@@ -1,6 +1,6 @@
 // space.ts holds which top-level area of the app is showing in the new design:
-// mail, contacts, the calendar, tasks or projects. the rail, the sidebar footer switcher and the
-// top bar tabs all read and write this one store.
+// mail, contacts, the calendar, tasks, projects, notes or feeds. the rail, the
+// sidebar footer switcher and the top bar tabs all read and write this one store.
 
 import { writable } from 'svelte/store'
 import type { Space } from '../lib/types'
@@ -55,6 +55,7 @@ const mailOnlyActions = new Set<string>([
   'rename-folder',
   'delete-folder',
   'toggle-sender-panel',
+  'reading-view',
   'create-task',
   'add-to-project',
   'done',

@@ -41,6 +41,45 @@ func cardOrder(t *testing.T, db *DB, projectID, columnID int64) []string {
 	return out
 }
 
+func TestProjectIconNodesRoundTrip(t *testing.T) {
+	db := newTestDB(t)
+	ctx := context.Background()
+	var version int
+	if err := db.sql.QueryRowContext(ctx, `SELECT id FROM schema_migrations WHERE id = 100`).Scan(&version); err != nil {
+		t.Fatalf("migration 100 not recorded: %v", err)
+	}
+	plain := Project{Name: "Plain", Icon: "rocket"}
+	if err := db.CreateProject(ctx, &plain); err != nil {
+		t.Fatal(err)
+	}
+	var isNull bool
+	if err := db.sql.QueryRowContext(ctx, `SELECT icon_nodes IS NULL FROM projects WHERE id = ?`, plain.ID).Scan(&isNull); err != nil || !isNull {
+		t.Errorf("icon_nodes of a project without geometry: null = %v, err = %v", isNull, err)
+	}
+	const nodes = `[["path","M5 4h4l3 3"]]`
+	p := Project{Name: "Folder", Icon: "folder", IconNodes: nodes}
+	if err := db.CreateProject(ctx, &p); err != nil {
+		t.Fatal(err)
+	}
+	got, err := db.GetProject(ctx, p.ID)
+	if err != nil || got.IconNodes != nodes || got.Icon != "folder" {
+		t.Fatalf("got %+v, %v", got, err)
+	}
+	got.IconNodes = ""
+	if err := db.UpdateProject(ctx, *got); err != nil {
+		t.Fatal(err)
+	}
+	list, err := db.ListProjects(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, q := range list {
+		if q.IconNodes != "" {
+			t.Errorf("%s kept geometry %q", q.Name, q.IconNodes)
+		}
+	}
+}
+
 func TestProjectLifecycleAndOrder(t *testing.T) {
 	db := newTestDB(t)
 	ctx := context.Background()

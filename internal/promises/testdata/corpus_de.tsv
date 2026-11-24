@@ -1,0 +1,169 @@
+# label	sentence
+# label is commit (the author promises), request (the author asks the reader) or none.
+commit	Ich schicke dir die Unterlagen bis Freitag.
+commit	Ich melde mich bis Montag.
+commit	Ich werde Ihnen das Angebot morgen zusenden.
+commit	Wir liefern die restlichen Teile nächste Woche.
+commit	Ich rufe dich morgen um 15 Uhr an.
+commit	Ich kümmere mich darum.
+commit	Ich gebe dir bis Mittwoch Bescheid.
+commit	Wir werden das Update Ende der Woche ausrollen und veröffentlichen.
+commit	Ich schaue mir das heute Nachmittag an.
+commit	Morgen schicke ich dir die Präsentation.
+commit	Ich werde die Rechnung bis Monatsende bezahlen.
+commit	Ich prüfe das gleich und melde mich.
+commit	Wir werden den Fehler bis übermorgen beheben.
+commit	Ich bereite die Folien für Montag vor.
+commit	Lass mich das kurz prüfen.
+commit	Ich leite die Mail an die Buchhaltung weiter, noch heute.
+commit	Ich werde das Protokoll bis Ende nächster Woche fertigstellen.
+commit	Wir melden uns in zwei Tagen bei Ihnen.
+commit	Ich kläre das mit dem Team bis Donnerstag.
+commit	Sie erhalten die Unterlagen spätestens am 15.03.
+commit	Die Ware wird bis Freitag geliefert.
+commit	Ich überweise den Betrag morgen.
+commit	Ich halte dich auf dem Laufenden.
+commit	Ich werde den Termin für den 12. Mai buchen.
+commit	Bis Freitag melde ich mich bei dir.
+commit	Ich sende Ihnen die Zugangsdaten im Laufe des Tages.
+commit	Wir kümmern uns bis Montag darum.
+commit	Ich werde mich nächste Woche bei Ihnen melden.
+commit	Klar, ich schicke dir die Datei nachher.
+commit	Ich werde den Vertrag bis 30.11.2026 unterschreiben.
+commit	Ich organisiere das Teamessen für nächsten Donnerstag.
+commit	Ich schreibe dir heute Abend eine kurze Zusammenfassung.
+commit	Wir werden Ihnen den Betrag innerhalb von fünf Werktagen erstatten.
+commit	Ich verspreche, die Fotos diese Woche zu schicken.
+commit	Ich schaue mir die Änderungen bis morgen früh an.
+commit	Ich bringe die unterschriebene Kopie morgen mit.
+commit	Ich frage bei der IT nach und gebe Ihnen bis Freitag Rückmeldung.
+commit	Ich aktualisiere die Tabelle heute noch.
+commit	Danke für den Hinweis, ich zahle die Rechnung heute.
+commit	Ich werde die Folien bis Dienstag überarbeiten.
+commit	Ich buche den Raum gleich.
+commit	Wir werden die Bestellung bis Ende des Monats ausliefern.
+commit	Ich melde mich, sobald ich zurück bin, spätestens aber am Montag.
+commit	Ich gebe Ihnen morgen Bescheid.
+commit	Ich teste das heute Abend noch.
+commit	Kein Problem, ich übernehme den Kundentermin am Freitag.
+commit	Übermorgen schicke ich Ihnen die finale Version.
+commit	Ich werde die Notizen heute abtippen und an alle verschicken.
+request	Kannst du mir die Zahlen bis Freitag schicken?
+request	Können Sie mir bitte bis Montag eine Rückmeldung geben?
+request	Bitte bestätigen Sie den Termin bis 03.03.
+request	Könntest du dir den Entwurf bis morgen anschauen?
+request	Bitte schick mir den unterschriebenen Vertrag zurück.
+request	Kannst du mich morgen um 10 Uhr anrufen?
+request	Könnten Sie die Mail an die Finanzabteilung weiterleiten?
+request	Ich bitte um Rückmeldung bis Freitag.
+request	Gib mir bitte bis Donnerstag Bescheid, ob der Termin passt.
+request	Bitte füllen Sie das Formular bis 15.12. aus.
+request	Bitte reichen Sie die fehlenden Unterlagen innerhalb von zwei Wochen ein.
+request	Kannst du dir den Pull Request anschauen?
+request	Könntet ihr einen Tisch für sechs Personen am Samstag buchen?
+request	Würdest du die Aufzeichnung mit dem Team teilen?
+request	Wir brauchen die finalen Zahlen bis Mittwoch.
+request	Schick mir die Folien bis morgen.
+request	Bitte prüfe das Budget und melde dich bei mir.
+request	Vergiss nicht, die Vereinbarung vor dem Termin zu unterschreiben.
+request	Kannst du die Summen in Spalte F nochmal prüfen?
+request	Könnten Sie die Zugangsrechte für die neue Kollegin einrichten?
+request	Denk bitte daran, deine Stunden bis Freitag einzutragen und zu bestätigen.
+request	Bitte überweisen Sie den offenen Betrag bis zum 30. November.
+request	Können Sie die Lieferadresse bestätigen?
+request	Bitte schick mir die Logs.
+request	Kannst du mir bis heute Abend deine Verfügbarkeit sagen?
+request	Anna, könntest du für nächste Woche einen Folgetermin planen?
+request	Bitte antworte dem Kunden vor 17 Uhr.
+request	Kannst du die Dateien in den gemeinsamen Ordner hochladen?
+request	Könnten Sie die Fragen in der Umfrage bis Montag beantworten?
+request	Bitte geben Sie die Geräte bis nächsten Freitag zurück.
+request	Könntest du Tom an die Frist erinnern und ihm Bescheid sagen?
+request	Bitte prüfen und unterschreiben Sie die Vereinbarung bis morgen.
+request	Wir bitten um Zahlung bis zum 15.01.2027.
+request	Bitte kümmere dich bis Montag um die Buchung.
+request	Würden Sie mir die Rechnung noch einmal zuschicken?
+request	Kannst du bitte die Präsentation aktualisieren?
+none	Danke, dass du mir den Bericht gestern geschickt hast.
+none	Ich habe den Vertrag letzte Woche geschickt.
+none	Ich habe die Rechnung bereits an die Buchhaltung weitergeleitet.
+none	Hast du die Folien an den Kunden geschickt?
+none	Haben Sie den Entwurf schon geprüft?
+none	Ich bin bis Montag nicht im Büro.
+none	Ich bin um 15 Uhr da.
+none	Wenn du mir die Datei schickst, prüfe ich sie heute Abend.
+none	Ich schicke es dir, sobald ich die finalen Zahlen habe.
+none	Ich werde den Bericht leider nicht bis Freitag schicken können.
+none	Ich kann morgen nicht zum Termin kommen.
+none	Ich versuche, es bis Ende der Woche zu schicken.
+none	Vielleicht rufe ich dich morgen an.
+none	Eventuell schaue ich es mir am Wochenende an.
+none	Anbei findest du den unterschriebenen Vertrag.
+none	Im Anhang die Rechnung für Oktober.
+none	Hier ist der Bericht, den ich versprochen hatte.
+none	Der Termin ist am Freitag um 10 Uhr.
+none	Unser Büro ist am Montag geschlossen.
+none	Wir haben vom 24. Dezember an Betriebsferien.
+none	Er sagte: "Ich schicke es morgen", aber es kam nichts.
+none	Soll ich dir die Folien schicken?
+none	Soll ich dich morgen anrufen?
+none	Melde dich gerne, wenn du Fragen hast.
+none	Gib mir Bescheid, falls etwas unklar ist.
+none	Ich hoffe, du hattest ein schönes Wochenende.
+none	Ich freue mich, dich nächste Woche zu sehen.
+none	Die Frist war letzten Freitag.
+none	Ich bin mir nicht sicher, ob ich es diese Woche schaffe.
+none	Wir haben das Update letzte Woche nicht ausgerollt.
+none	Ich habe die Rechnung nicht bekommen.
+none	Falls etwas dazwischenkommt, schicke ich es am Montag.
+none	Sobald ich zurück bin, rufe ich dich an.
+none	Ich würde es schicken, aber die Datei ist zu groß.
+none	Super Arbeit beim Release!
+none	Das Paket wurde gestern zugestellt.
+none	Der Bericht wurde am Dienstag an den Vorstand geschickt.
+none	Morgen wird es sonnig.
+none	Ich bin nächste Woche im Urlaub.
+none	Ich helfe gern.
+none	Wir freuen uns, unsere neuen Preise vorzustellen.
+none	Hörst du mich jetzt?
+none	Weißt du, wer das Budget verantwortet?
+none	Welche Uhrzeit passt dir am Freitag?
+none	Ich wollte nur kurz nachfragen, wie es läuft.
+none	Ich gebe mein Bestes.
+none	Wahrscheinlich liefern wir nächste Woche.
+none	Ich habe die Folien heute Morgen schon geschickt.
+none	Danke für die Bestätigung.
+none	Klingt gut.
+none	Gerne besprechen wir das morgen im Call.
+none	Niemand wird den Bericht diese Woche schicken.
+none	Guten Morgen zusammen!
+none	Ich schicke dir anbei die Unterlagen.
+none	Hiermit sende ich Ihnen die gewünschten Dokumente.
+none	Die Rechnung unten ist am 1. Dezember fällig.
+none	Ich bin morgen im Urlaub.
+none	Unser Team wächst nächstes Jahr.
+none	Bitte beachten Sie, dass das Büro nächsten Monat umzieht.
+none	Hast du schon in die Logs geschaut?
+none	Hat jemand den Lieferanten angerufen?
+none	Wir hatten am Montag ein Gespräch.
+none	Ich habe dich heute Morgen angerufen.
+none	Danke, mache ich.
+none	Du hast die Folien super gemacht.
+none	Ich denke, wir sollten nächste Woche liefern.
+none	Der Kunde sagte, er würde die Zahlung schicken.
+none	Tom schickt die Folien morgen.
+none	Wer schickt die Rechnung?
+none	Wann kannst du den Bericht schicken?
+none	Es wäre schön, sich mal wieder zu treffen.
+none	Sag mir, was du denkst.
+none	Ich freue mich auf dein Feedback.
+none	Zögern Sie nicht, mich zu kontaktieren.
+none	Ich schicke ungern Anhänge per Mail.
+none	Wir senden jeden Montag einen Newsletter.
+none	Ich prüfe meine Mails meistens abends.
+none	Ich wünsche dir ein schönes Wochenende.
+none	Montags rufe ich immer meine Eltern an.
+none	Bitte entschuldige die späte Antwort.
+none	Wir bitten um Ihr Verständnis.
+none	Bitte beachten Sie die geänderten Öffnungszeiten.
+none	Ich hatte vor, es dir zu schicken, aber es ging nicht.

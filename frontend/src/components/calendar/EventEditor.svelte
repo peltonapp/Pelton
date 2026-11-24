@@ -19,7 +19,7 @@
   import envelopeIcon from '@phosphor-icons/core/assets/duotone/envelope-simple-duotone.svg?raw'
   import plusIcon from '@phosphor-icons/core/assets/regular/plus.svg?raw'
   import closeIcon from '@phosphor-icons/core/assets/regular/x.svg?raw'
-  import './controls.css'
+  import '../../theme/controls.css'
   import Modal from '../common/Modal.svelte'
   import Select from '../common/Select.svelte'
   import ToggleSwitch from '../common/ToggleSwitch.svelte'
@@ -449,7 +449,7 @@
           <button type="button" class="link" on:click={() => setEndDay(addDays(startDay, 1))}>{$t('calendar.endsLater')}</button>
         {/if}
         {#if invalid}
-          <p class="error"><Ph svg={warningIcon} size={13} />{$t('calendar.endBeforeStart')}</p>
+          <p class="error" role="alert"><Ph svg={warningIcon} size={13} />{$t('calendar.endBeforeStart')}</p>
         {/if}
       </div>
     </div>

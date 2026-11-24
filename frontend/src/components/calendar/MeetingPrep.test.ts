@@ -85,7 +85,7 @@ function prep(patch: Partial<MeetingPrep> = {}): MeetingPrep {
         partStat: 'ACCEPTED',
         organizer: false,
         self: false,
-        contact: { id: 1, bookId: 1, bookName: 'Personal', uid: 'a', fullName: 'Ada Lovelace', organization: 'Analytical', title: 'Countess', note: '', emails: [{ value: 'ada@x.example', label: '' }], phones: [{ value: '+31 6 1234 5678', label: '' }], readOnly: false, updated: '', extra: [] },
+        contact: { id: 1, bookId: 1, bookName: 'Personal', uid: 'a', fullName: 'Ada Lovelace', organization: 'Analytical', title: 'Countess', note: '', emails: [{ value: 'ada@x.example', label: '' }], phones: [{ value: '+31 6 1234 5678', label: '' }], matrixId: '', readOnly: false, updated: '', extra: [] },
       },
       { email: 'bob@x.example', name: '', role: 'REQ-PARTICIPANT', partStat: 'DECLINED', organizer: false, self: false, contact: null },
     ],
@@ -188,10 +188,10 @@ describe('MeetingPrep', () => {
   it('says so for the sections with nothing in them', async () => {
     api.prepareMeeting.mockResolvedValue(prep({ threads: [], files: [], tasks: [], previous: [] }))
     mount()
-    expect(await screen.findByText('No recent mail with them.')).toBeInTheDocument()
-    expect(screen.getByText('No files exchanged lately.')).toBeInTheDocument()
-    expect(screen.getByText('No open tasks linked to them.')).toBeInTheDocument()
-    expect(screen.getByText('No earlier meetings with the same people.')).toBeInTheDocument()
+    expect(await screen.findByText('No recent mail with them')).toBeInTheDocument()
+    expect(screen.getByText('No files exchanged lately')).toBeInTheDocument()
+    expect(screen.getByText('No open tasks linked to them')).toBeInTheDocument()
+    expect(screen.getByText('No earlier meetings with the same people')).toBeInTheDocument()
   })
 
   it('writes to everyone but the user', async () => {
@@ -207,7 +207,7 @@ describe('MeetingPrep', () => {
   it('cannot write when nobody else is invited', async () => {
     api.prepareMeeting.mockResolvedValue(prep({ attendees: [prep().attendees[0]] }))
     mount()
-    await screen.findByText('Nobody else is invited.')
+    await screen.findByText('Nobody else is invited')
     expect(screen.getByRole('button', { name: 'Write to everyone' })).toBeDisabled()
   })
 

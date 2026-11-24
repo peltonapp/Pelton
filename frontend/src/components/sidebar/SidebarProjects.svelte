@@ -50,11 +50,6 @@
     border-radius: var(--radius-control);
   }
 
-  .target:global(.maildrop-over) {
-    background: var(--selection-bg);
-    box-shadow: inset 0 0 0 1px var(--accent);
-  }
-
   .dot {
     display: inline-block;
     width: var(--space-2);

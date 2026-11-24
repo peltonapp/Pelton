@@ -60,6 +60,7 @@ function contact(id: number, patch: Partial<Contact> = {}): Contact {
     note: '',
     emails: [],
     phones: [],
+    matrixId: '',
     readOnly: false,
     updated: '',
     extra: [],
@@ -220,7 +221,7 @@ describe('ContactDuplicates', () => {
 
   it('says so when there are none', () => {
     render(ContactDuplicates)
-    expect(screen.getByText('No duplicates found.')).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'No duplicates found' })).toBeInTheDocument()
   })
 
   it('dismisses a group for good', async () => {
@@ -228,7 +229,7 @@ describe('ContactDuplicates', () => {
     render(ContactDuplicates)
     await userEvent.click(screen.getByRole('button', { name: 'Not duplicates' }))
     await waitFor(() => expect(api.dismissDuplicateContacts).toHaveBeenCalledWith([1, 2]))
-    await waitFor(() => expect(screen.getByText('No duplicates found.')).toBeInTheDocument())
+    await waitFor(() => expect(screen.getByRole('heading', { name: 'No duplicates found' })).toBeInTheDocument())
   })
 
   it('opens the compare and, after a merge, offers to undo it', async () => {
@@ -237,7 +238,8 @@ describe('ContactDuplicates', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Compare and merge' }))
     await userEvent.click(await screen.findByRole('button', { name: 'Merge 2 contacts' }))
     await waitFor(() => expect(api.mergeContacts).toHaveBeenCalled())
-    const status = await screen.findByRole('status')
+    const statuses = await screen.findAllByRole('status')
+    const status = statuses.find((s) => within(s).queryByRole('button', { name: 'Undo merge' }))!
     await userEvent.click(within(status).getByRole('button', { name: 'Undo merge' }))
     await waitFor(() => expect(api.undoContactMerge).toHaveBeenCalledWith('tok'))
     await waitFor(() => expect(get(lastMerge)).toBeNull())

@@ -274,7 +274,7 @@ func TestMetadataOnlyAttachmentRestores(t *testing.T) {
 	if f.db.AttachmentOnDisk(att.DiskPath) {
 		t.Fatal("a row without a file reads as on disk")
 	}
-	if _, err := f.db.OpenAttachment(att.DiskPath); err != ErrAttachmentNotLocal {
+	if _, err := f.db.OpenAttachment(ctx, att); err != ErrAttachmentNotLocal {
 		t.Fatalf("open = %v, want ErrAttachmentNotLocal", err)
 	}
 
@@ -285,7 +285,7 @@ func TestMetadataOnlyAttachmentRestores(t *testing.T) {
 	if !f.db.AttachmentOnDisk(restored.DiskPath) || restored.SizeBytes != 5 {
 		t.Fatalf("restored = %+v", restored)
 	}
-	rc, err := f.db.OpenAttachment(restored.DiskPath)
+	rc, err := f.db.OpenAttachment(ctx, *restored)
 	if err != nil {
 		t.Fatal(err)
 	}

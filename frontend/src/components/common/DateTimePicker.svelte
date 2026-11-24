@@ -453,6 +453,9 @@
                 class="day"
                 class:selected={selected && sameDay(selected, cell)}
                 class:today={isToday(cell)}
+                aria-current={isToday(cell) ? 'date' : undefined}
+                aria-pressed={!!selected && sameDay(selected, cell)}
+                aria-label={new Date(cell.y, cell.m, cell.d).toLocaleDateString(undefined, { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}
                 tabindex={sameDay(focused, cell) ? 0 : -1}
                 bind:this={dayButtons[cellKey(cell)]}
                 on:click={() => selectDay(cell)}

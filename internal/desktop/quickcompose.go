@@ -269,7 +269,7 @@ func (a *App) openQuickCompose() {
 		return
 	}
 	query := url.Values{}
-	query.Set("window", "quick")
+	query.Set("window", quickWindowToken)
 	opts := application.WebviewWindowOptions{
 		Name:             quickWindowName,
 		Title:            "Pelton",

@@ -17,6 +17,7 @@ interface ArchivedMessage {
   summary: MessageSummary
   messageId: string
   originalFolderId: number
+  // the folder the action put the message in.
   destFolderId: number
 }
 
@@ -65,20 +66,25 @@ async function moveAll(moves: ArchivedMessage[], forward: boolean): Promise<void
   }
 }
 
-// recordArchivedBatch remembers a whole bulk archive or move as one undo step.
-export function recordArchivedBatch(entries: ArchivedMessage[], record: MoveRecord = {}): void {
+// recordArchivedBatch remembers a whole bulk archive or move as one undo step,
+// and returns the history entry's id, or null when there was nothing to record.
+export function recordArchivedBatch(entries: ArchivedMessage[], record: MoveRecord = {}): number | null {
   if (entries.length === 0) {
-    return
+    return null
   }
   const kind = record.kind ?? 'archive'
-  recordHistory({
+  return recordHistory({
     kind,
     label: record.label ?? get(t)(kind === 'done' ? 'history.kind.done' : 'history.kind.archive'),
     detail: subjectDetail(entries.map((e) => e.summary.subject)),
     count: entries.length,
     touches: entries.flatMap((e) => messageKeys(e.summary.id)),
     rekeys: true,
-    undo: () => moveAll(entries, false),
+    // last to first: the server finds each copy by Message-ID and takes the
+    // highest UID, so two messages sharing one Message-ID (a mailing list
+    // copy and the sent copy, say) only go back to their own folders when
+    // the newest move is undone first.
+    undo: () => moveAll([...entries].reverse(), false),
     redo: () => moveAll(entries, true),
   })
 }

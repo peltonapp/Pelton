@@ -4,6 +4,7 @@
   // notes and events are attached from here; mail by dropping it on the card.
   // the card can leave the board without its task being deleted.
   import { createEventDispatcher, onDestroy } from 'svelte'
+  import { get } from 'svelte/store'
   import { fade } from 'svelte/transition'
   import closeIcon from '@phosphor-icons/core/assets/regular/x.svg?raw'
   import plusIcon from '@phosphor-icons/core/assets/regular/plus.svg?raw'
@@ -11,9 +12,10 @@
   import eventIcon from '@phosphor-icons/core/assets/duotone/calendar-check-duotone.svg?raw'
   import noteIcon from '@phosphor-icons/core/assets/duotone/note-duotone.svg?raw'
   import clipIcon from '@phosphor-icons/core/assets/duotone/paperclip-duotone.svg?raw'
-  import '../calendar/controls.css'
+  import '../../theme/controls.css'
   import Ph from '../common/Ph.svelte'
   import PieProgress from '../common/PieProgress.svelte'
+  import EmptyState from '../common/EmptyState.svelte'
   import AnchoredPopover from '../common/AnchoredPopover.svelte'
   import TaskDetail from '../tasks/TaskDetail.svelte'
   import { linkEventToCard, listCardLinks, listOccurrences, removeProjectLink } from '../../lib/api'
@@ -23,6 +25,7 @@
   import { addDays, parseEventTime, toRFC3339 } from '../../lib/caldate'
   import { onProjectsChanged } from '../../lib/events'
   import { tasks } from '../../stores/tasks'
+  import { reloadVault, vaultIndex, vaultNotes } from '../../stores/notes'
   import { errorMessage, toastError } from '../../stores/toast'
   import { dur, motion } from '../../lib/motion'
   import { t } from '../../lib/i18n'
@@ -68,7 +71,7 @@
   $: noteLinks = links.filter((l) => l.kind === 'note')
   $: attachedNotes = new Set(noteLinks.map((l) => l.ref))
   $: attachedEvents = new Set(eventLinks.map((l) => l.ref))
-  $: pickNotes = notes.filter((n) => !attachedNotes.has(n.id) && match(noteTitle(n, ''), pickQuery))
+  $: pickNotes = notes.filter((n) => !attachedNotes.has(n.id) && match(noteTitle(n, ''), pickQuery)).slice(0, 50)
   $: pickEvents = events.filter((e) => !attachedEvents.has(e.uid) && match(e.summary, pickQuery)).slice(0, 30)
 
   function match(text: string, q: string): boolean {
@@ -111,7 +114,19 @@
     picking = kind
     try {
       if (kind === 'note') {
-        notes = await projectNotes().list(card.projectId)
+        const list = await projectNotes().list(card.projectId)
+        notes = list.notes
+        if (list.files) {
+          // any note of the notes folder can be attached, the project's own first.
+          if (!get(vaultIndex)) {
+            await reloadVault()
+          }
+          const own = new Set(notes.map((n) => n.id))
+          const others = get(vaultNotes)
+            .filter((n) => !own.has(n.path))
+            .map((n): ProjectNote => ({ id: n.path, projectId: card.projectId, title: n.title, body: '', snippet: n.snippet, path: n.path, updatedAt: '' }))
+          notes = [...notes, ...others]
+        }
       } else {
         const from = new Date()
         events = (await listOccurrences(toRFC3339(addDays(from, -7)), toRFC3339(addDays(from, 60)))).filter(
@@ -172,7 +187,7 @@
         {/if}
       </div>
       {#if !loading && links.length === 0}
-        <p class="empty" in:fade={{ duration: dur(motion.fast) }}>{$t('projects.card.nothingAttached')}</p>
+        <div class="empty" in:fade={{ duration: dur(motion.fast) }}><EmptyState size="compact" title={$t('projects.card.nothingAttached')} /></div>
       {/if}
       <ul class="links">
         {#each mail as link (link.id)}
@@ -231,7 +246,7 @@
               <Ph svg={noteIcon} size={14} /><span class="text">{noteTitle(n, $t('projects.notes.untitled'))}</span>
             </button>
           {:else}
-            <p class="none">{notes.length === 0 ? $t('projects.card.noNotes') : $t('projects.noMatches')}</p>
+            <EmptyState size="compact" kind={notes.length === 0 ? 'empty' : 'filtered'} title={notes.length === 0 ? $t('projects.card.noNotes') : $t('projects.noMatches')} />
           {/each}
         {:else}
           {#each pickEvents as o (o.uid)}
@@ -241,7 +256,7 @@
               <span class="when">{when(o)}</span>
             </button>
           {:else}
-            <p class="none">{$t('projects.card.noEvents')}</p>
+            <EmptyState size="compact" title={$t('projects.card.noEvents')} />
           {/each}
         {/if}
       </div>
@@ -286,6 +301,9 @@
   .tip {
     margin: 0;
     padding-inline-start: calc(var(--space-6) + var(--space-3));
+  }
+
+  .tip {
     font-size: var(--fz-meta);
     color: var(--text-tertiary);
   }
@@ -413,9 +431,4 @@
     border-radius: 50%;
   }
 
-  .none {
-    margin: var(--space-2);
-    font-size: var(--fz-label);
-    color: var(--text-tertiary);
-  }
 </style>

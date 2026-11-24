@@ -52,6 +52,7 @@ function task(uid: string, over: Partial<Task> = {}): Task {
     contacts: [],
     eventUids: [],
     sortOrder: 0,
+    estimate: 0,
     created: '',
     readOnly: false,
     pending: false,
@@ -72,6 +73,7 @@ function column(id: number, over: Partial<ProjectColumn> = {}): ProjectColumn {
 function project(id: number, over: Partial<Project> = {}): Project {
   return {
     id,
+    uid: `p${id}`,
     name: `P${id}`,
     color: '',
     icon: '',

@@ -5,8 +5,8 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/emersion/go-imap/v2"
-	pimap "github.com/peltonapp/Pelton/internal/imap"
+	"strconv"
+
 	"github.com/peltonapp/Pelton/internal/rfc822"
 	"github.com/peltonapp/Pelton/internal/storage"
 )
@@ -38,37 +38,36 @@ func threadingCases() []struct {
 	}
 }
 
-type threadingClient struct {
-	fakeClient
+type threadingAdapter struct {
+	fakeAdapter
 	raw []byte
 }
 
-func (c *threadingClient) FetchMessage(uid imap.UID) (*pimap.Message, error) {
-	c.fetched = append(c.fetched, uint32(uid))
-	parsed, err := rfc822.ParseBody(c.raw)
+func (a *threadingAdapter) Fetch(_ context.Context, _ string, remoteIDs []string) ([]Fetched, error) {
+	a.commands++
+	parsed, err := rfc822.ParseBody(a.raw)
 	if err != nil {
 		return nil, err
 	}
-	return &pimap.Message{
-		UID: uid, MessageID: "message@example.com", Subject: "threading",
-		From: "alice@example.com", To: "bob@example.com",
-		Text: parsed.Text, HTML: parsed.HTML, Size: parsed.Size, Raw: c.raw,
-		Attachments: parsed.Attachments, CharsetGuess: parsed.CharsetGuess,
-		ListUnsubscribe: parsed.ListUnsubscribe, ListUnsubscribePost: parsed.ListUnsubscribePost,
-		ReplyTo: parsed.ReplyTo, AuthResults: parsed.AuthResults,
-		InReplyTo: parsed.InReplyTo, References: parsed.References,
-	}, nil
-}
-
-func (c *threadingClient) FetchMessages(uids []imap.UID, fn func(imap.UID, *pimap.Message, error) error) error {
-	c.commands++
-	for _, uid := range uids {
-		msg, err := c.FetchMessage(uid)
-		if err := fn(uid, msg, err); err != nil {
-			return err
+	out := make([]Fetched, 0, len(remoteIDs))
+	for _, id := range remoteIDs {
+		a.fetched = append(a.fetched, id)
+		uid, _ := strconv.ParseUint(id, 10, 32)
+		atts := make([]Attachment, 0, len(parsed.Attachments))
+		for _, att := range parsed.Attachments {
+			atts = append(atts, Attachment{Filename: att.Filename, ContentType: att.ContentType, ContentID: att.ContentID, Content: att.Content})
 		}
+		out = append(out, Fetched{
+			RemoteID: id, LegacyUID: uint32(uid), MessageID: "message@example.com", Subject: "threading",
+			From: "alice@example.com", To: "bob@example.com",
+			Text: parsed.Text, HTML: parsed.HTML, Size: parsed.Size, Raw: a.raw,
+			Attachments: atts, CharsetGuess: parsed.CharsetGuess,
+			ListUnsubscribe: parsed.ListUnsubscribe, ListUnsubscribePost: parsed.ListUnsubscribePost,
+			ReplyTo: parsed.ReplyTo, AuthResults: parsed.AuthResults,
+			InReplyTo: parsed.InReplyTo, References: parsed.References,
+		})
 	}
-	return nil
+	return out, nil
 }
 
 func TestSyncStoresThreadingMetadata(t *testing.T) {
@@ -77,7 +76,7 @@ func TestSyncStoresThreadingMetadata(t *testing.T) {
 			ctx := context.Background()
 			db, folder := newSyncTestFolder(t)
 			uids := []uint32{7, 19}
-			client := &threadingClient{fakeClient: fakeClient{uids: uids}, raw: []byte(tt.headers + threadingBody)}
+			client := &threadingAdapter{fakeAdapter: fakeAdapter{ids: fakeIDs(uids...)}, raw: []byte(tt.headers + threadingBody)}
 			engine := NewEngine(client, db, nil)
 			res, err := engine.SyncFolder(ctx, folder)
 			if err != nil || res.New != len(uids) || len(res.NewIDs) != len(uids) {
@@ -113,11 +112,11 @@ func TestSyncStoresThreadingMetadata(t *testing.T) {
 func TestSyncDoesNotBackfillLegacyThreadingMetadata(t *testing.T) {
 	ctx := context.Background()
 	db, folder := newSyncTestFolder(t)
-	id, err := db.InsertMessage(ctx, &storage.Message{AccountID: folder.AccountID, FolderID: folder.ID, UID: 7, BodyPlain: "legacy body"})
+	id, err := db.InsertMessage(ctx, &storage.Message{AccountID: folder.AccountID, FolderID: folder.ID, UID: 7, BodyPlain: "legacy body", BodyComplete: true})
 	if err != nil {
 		t.Fatal(err)
 	}
-	client := &threadingClient{fakeClient: fakeClient{uids: []uint32{7}}, raw: []byte(threadingBody)}
+	client := &threadingAdapter{fakeAdapter: fakeAdapter{ids: fakeIDs(7)}, raw: []byte(threadingBody)}
 	if _, err := NewEngine(client, db, nil).SyncFolder(ctx, folder); err != nil {
 		t.Fatal(err)
 	}

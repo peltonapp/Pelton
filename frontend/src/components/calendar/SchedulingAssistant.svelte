@@ -13,7 +13,7 @@
   import caretLeft from '@phosphor-icons/core/assets/regular/caret-left.svg?raw'
   import caretRight from '@phosphor-icons/core/assets/regular/caret-right.svg?raw'
   import warningIcon from '@phosphor-icons/core/assets/duotone/warning-duotone.svg?raw'
-  import './controls.css'
+  import '../../theme/controls.css'
   import Ph from '../common/Ph.svelte'
   import PieProgress from '../common/PieProgress.svelte'
   import DateField from './DateField.svelte'

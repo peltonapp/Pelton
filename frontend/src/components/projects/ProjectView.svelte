@@ -5,7 +5,7 @@
   import { createEventDispatcher, tick } from 'svelte'
   import backIcon from '@phosphor-icons/core/assets/duotone/arrow-left-duotone.svg?raw'
   import moreIcon from '@phosphor-icons/core/assets/regular/dots-three.svg?raw'
-  import '../calendar/controls.css'
+  import '../../theme/controls.css'
   import Ph from '../common/Ph.svelte'
   import PieProgress from '../common/PieProgress.svelte'
   import ProjectBoard from './ProjectBoard.svelte'
@@ -13,7 +13,7 @@
   import ProjectMail from './ProjectMail.svelte'
   import ProjectNotes from './ProjectNotes.svelte'
   import ProjectPeople from './ProjectPeople.svelte'
-  import { projectIcon } from '../../lib/projecticons'
+  import ProjectIcon from './ProjectIcon.svelte'
   import { progressOf, projectColor } from '../../lib/projectlogic'
   import { askConfirm } from '../../stores/confirm'
   import { openContextMenu } from '../../stores/contextmenu'
@@ -122,7 +122,7 @@
     <button type="button" class="cal-icon" aria-label={$t('projects.back')} title={$t('projects.back')} on:click={closeProject}>
       <Ph svg={backIcon} size={16} />
     </button>
-    <span class="mark" aria-hidden="true"><Ph svg={projectIcon(project.icon)} size={16} /></span>
+    <span class="mark" aria-hidden="true"><ProjectIcon icon={project.icon} iconNodes={project.iconNodes} size={16} /></span>
     <div class="titles">
       <h2 class="name">{project.name}</h2>
       {#if project.status === 'archived'}

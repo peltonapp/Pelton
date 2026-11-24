@@ -1,0 +1,29 @@
+{
+  "format": 1,
+  "name": "Daily digest of unread mail",
+  "description": "Every evening, lists the subjects of your unread inbox mail in today's daily note.",
+  "kind": "blocks",
+  "trigger": { "type": "schedule.daily", "params": { "at": "18:00" } },
+  "permissions": ["mail.read", "notes.write"],
+  "blocks": {
+    "version": 1,
+    "blocks": [
+      {
+        "id": "find",
+        "kind": "action",
+        "type": "mail.list",
+        "args": { "folder": { "value": "inbox" }, "limit": { "value": 50 }, "unread": { "value": true } }
+      },
+      { "id": "head", "kind": "action", "type": "notes.append_daily", "args": { "text": { "value": "## Unread mail" } } },
+      {
+        "id": "each",
+        "kind": "foreach",
+        "list": { "ref": "step:find.messages" },
+        "as": "item",
+        "body": [
+          { "id": "line", "kind": "action", "type": "notes.append_daily", "args": { "text": { "ref": "var:item.subject" } } }
+        ]
+      }
+    ]
+  }
+}

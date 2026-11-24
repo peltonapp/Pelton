@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { isMac, shortcutLabel } from './i18n'
-import { comboHasModifier, comboMatches, comboTypes, eventToCombo, matchShortcut, parseCombo, shortcuts } from './shortcuts'
+import { comboHasModifier, comboMatches, comboTypes, eventToCombo, matchShortcut, parseCombo, shortcuts, spaceNumber } from './shortcuts'
 
 // key builds a keydown event. `mod` is the platform's primary modifier, which
 // is what a combo's "mod" token means, so the tests read the same on either
@@ -189,6 +189,16 @@ describe('the default registry', () => {
   it('lists each action once', () => {
     const actions = shortcuts.map((s) => s.action)
     expect(new Set(actions).size).toBe(actions.length)
+  })
+
+  it('goes to the spaces by number on mod and a digit, which work while typing', () => {
+    const map = Object.fromEntries(shortcuts.map((s) => [s.action, s.combo]))
+    expect(matchShortcut(key('1', { mod: true }), map)).toBe('go-space-1')
+    expect(matchShortcut(key('9', { mod: true }), map)).toBe('go-space-9')
+    expect(matchShortcut(key('0', { mod: true }), map)).toBeNull()
+    expect(comboTypes('mod+1')).toBe(false)
+    expect(spaceNumber('go-space-4')).toBe(4)
+    expect(spaceNumber('go-mail')).toBeNull()
   })
 
   it('opens the shortcut sheet on "?" as the key arrives, with Shift held', () => {

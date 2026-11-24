@@ -302,7 +302,7 @@ func (a *App) inviteData(m storage.Message, local bool) [][]byte {
 		if !rfc822.IsCalendar(att.ContentType, att.Filename) {
 			continue
 		}
-		f, err := a.store.OpenAttachment(att.DiskPath)
+		f, err := a.store.OpenAttachment(a.ctx, att)
 		if err != nil {
 			continue
 		}

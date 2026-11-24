@@ -2,7 +2,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { fireEvent, render, screen } from '@testing-library/svelte'
 import TimeGrid from './TimeGrid.svelte'
 import { placeOccurrence, toRFC3339, weekDays } from '../../lib/caldate'
-import type { Occurrence } from '../../lib/types'
+import type { Calendar, Occurrence } from '../../lib/types'
+import { calendars } from '../../stores/calendar'
+import { expectAccessible } from '../../test/a11y'
+import { expectAxeClean } from '../../test/axe'
 
 function occ(id: number, summary: string, start: Date, end: Date): Occurrence {
   return {
@@ -74,6 +77,20 @@ describe('TimeGrid', () => {
     expect(column(2).contains(review)).toBe(true)
     expect(parseFloat(review.style.top)).toBeCloseTo((600 / 1440) * 100, 3)
     expect(parseFloat(review.style.height)).toBeCloseTo((90 / 1440) * 100, 3)
+  })
+
+  it('names an event with its time, calendar and the states its color and style show', async () => {
+    calendars.set([{ id: 1, name: 'Work' } as Calendar])
+    const event = { ...occ(1, 'Review', new Date(2026, 10, 11, 10), new Date(2026, 10, 11, 11, 30)), status: 'TENTATIVE', recurring: true }
+    mount([event])
+    const name = screen.getByRole('button', { name: /^Review,/ }).getAttribute('aria-label') ?? ''
+    expect(name).toContain('10:00')
+    expect(name).toContain('Work')
+    expect(name).toContain('tentative')
+    expect(name).toContain('repeats')
+    expectAccessible()
+    await expectAxeClean()
+    calendars.set([])
   })
 
   it('draws a new event by dragging over empty time', async () => {

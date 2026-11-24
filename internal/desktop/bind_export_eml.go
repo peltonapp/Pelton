@@ -1,6 +1,7 @@
 package desktop
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"os"
@@ -8,6 +9,7 @@ import (
 
 	"github.com/emersion/go-imap/v2"
 
+	"github.com/peltonapp/Pelton/internal/desktop/syncsched"
 	"github.com/peltonapp/Pelton/internal/mailexport"
 	"github.com/peltonapp/Pelton/internal/storage"
 )
@@ -173,37 +175,26 @@ func (a *App) fetchEMLSources(ms []*storage.Message) []emlSource {
 	if err != nil {
 		return failAll(err)
 	}
-	cfg, err := a.resolveIMAP(*account)
-	if err != nil {
-		return failAll(err)
-	}
-
-	syncMu.Lock()
-	defer syncMu.Unlock()
-
-	client, err := a.connectIMAP(cfg)
-	if err != nil {
-		return failAll(offlineOrErr(err))
-	}
-	defer client.Close()
-	if err := client.Login(); err != nil {
-		return failAll(offlineOrErr(err))
-	}
-	defer client.Logout()
-	if _, err := client.Select(folder.IMAPPath); err != nil {
-		return failAll(offlineOrErr(err))
-	}
-	for i, m := range ms {
-		raw, err := client.FetchRawMessage(imap.UID(m.UID))
-		if err != nil {
-			out[i].err = offlineOrErr(err)
-			continue
+	err = a.runNow(a.ctx, *account, syncsched.KindSource, folder.ID, func(_ context.Context, client mailClient) error {
+		if _, err := client.Select(folder.IMAPPath); err != nil {
+			return err
 		}
-		if len(raw) == 0 {
-			out[i].err = errors.New("pelton: the message has no content to export")
-			continue
+		for i, m := range ms {
+			raw, err := client.FetchRawMessage(imap.UID(m.UID))
+			if err != nil {
+				out[i].err = offlineOrErr(err)
+				continue
+			}
+			if len(raw) == 0 {
+				out[i].err = errors.New("pelton: the message has no content to export")
+				continue
+			}
+			out[i].raw = raw
 		}
-		out[i].raw = raw
+		return nil
+	})
+	if err != nil {
+		return failAll(offlineOrErr(err))
 	}
 	return out
 }
