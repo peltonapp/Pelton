@@ -17,6 +17,8 @@ description: Install Pelton on macOS.
 
 ## Installation
 
+Pelton needs macOS 13 Ventura or newer.
+
 ### 1. Download
 
 Download the installer from 

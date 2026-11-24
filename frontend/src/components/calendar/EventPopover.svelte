@@ -15,19 +15,25 @@
   import warningIcon from '@phosphor-icons/core/assets/duotone/warning-duotone.svg?raw'
   import pencilIcon from '@phosphor-icons/core/assets/duotone/pencil-simple-duotone.svg?raw'
   import trashIcon from '@phosphor-icons/core/assets/duotone/trash-duotone.svg?raw'
+  import taskIcon from '@phosphor-icons/core/assets/duotone/check-square-duotone.svg?raw'
   import closeIcon from '@phosphor-icons/core/assets/regular/x.svg?raw'
   import envelopeIcon from '@phosphor-icons/core/assets/duotone/envelope-simple-duotone.svg?raw'
+  import prepareIcon from '@phosphor-icons/core/assets/duotone/clipboard-text-duotone.svg?raw'
   import { mailLinks, openMailLink } from '../../lib/maillink'
-  import './controls.css'
+  import { openMeetingPrep } from '../../stores/meetingprep'
+  import '../../theme/controls.css'
   import Ph from '../common/Ph.svelte'
   import PieProgress from '../common/PieProgress.svelte'
   import AnchoredPopover from '../common/AnchoredPopover.svelte'
-  import { getEvent } from '../../lib/api'
+  import { getEvent, projectsOfEvent, setEventProject } from '../../lib/api'
+  import kanbanIcon from '@phosphor-icons/core/assets/duotone/kanban-duotone.svg?raw'
+  import ProjectMenu from '../projects/ProjectMenu.svelte'
+  import NoteMentions from '../notes/NoteMentions.svelte'
   import { placeOccurrence } from '../../lib/caldate'
   import { formatWhen } from '../../lib/calformat'
   import { describeRRule } from '../../lib/recurrence'
   import { reminderLabel, partStatKey } from './labels'
-  import { errorMessage } from '../../stores/toast'
+  import { errorMessage, toastError } from '../../stores/toast'
   import { dur, motion } from '../../lib/motion'
   import { t } from '../../lib/i18n'
   import type { TimeFormat } from '../../lib/format'
@@ -46,6 +52,7 @@
     close: void
     edit: CalendarEvent
     remove: { occ: Occurrence; scope: EventScope | '' }
+    toTask: Occurrence
   }>()
 
   let event: CalendarEvent | null = null
@@ -62,11 +69,32 @@
   onMount(async () => {
     try {
       event = await getEvent(occ.eventId, occ.recurrenceId)
+      projectId = (await projectsOfEvent(occ.uid))[0] ?? 0
     } catch (err) {
       error = errorMessage(err)
     }
     popover?.reposition()
   })
+
+  // the project the event is filed under, 0 for none. filing is kept on this
+  // device and never written into the event.
+  let projectId = 0
+
+  async function fileUnder(id: number): Promise<void> {
+    const before = projectId
+    projectId = id
+    try {
+      await setEventProject(occ.uid, occ.summary, id)
+    } catch (err) {
+      projectId = before
+      toastError(errorMessage(err))
+    }
+  }
+
+  function prepare(): void {
+    openMeetingPrep(occ.eventId, occ.recurrenceId)
+    dispatch('close')
+  }
 
   function askDelete(): void {
     if (occ.recurring) {
@@ -84,10 +112,20 @@
       <span class="swatch" aria-hidden="true"></span>
       <h3 class:cancelled={occ.status === 'CANCELLED'}>{occ.summary || $t('calendar.untitled')}</h3>
       <div class="tools">
+        {#if attendees.length > 0 && !occ.task}
+          <button type="button" class="cal-icon" aria-label={$t('prep.button')} title={$t('prep.button')} on:click={prepare}>
+            <Ph svg={prepareIcon} size={15} />
+          </button>
+        {/if}
         {#if !occ.readOnly}
           <button type="button" class="cal-icon" aria-label={$t('calendar.edit')} disabled={!event} on:click={() => event && dispatch('edit', event)}>
             <Ph svg={pencilIcon} size={15} />
           </button>
+          {#if !occ.recurring}
+            <button type="button" class="cal-icon" aria-label={$t('tasks.toTask')} title={$t('tasks.toTask')} on:click={() => dispatch('toTask', occ)}>
+              <Ph svg={taskIcon} size={15} />
+            </button>
+          {/if}
           <button type="button" class="cal-icon" aria-label={$t('calendar.delete')} on:click={askDelete}>
             <Ph svg={trashIcon} size={15} />
           </button>
@@ -176,6 +214,33 @@
             <dd><button type="button" class="cal-btn" on:click={() => openMailLink(link)}>{$t('calendar.openMail')}</button></dd>
           </div>
         {/each}
+      {/if}
+      {#if event}
+        <div class="line">
+          <dt><Ph svg={kanbanIcon} size={15} /></dt>
+          <dd><ProjectMenu value={projectId} buttonClass="cal-btn project" on:change={(e) => void fileUnder(e.detail)} /></dd>
+        </div>
+      {/if}
+      {#if occ.uid}
+        <div class="line">
+          <dt></dt>
+          <dd>
+            <NoteMentions
+              about={{
+                kind: 'event',
+                id: occ.uid,
+                title: occ.summary || $t('calendar.untitled'),
+                event: {
+                  title: occ.summary || $t('calendar.untitled'),
+                  start: when,
+                  end: '',
+                  location: occ.location,
+                  attendees: attendees.map((a) => (a.name ? `${a.name} <${a.email}>` : a.email)),
+                },
+              }}
+            />
+          </dd>
+        </div>
       {/if}
       {#if occ.conflict || event?.syncError}
         <div class="line warn">

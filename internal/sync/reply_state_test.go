@@ -2,43 +2,19 @@ package sync
 
 import (
 	"context"
-	"slices"
 	"testing"
-
-	"github.com/emersion/go-imap/v2"
 
 	"github.com/peltonapp/Pelton/internal/storage"
 )
 
-func TestImapFlagsToStorageReadsReplyState(t *testing.T) {
-	tests := []struct {
-		name  string
-		flags []imap.Flag
-		want  storage.Flag
-	}{
-		{"answered", []imap.Flag{imap.FlagAnswered}, storage.FlagAnswered},
-		{"forwarded", []imap.Flag{imap.FlagForwarded}, storage.FlagForwarded},
-		{"forwarded keyword in another case", []imap.Flag{"$forwarded"}, storage.FlagForwarded},
-		{"both with seen", []imap.Flag{imap.FlagSeen, imap.FlagAnswered, imap.FlagForwarded}, storage.FlagSeen | storage.FlagAnswered | storage.FlagForwarded},
-		{"other keywords ignored", []imap.Flag{"$Label1", "$Junk", imap.FlagDraft}, 0},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			if got := imapFlagsToStorage(tt.flags); got != tt.want {
-				t.Fatalf("imapFlagsToStorage(%v) = %d, want %d", tt.flags, got, tt.want)
-			}
-		})
-	}
-}
-
 func TestSyncAdoptsServerReplyState(t *testing.T) {
 	ctx := context.Background()
 	db, folder := newSyncTestFolder(t)
-	client := &fakeClient{uids: []uint32{1, 2}, flags: map[uint32][]imap.Flag{
-		1: {imap.FlagSeen, imap.FlagAnswered},
-		2: {imap.FlagSeen},
+	adapter := &fakeAdapter{ids: fakeIDs(1, 2), flags: map[string]storage.Flag{
+		"1": storage.FlagSeen | storage.FlagAnswered,
+		"2": storage.FlagSeen,
 	}}
-	engine := NewEngine(client, db, nil)
+	engine := NewEngine(adapter, db, nil)
 	if _, err := engine.SyncFolder(ctx, folder); err != nil {
 		t.Fatalf("initial sync: %v", err)
 	}
@@ -48,7 +24,7 @@ func TestSyncAdoptsServerReplyState(t *testing.T) {
 	}
 
 	// another client forwards uid 2, and nothing else changes.
-	client.flags[2] = []imap.Flag{imap.FlagSeen, imap.FlagForwarded}
+	adapter.flags["2"] = storage.FlagSeen | storage.FlagForwarded
 	res, err := engine.SyncFolder(ctx, folder)
 	if err != nil {
 		t.Fatalf("second sync: %v", err)
@@ -62,7 +38,7 @@ func TestSyncAdoptsServerReplyState(t *testing.T) {
 	}
 
 	// a seen-only change elsewhere is not a reply state change.
-	client.flags[1] = []imap.Flag{imap.FlagAnswered}
+	adapter.flags["1"] = storage.FlagAnswered
 	res, err = engine.SyncFolder(ctx, folder)
 	if err != nil {
 		t.Fatalf("third sync: %v", err)
@@ -74,27 +50,23 @@ func TestSyncAdoptsServerReplyState(t *testing.T) {
 
 func TestSyncPushesReplyStateSetLocally(t *testing.T) {
 	tests := []struct {
-		name     string
-		kind     string
-		refuse   bool
-		wantFlag imap.Flag
-		wantHas  bool
+		name string
+		kind string
+		want storage.Flag
 	}{
-		{"reply pushes answered", storage.ReplyKindReply, false, imap.FlagAnswered, true},
-		{"forward pushes keyword", storage.ReplyKindForward, false, imap.FlagForwarded, true},
-		{"refused keyword does not block the rest", storage.ReplyKindForward, true, imap.FlagForwarded, false},
+		{"reply pushes answered", storage.ReplyKindReply, storage.FlagAnswered},
+		{"forward pushes forwarded", storage.ReplyKindForward, storage.FlagForwarded},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			ctx := context.Background()
 			db, folder := newSyncTestFolder(t)
-			client := &fakeClient{
-				uids:           []uint32{1},
-				flags:          map[uint32][]imap.Flag{1: {imap.FlagSeen}},
-				messageIDs:     map[uint32]string{1: "orig@example.com"},
-				refuseKeywords: tt.refuse,
+			adapter := &fakeAdapter{
+				ids:        fakeIDs(1),
+				flags:      map[string]storage.Flag{"1": storage.FlagSeen},
+				messageIDs: map[string]string{"1": "orig@example.com"},
 			}
-			engine := NewEngine(client, db, nil)
+			engine := NewEngine(adapter, db, nil)
 			if _, err := engine.SyncFolder(ctx, folder); err != nil {
 				t.Fatalf("initial sync: %v", err)
 			}
@@ -115,11 +87,8 @@ func TestSyncPushesReplyStateSetLocally(t *testing.T) {
 			if _, err := engine.SyncFolder(ctx, folder); err != nil {
 				t.Fatalf("push sync: %v", err)
 			}
-			if got := slices.Contains(client.flags[1], tt.wantFlag); got != tt.wantHas {
-				t.Fatalf("server flags = %v, want %s present = %v", client.flags[1], tt.wantFlag, tt.wantHas)
-			}
-			if slices.Contains(client.flags[1], imap.FlagSeen) {
-				t.Fatalf("server flags = %v, the unread change did not reach the server", client.flags[1])
+			if got := adapter.flags["1"]; !got.Has(tt.want) || got.Has(storage.FlagSeen) {
+				t.Fatalf("server flags = %d, want %d set and seen cleared", got, tt.want)
 			}
 			states, _ = db.ListMessageStates(ctx, folder.ID)
 			if states[0].PendingFlags {

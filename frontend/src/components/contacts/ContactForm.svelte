@@ -28,8 +28,12 @@
   // a new contact cannot be saved until a book is chosen: one filed in the wrong
   // book is a contact on the wrong device.
   $: writable = $addressBooks.filter((b) => !b.readOnly)
+  // a Matrix ID starts with @ and has a colon before the server name.
+  $: matrixId = (draft.matrixId ?? '').trim()
+  $: matrixInvalid = matrixId !== '' && !/^@[^:\s]+:\S+$/.test(matrixId)
   $: canSave =
     !saving &&
+    !matrixInvalid &&
     draft.bookId !== 0 &&
     (draft.fullName.trim() !== '' || draft.emails.some((e) => e.value.trim() !== ''))
 
@@ -43,6 +47,7 @@
 
   async function save(): Promise<void> {
     saving = true
+    draft.matrixId = matrixId
     const saved = await saveContact(draft)
     saving = false
     if (saved) {
@@ -143,6 +148,23 @@
   </fieldset>
 
   <label class="field">
+    <span>{$t('contacts.matrix')}</span>
+    <input
+      type="text"
+      bind:value={draft.matrixId}
+      placeholder="@name:example.org"
+      autocapitalize="off"
+      autocomplete="off"
+      spellcheck="false"
+      dir="ltr"
+      aria-invalid={matrixInvalid}
+    />
+    {#if matrixInvalid}
+      <span class="invalid" role="alert">{$t('contacts.matrix.invalid')}</span>
+    {/if}
+  </label>
+
+  <label class="field">
     <span>{$t('contacts.field.note')}</span>
     <textarea rows="4" bind:value={draft.note}></textarea>
   </label>
@@ -228,6 +250,14 @@
   textarea:focus {
     border-color: var(--accent);
     outline: none;
+  }
+
+  input[aria-invalid='true'] {
+    border-color: var(--danger);
+  }
+
+  .field > span.invalid {
+    color: var(--danger);
   }
 
   textarea {

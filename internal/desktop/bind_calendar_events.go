@@ -56,6 +56,9 @@ type OccurrenceDTO struct {
 	Transparency string `json:"transparency"`
 	ReadOnly     bool   `json:"readOnly"`
 	HasReminders bool   `json:"hasReminders"`
+	// HasAttendees is true when others are invited, which is when preparing
+	// for the meeting has something to show.
+	HasAttendees bool `json:"hasAttendees"`
 	// Pending is true while a change made here has not reached the server.
 	Pending  bool `json:"pending"`
 	Conflict bool `json:"conflict"`
@@ -224,6 +227,7 @@ func (a *App) ListOccurrences(from, to string, calendarIDs []int64) ([]Occurrenc
 				Transparency:  occ.Event.Transparency,
 				ReadOnly:      cal.ReadOnly,
 				HasReminders:  len(occ.Event.Alarms) > 0,
+				HasAttendees:  len(occ.Event.Attendees) > 0,
 				Pending:       row.Pending != "",
 				Conflict:      row.Conflict,
 			})
@@ -271,6 +275,14 @@ func (a *App) GetEvent(id int64, recurrenceID string) (EventDTO, error) {
 
 // CreateEvent stores a new event and writes it to its calendar's server.
 func (a *App) CreateEvent(req EventRequest) (EventSaveResultDTO, error) {
+	res, err := a.createEvent(req)
+	if err == nil {
+		a.scriptEventSaved(a.ctx, res.Event.ID, true)
+	}
+	return res, err
+}
+
+func (a *App) createEvent(req EventRequest) (EventSaveResultDTO, error) {
 	if err := a.ready(); err != nil {
 		return EventSaveResultDTO{}, err
 	}
@@ -302,6 +314,14 @@ func (a *App) CreateEvent(req EventRequest) (EventSaveResultDTO, error) {
 // splits the series there and changes the part from it on, ScopeAll changes
 // the series, moving every occurrence by as much as this one moved.
 func (a *App) UpdateEvent(req EventRequest) (EventSaveResultDTO, error) {
+	res, err := a.updateEvent(req)
+	if err == nil {
+		a.scriptEventSaved(a.ctx, res.Event.ID, false)
+	}
+	return res, err
+}
+
+func (a *App) updateEvent(req EventRequest) (EventSaveResultDTO, error) {
 	if err := a.ready(); err != nil {
 		return EventSaveResultDTO{}, err
 	}
@@ -442,56 +462,8 @@ func (a *App) ResolveEventConflict(id int64, keepMine bool) (EventDTO, error) {
 	if err := a.ready(); err != nil {
 		return EventDTO{}, err
 	}
-	row, err := a.store.GetCalendarEvent(a.ctx, id)
-	if err != nil {
-		return EventDTO{}, err
-	}
-	if !row.Conflict {
-		return EventDTO{}, errEventNotInConflict
-	}
-	cal, err := a.store.GetCalendar(a.ctx, row.CalendarID)
-	if err != nil {
-		return EventDTO{}, err
-	}
-	acct, err := a.store.GetCalendarAccount(a.ctx, cal.AccountID)
-	if err != nil {
-		return EventDTO{}, err
-	}
-	client, err := a.calendarClient(*acct)
-	if err != nil {
-		return EventDTO{}, err
-	}
-	ctx, cancel := context.WithTimeout(a.ctx, calendarTimeout)
-	defer cancel()
-
-	if keepMine {
-		row.Conflict = false
-		if err := a.pushEvent(ctx, client, *cal, row, true); err != nil {
-			return EventDTO{}, err
-		}
-	} else {
-		server, err := client.Get(ctx, row.Path)
-		switch {
-		case errors.Is(err, caldav.ErrNotFound):
-			if err := a.store.DeleteCalendarEvent(a.ctx, row.ID); err != nil {
-				return EventDTO{}, err
-			}
-			a.emit(EventCalendarChanged, CalendarChangedEvent{CalendarIDs: []int64{cal.ID}})
-			return EventDTO{}, nil
-		case err != nil:
-			return EventDTO{}, err
-		}
-		row.Pending, row.Conflict = "", false
-		if err := a.store.SaveCalendarEvent(a.ctx, row); err != nil {
-			return EventDTO{}, err
-		}
-		if _, err := a.storeResource(a.ctx, *cal, server); err != nil {
-			return EventDTO{}, err
-		}
-	}
-	a.emit(EventCalendarChanged, CalendarChangedEvent{CalendarIDs: []int64{cal.ID}})
-	fresh, err := a.store.GetCalendarEventByUID(a.ctx, cal.ID, row.UID)
-	if err != nil {
+	cal, fresh, err := a.resolveRowConflict(id, keepMine)
+	if err != nil || fresh == nil {
 		return EventDTO{}, err
 	}
 	obj, err := parseStoredEvent(*fresh)
@@ -499,6 +471,65 @@ func (a *App) ResolveEventConflict(id int64, keepMine bool) (EventDTO, error) {
 		return EventDTO{}, err
 	}
 	return occurrenceDTO(*fresh, *cal, obj, time.Time{})
+}
+
+// resolveRowConflict settles the conflict of an event or a task and returns
+// its calendar and the row as it now stands, nil when the server no longer
+// had it and the local copy went too.
+func (a *App) resolveRowConflict(id int64, keepMine bool) (*storage.Calendar, *storage.CalendarEvent, error) {
+	row, err := a.store.GetCalendarEvent(a.ctx, id)
+	if err != nil {
+		return nil, nil, err
+	}
+	if !row.Conflict {
+		return nil, nil, errEventNotInConflict
+	}
+	cal, err := a.store.GetCalendar(a.ctx, row.CalendarID)
+	if err != nil {
+		return nil, nil, err
+	}
+	acct, err := a.store.GetCalendarAccount(a.ctx, cal.AccountID)
+	if err != nil {
+		return nil, nil, err
+	}
+	client, err := a.calendarClient(*acct)
+	if err != nil {
+		return nil, nil, err
+	}
+	ctx, cancel := context.WithTimeout(a.ctx, calendarTimeout)
+	defer cancel()
+
+	if keepMine {
+		row.Conflict = false
+		if err := a.pushEvent(ctx, client, *cal, row, true); err != nil {
+			return nil, nil, err
+		}
+	} else {
+		server, err := client.Get(ctx, row.Path)
+		switch {
+		case errors.Is(err, caldav.ErrNotFound):
+			if err := a.store.DeleteCalendarEvent(a.ctx, row.ID); err != nil {
+				return nil, nil, err
+			}
+			a.emit(EventCalendarChanged, CalendarChangedEvent{CalendarIDs: []int64{cal.ID}})
+			return cal, nil, nil
+		case err != nil:
+			return nil, nil, err
+		}
+		row.Pending, row.Conflict = "", false
+		if err := a.store.SaveCalendarEvent(a.ctx, row); err != nil {
+			return nil, nil, err
+		}
+		if _, err := a.storeResource(a.ctx, *cal, server); err != nil {
+			return nil, nil, err
+		}
+	}
+	a.emit(EventCalendarChanged, CalendarChangedEvent{CalendarIDs: []int64{cal.ID}})
+	fresh, err := a.store.GetCalendarEventByUID(a.ctx, cal.ID, row.UID)
+	if err != nil {
+		return nil, nil, err
+	}
+	return cal, fresh, nil
 }
 
 // CreateEventDraftFromMessage prefills an event from a mail, for dropping a

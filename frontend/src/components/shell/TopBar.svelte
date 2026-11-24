@@ -8,6 +8,10 @@
   import { space } from '../../stores/space'
   import { spaceSearchProviders } from '../../lib/spacesearch'
   import ActivityButton from './ActivityButton.svelte'
+  import FocusButton from './FocusButton.svelte'
+  import HistoryButton from './HistoryButton.svelte'
+  import NavButtons from './NavButtons.svelte'
+  import MyDayButton from './MyDayButton.svelte'
   import { titleBarDoubleClick } from '../../lib/api'
   import { isMac } from '../../lib/i18n'
   import WindowButtons from './WindowButtons.svelte'
@@ -29,6 +33,7 @@
 >
   <div class="side start">
     <slot name="menu" />
+    <NavButtons />
     {#if tabs}
       <SpaceSwitcher labels />
     {/if}
@@ -41,6 +46,11 @@
   {/if}
 
   <div class="side end">
+    {#if $space === 'mail'}
+      <MyDayButton />
+    {/if}
+    <FocusButton />
+    <HistoryButton />
     <ActivityButton />
     <slot name="end" />
     {#if !isMac && $frameIntegrated}

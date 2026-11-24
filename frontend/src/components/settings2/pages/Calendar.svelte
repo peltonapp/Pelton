@@ -13,13 +13,15 @@
   import ToggleSwitch from '../../common/ToggleSwitch.svelte'
   import CalDavAccounts from '../../calendar/CalDavAccounts.svelte'
   import { calendarSettings, calendars, loadCalendars, loadCalendarSettings, saveCalendarSettings } from '../../../stores/calendar'
-  import { atMinutes, localeWeekStart } from '../../../lib/caldate'
+  import { loadTaskSettings, saveTaskSettings, taskSettings } from '../../../stores/tasks'
+  import { atMinutes, localeWeekStart, resolveWeekStart } from '../../../lib/caldate'
+  import { blockSettings, formatMinutes, loadBlockSettings, saveBlockSettings } from '../../calendar/timeblocks'
   import { formatTime } from '../../../lib/calformat'
   import { weekdayName } from '../../../lib/recurrence'
   import { reminderChoices, reminderLabel } from '../../calendar/labels'
   import { prefs } from '../../../stores/prefs'
   import { t } from '../../../lib/i18n'
-  import '../../calendar/controls.css'
+  import '../../../theme/controls.css'
   import { defaultCalendarFileStatus, setDefaultCalendarFileHandler } from '../../../lib/api'
   import { errorMessage, toastError } from '../../../stores/toast'
   import type { TimeFormat } from '../../../lib/format'
@@ -28,6 +30,8 @@
   let icsHandler = { known: false, isDefault: false }
 
   onMount(() => {
+    void loadBlockSettings()
+    void loadTaskSettings()
     void loadCalendarSettings()
     void loadCalendars()
     void readICSHandler()
@@ -59,6 +63,7 @@
     { key: 'week', label: $t('calendar.view.week') },
     { key: 'month', label: $t('calendar.view.month') },
     { key: 'agenda', label: $t('calendar.view.agenda') },
+    { key: 'year', label: $t('calendar.view.year') },
   ]
 
   $: weekStartOptions = [
@@ -97,6 +102,18 @@
     { value: '0', label: $t('calendarSettings.defaultCalendar.first') },
     ...$calendars.filter((c) => !c.readOnly).map((c) => ({ value: String(c.id), label: c.name || $t('calendar.defaultName') })),
   ]
+
+  $: b = $blockSettings
+  $: weekOrder = Array.from({ length: 7 }, (_, i) => (resolveWeekStart(s.weekStart, navigator.language) + i) % 7)
+
+  function minuteItems(choices: number[], current: number): { value: string; label: string }[] {
+    return [...new Set([...choices, current])].sort((x, y) => x - y).map((m) => ({ value: String(m), label: formatMinutes(m, $t) }))
+  }
+
+  function toggleWorkDay(day: number): void {
+    const days = b.workDays.includes(day) ? b.workDays.filter((d) => d !== day) : [...b.workDays, day]
+    void saveBlockSettings({ workDays: days.sort((x, y) => x - y) })
+  }
 
   $: syncItems = [
     { value: '0', label: $t('calendarSettings.sync.manual') },
@@ -188,12 +205,83 @@
       on:change={(e) => saveCalendarSettings({ remindersEnabled: e.detail })}
     />
   </Row>
+  <Row id="calendar-show-tasks" label={$t('taskSettings.inCalendar')} hint={$t('taskSettings.inCalendar.hint')}>
+    <ToggleSwitch checked={$taskSettings.showInCalendar} label={$t('taskSettings.inCalendar')} on:change={(e) => saveTaskSettings({ showInCalendar: e.detail })} />
+  </Row>
   <Row id="calendar-ics-handler" label={$t('calendarSettings.icsHandler')} hint={$t('calendarSettings.icsHandler.hint')}>
     {#if icsHandler.known && icsHandler.isDefault}
       <span class="to">{$t('calendarSettings.icsHandler.isDefault')}</span>
     {:else}
       <button type="button" class="cal-btn" on:click={useForICS}>{$t('calendarSettings.icsHandler.set')}</button>
     {/if}
+  </Row>
+</Card>
+
+<Card title={$t('calendarSettings.timeblock')} description={$t('calendarSettings.timeblock.hint')}>
+  <Row id="calendar-block-length" label={$t('calendarSettings.timeblock.length')} hint={$t('calendarSettings.timeblock.length.hint')}>
+    <Select
+      value={String(b.defaultMinutes)}
+      items={minuteItems([15, 30, 45, 60, 90, 120], b.defaultMinutes)}
+      ariaLabel={$t('calendarSettings.timeblock.length')}
+      on:change={(e) => saveBlockSettings({ defaultMinutes: Number(e.detail) })}
+    />
+  </Row>
+  <Row id="calendar-block-work-days" label={$t('calendarSettings.timeblock.workDays')} hint={$t('calendarSettings.timeblock.workDays.hint')}>
+    <div class="days" role="group" aria-label={$t('calendarSettings.timeblock.workDays')}>
+      {#each weekOrder as day (day)}
+        <button type="button" class="cal-btn day" aria-pressed={b.workDays.includes(day)} on:click={() => toggleWorkDay(day)}>
+          {weekdayName(day, navigator.language, 'short')}
+        </button>
+      {/each}
+    </div>
+  </Row>
+  <Row id="calendar-block-min-slot" label={$t('calendarSettings.timeblock.minSlot')} hint={$t('calendarSettings.timeblock.minSlot.hint')}>
+    <Select
+      value={String(b.minSlotMinutes)}
+      items={minuteItems([5, 10, 15, 30, 45, 60], b.minSlotMinutes)}
+      ariaLabel={$t('calendarSettings.timeblock.minSlot')}
+      on:change={(e) => saveBlockSettings({ minSlotMinutes: Number(e.detail) })}
+    />
+  </Row>
+  <Row id="calendar-block-buffer" label={$t('calendarSettings.timeblock.buffer')} hint={$t('calendarSettings.timeblock.buffer.hint')}>
+    <Select
+      value={String(b.bufferMinutes)}
+      items={[{ value: '0', label: $t('calendarSettings.timeblock.buffer.none') }, ...minuteItems([5, 10, 15, 30], b.bufferMinutes).filter((i) => i.value !== '0')]}
+      ariaLabel={$t('calendarSettings.timeblock.buffer')}
+      on:change={(e) => saveBlockSettings({ bufferMinutes: Number(e.detail) })}
+    />
+  </Row>
+  <Row id="calendar-block-search" label={$t('calendarSettings.timeblock.searchDays')} hint={$t('calendarSettings.timeblock.searchDays.hint')}>
+    <Select
+      value={String(b.searchDays)}
+      items={[3, 7, 14, 31].map((n) => ({ value: String(n), label: $t('calendarSettings.timeblock.days').replace('{n}', String(n)) }))}
+      ariaLabel={$t('calendarSettings.timeblock.searchDays')}
+      on:change={(e) => saveBlockSettings({ searchDays: Number(e.detail) })}
+    />
+  </Row>
+  <Row id="calendar-block-write" label={$t('calendarSettings.timeblock.write')} hint={$t('calendarSettings.timeblock.write.hint')}>
+    <ToggleSwitch checked={b.writeToCalendar} label={$t('calendarSettings.timeblock.write')} on:change={(e) => saveBlockSettings({ writeToCalendar: e.detail })} />
+  </Row>
+  {#if b.writeToCalendar}
+    <Row id="calendar-block-calendar" label={$t('calendarSettings.timeblock.calendar')} hint={$t('calendarSettings.timeblock.calendar.hint')}>
+      <Select
+        value={String(b.calendarId)}
+        items={calendarItems}
+        ariaLabel={$t('calendarSettings.timeblock.calendar')}
+        on:change={(e) => saveBlockSettings({ calendarId: Number(e.detail) })}
+      />
+    </Row>
+  {/if}
+  <Row id="calendar-block-title" label={$t('calendarSettings.timeblock.eventTitle')} hint={$t('calendarSettings.timeblock.eventTitle.hint')}>
+    <input
+      class="cal-field"
+      value={b.eventTitle}
+      aria-label={$t('calendarSettings.timeblock.eventTitle')}
+      on:change={(e) => e.currentTarget.value.trim() && saveBlockSettings({ eventTitle: e.currentTarget.value.trim() })}
+    />
+  </Row>
+  <Row id="calendar-block-include-title" label={$t('calendarSettings.timeblock.includeTitle')} hint={$t('calendarSettings.timeblock.includeTitle.hint')}>
+    <ToggleSwitch checked={b.includeTitle} label={$t('calendarSettings.timeblock.includeTitle')} on:change={(e) => saveBlockSettings({ includeTitle: e.detail })} />
   </Row>
 </Card>
 
@@ -215,5 +303,16 @@
   .to {
     font-size: var(--fz-label);
     color: var(--text-tertiary);
+  }
+
+  .days {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-1);
+  }
+
+  .day[aria-pressed='true'] {
+    border-color: var(--accent);
+    background: var(--selection-bg);
   }
 </style>

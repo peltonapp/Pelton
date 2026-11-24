@@ -19,6 +19,7 @@
     IconHeading,
   } from '@tabler/icons-svelte'
   import { t } from '../../lib/i18n'
+  import { get } from 'svelte/store'
   import { caretMark } from '../../lib/richtext'
   import { looksLikeMarkdown, renderMarkdown } from '../../lib/markdown'
 
@@ -67,6 +68,7 @@
       enablePasteRules: inputRules,
       editorProps: {
         handlePaste: (_view, event) => pasteAsMarkdown(event),
+        attributes: { 'aria-label': get(t)('a11y.messageBody'), 'aria-multiline': 'true' },
       },
       onUpdate: ({ editor }) => {
         dispatch('change', editor.getHTML())
@@ -214,9 +216,75 @@
       .run()
   }
 
+  /** insertText puts plain text at the caret, one paragraph per line. */
+  export function insertText(text: string): void {
+    const lines = text.split('\n')
+    editor
+      ?.chain()
+      .focus()
+      .insertContent(lines.map((line) => ({ type: 'paragraph', content: line ? [{ type: 'text', text: line }] : [] })))
+      .run()
+  }
+
   /** focus puts the caret in the editor. */
   export function focus(): void {
     editor?.commands.focus()
+  }
+
+  /** textBeforeCaret is the text of the caret's block up to the caret. */
+  export function textBeforeCaret(): string {
+    if (!editor) {
+      return ''
+    }
+    const { $from, empty } = editor.state.selection
+    return empty ? $from.parent.textBetween(0, $from.parentOffset, undefined, '￼') : ''
+  }
+
+  /**
+   * insertBeforeCaret replaces the count characters before the caret with
+   * html. It returns where the insert starts and how far its end is from the
+   * end of the document, which stays true while text inside it changes.
+   */
+  export function insertBeforeCaret(count: number, html: string): { from: number; tail: number } {
+    if (!editor) {
+      return { from: 0, tail: 0 }
+    }
+    const head = editor.state.selection.head
+    const from = Math.max(0, head - count)
+    editor.chain().focus().insertContentAt({ from, to: head }, html).run()
+    return { from, tail: editor.state.doc.content.size - editor.state.selection.head }
+  }
+
+  /**
+   * selectNextPlaceholder selects the next {placeholder} from position from
+   * (the end of the selection when left out) up to tail characters before the
+   * end of the document, and reports whether there was one.
+   */
+  export function selectNextPlaceholder(tail: number, from?: number): boolean {
+    if (!editor) {
+      return false
+    }
+    const { doc, selection } = editor.state
+    const at = from ?? selection.to
+    const until = doc.content.size - tail
+    let found = null as { from: number; to: number } | null
+    doc.nodesBetween(at, Math.max(at, until), (node, pos) => {
+      if (found || !node.isText) {
+        return !found
+      }
+      const text = node.text ?? ''
+      const start = Math.max(0, at - pos)
+      const match = /\{[^{}\n]+\}/.exec(text.slice(start))
+      if (match && pos + start + match.index + match[0].length <= until) {
+        found = { from: pos + start + match.index, to: pos + start + match.index + match[0].length }
+      }
+      return !found
+    })
+    if (!found) {
+      return false
+    }
+    editor.chain().focus().setTextSelection(found).run()
+    return true
   }
 
   // active() reports whether a mark/node is on at the caret. it reads `revision`

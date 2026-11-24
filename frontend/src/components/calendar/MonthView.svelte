@@ -7,9 +7,11 @@
   // message.
   import { createEventDispatcher, onDestroy, onMount } from 'svelte'
   import AnchoredPopover from '../common/AnchoredPopover.svelte'
+  import { openScriptMenu } from '../../lib/scriptmenu'
   import { maildrop, type MailDropOptions } from '../../stores/maildrag'
   import { mailDropHint } from './maildrop'
-  import { dayKey, eventsOnDay, isLaneEvent, layoutRow, rowOverflow, sameDay, startOfDay, type Placed, type RowSpan } from '../../lib/caldate'
+  import { dayKey, eventsOnDay, isLaneEvent, layoutRow, parseDayKey, rowOverflow, sameDay, startOfDay, type Placed, type RowSpan } from '../../lib/caldate'
+  import TaskCheck from '../tasks/TaskCheck.svelte'
   import { weekdayName } from '../../lib/recurrence'
   import { formatLongDay, formatTime } from '../../lib/calformat'
   import { occurrenceKey } from './occurrence'
@@ -38,6 +40,8 @@
     create: { day: Date; anchor: HTMLElement }
     mailDrop: MailDropAt
     menu: CellMenuAt
+    toggleTask: Occurrence
+    moveTask: { occ: Occurrence; day: Date }
   }>()
 
   let grid: HTMLDivElement
@@ -111,6 +115,62 @@
     }
   }
 
+  // dragging a task to another day: the items stop catching the pointer while
+  // it moves, so the day under it can be found.
+  let taskDrag: { occ: Occurrence; x: number; y: number; moved: boolean } | null = null
+  let overDay: HTMLElement | null = null
+  let justDragged = false
+
+  function onTaskDown(event: PointerEvent, occ: Occurrence): void {
+    if (event.button !== 0 || !occ.task || occ.task.readOnly) {
+      return
+    }
+    taskDrag = { occ, x: event.clientX, y: event.clientY, moved: false }
+    window.addEventListener('pointermove', onTaskMove)
+    window.addEventListener('pointerup', onTaskUp)
+  }
+
+  function setOverDay(el: HTMLElement | null): void {
+    if (el !== overDay) {
+      overDay?.classList.remove('task-over')
+      el?.classList.add('task-over')
+      overDay = el
+    }
+  }
+
+  function onTaskMove(event: PointerEvent): void {
+    if (!taskDrag) {
+      return
+    }
+    if (!taskDrag.moved && Math.hypot(event.clientX - taskDrag.x, event.clientY - taskDrag.y) > 4) {
+      taskDrag = { ...taskDrag, moved: true }
+    }
+    if (taskDrag.moved) {
+      setOverDay((document.elementFromPoint(event.clientX, event.clientY) as HTMLElement | null)?.closest<HTMLElement>('.cell[data-day]') ?? null)
+    }
+  }
+
+  function onTaskUp(): void {
+    window.removeEventListener('pointermove', onTaskMove)
+    window.removeEventListener('pointerup', onTaskUp)
+    const drag = taskDrag
+    const target = overDay?.dataset.day
+    setOverDay(null)
+    taskDrag = null
+    if (drag?.moved) {
+      justDragged = true
+      setTimeout(() => (justDragged = false), 0)
+      if (target) {
+        dispatch('moveTask', { occ: drag.occ, day: parseDayKey(target) })
+      }
+    }
+  }
+
+  onDestroy(() => {
+    window.removeEventListener('pointermove', onTaskMove)
+    window.removeEventListener('pointerup', onTaskUp)
+  })
+
   function onCellMenu(event: MouseEvent, day: Date): void {
     if ((event.target as HTMLElement).closest('.item, .more')) {
       return
@@ -120,7 +180,7 @@
   }
 </script>
 
-<div class="month" bind:this={grid}>
+<div class="month" class:task-dragging={taskDrag?.moved} bind:this={grid}>
   <div class="heads" aria-hidden="true">
     {#each heads as d (d)}
       <span class:weekend={d === 0 || d === 6}>{weekdayName(d, navigator.language, 'short')}</span>
@@ -133,6 +193,7 @@
           <!-- svelte-ignore a11y-click-events-have-key-events a11y-no-static-element-interactions -->
           <div
             class="cell"
+            data-day={dayKey(day)}
             class:other={day.getMonth() !== month}
             class:today={sameDay(day, today)}
             class:focus={sameDay(day, focus)}
@@ -147,6 +208,7 @@
               type="button"
               class="num"
               aria-label={formatLongDay(day)}
+              aria-current={sameDay(day, today) ? 'date' : undefined}
               on:click|stopPropagation={() => dispatch('day', day)}
             >
               {day.getDate() === 1 ? day.toLocaleDateString(undefined, { day: 'numeric', month: 'short' }) : day.getDate()}
@@ -156,6 +218,26 @@
         <div class="items">
           {#each row.spans.filter((s) => s.lane < row.shown) as s (occurrenceKey(s.placed.occ))}
             {@const occ = s.placed.occ}
+            {#if occ.task}
+              <div
+                class="item task"
+                class:done={occ.task.done}
+                class:dragging={taskDrag?.occ === occ && taskDrag.moved}
+                style={`grid-column:${s.col + 1} / span 1;grid-row:${s.lane + 1};--ev:${colorOf(occ)}`}
+              >
+                <TaskCheck
+                  checked={occ.task.done}
+                  label={$t(occ.task.done ? 'tasks.inCalendarOpen' : 'tasks.inCalendarDone').replace('{title}', occ.summary || $t('tasks.untitled'))}
+                  color={colorOf(occ)}
+                  disabled={occ.task.readOnly}
+                  on:toggle={() => dispatch('toggleTask', occ)}
+                />
+                <button type="button" class="task-title" on:pointerdown={(e) => onTaskDown(e, occ)} on:click={(e) => !justDragged && dispatch('open', { occ, anchor: e.currentTarget })}>
+                  {#if !occ.allDay}<span class="time">{formatTime(s.placed.start, timeFormat)}</span>{/if}
+                  <span class="title">{occ.summary || $t('tasks.untitled')}</span>
+                </button>
+              </div>
+            {:else}
             <button
               type="button"
               class="item"
@@ -166,6 +248,7 @@
               class:cancelled={occ.status === 'CANCELLED'}
               style={`grid-column:${s.col + 1} / span ${s.span};grid-row:${s.lane + 1};--ev:${colorOf(occ)}`}
               on:click={(e) => dispatch('open', { occ, anchor: e.currentTarget })}
+              on:contextmenu={(e) => !occ.task && openScriptMenu(e, 'calendar.event', { id: String(occ.eventId) })}
             >
               {#if !isBar(s)}
                 <span class="dot" aria-hidden="true"></span>
@@ -173,6 +256,7 @@
               {/if}
               <span class="title">{occ.summary || $t('calendar.untitled')}</span>
             </button>
+            {/if}
           {/each}
           {#each row.hidden as n, i (i)}
             {#if n > 0}
@@ -277,10 +361,6 @@
     background: var(--selection-bg);
   }
 
-  .cell:global(.maildrop-over) {
-    background: var(--selection-bg-strong);
-  }
-
   .num {
     min-width: calc(var(--fz-list) * 1.9);
     height: calc(var(--fz-list) * 1.9);
@@ -375,6 +455,53 @@
   .more:focus-visible {
     outline: 2px solid var(--accent);
     outline-offset: -1px;
+  }
+
+  /* a task: no fill, its checkbox in the list color and a quieter title, so
+     it reads as something to do rather than somewhere to be. */
+  .item.task {
+    gap: var(--space-2);
+    color: var(--text-secondary);
+    cursor: default;
+  }
+
+  .item.task.done .title {
+    color: var(--text-tertiary);
+    text-decoration: line-through;
+  }
+
+  .item.task.dragging {
+    opacity: 0.4;
+  }
+
+  .task-title {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    flex: 1;
+    min-width: 0;
+    height: 100%;
+    padding: 0;
+    border: none;
+    background: transparent;
+    color: inherit;
+    font: inherit;
+    text-align: start;
+    cursor: var(--cursor-action);
+    touch-action: none;
+  }
+
+  .task-title:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: -1px;
+  }
+
+  .month.task-dragging .item {
+    pointer-events: none;
+  }
+
+  .cell:global(.task-over) {
+    background: var(--selection-bg-strong);
   }
 
   .dot {

@@ -11,7 +11,8 @@ type TrafficLightsDTO struct {
 }
 
 // TrafficLights reports where the window buttons sit in the main window, or
-// in the compose window opened with the given token.
+// in the compose window opened with the given token. The token
+// outboxWindowToken names the send activity window.
 func (a *App) TrafficLights(composeToken string) TrafficLightsDTO {
 	if composeToken == "" {
 		if a.win == nil {
@@ -22,7 +23,11 @@ func (a *App) TrafficLights(composeToken string) TrafficLightsDTO {
 	if a.wapp == nil {
 		return TrafficLightsDTO{}
 	}
-	w, ok := a.wapp.Window.GetByName("compose-" + composeToken)
+	name := "compose-" + composeToken
+	if composeToken == outboxWindowToken {
+		name = outboxWindowName
+	}
+	w, ok := a.wapp.Window.GetByName(name)
 	if !ok {
 		return TrafficLightsDTO{}
 	}

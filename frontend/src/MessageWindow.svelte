@@ -13,11 +13,14 @@
   import AttachmentPreview from './components/detail/AttachmentPreview.svelte'
   import MoveDialog from './components/detail/MoveDialog.svelte'
   import SnoozeDialog from './components/detail/SnoozeDialog.svelte'
+  import ClassicMoveDialog from './components/detail/classic/MoveDialog.svelte'
+  import ClassicSnoozeDialog from './components/detail/classic/SnoozeDialog.svelte'
   import Composer2 from './components/compose/Composer2.svelte'
   import { initPrefs, prefs } from './stores/prefs'
   import { initComposePrefs, composeSessions, setForcedComposeMode } from './stores/compose'
   import { routeComposeSessions } from './stores/composeroute'
   import { loadSignatures } from './stores/signatures'
+  import { loadSnippets } from './stores/snippets'
   import { loadVIPSenders } from './stores/vip'
   import { loadVirusTotalConfig } from './stores/virustotal'
   import { openMessageId } from './stores/selection'
@@ -42,6 +45,7 @@
     await initPrefs()
     await initComposePrefs()
     void loadSignatures()
+    void loadSnippets()
     void loadVIPSenders()
     void loadVirusTotalConfig()
     openMessageId.set(messageId)
@@ -98,9 +102,17 @@
 <Toasts />
 <ContextMenu />
 <ConfirmDialog />
-<SnoozeDialog />
+{#if classic}
+  <ClassicSnoozeDialog />
+{:else}
+  <SnoozeDialog />
+{/if}
 <AttachmentPreview />
-<MoveDialog />
+{#if classic}
+  <ClassicMoveDialog />
+{:else}
+  <MoveDialog />
+{/if}
 
 <style>
   .message-window {

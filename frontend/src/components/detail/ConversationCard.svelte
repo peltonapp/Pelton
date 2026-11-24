@@ -17,11 +17,18 @@
   import PhishingNotice from './PhishingNotice.svelte'
   import ProtectedNotice from './ProtectedNotice.svelte'
   import AttachmentStrip from './AttachmentStrip.svelte'
+  import FollowUpNotice from './FollowUpNotice.svelte'
+  import { loadEncryptionIndicator, loadPromiseStrip } from '../../lib/lazyload'
+  import { promiseSettings } from '../../stores/promises'
+  import { passports } from '../../stores/trust'
   import { prefs } from '../../stores/prefs'
   import { formatListDate, displayName, type TimeFormat } from '../../lib/format'
   import { dur, motion } from '../../lib/motion'
   import { t } from '../../lib/i18n'
   import type { MessageDetail, MessageSummary } from '../../lib/types'
+  import { choiceFor, senderReading } from '../../stores/senderreading'
+  import { bodyFetchFailed, retryBodyFetch } from '../../stores/bodyfetch'
+  import { countWords, readingMinutes, visibleText } from '../../lib/readingtime'
 
   /** The message as listed, which the closed line is drawn from. */
   export let message: MessageSummary
@@ -35,6 +42,14 @@
   export let fromMe: boolean = false
   /** The full message could not be loaded. */
   export let error: string = ''
+  /** Sets the body for the reading view: roomier lines. */
+  export let roomy: boolean = false
+
+  // the text size kept for this sender, or 0 for the global size.
+  $: senderSize = choiceFor($senderReading, message.fromAddress).fontSize
+  // how long the body takes to read, said only for a long one.
+  $: minutes = detail && textful ? readingMinutes(countWords(visibleText(detail))) : 0
+  $: readingLabel = minutes > 0 ? $t('reader.readingTime').replace('{n}', String(minutes)) : ''
 
   const dispatch = createEventDispatcher<{
     toggle: void
@@ -84,7 +99,7 @@
     <!-- svelte-ignore a11y-click-events-have-key-events a11y-no-static-element-interactions -->
     <div class="head" class:closable on:click={onHeadClick}>
       {#if detail}
-        <DetailHeader {detail} compact>
+        <DetailHeader {detail} compact readingTime={readingLabel}>
           <div slot="actions" class="actions">
             <button
               type="button"
@@ -116,13 +131,40 @@
     </div>
     <div class="body" transition:slide={{ duration: dur(motion.base) }}>
       {#if detail}
-        {#if detail.phishing.level !== 'none'}
-          <PhishingNotice report={detail.phishing} messageId={detail.id} />
+        {#if detail.messageId}
+          <FollowUpNotice messageId={detail.messageId} />
+        {/if}
+        {@const banner = $passports.get(detail.id)?.banner ?? detail.phishing}
+        {#if banner.level !== 'none'}
+          <PhishingNotice report={banner} messageId={detail.id} />
+        {/if}
+        {#if detail.encryption}
+          {#await loadEncryptionIndicator() then m}
+            <svelte:component this={m.default} encryption={detail.encryption} messageId={detail.id} />
+          {/await}
+        {/if}
+        {#if $prefs.design === 'new' && $promiseSettings.enabled && detail.messageId}
+          {#await loadPromiseStrip() then m}
+            <svelte:component this={m.default} messageId={detail.id} accountId={detail.accountId} mailId={detail.messageId} />
+          {/await}
+        {/if}
+        {#if detail.bodyComplete === false}
+          <!-- a stub: the preview shows below while the full body is fetched. -->
+          {#if $bodyFetchFailed === detail.id}
+            <div class="stub failed" role="alert">
+              <span>{$t('detail.bodyFetchFailed')}</span>
+              <button type="button" on:click={() => detail && void retryBodyFetch(detail.id)}>{$t('detail.bodyFetchRetry')}</button>
+            </div>
+          {:else}
+            <div class="stub" aria-live="polite">
+              <Spinner label={$t('detail.loadingMessage')} inline />
+            </div>
+          {/if}
         {/if}
         {#if detail.pgpState !== '' && detail.pgpState !== 'open'}
           <ProtectedNotice state={detail.pgpState} messageId={detail.id} on:opened={() => dispatch('reload')} />
         {:else if textful}
-          <MailBody {detail} collapseQuotes />
+          <MailBody {detail} collapseQuotes adaptive fontSize={senderSize} {roomy} />
         {:else}
           <p class="no-text">{$t('messageList.noText')}</p>
         {/if}
@@ -281,5 +323,32 @@
     margin: 0;
     font-size: var(--fz-label);
     color: var(--danger);
+  }
+
+  .stub {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+    color: var(--text-tertiary);
+    font-size: var(--fz-meta);
+  }
+
+  .stub.failed {
+    color: var(--text-secondary);
+  }
+
+  .stub button {
+    padding: var(--space-1) var(--space-3);
+    border: var(--hairline) solid var(--border-default);
+    border-radius: var(--radius-control);
+    background: var(--surface-raised);
+    color: var(--text-primary);
+    font: inherit;
+    font-size: var(--fz-label);
+    cursor: var(--cursor-action);
+  }
+
+  .stub button:hover {
+    background: var(--surface-hover);
   }
 </style>

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import * as en from 'chrono-node/en'
 import * as de from 'chrono-node/de'
-import { datesInText, parsePhrase, type ChronoLike, type PhraseResult } from './eventphrase'
+import { dateMentions, datesInText, parsePhrase, type ChronoLike, type PhraseResult } from './eventphrase'
 
 // Saturday 14 November 2026, 10:07.
 const now = new Date(2026, 10, 14, 10, 7)
@@ -116,5 +116,44 @@ describe('datesInText', () => {
 
   it('finds nothing in a text without dates', () => {
     expect(datesInText('Thanks for the files.', { ref: sent, now, lang: 'en', chrono: english })).toEqual([])
+  })
+})
+
+describe('dateMentions', () => {
+  // Saturday 7 November 2026, 09:00.
+  const sent = new Date(2026, 10, 7, 9)
+
+  it('gives each date with where it stands in the text', () => {
+    const text = 'Can we meet Thursday at 3? If not, 12 March, 14:00 to 15:30 works too.'
+    const found = dateMentions(text, { ref: sent, chrono: english })
+    expect(found.map((m) => text.slice(m.index, m.index + m.length))).toEqual(['Thursday at 3', '12 March, 14:00 to 15:30'])
+    expect(found[0]).toMatchObject({ start: new Date(2026, 10, 12, 15), end: new Date(2026, 10, 12, 16), allDay: false })
+    expect(found[1]).toMatchObject({ start: new Date(2027, 2, 12, 14), end: new Date(2027, 2, 12, 15, 30), allDay: false })
+  })
+
+  it('reads a day without a time as the whole day', () => {
+    const text = 'The deadline is Friday.'
+    const [m] = dateMentions(text, { ref: sent, chrono: english })
+    expect(text.slice(m.index, m.index + m.length)).toBe('Friday')
+    expect(m).toMatchObject({ start: new Date(2026, 10, 13), end: new Date(2026, 10, 14), allDay: true })
+  })
+
+  it('keeps every mention, the same date twice included, in text order', () => {
+    const text = 'Friday works. See you Friday!'
+    const found = dateMentions(text, { ref: sent, chrono: english })
+    expect(found.map((m) => m.index)).toEqual([0, text.lastIndexOf('Friday')])
+  })
+
+  it('keeps a morning hour written with a leading zero, or with am', () => {
+    expect(dateMentions('Thursday at 07:30', { ref: sent, chrono: english })[0].start).toEqual(new Date(2026, 10, 12, 7, 30))
+    expect(dateMentions('Thursday at 7am', { ref: sent, chrono: english })[0].start).toEqual(new Date(2026, 10, 12, 7))
+  })
+
+  it('leaves out "now" and very short matches', () => {
+    expect(dateMentions('Call me now please', { ref: sent, chrono: english })).toEqual([])
+  })
+
+  it('finds nothing in a text without dates', () => {
+    expect(dateMentions('Thanks for the files.', { ref: sent, chrono: english })).toEqual([])
   })
 })

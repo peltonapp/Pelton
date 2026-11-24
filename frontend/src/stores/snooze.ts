@@ -5,6 +5,7 @@
 // the dialog live once at the app root instead of per row.
 
 import { writable } from 'svelte/store'
+import { noteAction } from '../lib/coach'
 
 export interface SnoozeTarget {
   ids: number[]
@@ -16,6 +17,7 @@ export interface SnoozeTarget {
 export const snoozeTarget = writable<SnoozeTarget | null>(null)
 
 export function openSnooze(id: number, subject: string): void {
+  noteAction('snooze')
   snoozeTarget.set({ ids: [id], subject })
 }
 
@@ -23,6 +25,7 @@ export function openSnoozeMany(ids: number[]): void {
   if (ids.length === 0) {
     return
   }
+  noteAction('snooze')
   snoozeTarget.set({ ids: [...ids], subject: '' })
 }
 

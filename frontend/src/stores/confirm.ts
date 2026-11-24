@@ -12,6 +12,8 @@ export interface ConfirmRequest {
   body: string
   /** Label of the button that goes ahead; the other one always cancels. */
   confirmLabel: string
+  /** Label of the other button. Empty shows Cancel. */
+  cancelLabel: string
   /** Paints the confirm button as destructive. */
   danger: boolean
   resolve: (ok: boolean) => void
@@ -24,6 +26,7 @@ interface AskOptions {
   title: string
   body?: string
   confirmLabel: string
+  cancelLabel?: string
   danger?: boolean
 }
 
@@ -37,6 +40,7 @@ export function askConfirm(options: AskOptions): Promise<boolean> {
       title: options.title,
       body: options.body ?? '',
       confirmLabel: options.confirmLabel,
+      cancelLabel: options.cancelLabel ?? '',
       danger: options.danger ?? false,
       resolve: (ok) => {
         confirmRequest.set(null)

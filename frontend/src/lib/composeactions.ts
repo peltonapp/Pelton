@@ -7,7 +7,7 @@ import { get } from 'svelte/store'
 import { closeCompose, getSession, restoreSession, updateCompose, type ComposeSession } from '../stores/compose'
 import { composeProtectionStatus, deleteDraft, removeServerDraft, saveDraft, sendMessage, uploadDraft } from './api'
 import { buildRequest, hasRecipients, parseAddressList } from './mailcompose'
-import type { ProtectionStatus } from './types'
+import type { FollowUpInterval, ProtectionStatus } from './types'
 import { loadOutbox } from '../stores/outbox'
 import { scheduleUndo } from '../stores/undosend'
 import { prefs } from '../stores/prefs'
@@ -111,6 +111,11 @@ export interface SendOptions {
   scheduledAt?: Date
   /** Runs once the message is queued, before the composer closes. */
   beforeClose?: () => Promise<void>
+  /**
+   * Runs once the message can no longer be taken back: straight after it is
+   * queued, or when the undo-send window closes without an undo.
+   */
+  afterSent?: () => void
 }
 
 /**
@@ -125,7 +130,12 @@ export async function sendSession(id: number, fallback: ComposeSession, options:
     toastError(tr('compose.error.noRecipients'))
     return false
   }
-  const { scheduledAt, beforeClose } = options
+  const { scheduledAt, beforeClose, afterSent } = options
+  const followUp = (getSession(id) ?? fallback).followUpAt
+  if (followUp && Date.parse(followUp) <= (scheduledAt ?? new Date()).getTime()) {
+    toastError(tr('followUp.tooEarly'))
+    return false
+  }
   try {
     const current = await settled(id, fallback)
     const snapshot: ComposeSession = { ...current }
@@ -143,12 +153,14 @@ export async function sendSession(id: number, fallback: ComposeSession, options:
 
     if (scheduledAt) {
       toastSuccess(tr('compose.sendLater.scheduledToast').replace('{when}', formatSendWhen(scheduledAt)))
+      afterSent?.()
     } else {
       const delay = get(prefs).sendDelaySeconds
       if (delay > 0) {
-        scheduleUndo(queued, snapshot, delay)
+        scheduleUndo(queued, snapshot, delay, afterSent)
       } else {
         toastSuccess(tr('compose.toast.queued'))
+        afterSent?.()
       }
     }
     return true
@@ -239,6 +251,26 @@ export function combineProtection(sign: boolean, encrypt: boolean): string {
   if (sign) return 'sign'
   if (encrypt) return 'encrypt'
   return 'none'
+}
+
+/** One entry of the follow-up reminder menu. */
+export interface FollowUpPreset {
+  key: FollowUpInterval
+  label: string
+  when: Date
+}
+
+/**
+ * buildFollowUpPresets is the reminder menu's choices: tomorrow, in three days
+ * and in a week, each at nine in the morning so the reminder lands at the
+ * start of a working day rather than at the minute the mail went out.
+ */
+export function buildFollowUpPresets(now: Date, tr: (key: string) => string): FollowUpPreset[] {
+  return [
+    { key: 'tomorrow', label: tr('followUp.tomorrow'), when: atTime(addDays(now, 1), 9, 0) },
+    { key: 'threeDays', label: tr('followUp.threeDays'), when: atTime(addDays(now, 3), 9, 0) },
+    { key: 'week', label: tr('followUp.week'), when: atTime(addDays(now, 7), 9, 0) },
+  ]
 }
 
 /** One entry of the send-later menu. */

@@ -2,12 +2,13 @@ package desktop
 
 import (
 	"errors"
+	"strconv"
 
 	"github.com/peltonapp/Pelton/internal/logging"
 	"github.com/peltonapp/Pelton/internal/storage"
 )
 
-// ui setting keys. theme and editor mode already exist in storage; the rest are
+// ui setting keys. theme already exists in storage; the rest are
 // ui-only and defined here. raw strings keep the contract in one place next to
 // the defaults.
 const (
@@ -79,14 +80,25 @@ const (
 	settingFlaggedCount     = "show_flagged_count"
 	settingViewsPlacement   = "views_placement"
 	// newer feature settings.
-	settingFlagColorSync       = "flag_color_sync"
-	settingShowOffline         = "show_offline_indicator"
-	settingShowUnsyncedFolder  = "show_unsynced_folder"
-	settingRestoreTabs         = "restore_reading_tabs"
-	settingPaletteProfiles     = "palette_profiles"
-	settingSwipeEnabled        = "swipe_enabled"
-	settingSwipeLeft           = "swipe_left_action"
-	settingSwipeRight          = "swipe_right_action"
+	settingFlagColorSync      = "flag_color_sync"
+	settingShowOffline        = "show_offline_indicator"
+	settingShowUnsyncedFolder = "show_unsynced_folder"
+	settingRestoreTabs        = "restore_reading_tabs"
+	settingPaletteProfiles    = "palette_profiles"
+	settingSwipeEnabled       = "swipe_enabled"
+	settingSwipeLeft          = "swipe_left_action"
+	settingSwipeRight         = "swipe_right_action"
+	// the new design's swipes: a short and a long one in each direction.
+	settingSwipeLeftShort  = "swipe_left_short"
+	settingSwipeLeftLong   = "swipe_left_long"
+	settingSwipeRightShort = "swipe_right_short"
+	settingSwipeRightLong  = "swipe_right_long"
+	// the quick buttons over a hovered row in the new design, and which ones
+	// in what order, comma separated.
+	settingRowActions    = "row_actions"
+	settingRowActionList = "row_action_list"
+	// how html mail is coloured in a dark theme: auto, adapt or original.
+	settingHTMLColors          = "html_colors"
 	settingVimMode             = "compose_vim_mode"
 	settingDownloadAtts        = "download_include_attachments"
 	settingDownloadPending     = "download_pending_since"
@@ -149,6 +161,10 @@ const (
 	// the views pinned to the middle of the rail, comma separated: "u:inbox"
 	// for a unified view, "v:12" for a saved one.
 	settingRailPins = "rail_pins"
+	// the order of the spaces in the navigation and the ones left out of it,
+	// both comma separated space keys. empty means the default order, all shown.
+	settingSpaceOrder   = "space_order"
+	settingHiddenSpaces = "hidden_spaces"
 	// how the panes are drawn in the new design: "hybrid", "flat" or "soft".
 	settingPaneStyle = "pane_style"
 	// where the sender picture goes in a list row and the reading header:
@@ -168,14 +184,66 @@ const (
 	settingComposeOpenIn = "compose_open_in"
 	// group the message list into conversations in the new design.
 	settingThreadedList = "threaded_list"
+	// what the reader shows after the open message is archived, deleted or
+	// moved in the new design: "older", "newer" or "list".
+	settingAfterMove = "after_move"
+	// what plain Send does after a reply or forward is sent in the new
+	// composer: "nothing" or "archive" the conversation it answered.
+	settingAfterReplySend = "after_reply_send"
+	// when Send and remind sets its reminder: "tomorrow", "threeDays" or
+	// "week".
+	settingSendRemindAfter = "send_remind_after"
+	// the checks the new composer runs before sending: a text that speaks of
+	// an attachment it does not carry, and an empty subject.
+	settingWarnMissingAttachment = "warn_missing_attachment"
+	settingWarnEmptySubject      = "warn_empty_subject"
+	// split the inbox into tabs in the new design. Off by default.
+	settingSplitInbox = "split_inbox"
+	// the split inbox tabs in order, comma separated: important, newsletters,
+	// notifications, or view:<id> for a saved view. The catch-all tab is always
+	// last and not listed.
+	settingSplitTabs = "split_inbox_tabs"
+	// the split inbox tab last shown.
+	settingSplitActive = "split_inbox_active"
 	// how wide the reading column runs in the new design: "narrow", "medium"
 	// or "full".
 	settingReaderWidth = "reader_width"
 	// show the sender panel beside the reader in the new design.
 	settingSenderPanel = "sender_panel"
+	// the shortcut coach of the new design: a hint naming the key after an
+	// action done by mouse, and the sheet shown while the modifier is held.
+	settingCoachHints = "coach_hints"
+	settingCoachHold  = "coach_hold"
+	// the one-time tips of the new design, shown the first time a feature's
+	// context comes up.
+	settingShowTips = "show_tips"
+	// mark the dates a mail names in the reader, with a calendar preview on
+	// hover. On by default.
+	settingMailDates = "mail_dates"
+	// show the My Day panel beside the mail surface in the new design.
+	settingMyDayPanel = "my_day_panel"
+	// how the Projects space lists projects: "grid" or "list".
+	settingProjectsView = "projects_view"
+	// offer to file mail from a project's people under the project, in the
+	// reader. On by default.
+	settingProjectSuggestions = "project_suggestions"
 	// general new-mail OS notifications (#126). VIP senders are stored
 	// separately in bind_vip.go and notify even when this is off.
 	settingNotifyNewMail = "notify_new_mail"
+	// the buttons a new-mail notification carries where the system supports
+	// them. All on by default.
+	settingNotifyActionArchive  = "notify_action_archive"
+	settingNotifyActionMarkRead = "notify_action_mark_read"
+	settingNotifyActionReply    = "notify_action_reply"
+	// links opened from a mail have tracking parameters and redirect wrappers
+	// taken off. Off by default.
+	settingCleanLinks = "clean_links"
+	// the privacy report keeps counters of what mail tried to track. On by
+	// default; they never leave this device.
+	settingPrivacyCounters = "privacy_counters"
+	// days after an unsubscribe before more mail from the list counts as
+	// still sending.
+	settingUnsubscribeGrace = "unsubscribe_grace_days"
 	// verbose sync surfaces the mailbox currently being synced in the status
 	// line instead of a plain "Syncing" (#128). Off by default.
 	settingVerboseSync = "verbose_sync"
@@ -193,21 +261,46 @@ const (
 	// what the window's close button does: "background" (default) or "quit".
 	// See close.go.
 	settingCloseAction = "close_button_action"
-	// how many of a folder's newest messages a first sync fetches, and whether
+	// the sync window: how many of a folder's newest messages are kept with
+	// their bodies (raising it fetches the newly admitted ones), and whether
 	// reaching the end of the list pulls the next batch automatically (#175).
 	// 0 messages means no limit: sync the whole mailbox as older versions did.
 	settingSyncMessageLimit = "sync_message_limit"
 	settingSyncAutoBackfill = "sync_auto_backfill"
+	// how many IMAP sessions one account may use at once. IDLE holds one of
+	// them; sending stays outside the pool. Clamped to
+	// [minSyncMaxParallel, maxSyncMaxParallel] on write and on read.
+	settingSyncMaxParallel = "sync_max_parallel"
+	// how many days a folder may go without a full reconcile before it is
+	// re-listed in full in the background (checked at startup, after each
+	// timed sync and hourly). 0 means only manual Sync does that, for folders
+	// not checked in a day. Low-power mode queues none. Clamped to
+	// [0, maxSyncFullReconcileDays].
+	settingSyncFullReconcileDays = "sync_full_reconcile_days"
 	// the order of the unified views block in the sidebar, as a comma-separated
 	// list of view keys (#187). The views have no rows of their own, so unlike
 	// folders and accounts their order lives here. Empty means the built-in
 	// order.
 	settingUnifiedViewOrder = "sidebar_unified_view_order"
 	// what Pelton opens on launch: "view:<key>", "folder:<id>", or "last" to
-	// restore whatever was open when the app last closed. settingLastSelection
-	// holds that remembered selection in the same "view:"/"folder:" form.
+	// restore whatever was open when the app last closed. the frontend keeps
+	// that remembered selection under "last_selection" in the same form.
 	settingStartupSelection = "startup_selection"
-	settingLastSelection    = "last_selection"
+	// the notes space: the folder of Markdown files (empty means the Notes
+	// folder in the data directory), where daily notes go and how they are
+	// named, the note a daily note starts from, the folders of templates, of
+	// pasted images and of project notes, the mode a note opens in (live,
+	// source or reading)
+	// and how wide its text runs (narrow, medium or full).
+	settingNotesVault         = "notes_vault"
+	settingNotesDailyFolder   = "notes_daily_folder"
+	settingNotesDailyFormat   = "notes_daily_format"
+	settingNotesDailyTemplate = "notes_daily_template"
+	settingNotesTemplates     = "notes_templates_folder"
+	settingNotesAttachments   = "notes_attachments_folder"
+	settingNotesProjects      = "notes_projects_folder"
+	settingNotesEditorMode    = "notes_editor_mode"
+	settingNotesLineWidth     = "notes_line_width"
 )
 
 // defaultStartupSelection is the unified inbox, which is where every version
@@ -245,10 +338,21 @@ const (
 	defaultUIScale = "1"
 	// base font size (px) for rendered email content.
 	defaultMessageFont = 14
-	// how many of a folder's newest messages a first sync fetches. Matches the
-	// list's page size, so the first screenful is cached and anything past it is
-	// backfilled on demand rather than downloaded up front.
-	defaultSyncMessageLimit = 50
+	// how many of a folder's newest message bodies a first sync fetches. Older
+	// bodies stay on the server until asked for. 0 means no limit.
+	defaultSyncMessageLimit = 100
+	// parallel sync connections per account: every IMAP session, the IDLE
+	// one included (at 3 that is 2 background workers and the IDLE session,
+	// which also serves the fast lane). Sending does not consume a slot. The
+	// ui offers 2..10; the backend accepts 1..10, and the throttle may lower
+	// the effective size to 1 on its own.
+	defaultSyncMaxParallel = 3
+	minSyncMaxParallel     = 1
+	maxSyncMaxParallel     = 10
+	// days between background full reconciles of a folder, and the largest
+	// value the setting accepts.
+	defaultSyncFullReconcileDays = 7
+	maxSyncFullReconcileDays     = 365
 )
 
 // UIPrefsDTO is the complete set of user-facing preferences this step exposes:
@@ -276,6 +380,15 @@ type UIPrefsDTO struct {
 	// ShowShortcutHints shows inline keyboard shortcut chips in the ui. Off by
 	// default to keep the interface clean.
 	ShowShortcutHints bool `json:"showShortcutHints"`
+	// CoachHints shows a short hint naming the key after an action done by
+	// mouse, in the new design.
+	CoachHints bool `json:"coachHints"`
+	// CoachHold shows the shortcuts that apply on screen while the platform
+	// modifier is held, in the new design.
+	CoachHold bool `json:"coachHold"`
+	// ShowTips shows a one-time tip the first time a feature's context comes
+	// up, in the new design.
+	ShowTips bool `json:"showTips"`
 	// HarvestAddresses keeps learning addresses from the mail that passes
 	// through, for compose autocomplete. Off leaves only synced contacts.
 	HarvestAddresses bool `json:"harvestAddresses"`
@@ -356,6 +469,20 @@ type UIPrefsDTO struct {
 	SwipeEnabled     bool   `json:"swipeEnabled"`
 	SwipeLeftAction  string `json:"swipeLeftAction"`
 	SwipeRightAction string `json:"swipeRightAction"`
+	// The new design's swipes act by distance: a short swipe and a long one in
+	// each direction, each an action id or "none".
+	SwipeLeftShort  string `json:"swipeLeftShort"`
+	SwipeLeftLong   string `json:"swipeLeftLong"`
+	SwipeRightShort string `json:"swipeRightShort"`
+	SwipeRightLong  string `json:"swipeRightLong"`
+	// RowActions shows quick buttons over a hovered row in the new design;
+	// RowActionList names them in order, comma separated, five at most.
+	RowActions    bool   `json:"rowActions"`
+	RowActionList string `json:"rowActionList"`
+	// HTMLColors is how html mail is coloured in a dark theme: "auto" adapts
+	// plain and lightly styled mail and keeps designed mail on a light sheet,
+	// "adapt" adapts all of it, "original" keeps every message as sent.
+	HTMLColors string `json:"htmlColors"`
 	// ComposeVimMode enables vim keybindings in the compose editor.
 	ComposeVimMode bool `json:"composeVimMode"`
 	// DownloadIncludeAttachments is the remembered default for the bulk range
@@ -412,6 +539,12 @@ type UIPrefsDTO struct {
 	// RailPins lists the views pinned to the middle of the rail, comma
 	// separated, in display order.
 	RailPins string `json:"railPins"`
+	// SpaceOrder lists the space keys in navigation order, comma separated.
+	// Keys it leaves out follow in their default order.
+	SpaceOrder string `json:"spaceOrder"`
+	// HiddenSpaces lists the space keys left out of the navigation, comma
+	// separated. Mail is never hidden.
+	HiddenSpaces string `json:"hiddenSpaces"`
 	// PaneStyle draws the panes in the new design: hybrid, flat or soft.
 	PaneStyle string `json:"paneStyle"`
 	// AvatarPlacement puts the sender picture in its own column, inline in the
@@ -432,12 +565,54 @@ type UIPrefsDTO struct {
 	ComposeOpenIn string `json:"composeOpenIn"`
 	// ThreadedList shows the message list as conversations in the new design.
 	ThreadedList bool `json:"threadedList"`
+	// AfterMove is what the reader opens once the open message is archived,
+	// deleted or moved in the new design: older, newer or list.
+	AfterMove string `json:"afterMove"`
+	// AfterReplySend is what plain Send does after a reply or forward goes
+	// out: nothing or archive.
+	AfterReplySend string `json:"afterReplySend"`
+	// SendRemindAfter is when Send and remind sets its reminder: tomorrow,
+	// threeDays or week.
+	SendRemindAfter string `json:"sendRemindAfter"`
+	// WarnMissingAttachment asks before sending a message whose text speaks of
+	// an attachment it does not carry. On by default.
+	WarnMissingAttachment bool `json:"warnMissingAttachment"`
+	// WarnEmptySubject asks before sending a message without a subject. On by
+	// default.
+	WarnEmptySubject bool `json:"warnEmptySubject"`
+	// SplitInbox splits the inbox into tabs in the new design. SplitTabs is
+	// the tab order, SplitActive the tab last shown.
+	SplitInbox  bool   `json:"splitInbox"`
+	SplitTabs   string `json:"splitTabs"`
+	SplitActive string `json:"splitActive"`
 	// ReaderWidth caps the reading column in the new design: narrow, medium
 	// or full.
 	ReaderWidth string `json:"readerWidth"`
 	// SenderPanel shows the panel about the open message's sender beside the
 	// reader in the new design.
 	SenderPanel bool `json:"senderPanel"`
+	// MailDates marks the dates a mail names in the reader, with a preview of
+	// the calendar around them on hover.
+	MailDates bool `json:"mailDates"`
+	// MyDayPanel shows today's agenda and tasks beside the mail surface in the
+	// new design.
+	MyDayPanel bool `json:"myDayPanel"`
+	// ProjectsView is how the Projects space lists projects: grid or list.
+	ProjectsView string `json:"projectsView"`
+	// ProjectSuggestions offers, in the reader, to file mail from a project's
+	// people under that project.
+	ProjectSuggestions bool `json:"projectSuggestions"`
+	// FeedsRefreshMinutes is how often feeds are fetched, 0 for only by hand.
+	// FeedsKeepDays and FeedsKeepCount are the retention rules (0 turns one
+	// off); starred and read-later entries are always kept.
+	FeedsRefreshMinutes int `json:"feedsRefreshMinutes"`
+	FeedsKeepDays       int `json:"feedsKeepDays"`
+	FeedsKeepCount      int `json:"feedsKeepCount"`
+	// FeedsLoadImages shows the remote images of every feed without asking.
+	FeedsLoadImages bool `json:"feedsLoadImages"`
+	// FeedsMarkReadOnScroll marks entries read as they scroll out of the top
+	// of the list.
+	FeedsMarkReadOnScroll bool `json:"feedsMarkReadOnScroll"`
 	// ThemeID selects an installed custom theme (see bind_themes.go). Empty
 	// means the built-in default themes driven by the Theme setting.
 	ThemeID string `json:"themeId"`
@@ -450,6 +625,9 @@ type UIPrefsDTO struct {
 	// on macOS, Mica on Windows); whether the running window has it is
 	// WindowMaterialActive.
 	WindowMaterial bool `json:"windowMaterial"`
+	// OCRLanguages is the "+" joined list of tesseract languages the pdf
+	// viewer reads with; empty follows the ui language.
+	OCRLanguages string `json:"ocrLanguages"`
 	// MenuBarIcons shows icons next to the in-app menu bar's dropdown items.
 	MenuBarIcons bool `json:"menuBarIcons"`
 	// TimeFormat picks the clock for rendered times: auto (locale), 12, or 24.
@@ -478,6 +656,22 @@ type UIPrefsDTO struct {
 	// inbox. Off by default. VIP-sender notifications fire regardless of this
 	// (see bind_vip.go), so important senders cut through when it is off.
 	NotifyNewMail bool `json:"notifyNewMail"`
+	// NotifyActionArchive, NotifyActionMarkRead and NotifyActionReply choose
+	// which buttons a new-mail notification carries.
+	NotifyActionArchive  bool `json:"notifyActionArchive"`
+	NotifyActionMarkRead bool `json:"notifyActionMarkRead"`
+	NotifyActionReply    bool `json:"notifyActionReply"`
+	// CleanLinks removes tracking parameters and redirect wrappers from links
+	// opened from a mail.
+	CleanLinks bool `json:"cleanLinks"`
+	// PrivacyCounters keeps the privacy report's counters.
+	PrivacyCounters bool `json:"privacyCounters"`
+	// UnsubscribeGraceDays is how long after an unsubscribe mail from the
+	// list may still arrive before Pelton says they are still sending.
+	UnsubscribeGraceDays int `json:"unsubscribeGraceDays"`
+	// AutoconfigLookup is whether the add-mailbox wizard may look up a typed
+	// address's domain: ask (default), allow or manual.
+	AutoconfigLookup string `json:"autoconfigLookup"`
 	// VerboseSync shows which mailbox is currently syncing in the status line,
 	// with the account and server it is talking to. SyncProgressBar puts a real
 	// progress bar next to it, counting message bodies rather than mailboxes.
@@ -487,6 +681,22 @@ type UIPrefsDTO struct {
 	// unread count of the unified inbox.
 	StatusClock  bool `json:"statusClock"`
 	StatusUnread bool `json:"statusUnread"`
+	// ChatEnabled turns the Matrix chat space on. Off by default: nothing
+	// chat related runs or connects until it is on.
+	ChatEnabled bool `json:"chatEnabled"`
+	// AutoEncrypt is automatic encryption. Off by default: until it is on no
+	// key is made, no header added and nothing looked up.
+	AutoEncrypt bool `json:"autoEncrypt"`
+	// ChatSendReceipts sends public read receipts in chat; off keeps them
+	// private.
+	ChatSendReceipts bool `json:"chatSendReceipts"`
+	// ChatSendTyping tells chat rooms while the user types.
+	ChatSendTyping bool `json:"chatSendTyping"`
+	// ChatNotify picks which chat messages notify: all, mentions (direct
+	// messages and mentions, the default) or off.
+	ChatNotify string `json:"chatNotify"`
+	// ChatMarkdown formats chat messages as Markdown when sent.
+	ChatMarkdown bool `json:"chatMarkdown"`
 	// MarkReadOnOpen marks a message read when it is opened in the list.
 	MarkReadOnOpen bool `json:"markReadOnOpen"`
 	// OpenOnArrow opens the message the arrow keys move to in the list, instead
@@ -500,12 +710,35 @@ type UIPrefsDTO struct {
 	CloseAction string `json:"closeAction"`
 	// StartHidden keeps the window hidden at launch (#483).
 	StartHidden bool `json:"startHidden"`
-	// SyncMessageLimit caps how many of a folder's newest messages the first
-	// sync fetches; older mail stays on the server until it is asked for. 0
-	// means no limit. SyncAutoBackfill fetches the next batch automatically on
-	// reaching the end of the list; off puts it behind a button instead.
+	// QuickCompose registers QuickComposeShortcut as a system-wide shortcut
+	// that opens a small compose window. Off by default; the shortcut is a
+	// Wails accelerator such as "Ctrl+Alt+M".
+	QuickCompose         bool   `json:"quickCompose"`
+	QuickComposeShortcut string `json:"quickComposeShortcut"`
+	// AppLock is whether the app lock is on. It is turned on and off through
+	// EnableAppLock and DisableAppLock. AppLockIdleMinutes locks after that
+	// long unused (0 only on demand), AppLockOnLaunch starts locked, and
+	// AppLockHideNotifications keeps senders and subjects out of
+	// notifications while locked.
+	AppLock                  bool `json:"appLock"`
+	AppLockIdleMinutes       int  `json:"appLockIdleMinutes"`
+	AppLockOnLaunch          bool `json:"appLockOnLaunch"`
+	AppLockHideNotifications bool `json:"appLockHideNotifications"`
+	// SyncMessageLimit is the sync window: how many of a folder's newest
+	// messages are kept with their bodies. Older ones stay on the server until
+	// asked for; raising it fetches the newly admitted ones. 0 means no limit.
+	// SyncAutoBackfill fetches the next batch automatically on reaching the end
+	// of the list; off puts it behind a button instead.
 	SyncMessageLimit int  `json:"syncMessageLimit"`
 	SyncAutoBackfill bool `json:"syncAutoBackfill"`
+	// SyncMaxParallel is how many IMAP sessions one account may use at once,
+	// IDLE included. Clamped to 1–10 (the ui offers 2–10). Sending does not
+	// use one.
+	SyncMaxParallel int `json:"syncMaxParallel"`
+	// SyncFullReconcileDays is how many days a folder may go without a full
+	// reconcile before it is re-checked in the background; 0 means only
+	// manual Sync does, for folders not checked in a day.
+	SyncFullReconcileDays int `json:"syncFullReconcileDays"`
 	// StartupSelection is what the sidebar selects on launch: "view:<key>" for a
 	// unified view, "folder:<id>" for one account folder, or "last" to restore
 	// the previous session. A target that no longer exists falls back to the
@@ -520,6 +753,23 @@ type UIPrefsDTO struct {
 	LogLevel           string `json:"logLevel"`
 	LogMessageMetadata bool   `json:"logMessageMetadata"`
 	CrashLogs          bool   `json:"crashLogs"`
+	// NotesVault is the notes folder the user chose, empty for the Notes
+	// folder in the data directory. NotesDailyFolder and NotesDailyFormat
+	// place and name the daily notes (YYYY-MM-DD style tokens);
+	// NotesDailyTemplate is the template note a daily note starts from, empty
+	// for the built-in one. NotesTemplatesFolder holds the templates and
+	// NotesAttachmentsFolder pasted images. NotesProjectsFolder holds a
+	// folder of notes per project. NotesEditorMode is how a note opens: live,
+	// source or reading. NotesLineWidth caps the text: narrow, medium or full.
+	NotesVault             string `json:"notesVault"`
+	NotesDailyFolder       string `json:"notesDailyFolder"`
+	NotesDailyFormat       string `json:"notesDailyFormat"`
+	NotesDailyTemplate     string `json:"notesDailyTemplate"`
+	NotesTemplatesFolder   string `json:"notesTemplatesFolder"`
+	NotesAttachmentsFolder string `json:"notesAttachmentsFolder"`
+	NotesProjectsFolder    string `json:"notesProjectsFolder"`
+	NotesEditorMode        string `json:"notesEditorMode"`
+	NotesLineWidth         string `json:"notesLineWidth"`
 }
 
 // GetUIPrefs returns all ui preferences with defaults filled in, so startup is a
@@ -543,6 +793,9 @@ func (a *App) GetUIPrefs() (UIPrefsDTO, error) {
 		SendDelaySeconds:    a.intSetting(settingSendDelay, 0),
 		FlagHighlight:       a.stringSetting(settingFlagHighlight, defaultFlagHighlight),
 		ShowShortcutHints:   a.boolSetting(settingShortcutHints, true),
+		CoachHints:          a.boolSetting(settingCoachHints, true),
+		CoachHold:           a.boolSetting(settingCoachHold, true),
+		ShowTips:            a.boolSetting(settingShowTips, true),
 		HarvestAddresses:    a.harvestAddresses(),
 		ShowAccountEmail:    a.boolSetting(settingAccountEmail, false),
 		AlwaysLoadImages:    a.boolSetting(settingRemoteAlways, false),
@@ -574,6 +827,13 @@ func (a *App) GetUIPrefs() (UIPrefsDTO, error) {
 		SwipeEnabled:               a.boolSetting(settingSwipeEnabled, true),
 		SwipeLeftAction:            a.stringSetting(settingSwipeLeft, "delete"),
 		SwipeRightAction:           a.stringSetting(settingSwipeRight, "unread"),
+		SwipeLeftShort:             a.stringSetting(settingSwipeLeftShort, "archive"),
+		SwipeLeftLong:              a.stringSetting(settingSwipeLeftLong, "delete"),
+		SwipeRightShort:            a.stringSetting(settingSwipeRightShort, "read"),
+		SwipeRightLong:             a.stringSetting(settingSwipeRightLong, "snooze"),
+		RowActions:                 a.boolSetting(settingRowActions, true),
+		RowActionList:              a.stringSetting(settingRowActionList, "archive,delete,done,snooze,pin"),
+		HTMLColors:                 a.stringSetting(settingHTMLColors, "auto"),
 		ComposeVimMode:             a.boolSetting(settingVimMode, false),
 		DownloadIncludeAttachments: a.boolSetting(settingDownloadAtts, true),
 		AppVimMode:                 a.boolSetting(settingAppVimMode, false),
@@ -594,6 +854,8 @@ func (a *App) GetUIPrefs() (UIPrefsDTO, error) {
 		NavStyle:                   a.stringSetting(settingNavStyle, "rail"),
 		RailSide:                   a.stringSetting(settingRailSide, "left"),
 		RailPins:                   a.stringSetting(settingRailPins, ""),
+		SpaceOrder:                 a.stringSetting(settingSpaceOrder, ""),
+		HiddenSpaces:               a.stringSetting(settingHiddenSpaces, ""),
 		PaneStyle:                  a.stringSetting(settingPaneStyle, "hybrid"),
 		AvatarPlacement:            a.stringSetting(settingAvatarPlacement, "inline"),
 		ContactsView:               a.stringSetting(settingContactsView, "panes"),
@@ -602,12 +864,30 @@ func (a *App) GetUIPrefs() (UIPrefsDTO, error) {
 		QuickFilterBar:             a.boolSetting(settingQuickFilterBar, false),
 		ComposeOpenIn:              a.stringSetting(settingComposeOpenIn, "window"),
 		ThreadedList:               a.boolSetting(settingThreadedList, true),
+		AfterMove:                  a.stringSetting(settingAfterMove, "older"),
+		AfterReplySend:             a.stringSetting(settingAfterReplySend, "nothing"),
+		SendRemindAfter:            a.stringSetting(settingSendRemindAfter, "threeDays"),
+		WarnMissingAttachment:      a.boolSetting(settingWarnMissingAttachment, true),
+		WarnEmptySubject:           a.boolSetting(settingWarnEmptySubject, true),
+		SplitInbox:                 a.boolSetting(settingSplitInbox, false),
+		SplitTabs:                  a.stringSetting(settingSplitTabs, defaultSplitTabs),
+		SplitActive:                a.stringSetting(settingSplitActive, ""),
 		ReaderWidth:                a.stringSetting(settingReaderWidth, "full"),
 		SenderPanel:                a.boolSetting(settingSenderPanel, false),
+		MailDates:                  a.boolSetting(settingMailDates, true),
+		MyDayPanel:                 a.boolSetting(settingMyDayPanel, false),
+		ProjectsView:               a.stringSetting(settingProjectsView, "grid"),
+		ProjectSuggestions:         a.boolSetting(settingProjectSuggestions, true),
+		FeedsRefreshMinutes:        a.intSetting(settingFeedsRefresh, defaultFeedsRefresh),
+		FeedsKeepDays:              a.intSetting(settingFeedsKeepDays, defaultFeedsKeepDays),
+		FeedsKeepCount:             a.intSetting(settingFeedsKeepCount, defaultFeedsKeepCount),
+		FeedsLoadImages:            a.boolSetting(settingFeedsLoadImages, false),
+		FeedsMarkReadOnScroll:      a.boolSetting(settingFeedsMarkScroll, false),
 		ThemeID:                    a.stringSetting(settingThemeID, ""),
 		MenuBarInApp:               a.boolSetting(settingMenuBarInApp, false),
 		MenuBarNativeMinimal:       a.boolSetting(settingMenuBarNativeMinimal, false),
 		WindowMaterial:             a.boolSetting(settingWindowMaterial, false),
+		OCRLanguages:               a.stringSetting(settingOCRLanguages, ""),
 		MenuBarIcons:               a.boolSetting(settingMenuBarIcons, false),
 		TimeFormat:                 a.stringSetting(settingTimeFormat, "auto"),
 		ReduceMotion:               a.boolSetting(settingReduceMotion, false),
@@ -620,22 +900,52 @@ func (a *App) GetUIPrefs() (UIPrefsDTO, error) {
 		MonoFont:                   a.stringSetting(settingMonoFont, "default"),
 		SenderFonts:                a.senderFonts(),
 		NotifyNewMail:              a.boolSetting(settingNotifyNewMail, false),
+		NotifyActionArchive:        a.boolSetting(settingNotifyActionArchive, true),
+		NotifyActionMarkRead:       a.boolSetting(settingNotifyActionMarkRead, true),
+		NotifyActionReply:          a.boolSetting(settingNotifyActionReply, true),
+		CleanLinks:                 a.boolSetting(settingCleanLinks, false),
+		PrivacyCounters:            a.privacyCounting(),
+		UnsubscribeGraceDays:       a.unsubscribeGraceDays(),
+		AutoconfigLookup:           a.stringSetting(settingAutoconfigLookup, "ask"),
 		VerboseSync:                a.boolSetting(settingVerboseSync, false),
 		SyncProgressBar:            a.boolSetting(settingSyncProgress, true),
 		StatusClock:                a.boolSetting(settingStatusClock, true),
 		StatusUnread:               a.boolSetting(settingStatusUnread, true),
+		ChatEnabled:                a.boolSetting(settingChatEnabled, false),
+		AutoEncrypt:                a.boolSetting(settingAutoEncrypt, false),
+		ChatSendReceipts:           a.boolSetting(settingChatSendReceipts, true),
+		ChatSendTyping:             a.boolSetting(settingChatSendTyping, true),
+		ChatNotify:                 a.stringSetting(settingChatNotify, "mentions"),
+		ChatMarkdown:               a.boolSetting(settingChatMarkdown, true),
 		MarkReadOnOpen:             a.boolSetting(settingMarkReadOnOpen, true),
 		OpenOnArrow:                a.boolSetting(settingOpenOnArrow, false),
 		SignatureAboveQuote:        a.boolSetting(settingSignatureAboveQuote, false),
 		CloseAction:                a.stringSetting(settingCloseAction, closeActionBackground),
 		StartHidden:                a.startHiddenEnabled(),
+		QuickCompose:               a.boolSetting(settingQuickCompose, false),
+		QuickComposeShortcut:       a.stringSetting(settingQuickComposeShortcut, defaultQuickComposeShortcut()),
+		AppLock:                    a.boolSetting(settingAppLock, false) && a.lockMethod() != "",
+		AppLockIdleMinutes:         max(a.intSetting(settingAppLockIdle, defaultAppLockIdle), 0),
+		AppLockOnLaunch:            a.boolSetting(settingAppLockOnLaunch, true),
+		AppLockHideNotifications:   a.boolSetting(settingAppLockHideNotifications, true),
 		SyncMessageLimit:           a.syncMessageLimit(),
 		SyncAutoBackfill:           a.boolSetting(settingSyncAutoBackfill, true),
+		SyncMaxParallel:            a.syncMaxParallel(),
+		SyncFullReconcileDays:      a.fullReconcileDays(),
 		StartupSelection:           a.stringSetting(settingStartupSelection, defaultStartupSelection),
 		LogToFile:                  a.logsOn(),
 		LogLevel:                   logging.LevelName(a.logLevel()),
 		LogMessageMetadata:         a.boolSetting(settingLogMessageMetadata, false),
 		CrashLogs:                  a.crashLogsOn(),
+		NotesVault:                 a.stringSetting(settingNotesVault, ""),
+		NotesDailyFolder:           a.stringSetting(settingNotesDailyFolder, "Daily"),
+		NotesDailyFormat:           a.stringSetting(settingNotesDailyFormat, "YYYY-MM-DD"),
+		NotesDailyTemplate:         a.stringSetting(settingNotesDailyTemplate, ""),
+		NotesTemplatesFolder:       a.stringSetting(settingNotesTemplates, "Templates"),
+		NotesAttachmentsFolder:     a.stringSetting(settingNotesAttachments, defaultAttachmentsDir),
+		NotesProjectsFolder:        a.stringSetting(settingNotesProjects, defaultProjectsDir),
+		NotesEditorMode:            a.stringSetting(settingNotesEditorMode, "live"),
+		NotesLineWidth:             a.stringSetting(settingNotesLineWidth, "medium"),
 	}, nil
 }
 
@@ -655,14 +965,58 @@ func (a *App) GetSetting(key string) (SettingResult, error) {
 	return SettingResult{Value: value, Found: true}, nil
 }
 
-// SetSetting writes a single setting. The frontend uses the known keys above
-// (theme/accent/density/show_*) plus editor_mode.
+// SetSetting writes a single setting.
 func (a *App) SetSetting(key, value string) error {
 	if err := a.ready(); err != nil {
 		return err
 	}
+	if protectedLockSettings[key] {
+		return errLockSetting
+	}
+	if key == settingQuickCompose || key == settingQuickComposeShortcut {
+		return errQuickComposeSetting
+	}
+	if key == settingSyncMaxParallel {
+		n, err := strconv.Atoi(value)
+		if err != nil {
+			n = defaultSyncMaxParallel
+		}
+		value = strconv.Itoa(clampSyncMaxParallel(n))
+	}
+	if key == settingSyncFullReconcileDays {
+		n, err := strconv.Atoi(value)
+		if err != nil {
+			n = defaultSyncFullReconcileDays
+		}
+		value = strconv.Itoa(clampFullReconcileDays(n))
+	}
+	var limitRaisedFrom, limitRaisedTo int
+	var raiseMessageLimit bool
+	if key == settingSyncMessageLimit {
+		limitRaisedFrom = a.syncMessageLimit()
+		n, err := strconv.Atoi(value)
+		if err != nil {
+			n = defaultSyncMessageLimit
+		}
+		if n < 0 {
+			n = 0
+		}
+		limitRaisedTo = n
+		value = strconv.Itoa(n)
+		raiseMessageLimit = syncMessageLimitExpanded(limitRaisedFrom, limitRaisedTo)
+	}
 	if err := a.store.Set(a.ctx, key, value); err != nil {
 		return err
+	}
+	if key == settingAppLockIdle && a.lock != nil {
+		a.applyLockSettings()
+	}
+	if raiseMessageLimit {
+		from, to := limitRaisedFrom, limitRaisedTo
+		goSafe("expanding sync window", func() { a.enqueueSyncLimitDelta(from, to) })
+	}
+	if key == settingSyncMaxParallel {
+		a.reconfigureSyncPools()
 	}
 	if key == storage.SettingTheme {
 		a.applyNativeTheme(value)
@@ -686,6 +1040,12 @@ func (a *App) SetSetting(key, value string) error {
 	}
 	if key == settingUnreadBadge || key == settingLanguage {
 		a.applyUnreadBadge()
+	}
+	if key == settingChatEnabled {
+		a.chatSettingChanged(value)
+	}
+	if key == settingAutoEncrypt || key == settingKeySourceAutocrypt {
+		a.loadAutoEncryptFlags()
 	}
 	if key == settingIndexDecrypted {
 		// rebuilt from scratch rather than re-indexed in place: switching this
@@ -754,6 +1114,76 @@ func (a *App) intSetting(key string, def int) int {
 		return def
 	}
 	return value
+}
+
+// clampSyncMaxParallel keeps a parallel-sync setting inside 1–10.
+func clampSyncMaxParallel(n int) int {
+	if n < minSyncMaxParallel {
+		return minSyncMaxParallel
+	}
+	if n > maxSyncMaxParallel {
+		return maxSyncMaxParallel
+	}
+	return n
+}
+
+// syncMessageLimitExpanded reports whether newLimit admits more local bodies
+// than oldLimit. Zero means unlimited (all local bodies per protocol rules).
+func syncMessageLimitExpanded(oldLimit, newLimit int) bool {
+	if newLimit == oldLimit {
+		return false
+	}
+	if oldLimit == 0 {
+		return false
+	}
+	if newLimit == 0 {
+		return true
+	}
+	return newLimit > oldLimit
+}
+
+// syncMaxParallel is how many sync connections one account may use at once.
+// An unset or unparsable value is the default; a stored value outside 1–10 is
+// clamped so a hand-edited setting cannot open more sessions than the pool
+// allows.
+func (a *App) syncMaxParallel() int {
+	return clampSyncMaxParallel(a.intSetting(settingSyncMaxParallel, defaultSyncMaxParallel))
+}
+
+// accountSyncMaxParallel is how many sync connections one account may use: its
+// own override when set, otherwise the global setting, clamped to 1–10.
+func (a *App) accountSyncMaxParallel(accountID int64) int {
+	if a.store != nil {
+		if acct, err := a.store.GetAccount(a.ctx, accountID); err == nil && acct.SyncMaxParallel != nil {
+			return clampSyncMaxParallel(*acct.SyncMaxParallel)
+		}
+	}
+	return a.syncMaxParallel()
+}
+
+// reconfigureSyncPools pushes the current parallelism onto every running pool.
+// Accounts with an override keep it; they land on the same value either way.
+// A pool between two runtimes of its account gets it too.
+func (a *App) reconfigureSyncPools() {
+	a.sessionPoolsMu.Lock()
+	ids := make([]int64, 0, len(a.sessionPools))
+	for id := range a.sessionPools {
+		ids = append(ids, id)
+	}
+	a.sessionPoolsMu.Unlock()
+	for _, id := range ids {
+		a.reconfigureAccountPool(id)
+	}
+}
+
+// reconfigureAccountPool re-reads one account's parallelism into its pool,
+// if it has one (see accountSessions.applyUserSetting). The setting is read
+// under the account's resize lock, so of two applies the later one applies
+// the newer value.
+func (a *App) reconfigureAccountPool(accountID int64) {
+	if s := a.accountShared(accountID); s != nil {
+		s.applyUserSetting(func() int { return a.accountSyncMaxParallel(accountID) })
+	}
 }
 
 // isSettingMissing reports whether err is the not-found sentinel, so callers can

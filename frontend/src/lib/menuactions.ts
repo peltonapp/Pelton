@@ -44,8 +44,12 @@ import {
   IconFolderX,
   IconTrashX,
   IconPin,
+  IconBellOff,
+  IconNote,
   IconBrush,
   IconCommand,
+  IconCircleCheck,
+  IconLock,
 } from '@tabler/icons-svelte'
 import type { ShortcutAction } from './shortcuts'
 import { isMac } from './i18n'
@@ -56,7 +60,6 @@ import { isMac } from './i18n'
 export type MenuActionId =
   | ShortcutAction
   | 'about'
-  | 'undo'
   | 'toggle-low-power'
   | 'open-mailboxes'
   | 'open-contacts'
@@ -90,6 +93,7 @@ export interface MenuActionDef {
 export const menuActionCatalog: MenuActionDef[] = [
   { action: 'about', labelKey: 'menu.about', iconName: 'info-circle', icon: IconInfoCircle },
   { action: 'preferences', labelKey: 'menu.preferences', iconName: 'settings', icon: IconSettings },
+  { action: 'lock-app', labelKey: 'shortcut.lockApp', iconName: 'lock', icon: IconLock },
   { action: 'hide-window', labelKey: 'menu.hide', iconName: 'eye-off', icon: IconEyeOff, macOnly: true, hint: 'mod+h' },
   { action: 'quit', labelKey: 'menu.quit', iconName: 'power', icon: IconPower, hint: isMac ? 'mod+q' : undefined },
   { action: 'compose', labelKey: 'menu.compose', iconName: 'pencil', icon: IconPencil },
@@ -102,7 +106,7 @@ export const menuActionCatalog: MenuActionDef[] = [
   { action: 'open-contacts', labelKey: 'menu.contacts', iconName: 'address-book', icon: IconAddressBook },
   { action: 'search', labelKey: 'shortcut.search', iconName: 'search', icon: IconSearch },
   { action: 'command-palette', labelKey: 'shortcut.commandPalette', iconName: 'command', icon: IconCommand },
-  { action: 'undo', labelKey: 'menu.undo', iconName: 'arrow-back-up', icon: IconArrowBackUp, hint: 'mod+z' },
+  { action: 'undo', labelKey: 'menu.undo', iconName: 'arrow-back-up', icon: IconArrowBackUp },
   { action: 'reply', labelKey: 'shortcut.reply', iconName: 'corner-up-left', icon: IconCornerUpLeft, needsMessage: true },
   { action: 'reply-all', labelKey: 'shortcut.replyAll', iconName: 'corner-up-left-double', icon: IconCornerUpLeftDouble, needsMessage: true },
   { action: 'forward', labelKey: 'shortcut.forward', iconName: 'arrow-forward-up', icon: IconArrowForwardUp, needsMessage: true },
@@ -112,6 +116,7 @@ export const menuActionCatalog: MenuActionDef[] = [
   { action: 'snooze', labelKey: 'shortcut.snooze', iconName: 'alarm-snooze', icon: IconAlarmSnooze, needsMessage: true },
   { action: 'download-offline', labelKey: 'shortcut.downloadOffline', iconName: 'download', icon: IconDownload, needsMessage: true },
   { action: 'archive', labelKey: 'menu.archive', iconName: 'archive', icon: IconArchive, needsMessage: true },
+  { action: 'done', labelKey: 'shortcut.done', iconName: 'circle-check', icon: IconCircleCheck, needsMessage: true },
   { action: 'toggle-spam', labelKey: 'shortcut.toggleSpam', iconName: 'alert-triangle', icon: IconAlertTriangle, needsMessage: true },
   { action: 'delete-message', labelKey: 'menu.deleteMessage', iconName: 'trash', icon: IconTrash, needsMessage: true, danger: true },
   { action: 'unsubscribe', labelKey: 'shortcut.unsubscribe', iconName: 'mail-x', icon: IconMailX, needsMessage: true },
@@ -120,6 +125,9 @@ export const menuActionCatalog: MenuActionDef[] = [
   { action: 'toggle-fullscreen', labelKey: 'menu.toggleFullscreen', iconName: 'maximize', icon: IconMaximize },
   { action: 'toggle-low-power', labelKey: 'menu.lowPower', iconName: 'battery-eco', icon: IconBatteryEco },
   { action: 'mark-vip', labelKey: 'palette.action.markVip', iconName: 'star', icon: IconStar, needsMessage: true },
+  { action: 'toggle-pin', labelKey: 'shortcut.togglePin', iconName: 'pin', icon: IconPin, needsMessage: true },
+  { action: 'toggle-mute', labelKey: 'shortcut.toggleMute', iconName: 'bell-off', icon: IconBellOff, needsMessage: true },
+  { action: 'edit-note', labelKey: 'shortcut.editNote', iconName: 'note', icon: IconNote, needsMessage: true },
   { action: 'move-to', labelKey: 'messageList.menu.moveTo', iconName: 'folder-symlink', icon: IconFolderSymlink, needsMessage: true },
   { action: 'flag-color', labelKey: 'palette.action.flagColor', iconName: 'palette', icon: IconPalette, needsMessage: true },
   { action: 'remove-offline', labelKey: 'messageList.menu.removeOffline', iconName: 'download-off', icon: IconDownloadOff, needsMessage: true },
@@ -212,6 +220,7 @@ export function defaultMenuLayout(): MenuBarLayout {
           action('about'),
           sep('app', 0),
           action('preferences'),
+          action('lock-app'),
           sep('app', 1),
           action('hide-window'),
           action('quit'),

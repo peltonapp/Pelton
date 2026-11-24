@@ -22,6 +22,7 @@ import {
 } from '../lib/api'
 import { onCalendarChanged, onCalendarSync, type CalendarSyncEvent, type Unsubscribe } from '../lib/events'
 import { errorMessage, toastError, toastInfo, toastSuccess } from './toast'
+import { openSpace } from './space'
 import { t } from '../lib/i18n'
 import type {
   Calendar,
@@ -104,6 +105,16 @@ export interface MailDropAt {
   at: Date | null
   mode: MailDropMode
   shift: boolean
+  /** Alt (Option) was held: the mail gets a time block to deal with it instead of an event. */
+  alt?: boolean
+  /** Where the event ends, when the time was picked with an end; an hour after at otherwise. */
+  end?: Date
+}
+
+/** The calendar new events go to: the default while it takes events, else the first writable one. */
+export function defaultCalendarId(list: Calendar[], settings: CalendarSettings): number {
+  const writable = list.filter((c) => !c.readOnly)
+  return (writable.find((c) => c.id === settings.defaultCalendarId) ?? writable.find((c) => c.default) ?? writable[0])?.id ?? 0
 }
 
 /** A right click on a day, a time slot or the all-day lane, as the views report it. */
@@ -116,6 +127,30 @@ export interface CellMenuAt {
 
 /** Mail to start events from, set by a drop and taken by the calendar screen. */
 export const calendarSeed = writable<MailDropAt | null>(null)
+
+/**
+ * Asks the calendar screen for time blocking, from another space or the
+ * palette: plan today, or find time for a task.
+ */
+export type TimeBlockAsk = { kind: 'plan' } | { kind: 'find'; taskId: number }
+
+/** The time blocking request the calendar screen takes next, or null. */
+export const timeblockRequest = writable<TimeBlockAsk | null>(null)
+
+/** Asks the mail screen to block time for the open or selected mail, set from the palette. */
+export const blockMailRequest = writable<boolean>(false)
+
+/** Opens the calendar on "Find time" for a task. */
+export function findTimeFor(taskId: number): void {
+  timeblockRequest.set({ kind: 'find', taskId })
+  openSpace('calendar')
+}
+
+/** Opens the calendar and lays today's due tasks out as proposals. */
+export function planMyDay(): void {
+  timeblockRequest.set({ kind: 'plan' })
+  openSpace('calendar')
+}
 
 /** Asks the calendar screen to open quick add, set by the shortcut from another space. */
 export const calendarQuickAdd = writable<boolean>(false)

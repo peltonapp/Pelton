@@ -7,34 +7,77 @@
   // plaintext renders in the mono font, with bare urls linkified. remote
   // images are blocked by the backend by default; a per-message affordance
   // asks the backend to re-render with remote content allowed.
-  import { onDestroy, tick } from 'svelte'
+  import { createEventDispatcher, onDestroy, tick } from 'svelte'
   import { get } from 'svelte/store'
   import { openURL } from '../../lib/browser'
-  import { IconPhoto, IconUserCheck, IconWorldCheck, IconMailCheck, IconShieldSearch, IconChevronDown, IconEyeOff } from '@tabler/icons-svelte'
+  import { IconPhoto, IconUserCheck, IconWorldCheck, IconMailCheck, IconShieldSearch, IconChevronDown, IconEyeOff, IconCopy, IconExternalLink } from '@tabler/icons-svelte'
+  import { resolveLink } from '../../lib/linkclean'
   import { prefs } from '../../stores/prefs'
-  import { getMessageHtml, trustSenderImages, allowDomainImages, allowRemoteForMessage, scanUrl } from '../../lib/api'
+  import { getMessageHtml, getMessageHtmlBlockingTrackers, trustSenderImages, allowDomainImages, allowRemoteForMessage, scanUrl } from '../../lib/api'
+  import { guarded, imageRequest, linkCheck, noteLoaded, trackedLink } from '../../stores/trust'
   import { setBodyHtml } from '../../stores/message'
-  import { openContextMenu } from '../../stores/contextmenu'
+  import { openContextMenu, type MenuItem } from '../../stores/contextmenu'
   import { virusTotal, linkVerdicts, putLinkVerdict, scanEnabled } from '../../stores/virustotal'
   import VerdictBadge from '../common/VerdictBadge.svelte'
+  import Spinner from '../common/Spinner.svelte'
   import { errorMessage, toastError, toastSuccess } from '../../stores/toast'
   import { displayName, linkifySegments } from '../../lib/format'
   import { bodyFontStack } from '../../lib/fonts'
   import { frameKeyRelay, relayedKey, replayKey } from '../../lib/framekeys'
   import { t } from '../../lib/i18n'
-  import type { MessageDetail, Verdict } from '../../lib/types'
+  import type { BodyDetail, RemoteSource, Verdict } from '../../lib/types'
   import { markClass, markDocument } from '../../lib/highlight'
   import { highlightTerms, searchOpenedId } from '../../stores/search'
+  import { highlightTerms as promiseTerms, promiseHighlight } from '../../stores/promises'
   import Highlight from '../common/Highlight.svelte'
   import Ph from '../common/Ph.svelte'
   import dotsIcon from '@phosphor-icons/core/assets/duotone/dots-three-duotone.svg?raw'
+  import calendarIcon from '@phosphor-icons/core/assets/duotone/calendar-blank-duotone.svg?raw'
   import { splitHtmlQuote, splitPlainQuote } from '../../lib/quotes'
+  import { loadDatePeek } from '../../lib/lazyload'
+  import { scanDates } from '../../lib/datescan'
+  import { collectText, dateAttr, markRanges, unmarkDates, dateClass } from '../../lib/datemarks'
+  import { formatWhen } from '../../lib/calformat'
+  import { currentUIScale } from '../../theme/theme'
+  import { locale } from '../../lib/i18n'
+  import type { DateMention } from '../../lib/eventphrase'
+  import type { TimeFormat } from '../../lib/format'
+  import { adaptHtml, colorMode, defaultMode, mailStyle, type ColorMode, type MailStyle } from '../../lib/mailcolors'
+  import { choiceFor, darkTheme, messageColors, rememberColors, senderReading, setMessageColors } from '../../stores/senderreading'
+  import { noteTipContext } from '../../stores/firsttips'
+  import paletteIcon from '@phosphor-icons/core/assets/duotone/circle-half-duotone.svg?raw'
 
-  export let detail: MessageDetail
+  export let detail: BodyDetail
   /** Folds the quoted original at the end of a reply behind a toggle. */
   export let collapseQuotes: boolean = false
+  /**
+   * Where the body's remote content comes from when it is not a stored
+   * message, such as a feed entry: the load buttons then ask this instead of
+   * the mail backend, and offer its own "always" choice in place of trusting a
+   * sender. Dates in the body are not marked for such a body.
+   */
+  export let remote: RemoteSource | null = null
+  /**
+   * Lets html mail follow a dark theme (lib/mailcolors.ts decides how), with
+   * a toggle for the message and a choice remembered for the sender. Off,
+   * html mail always renders as sent on a light page.
+   */
+  export let adaptive: boolean = false
+  /** The text size in px, or 0 for the reader's global size. */
+  export let fontSize: number = 0
+  /** Sets the text with the reading view's roomier line height. */
+  export let roomy: boolean = false
+
+  // html tells a holder of its own copy of the message, such as the Feeds
+  // reader, that the body was rendered again with remote content.
+  const dispatch = createEventDispatcher<{ html: { id: number; html: string } }>()
 
   $: canScan = scanEnabled($virusTotal)
+  // the link menu offers copy and open original as well as the scan. The
+  // classic design has none of that, so it keeps the system menu unless a
+  // scan is on offer.
+  $: offerMenu = canScan || $prefs.design !== 'classic'
+  $: cleanOn = $prefs.cleanLinks
 
   // the quoted original, split off when it is folded. showQuote resets with
   // the message.
@@ -57,7 +100,9 @@
   // because the sender/domain is trusted (or the global override is on).
   let remoteLoaded = detail.remoteAllowed
 
-  // reset the remote-loaded affordance when a different message opens.
+  // reset the remote-loaded affordance when a different message opens. Each
+  // message also gets its own frame (see the {#key} below), which stays hidden
+  // until its document has loaded.
   let lastId = -1
   $: if (detail.id !== lastId) {
     lastId = detail.id
@@ -66,6 +111,12 @@
     pixelsBlocked = false
     pixelMenu = null
     pixelDetails = false
+    startFrameLoad()
+  }
+  // the same message can refresh in place with remote content now allowed: a
+  // stub whose sender only matches the trust list once the full body is stored.
+  $: if (detail.remoteAllowed) {
+    remoteLoaded = true
   }
 
   $: senderLabel = displayName(detail.fromName, detail.fromAddress)
@@ -112,32 +163,40 @@
   // click handler that runs natively inside the iframe's own document, using
   // postMessage to hand the url back to the parent, has no such dependency on
   // cross-frame event delivery.
-  function buildSrcdoc(html: string, allowRemote: boolean, fontSize: number, bodyFont: string, nonce: string, offerScan: boolean): string {
+  function buildSrcdoc(html: string, allowRemote: boolean, fontSize: number, bodyFont: string, nonce: string, offerMenu: boolean, still: boolean, theme: FramePalette | null, leading: string): string {
     // the reader font preference sets the base font-family, so it applies to
     // mail that declares none. Mail that declares its own overrides it, unless
     // the sender-fonts setting is off, in which case the sanitizer has already
     // taken those declarations out and this is what everything renders in.
     const font = bodyFontStack(bodyFont) ?? readVar('--font-ui')
+    const accent = readVar('--accent') || '#465af2'
     // the .pelton-vt colors are the light-theme semantic token values written
     // out literally, for the same reason the page colors above are: this
     // document always renders on a fixed white background, so a badge that
-    // followed the dark theme would be a dark-mode green on white.
+    // followed the dark theme would be a dark-mode green on white. Mail
+    // adapted to a dark theme renders on the theme's own colours instead, and
+    // takes the theme's tokens for everything here.
+    const c = theme ?? lightPage
     const css = `
-  html,body{margin:0;background:#ffffff;color:#1a1a1a;font-family:${font};font-size:${fontSize}px;line-height:1.5;}
+  html,body{margin:0;background:${c.page};color:${c.text};font-family:${font};font-size:${fontSize}px;line-height:${leading};}
   body{padding:4px 2px;word-wrap:break-word;overflow-wrap:break-word;}
-  a{color:#1a56db;}
+  a{color:${c.link};}
   img{max-width:100%;height:auto;}
   video{max-width:100%;height:auto;}
-  blockquote{margin:0;margin-inline-start:8px;padding-inline-start:10px;border-inline-start:2px solid #94a3b8;color:#55606c;}
+  blockquote{margin:0;margin-inline-start:8px;padding-inline-start:10px;border-inline-start:2px solid ${c.rule};color:${c.quote};}
   table{max-width:100%;}
   pre{white-space:pre-wrap;}
   .pelton-vt{display:inline-block;margin-inline-start:3px;font-family:${readVar('--font-mono') || 'monospace'};font-weight:700;font-size:0.85em;cursor:default;}
-  .pelton-vt-clean{color:#1a7f4b;}
-  .pelton-vt-flagged{color:#c0392b;}
-  .pelton-vt-unknown{color:#6b7280;}
-  .pelton-vt-error{color:#9a6700;}
-  .pelton-phish{display:inline-block;margin-inline-start:3px;font-weight:700;font-size:0.85em;color:#c0392b;cursor:default;}
-  .${markClass}{background:color-mix(in srgb, ${readVar('--accent') || '#465af2'} 32%, #ffffff);color:inherit;border-radius:2px;}`
+  .pelton-vt-clean{color:${c.success};}
+  .pelton-vt-flagged{color:${c.danger};}
+  .pelton-vt-unknown{color:${c.quote};}
+  .pelton-vt-error{color:${c.warning};}
+  .pelton-phish{display:inline-block;margin-inline-start:3px;font-weight:700;font-size:0.85em;color:${c.danger};cursor:default;}
+  .${markClass}{background:color-mix(in srgb, ${accent} 32%, ${c.page});color:inherit;border-radius:2px;}
+  .${dateClass}{position:relative;border-radius:3px;cursor:pointer;outline:none;${still ? '' : 'transition:background-color 120ms ease-out,box-shadow 120ms ease-out;'}}
+  .${dateClass}.pelton-date-on{background:color-mix(in srgb, ${accent} 14%, ${c.page});box-shadow:0 0 0 2px color-mix(in srgb, ${accent} 14%, ${c.page});}
+  .${dateClass}:focus-visible{box-shadow:0 0 0 2px ${accent};}
+  .${dateClass}.pelton-date-on[tabindex]::before{content:"";position:absolute;inset-inline-start:-0.3em;top:-0.95em;width:0.95em;height:0.95em;border-radius:3px;background:${c.page} url("${calendarGlyph(accent)}") center/78% no-repeat;box-shadow:0 0 0 1px color-mix(in srgb, ${accent} 40%, ${c.page}),0 1px 3px rgba(0,0,0,0.16);pointer-events:none;}`
     const imgSrc = allowRemote ? 'data: https: http:' : 'data:'
     // media rides on the same choice as images: a message that embeds a video
     // can only reach out once the reader has allowed remote content for it.
@@ -153,16 +212,28 @@
     // do nothing). runs inside the iframe's own document so it's a normal,
     // same-document click listener - no cross-frame event delivery involved.
     //
-    // the contextmenu half is only wired up when a scan can actually be
-    // offered: with the integration off there is nothing to put in a menu, and
+    // the contextmenu half is only wired up when there is a menu to show:
     // suppressing the default one to show nothing would just look broken.
-    const contextHandler = offerScan
+    const contextHandler = offerMenu
       ? 'document.addEventListener("contextmenu",function(e){var a=e.target&&e.target.closest("a");if(!a)return;var href=(a.getAttribute("href")||"").trim();if(!/^https?:/i.test(href))return;e.preventDefault();window.parent.postMessage({peltonContextLink:href,x:e.clientX,y:e.clientY},"*")});'
       : ''
     const hoverHandler =
       'var lastHov="";function hov(h){if(h===lastHov)return;lastHov=h;window.parent.postMessage({peltonHoverLink:h},"*")}' +
       'document.addEventListener("mouseover",function(e){var a=e.target&&e.target.closest&&e.target.closest("a");hov(a?(a.getAttribute("href")||"").trim():"")});' +
       'document.documentElement.addEventListener("mouseleave",function(){hov("")});'
+    // dates marked in the body (see markDates): hovering or focusing one lights
+    // up all of its pieces and tells the parent which it is, a click or Enter
+    // asks for its preview to open and stay. Only the mark's number crosses.
+    const dateHandler =
+      `function pdEl(e){var n=e.target;return n&&n.closest?n.closest("[${dateAttr}]"):null}` +
+      `function pdLit(id,on){var l=document.querySelectorAll('[${dateAttr}="'+id+'"]');for(var i=0;i<l.length;i++){l[i].classList.toggle("pelton-date-on",on)}}` +
+      'var pdCur="";function pdHov(el,how){var id=el?el.getAttribute("' + dateAttr + '"):"";if(id===pdCur)return;if(pdCur)pdLit(pdCur,false);pdCur=id;if(id)pdLit(id,true);window.parent.postMessage({peltonDate:id,how:how},"*")}' +
+      'document.addEventListener("mouseover",function(e){pdHov(pdEl(e),"hover")});' +
+      'document.documentElement.addEventListener("mouseleave",function(){pdHov(null,"hover")});' +
+      'document.addEventListener("focusin",function(e){var d=pdEl(e);if(d)pdHov(d,"focus")});' +
+      'document.addEventListener("focusout",function(e){if(pdEl(e))pdHov(null,"focus")});' +
+      'document.addEventListener("click",function(e){var d=pdEl(e);if(!d)return;e.preventDefault();window.parent.postMessage({peltonDateOpen:d.getAttribute("' + dateAttr + '")},"*")});' +
+      'document.addEventListener("keydown",function(e){var d=pdEl(e);if(!d)return;if(e.key==="Enter"||e.key===" "){e.preventDefault();e.stopImmediatePropagation();window.parent.postMessage({peltonDateOpen:d.getAttribute("' + dateAttr + '")},"*")}else if(e.key==="Escape"&&pdCur){e.stopImmediatePropagation();pdHov(null,"focus")}});'
     const script =
       '<scr' +
       'ipt nonce="' +
@@ -170,6 +241,7 @@
       '">document.addEventListener("click",function(e){var a=e.target&&e.target.closest("a");if(!a)return;var href=(a.getAttribute("href")||"").trim();if(!href)return;e.preventDefault();if(/^(https?:|mailto:)/i.test(href)){window.parent.postMessage({peltonOpenUrl:href},"*")}});' +
       contextHandler +
       hoverHandler +
+      dateHandler +
       frameKeyRelay +
       '</scr' +
       'ipt>'
@@ -190,23 +262,149 @@
     return `<!doctype html><html dir="auto"><head><meta charset="utf-8">${cspMeta}${open}${css}${close}</head><body dir="auto" data-pelton-ready="1">${html}${script}</body></html>`
   }
 
-  // nonce is regenerated per message so a stale nonce from a previous render
-  // can never be replayed against a new one.
+  // the calendar glyph a hovered date shows, as an svg data url in a color.
+  function calendarGlyph(accent: string): string {
+    return `data:image/svg+xml,${encodeURIComponent(calendarIcon.replace('fill="currentColor"', `fill="${accent}"`))}`
+  }
+
+  // the nonce is regenerated whenever the document it guards changes: another
+  // message, a new body (remote images loaded, the full body replacing a stub)
+  // or remote content switching on. A stale nonce is then never reused against
+  // different content. It stays the same while none of those change, so a
+  // refresh with the same body (marking it read) builds the same srcdoc and
+  // does not reload the frame.
   function makeNonce(): string {
     return crypto.randomUUID().replace(/-/g, '')
   }
 
-  // one nonce per message: drawing a fresh one on every update made the
-  // document a new string each time, and the frame reloaded when a flag was
-  // toggled or the pane re-rendered for any other reason.
-  let nonce = makeNonce()
-  let nonceFor = -1
-  $: if (detail.id !== nonceFor) {
-    nonceFor = detail.id
-    nonce = makeNonce()
+  // the nonce changes only with the message, its body or its remote state, so
+  // toggling a flag or another re-render does not reload the frame.
+  let lastNonce = ''
+  let nonceFor: { id: number; body: string; remote: boolean } | null = null
+  function nonceOf(id: number, body: string, remote: boolean): string {
+    if (!nonceFor || nonceFor.id !== id || nonceFor.body !== body || nonceFor.remote !== remote) {
+      nonceFor = { id, body, remote }
+      lastNonce = makeNonce()
+    }
+    return lastNonce
+  }
+  $: currentNonce = nonceOf(detail.id, detail.bodyHtmlSafe, remoteLoaded)
+
+  // frameLoaded is false from the moment another message opens until its
+  // frame's document has loaded; the frame is hidden meanwhile, so the pane
+  // never shows the previous message's body under the new header. A spinner
+  // appears once the load takes long enough to notice, and the frame is shown
+  // anyway after frameLoadGiveUpMs in case the load is never reported.
+  const frameSpinnerDelayMs = 150
+  const frameLoadGiveUpMs = 3000
+  let frameLoaded = false
+  let frameSlow = false
+  let frameSpinnerTimer: ReturnType<typeof setTimeout> | undefined
+  let frameGiveUpTimer: ReturnType<typeof setTimeout> | undefined
+
+  function startFrameLoad(): void {
+    clearTimeout(frameSpinnerTimer)
+    clearTimeout(frameGiveUpTimer)
+    frameLoaded = false
+    frameSlow = false
+    frameSpinnerTimer = setTimeout(() => (frameSlow = true), frameSpinnerDelayMs)
+    frameGiveUpTimer = setTimeout(frameDidLoad, frameLoadGiveUpMs)
   }
 
-  $: srcdoc = buildSrcdoc(shownHtml, remoteLoaded, $prefs.messageFontSize, $prefs.bodyFont, nonce, canScan)
+  // --- colours in a dark theme -------------------------------------------------
+
+  /** The colours the frame's own document is drawn in. */
+  interface FramePalette {
+    page: string
+    text: string
+    link: string
+    rule: string
+    quote: string
+    success: string
+    danger: string
+    warning: string
+  }
+
+  // the fixed light page html mail is written for.
+  const lightPage: FramePalette = {
+    page: '#ffffff',
+    text: '#1a1a1a',
+    link: '#1a56db',
+    rule: '#94a3b8',
+    quote: '#55606c',
+    success: '#1a7f4b',
+    danger: '#c0392b',
+    warning: '#9a6700',
+  }
+
+  // the theme's own colours, read again whenever the theme or accent changes.
+  function themePalette(_dark: boolean, _themeId: string, _accent: string): FramePalette {
+    return {
+      page: readVar('--surface-raised'),
+      text: readVar('--text-primary'),
+      link: readVar('--link'),
+      rule: readVar('--border-strong'),
+      quote: readVar('--text-secondary'),
+      success: readVar('--success'),
+      danger: readVar('--danger'),
+      warning: readVar('--warning'),
+    }
+  }
+
+  let htmlStyle: MailStyle = 'plain'
+  let senderColors: '' | ColorMode = ''
+  let messageColor: '' | ColorMode = ''
+  $: htmlStyle = adaptive && detail.isHtml ? mailStyle(detail.bodyHtmlSafe) : 'plain'
+  $: senderColors = adaptive ? choiceFor($senderReading, detail.fromAddress).colors : ''
+  $: messageColor = adaptive ? ($messageColors.get(detail.id) ?? '') : ''
+  $: colorBase = { dark: $darkTheme, style: htmlStyle, pref: $prefs.htmlColors }
+  $: mode = adaptive && detail.isHtml ? colorMode({ ...colorBase, sender: senderColors, message: messageColor }) : 'original'
+  $: adapted = mode === 'adapt'
+  // a dark theme showing mail as sent puts it on a light sheet of its own.
+  $: sheet = adaptive && detail.isHtml && $darkTheme && !adapted
+  $: frameHtml = adapted ? adaptHtml(shownHtml) : shownHtml
+  $: framePalette = adapted ? themePalette($darkTheme, $prefs.themeId, $prefs.accent) : null
+  $: textSize = fontSize || $prefs.messageFontSize
+  $: leading = roomy ? readVar('--reading-leading') || '1.7' : '1.5'
+
+  // the toggle flips this message; a flip that differs from what the sender
+  // would get otherwise can then be kept for the sender, and a kept choice
+  // forgotten again.
+  $: senderOrDefault = senderColors || defaultMode(colorBase)
+  $: canKeep = messageColor !== '' && messageColor !== senderOrDefault
+  $: canForget = !canKeep && messageColor === '' && senderColors !== ''
+
+  // a long html mail in a dark theme is where the colors button matters most.
+  const longMail = 6000
+  $: if (adaptive && detail.isHtml && $darkTheme && detail.bodyHtmlSafe.length > longMail) {
+    void tick().then(() => noteTipContext('dark-mail'))
+  }
+
+  function flipColors(): void {
+    setMessageColors(detail.id, adapted ? 'original' : 'adapt')
+  }
+
+  function keepForSender(): void {
+    const keep = messageColor
+    if (keep === '') {
+      return
+    }
+    void rememberColors(detail.fromAddress, keep === defaultMode(colorBase) ? '' : keep)
+    setMessageColors(detail.id, '')
+  }
+
+  function forgetForSender(): void {
+    void rememberColors(detail.fromAddress, '')
+  }
+
+  $: srcdoc = buildSrcdoc(frameHtml, remoteLoaded, textSize, $prefs.bodyFont, currentNonce, offerMenu, $prefs.reduceMotion, framePalette, leading)
+
+  function frameDidLoad(): void {
+    clearTimeout(frameSpinnerTimer)
+    clearTimeout(frameGiveUpTimer)
+    frameLoaded = true
+    frameSlow = false
+  }
 
   // plain-text bodies render in a <pre>, not the sandboxed iframe, so bare
   // urls need their own linkification: nothing upstream turns them into real
@@ -270,6 +468,8 @@
     if (!body) {
       return
     }
+    // our own document is in place, whether or not 'load' was reported.
+    frameDidLoad()
     measure()
     resizeObserver = new ResizeObserver(() => measure())
     resizeObserver.observe(body)
@@ -277,10 +477,269 @@
     // render are gone and have to be put back.
     decorateLinks(get(linkVerdicts), suspectLinks)
     markMatches(markTerms)
+    void markDates()
+  }
+
+  // --- dates named in the mail ------------------------------------------------
+
+  $: datesOn = $prefs.mailDates && $prefs.design !== 'classic' && remote === null
+  $: timeFormat = $prefs.timeFormat as TimeFormat
+
+  // the dates found in the shown body, by mark number, and the run they were
+  // found in, so a reply that arrives after the body changed is dropped.
+  let mentions: DateMention[] = []
+  let dateRun = 0
+
+  function sentAt(): Date {
+    const d = detail.date ? new Date(detail.date) : new Date()
+    return Number.isNaN(d.getTime()) ? new Date() : d
+  }
+
+  function describe(m: DateMention): string {
+    return formatWhen(m.start, m.end, m.allDay, timeFormat, $locale)
+  }
+
+  // markDates finds the dates in the frame's text, off the main thread, then
+  // wraps them in marks over the same text nodes. Taking the marks out first
+  // makes it safe to run again for the same document.
+  let datesBody: HTMLElement | null = null
+
+  async function markDates(again = false): Promise<void> {
+    const doc = frame?.contentDocument
+    const body = readyBody()
+    if (!doc || !body || (body === datesBody && !again)) {
+      return
+    }
+    datesBody = body
+    const run = ++dateRun
+    unmarkDates(doc)
+    mentions = []
+    closePeek(false)
+    if (!datesOn) {
+      return
+    }
+    const before = collectText(body)
+    let found: DateMention[]
+    try {
+      found = await scanDates(before.text, sentAt(), $locale)
+    } catch {
+      return
+    }
+    if (run !== dateRun || readyBody() !== body || found.length === 0) {
+      return
+    }
+    const now = collectText(body)
+    if (now.text !== before.text) {
+      return
+    }
+    mentions = found
+    markRanges(
+      now,
+      found.map((m, id) => ({ id, index: m.index, length: m.length })),
+      (id) => $t('dateHint.mark').replace('{when}', describe(found[id])),
+    )
+  }
+
+  let datesWere: boolean | null = null
+  $: if (frame && detail.isHtml && datesOn !== datesWere) {
+    if (datesWere !== null) {
+      void markDates(true)
+    }
+    datesWere = datesOn
+  }
+
+  // the plain-text body: the same dates, cut into its segments by offset.
+  let plainMentions: DateMention[] = []
+  let plainFor = ''
+  $: if (!detail.isHtml) {
+    void scanPlain(shownPlain, datesOn)
+  }
+
+  async function scanPlain(text: string, on: boolean): Promise<void> {
+    const key = `${detail.id}|${on}|${text.length}`
+    if (key === plainFor) {
+      return
+    }
+    plainFor = key
+    plainMentions = []
+    mentions = []
+    closePeek(false)
+    if (!on) {
+      return
+    }
+    const run = ++dateRun
+    try {
+      const found = await scanDates(text, sentAt(), $locale)
+      if (run === dateRun && plainFor === key) {
+        plainMentions = found
+        mentions = found
+      }
+    } catch {
+      plainMentions = []
+    }
+  }
+
+  /** A piece of a plain segment, with the mark number of the date it is part of. */
+  interface PlainPart {
+    text: string
+    date: number
+    first: boolean
+  }
+
+  // splits each segment of the plain body at the dates found in it. Links keep
+  // their text whole and are not marked.
+  function plainParts(segments: typeof plainSegments, found: DateMention[]): PlainPart[][] {
+    let offset = 0
+    return segments.map((segment) => {
+      const from = offset
+      offset += segment.text.length
+      if (segment.href || found.length === 0) {
+        return [{ text: segment.text, date: -1, first: false }]
+      }
+      const parts: PlainPart[] = []
+      let at = 0
+      found.forEach((m, id) => {
+        const start = Math.max(m.index - from, at)
+        const end = Math.min(m.index + m.length - from, segment.text.length)
+        if (end <= start) {
+          return
+        }
+        if (start > at) {
+          parts.push({ text: segment.text.slice(at, start), date: -1, first: false })
+        }
+        parts.push({ text: segment.text.slice(start, end), date: id, first: m.index >= from })
+        at = end
+      })
+      if (at < segment.text.length) {
+        parts.push({ text: segment.text.slice(at), date: -1, first: false })
+      }
+      return parts
+    })
+  }
+
+  $: plainSplit = detail.isHtml ? [] : plainParts(plainSegments, plainMentions)
+
+  // --- the preview a date opens ---------------------------------------------
+
+  const showDelay = 450
+  const hideDelay = 220
+
+  let peek: { id: number; anchor: { left: number; top: number; right: number; bottom: number }; pinned: boolean } | null = null
+  let showTimer: ReturnType<typeof setTimeout> | undefined
+  let hideTimer: ReturnType<typeof setTimeout> | undefined
+  let plainBox: HTMLPreElement | undefined
+
+  $: peekMention = peek ? mentions[peek.id] ?? null : null
+
+  // dateEls returns the marks of one date: in the frame's document, or in the
+  // plain body.
+  function dateEls(id: number): HTMLElement[] {
+    const root: ParentNode | null | undefined = detail.isHtml ? frame?.contentDocument : plainBox
+    return root ? Array.from(root.querySelectorAll<HTMLElement>(`[${dateAttr}="${id}"]`)) : []
+  }
+
+  // anchorOf is the box around a date's marks in the layout space a fixed
+  // element uses: a frame's own pixels are scaled by how it is drawn, and the
+  // interface zoom is divided out.
+  function anchorOf(id: number): { left: number; top: number; right: number; bottom: number } | null {
+    const els = dateEls(id)
+    if (els.length === 0) {
+      return null
+    }
+    const rects = els.map((el) => el.getBoundingClientRect())
+    let left = Math.min(...rects.map((r) => r.left))
+    let right = Math.max(...rects.map((r) => r.right))
+    let top = Math.min(...rects.map((r) => r.top))
+    let bottom = Math.max(...rects.map((r) => r.bottom))
+    if (detail.isHtml && frame) {
+      const box = frame.getBoundingClientRect()
+      const inner = frame.contentDocument?.documentElement.clientWidth ?? 0
+      const ratio = inner > 0 ? box.width / inner : 1
+      left = box.left + left * ratio
+      right = box.left + right * ratio
+      top = box.top + top * ratio
+      bottom = box.top + bottom * ratio
+    }
+    const scale = currentUIScale()
+    return { left: left / scale, right: right / scale, top: top / scale, bottom: bottom / scale }
+  }
+
+  function openPeek(id: number, pinned: boolean): void {
+    clearTimeout(showTimer)
+    clearTimeout(hideTimer)
+    const anchor = mentions[id] ? anchorOf(id) : null
+    peek = anchor ? { id, anchor, pinned: pinned || (peek?.id === id && peek.pinned) } : null
+  }
+
+  // the date the focus is being handed back to, which must not open again.
+  let returning: number | null = null
+
+  function closePeek(refocus: boolean): void {
+    clearTimeout(showTimer)
+    clearTimeout(hideTimer)
+    const was = peek
+    peek = null
+    if (refocus && was?.pinned) {
+      returning = was.id
+      dateEls(was.id)[0]?.focus()
+    }
+  }
+
+  // hoverDate is the pointer or the focus reaching a date (id) or leaving it
+  // (null). A preview opens after a short rest, or at once for the keyboard,
+  // and closes a moment after the pointer leaves unless it went into the
+  // preview itself. A pinned preview stays.
+  function hoverDate(id: number | null, how: 'hover' | 'focus'): void {
+    if (how === 'focus' && id !== null && id === returning) {
+      returning = null
+      return
+    }
+    returning = null
+    if (peek?.pinned) {
+      return
+    }
+    clearTimeout(showTimer)
+    if (id === null) {
+      if (peek) {
+        clearTimeout(hideTimer)
+        hideTimer = setTimeout(() => closePeek(false), hideDelay)
+      }
+      return
+    }
+    clearTimeout(hideTimer)
+    if (peek?.id === id) {
+      return
+    }
+    if (how === 'focus') {
+      openPeek(id, false)
+    } else {
+      showTimer = setTimeout(() => openPeek(id, false), peek ? 0 : showDelay)
+    }
+  }
+
+  function holdPeek(): void {
+    clearTimeout(hideTimer)
+  }
+
+  function releasePeek(): void {
+    if (peek && !peek.pinned) {
+      clearTimeout(hideTimer)
+      hideTimer = setTimeout(() => closePeek(false), hideDelay)
+    }
+  }
+
+  function onPlainDateKey(event: KeyboardEvent, id: number): void {
+    if (event.key === 'Enter' || event.key === ' ') {
+      event.preventDefault()
+      openPeek(id, true)
+    }
   }
 
   // the words of the search this message was opened from, marked in the body.
-  $: markTerms = $searchOpenedId === detail.id ? $highlightTerms : []
+  $: markTerms = [
+    ...($searchOpenedId === detail.id ? $highlightTerms : []),
+    ...($promiseHighlight?.messageId === detail.id ? promiseTerms($promiseHighlight.quote) : []),
+  ]
 
   // markMatches wraps the search words in mark elements inside the iframe's
   // own document, the same way decorateLinks adds its badges: built with
@@ -301,6 +760,7 @@
   // in case 'load' fires before contentDocument.body is actually populated
   // (observed to be unreliable timing on some webview engines).
   function onFrameLoad(): void {
+    frameDidLoad()
     hoverUrl = ''
     attachInteractivity()
   }
@@ -331,14 +791,44 @@
   }
 
   let hoverUrl = ''
+  let hoverCleaned = false
+  let hoverVia = ''
 
-  // showHover updates the status overlay with the address of the hovered link,
-  // or hides it for an empty href. mailto links show just the address. The
-  // overlay is anchored to the message pane, outside its scroll area.
+  // the sender passport and the shield reach a mail's links in the new design
+  // only, and never a feed entry's.
+  $: trustLinks = $prefs.design === 'new' && !remote
+  $: if (trustLinks && $imageRequest === detail.id) {
+    imageRequest.set(null)
+    void loadRemote(false, true)
+  }
+
+  // openLink opens a link in the system browser, cleaned when that is on. A
+  // mail with a strong sender warning shows where the link goes first.
+  function openLink(href: string): void {
+    const url = resolveLink(href, cleanOn).url
+    if (trustLinks && /^https?:/i.test(href) && guarded(detail.id)) {
+      linkCheck.set({ messageId: detail.id, url, item: trackedLink(detail.id, href) })
+      return
+    }
+    openURL(url)
+  }
+
+  // showHover updates the status overlay with the address a hovered link goes
+  // to, or hides it for an empty href: the cleaned address, marked as such,
+  // when cleaning changed it. mailto links show just the address. The overlay
+  // is anchored to the message pane, outside its scroll area.
   function showHover(href: string): void {
-    const shown = /^mailto:/i.test(href) ? href.slice(7).split('?')[0] : /^https?:/i.test(href) ? href : ''
-    if (shown === hoverUrl) return
+    const link = /^https?:/i.test(href) ? resolveLink(href, cleanOn) : null
+    // a tracking redirect whose destination is in its own url shows where it
+    // really goes, and through whom.
+    const tracked = trustLinks && link && !link.unwrapped ? trackedLink(detail.id, href) : null
+    const via = tracked?.destination ? tracked.host : ''
+    const shown = /^mailto:/i.test(href) ? href.slice(7).split('?')[0] : via ? (tracked?.destination ?? '') : (link?.url ?? '')
+    const cleaned = link?.changed ?? false
+    if (shown === hoverUrl && cleaned === hoverCleaned && via === hoverVia) return
     hoverUrl = shown
+    hoverCleaned = cleaned
+    hoverVia = via
     hoverSlide = 0
     if (shown) void measureHover()
   }
@@ -368,14 +858,37 @@
       replayKey(frame, key)
       return
     }
-    const data = event.data as { peltonOpenUrl?: unknown; peltonContextLink?: unknown; peltonHoverLink?: unknown; x?: unknown; y?: unknown } | null
+    const data = event.data as {
+      peltonOpenUrl?: unknown
+      peltonContextLink?: unknown
+      peltonHoverLink?: unknown
+      peltonDate?: unknown
+      peltonDateOpen?: unknown
+      how?: unknown
+      x?: unknown
+      y?: unknown
+    } | null
+    if (typeof data?.peltonDate === 'string') {
+      const id = data.peltonDate === '' ? null : Number(data.peltonDate)
+      if (id === null || (Number.isInteger(id) && id >= 0)) {
+        hoverDate(id, data.how === 'focus' ? 'focus' : 'hover')
+      }
+      return
+    }
+    if (typeof data?.peltonDateOpen === 'string') {
+      const id = Number(data.peltonDateOpen)
+      if (Number.isInteger(id) && id >= 0) {
+        openPeek(id, true)
+      }
+      return
+    }
     if (typeof data?.peltonHoverLink === 'string') {
       showHover(data.peltonHoverLink)
       return
     }
     const href = data?.peltonOpenUrl
     if (typeof href === 'string' && /^(https?:|mailto:)/i.test(href)) {
-      openURL(href)
+      openLink(href)
       return
     }
     const link = data?.peltonContextLink
@@ -390,27 +903,54 @@
   // the measured ratio between the element's rendered and internal widths
   // rather than by reasoning about the zoom factor.
   function openLinkMenu(url: string, frameX: number, frameY: number): void {
-    if (!canScan || !frame) {
+    if (!offerMenu || !frame) {
       return
     }
     const rect = frame.getBoundingClientRect()
     const inner = frame.contentDocument?.documentElement.clientWidth ?? 0
     const scale = inner > 0 ? rect.width / inner : 1
-    openContextMenu(rect.left + frameX * scale, rect.top + frameY * scale, [
-      { label: $t('virustotal.scanLink'), icon: IconShieldSearch, action: () => void scanLink(url) },
-    ])
+    openContextMenu(rect.left + frameX * scale, rect.top + frameY * scale, linkMenuItems(url))
+  }
+
+  // linkMenuItems is the menu of a link: copy it as it would open, open the
+  // original when cleaning changed it, and scan it when that is set up.
+  function linkMenuItems(url: string): MenuItem[] {
+    const link = resolveLink(url, cleanOn)
+    const items: MenuItem[] = []
+    if ($prefs.design !== 'classic') {
+      items.push({ label: $t('links.copy'), icon: IconCopy, action: () => void copyLink(link.url) })
+      if (link.changed) {
+        items.push({ label: $t('links.openOriginal'), icon: IconExternalLink, action: () => openURL(url) })
+      }
+      const tracked = trustLinks && !link.unwrapped ? trackedLink(detail.id, url) : null
+      if (tracked?.destination) {
+        const destination = tracked.destination
+        items.push({ label: $t('trust.link.direct'), icon: IconExternalLink, action: () => openURL(destination) })
+      }
+    }
+    if (canScan) {
+      items.push({ label: $t('virustotal.scanLink'), icon: IconShieldSearch, action: () => void scanLink(url) })
+    }
+    return items
+  }
+
+  async function copyLink(url: string): Promise<void> {
+    try {
+      await navigator.clipboard.writeText(url)
+      toastSuccess($t('links.copied'))
+    } catch (err) {
+      toastError(errorMessage(err))
+    }
   }
 
   // the plain-text body is rendered by svelte rather than in the iframe, so its
   // links get the same menu directly.
   function onPlainContext(event: MouseEvent, url: string): void {
-    if (!canScan || url === '') {
+    if (!offerMenu || url === '') {
       return
     }
     event.preventDefault()
-    openContextMenu(event.clientX, event.clientY, [
-      { label: $t('virustotal.scanLink'), icon: IconShieldSearch, action: () => void scanLink(url) },
-    ])
+    openContextMenu(event.clientX, event.clientY, linkMenuItems(url))
   }
 
   async function scanLink(url: string): Promise<void> {
@@ -490,6 +1030,11 @@
   window.addEventListener('message', onWindowMessage)
 
   onDestroy(() => {
+    clearTimeout(showTimer)
+    clearTimeout(hideTimer)
+    dateRun += 1
+    clearTimeout(frameSpinnerTimer)
+    clearTimeout(frameGiveUpTimer)
     resizeObserver?.disconnect()
     cancelAnimationFrame(readyPollHandle)
     window.removeEventListener('message', onWindowMessage)
@@ -519,17 +1064,27 @@
     return text === key ? reason : text
   }
 
-  async function loadRemote(includeTrackers = false): Promise<void> {
+  // keepTrackers is the shield's "load images, keep trackers blocked": the
+  // pixels stay out whatever the block-tracking-pixels setting says.
+  async function loadRemote(includeTrackers = false, keepTrackers = false): Promise<void> {
+    const id = detail.id
     try {
-      const id = detail.id
-      const html = await getMessageHtml(id, true, includeTrackers)
-      setBodyHtml(id, html)
-      // the reader may have moved on while the html was fetched
+      if (remote) {
+        await remote.load(includeTrackers)
+      } else {
+        const html = keepTrackers ? await getMessageHtmlBlockingTrackers(id) : await getMessageHtml(id, true, includeTrackers)
+        setBodyHtml(id, html)
+        dispatch('html', { id, html })
+      }
+      // another message opened while this loaded: its remote state is its own.
       if (detail.id !== id) {
         return
       }
       remoteLoaded = true
       pixelsBlocked = !includeTrackers && trackers.length > 0
+      if (trustLinks) {
+        noteLoaded(id, !includeTrackers && (keepTrackers || $prefs.blockTrackingPixels) ? 'images' : 'all')
+      }
       pixelMenu = null
     } catch (err) {
       toastError(errorMessage(err))
@@ -569,9 +1124,42 @@
     }
   }
 
+  // trust whatever the remote source offers to trust, then show it now.
+  async function trustSource(includeTrackers = false): Promise<void> {
+    try {
+      await remote?.always?.run()
+      await loadRemote(includeTrackers)
+    } catch (err) {
+      toastError(errorMessage(err))
+    }
+  }
+
   // the load buttons, built as data so the split control that carries the
   // "load the pixels too" menu is written once rather than four times.
-  $: loadActions = [
+  $: loadActions = remote
+    ? [
+        {
+          key: 'once',
+          icon: IconPhoto,
+          label: $t('detail.mailBody.loadOnce'),
+          title: '',
+          run: (withPixels: boolean) => loadRemote(withPixels),
+        },
+        ...(remote.always
+          ? [
+              {
+                key: 'always',
+                icon: IconWorldCheck,
+                label: remote.always.label,
+                title: remote.always.title,
+                run: (withPixels: boolean) => trustSource(withPixels),
+              },
+            ]
+          : []),
+      ]
+    : mailLoadActions
+
+  $: mailLoadActions = [
     {
       key: 'once',
       icon: IconPhoto,
@@ -682,28 +1270,79 @@
   </div>
 {/if}
 
+{#if adaptive && detail.isHtml && $darkTheme}
+  <div class="colors-bar">
+    <button type="button" class="colors-btn" data-tip-anchor="mail-colors" on:click={flipColors}>
+      <Ph svg={paletteIcon} size={13} />
+      {adapted ? $t('reader.colors.original') : $t('reader.colors.adapt')}
+    </button>
+    {#if canKeep}
+      <button type="button" class="colors-link" on:click={keepForSender}>
+        {$t('reader.colors.keep').replace('{who}', senderLabel)}
+      </button>
+    {:else if canForget}
+      <button type="button" class="colors-link" on:click={forgetForSender}>
+        {$t('reader.colors.forget').replace('{who}', senderLabel)}
+      </button>
+    {/if}
+  </div>
+{/if}
+
 {#if detail.isHtml}
-  <iframe
-    class="body-frame"
-    title={$t('detail.mailBody.iframeTitle')}
-    sandbox="allow-same-origin allow-scripts allow-popups allow-top-navigation-by-user-activation"
-    bind:this={frame}
-    on:load={onFrameLoad}
-    style={`height:${frameHeight}px`}
-    {srcdoc}
-  ></iframe>
+  {#if !frameLoaded && frameSlow}
+    <Spinner inline label={$t('detail.loadingMessage')} />
+  {/if}
+  <!-- a new frame per message: swapping one frame's srcdoc could leave WebKit
+       painting the previous message's document under the new header. -->
+  {#key detail.id}
+    <iframe
+      class="body-frame"
+      class:adapted
+      class:sheet
+      class:loading={!frameLoaded}
+      title={$t('detail.mailBody.iframeTitle')}
+      sandbox="allow-same-origin allow-scripts allow-popups allow-top-navigation-by-user-activation"
+      bind:this={frame}
+      on:load={onFrameLoad}
+      style={`height:${frameHeight}px`}
+      {srcdoc}
+    ></iframe>
+  {/key}
 {:else}
   <!-- dir="auto" for the same reason as the html document above: a plain-text
        message written right to left reads that way, whatever the interface is
        set to. -->
-  <pre dir="auto" class="body-plain mono selectable" style={`font-size:${$prefs.messageFontSize}px`}>{#each plainSegments as segment}{#if segment.href}<a
+  <!-- the date marks are spans around the text they hold, so what the body
+       says is the same with or without them. -->
+  <!-- svelte-ignore a11y-no-static-element-interactions a11y-mouse-events-have-key-events -->
+  <pre dir="auto" class="body-plain mono selectable" class:roomy style={`font-size:${textSize}px;--date-glyph:url("${calendarGlyph('currentColor')}")`} bind:this={plainBox}>{#each plainSegments as segment, si}{#if segment.href}<a
         class="plain-link"
         href={segment.href}
-        on:click|preventDefault={() => openURL(segment.href ?? '')}
+        on:click|preventDefault={() => openLink(segment.href ?? '')}
         on:contextmenu={(e) => onPlainContext(e, segment.href ?? '')}
         on:mouseenter={() => showHover(segment.href ?? '')}
         on:mouseleave={() => showHover('')}
-      >{segment.text}</a>{#if $linkVerdicts.has(segment.href ?? '')}<VerdictBadge verdict={$linkVerdicts.get(segment.href ?? '')!} size={12} />{/if}{:else}<Highlight text={segment.text} terms={markTerms} />{/if}{/each}</pre>
+      >{segment.text}</a>{#if $linkVerdicts.has(segment.href ?? '')}<VerdictBadge verdict={$linkVerdicts.get(segment.href ?? '')!} size={12} />{/if}{:else}{#each plainSplit[si] ?? [{ text: segment.text, date: -1, first: false }] as part}{#if part.date >= 0}{#if part.first}<span
+              class="date-mark"
+              class:on={peek?.id === part.date}
+              data-pelton-date={part.date}
+              role="button"
+              tabindex="0"
+              aria-haspopup="dialog"
+              aria-label={mentions[part.date] ? $t('dateHint.mark').replace('{when}', describe(mentions[part.date])) : undefined}
+              on:mouseenter={() => hoverDate(part.date, 'hover')}
+              on:mouseleave={() => hoverDate(null, 'hover')}
+              on:focus={() => hoverDate(part.date, 'focus')}
+              on:blur={() => hoverDate(null, 'focus')}
+              on:click={() => openPeek(part.date, true)}
+              on:keydown={(e) => onPlainDateKey(e, part.date)}
+            ><Highlight text={part.text} terms={markTerms} /></span>{:else}<span
+              class="date-mark"
+              class:on={peek?.id === part.date}
+              data-pelton-date={part.date}
+              on:mouseenter={() => hoverDate(part.date, 'hover')}
+              on:mouseleave={() => hoverDate(null, 'hover')}
+            ><Highlight text={part.text} terms={markTerms} /></span>{/if}{:else}<Highlight text={part.text} terms={markTerms} />{/if}{/each}{/if}{/each}</pre>
 {/if}
 
 {#if quoteSplit?.hasQuote}
@@ -719,6 +1358,21 @@
   </button>
 {/if}
 
+{#if peek && peekMention}
+  {#await loadDatePeek() then m}
+    <svelte:component
+      this={m.default}
+      slot={{ start: peekMention.start, end: peekMention.end, allDay: peekMention.allDay }}
+      anchor={peek.anchor}
+      pinned={peek.pinned}
+      messageId={detail.id}
+      on:hold={holdPeek}
+      on:release={releasePeek}
+      on:close={(e) => closePeek(e.detail)}
+    />
+  {/await}
+{/if}
+
 {#if hoverUrl}
   <div class="link-hover mono" aria-hidden="true" bind:this={hoverBox}>
     <span
@@ -727,6 +1381,12 @@
       style={`--slide:-${hoverSlide}px;--slide-time:${Math.max(3, hoverSlide / 40)}s`}
       bind:this={hoverText}>{hoverUrl}</span
     >
+    {#if hoverCleaned}
+      <span class="link-hover-tag">{$t('links.cleaned')}</span>
+    {/if}
+    {#if hoverVia}
+      <span class="link-hover-tag">{$t('trust.link.viaHover').replace('{host}', hoverVia)}</span>
+    {/if}
   </div>
 {/if}
 
@@ -780,6 +1440,19 @@
   .link-hover-text {
     display: inline-block;
     padding: var(--space-1) var(--space-2);
+  }
+
+  .link-hover-tag {
+    position: absolute;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    display: flex;
+    align-items: center;
+    padding: 0 var(--space-2) 0 var(--space-3);
+    background: var(--surface-overlay);
+    color: var(--text-tertiary);
+    font-family: var(--font-ui);
   }
 
   .link-hover-text.sliding {
@@ -1016,6 +1689,73 @@
     zoom: calc(1 / var(--ui-scale, 1));
   }
 
+  /* adapted mail is drawn on the theme's own surface. */
+  .body-frame.adapted {
+    background: var(--surface-raised);
+  }
+
+  /* designed mail in a dark theme keeps its colours on a light sheet. */
+  .body-frame.sheet {
+    border-radius: var(--radius-control);
+  }
+
+  .body-plain.roomy {
+    line-height: var(--reading-leading);
+  }
+
+  .colors-bar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: flex-end;
+    gap: var(--space-2);
+    margin-bottom: var(--space-2);
+  }
+
+  .colors-btn,
+  .colors-link {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-1);
+    height: var(--chip-height);
+    padding: 0 var(--space-2);
+    border-radius: var(--radius-control);
+    font: inherit;
+    font-size: var(--fz-meta);
+    cursor: var(--cursor-action);
+    transition:
+      background-color var(--motion-fast) var(--ease-out),
+      color var(--motion-fast) var(--ease-out);
+  }
+
+  .colors-btn {
+    border: var(--hairline) solid var(--border-default);
+    background: transparent;
+    color: var(--text-secondary);
+  }
+
+  .colors-btn:hover {
+    background: var(--surface-hover);
+    color: var(--text-primary);
+  }
+
+  .colors-link {
+    border: none;
+    background: transparent;
+    color: var(--text-tertiary);
+    text-decoration: underline;
+    text-underline-offset: 2px;
+  }
+
+  .colors-link:hover {
+    color: var(--text-primary);
+  }
+
+  /* the frame's document is still loading: keep the space, show nothing. */
+  .body-frame.loading {
+    visibility: hidden;
+  }
+
   .body-plain {
     margin: 0;
     font-size: var(--fz-body);
@@ -1029,5 +1769,59 @@
     color: var(--accent);
     text-decoration: underline;
     cursor: var(--cursor-action);
+  }
+
+  /* a date the mail names: quiet until the pointer or the focus reaches it. */
+  .date-mark {
+    position: relative;
+    border-radius: var(--radius-control);
+    outline: none;
+    cursor: var(--cursor-action);
+    transition:
+      background-color var(--motion-fast) var(--ease-out),
+      box-shadow var(--motion-fast) var(--ease-out);
+  }
+
+  .date-mark:hover,
+  .date-mark.on,
+  .date-mark:focus-visible {
+    background: color-mix(in srgb, var(--accent) 14%, transparent);
+    box-shadow: 0 0 0 var(--space-1) color-mix(in srgb, var(--accent) 14%, transparent);
+  }
+
+  .date-mark:focus-visible {
+    box-shadow: 0 0 0 calc(var(--hairline) * 2) var(--accent);
+  }
+
+  .date-mark[tabindex]:is(:hover, .on, :focus-visible)::before {
+    content: '';
+    position: absolute;
+    inset-inline-start: -0.3em;
+    top: -0.95em;
+    width: 0.95em;
+    height: 0.95em;
+    border-radius: var(--radius-control);
+    background: var(--surface-overlay);
+    box-shadow:
+      0 0 0 var(--hairline) var(--border-default),
+      var(--shadow-overlay);
+    pointer-events: none;
+  }
+
+  .date-mark[tabindex]:is(:hover, .on, :focus-visible)::after {
+    content: '';
+    position: absolute;
+    inset-inline-start: -0.2em;
+    top: -0.85em;
+    width: 0.75em;
+    height: 0.75em;
+    background: var(--accent);
+    -webkit-mask: var(--date-glyph) center / contain no-repeat;
+    mask: var(--date-glyph) center / contain no-repeat;
+    pointer-events: none;
+  }
+
+  :global(:root[data-reduce-motion]) .date-mark {
+    transition: none;
   }
 </style>

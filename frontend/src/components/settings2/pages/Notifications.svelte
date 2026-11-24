@@ -1,14 +1,15 @@
 <script lang="ts">
   // the Notifications page: where in-app toasts appear, whether new mail raises
-  // a system notification, the unread badge on the dock or tray icon, and the
-  // senders that always notify.
+  // a system notification, the unread badge on the dock or tray icon, the
+  // senders that always notify, and the focus schedule.
   import Card from '../ui/Card.svelte'
   import Row from '../ui/Row.svelte'
   import ToggleSwitch from '../../common/ToggleSwitch.svelte'
   import ToastPositionPicker from '../../settings/ToastPositionPicker.svelte'
   import ToastPreview from '../skeletons/ToastPreview.svelte'
   import DesktopPreview from '../skeletons/DesktopPreview.svelte'
-  import { prefs, setToastPosition, setNotifyNewMail, setUnreadBadgeEnabled } from '../../../stores/prefs'
+  import FocusSchedule from '../FocusSchedule.svelte'
+  import { prefs, setToastPosition, setNotifyNewMail, setNotifyAction, setUnreadBadgeEnabled } from '../../../stores/prefs'
   import { isMac, t } from '../../../lib/i18n'
 
   // the unread badge is a count on the dock tile on macOS and a dot on the tray
@@ -51,6 +52,22 @@
       {$t('vip.manage')}
     </button>
   </Row>
+</Card>
+
+<Card title={$t('notify.actions.title')}>
+  <Row id="notify-action-archive" label={$t('notify.actions.archive')} hint={$t('notify.actions.hint')}>
+    <ToggleSwitch checked={$prefs.notifyActionArchive} label={$t('notify.actions.archive')} on:change={(e) => setNotifyAction('archive', e.detail)} />
+  </Row>
+  <Row id="notify-action-mark-read" label={$t('notify.actions.markRead')}>
+    <ToggleSwitch checked={$prefs.notifyActionMarkRead} label={$t('notify.actions.markRead')} on:change={(e) => setNotifyAction('markRead', e.detail)} />
+  </Row>
+  <Row id="notify-action-reply" label={$t('notify.actions.reply')}>
+    <ToggleSwitch checked={$prefs.notifyActionReply} label={$t('notify.actions.reply')} on:change={(e) => setNotifyAction('reply', e.detail)} />
+  </Row>
+</Card>
+
+<Card title={$t('focus.title')}>
+  <FocusSchedule />
 </Card>
 
 {#if vipOpen}

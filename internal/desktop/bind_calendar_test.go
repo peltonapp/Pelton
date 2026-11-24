@@ -240,10 +240,32 @@ func remoteSetup(t *testing.T, server *caldavtest.Server) (*App, storage.Calenda
 		t.Fatalf("first sync: %v", err)
 	}
 	cals, err := a.store.ListAccountCalendars(a.ctx, acct.ID)
-	if err != nil || len(cals) != 1 {
+	if err != nil || len(cals) != 2 {
 		t.Fatalf("calendars = %+v, %v", cals, err)
 	}
-	return a, cals[0]
+	for _, c := range cals {
+		if c.Path == caldavtest.WorkPath {
+			return a, c
+		}
+	}
+	t.Fatalf("no work calendar in %+v", cals)
+	return nil, storage.Calendar{}
+}
+
+// remoteTaskList is the server's task list after remoteSetup's first sync.
+func remoteTaskList(t *testing.T, a *App) storage.Calendar {
+	t.Helper()
+	cals, err := a.store.ListCalendars(a.ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, c := range cals {
+		if c.Path == caldavtest.TasksPath {
+			return c
+		}
+	}
+	t.Fatal("no remote task list")
+	return storage.Calendar{}
 }
 
 func serverEvent(uid, summary, start string) string {
@@ -619,7 +641,7 @@ func TestCalendarSettingsRefusesInvalid(t *testing.T) {
 		name   string
 		change func(*CalendarSettingsDTO)
 	}{
-		{"unknown view", func(s *CalendarSettingsDTO) { s.DefaultView = "year" }},
+		{"unknown view", func(s *CalendarSettingsDTO) { s.DefaultView = "decade" }},
 		{"week start", func(s *CalendarSettingsDTO) { s.WeekStart = 7 }},
 		{"end before start", func(s *CalendarSettingsDTO) { s.WorkDayStart, s.WorkDayEnd = 600, 540 }},
 		{"past midnight", func(s *CalendarSettingsDTO) { s.WorkDayEnd = 25 * 60 }},

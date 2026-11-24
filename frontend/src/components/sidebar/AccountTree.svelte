@@ -12,6 +12,7 @@
   import { openCreateFolder } from '../../stores/folderdialog'
   import { folderDragAccount, startFolderDrag, endFolderDrag } from '../../stores/sidebardrag'
   import { reorder, type ReorderDetail } from '../../lib/reorder'
+  import { maildragSpring } from '../../stores/maildrag'
   import { refreshSidebar } from '../../stores/accounts'
   import { missingPassword, askForPassword } from '../../stores/passwordprompt'
   import { failedSyncs, showSyncFailure } from '../../stores/syncfailures'
@@ -20,6 +21,12 @@
   import { toastError, errorMessage } from '../../stores/toast'
   import type { Account, Folder } from '../../lib/types'
   import { t } from '../../lib/i18n'
+  import { lockVaultsNow, openVaultUnlock } from '../../stores/vaultdialog'
+  import { openContextMenu } from '../../stores/contextmenu'
+  import SidebarRow from './SidebarRow.svelte'
+  import Ph from '../common/Ph.svelte'
+  import lockIcon from '@phosphor-icons/core/assets/duotone/lock-simple-duotone.svg?raw'
+  import openIcon from '@phosphor-icons/core/assets/duotone/lock-simple-open-duotone.svg?raw'
 
   export let account: Account
   export let folders: Folder[]
@@ -62,10 +69,44 @@
   // one of the two is the user's to fix. A missing password already has its own
   // mark, so this stands down for it rather than showing two (#322).
   $: syncFailure = needsPassword ? undefined : $failedSyncs.find((s) => s.accountId === account.id)
+
+  // mail held over a collapsed account opens it, so its folders can take the drop.
+  function springOpen(): void {
+    if (!expanded) {
+      toggleAccountCollapsed(account.id)
+    }
+  }
+
+  // one row per vault with folders here: unlock where its folders are hidden
+  // (always in the classic design), and lock now while it is open.
+  $: vaultRows = [...new Map(folders.filter((f) => f.vaultId).map((f) => [f.vaultId, f])).values()]
+    .filter((f) => !f.vaultLocked || $prefs.design === 'classic' || f.vaultHidden)
+    .map((f) => ({ id: f.vaultId ?? 0, locked: f.vaultLocked ?? false }))
+  // the vault store clears the screen on lock, so it loads once there is a
+  // vault to speak of.
+  $: if (folders.some((f) => f.vaultId)) {
+    void import('../../stores/mailvault')
+  }
+
+  function onAccountContext(event: MouseEvent): void {
+    if ($prefs.design !== 'new' || account.local || folders.some((f) => f.vaultId)) {
+      return
+    }
+    event.preventDefault()
+    const member = { accountId: account.id, folderId: 0 }
+    openContextMenu(event.clientX, event.clientY, [
+      {
+        label: $t('mailvault.protectAccount'),
+        icon: IconFolderPlus,
+        action: () =>
+          void import('../../stores/mailvault').then((m) => m.protectWithVault(member)).catch((err) => toastError(errorMessage(err))),
+      },
+    ])
+  }
 </script>
 
 <section class="account" class:dimmed data-reorder-id={account.id}>
-  <div class="account-row">
+  <div class="account-row" use:maildragSpring={springOpen}>
     <button
       type="button"
       class="account-head"
@@ -73,6 +114,7 @@
       title={account.local ? $t('sidebar.localFoldersHint') : account.email}
       aria-expanded={expanded}
       on:click={() => toggleAccountCollapsed(account.id)}
+      on:contextmenu={onAccountContext}
     >
       <span class="account-caret" aria-hidden="true"><IconChevronRight size={13} stroke={1.9} /></span>
       <span class="account-name">{label}</span>
@@ -126,6 +168,14 @@
         {/each}
       </div>
     {/if}
+    {#each vaultRows as v (v.id)}
+      <SidebarRow
+        label={v.locked ? $t('mailvault.unlock') : $t('mailvault.lockNow')}
+        on:select={() => (v.locked ? openVaultUnlock(v.id) : lockVaultsNow())}
+      >
+        <Ph svg={v.locked ? lockIcon : openIcon} size={15} />
+      </SidebarRow>
+    {/each}
   {/if}
 </section>
 

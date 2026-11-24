@@ -13,7 +13,77 @@ import { Call as $Call, CancellablePromise as $CancellablePromise, Create as $Cr
 
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore: Unused imports
+import * as chat$0 from "../chat/models.js";
+// eslint-disable-next-line @typescript-eslint/ban-ts-comment
+// @ts-ignore: Unused imports
+import * as mailimport$0 from "../mailimport/models.js";
+// eslint-disable-next-line @typescript-eslint/ban-ts-comment
+// @ts-ignore: Unused imports
+import * as scripting$0 from "../scripting/models.js";
+// eslint-disable-next-line @typescript-eslint/ban-ts-comment
+// @ts-ignore: Unused imports
+import * as sieve$0 from "../sieve/models.js";
+
+// eslint-disable-next-line @typescript-eslint/ban-ts-comment
+// @ts-ignore: Unused imports
 import * as $models from "./models.js";
+
+/**
+ * AIProviderKinds lists the kinds of provider that can be added.
+ */
+export function AIProviderKinds(): $CancellablePromise<$models.AIKindDTO[]> {
+    return $Call.ByID(1056614892).then(($result: any) => {
+        return $$createType1($result);
+    });
+}
+
+/**
+ * AIProviders lists the providers the user set up. It contacts nothing.
+ */
+export function AIProviders(): $CancellablePromise<$models.AIProviderDTO[]> {
+    return $Call.ByID(1938858766).then(($result: any) => {
+        return $$createType3($result);
+    });
+}
+
+/**
+ * AIScriptOptions returns a script's AI switches, all off when never set.
+ */
+export function AIScriptOptions(scriptID: number): $CancellablePromise<$models.AIScriptOptionsDTO> {
+    return $Call.ByID(3157504915, scriptID).then(($result: any) => {
+        return $$createType4($result);
+    });
+}
+
+/**
+ * AcceptContactKey makes the key Pelton currently finds for addr the one to
+ * send with, after a key change. fingerprint is the key the user was shown,
+ * so a key that changed again in the meantime is not accepted unseen.
+ */
+export function AcceptContactKey(addr: string, fingerprint: string): $CancellablePromise<void> {
+    return $Call.ByID(1981919797, addr, fingerprint);
+}
+
+/**
+ * AcceptPromise makes a task of a suggestion, with the user's edits.
+ */
+export function AcceptPromise(edit: $models.PromiseEditDTO): $CancellablePromise<$models.PromiseDTO> {
+    return $Call.ByID(4256910351, edit).then(($result: any) => {
+        return $$createType5($result);
+    });
+}
+
+/**
+ * AcceptScriptProposal applies a proposed change. When it changes the code,
+ * the trigger or its parameters, the declared permissions or where the
+ * script is placed, the update switches the script off and clears its
+ * approvals and allowances, so the user approves the new version afresh.
+ */
+export function AcceptScriptProposal(id: number): $CancellablePromise<$models.ScriptDTO> {
+    return $Call.ByID(3375767223, id).then(($result: any) => {
+        return $$createType6($result);
+    });
+}
 
 /**
  * AccountOAuthProvider returns the oauth provider key an account signs in with
@@ -41,7 +111,7 @@ export function AccountProxyPasswordStored(accountID: number): $CancellablePromi
  */
 export function AccountSyncStates(): $CancellablePromise<$models.AccountSyncStateDTO[]> {
     return $Call.ByID(3929921312).then(($result: any) => {
-        return $$createType1($result);
+        return $$createType8($result);
     });
 }
 
@@ -58,7 +128,7 @@ export function AccountSyncStates(): $CancellablePromise<$models.AccountSyncStat
  */
 export function AccountsNeedingPassword(): $CancellablePromise<$models.AccountDTO[]> {
     return $Call.ByID(339443463).then(($result: any) => {
-        return $$createType3($result);
+        return $$createType10($result);
     });
 }
 
@@ -67,7 +137,7 @@ export function AccountsNeedingPassword(): $CancellablePromise<$models.AccountDT
  */
 export function ActiveProfile(): $CancellablePromise<$models.ProfileDTO> {
     return $Call.ByID(2776188557).then(($result: any) => {
-        return $$createType4($result);
+        return $$createType11($result);
     });
 }
 
@@ -77,7 +147,7 @@ export function ActiveProfile(): $CancellablePromise<$models.ProfileDTO> {
  */
 export function AddAddressBook(req: $models.AddressBookRequest): $CancellablePromise<$models.AddressBookDTO> {
     return $Call.ByID(741494838, req).then(($result: any) => {
-        return $$createType5($result);
+        return $$createType12($result);
     });
 }
 
@@ -87,8 +157,37 @@ export function AddAddressBook(req: $models.AddressBookRequest): $CancellablePro
  */
 export function AddCalendarAccount(req: $models.CalendarAccountRequest): $CancellablePromise<$models.CalendarAccountDTO> {
     return $Call.ByID(3265687970, req).then(($result: any) => {
-        return $$createType6($result);
+        return $$createType13($result);
     });
+}
+
+/**
+ * AddFeed subscribes to a feed, fetches it at once and returns it. The site's
+ * icon follows in the background.
+ */
+export function AddFeed(address: string, folderID: number, title: string): $CancellablePromise<$models.FeedDTO> {
+    return $Call.ByID(1098494797, address, folderID, title).then(($result: any) => {
+        return $$createType14($result);
+    });
+}
+
+/**
+ * AddMailToProject files the conversations of these messages under a
+ * project, or under one of its cards when taskUID is set. The whole
+ * conversation follows, replies to come included. It returns how many
+ * conversations were added.
+ */
+export function AddMailToProject(projectID: number, messageIDs: number[], taskUID: string): $CancellablePromise<number> {
+    return $Call.ByID(2580746984, projectID, messageIDs, taskUID);
+}
+
+/**
+ * AddNoteToProject puts a note of the notes folder in a project by writing
+ * the project into its front matter. A note in another project moves to this
+ * one. Nothing else in the file changes.
+ */
+export function AddNoteToProject(rel: string, projectID: number): $CancellablePromise<void> {
+    return $Call.ByID(3137963977, rel, projectID);
 }
 
 /**
@@ -99,8 +198,17 @@ export function AddCalendarAccount(req: $models.CalendarAccountRequest): $Cancel
  */
 export function AddOAuthAccount(req: $models.AddAccountRequest): $CancellablePromise<$models.AccountDTO> {
     return $Call.ByID(3734331747, req).then(($result: any) => {
-        return $$createType2($result);
+        return $$createType9($result);
     });
+}
+
+/**
+ * AddOCRLanguage asks for a tesseract language file (.traineddata, optionally
+ * gzipped) and copies it into the ocr folder. Returns its code, or "" if the
+ * user canceled. A file with the same code replaces the old one.
+ */
+export function AddOCRLanguage(): $CancellablePromise<string> {
+    return $Call.ByID(2447172345);
 }
 
 /**
@@ -110,8 +218,44 @@ export function AddOAuthAccount(req: $models.AddAccountRequest): $CancellablePro
  */
 export function AddPasswordAccount(req: $models.AddAccountRequest): $CancellablePromise<$models.AccountDTO> {
     return $Call.ByID(2794757103, req).then(($result: any) => {
-        return $$createType2($result);
+        return $$createType9($result);
     });
+}
+
+/**
+ * AddProjectColumn adds a column at the end of a board.
+ */
+export function AddProjectColumn(projectID: number, name: string): $CancellablePromise<$models.ProjectColumnDTO> {
+    return $Call.ByID(532815788, projectID, name).then(($result: any) => {
+        return $$createType15($result);
+    });
+}
+
+/**
+ * AddProjectPerson adds someone to a project by address. Their mail is what
+ * the reader suggests filing under the project.
+ */
+export function AddProjectPerson(projectID: number, email: string, name: string): $CancellablePromise<void> {
+    return $Call.ByID(3943442459, projectID, email, name);
+}
+
+/**
+ * AddTaskToProject puts an existing task on a board, at the end of a column:
+ * the one given, or for columnID 0 the done column for a completed task and
+ * the first other column for an open one. A task on another board leaves it.
+ */
+export function AddTaskToProject(projectID: number, taskUID: string, columnID: number): $CancellablePromise<$models.ProjectCardDTO> {
+    return $Call.ByID(2594441270, projectID, taskUID, columnID).then(($result: any) => {
+        return $$createType16($result);
+    });
+}
+
+/**
+ * AddToMailVault puts another folder, or a whole account when folderID is 0,
+ * into an unlocked vault and seals its mail.
+ */
+export function AddToMailVault(vaultID: number, accountID: number, folderID: number): $CancellablePromise<void> {
+    return $Call.ByID(3212150981, vaultID, accountID, folderID);
 }
 
 /**
@@ -127,7 +271,7 @@ export function AddVIPSender(address: string): $CancellablePromise<void> {
  */
 export function AgentActions(): $CancellablePromise<$models.AgentActionDTO[]> {
     return $Call.ByID(2594692670).then(($result: any) => {
-        return $$createType8($result);
+        return $$createType18($result);
     });
 }
 
@@ -136,7 +280,7 @@ export function AgentActions(): $CancellablePromise<$models.AgentActionDTO[]> {
  */
 export function AgentProposals(): $CancellablePromise<$models.AgentProposalDTO[]> {
     return $Call.ByID(1765161650).then(($result: any) => {
-        return $$createType10($result);
+        return $$createType20($result);
     });
 }
 
@@ -147,7 +291,7 @@ export function AgentProposals(): $CancellablePromise<$models.AgentProposalDTO[]
  */
 export function AllAccounts(): $CancellablePromise<$models.AccountDTO[]> {
     return $Call.ByID(2591081141).then(($result: any) => {
-        return $$createType3($result);
+        return $$createType10($result);
     });
 }
 
@@ -175,8 +319,24 @@ export function AllowRemoteForMessage(messageID: number): $CancellablePromise<vo
  */
 export function AnswerInvite(req: $models.InviteAnswerRequest): $CancellablePromise<$models.InviteAnswerResultDTO> {
     return $Call.ByID(2905446161, req).then(($result: any) => {
-        return $$createType11($result);
+        return $$createType21($result);
     });
+}
+
+/**
+ * AnswerScriptAsk answers a question a running script asked. cancelled
+ * ends the run as cancelled.
+ */
+export function AnswerScriptAsk(id: string, value: any, cancelled: boolean): $CancellablePromise<void> {
+    return $Call.ByID(1403071252, id, value, cancelled);
+}
+
+/**
+ * AnswerScriptConfirm answers a confirmation a script asked for. always lets
+ * the script make that call without asking from now on.
+ */
+export function AnswerScriptConfirm(id: string, allow: boolean, always: boolean): $CancellablePromise<void> {
+    return $Call.ByID(2952100413, id, allow, always);
 }
 
 /**
@@ -193,7 +353,7 @@ export function AppVersion(): $CancellablePromise<string> {
  */
 export function ApplyInvite(messageID: number): $CancellablePromise<$models.InviteAnswerResultDTO> {
     return $Call.ByID(1278698311, messageID).then(($result: any) => {
-        return $$createType11($result);
+        return $$createType21($result);
     });
 }
 
@@ -213,7 +373,101 @@ export function ApproveAgentProposal(id: number): $CancellablePromise<void> {
  */
 export function ArchiveMessage(id: number): $CancellablePromise<$models.ArchiveUndoDTO> {
     return $Call.ByID(875491147, id).then(($result: any) => {
-        return $$createType12($result);
+        return $$createType22($result);
+    });
+}
+
+/**
+ * ArchiveMessages archives many messages the way ArchiveMessage archives one,
+ * including the export-on-archive copy, but with one server session per
+ * account and one MOVE per source folder rather than a login per message. A
+ * message that is already in its archive, or whose account has none, fails on
+ * its own without stopping the rest.
+ */
+export function ArchiveMessages(ids: number[]): $CancellablePromise<$models.BulkArchiveDTO> {
+    return $Call.ByID(1575130408, ids).then(($result: any) => {
+        return $$createType23($result);
+    });
+}
+
+/**
+ * AttachProjectNote attaches one of a project's notes to a card of it.
+ */
+export function AttachProjectNote(noteID: number, taskUID: string): $CancellablePromise<void> {
+    return $Call.ByID(554748560, noteID, taskUID);
+}
+
+/**
+ * AttachVaultNote attaches a note of the notes folder to a card. A note in no
+ * project yet joins the card's project.
+ */
+export function AttachVaultNote(rel: string, taskUID: string): $CancellablePromise<void> {
+    return $Call.ByID(2609321113, rel, taskUID);
+}
+
+/**
+ * AutoEncryptStatus says what would happen to a message from this mailbox to
+ * these recipients. It reads only what is stored; it never asks the network.
+ */
+export function AutoEncryptStatus(q: $models.AutoEncryptQuery): $CancellablePromise<$models.AutoEncryptStatusDTO> {
+    return $Call.ByID(2467473856, q).then(($result: any) => {
+        return $$createType24($result);
+    });
+}
+
+/**
+ * BackupOwnKey writes a mailbox's key to a file the user picks, protected by
+ * a passphrase they chose, and returns the path; "" when they cancelled.
+ */
+export function BackupOwnKey(accountID: number, passphrase: string): $CancellablePromise<string> {
+    return $Call.ByID(2098640855, accountID, passphrase);
+}
+
+/**
+ * BlockTimeForMessages makes a block for each mail, to deal with it. With at
+ * (rfc3339) the blocks follow each other from there; without, each takes the
+ * next free time of the default length. The blocks link back to their mail.
+ */
+export function BlockTimeForMessages(ids: number[], at: string): $CancellablePromise<$models.TimeBlockDTO[]> {
+    return $Call.ByID(3776821057, ids, at).then(($result: any) => {
+        return $$createType26($result);
+    });
+}
+
+/**
+ * BlockTimeForTask blocks the first free time for a task, of what it still
+ * needs, and writes it to the calendar when the settings say so.
+ */
+export function BlockTimeForTask(taskID: number, minutes: number): $CancellablePromise<$models.TimeBlockDTO> {
+    return $Call.ByID(3879881152, taskID, minutes).then(($result: any) => {
+        return $$createType25($result);
+    });
+}
+
+/**
+ * BlockUnsubscribedSender moves new mail from a sender the user unsubscribed
+ * from to junk ("junk") or trash ("trash"), or stops ("") doing so. Mail
+ * already in the mailbox is left where it is.
+ */
+export function BlockUnsubscribedSender(sender: string, where: string): $CancellablePromise<void> {
+    return $Call.ByID(3854901137, sender, where);
+}
+
+/**
+ * CLIInstallInfo describes installing the command line tool on this system.
+ */
+export function CLIInstallInfo(): $CancellablePromise<$models.CLIInstallDTO> {
+    return $Call.ByID(927111087).then(($result: any) => {
+        return $$createType27($result);
+    });
+}
+
+/**
+ * CLILog returns the newest requests of the pelton command.
+ */
+export function CLILog(): $CancellablePromise<$models.CLILogEntryDTO[]> {
+    return $Call.ByID(2678506410).then(($result: any) => {
+        return $$createType29($result);
     });
 }
 
@@ -223,6 +477,43 @@ export function ArchiveMessage(id: number): $CancellablePromise<$models.ArchiveU
  */
 export function CancelDownload(): $CancellablePromise<void> {
     return $Call.ByID(3133847180);
+}
+
+/**
+ * CancelFollowUp drops a reminder, waiting or fired.
+ */
+export function CancelFollowUp(id: number): $CancellablePromise<void> {
+    return $Call.ByID(3277520452, id);
+}
+
+/**
+ * CancelImportJob stops a job for good. What it already imported stays.
+ */
+export function CancelImportJob(id: number): $CancellablePromise<void> {
+    return $Call.ByID(2389476896, id);
+}
+
+/**
+ * CancelOutboxSend stops a message on its way out. A waiting message is taken
+ * out of the queue; one being transmitted is aborted when the server has not
+ * yet accepted it. Either way it goes back to the Drafts folder when the
+ * request it was written from is known. When the draft cannot be put there
+ * (an encrypted message, a mailbox without a server, a failed upload) the
+ * request is returned for a composer instead, and a message sent before a
+ * restart stays in the outbox as a failed send. Nothing is dropped.
+ */
+export function CancelOutboxSend(id: number): $CancellablePromise<$models.OutboxCancelDTO> {
+    return $Call.ByID(838796659, id).then(($result: any) => {
+        return $$createType30($result);
+    });
+}
+
+/**
+ * CancelScriptRun cancels a run in progress by the id its progress reports
+ * carry.
+ */
+export function CancelScriptRun(liveID: number): $CancellablePromise<void> {
+    return $Call.ByID(1484212152, liveID);
 }
 
 /**
@@ -236,6 +527,385 @@ export function CancelSend(id: number): $CancellablePromise<boolean> {
 }
 
 /**
+ * ChangeLockPassphrase replaces the passphrase once current has been checked.
+ */
+export function ChangeLockPassphrase(current: string, next: string): $CancellablePromise<$models.LockAuthResultDTO> {
+    return $Call.ByID(2966328469, current, next).then(($result: any) => {
+        return $$createType31($result);
+    });
+}
+
+/**
+ * ChangeMailVaultPassphrase rewraps a vault's key under a new passphrase. The
+ * current one is checked like an unlock, with the same waits.
+ */
+export function ChangeMailVaultPassphrase(id: number, current: string, next: string): $CancellablePromise<$models.MailVaultAuthDTO> {
+    return $Call.ByID(1229027963, id, current, next).then(($result: any) => {
+        return $$createType32($result);
+    });
+}
+
+/**
+ * ChatAcceptVerification accepts a verification request.
+ */
+export function ChatAcceptVerification(txn: string): $CancellablePromise<void> {
+    return $Call.ByID(980551571, txn);
+}
+
+/**
+ * ChatAvatar returns a small mxc picture as a data URL.
+ */
+export function ChatAvatar(mxc: string): $CancellablePromise<string> {
+    return $Call.ByID(4069693033, mxc);
+}
+
+/**
+ * ChatCancelSSO abandons a browser sign-in that is waiting.
+ */
+export function ChatCancelSSO(): $CancellablePromise<void> {
+    return $Call.ByID(1152860149);
+}
+
+/**
+ * ChatCancelVerification stops a verification; mismatch says the emoji did
+ * not match.
+ */
+export function ChatCancelVerification(txn: string, mismatch: boolean): $CancellablePromise<void> {
+    return $Call.ByID(2982385885, txn, mismatch);
+}
+
+/**
+ * ChatConfirmSAS says the emoji match.
+ */
+export function ChatConfirmSAS(txn: string): $CancellablePromise<void> {
+    return $Call.ByID(1755948977, txn);
+}
+
+/**
+ * ChatCreateRoom creates a room and returns its id.
+ */
+export function ChatCreateRoom(req: chat$0.CreateRoomRequest): $CancellablePromise<string> {
+    return $Call.ByID(1852075887, req);
+}
+
+/**
+ * ChatDevices lists the user's sessions.
+ */
+export function ChatDevices(): $CancellablePromise<chat$0.Device[]> {
+    return $Call.ByID(3482534507).then(($result: any) => {
+        return $$createType34($result);
+    });
+}
+
+/**
+ * ChatDiscover finds the homeserver for a server name, Matrix ID or URL and
+ * the ways it offers to sign in.
+ */
+export function ChatDiscover(input: string): $CancellablePromise<chat$0.Server> {
+    return $Call.ByID(3212755135, input).then(($result: any) => {
+        return $$createType35($result);
+    });
+}
+
+/**
+ * ChatDismissVerification forgets a finished verification.
+ */
+export function ChatDismissVerification(txn: string): $CancellablePromise<void> {
+    return $Call.ByID(2819119663, txn);
+}
+
+/**
+ * ChatInlineImage returns an mxc image from message HTML as a data URL.
+ */
+export function ChatInlineImage(mxc: string): $CancellablePromise<string> {
+    return $Call.ByID(1312516466, mxc);
+}
+
+/**
+ * ChatInvite invites a person to a room.
+ */
+export function ChatInvite(roomID: string, userID: string): $CancellablePromise<void> {
+    return $Call.ByID(1634257721, roomID, userID);
+}
+
+/**
+ * ChatJoin joins a room by address or link, or accepts an invite.
+ */
+export function ChatJoin(target: string): $CancellablePromise<string> {
+    return $Call.ByID(3245457056, target);
+}
+
+/**
+ * ChatLeave leaves a room or declines an invite.
+ */
+export function ChatLeave(roomID: string): $CancellablePromise<void> {
+    return $Call.ByID(2259134095, roomID);
+}
+
+/**
+ * ChatLoginPassword signs in with a user name and password.
+ */
+export function ChatLoginPassword(homeserver: string, user: string, password: string): $CancellablePromise<void> {
+    return $Call.ByID(3773749792, homeserver, user, password);
+}
+
+/**
+ * ChatLoginSSO signs in through the homeserver's single sign-on page in the
+ * system browser, returning once that finished, failed or was cancelled.
+ */
+export function ChatLoginSSO(homeserver: string, providerID: string): $CancellablePromise<void> {
+    return $Call.ByID(850363036, homeserver, providerID);
+}
+
+/**
+ * ChatLoginToken signs in with a login token.
+ */
+export function ChatLoginToken(homeserver: string, token: string): $CancellablePromise<void> {
+    return $Call.ByID(1351067082, homeserver, token);
+}
+
+/**
+ * ChatLookupProfile reads a person's public profile.
+ */
+export function ChatLookupProfile(userID: string): $CancellablePromise<chat$0.Profile> {
+    return $Call.ByID(3833269707, userID).then(($result: any) => {
+        return $$createType36($result);
+    });
+}
+
+/**
+ * ChatMarkRead moves the read marker of a room.
+ */
+export function ChatMarkRead(roomID: string, eventID: string): $CancellablePromise<void> {
+    return $Call.ByID(4080013297, roomID, eventID);
+}
+
+/**
+ * ChatMedia returns a message's file or its thumbnail.
+ */
+export function ChatMedia(roomID: string, eventID: string, thumbnail: boolean): $CancellablePromise<chat$0.MediaContent> {
+    return $Call.ByID(2033218292, roomID, eventID, thumbnail).then(($result: any) => {
+        return $$createType37($result);
+    });
+}
+
+/**
+ * ChatMembers lists a room's members.
+ */
+export function ChatMembers(roomID: string): $CancellablePromise<chat$0.Member[]> {
+    return $Call.ByID(2141470819, roomID).then(($result: any) => {
+        return $$createType39($result);
+    });
+}
+
+/**
+ * ChatOpenDirect returns the direct chat with a person, starting one when
+ * there is none.
+ */
+export function ChatOpenDirect(userID: string): $CancellablePromise<string> {
+    return $Call.ByID(1851895369, userID);
+}
+
+/**
+ * ChatPickFiles asks for files and returns their paths, for the composer to
+ * show before sending.
+ */
+export function ChatPickFiles(): $CancellablePromise<string[]> {
+    return $Call.ByID(342355444).then(($result: any) => {
+        return $$createType40($result);
+    });
+}
+
+/**
+ * ChatReact reacts to a message.
+ */
+export function ChatReact(roomID: string, eventID: string, key: string): $CancellablePromise<string> {
+    return $Call.ByID(854283295, roomID, eventID, key);
+}
+
+/**
+ * ChatRedact removes a message or a reaction.
+ */
+export function ChatRedact(roomID: string, eventID: string): $CancellablePromise<void> {
+    return $Call.ByID(2894112469, roomID, eventID);
+}
+
+/**
+ * ChatRefreshEncryption reads the encryption state again.
+ */
+export function ChatRefreshEncryption(): $CancellablePromise<void> {
+    return $Call.ByID(2587953334);
+}
+
+/**
+ * ChatRetryDecryption asks again for the keys of undecryptable messages.
+ */
+export function ChatRetryDecryption(roomID: string, eventIDs: string[]): $CancellablePromise<void> {
+    return $Call.ByID(2729068987, roomID, eventIDs);
+}
+
+/**
+ * ChatRooms lists the rooms, direct chats, spaces and invites.
+ */
+export function ChatRooms(): $CancellablePromise<chat$0.Room[]> {
+    return $Call.ByID(4285076608).then(($result: any) => {
+        return $$createType42($result);
+    });
+}
+
+/**
+ * ChatSaveMedia asks where to save a message's file and writes it there,
+ * reporting progress through EventChatMediaProgress. It returns the path, or
+ * empty when the user cancelled.
+ */
+export function ChatSaveMedia(roomID: string, eventID: string): $CancellablePromise<string> {
+    return $Call.ByID(2751491899, roomID, eventID);
+}
+
+/**
+ * ChatSend sends a message, reply or edit and returns its event id.
+ */
+export function ChatSend(req: chat$0.SendRequest): $CancellablePromise<string> {
+    return $Call.ByID(1375503774, req);
+}
+
+/**
+ * ChatSendFileData sends a file the frontend holds, such as a pasted image.
+ * uploadID names it in the progress events.
+ */
+export function ChatSendFileData(req: chat$0.FileRequest, base64Data: string, uploadID: string): $CancellablePromise<string> {
+    return $Call.ByID(843485568, req, base64Data, uploadID);
+}
+
+/**
+ * ChatSendFilePaths sends files from disk, such as ones dropped on the room.
+ * uploadIDs name them in the progress events, one per path.
+ */
+export function ChatSendFilePaths(roomID: string, paths: string[], uploadIDs: string[], replyTo: string): $CancellablePromise<void> {
+    return $Call.ByID(2448033140, roomID, paths, uploadIDs, replyTo);
+}
+
+/**
+ * ChatSetFavourite adds a room to or removes it from the favourites.
+ */
+export function ChatSetFavourite(roomID: string, favourite: boolean): $CancellablePromise<void> {
+    return $Call.ByID(3677389523, roomID, favourite);
+}
+
+/**
+ * ChatSetViewing tells the backend which room is on screen, or none.
+ */
+export function ChatSetViewing(roomID: string): $CancellablePromise<void> {
+    return $Call.ByID(1993632591, roomID);
+}
+
+/**
+ * ChatSetupEncryption sets up cross-signing, secure storage and key backup
+ * for an account that has none, and returns the recovery key to keep.
+ */
+export function ChatSetupEncryption(passphrase: string, password: string): $CancellablePromise<chat$0.SetupResult> {
+    return $Call.ByID(619452084, passphrase, password).then(($result: any) => {
+        return $$createType43($result);
+    });
+}
+
+/**
+ * ChatSignOut signs this device out and deletes its chat data and keys.
+ */
+export function ChatSignOut(): $CancellablePromise<void> {
+    return $Call.ByID(1595950939);
+}
+
+/**
+ * ChatSignOutDevice ends another session of the user's.
+ */
+export function ChatSignOutDevice(deviceID: string, password: string): $CancellablePromise<void> {
+    return $Call.ByID(2226578737, deviceID, password);
+}
+
+/**
+ * ChatStartSAS starts comparing emoji in a ready verification.
+ */
+export function ChatStartSAS(txn: string): $CancellablePromise<void> {
+    return $Call.ByID(2948682069, txn);
+}
+
+/**
+ * ChatStartVerification asks another device to verify: one of the user's own
+ * when userID is empty.
+ */
+export function ChatStartVerification(userID: string): $CancellablePromise<string> {
+    return $Call.ByID(357833927, userID);
+}
+
+/**
+ * ChatStatus returns the chat account's state. While chat is off it reports
+ * signed out without opening anything.
+ */
+export function ChatStatus(): $CancellablePromise<chat$0.Status> {
+    return $Call.ByID(3372193138).then(($result: any) => {
+        return $$createType44($result);
+    });
+}
+
+/**
+ * ChatTimeline returns up to limit messages of a room older than before, or
+ * the newest when before is empty.
+ */
+export function ChatTimeline(roomID: string, before: string, limit: number): $CancellablePromise<chat$0.TimelinePage> {
+    return $Call.ByID(2090492755, roomID, before, limit).then(($result: any) => {
+        return $$createType45($result);
+    });
+}
+
+/**
+ * ChatTyping tells a room the user is typing, when typing notices are on.
+ */
+export function ChatTyping(roomID: string, typing: boolean): $CancellablePromise<void> {
+    return $Call.ByID(759883667, roomID, typing);
+}
+
+/**
+ * ChatTypists returns who is typing in a room.
+ */
+export function ChatTypists(roomID: string): $CancellablePromise<chat$0.Member[]> {
+    return $Call.ByID(2500990616, roomID).then(($result: any) => {
+        return $$createType39($result);
+    });
+}
+
+/**
+ * ChatUnlock opens secure storage with the recovery key or passphrase,
+ * verifying this device and restoring the key backup.
+ */
+export function ChatUnlock(secret: string, passphrase: boolean): $CancellablePromise<void> {
+    return $Call.ByID(3092331436, secret, passphrase);
+}
+
+/**
+ * ChatUploadLimit returns the largest file the homeserver accepts, or 0.
+ */
+export function ChatUploadLimit(): $CancellablePromise<number> {
+    return $Call.ByID(84902560);
+}
+
+/**
+ * ChatUserTrust reports whether the user verified a person.
+ */
+export function ChatUserTrust(userID: string): $CancellablePromise<boolean> {
+    return $Call.ByID(818458599, userID);
+}
+
+/**
+ * ChatVerifications lists the device verifications in flight.
+ */
+export function ChatVerifications(): $CancellablePromise<chat$0.Verification[]> {
+    return $Call.ByID(548710792).then(($result: any) => {
+        return $$createType47($result);
+    });
+}
+
+/**
  * CheckAccountPassword tries a password against an existing account's imap
  * server without storing it, so a mailbox marked as refused can be fixed on the
  * spot instead of the user finding out at the next sync.
@@ -246,7 +916,7 @@ export function CancelSend(id: number): $CancellablePromise<boolean> {
  */
 export function CheckAccountPassword(accountID: number, password: string): $CancellablePromise<$models.PasswordCheckDTO> {
     return $Call.ByID(3416903548, accountID, password).then(($result: any) => {
-        return $$createType13($result);
+        return $$createType48($result);
     });
 }
 
@@ -258,7 +928,7 @@ export function CheckAccountPassword(accountID: number, password: string): $Canc
  */
 export function CheckForUpdates(): $CancellablePromise<$models.UpdateCheckResult> {
     return $Call.ByID(1790750005).then(($result: any) => {
-        return $$createType14($result);
+        return $$createType49($result);
     });
 }
 
@@ -274,7 +944,24 @@ export function CheckForUpdates(): $CancellablePromise<$models.UpdateCheckResult
  */
 export function CheckSMIMERevocation(messageID: number): $CancellablePromise<$models.SMIMERevocationDTO> {
     return $Call.ByID(3706219155, messageID).then(($result: any) => {
-        return $$createType15($result);
+        return $$createType50($result);
+    });
+}
+
+/**
+ * CheckScriptLua reports a syntax error in Lua, or "" when it parses.
+ */
+export function CheckScriptLua(source: string): $CancellablePromise<string> {
+    return $Call.ByID(595029417, source);
+}
+
+/**
+ * CheckSieveScript asks the server whether a script is valid, without
+ * storing anything. Its State carries the connection status only.
+ */
+export function CheckSieveScript(accountID: number, text: string): $CancellablePromise<$models.SieveSaveDTO> {
+    return $Call.ByID(2909982135, accountID, text).then(($result: any) => {
+        return $$createType51($result);
     });
 }
 
@@ -293,7 +980,28 @@ export function ChooseArchiveExportFolder(): $CancellablePromise<string> {
  */
 export function ChooseCAFile(): $CancellablePromise<$models.CAFileDTO> {
     return $Call.ByID(910208697).then(($result: any) => {
-        return $$createType16($result);
+        return $$createType52($result);
+    });
+}
+
+/**
+ * ChooseCLIInstallDir asks for a folder to put the link in. Empty means
+ * cancelled.
+ */
+export function ChooseCLIInstallDir(): $CancellablePromise<string> {
+    return $Call.ByID(52956897);
+}
+
+/**
+ * ChooseImportSource opens the picker that fits a source: a profile or
+ * store folder for Thunderbird and Apple Mail, mail files or a folder of
+ * them, or an Outlook data file. An empty result means it was cancelled.
+ * Apple Mail's folder is protected by macOS, and picking it here is what
+ * lets Pelton read it.
+ */
+export function ChooseImportSource(kind: string): $CancellablePromise<string[]> {
+    return $Call.ByID(2200943643, kind).then(($result: any) => {
+        return $$createType40($result);
     });
 }
 
@@ -303,7 +1011,7 @@ export function ChooseCAFile(): $CancellablePromise<$models.CAFileDTO> {
  */
 export function ChooseMailFiles(): $CancellablePromise<string[]> {
     return $Call.ByID(3170429391).then(($result: any) => {
-        return $$createType17($result);
+        return $$createType40($result);
     });
 }
 
@@ -313,7 +1021,7 @@ export function ChooseMailFiles(): $CancellablePromise<string[]> {
  */
 export function ChooseThunderbirdProfile(): $CancellablePromise<$models.ThunderbirdProfileDTO[]> {
     return $Call.ByID(1768657401).then(($result: any) => {
-        return $$createType19($result);
+        return $$createType54($result);
     });
 }
 
@@ -325,11 +1033,47 @@ export function ClearAgentActions(): $CancellablePromise<void> {
 }
 
 /**
+ * ClearCLILog empties the log.
+ */
+export function ClearCLILog(): $CancellablePromise<void> {
+    return $Call.ByID(311954163);
+}
+
+/**
  * ClearDevActivity empties the activity buffer, for starting a fresh read of
  * one operation.
  */
 export function ClearDevActivity(): $CancellablePromise<void> {
     return $Call.ByID(4280768563);
+}
+
+/**
+ * ClearKeyLookupLog empties the lookup log.
+ */
+export function ClearKeyLookupLog(): $CancellablePromise<void> {
+    return $Call.ByID(692870122);
+}
+
+/**
+ * ClearPrivacyHistory forgets every counter. Unsubscribe records stay: they
+ * are what still-sending detection works from.
+ */
+export function ClearPrivacyHistory(): $CancellablePromise<void> {
+    return $Call.ByID(533146107);
+}
+
+/**
+ * ClearScriptFolder takes back a script's folder.
+ */
+export function ClearScriptFolder(id: number): $CancellablePromise<void> {
+    return $Call.ByID(2405041804, id);
+}
+
+/**
+ * ClearScriptRuns empties the log of a script, or every log for 0.
+ */
+export function ClearScriptRuns(scriptID: number): $CancellablePromise<void> {
+    return $Call.ByID(2893523754, scriptID);
 }
 
 /**
@@ -360,6 +1104,16 @@ export function CloseWindow(): $CancellablePromise<void> {
 }
 
 /**
+ * CompileScriptBlocks compiles a block tree (JSON) for a trigger to Lua, as
+ * the editor shows it, with every problem found.
+ */
+export function CompileScriptBlocks(blocks: string, trigger: string): $CancellablePromise<scripting$0.CompileResult> {
+    return $Call.ByID(2394487534, blocks, trigger).then(($result: any) => {
+        return $$createType55($result);
+    });
+}
+
+/**
  * ComposeProtectionStatus reports what signing and encryption are possible for
  * a message from this account to these recipients. The compose window calls it
  * as the recipient list changes, so the controls never offer something that
@@ -367,7 +1121,7 @@ export function CloseWindow(): $CancellablePromise<void> {
  */
 export function ComposeProtectionStatus(accountID: number, recipients: string[]): $CancellablePromise<$models.ProtectionStatusDTO> {
     return $Call.ByID(661377335, accountID, recipients).then(($result: any) => {
-        return $$createType20($result);
+        return $$createType56($result);
     });
 }
 
@@ -384,8 +1138,16 @@ export function ComposeProtectionStatus(accountID: number, recipients: string[])
  */
 export function ConfirmThemeImport(path: string, allowRemote: boolean, importTokens: boolean, importCSS: boolean): $CancellablePromise<$models.ThemeInfoDTO> {
     return $Call.ByID(2724820550, path, allowRemote, importTokens, importCSS).then(($result: any) => {
-        return $$createType21($result);
+        return $$createType57($result);
     });
+}
+
+/**
+ * ConsentMailVaultTempFiles records that the user was told vault attachments
+ * are written to a private temporary folder while open.
+ */
+export function ConsentMailVaultTempFiles(): $CancellablePromise<void> {
+    return $Call.ByID(326037426);
 }
 
 /**
@@ -394,7 +1156,7 @@ export function ConfirmThemeImport(path: string, allowRemote: boolean, importTok
  */
 export function ConsumePendingICS(): $CancellablePromise<string[]> {
     return $Call.ByID(861770428).then(($result: any) => {
-        return $$createType17($result);
+        return $$createType40($result);
     });
 }
 
@@ -404,8 +1166,24 @@ export function ConsumePendingICS(): $CancellablePromise<string[]> {
  */
 export function ConsumePendingMailto(): $CancellablePromise<$models.PendingMailtoDTO> {
     return $Call.ByID(1157729509).then(($result: any) => {
-        return $$createType22($result);
+        return $$createType58($result);
     });
+}
+
+/**
+ * ConvertScriptToLua turns a block script into a Lua script for good.
+ */
+export function ConvertScriptToLua(id: number): $CancellablePromise<$models.ScriptDTO> {
+    return $Call.ByID(1083013175, id).then(($result: any) => {
+        return $$createType6($result);
+    });
+}
+
+/**
+ * CountNewsletterMail counts the unread newsletter mail for the smart view.
+ */
+export function CountNewsletterMail(): $CancellablePromise<number> {
+    return $Call.ByID(1562882193);
 }
 
 /**
@@ -413,7 +1191,7 @@ export function ConsumePendingMailto(): $CancellablePromise<$models.PendingMailt
  */
 export function CreateEvent(req: $models.EventRequest): $CancellablePromise<$models.EventSaveResultDTO> {
     return $Call.ByID(1717317702, req).then(($result: any) => {
-        return $$createType23($result);
+        return $$createType59($result);
     });
 }
 
@@ -426,7 +1204,16 @@ export function CreateEvent(req: $models.EventRequest): $CancellablePromise<$mod
  */
 export function CreateEventDraftFromMessage(messageID: number): $CancellablePromise<$models.EventRequest> {
     return $Call.ByID(4105218580, messageID).then(($result: any) => {
-        return $$createType24($result);
+        return $$createType60($result);
+    });
+}
+
+/**
+ * CreateFeedFolder adds a folder.
+ */
+export function CreateFeedFolder(name: string): $CancellablePromise<$models.FeedFolderDTO> {
+    return $Call.ByID(2190447194, name).then(($result: any) => {
+        return $$createType61($result);
     });
 }
 
@@ -438,7 +1225,7 @@ export function CreateEventDraftFromMessage(messageID: number): $CancellableProm
  */
 export function CreateFolder(req: $models.CreateFolderRequest): $CancellablePromise<$models.FolderDTO> {
     return $Call.ByID(483951026, req).then(($result: any) => {
-        return $$createType25($result);
+        return $$createType62($result);
     });
 }
 
@@ -447,7 +1234,18 @@ export function CreateFolder(req: $models.CreateFolderRequest): $CancellableProm
  */
 export function CreateLocalCalendar(name: string, color: string): $CancellablePromise<$models.CalendarDTO> {
     return $Call.ByID(2909375019, name, color).then(($result: any) => {
-        return $$createType26($result);
+        return $$createType63($result);
+    });
+}
+
+/**
+ * CreateMailVault makes a vault over the given folders and accounts and
+ * starts sealing their mail in the background. The vault starts unlocked.
+ * The recovery code in the result is the only copy there will ever be.
+ */
+export function CreateMailVault(req: $models.MailVaultCreateRequest): $CancellablePromise<$models.MailVaultCreatedDTO> {
+    return $Call.ByID(18152907, req).then(($result: any) => {
+        return $$createType64($result);
     });
 }
 
@@ -458,7 +1256,97 @@ export function CreateLocalCalendar(name: string, color: string): $CancellablePr
  */
 export function CreateProfile(req: $models.ProfileRequest): $CancellablePromise<$models.ProfileDTO> {
     return $Call.ByID(2365698023, req).then(($result: any) => {
-        return $$createType4($result);
+        return $$createType11($result);
+    });
+}
+
+/**
+ * CreateProject makes a project with the board its request names. Columns
+ * without a name are left out.
+ */
+export function CreateProject(req: $models.ProjectRequest): $CancellablePromise<$models.ProjectDTO> {
+    return $Call.ByID(1048483227, req).then(($result: any) => {
+        return $$createType65($result);
+    });
+}
+
+/**
+ * CreateProjectCard makes a task in the project's list and puts it on the
+ * board. In the done column it is made completed.
+ */
+export function CreateProjectCard(req: $models.ProjectCardRequest): $CancellablePromise<$models.ProjectCardDTO> {
+    return $Call.ByID(3685066765, req).then(($result: any) => {
+        return $$createType16($result);
+    });
+}
+
+/**
+ * CreateProjectNote adds a note to a project.
+ */
+export function CreateProjectNote(projectID: number, title: string, body: string): $CancellablePromise<$models.ProjectNoteDTO> {
+    return $Call.ByID(1707835483, projectID, title, body).then(($result: any) => {
+        return $$createType66($result);
+    });
+}
+
+/**
+ * CreateProjectVaultNote writes a new note of a project into the project's
+ * folder, under a free name made from title. body is the note's text, usually
+ * a filled template; the project goes into its front matter.
+ */
+export function CreateProjectVaultNote(projectID: number, title: string, body: string): $CancellablePromise<$models.ProjectVaultNoteDTO> {
+    return $Call.ByID(383901013, projectID, title, body).then(($result: any) => {
+        return $$createType67($result);
+    });
+}
+
+/**
+ * CreateScript stores a new script, switched off.
+ */
+export function CreateScript($in: $models.ScriptInput): $CancellablePromise<$models.ScriptDTO> {
+    return $Call.ByID(639163841, $in).then(($result: any) => {
+        return $$createType6($result);
+    });
+}
+
+/**
+ * CreateScriptLibrary stores a new library. Its name is what require takes
+ * and must be free. Scripts that already required that name are switched
+ * off and listed.
+ */
+export function CreateScriptLibrary($in: $models.ScriptLibraryInput): $CancellablePromise<$models.ScriptLibrarySavedDTO> {
+    return $Call.ByID(131227436, $in).then(($result: any) => {
+        return $$createType68($result);
+    });
+}
+
+/**
+ * CreateTask stores a new task and writes it to its list's server.
+ */
+export function CreateTask(req: $models.TaskRequest): $CancellablePromise<$models.TaskSaveResultDTO> {
+    return $Call.ByID(689347879, req).then(($result: any) => {
+        return $$createType69($result);
+    });
+}
+
+/**
+ * CreateTaskList adds a task list that lives only in this database.
+ */
+export function CreateTaskList(name: string, color: string): $CancellablePromise<$models.TaskListDTO> {
+    return $Call.ByID(2974598415, name, color).then(($result: any) => {
+        return $$createType70($result);
+    });
+}
+
+/**
+ * CreateTimeBlocks makes blocks, writing each to its calendar when it names
+ * one; accepting a day plan makes them all at once. Nothing is made when one
+ * of them is not valid. A block for a mail in a vault keeps no title of the
+ * mail's: its title is read from the mail while the vault is open.
+ */
+export function CreateTimeBlocks(reqs: $models.TimeBlockRequest[]): $CancellablePromise<$models.TimeBlockDTO[]> {
+    return $Call.ByID(3323287381, reqs).then(($result: any) => {
+        return $$createType26($result);
     });
 }
 
@@ -468,7 +1356,7 @@ export function CreateProfile(req: $models.ProfileRequest): $CancellablePromise<
  */
 export function DecodeEventLink(link: string): $CancellablePromise<$models.EventLinkResultDTO> {
     return $Call.ByID(1678222880, link).then(($result: any) => {
-        return $$createType27($result);
+        return $$createType71($result);
     });
 }
 
@@ -478,7 +1366,7 @@ export function DecodeEventLink(link: string): $CancellablePromise<$models.Event
  */
 export function DecodeJSCalendar(text: string): $CancellablePromise<$models.EventLinkResultDTO> {
     return $Call.ByID(4013099069, text).then(($result: any) => {
-        return $$createType27($result);
+        return $$createType71($result);
     });
 }
 
@@ -489,7 +1377,7 @@ export function DecodeJSCalendar(text: string): $CancellablePromise<$models.Even
  */
 export function DefaultCalendarFileStatus(): $CancellablePromise<$models.DefaultMailStatusDTO> {
     return $Call.ByID(4083604353).then(($result: any) => {
-        return $$createType28($result);
+        return $$createType72($result);
     });
 }
 
@@ -499,15 +1387,25 @@ export function DefaultCalendarFileStatus(): $CancellablePromise<$models.Default
  */
 export function DefaultMailClientStatus(): $CancellablePromise<$models.DefaultMailStatusDTO> {
     return $Call.ByID(3213425133).then(($result: any) => {
-        return $$createType28($result);
+        return $$createType72($result);
     });
+}
+
+/**
+ * DeleteAIProvider removes a provider and its key. When it was the default,
+ * the first one left becomes the default.
+ */
+export function DeleteAIProvider(id: string): $CancellablePromise<void> {
+    return $Call.ByID(2741524258, id);
 }
 
 /**
  * DeleteAccount removes an account entirely: its keyring secret, its cached mail
  * (folders, messages and attachment rows cascade in the db) and its attachment
- * files on disk. Deleting the keyring secret also lets any running idle loop for
- * the account exit cleanly, since it stops on a missing-credentials error.
+ * files on disk. First it hard-cancels that account only: its worker (IDLE),
+ * scheduler tasks and IMAP sessions stop, and nothing can start
+ * sync work for it again. Other accounts keep running. If the row cannot be
+ * deleted, a worker the account had is started again.
  */
 export function DeleteAccount(id: number): $CancellablePromise<void> {
     return $Call.ByID(1278365736, id);
@@ -527,7 +1425,7 @@ export function DeleteAddress(email: string): $CancellablePromise<void> {
  */
 export function DeleteContact(id: number, force: boolean): $CancellablePromise<$models.ContactConflictDTO> {
     return $Call.ByID(2336934415, id, force).then(($result: any) => {
-        return $$createType29($result);
+        return $$createType73($result);
     });
 }
 
@@ -546,8 +1444,22 @@ export function DeleteDraft(id: number): $CancellablePromise<void> {
  */
 export function DeleteEvent(id: number, scope: string, recurrenceID: string, force: boolean): $CancellablePromise<$models.EventSaveResultDTO> {
     return $Call.ByID(1134581331, id, scope, recurrenceID, force).then(($result: any) => {
-        return $$createType23($result);
+        return $$createType59($result);
     });
+}
+
+/**
+ * DeleteFeed unsubscribes from a feed and drops its entries.
+ */
+export function DeleteFeed(id: number): $CancellablePromise<void> {
+    return $Call.ByID(1436692953, id);
+}
+
+/**
+ * DeleteFeedFolder removes a folder; its feeds move out of it.
+ */
+export function DeleteFeedFolder(id: number): $CancellablePromise<void> {
+    return $Call.ByID(1087728377, id);
 }
 
 /**
@@ -590,6 +1502,26 @@ export function DeleteMessage(id: number): $CancellablePromise<void> {
 }
 
 /**
+ * DeleteMessages deletes many messages the way DeleteMessage deletes one, and
+ * refreshes the badges once. A message that fails does not stop the rest.
+ * Imported mail is deleted outright and cannot be undone; for the rest
+ * UndoDeletes brings them back until the next sync.
+ */
+export function DeleteMessages(ids: number[]): $CancellablePromise<$models.BulkResultDTO> {
+    return $Call.ByID(1439497785, ids).then(($result: any) => {
+        return $$createType74($result);
+    });
+}
+
+/**
+ * DeleteNote removes the private note on a message, or on its conversation
+ * when conversation is set.
+ */
+export function DeleteNote(messageID: number, conversation: boolean): $CancellablePromise<void> {
+    return $Call.ByID(255761393, messageID, conversation);
+}
+
+/**
  * DeletePGPKey removes a key from both rings, forgets any passphrase held for
  * it, and drops it from any account that was signing with it.
  */
@@ -607,11 +1539,77 @@ export function DeleteProfile(id: number): $CancellablePromise<void> {
 }
 
 /**
+ * DeleteProject removes a project with its board, its links and its notes.
+ * The tasks on the board, and the mail, events and contacts it pointed at,
+ * stay where they are.
+ */
+export function DeleteProject(id: number): $CancellablePromise<void> {
+    return $Call.ByID(3166205650, id);
+}
+
+/**
+ * DeleteProjectColumn removes a column. Its cards go to the end of moveTo, or
+ * leave the board for moveTo 0; their tasks stay either way.
+ */
+export function DeleteProjectColumn(id: number, moveTo: number): $CancellablePromise<void> {
+    return $Call.ByID(4274244608, id, moveTo);
+}
+
+/**
+ * DeleteProjectNote removes a note and the card links to it.
+ */
+export function DeleteProjectNote(id: number): $CancellablePromise<void> {
+    return $Call.ByID(4069722782, id);
+}
+
+/**
+ * DeleteScript removes a script with its log and storage.
+ */
+export function DeleteScript(id: number): $CancellablePromise<void> {
+    return $Call.ByID(189565590, id);
+}
+
+/**
+ * DeleteScriptLibrary removes a library and lists the scripts that load it,
+ * which are switched off.
+ */
+export function DeleteScriptLibrary(id: number): $CancellablePromise<$models.ScriptRefDTO[]> {
+    return $Call.ByID(448806985, id).then(($result: any) => {
+        return $$createType76($result);
+    });
+}
+
+/**
  * DeleteSignature removes a signature block. Any account that defaulted to it has
  * that slot cleared by the database.
  */
 export function DeleteSignature(id: number): $CancellablePromise<void> {
     return $Call.ByID(59815409, id);
+}
+
+/**
+ * DeleteSnippet removes a snippet.
+ */
+export function DeleteSnippet(id: number): $CancellablePromise<void> {
+    return $Call.ByID(2645929378, id);
+}
+
+/**
+ * DeleteTask deletes a task with its subtasks, here and on the server. The
+ * result carries what was deleted, for RestoreTasks.
+ */
+export function DeleteTask(id: number, force: boolean): $CancellablePromise<$models.TaskDeleteResultDTO> {
+    return $Call.ByID(3133708696, id, force).then(($result: any) => {
+        return $$createType77($result);
+    });
+}
+
+/**
+ * DeleteTaskList removes a local task list and its tasks. The last local list
+ * stays, so there is always somewhere to put a task.
+ */
+export function DeleteTaskList(id: number): $CancellablePromise<void> {
+    return $Call.ByID(1408571648, id);
 }
 
 /**
@@ -621,6 +1619,15 @@ export function DeleteSignature(id: number): $CancellablePromise<void> {
  */
 export function DeleteTheme(id: string): $CancellablePromise<void> {
     return $Call.ByID(3140441406, id);
+}
+
+/**
+ * DeleteTimeBlocks deletes blocks and, for each written to a calendar, its
+ * event there; a block whose event is already gone just goes. Undoing an
+ * accepted plan deletes all its blocks at once.
+ */
+export function DeleteTimeBlocks(ids: number[]): $CancellablePromise<void> {
+    return $Call.ByID(4099982966, ids);
 }
 
 /**
@@ -639,7 +1646,7 @@ export function DeleteView(id: number): $CancellablePromise<void> {
  */
 export function DevActivity(after: number): $CancellablePromise<$models.DevActivityDTO> {
     return $Call.ByID(834755164, after).then(($result: any) => {
-        return $$createType30($result);
+        return $$createType78($result);
     });
 }
 
@@ -650,7 +1657,7 @@ export function DevActivity(after: number): $CancellablePromise<$models.DevActiv
  */
 export function DevProcessStats(): $CancellablePromise<$models.DevProcessDTO> {
     return $Call.ByID(3854388265).then(($result: any) => {
-        return $$createType31($result);
+        return $$createType79($result);
     });
 }
 
@@ -660,6 +1667,16 @@ export function DevProcessStats(): $CancellablePromise<$models.DevProcessDTO> {
  */
 export function DevToolsEnabled(): $CancellablePromise<boolean> {
     return $Call.ByID(2227371933);
+}
+
+/**
+ * DisableAppLock turns the lock off once the user has authenticated: with the
+ * system prompt, or with passphrase when the lock uses one.
+ */
+export function DisableAppLock(passphrase: string, reason: string): $CancellablePromise<$models.LockAuthResultDTO> {
+    return $Call.ByID(1959190202, passphrase, reason).then(($result: any) => {
+        return $$createType31($result);
+    });
 }
 
 /**
@@ -687,7 +1704,7 @@ export function DiscardFailedSend(id: number): $CancellablePromise<boolean> {
  */
 export function DiscoverAddressBooks(req: $models.AddressBookRequest): $CancellablePromise<$models.DiscoveredBookDTO[]> {
     return $Call.ByID(1666200171, req).then(($result: any) => {
-        return $$createType33($result);
+        return $$createType81($result);
     });
 }
 
@@ -699,18 +1716,32 @@ export function DiscoverAddressBooks(req: $models.AddressBookRequest): $Cancella
  */
 export function DiscoverCalendars(req: $models.CalendarAccountRequest): $CancellablePromise<$models.CalendarDiscoveryDTO> {
     return $Call.ByID(478875368, req).then(($result: any) => {
-        return $$createType34($result);
+        return $$createType82($result);
     });
 }
 
 /**
  * DiscoverConfig resolves likely imap/smtp settings for an email address using
- * autoconfig (ISPDB, the domain's well-known/autoconfig, then a guess). The
- * wizard pre-fills the form with this; the user can still edit before testing.
+ * autoconfig (ISPDB, the domain's well-known/autoconfig, its MX records, then a
+ * guess). Only the domain leaves the machine, and only once the user allowed
+ * lookups; until then it returns errLookupNotAllowed without any network use.
+ * The wizard pre-fills the form with this; the user can still edit before
+ * testing.
  */
 export function DiscoverConfig(email: string): $CancellablePromise<$models.DiscoveredDTO> {
     return $Call.ByID(2312054947, email).then(($result: any) => {
-        return $$createType35($result);
+        return $$createType83($result);
+    });
+}
+
+/**
+ * DiscoverFeeds finds the feeds at an address: the address itself when it is
+ * a feed, else the feeds its page links to, else the places sites usually keep
+ * one. Each candidate is fetched and read, so only working feeds come back.
+ */
+export function DiscoverFeeds(address: string): $CancellablePromise<$models.FeedCandidateDTO[]> {
+    return $Call.ByID(2312573270, address).then(($result: any) => {
+        return $$createType85($result);
     });
 }
 
@@ -724,6 +1755,14 @@ export function DismissCrashReport(): $CancellablePromise<void> {
 }
 
 /**
+ * DismissDuplicateContacts marks every pair among the given contacts as not
+ * duplicates, for good: the duplicates view stops offering them.
+ */
+export function DismissDuplicateContacts(ids: number[]): $CancellablePromise<void> {
+    return $Call.ByID(3549208042, ids);
+}
+
+/**
  * DismissPasswordPrompt stops the missing-password prompt from interrupting for
  * one account. The account still cannot sync without a password; the ui marks
  * it in the sidebar and in Settings instead, and clicking that marker brings the
@@ -734,9 +1773,33 @@ export function DismissPasswordPrompt(accountID: number): $CancellablePromise<vo
 }
 
 /**
- * DownloadMessageOffline pins a message for offline availability. Sync already
- * caches the body; this records the deliberate keep signal that drives the
- * downloaded indicator.
+ * DismissProjectSuggestion stops a conversation being suggested for a
+ * project again.
+ */
+export function DismissProjectSuggestion(threadID: number): $CancellablePromise<void> {
+    return $Call.ByID(753819555, threadID);
+}
+
+/**
+ * DismissPromise sets a suggestion aside for good: a resync never brings it
+ * back.
+ */
+export function DismissPromise(id: number): $CancellablePromise<void> {
+    return $Call.ByID(1463707, id);
+}
+
+/**
+ * DismissStillSending stops telling the user a sender is still sending,
+ * until more mail arrives from them.
+ */
+export function DismissStillSending(sender: string): $CancellablePromise<void> {
+    return $Call.ByID(224197702, sender);
+}
+
+/**
+ * DownloadMessageOffline keeps a message available offline. A message that so
+ * far has only its list entry gets its body fetched first; pinning a row with
+ * no body would show it as downloaded while there is nothing to read.
  */
 export function DownloadMessageOffline(id: number): $CancellablePromise<void> {
     return $Call.ByID(1176395672, id);
@@ -746,7 +1809,8 @@ export function DownloadMessageOffline(id: number): $CancellablePromise<void> {
  * DownloadRange downloads every message from startDateRFC3339 to today that is
  * not already cached, across all accounts and folders, and pins them offline for
  * fast local search. includeAttachments controls whether attachment bytes are
- * persisted. Progress (percent + eta) is emitted for the status bar.
+ * persisted for messages not yet in the cache; a cached stub always gets its
+ * attachments. Progress (percent + eta) is emitted for the status bar.
  */
 export function DownloadRange(startDateRFC3339: string, includeAttachments: boolean): $CancellablePromise<void> {
     return $Call.ByID(5650659, startDateRFC3339, includeAttachments);
@@ -760,7 +1824,7 @@ export function DownloadRange(startDateRFC3339: string, includeAttachments: bool
  */
 export function EditOutboxMessage(id: number): $CancellablePromise<$models.OutboxEditDTO> {
     return $Call.ByID(3604846874, id).then(($result: any) => {
-        return $$createType36($result);
+        return $$createType86($result);
     });
 }
 
@@ -777,6 +1841,44 @@ export function EditOutboxMessage(id: number): $CancellablePromise<$models.Outbo
  */
 export function EmptyTrash(folderID: number): $CancellablePromise<number> {
     return $Call.ByID(1899874943, folderID);
+}
+
+/**
+ * EnableAppLock turns the lock on. With a passphrase it uses that; without
+ * one it uses the system prompt, which has to pass once first so the user
+ * knows it works. The app is not locked by turning it on.
+ */
+export function EnableAppLock(passphrase: string, reason: string): $CancellablePromise<$models.LockAuthResultDTO> {
+    return $Call.ByID(2496159723, passphrase, reason).then(($result: any) => {
+        return $$createType31($result);
+    });
+}
+
+/**
+ * EnableAutoEncrypt switches automatic encryption on with the sources the
+ * user allowed in the setup, and makes a key for every mailbox that has none.
+ * The keys are made in the background; EventAutoEncryptChanged says when.
+ */
+export function EnableAutoEncrypt(sources: $models.KeySourcesDTO): $CancellablePromise<void> {
+    return $Call.ByID(657319239, sources);
+}
+
+/**
+ * EndFocus turns focus off now and raises the summary. Ending a scheduled
+ * focus keeps the schedule from starting it again until its window is over.
+ */
+export function EndFocus(): $CancellablePromise<void> {
+    return $Call.ByID(2838378125);
+}
+
+/**
+ * EstimateImport says how many messages a plan brings over and how much
+ * space they take, which is what an upload needs free on the server.
+ */
+export function EstimateImport(plan: mailimport$0.Plan): $CancellablePromise<$models.ImportEstimateDTO> {
+    return $Call.ByID(2074628093, plan).then(($result: any) => {
+        return $$createType87($result);
+    });
 }
 
 /**
@@ -824,8 +1926,16 @@ export function ExportMessagePrintView(id: number): $CancellablePromise<void> {
  */
 export function ExportMessagesEML(ids: number[]): $CancellablePromise<$models.EmlExportDTO> {
     return $Call.ByID(1073714382, ids).then(($result: any) => {
-        return $$createType37($result);
+        return $$createType88($result);
     });
+}
+
+/**
+ * ExportOPML writes every subscription to an OPML file the user picks and
+ * returns its path, or "" when they cancelled.
+ */
+export function ExportOPML(): $CancellablePromise<string> {
+    return $Call.ByID(4141659570);
 }
 
 /**
@@ -839,11 +1949,37 @@ export function ExportPGPKey(fingerprint: string, includePrivate: boolean): $Can
 }
 
 /**
+ * ExportScript writes a script to a .peltonscript file the user picks and
+ * returns the path, "" when they cancelled.
+ */
+export function ExportScript(id: number): $CancellablePromise<string> {
+    return $Call.ByID(661153903, id);
+}
+
+/**
+ * ExportScriptLibrary writes a library to a .peltonscript file the user
+ * picks and returns the path, "" when they cancelled.
+ */
+export function ExportScriptLibrary(id: number): $CancellablePromise<string> {
+    return $Call.ByID(2778495730, id);
+}
+
+/**
  * ExportTheme copies an installed theme into a shareable .peltontheme file
  * via a save dialog. Returns the chosen path, or "" if the user canceled.
  */
 export function ExportTheme(id: string): $CancellablePromise<string> {
     return $Call.ByID(4034277889, id);
+}
+
+/**
+ * FetchAIModels asks a provider for its models. For a saved provider the list
+ * is kept for the pickers.
+ */
+export function FetchAIModels($in: $models.AIProviderInput): $CancellablePromise<string[]> {
+    return $Call.ByID(756005962, $in).then(($result: any) => {
+        return $$createType40($result);
+    });
 }
 
 /**
@@ -853,7 +1989,7 @@ export function ExportTheme(id: string): $CancellablePromise<string> {
  */
 export function FetchAttachment(attachmentID: number): $CancellablePromise<$models.AttachmentEntryDTO> {
     return $Call.ByID(715403391, attachmentID).then(($result: any) => {
-        return $$createType38($result);
+        return $$createType89($result);
     });
 }
 
@@ -866,7 +2002,39 @@ export function FetchAttachment(attachmentID: number): $CancellablePromise<$mode
  */
 export function FetchOlderMessages(req: $models.ListMessagesRequest): $CancellablePromise<$models.FetchOlderResult> {
     return $Call.ByID(3795637664, req).then(($result: any) => {
-        return $$createType39($result);
+        return $$createType90($result);
+    });
+}
+
+/**
+ * FindDuplicateContacts lists the groups of contacts that look like one person,
+ * the surest first, leaving out pairs the user dismissed.
+ */
+export function FindDuplicateContacts(): $CancellablePromise<$models.DuplicatesDTO> {
+    return $Call.ByID(3156031779).then(($result: any) => {
+        return $$createType91($result);
+    });
+}
+
+/**
+ * FindEventByUID finds the event a task links to by its UID.
+ */
+export function FindEventByUID(uid: string): $CancellablePromise<$models.EventRefDTO> {
+    return $Call.ByID(2721927300, uid).then(($result: any) => {
+        return $$createType92($result);
+    });
+}
+
+/**
+ * FindFreeSlots proposes times for a block: for a task, of what it still
+ * needs (its whole estimate when that is all planned already), with its due
+ * date marking the slots that come too late; else of Minutes, or the default
+ * length. Busy time, working hours and days, the shortest slot and the buffer
+ * all count. Nothing leaves the computer.
+ */
+export function FindFreeSlots(req: $models.SlotRequest): $CancellablePromise<$models.SlotDTO[]> {
+    return $Call.ByID(62488776, req).then(($result: any) => {
+        return $$createType94($result);
     });
 }
 
@@ -876,7 +2044,17 @@ export function FetchOlderMessages(req: $models.ListMessagesRequest): $Cancellab
  */
 export function FindMessageByLink(link: string): $CancellablePromise<$models.MessageRefDTO> {
     return $Call.ByID(3669298833, link).then(($result: any) => {
-        return $$createType40($result);
+        return $$createType95($result);
+    });
+}
+
+/**
+ * FindPromises reads one message for promises now, whether or not it was
+ * read before and however old it is, and returns what it holds.
+ */
+export function FindPromises(messageID: number): $CancellablePromise<$models.PromiseDTO[]> {
+    return $Call.ByID(1291275855, messageID).then(($result: any) => {
+        return $$createType96($result);
     });
 }
 
@@ -888,8 +2066,16 @@ export function FindMessageByLink(link: string): $CancellablePromise<$models.Mes
  */
 export function FindThunderbirdProfiles(): $CancellablePromise<$models.ThunderbirdProfileDTO[]> {
     return $Call.ByID(1212741268).then(($result: any) => {
-        return $$createType19($result);
+        return $$createType54($result);
     });
+}
+
+/**
+ * ForgetContactKey removes everything Pelton learned about addr's keys. A
+ * key the user imported into the keyring stays; that is removed there.
+ */
+export function ForgetContactKey(addr: string): $CancellablePromise<void> {
+    return $Call.ByID(2713672376, addr);
 }
 
 /**
@@ -912,7 +2098,25 @@ export function GetAccountPGPKey(accountID: number): $CancellablePromise<string>
  */
 export function GetAccountSignatures(accountID: number): $CancellablePromise<$models.AccountSignaturesDTO> {
     return $Call.ByID(1545977002, accountID).then(($result: any) => {
-        return $$createType41($result);
+        return $$createType97($result);
+    });
+}
+
+/**
+ * GetAutoEncryptSettings returns the state of automatic encryption.
+ */
+export function GetAutoEncryptSettings(): $CancellablePromise<$models.AutoEncryptSettingsDTO> {
+    return $Call.ByID(178312663).then(($result: any) => {
+        return $$createType98($result);
+    });
+}
+
+/**
+ * GetCLIConfig returns the command line access settings.
+ */
+export function GetCLIConfig(): $CancellablePromise<$models.CLIConfigDTO> {
+    return $Call.ByID(1263296146).then(($result: any) => {
+        return $$createType99($result);
     });
 }
 
@@ -921,7 +2125,7 @@ export function GetAccountSignatures(accountID: number): $CancellablePromise<$mo
  */
 export function GetCalendarSettings(): $CancellablePromise<$models.CalendarSettingsDTO> {
     return $Call.ByID(4188187489).then(($result: any) => {
-        return $$createType42($result);
+        return $$createType100($result);
     });
 }
 
@@ -945,7 +2149,54 @@ export function GetDiagnostics(): $CancellablePromise<string> {
  */
 export function GetEvent(id: number, recurrenceID: string): $CancellablePromise<$models.EventDTO> {
     return $Call.ByID(2126340470, id, recurrenceID).then(($result: any) => {
-        return $$createType43($result);
+        return $$createType101($result);
+    });
+}
+
+/**
+ * GetFeedEntry returns an entry for the reader. Remote images are shown when
+ * the feed, the Feeds default or the app-wide override allows them.
+ */
+export function GetFeedEntry(id: number): $CancellablePromise<$models.FeedEntryDetailDTO> {
+    return $Call.ByID(3877120778, id).then(($result: any) => {
+        return $$createType102($result);
+    });
+}
+
+/**
+ * GetFeedEntryHTML renders an entry again with remote content allowed or not,
+ * for the reader's load images control. includeTrackers also loads the images
+ * that look like tracking pixels.
+ */
+export function GetFeedEntryHTML(id: number, allowRemote: boolean, includeTrackers: boolean): $CancellablePromise<string> {
+    return $Call.ByID(510076951, id, allowRemote, includeTrackers);
+}
+
+/**
+ * GetFocus returns focus mode as it stands now.
+ */
+export function GetFocus(): $CancellablePromise<$models.FocusDTO> {
+    return $Call.ByID(3017201390).then(($result: any) => {
+        return $$createType103($result);
+    });
+}
+
+/**
+ * GetFocusSchedule returns the days and hours focus starts on its own.
+ */
+export function GetFocusSchedule(): $CancellablePromise<$models.FocusScheduleDTO> {
+    return $Call.ByID(1343157435).then(($result: any) => {
+        return $$createType104($result);
+    });
+}
+
+/**
+ * GetLockState reports whether the lock is on and the app locked, how it is
+ * opened, and the look the lock screen takes. It is allowed while locked.
+ */
+export function GetLockState(): $CancellablePromise<$models.LockStateDTO> {
+    return $Call.ByID(1065182406).then(($result: any) => {
+        return $$createType105($result);
     });
 }
 
@@ -955,7 +2206,7 @@ export function GetEvent(id: number, recurrenceID: string): $CancellablePromise<
  */
 export function GetLogStatus(): $CancellablePromise<$models.LogStatusDTO> {
     return $Call.ByID(3089254226).then(($result: any) => {
-        return $$createType44($result);
+        return $$createType106($result);
     });
 }
 
@@ -964,7 +2215,7 @@ export function GetLogStatus(): $CancellablePromise<$models.LogStatusDTO> {
  */
 export function GetMCPConfig(): $CancellablePromise<$models.MCPConfigDTO> {
     return $Call.ByID(1836574608).then(($result: any) => {
-        return $$createType45($result);
+        return $$createType107($result);
     });
 }
 
@@ -975,7 +2226,7 @@ export function GetMCPConfig(): $CancellablePromise<$models.MCPConfigDTO> {
  */
 export function GetMessage(id: number): $CancellablePromise<$models.MessageDetailDTO> {
     return $Call.ByID(2499058337, id).then(($result: any) => {
-        return $$createType46($result);
+        return $$createType108($result);
     });
 }
 
@@ -993,6 +2244,16 @@ export function GetMessageHTML(id: number, allowRemote: boolean, includeTrackers
 }
 
 /**
+ * GetMessageHTMLBlockingTrackers renders a message with its remote images
+ * loaded and everything that looks like a tracking pixel left out, whatever
+ * the block-tracking-pixels setting says: the shield's "load images, keep
+ * trackers blocked".
+ */
+export function GetMessageHTMLBlockingTrackers(id: number): $CancellablePromise<string> {
+    return $Call.ByID(2375980530, id);
+}
+
+/**
  * GetMessageSource returns a message's raw RFC 822 source (all headers plus
  * body, exactly as fetched). The messages table only caches the parsed
  * plain/html bodies, so the raw bytes are fetched on demand over imap; nothing
@@ -1003,12 +2264,81 @@ export function GetMessageSource(id: number): $CancellablePromise<string> {
 }
 
 /**
+ * GetNote returns the private note on a message, or on its conversation when
+ * conversation is set.
+ */
+export function GetNote(messageID: number, conversation: boolean): $CancellablePromise<$models.NoteDTO> {
+    return $Call.ByID(3578938214, messageID, conversation).then(($result: any) => {
+        return $$createType109($result);
+    });
+}
+
+/**
+ * GetPrivacyShield returns what one message tried to learn and what was done
+ * about it, and counts it for the report when counting is on.
+ */
+export function GetPrivacyShield(id: number): $CancellablePromise<$models.ShieldDTO> {
+    return $Call.ByID(2084224351, id).then(($result: any) => {
+        return $$createType110($result);
+    });
+}
+
+/**
+ * GetProject returns one project with its counts.
+ */
+export function GetProject(id: number): $CancellablePromise<$models.ProjectDTO> {
+    return $Call.ByID(1506497387, id).then(($result: any) => {
+        return $$createType65($result);
+    });
+}
+
+/**
+ * GetProjectBoard returns a project's board. Cards whose task is gone are left
+ * out but kept, so a task brought back by undo returns to its place. Before
+ * reading, cards follow their tasks into and out of the done column.
+ */
+export function GetProjectBoard(id: number): $CancellablePromise<$models.ProjectBoardDTO> {
+    return $Call.ByID(3059376097, id).then(($result: any) => {
+        return $$createType111($result);
+    });
+}
+
+/**
+ * GetPromiseSettings returns the promise preferences with every account.
+ */
+export function GetPromiseSettings(): $CancellablePromise<$models.PromiseSettingsDTO> {
+    return $Call.ByID(135126950).then(($result: any) => {
+        return $$createType112($result);
+    });
+}
+
+/**
  * GetProxyConfig returns the current proxy preference for the settings ui,
  * without the password itself.
  */
 export function GetProxyConfig(): $CancellablePromise<$models.ProxyConfigDTO> {
     return $Call.ByID(3373558576).then(($result: any) => {
-        return $$createType47($result);
+        return $$createType113($result);
+    });
+}
+
+/**
+ * GetQuickComposeStatus reports the quick compose setting and whether its
+ * shortcut is registered.
+ */
+export function GetQuickComposeStatus(): $CancellablePromise<$models.QuickComposeStatusDTO> {
+    return $Call.ByID(858488621).then(($result: any) => {
+        return $$createType114($result);
+    });
+}
+
+/**
+ * GetSenderPassport returns the passport of one message: who sent it, how
+ * sure that is, and what the local mail says about them.
+ */
+export function GetSenderPassport(id: number): $CancellablePromise<$models.PassportDTO> {
+    return $Call.ByID(1600065981, id).then(($result: any) => {
+        return $$createType115($result);
     });
 }
 
@@ -1018,7 +2348,25 @@ export function GetProxyConfig(): $CancellablePromise<$models.ProxyConfigDTO> {
  */
 export function GetSetting(key: string): $CancellablePromise<$models.SettingResult> {
     return $Call.ByID(1031241110, key).then(($result: any) => {
-        return $$createType48($result);
+        return $$createType116($result);
+    });
+}
+
+/**
+ * GetTask returns one task.
+ */
+export function GetTask(id: number): $CancellablePromise<$models.TaskDTO> {
+    return $Call.ByID(1878759607, id).then(($result: any) => {
+        return $$createType117($result);
+    });
+}
+
+/**
+ * GetTaskSettings returns the task preferences.
+ */
+export function GetTaskSettings(): $CancellablePromise<$models.TaskSettingsDTO> {
+    return $Call.ByID(3167124586).then(($result: any) => {
+        return $$createType118($result);
     });
 }
 
@@ -1029,7 +2377,7 @@ export function GetSetting(key: string): $CancellablePromise<$models.SettingResu
  */
 export function GetThemeApply(id: string): $CancellablePromise<$models.ThemeApplyDTO> {
     return $Call.ByID(2754380765, id).then(($result: any) => {
-        return $$createType49($result);
+        return $$createType119($result);
     });
 }
 
@@ -1038,7 +2386,7 @@ export function GetThemeApply(id: string): $CancellablePromise<$models.ThemeAppl
  */
 export function GetThemeDraft(id: string): $CancellablePromise<$models.ThemeDraftDTO> {
     return $Call.ByID(2964546614, id).then(($result: any) => {
-        return $$createType50($result);
+        return $$createType120($result);
     });
 }
 
@@ -1052,7 +2400,16 @@ export function GetThemeDraft(id: string): $CancellablePromise<$models.ThemeDraf
  */
 export function GetThread(threadID: number): $CancellablePromise<$models.ThreadDTO> {
     return $Call.ByID(1547003774, threadID).then(($result: any) => {
-        return $$createType51($result);
+        return $$createType121($result);
+    });
+}
+
+/**
+ * GetTimeBlockSettings returns the time blocking preferences.
+ */
+export function GetTimeBlockSettings(): $CancellablePromise<$models.TimeBlockSettingsDTO> {
+    return $Call.ByID(3186548025).then(($result: any) => {
+        return $$createType122($result);
     });
 }
 
@@ -1062,7 +2419,7 @@ export function GetThread(threadID: number): $CancellablePromise<$models.ThreadD
  */
 export function GetUIPrefs(): $CancellablePromise<$models.UIPrefsDTO> {
     return $Call.ByID(1337377406).then(($result: any) => {
-        return $$createType52($result);
+        return $$createType123($result);
     });
 }
 
@@ -1072,7 +2429,7 @@ export function GetUIPrefs(): $CancellablePromise<$models.UIPrefsDTO> {
  */
 export function GetUserLocale(id: string): $CancellablePromise<$models.UserLocaleApplyDTO> {
     return $Call.ByID(2206708415, id).then(($result: any) => {
-        return $$createType53($result);
+        return $$createType124($result);
     });
 }
 
@@ -1081,7 +2438,7 @@ export function GetUserLocale(id: string): $CancellablePromise<$models.UserLocal
  */
 export function GetVirusTotalConfig(): $CancellablePromise<$models.VirusTotalConfigDTO> {
     return $Call.ByID(1998762525).then(($result: any) => {
-        return $$createType54($result);
+        return $$createType125($result);
     });
 }
 
@@ -1110,8 +2467,26 @@ export function ImportData(path: string, categories: string[], credentialPasswor
  */
 export function ImportICSData(calendarID: number, data: string): $CancellablePromise<$models.ICSImportResultDTO> {
     return $Call.ByID(3029197892, calendarID, data).then(($result: any) => {
-        return $$createType55($result);
+        return $$createType126($result);
     });
+}
+
+/**
+ * ImportJobs returns the most recent guided imports, newest first. A job
+ * that was running when the app last quit shows as paused.
+ */
+export function ImportJobs(): $CancellablePromise<$models.ImportJobDTO[]> {
+    return $Call.ByID(2880087323).then(($result: any) => {
+        return $$createType128($result);
+    });
+}
+
+/**
+ * ImportKeyFromSetupMessage opens a key transfer with its setup code and
+ * makes the key it carries this mailbox's key.
+ */
+export function ImportKeyFromSetupMessage(messageID: number, code: string): $CancellablePromise<void> {
+    return $Call.ByID(2415395170, messageID, code);
 }
 
 /**
@@ -1129,13 +2504,54 @@ export function ImportMailFiles(paths: string[]): $CancellablePromise<void> {
 }
 
 /**
+ * ImportOPML asks for an OPML file and subscribes to every feed in it that is
+ * not in the list yet. The feeds are fetched in the background afterwards.
+ */
+export function ImportOPML(): $CancellablePromise<$models.FeedImportDTO> {
+    return $Call.ByID(2579033373).then(($result: any) => {
+        return $$createType129($result);
+    });
+}
+
+/**
  * ImportPGPKey opens a file picker and imports whatever keys the chosen file
  * holds. It reports the keys it added; a cancelled dialog returns none and no
  * error.
  */
 export function ImportPGPKey(): $CancellablePromise<$models.PGPKeyDTO[]> {
     return $Call.ByID(3919503765).then(($result: any) => {
-        return $$createType57($result);
+        return $$createType131($result);
+    });
+}
+
+/**
+ * ImportScript stores the script in a file's text, switched off and marked
+ * as imported.
+ */
+export function ImportScript(text: string): $CancellablePromise<$models.ScriptDTO> {
+    return $Call.ByID(2860638596, text).then(($result: any) => {
+        return $$createType6($result);
+    });
+}
+
+/**
+ * ImportScriptLibrary stores the library in a file's text. A library of the
+ * same name is not replaced. Scripts that already required that name are
+ * switched off and listed.
+ */
+export function ImportScriptLibrary(text: string): $CancellablePromise<$models.ScriptLibrarySavedDTO> {
+    return $Call.ByID(2262562895, text).then(($result: any) => {
+        return $$createType68($result);
+    });
+}
+
+/**
+ * ImportTargets lists the accounts mail can be uploaded into, with their
+ * folders by server path.
+ */
+export function ImportTargets(): $CancellablePromise<$models.ImportTargetDTO[]> {
+    return $Call.ByID(3250410255).then(($result: any) => {
+        return $$createType133($result);
     });
 }
 
@@ -1165,12 +2581,54 @@ export function ImportThunderbirdFolders(paths: string[]): $CancellablePromise<v
 }
 
 /**
+ * InsightsPeople returns the people section over the last days days (0 for
+ * all mail).
+ */
+export function InsightsPeople(days: number): $CancellablePromise<$models.InsightsPeopleDTO> {
+    return $Call.ByID(4239708520, days).then(($result: any) => {
+        return $$createType134($result);
+    });
+}
+
+/**
+ * InsightsStorage returns the storage section: every account and folder by
+ * size, the senders whose mail takes the most space and the biggest
+ * attachments. Drafts, trash and junk count here, since they take space too.
+ */
+export function InsightsStorage(): $CancellablePromise<$models.InsightsStorageDTO> {
+    return $Call.ByID(445209120).then(($result: any) => {
+        return $$createType135($result);
+    });
+}
+
+/**
+ * InsightsVolume returns the mail received and sent per local day over the
+ * last days days (0 for all mail), and the received mail per weekday and hour.
+ */
+export function InsightsVolume(days: number): $CancellablePromise<$models.InsightsVolumeDTO> {
+    return $Call.ByID(2447478925, days).then(($result: any) => {
+        return $$createType136($result);
+    });
+}
+
+/**
  * InspectBackupFile opens a file picker and parses the chosen backup, returning
  * what it contains. An empty Path means the dialog was cancelled.
  */
 export function InspectBackupFile(): $CancellablePromise<$models.BackupInfoDTO> {
     return $Call.ByID(4117739970).then(($result: any) => {
-        return $$createType58($result);
+        return $$createType137($result);
+    });
+}
+
+/**
+ * InstallCLI puts a link named pelton to the app into dir. It never replaces
+ * a file that is already there unless that is a link to this app, and when
+ * dir needs administrator rights it returns the command to run instead.
+ */
+export function InstallCLI(dir: string): $CancellablePromise<$models.CLIInstallResultDTO> {
+    return $Call.ByID(2290151673, dir).then(($result: any) => {
+        return $$createType138($result);
     });
 }
 
@@ -1225,13 +2683,20 @@ export function Licenses(): $CancellablePromise<string> {
 }
 
 /**
+ * LinkEventToCard attaches an event to a card by its UID.
+ */
+export function LinkEventToCard(taskUID: string, uid: string, summary: string): $CancellablePromise<void> {
+    return $Call.ByID(2046525249, taskUID, uid, summary);
+}
+
+/**
  * ListAccounts returns all configured accounts. Accounts are created by the cli
  * tools today; an in-app add-account flow is the next step and would call a new
  * CreateAccount binding here plus a keyring write for credentials.
  */
 export function ListAccounts(): $CancellablePromise<$models.AccountDTO[]> {
     return $Call.ByID(1176672978).then(($result: any) => {
-        return $$createType3($result);
+        return $$createType10($result);
     });
 }
 
@@ -1240,7 +2705,7 @@ export function ListAccounts(): $CancellablePromise<$models.AccountDTO[]> {
  */
 export function ListAddressBooks(): $CancellablePromise<$models.AddressBookDTO[]> {
     return $Call.ByID(1212279500).then(($result: any) => {
-        return $$createType59($result);
+        return $$createType139($result);
     });
 }
 
@@ -1250,7 +2715,7 @@ export function ListAddressBooks(): $CancellablePromise<$models.AddressBookDTO[]
  */
 export function ListAddresses(): $CancellablePromise<$models.AddressBookEntryDTO[]> {
     return $Call.ByID(274872050).then(($result: any) => {
-        return $$createType61($result);
+        return $$createType141($result);
     });
 }
 
@@ -1259,16 +2724,37 @@ export function ListAddresses(): $CancellablePromise<$models.AddressBookEntryDTO
  */
 export function ListCalendarAccounts(): $CancellablePromise<$models.CalendarAccountDTO[]> {
     return $Call.ByID(909285760).then(($result: any) => {
-        return $$createType62($result);
+        return $$createType142($result);
     });
 }
 
 /**
- * ListCalendars returns every calendar, local ones first.
+ * ListCalendars returns every calendar that holds events, local ones first.
+ * Task lists are listed by ListTaskLists.
  */
 export function ListCalendars(): $CancellablePromise<$models.CalendarDTO[]> {
     return $Call.ByID(2034585149).then(($result: any) => {
-        return $$createType63($result);
+        return $$createType143($result);
+    });
+}
+
+/**
+ * ListCardLinks returns what a card holds: its mail, events and notes.
+ */
+export function ListCardLinks(taskUID: string): $CancellablePromise<$models.ProjectLinkDTO[]> {
+    return $Call.ByID(2332573161, taskUID).then(($result: any) => {
+        return $$createType145($result);
+    });
+}
+
+/**
+ * ListContactKeys returns every correspondent Pelton knows a key for, from
+ * Autocrypt and from lookups. Keys in the keyring are listed in the keyring
+ * section instead.
+ */
+export function ListContactKeys(): $CancellablePromise<$models.ContactKeyDTO[]> {
+    return $Call.ByID(2217891582).then(($result: any) => {
+        return $$createType147($result);
     });
 }
 
@@ -1278,7 +2764,7 @@ export function ListCalendars(): $CancellablePromise<$models.CalendarDTO[]> {
  */
 export function ListContacts(bookID: number): $CancellablePromise<$models.ContactDTO[]> {
     return $Call.ByID(1294704787, bookID).then(($result: any) => {
-        return $$createType65($result);
+        return $$createType149($result);
     });
 }
 
@@ -1289,7 +2775,26 @@ export function ListContacts(bookID: number): $CancellablePromise<$models.Contac
  */
 export function ListDrafts(): $CancellablePromise<$models.DraftDTO[]> {
     return $Call.ByID(2552292942).then(($result: any) => {
-        return $$createType67($result);
+        return $$createType151($result);
+    });
+}
+
+/**
+ * ListFeedEntries returns a page of the entries a scope selects, newest first.
+ */
+export function ListFeedEntries(scope: $models.FeedScopeDTO, limit: number, offset: number): $CancellablePromise<$models.FeedEntryDTO[]> {
+    return $Call.ByID(1394665338, scope, limit, offset).then(($result: any) => {
+        return $$createType153($result);
+    });
+}
+
+/**
+ * ListFeedSidebar returns the folders, the feeds with their unread counts and
+ * the counts of the smart views.
+ */
+export function ListFeedSidebar(): $CancellablePromise<$models.FeedSidebarDTO> {
+    return $Call.ByID(4144613278).then(($result: any) => {
+        return $$createType154($result);
     });
 }
 
@@ -1300,7 +2805,17 @@ export function ListDrafts(): $CancellablePromise<$models.DraftDTO[]> {
  */
 export function ListFolders(accountID: number): $CancellablePromise<$models.FolderDTO[]> {
     return $Call.ByID(3934291747, accountID).then(($result: any) => {
-        return $$createType68($result);
+        return $$createType155($result);
+    });
+}
+
+/**
+ * ListFollowUps returns every reminder, waiting and fired, the soonest due
+ * first.
+ */
+export function ListFollowUps(): $CancellablePromise<$models.FollowUpDTO[]> {
+    return $Call.ByID(2944834227).then(($result: any) => {
+        return $$createType157($result);
     });
 }
 
@@ -1310,17 +2825,57 @@ export function ListFolders(accountID: number): $CancellablePromise<$models.Fold
  */
 export function ListImageAllowlist(): $CancellablePromise<$models.ImageAllowEntryDTO[]> {
     return $Call.ByID(3551399056).then(($result: any) => {
-        return $$createType70($result);
+        return $$createType159($result);
+    });
+}
+
+/**
+ * ListKeyLookupLog returns the most recent lookup requests, newest first.
+ */
+export function ListKeyLookupLog(): $CancellablePromise<$models.KeyLookupLogDTO[]> {
+    return $Call.ByID(204863959).then(($result: any) => {
+        return $$createType161($result);
+    });
+}
+
+/**
+ * ListMailVaults returns every vault with its state and progress.
+ */
+export function ListMailVaults(): $CancellablePromise<$models.MailVaultDTO[]> {
+    return $Call.ByID(351731608).then(($result: any) => {
+        return $$createType163($result);
     });
 }
 
 /**
  * ListMessages returns a page of summaries for a folder or a unified view, plus
  * the total count for pagination. This is the single read path the list uses.
+ * The first page also carries the Pinned group, which the pages leave out.
  */
 export function ListMessages(req: $models.ListMessagesRequest): $CancellablePromise<$models.MessageListDTO> {
     return $Call.ByID(386262390, req).then(($result: any) => {
-        return $$createType71($result);
+        return $$createType164($result);
+    });
+}
+
+/**
+ * ListNewsletterMail returns the newest mailing list mail, the newsletters the
+ * newsletter manager tracks, for the Newsletters view of the Feeds space. The
+ * rows are the mail itself: reading one marks the message read.
+ */
+export function ListNewsletterMail(limit: number, offset: number, unreadOnly: boolean): $CancellablePromise<$models.MessageSummaryDTO[]> {
+    return $Call.ByID(1126207110, limit, offset, unreadOnly).then(($result: any) => {
+        return $$createType166($result);
+    });
+}
+
+/**
+ * ListNewsletters returns every newsletter sender of the synced accounts.
+ * Order is left to the caller, which sorts by what the user picked.
+ */
+export function ListNewsletters(): $CancellablePromise<$models.NewsletterSenderDTO[]> {
+    return $Call.ByID(4120281850).then(($result: any) => {
+        return $$createType168($result);
     });
 }
 
@@ -1330,7 +2885,16 @@ export function ListMessages(req: $models.ListMessagesRequest): $CancellableProm
  */
 export function ListOAuthProviders(): $CancellablePromise<{ [_ in string]?: string }> {
     return $Call.ByID(1477266713).then(($result: any) => {
-        return $$createType72($result);
+        return $$createType169($result);
+    });
+}
+
+/**
+ * ListOCRLanguages returns the codes of the language files the user added.
+ */
+export function ListOCRLanguages(): $CancellablePromise<string[]> {
+    return $Call.ByID(2208958617).then(($result: any) => {
+        return $$createType40($result);
     });
 }
 
@@ -1341,7 +2905,7 @@ export function ListOAuthProviders(): $CancellablePromise<{ [_ in string]?: stri
  */
 export function ListOccurrences($from: string, to: string, calendarIDs: number[]): $CancellablePromise<$models.OccurrenceDTO[]> {
     return $Call.ByID(2055436096, $from, to, calendarIDs).then(($result: any) => {
-        return $$createType74($result);
+        return $$createType171($result);
     });
 }
 
@@ -1351,7 +2915,7 @@ export function ListOccurrences($from: string, to: string, calendarIDs: number[]
  */
 export function ListOutbox(): $CancellablePromise<$models.OutboxRowDTO[]> {
     return $Call.ByID(2551398283).then(($result: any) => {
-        return $$createType76($result);
+        return $$createType173($result);
     });
 }
 
@@ -1360,7 +2924,7 @@ export function ListOutbox(): $CancellablePromise<$models.OutboxRowDTO[]> {
  */
 export function ListPGPKeys(): $CancellablePromise<$models.PGPKeyDTO[]> {
     return $Call.ByID(2321425041).then(($result: any) => {
-        return $$createType57($result);
+        return $$createType131($result);
     });
 }
 
@@ -1371,7 +2935,7 @@ export function ListPGPKeys(): $CancellablePromise<$models.PGPKeyDTO[]> {
  */
 export function ListPinnedFolders(): $CancellablePromise<$models.FolderDTO[]> {
     return $Call.ByID(3537515353).then(($result: any) => {
-        return $$createType68($result);
+        return $$createType155($result);
     });
 }
 
@@ -1380,7 +2944,114 @@ export function ListPinnedFolders(): $CancellablePromise<$models.FolderDTO[]> {
  */
 export function ListProfiles(): $CancellablePromise<$models.ProfileDTO[]> {
     return $Call.ByID(415269388).then(($result: any) => {
-        return $$createType77($result);
+        return $$createType174($result);
+    });
+}
+
+/**
+ * ListProjectDismissals returns the conversations whose project suggestion
+ * was dismissed.
+ */
+export function ListProjectDismissals(): $CancellablePromise<number[]> {
+    return $Call.ByID(4218177605).then(($result: any) => {
+        return $$createType175($result);
+    });
+}
+
+/**
+ * ListProjectEvents returns the events linked to a project or its cards,
+ * each once, the coming ones first by start and the past ones after them,
+ * latest first.
+ */
+export function ListProjectEvents(projectID: number): $CancellablePromise<$models.ProjectEventDTO[]> {
+    return $Call.ByID(2397458206, projectID).then(($result: any) => {
+        return $$createType177($result);
+    });
+}
+
+/**
+ * ListProjectMailMarks returns which conversations belong to which projects,
+ * for the chips in the message list and the reader.
+ */
+export function ListProjectMailMarks(): $CancellablePromise<$models.ProjectMailMarkDTO[]> {
+    return $Call.ByID(2580055786).then(($result: any) => {
+        return $$createType179($result);
+    });
+}
+
+/**
+ * ListProjectNotes returns a project's notes, the last edited first.
+ */
+export function ListProjectNotes(projectID: number): $CancellablePromise<$models.ProjectNoteDTO[]> {
+    return $Call.ByID(731708936, projectID).then(($result: any) => {
+        return $$createType180($result);
+    });
+}
+
+/**
+ * ListProjectThreads returns a project's conversations as list rows, newest
+ * first. A conversation whose mail is all gone or in Trash is left out.
+ */
+export function ListProjectThreads(projectID: number): $CancellablePromise<$models.ThreadSummaryDTO[]> {
+    return $Call.ByID(3608551664, projectID).then(($result: any) => {
+        return $$createType182($result);
+    });
+}
+
+/**
+ * ListProjectVaultNotes returns a project's notes in the notes folder and the
+ * notes that link to it. The first call with a folder open moves the notes
+ * kept in the database into it.
+ */
+export function ListProjectVaultNotes(projectID: number): $CancellablePromise<$models.ProjectVaultNotesDTO> {
+    return $Call.ByID(2425807202, projectID).then(($result: any) => {
+        return $$createType183($result);
+    });
+}
+
+/**
+ * ListProjects returns every project in its manual order, archived ones
+ * included, with the counts their tiles show.
+ */
+export function ListProjects(): $CancellablePromise<$models.ProjectDTO[]> {
+    return $Call.ByID(2945013416).then(($result: any) => {
+        return $$createType184($result);
+    });
+}
+
+/**
+ * ListPromises returns the promises that are suggested, accepted or closed.
+ */
+export function ListPromises(): $CancellablePromise<$models.PromiseDTO[]> {
+    return $Call.ByID(2866219864).then(($result: any) => {
+        return $$createType96($result);
+    });
+}
+
+/**
+ * ListScriptLibraries returns every shared library by name.
+ */
+export function ListScriptLibraries(): $CancellablePromise<$models.ScriptLibraryDTO[]> {
+    return $Call.ByID(1805473736).then(($result: any) => {
+        return $$createType186($result);
+    });
+}
+
+/**
+ * ListScripts returns every script by name.
+ */
+export function ListScripts(): $CancellablePromise<$models.ScriptDTO[]> {
+    return $Call.ByID(496682534).then(($result: any) => {
+        return $$createType187($result);
+    });
+}
+
+/**
+ * ListSenderReading returns every sender with a remembered reading choice.
+ */
+export function ListSenderReading(): $CancellablePromise<$models.SenderReadingDTO[]> {
+    return $Call.ByID(614250789).then(($result: any) => {
+        return $$createType189($result);
     });
 }
 
@@ -1389,7 +3060,16 @@ export function ListProfiles(): $CancellablePromise<$models.ProfileDTO[]> {
  */
 export function ListSignatures(): $CancellablePromise<$models.SignatureDTO[]> {
     return $Call.ByID(1369021977).then(($result: any) => {
-        return $$createType79($result);
+        return $$createType191($result);
+    });
+}
+
+/**
+ * ListSnippets returns every snippet in the user's order.
+ */
+export function ListSnippets(): $CancellablePromise<$models.SnippetDTO[]> {
+    return $Call.ByID(304860672).then(($result: any) => {
+        return $$createType193($result);
     });
 }
 
@@ -1399,7 +3079,46 @@ export function ListSignatures(): $CancellablePromise<$models.SignatureDTO[]> {
  */
 export function ListSystemFonts(): $CancellablePromise<string[]> {
     return $Call.ByID(589903515).then(($result: any) => {
-        return $$createType17($result);
+        return $$createType40($result);
+    });
+}
+
+/**
+ * ListTaskLists returns every calendar that takes tasks, local lists first.
+ */
+export function ListTaskLists(): $CancellablePromise<$models.TaskListDTO[]> {
+    return $Call.ByID(2827377572).then(($result: any) => {
+        return $$createType194($result);
+    });
+}
+
+/**
+ * ListTaskMailMarks returns the stored messages that tasks link to, so the
+ * message list and the reader can mark them.
+ */
+export function ListTaskMailMarks(): $CancellablePromise<$models.TaskMailMarkDTO[]> {
+    return $Call.ByID(3916931110).then(($result: any) => {
+        return $$createType196($result);
+    });
+}
+
+/**
+ * ListTaskPlans returns, for every task with blocks, how much time they hold
+ * and how much of it is still ahead.
+ */
+export function ListTaskPlans(): $CancellablePromise<$models.TaskPlanDTO[]> {
+    return $Call.ByID(1287806041).then(($result: any) => {
+        return $$createType198($result);
+    });
+}
+
+/**
+ * ListTasks returns every task, leaving out completed ones older than the
+ * completed-days setting.
+ */
+export function ListTasks(): $CancellablePromise<$models.TaskDTO[]> {
+    return $Call.ByID(892994540).then(($result: any) => {
+        return $$createType199($result);
     });
 }
 
@@ -1409,7 +3128,7 @@ export function ListSystemFonts(): $CancellablePromise<string[]> {
  */
 export function ListThemes(): $CancellablePromise<$models.ThemeInfoDTO[]> {
     return $Call.ByID(2466908024).then(($result: any) => {
-        return $$createType80($result);
+        return $$createType200($result);
     });
 }
 
@@ -1421,7 +3140,19 @@ export function ListThemes(): $CancellablePromise<$models.ThemeInfoDTO[]> {
  */
 export function ListThreads(req: $models.ListMessagesRequest): $CancellablePromise<$models.ThreadListDTO> {
     return $Call.ByID(227770071, req).then(($result: any) => {
-        return $$createType81($result);
+        return $$createType201($result);
+    });
+}
+
+/**
+ * ListTimeBlocks returns the blocks overlapping [from, to), both rfc3339, by
+ * start. Blocks written to a calendar are first compared with their events,
+ * so one whose event moved on the server follows it, and one whose event went
+ * or changed past following is marked.
+ */
+export function ListTimeBlocks($from: string, to: string): $CancellablePromise<$models.TimeBlockDTO[]> {
+    return $Call.ByID(668398213, $from, to).then(($result: any) => {
+        return $$createType26($result);
     });
 }
 
@@ -1432,7 +3163,7 @@ export function ListThreads(req: $models.ListMessagesRequest): $CancellablePromi
  */
 export function ListUnifiedViews(): $CancellablePromise<$models.UnifiedViewDTO[]> {
     return $Call.ByID(2069212062).then(($result: any) => {
-        return $$createType83($result);
+        return $$createType203($result);
     });
 }
 
@@ -1443,7 +3174,7 @@ export function ListUnifiedViews(): $CancellablePromise<$models.UnifiedViewDTO[]
  */
 export function ListUserLocales(): $CancellablePromise<$models.UserLocaleDTO[]> {
     return $Call.ByID(495255492).then(($result: any) => {
-        return $$createType85($result);
+        return $$createType205($result);
     });
 }
 
@@ -1452,7 +3183,7 @@ export function ListUserLocales(): $CancellablePromise<$models.UserLocaleDTO[]> 
  */
 export function ListVIPSenders(): $CancellablePromise<string[]> {
     return $Call.ByID(1717489973).then(($result: any) => {
-        return $$createType17($result);
+        return $$createType40($result);
     });
 }
 
@@ -1462,8 +3193,52 @@ export function ListVIPSenders(): $CancellablePromise<string[]> {
  */
 export function ListViews(): $CancellablePromise<$models.ViewDTO[]> {
     return $Call.ByID(2155571936).then(($result: any) => {
-        return $$createType87($result);
+        return $$createType207($result);
     });
+}
+
+/**
+ * LockAllMailVaults locks every vault now.
+ */
+export function LockAllMailVaults(): $CancellablePromise<void> {
+    return $Call.ByID(650192598);
+}
+
+/**
+ * LockMailVault locks one vault now.
+ */
+export function LockMailVault(id: number): $CancellablePromise<void> {
+    return $Call.ByID(2950397070, id);
+}
+
+/**
+ * LockNow locks the app, when the lock is on.
+ */
+export function LockNow(): $CancellablePromise<void> {
+    return $Call.ByID(1186130827);
+}
+
+/**
+ * LookupFreeBusy returns the user's busy time from the visible calendars here
+ * and the attendees' from the CalDAV server of the event's calendar. A server
+ * without scheduling support, and an attendee it cannot answer for, come back
+ * as unknown rather than as an error; a server that cannot be reached at all
+ * fails the lookup. It stops when the caller cancels the call, and after the
+ * calendar timeout.
+ */
+export function LookupFreeBusy(req: $models.FreeBusyRequest): $CancellablePromise<$models.FreeBusyDTO> {
+    return $Call.ByID(2750404971, req).then(($result: any) => {
+        return $$createType208($result);
+    });
+}
+
+/**
+ * LookupRecipientKeys asks the allowed sources for the keys of recipients
+ * Pelton knows none for, and reports whether it found any. With the feature
+ * off or no network source allowed it makes no request at all.
+ */
+export function LookupRecipientKeys(accountID: number, emails: string[]): $CancellablePromise<boolean> {
+    return $Call.ByID(2256028143, accountID, emails);
 }
 
 /**
@@ -1471,7 +3246,7 @@ export function ListViews(): $CancellablePromise<$models.ViewDTO[]> {
  */
 export function MCPPermissions(): $CancellablePromise<$models.MCPPermissionDTO[]> {
     return $Call.ByID(1132143466).then(($result: any) => {
-        return $$createType89($result);
+        return $$createType210($result);
     });
 }
 
@@ -1480,7 +3255,17 @@ export function MCPPermissions(): $CancellablePromise<$models.MCPPermissionDTO[]
  */
 export function MailEventSource(messageID: number): $CancellablePromise<$models.MailEventSourceDTO> {
     return $Call.ByID(1848767666, messageID).then(($result: any) => {
-        return $$createType90($result);
+        return $$createType211($result);
+    });
+}
+
+/**
+ * MarkFeedScopeRead marks every unread entry of a scope read and returns
+ * their ids, so the ui can offer to undo it.
+ */
+export function MarkFeedScopeRead(scope: $models.FeedScopeDTO): $CancellablePromise<number[]> {
+    return $Call.ByID(1828476769, scope).then(($result: any) => {
+        return $$createType175($result);
     });
 }
 
@@ -1492,7 +3277,7 @@ export function MailEventSource(messageID: number): $CancellablePromise<$models.
  */
 export function MarkNotSpam(id: number): $CancellablePromise<$models.ArchiveUndoDTO> {
     return $Call.ByID(341138761, id).then(($result: any) => {
-        return $$createType12($result);
+        return $$createType22($result);
     });
 }
 
@@ -1512,7 +3297,18 @@ export function MarkSenderVIP(messageID: number): $CancellablePromise<void> {
  */
 export function MarkSpam(id: number): $CancellablePromise<$models.ArchiveUndoDTO> {
     return $Call.ByID(2234747294, id).then(($result: any) => {
-        return $$createType12($result);
+        return $$createType22($result);
+    });
+}
+
+/**
+ * MergeContacts merges contacts into one: the merged card is written to the
+ * server first, then the others are deleted there and here. See
+ * contactmerge.Run for the order and what a failure part way leaves behind.
+ */
+export function MergeContacts(req: $models.MergeContactsRequest): $CancellablePromise<$models.MergeResultDTO> {
+    return $Call.ByID(1900325159, req).then(($result: any) => {
+        return $$createType212($result);
     });
 }
 
@@ -1524,7 +3320,7 @@ export function MarkSpam(id: number): $CancellablePromise<$models.ArchiveUndoDTO
  */
 export function MessageIDs(req: $models.ListMessagesRequest): $CancellablePromise<$models.MessageIDsDTO> {
     return $Call.ByID(3727472753, req).then(($result: any) => {
-        return $$createType91($result);
+        return $$createType213($result);
     });
 }
 
@@ -1537,14 +3333,61 @@ export function MinimiseWindow(): $CancellablePromise<void> {
 }
 
 /**
+ * MoveFeeds puts feeds into a folder (0 for none) in the given order.
+ */
+export function MoveFeeds(folderID: number, ids: number[]): $CancellablePromise<void> {
+    return $Call.ByID(3694977852, folderID, ids);
+}
+
+/**
  * MoveMessage moves a message to any folder (of its own account) on the server,
  * dropping the local row so it leaves the current view immediately; the next sync
  * re-fetches it under the destination. It returns the info needed to undo.
  */
 export function MoveMessage(id: number, destFolderID: number): $CancellablePromise<$models.ArchiveUndoDTO> {
     return $Call.ByID(335837378, id, destFolderID).then(($result: any) => {
-        return $$createType12($result);
+        return $$createType22($result);
     });
+}
+
+/**
+ * MoveProjectCard moves a card to index in a column of its board. Into the
+ * done column it completes the task; out of it, it opens the task again. A
+ * repeating task completed this way moves on to its next occurrence and the
+ * card stays where it was, which the result says with Advanced.
+ */
+export function MoveProjectCard(taskUID: string, columnID: number, index: number): $CancellablePromise<$models.ProjectMoveResultDTO> {
+    return $Call.ByID(2901483814, taskUID, columnID, index).then(($result: any) => {
+        return $$createType214($result);
+    });
+}
+
+/**
+ * NewsletterMessageIDs returns the ids of the newsletter mail sel picks,
+ * which the frontend counts for its confirmation and then archives or
+ * deletes through the bulk bindings.
+ */
+export function NewsletterMessageIDs(sel: $models.NewsletterSelectionDTO): $CancellablePromise<number[]> {
+    return $Call.ByID(3205105362, sel).then(($result: any) => {
+        return $$createType175($result);
+    });
+}
+
+/**
+ * NoteActivity tells the idle check the app is being used. Every window calls
+ * it, throttled, on input.
+ */
+export function NoteActivity(): $CancellablePromise<void> {
+    return $Call.ByID(3146739959);
+}
+
+/**
+ * NoteUnsubscribeLink records that the user opened a message's unsubscribe
+ * web page, so mail that keeps coming afterwards is noticed like after any
+ * other unsubscribe. Whether the page worked is not known here.
+ */
+export function NoteUnsubscribeLink(id: number): $CancellablePromise<void> {
+    return $Call.ByID(2177558867, id);
 }
 
 /**
@@ -1581,7 +3424,7 @@ export function OpenCrashReport(): $CancellablePromise<void> {
  */
 export function OpenDraft(messageID: number): $CancellablePromise<$models.DraftDTO> {
     return $Call.ByID(1449483965, messageID).then(($result: any) => {
-        return $$createType66($result);
+        return $$createType150($result);
     });
 }
 
@@ -1591,7 +3434,7 @@ export function OpenDraft(messageID: number): $CancellablePromise<$models.DraftD
  */
 export function OpenICSFile(): $CancellablePromise<$models.ICSFileDTO> {
     return $Call.ByID(3931373229).then(($result: any) => {
-        return $$createType92($result);
+        return $$createType215($result);
     });
 }
 
@@ -1622,6 +3465,21 @@ export function OpenMessageWindow(id: number, title: string): $CancellablePromis
 }
 
 /**
+ * OpenOCRFolder shows the ocr folder in the system file manager.
+ */
+export function OpenOCRFolder(): $CancellablePromise<void> {
+    return $Call.ByID(1452344790);
+}
+
+/**
+ * OpenOutboxWindow shows the send activity in its own window, or brings the
+ * one already open forward.
+ */
+export function OpenOutboxWindow(): $CancellablePromise<void> {
+    return $Call.ByID(1912580527);
+}
+
+/**
  * OpenThemesFolder shows the themes folder in the system file manager, so
  * .peltontheme files can be dropped in or copied out directly.
  */
@@ -1636,7 +3494,69 @@ export function OpenThemesFolder(): $CancellablePromise<void> {
  */
 export function ParseInvite(messageID: number): $CancellablePromise<$models.InviteDTO> {
     return $Call.ByID(3416305756, messageID).then(($result: any) => {
-        return $$createType93($result);
+        return $$createType216($result);
+    });
+}
+
+/**
+ * PauseImportJob stops a running job so it can be resumed later.
+ */
+export function PauseImportJob(id: number): $CancellablePromise<void> {
+    return $Call.ByID(1533084524, id);
+}
+
+/**
+ * PendingScriptCatchUps lists the catch-up questions still open, for a
+ * window that opened after they were asked.
+ */
+export function PendingScriptCatchUps(): $CancellablePromise<$models.ScriptCatchUpDTO[]> {
+    return $Call.ByID(3684495237).then(($result: any) => {
+        return $$createType218($result);
+    });
+}
+
+/**
+ * PickScriptFile asks for a .peltonscript file and returns its path, ""
+ * when the user cancelled.
+ */
+export function PickScriptFile(): $CancellablePromise<string> {
+    return $Call.ByID(947934670);
+}
+
+/**
+ * PickScriptFolder asks for the folder a script may read and write files
+ * in and grants it. It returns the folder, "" when the user cancelled, which
+ * keeps the grant as it was.
+ */
+export function PickScriptFolder(id: number): $CancellablePromise<string> {
+    return $Call.ByID(1765602780, id);
+}
+
+/**
+ * PlanDay lays the open tasks due on day (2006-01-02, empty for today) or
+ * before it into that day's free time from now on, as proposals. Tasks go by
+ * due date, then priority; each needs its estimate, or the default length,
+ * less what its blocks already hold. Nothing is stored until the proposals
+ * are accepted.
+ */
+export function PlanDay(day: string): $CancellablePromise<$models.DayPlanDTO> {
+    return $Call.ByID(392406541, day).then(($result: any) => {
+        return $$createType219($result);
+    });
+}
+
+/**
+ * PrepareMeeting gathers what helps with a meeting from local data: the
+ * invited with their address book cards and replies, recent conversations with
+ * them (those with several of them or with a subject matching the title
+ * first), files exchanged, open tasks linked to them or to those mails,
+ * earlier meetings with the same people, and the call's join link. A
+ * recurrenceID names one occurrence of a series. It reads only the store, with
+ * the limits above.
+ */
+export function PrepareMeeting(eventID: number, recurrenceID: string): $CancellablePromise<$models.MeetingPrepDTO> {
+    return $Call.ByID(3001780658, eventID, recurrenceID).then(($result: any) => {
+        return $$createType220($result);
     });
 }
 
@@ -1658,7 +3578,26 @@ export function PreviewArchiveExportName(template: string, subfolders: string): 
  */
 export function PreviewThemeImport(): $CancellablePromise<$models.ThemeImportPreviewDTO> {
     return $Call.ByID(4097141706).then(($result: any) => {
-        return $$createType94($result);
+        return $$createType221($result);
+    });
+}
+
+/**
+ * PrioritiseOutboxSend moves a waiting message to the front of the queue, so
+ * it is the next one sent once due, and reports whether it was still waiting.
+ */
+export function PrioritiseOutboxSend(id: number): $CancellablePromise<boolean> {
+    return $Call.ByID(1050086629, id);
+}
+
+/**
+ * PrivacyReport lists senders by how much they tried to track over the last
+ * days days; 0 means all the history there is. Senders whose mail never
+ * tracked anything and who were never unsubscribed from are left out.
+ */
+export function PrivacyReport(days: number): $CancellablePromise<$models.PrivacyReportDTO> {
+    return $Call.ByID(895298132, days).then(($result: any) => {
+        return $$createType222($result);
     });
 }
 
@@ -1669,7 +3608,7 @@ export function PreviewThemeImport(): $CancellablePromise<$models.ThemeImportPre
  */
 export function ProbeAccountCertificates(accountID: number): $CancellablePromise<$models.UntrustedCertDTO[]> {
     return $Call.ByID(1000865495, accountID).then(($result: any) => {
-        return $$createType96($result);
+        return $$createType224($result);
     });
 }
 
@@ -1681,13 +3620,49 @@ export function ProgramLicense(): $CancellablePromise<string> {
 }
 
 /**
+ * ProjectOfTask returns the project a task is a card of, 0 for none.
+ */
+export function ProjectOfTask(taskUID: string): $CancellablePromise<number> {
+    return $Call.ByID(2466486623, taskUID);
+}
+
+/**
+ * ProjectsOfEvent returns the projects an event is filed under itself.
+ */
+export function ProjectsOfEvent(uid: string): $CancellablePromise<number[]> {
+    return $Call.ByID(3862382143, uid).then(($result: any) => {
+        return $$createType175($result);
+    });
+}
+
+/**
+ * PromisesForMessage returns the promises of the mail a stored message is a
+ * copy of, dismissed ones left out.
+ */
+export function PromisesForMessage(messageID: number): $CancellablePromise<$models.PromiseDTO[]> {
+    return $Call.ByID(1047978626, messageID).then(($result: any) => {
+        return $$createType96($result);
+    });
+}
+
+/**
  * QueryAttachments returns a page of the attachments browser, newest first.
  * Trash and junk are left out, and so are tiny images (see
  * storage.TinyImageBytes).
  */
 export function QueryAttachments(req: $models.AttachmentQueryRequest): $CancellablePromise<$models.AttachmentPageDTO> {
     return $Call.ByID(1777505748, req).then(($result: any) => {
-        return $$createType97($result);
+        return $$createType225($result);
+    });
+}
+
+/**
+ * QuietPromiseSender stops reading a sender's mail for promises and dismisses
+ * the suggestions about them. It returns the ids it dismissed, for undo.
+ */
+export function QuietPromiseSender(email: string): $CancellablePromise<number[]> {
+    return $Call.ByID(687578406, email).then(($result: any) => {
+        return $$createType175($result);
     });
 }
 
@@ -1704,7 +3679,7 @@ export function QuitApp(): $CancellablePromise<void> {
  */
 export function ReadAttachment(messageID: number, attachmentID: number): $CancellablePromise<$models.AttachmentContentDTO> {
     return $Call.ByID(3319094499, messageID, attachmentID).then(($result: any) => {
-        return $$createType98($result);
+        return $$createType226($result);
     });
 }
 
@@ -1714,7 +3689,36 @@ export function ReadAttachment(messageID: number, attachmentID: number): $Cancel
  */
 export function ReadICSFiles(paths: string[]): $CancellablePromise<$models.ICSFileDTO[]> {
     return $Call.ByID(4072265058, paths).then(($result: any) => {
-        return $$createType99($result);
+        return $$createType227($result);
+    });
+}
+
+/**
+ * ReadOCRLanguage returns a user-added language file for tesseract to load.
+ */
+export function ReadOCRLanguage(code: string): $CancellablePromise<string> {
+    return $Call.ByID(3311324412, code).then(($result: any) => {
+        return $Create.ByteSlice($result);
+    });
+}
+
+/**
+ * ReadOutboxLog returns the send activity of this run, oldest first. It is
+ * kept in memory only and is empty after a restart.
+ */
+export function ReadOutboxLog(): $CancellablePromise<$models.OutboxLogEntryDTO[]> {
+    return $Call.ByID(994291703).then(($result: any) => {
+        return $$createType229($result);
+    });
+}
+
+/**
+ * ReadScriptFile reads a script file for the import dialog without storing
+ * or running anything.
+ */
+export function ReadScriptFile(path: string): $CancellablePromise<$models.ScriptFileDTO> {
+    return $Call.ByID(3717567395, path).then(($result: any) => {
+        return $$createType230($result);
     });
 }
 
@@ -1741,12 +3745,64 @@ export function RebuildMenu(): $CancellablePromise<void> {
 }
 
 /**
+ * RecheckSieve forgets that the server had no sieve service and looks again.
+ */
+export function RecheckSieve(accountID: number): $CancellablePromise<$models.SieveStateDTO> {
+    return $Call.ByID(533567617, accountID).then(($result: any) => {
+        return $$createType231($result);
+    });
+}
+
+/**
+ * RecoverMailVault opens a vault with its recovery code and sets a new
+ * passphrase. The recovery code keeps working afterwards.
+ */
+export function RecoverMailVault(id: number, code: string, newPassphrase: string): $CancellablePromise<$models.MailVaultAuthDTO> {
+    return $Call.ByID(2161365163, id, code, newPassphrase).then(($result: any) => {
+        return $$createType32($result);
+    });
+}
+
+/**
+ * RefreshFeed fetches one feed now, in the background.
+ */
+export function RefreshFeed(id: number): $CancellablePromise<void> {
+    return $Call.ByID(2971986965, id);
+}
+
+/**
+ * RefreshFeeds fetches every feed now, in the background. Progress and the
+ * result arrive as events. A refresh already running is left to finish.
+ */
+export function RefreshFeeds(): $CancellablePromise<void> {
+    return $Call.ByID(1126179986);
+}
+
+/**
  * RegenerateMCPToken issues a fresh bearer token, invalidating the old one, and
  * restarts the server if running so the new token takes effect. Returns the new
  * token for the settings ui to display.
  */
 export function RegenerateMCPToken(): $CancellablePromise<string> {
     return $Call.ByID(1277669429);
+}
+
+/**
+ * RejectScriptProposal throws a proposed change away.
+ */
+export function RejectScriptProposal(id: number): $CancellablePromise<void> {
+    return $Call.ByID(1543788344, id);
+}
+
+/**
+ * ReleaseTaskTimeBlocks is asked before a task is deleted: with deleteFuture,
+ * its blocks that have not started go (with their events) and the rest stay;
+ * otherwise every block stays. Blocks that stay forget the task and take its
+ * title as their own, unless the task was made from mail in a vault, whose
+ * subject is never stored here.
+ */
+export function ReleaseTaskTimeBlocks(uid: string, deleteFuture: boolean): $CancellablePromise<void> {
+    return $Call.ByID(1014457153, uid, deleteFuture);
 }
 
 /**
@@ -1781,10 +3837,65 @@ export function RemoveImageAllow(kind: string, value: string): $CancellablePromi
 }
 
 /**
+ * RemoveMailVault unseals an unlocked vault's mail back into ordinary
+ * storage in the background and removes the vault once nothing is left
+ * sealed. It resumes at the next unlock if the app quits first.
+ */
+export function RemoveMailVault(id: number): $CancellablePromise<void> {
+    return $Call.ByID(1232264139, id);
+}
+
+/**
+ * RemoveNoteFromProject takes a note out of a project: the project leaves
+ * its front matter when it is this one, and the project's cards let go of
+ * it. The file stays.
+ */
+export function RemoveNoteFromProject(rel: string, projectID: number): $CancellablePromise<void> {
+    return $Call.ByID(2642488179, rel, projectID);
+}
+
+/**
+ * RemoveOCRLanguage deletes a language file the user added.
+ */
+export function RemoveOCRLanguage(code: string): $CancellablePromise<void> {
+    return $Call.ByID(3747166912, code);
+}
+
+/**
  * RemoveOffline unpins a message from offline.
  */
 export function RemoveOffline(id: number): $CancellablePromise<void> {
     return $Call.ByID(118757429, id);
+}
+
+/**
+ * RemoveProjectCard takes a card off its board with the links it held. The
+ * task stays in its list.
+ */
+export function RemoveProjectCard(taskUID: string): $CancellablePromise<void> {
+    return $Call.ByID(32617997, taskUID);
+}
+
+/**
+ * RemoveProjectLink removes one link of a project or a card.
+ */
+export function RemoveProjectLink(id: number): $CancellablePromise<void> {
+    return $Call.ByID(38855679, id);
+}
+
+/**
+ * RemoveProjectPerson takes someone off a project.
+ */
+export function RemoveProjectPerson(projectID: number, email: string): $CancellablePromise<void> {
+    return $Call.ByID(2785034742, projectID, email);
+}
+
+/**
+ * RemoveProjectThread takes a conversation out of a project and its cards.
+ * The mail stays where it is.
+ */
+export function RemoveProjectThread(projectID: number, threadID: number): $CancellablePromise<void> {
+    return $Call.ByID(2824720435, projectID, threadID);
 }
 
 /**
@@ -1812,6 +3923,13 @@ export function RenameCalendar(id: number, name: string): $CancellablePromise<vo
 }
 
 /**
+ * RenameFeedFolder renames a folder.
+ */
+export function RenameFeedFolder(id: number, name: string): $CancellablePromise<void> {
+    return $Call.ByID(3626269456, id, name);
+}
+
+/**
  * RenameFolder renames a mailbox in place, keeping its cached messages. The
  * name is again a single level: the folder stays where it is in the hierarchy,
  * so only the last path segment changes. Special mailboxes are refused.
@@ -1821,10 +3939,26 @@ export function RenameFolder(id: number, name: string): $CancellablePromise<void
 }
 
 /**
+ * ReopenPromise undoes an automatic close or turns down an offer to complete:
+ * the promise is open again, its task too, and the reply that closed it is
+ * remembered so it does not close it again.
+ */
+export function ReopenPromise(id: number): $CancellablePromise<void> {
+    return $Call.ByID(1756833996, id);
+}
+
+/**
  * ReorderAccounts persists a new order for the sidebar's account sections.
  */
 export function ReorderAccounts(orderedIDs: number[]): $CancellablePromise<void> {
     return $Call.ByID(2379918365, orderedIDs);
+}
+
+/**
+ * ReorderFeedFolders puts the folders in the given order.
+ */
+export function ReorderFeedFolders(ids: number[]): $CancellablePromise<void> {
+    return $Call.ByID(992460298, ids);
 }
 
 /**
@@ -1842,6 +3976,35 @@ export function ReorderFolders(orderedIDs: number[]): $CancellablePromise<void> 
  */
 export function ReorderPinnedFolders(orderedIDs: number[]): $CancellablePromise<void> {
     return $Call.ByID(24920696, orderedIDs);
+}
+
+/**
+ * ReorderProjectColumns gives a board's columns the order of ids.
+ */
+export function ReorderProjectColumns(projectID: number, ids: number[]): $CancellablePromise<void> {
+    return $Call.ByID(3930680261, projectID, ids);
+}
+
+/**
+ * ReorderProjects gives the projects the order of ids.
+ */
+export function ReorderProjects(ids: number[]): $CancellablePromise<void> {
+    return $Call.ByID(3245369815, ids);
+}
+
+/**
+ * ReorderSnippets stores the order the snippets are listed in.
+ */
+export function ReorderSnippets(ids: number[]): $CancellablePromise<void> {
+    return $Call.ByID(3238170871, ids);
+}
+
+/**
+ * ReorderTasks gives the tasks the manual order they are listed in, writing
+ * only the ones whose position changed.
+ */
+export function ReorderTasks(ids: number[]): $CancellablePromise<void> {
+    return $Call.ByID(3241592685, ids);
 }
 
 /**
@@ -1863,12 +4026,46 @@ export function ReorderViews(orderedIDs: number[]): $CancellablePromise<void> {
 }
 
 /**
+ * ResetDismissedDuplicates forgets every "not duplicates" answer, so those
+ * groups show again. It returns how many pairs were forgotten.
+ */
+export function ResetDismissedDuplicates(): $CancellablePromise<number> {
+    return $Call.ByID(2710348684);
+}
+
+/**
+ * ResetSenderReading forgets every remembered sender reading choice and
+ * returns how many senders there were.
+ */
+export function ResetSenderReading(): $CancellablePromise<number> {
+    return $Call.ByID(3535212276);
+}
+
+/**
  * ResolveEventConflict settles a conflict: keepMine writes the local version
  * over the server's, otherwise the server's version replaces the local one.
  */
 export function ResolveEventConflict(id: number, keepMine: boolean): $CancellablePromise<$models.EventDTO> {
     return $Call.ByID(523357160, id, keepMine).then(($result: any) => {
-        return $$createType43($result);
+        return $$createType101($result);
+    });
+}
+
+/**
+ * ResolveScriptCatchUp answers a catch-up question: run over the mail that
+ * arrived while the app was closed, or skip it.
+ */
+export function ResolveScriptCatchUp(scriptID: number, run: boolean): $CancellablePromise<void> {
+    return $Call.ByID(2794499369, scriptID, run);
+}
+
+/**
+ * ResolveTaskConflict settles a task's conflict: keepMine writes the local
+ * version over the server's, otherwise the server's replaces the local one.
+ */
+export function ResolveTaskConflict(id: number, keepMine: boolean): $CancellablePromise<$models.TaskDTO> {
+    return $Call.ByID(2502896921, id, keepMine).then(($result: any) => {
+        return $$createType117($result);
     });
 }
 
@@ -1885,10 +4082,44 @@ export function RestoreMessage(rfcMessageID: string, fromFolderID: number, toFol
 }
 
 /**
+ * RestorePromise brings a dismissed suggestion back, which is what undo of a
+ * dismissal does.
+ */
+export function RestorePromise(id: number): $CancellablePromise<void> {
+    return $Call.ByID(2219404933, id);
+}
+
+/**
+ * RestoreSievePrevious undoes the last save: Pelton's script goes back to the
+ * version before it and the script that was active then is active again.
+ * Restoring twice returns to where it started.
+ */
+export function RestoreSievePrevious(accountID: number): $CancellablePromise<$models.SieveStateDTO> {
+    return $Call.ByID(1563920075, accountID).then(($result: any) => {
+        return $$createType231($result);
+    });
+}
+
+/**
+ * RestoreTasks brings deleted tasks back as they were, under their own UIDs,
+ * which is what undo of a deletion does.
+ */
+export function RestoreTasks(items: $models.RemovedTaskDTO[]): $CancellablePromise<void> {
+    return $Call.ByID(980464750, items);
+}
+
+/**
+ * ResumeImportJob carries on with a paused job from where it stopped.
+ */
+export function ResumeImportJob(id: number): $CancellablePromise<void> {
+    return $Call.ByID(393538531, id);
+}
+
+/**
  * ResumePendingDownload restarts a bulk download that was still running when
- * the app last closed. planDownload/planAccount already skip anything cached,
- * so replaying the same range only fetches whatever the previous run had not
- * gotten to yet. Called once from startup; a no-op if nothing was pending.
+ * the app last closed. planDownload/planAccount already skip anything that has
+ * its body, so replaying the same range only fetches whatever the previous run
+ * had not gotten to yet. Called once from startup; a no-op if nothing was pending.
  */
 export function ResumePendingDownload(): $CancellablePromise<void> {
     return $Call.ByID(548967280);
@@ -1904,10 +4135,50 @@ export function RetrySend(id: number): $CancellablePromise<boolean> {
 }
 
 /**
+ * RunPlacedScript runs a script from a placement on the items it was used
+ * on: ids to load, or for a value nothing loads, its fields.
+ */
+export function RunPlacedScript(id: number, placement: string, items: scripting$0.PlacedItem[]): $CancellablePromise<$models.ScriptRunDTO> {
+    return $Call.ByID(1278665749, id, placement, items).then(($result: any) => {
+        return $$createType232($result);
+    });
+}
+
+/**
+ * RunScript runs an enabled script now, on the given message when its
+ * trigger works on one (0 for none), and returns the run.
+ */
+export function RunScript(id: number, messageID: number): $CancellablePromise<$models.ScriptRunDTO> {
+    return $Call.ByID(2788026208, id, messageID).then(($result: any) => {
+        return $$createType232($result);
+    });
+}
+
+/**
+ * RunScriptResultAction carries out a result action that runs in the
+ * backend, such as saving a result as a note, and returns what to tell the
+ * user. A result is kept for its buttons while it is among the latest shown.
+ */
+export function RunScriptResultAction(resultID: string, action: string): $CancellablePromise<string> {
+    return $Call.ByID(1433062139, resultID, action);
+}
+
+/**
  * SMIMERevocationEnabled reports whether revocation checking is on.
  */
 export function SMIMERevocationEnabled(): $CancellablePromise<boolean> {
     return $Call.ByID(3086230136);
+}
+
+/**
+ * SaveAIProvider adds a provider, or changes the one with the input's id.
+ * The first provider becomes the default. A new key goes to the credential
+ * store, never to the settings.
+ */
+export function SaveAIProvider($in: $models.AIProviderInput): $CancellablePromise<$models.AIProviderDTO> {
+    return $Call.ByID(761564268, $in).then(($result: any) => {
+        return $$createType2($result);
+    });
 }
 
 /**
@@ -1944,7 +4215,7 @@ export function SaveAttachmentsTo(refs: $models.AttachmentRefDTO[]): $Cancellabl
  */
 export function SaveContact(req: $models.ContactRequest): $CancellablePromise<$models.ContactConflictDTO> {
     return $Call.ByID(3816472717, req).then(($result: any) => {
-        return $$createType29($result);
+        return $$createType73($result);
     });
 }
 
@@ -1956,7 +4227,7 @@ export function SaveContact(req: $models.ContactRequest): $CancellablePromise<$m
  */
 export function SaveCustomTheme(req: $models.SaveThemeRequest): $CancellablePromise<$models.ThemeInfoDTO> {
     return $Call.ByID(216806573, req).then(($result: any) => {
-        return $$createType21($result);
+        return $$createType57($result);
     });
 }
 
@@ -1979,12 +4250,64 @@ export function SaveLocaleTemplate(content: string): $CancellablePromise<string>
 }
 
 /**
+ * SaveNote writes the private note on a message, or on its conversation when
+ * conversation is set. A blank body deletes it. Notes stay on this device:
+ * they are never synced, sent or added to the message.
+ */
+export function SaveNote(messageID: number, conversation: boolean, body: string): $CancellablePromise<$models.NoteDTO> {
+    return $Call.ByID(3350745451, messageID, conversation, body).then(($result: any) => {
+        return $$createType109($result);
+    });
+}
+
+/**
+ * SaveSieveRules writes the filter rules into Pelton's script, keeping its out
+ * of office, and activates it.
+ */
+export function SaveSieveRules(accountID: number, rules: sieve$0.Rule[]): $CancellablePromise<$models.SieveSaveDTO> {
+    return $Call.ByID(2723043074, accountID, rules).then(($result: any) => {
+        return $$createType51($result);
+    });
+}
+
+/**
+ * SaveSieveScript writes text as Pelton's script as it is, after the server
+ * checked it, and activates it.
+ */
+export function SaveSieveScript(accountID: number, text: string): $CancellablePromise<$models.SieveSaveDTO> {
+    return $Call.ByID(2108138604, accountID, text).then(($result: any) => {
+        return $$createType51($result);
+    });
+}
+
+/**
+ * SaveSieveVacation writes the out of office into Pelton's script, keeping its
+ * rules, and activates it.
+ */
+export function SaveSieveVacation(accountID: number, vacation: sieve$0.Vacation): $CancellablePromise<$models.SieveSaveDTO> {
+    return $Call.ByID(1394060616, accountID, vacation).then(($result: any) => {
+        return $$createType51($result);
+    });
+}
+
+/**
  * SaveSignature creates the signature when ID is 0, otherwise updates it, and
  * returns the stored row (with its id).
  */
 export function SaveSignature(dto: $models.SignatureDTO): $CancellablePromise<$models.SignatureDTO> {
     return $Call.ByID(94196479, dto).then(($result: any) => {
-        return $$createType78($result);
+        return $$createType190($result);
+    });
+}
+
+/**
+ * SaveSnippet creates the snippet when ID is 0 and updates it otherwise,
+ * returning it as stored. The name must not be empty and the trigger, when
+ * set, must be one word no other snippet uses.
+ */
+export function SaveSnippet(dto: $models.SnippetDTO): $CancellablePromise<$models.SnippetDTO> {
+    return $Call.ByID(3712814544, dto).then(($result: any) => {
+        return $$createType192($result);
     });
 }
 
@@ -1994,7 +4317,7 @@ export function SaveSignature(dto: $models.SignatureDTO): $CancellablePromise<$m
  */
 export function SaveView(dto: $models.ViewDTO): $CancellablePromise<$models.ViewDTO> {
     return $Call.ByID(4262619006, dto).then(($result: any) => {
-        return $$createType86($result);
+        return $$createType206($result);
     });
 }
 
@@ -2005,7 +4328,18 @@ export function SaveView(dto: $models.ViewDTO): $CancellablePromise<$models.View
  */
 export function ScanAttachment(messageID: number, attachmentID: number): $CancellablePromise<$models.VerdictDTO> {
     return $Call.ByID(453863286, messageID, attachmentID).then(($result: any) => {
-        return $$createType100($result);
+        return $$createType233($result);
+    });
+}
+
+/**
+ * ScanImportSource reads what a source holds without changing anything in
+ * it: accounts, mail folders with their message counts, address books,
+ * calendars and filters, and what Pelton cannot bring over.
+ */
+export function ScanImportSource(kind: string, paths: string[]): $CancellablePromise<$models.ImportInventoryDTO> {
+    return $Call.ByID(1987666303, kind, paths).then(($result: any) => {
+        return $$createType234($result);
     });
 }
 
@@ -2017,7 +4351,7 @@ export function ScanAttachment(messageID: number, attachmentID: number): $Cancel
  */
 export function ScanMessage(messageID: number, links: boolean, attachments: boolean): $CancellablePromise<$models.MessageScanDTO> {
     return $Call.ByID(300497314, messageID, links, attachments).then(($result: any) => {
-        return $$createType101($result);
+        return $$createType235($result);
     });
 }
 
@@ -2028,7 +4362,120 @@ export function ScanMessage(messageID: number, links: boolean, attachments: bool
  */
 export function ScanURL(rawURL: string): $CancellablePromise<$models.VerdictDTO> {
     return $Call.ByID(3387403308, rawURL).then(($result: any) => {
-        return $$createType100($result);
+        return $$createType233($result);
+    });
+}
+
+/**
+ * ScriptAskSeconds returns how long a question of a script nobody started,
+ * and the before-send recipient confirmation, wait for an answer.
+ */
+export function ScriptAskSeconds(): $CancellablePromise<number> {
+    return $Call.ByID(305353439);
+}
+
+/**
+ * ScriptFolder returns the folder a script may read and write files in, ""
+ * when it has none.
+ */
+export function ScriptFolder(id: number): $CancellablePromise<string> {
+    return $Call.ByID(1649930389, id);
+}
+
+/**
+ * ScriptLibraryImpact lists the scripts saving a library under name would
+ * switch off: those that load it, under its current name or the new one,
+ * and are on or hold an approval. id is 0 for a library not stored yet.
+ */
+export function ScriptLibraryImpact(id: number, name: string): $CancellablePromise<$models.ScriptRefDTO[]> {
+    return $Call.ByID(1000612282, id, name).then(($result: any) => {
+        return $$createType76($result);
+    });
+}
+
+/**
+ * ScriptLibraryNote says whether a script was switched off because a library
+ * it loads changed, and what changed in it since the script was approved.
+ */
+export function ScriptLibraryNote(scriptID: number): $CancellablePromise<$models.ScriptLibraryNoteDTO> {
+    return $Call.ByID(2341516292, scriptID).then(($result: any) => {
+        return $$createType236($result);
+    });
+}
+
+/**
+ * ScriptLiveRuns lists the runs in progress, for a window opened while they
+ * run.
+ */
+export function ScriptLiveRuns(): $CancellablePromise<scripting$0.LiveRun[]> {
+    return $Call.ByID(2659035721).then(($result: any) => {
+        return $$createType238($result);
+    });
+}
+
+/**
+ * ScriptLogDays returns how many days the run log keeps.
+ */
+export function ScriptLogDays(): $CancellablePromise<number> {
+    return $Call.ByID(212513478);
+}
+
+/**
+ * ScriptPlacements lists, per placement id, the scripts offered there.
+ */
+export function ScriptPlacements(): $CancellablePromise<{ [_ in string]?: $models.PlacedScriptDTO[] }> {
+    return $Call.ByID(299555825).then(($result: any) => {
+        return $$createType241($result);
+    });
+}
+
+/**
+ * ScriptProposal returns the change an agent proposed to a script, with a
+ * line diff against the script as it is.
+ */
+export function ScriptProposal(id: number): $CancellablePromise<$models.ScriptProposalDTO> {
+    return $Call.ByID(614664391, id).then(($result: any) => {
+        return $$createType242($result);
+    });
+}
+
+/**
+ * ScriptReference returns the scripting reference as one markdown document
+ * in English, the same one an assistant reads over MCP.
+ */
+export function ScriptReference(): $CancellablePromise<string> {
+    return $Call.ByID(1749449554);
+}
+
+/**
+ * ScriptRegistry returns everything scripts can use, as data: triggers,
+ * conditions, actions, modules with their functions, value types,
+ * permissions and parameter types. The editor, the pickers and the API
+ * reference are built from it.
+ */
+export function ScriptRegistry(): $CancellablePromise<scripting$0.Catalog> {
+    return $Call.ByID(2729274182).then(($result: any) => {
+        return $$createType243($result);
+    });
+}
+
+/**
+ * ScriptRuns returns the latest runs of a script, or of every script for 0,
+ * newest first.
+ */
+export function ScriptRuns(scriptID: number, limit: number): $CancellablePromise<$models.ScriptRunDTO[]> {
+    return $Call.ByID(1586565763, scriptID, limit).then(($result: any) => {
+        return $$createType244($result);
+    });
+}
+
+/**
+ * ScriptValue loads an item as scripts see it, e.g. a message by its id, so
+ * the editor can build a rule from its fields.
+ */
+export function ScriptValue(valueType: string, id: string): $CancellablePromise<{ [_ in string]?: any }> {
+    return $Call.ByID(538001730, valueType, id).then(($result: any) => {
+        return $$createType245($result);
     });
 }
 
@@ -2039,7 +4486,7 @@ export function ScanURL(rawURL: string): $CancellablePromise<$models.VerdictDTO>
  */
 export function Search(req: $models.SearchRequestDTO): $CancellablePromise<$models.SearchResultDTO> {
     return $Call.ByID(2859382430, req).then(($result: any) => {
-        return $$createType102($result);
+        return $$createType246($result);
     });
 }
 
@@ -2052,7 +4499,7 @@ export function Search(req: $models.SearchRequestDTO): $CancellablePromise<$mode
  */
 export function SearchAddresses(query: string, limit: number): $CancellablePromise<$models.AddressBookEntryDTO[]> {
     return $Call.ByID(682961006, query, limit).then(($result: any) => {
-        return $$createType61($result);
+        return $$createType141($result);
     });
 }
 
@@ -2063,8 +4510,17 @@ export function SearchAddresses(query: string, limit: number): $CancellablePromi
  */
 export function SearchMessageIDs(req: $models.SearchRequestDTO): $CancellablePromise<$models.MessageIDsDTO> {
     return $Call.ByID(2278013345, req).then(($result: any) => {
-        return $$createType91($result);
+        return $$createType213($result);
     });
+}
+
+/**
+ * SendKeyToOtherDevice mails a mailbox's key to itself as an Autocrypt Setup
+ * Message and returns the setup code, which is shown once and needed to open
+ * it on the other device.
+ */
+export function SendKeyToOtherDevice(accountID: number): $CancellablePromise<string> {
+    return $Call.ByID(995276918, accountID);
 }
 
 /**
@@ -2097,7 +4553,7 @@ export function SendOutboxNow(id: number): $CancellablePromise<boolean> {
  */
 export function SenderOverview(address: string): $CancellablePromise<$models.SenderOverviewDTO> {
     return $Call.ByID(3937500380, address).then(($result: any) => {
-        return $$createType103($result);
+        return $$createType247($result);
     });
 }
 
@@ -2112,8 +4568,15 @@ export function SenderOverview(address: string): $CancellablePromise<$models.Sen
  */
 export function SenderPhotos(email: string): $CancellablePromise<string[]> {
     return $Call.ByID(2200450858, email).then(($result: any) => {
-        return $$createType17($result);
+        return $$createType40($result);
     });
+}
+
+/**
+ * SetAIScriptOptions changes a script's AI switches.
+ */
+export function SetAIScriptOptions(scriptID: number, opts: $models.AIScriptOptionsDTO): $CancellablePromise<void> {
+    return $Call.ByID(256984971, scriptID, opts);
 }
 
 /**
@@ -2161,6 +4624,30 @@ export function SetAccountSignatures(accountID: number, headerID: number, footer
 }
 
 /**
+ * SetAutoEncryptAccountMode sets a mailbox to auto or manual.
+ */
+export function SetAutoEncryptAccountMode(accountID: number, mode: string): $CancellablePromise<void> {
+    return $Call.ByID(1593980278, accountID, mode);
+}
+
+/**
+ * SetCLIEnabled turns command line access on or off. Turning it on writes a
+ * fresh token; turning it off removes the token file, so nothing the
+ * command held still works.
+ */
+export function SetCLIEnabled(enabled: boolean): $CancellablePromise<void> {
+    return $Call.ByID(2076288081, enabled);
+}
+
+/**
+ * SetCLIPermission turns one capability on or off. It applies to the next
+ * request.
+ */
+export function SetCLIPermission(name: string, allowed: boolean): $CancellablePromise<void> {
+    return $Call.ByID(2621851607, name, allowed);
+}
+
+/**
  * SetCalendarColor sets a calendar's color here. It is not written to the
  * server, and a later sync does not overwrite it.
  */
@@ -2186,6 +4673,31 @@ export function SetCalendarVisible(id: number, visible: boolean): $CancellablePr
 }
 
 /**
+ * SetContactEncryption sets the user's preference for one contact: empty to
+ * follow the recommendation, always or never.
+ */
+export function SetContactEncryption(addr: string, pref: string): $CancellablePromise<void> {
+    return $Call.ByID(305161275, addr, pref);
+}
+
+/**
+ * SetConversationMuted mutes or unmutes the conversation a message belongs to.
+ * A muted conversation stays out of the inbox views and raises no
+ * notification; it remains in its folders and in search.
+ */
+export function SetConversationMuted(messageID: number, muted: boolean): $CancellablePromise<void> {
+    return $Call.ByID(3570705256, messageID, muted);
+}
+
+/**
+ * SetDefaultAIProvider makes a provider the one steps use when they name
+ * none.
+ */
+export function SetDefaultAIProvider(id: string): $CancellablePromise<void> {
+    return $Call.ByID(1433045852, id);
+}
+
+/**
  * SetDefaultCalendarFileHandler asks the OS to open .ics files with Pelton,
  * the same way SetDefaultMailClient does for mailto links.
  */
@@ -2204,6 +4716,39 @@ export function SetDefaultMailClient(): $CancellablePromise<void> {
 }
 
 /**
+ * SetEventProject files an event under a project by its UID, taking it out of
+ * any other project; projectID 0 takes it out of all of them. Links a card
+ * holds to the event are left alone.
+ */
+export function SetEventProject(uid: string, summary: string, projectID: number): $CancellablePromise<void> {
+    return $Call.ByID(582686339, uid, summary, projectID);
+}
+
+/**
+ * SetFeedEntriesRead marks entries read or unread and returns the ids that
+ * changed.
+ */
+export function SetFeedEntriesRead(ids: number[], read: boolean): $CancellablePromise<number[]> {
+    return $Call.ByID(1851150870, ids, read).then(($result: any) => {
+        return $$createType175($result);
+    });
+}
+
+/**
+ * SetFeedEntryReadLater puts an entry on the read-later list or takes it off.
+ */
+export function SetFeedEntryReadLater(id: number, later: boolean): $CancellablePromise<void> {
+    return $Call.ByID(2364196000, id, later);
+}
+
+/**
+ * SetFeedEntryStarred stars or unstars an entry.
+ */
+export function SetFeedEntryStarred(id: number, starred: boolean): $CancellablePromise<void> {
+    return $Call.ByID(2011767565, id, starred);
+}
+
+/**
  * SetFlagColor sets a message's color label (0 clears, 1..8 pick a palette
  * color). It is authoritative locally; when the flag_color_sync setting is on it
  * also pushes the matching imap keyword in the background, best effort.
@@ -2217,6 +4762,14 @@ export function SetFlagColor(id: number, color: number): $CancellablePromise<voi
  */
 export function SetFlagged(id: number, flagged: boolean): $CancellablePromise<void> {
     return $Call.ByID(2700753652, id, flagged);
+}
+
+/**
+ * SetFocusSchedule stores the schedule and applies it straight away, so a
+ * window that is already open starts focus without waiting for the ticker.
+ */
+export function SetFocusSchedule(sched: $models.FocusScheduleDTO): $CancellablePromise<void> {
+    return $Call.ByID(779676223, sched);
 }
 
 /**
@@ -2253,6 +4806,13 @@ export function SetFolderRole(folderID: number, role: string): $CancellablePromi
  */
 export function SetFolderSyncExcluded(folderID: number, excluded: boolean): $CancellablePromise<void> {
     return $Call.ByID(3724121495, folderID, excluded);
+}
+
+/**
+ * SetKeySources changes which places keys may be found in.
+ */
+export function SetKeySources(sources: $models.KeySourcesDTO): $CancellablePromise<void> {
+    return $Call.ByID(1685085177, sources);
 }
 
 /**
@@ -2297,12 +4857,66 @@ export function SetMailActionsEnabled(enabled: boolean): $CancellablePromise<voi
 }
 
 /**
+ * SetPinned pins or unpins a message, and with conversation set the whole
+ * conversation it belongs to: pinning one message pins its conversation, and
+ * unpinning a conversation unpins every message in it. The pin is stored on
+ * the server as the $Pinned keyword at the next sync, where the server keeps
+ * keywords.
+ */
+export function SetPinned(messageID: number, pinned: boolean, conversation: boolean): $CancellablePromise<void> {
+    return $Call.ByID(949320832, messageID, pinned, conversation);
+}
+
+/**
+ * SetProjectDoneColumn makes a column the board's done column, or leaves the
+ * board without one for columnID 0. Cards then follow their tasks the next
+ * time the board is read.
+ */
+export function SetProjectDoneColumn(projectID: number, columnID: number): $CancellablePromise<void> {
+    return $Call.ByID(3071720313, projectID, columnID);
+}
+
+/**
+ * SetProjectStatus archives a project or makes it active again.
+ */
+export function SetProjectStatus(id: number, status: string): $CancellablePromise<void> {
+    return $Call.ByID(1866624689, id, status);
+}
+
+/**
+ * SetPromiseSettings saves the promise preferences. An AI check needs a
+ * provider that is set up.
+ */
+export function SetPromiseSettings(s: $models.PromiseSettingsDTO): $CancellablePromise<void> {
+    return $Call.ByID(978687130, s);
+}
+
+/**
+ * SetProtectSubject chooses whether encrypted mail hides its subject.
+ */
+export function SetProtectSubject(on: boolean): $CancellablePromise<void> {
+    return $Call.ByID(589979415, on);
+}
+
+/**
  * SetProxyConfig validates, persists and applies a new proxy preference. An
  * empty Password with HasPassword=true keeps the stored one (the ui sends no
  * secret unless the user typed a new value); Mode "off"/"system" clears it.
  */
 export function SetProxyConfig(dto: $models.ProxyConfigDTO): $CancellablePromise<void> {
     return $Call.ByID(132270876, dto);
+}
+
+/**
+ * SetQuickCompose turns quick compose on or off with the given shortcut. The
+ * shortcut is registered first and the setting stored only once that worked;
+ * when the system refuses it, the previous shortcut stays as it was and the
+ * status says why.
+ */
+export function SetQuickCompose(enabled: boolean, shortcut: string): $CancellablePromise<$models.QuickComposeStatusDTO> {
+    return $Call.ByID(1805433743, enabled, shortcut).then(($result: any) => {
+        return $$createType114($result);
+    });
 }
 
 /**
@@ -2317,6 +4931,70 @@ export function SetSMIMERevocation(on: boolean): $CancellablePromise<void> {
 }
 
 /**
+ * SetScriptAllowUnasked lets a script call a risky function, e.g.
+ * "mail.send", without asking each time, or takes that back.
+ */
+export function SetScriptAllowUnasked(id: number, $function: string, allow: boolean): $CancellablePromise<$models.ScriptDTO> {
+    return $Call.ByID(461960167, id, $function, allow).then(($result: any) => {
+        return $$createType6($result);
+    });
+}
+
+/**
+ * SetScriptAskSeconds sets how long such a question waits, within
+ * scripting.MinAskTimeout and scripting.MaxAskTimeout.
+ */
+export function SetScriptAskSeconds(seconds: number): $CancellablePromise<void> {
+    return $Call.ByID(1083915591, seconds);
+}
+
+/**
+ * SetScriptCatchUp sets what a mail script does with mail that arrived
+ * while the app was closed: "run", "live" or "ask", and the most messages
+ * it runs over.
+ */
+export function SetScriptCatchUp(id: number, mode: string, limit: number): $CancellablePromise<$models.ScriptDTO> {
+    return $Call.ByID(2964512321, id, mode, limit).then(($result: any) => {
+        return $$createType6($result);
+    });
+}
+
+/**
+ * SetScriptEnabled switches a script on, approving the given permissions,
+ * or off. On needs every declared permission approved.
+ */
+export function SetScriptEnabled(id: number, enabled: boolean, approve: string[]): $CancellablePromise<$models.ScriptDTO> {
+    return $Call.ByID(420890638, id, enabled, approve).then(($result: any) => {
+        return $$createType6($result);
+    });
+}
+
+/**
+ * SetScriptLogDays sets how many days the run log keeps, 1 to 365.
+ */
+export function SetScriptLogDays(days: number): $CancellablePromise<void> {
+    return $Call.ByID(3070623262, days);
+}
+
+/**
+ * SetScriptPlacements sets where in the app a script is offered.
+ */
+export function SetScriptPlacements(id: number, placements: scripting$0.PlacementConfig[]): $CancellablePromise<$models.ScriptDTO> {
+    return $Call.ByID(85186745, id, placements).then(($result: any) => {
+        return $$createType6($result);
+    });
+}
+
+/**
+ * SetScriptSettings stores the values of a script's declared settings.
+ */
+export function SetScriptSettings(id: number, values: { [_ in string]?: any }): $CancellablePromise<$models.ScriptDTO> {
+    return $Call.ByID(1421935768, id, values).then(($result: any) => {
+        return $$createType6($result);
+    });
+}
+
+/**
  * SetSeen sets or clears the \Seen flag on a message and queues the change for
  * the next sync to push to the server.
  */
@@ -2325,11 +5003,85 @@ export function SetSeen(id: number, seen: boolean): $CancellablePromise<void> {
 }
 
 /**
- * SetSetting writes a single setting. The frontend uses the known keys above
- * (theme/accent/density/show_*) plus editor_mode.
+ * SetSenderColors remembers whether html mail from address adapts to a dark
+ * theme ("adapt") or keeps its own colours ("original"); "" forgets it.
+ */
+export function SetSenderColors(address: string, mode: string): $CancellablePromise<void> {
+    return $Call.ByID(2419664043, address, mode);
+}
+
+/**
+ * SetSenderFontSize remembers the reader text size for address in px; 0
+ * forgets it.
+ */
+export function SetSenderFontSize(address: string, size: number): $CancellablePromise<void> {
+    return $Call.ByID(1775278091, address, size);
+}
+
+/**
+ * SetSenderMark records what the user said about a sender: "known" ("I know
+ * this sender") quiets first-contact notices, "impostor" ("not who they claim
+ * to be") marks their mail from now on, and "" takes either back.
+ */
+export function SetSenderMark(address: string, mark: string): $CancellablePromise<void> {
+    return $Call.ByID(1153046638, address, mark);
+}
+
+/**
+ * SetSetting writes a single setting.
  */
 export function SetSetting(key: string, value: string): $CancellablePromise<void> {
     return $Call.ByID(225717314, key, value);
+}
+
+/**
+ * SetSieveConnection sets the sieve host, port and security by hand ("" host
+ * and 0 port go back to the defaults; tls is "starttls" or "ssl") and checks
+ * the server again.
+ */
+export function SetSieveConnection(accountID: number, host: string, port: number, tls: string): $CancellablePromise<$models.SieveStateDTO> {
+    return $Call.ByID(4012515732, accountID, host, port, tls).then(($result: any) => {
+        return $$createType231($result);
+    });
+}
+
+/**
+ * SetTaskDone completes a task or opens it again. A repeating task that is
+ * completed moves on to its next occurrence and stays open, which the result
+ * says with Advanced.
+ */
+export function SetTaskDone(id: number, done: boolean): $CancellablePromise<$models.TaskSaveResultDTO> {
+    return $Call.ByID(2184723991, id, done).then(($result: any) => {
+        return $$createType69($result);
+    });
+}
+
+/**
+ * SetTaskDue moves a task's due date, keeping its time of day when it has
+ * one and moving the start along by as much. due is a date (2006-01-02) or
+ * rfc3339; empty clears it.
+ */
+export function SetTaskDue(id: number, due: string): $CancellablePromise<$models.TaskSaveResultDTO> {
+    return $Call.ByID(1752573607, id, due).then(($result: any) => {
+        return $$createType69($result);
+    });
+}
+
+/**
+ * SetTaskSettings saves the task preferences. An unknown badge or sort, a due
+ * time outside the day and a negative keep other than -1 are refused.
+ */
+export function SetTaskSettings(s: $models.TaskSettingsDTO): $CancellablePromise<void> {
+    return $Call.ByID(125309206, s);
+}
+
+/**
+ * SetTimeBlockSettings saves the time blocking preferences. Lengths outside
+ * what a block can be, a negative buffer, unknown week days, a search of more
+ * than a month and an empty event title are refused.
+ */
+export function SetTimeBlockSettings(s: $models.TimeBlockSettingsDTO): $CancellablePromise<void> {
+    return $Call.ByID(1687579885, s);
 }
 
 /**
@@ -2399,12 +5151,35 @@ export function SetWindowTitle(title: string): $CancellablePromise<void> {
 }
 
 /**
+ * SettleTimeBlockLink settles a block that is out of step with its event:
+ * follow takes the event's time, rewrite writes the block's time to the
+ * calendar again (making a new event when the old one is gone), forget keeps
+ * the block on this device only and leaves the event as it is.
+ */
+export function SettleTimeBlockLink(id: number, action: string): $CancellablePromise<$models.TimeBlockDTO> {
+    return $Call.ByID(1276013789, id, action).then(($result: any) => {
+        return $$createType25($result);
+    });
+}
+
+/**
  * ShowMessageInMainWindow brings the main window forward and opens a message
  * there, in the folder it lives in. A message that is gone only shows the
  * window.
  */
 export function ShowMessageInMainWindow(id: number): $CancellablePromise<void> {
     return $Call.ByID(3614075796, id);
+}
+
+/**
+ * SieveState connects to an account's sieve service and reports what is
+ * there. A server already found to have none is not dialed again; see
+ * RecheckSieve.
+ */
+export function SieveState(accountID: number): $CancellablePromise<$models.SieveStateDTO> {
+    return $Call.ByID(3369919137, accountID).then(($result: any) => {
+        return $$createType231($result);
+    });
 }
 
 /**
@@ -2426,14 +5201,41 @@ export function SnoozeMessage(id: number, untilRFC3339: string, hideNow: boolean
 }
 
 /**
- * StartAccountSync runs the first sync of an account and parks it on idle, in
- * the background. The wizard calls it after the folder choice, which is why
- * adding an account no longer starts syncing on its own. Calling it for an
- * account that is already syncing is harmless: syncAccount serializes on the
- * same lock every other sync uses.
+ * SplitCounts returns each split inbox tab with its total and unread counts,
+ * in tab order with the catch-all last, from one grouped query. It returns no
+ * tabs for a request that is not an inbox.
+ */
+export function SplitCounts(req: $models.ListMessagesRequest): $CancellablePromise<$models.SplitTabDTO[]> {
+    return $Call.ByID(1877442994, req).then(($result: any) => {
+        return $$createType249($result);
+    });
+}
+
+/**
+ * StartAccountSync runs the first sync of an account and parks it on idle,
+ * replacing any existing worker for that account.
  */
 export function StartAccountSync(accountID: number): $CancellablePromise<void> {
     return $Call.ByID(1507504286, accountID);
+}
+
+/**
+ * StartFocus turns focus on until the given RFC 3339 time, or until it is
+ * turned off when untilRFC3339 is empty. Starting while focus is on changes
+ * its end and keeps the count of what arrived so far.
+ */
+export function StartFocus(untilRFC3339: string): $CancellablePromise<$models.FocusDTO> {
+    return $Call.ByID(1824555394, untilRFC3339).then(($result: any) => {
+        return $$createType103($result);
+    });
+}
+
+/**
+ * StartImportJob stores a plan as a new job and starts it in the background.
+ * It returns the job's id; progress and the end arrive on EventGuidedImport.
+ */
+export function StartImportJob(plan: mailimport$0.Plan): $CancellablePromise<number> {
+    return $Call.ByID(991498554, plan);
 }
 
 /**
@@ -2494,6 +5296,17 @@ export function TakeComposeSession(token: string): $CancellablePromise<string> {
 }
 
 /**
+ * TestAIProvider sends one tiny request to a provider, saved or not, with
+ * its model. It is the only time the settings contact a provider besides
+ * fetching the model list, and only when the user asks.
+ */
+export function TestAIProvider($in: $models.AIProviderInput): $CancellablePromise<$models.AITestDTO> {
+    return $Call.ByID(3801056801, $in).then(($result: any) => {
+        return $$createType250($result);
+    });
+}
+
+/**
  * TestAccountRoute opens a connection to the mailbox's imap and smtp servers
  * along the given route and closes it again. Reaching them is the whole test:
  * nothing is sent, so it needs no login and cannot lock an account out.
@@ -2510,7 +5323,7 @@ export function TestAccountRoute(req: $models.RouteTestRequest): $CancellablePro
  */
 export function TestConnection(req: $models.TestConnectionRequest): $CancellablePromise<$models.ConnectionTestDTO> {
     return $Call.ByID(1152861202, req).then(($result: any) => {
-        return $$createType104($result);
+        return $$createType251($result);
     });
 }
 
@@ -2521,6 +5334,40 @@ export function TestConnection(req: $models.TestConnectionRequest): $Cancellable
  */
 export function TestProxy(dto: $models.ProxyConfigDTO): $CancellablePromise<void> {
     return $Call.ByID(1242970290, dto);
+}
+
+/**
+ * TestScript dry runs a script as written in the editor, saved or not,
+ * against a message (0 for the sample message). Reads work; every change is
+ * listed as a planned step and nothing is changed.
+ */
+export function TestScript($in: $models.ScriptInput, messageID: number): $CancellablePromise<$models.ScriptRunDTO> {
+    return $Call.ByID(2357615957, $in, messageID).then(($result: any) => {
+        return $$createType232($result);
+    });
+}
+
+/**
+ * TestScriptAskingAI dry runs a script as TestScript does, except that its AI
+ * steps really ask the model, so a branch on the answer can be tried. Every
+ * change, including those the model asks for, stays a planned step. Only a
+ * provider the user approved for the saved script scriptID is asked, and
+ * only while the code in the editor is the code they approved.
+ */
+export function TestScriptAskingAI(scriptID: number, $in: $models.ScriptInput, messageID: number): $CancellablePromise<$models.ScriptRunDTO> {
+    return $Call.ByID(957971532, scriptID, $in, messageID).then(($result: any) => {
+        return $$createType232($result);
+    });
+}
+
+/**
+ * TestScriptMatch tries a regular expression or a condition on the newest
+ * messages of a folder and reports which match. Nothing is changed.
+ */
+export function TestScriptMatch(req: scripting$0.MatchRequest): $CancellablePromise<scripting$0.MatchReport | null> {
+    return $Call.ByID(2702526918, req).then(($result: any) => {
+        return $$createType253($result);
+    });
 }
 
 /**
@@ -2549,11 +5396,23 @@ export function ToggleMaximiseWindow(): $CancellablePromise<void> {
 
 /**
  * TrafficLights reports where the window buttons sit in the main window, or
- * in the compose window opened with the given token.
+ * in the compose window opened with the given token. The token
+ * outboxWindowToken names the send activity window.
  */
 export function TrafficLights(composeToken: string): $CancellablePromise<$models.TrafficLightsDTO> {
     return $Call.ByID(1219898178, composeToken).then(($result: any) => {
-        return $$createType105($result);
+        return $$createType254($result);
+    });
+}
+
+/**
+ * TrashProjectNote moves a project's note to the trash folder of the notes
+ * folder and lets the project's cards go of it. VaultUndo with the returned
+ * id brings the file back.
+ */
+export function TrashProjectNote(rel: string, projectID: number): $CancellablePromise<$models.VaultOpDTO> {
+    return $Call.ByID(2025348081, rel, projectID).then(($result: any) => {
+        return $$createType255($result);
     });
 }
 
@@ -2582,11 +5441,51 @@ export function TrustSenderImages(messageID: number): $CancellablePromise<void> 
 }
 
 /**
+ * UndoContactMerge puts the contacts of a merge back, on the servers and here,
+ * and returns them. It works until the app restarts. A contact that was
+ * deleted from a synced book is written there again as a new resource: other
+ * devices see it come back, and changes they made to the merged card in the
+ * meantime stop the undo rather than being overwritten.
+ */
+export function UndoContactMerge(token: string): $CancellablePromise<$models.ContactDTO[]> {
+    return $Call.ByID(55003932, token).then(($result: any) => {
+        return $$createType149($result);
+    });
+}
+
+/**
  * UndoDelete reverses a pending delete while the message is still cached (before
  * the next sync expunges it), bringing the row back into the list.
  */
 export function UndoDelete(id: number): $CancellablePromise<void> {
     return $Call.ByID(3822553783, id);
+}
+
+/**
+ * UndoDeletes reverses DeleteMessages for the messages still cached.
+ */
+export function UndoDeletes(ids: number[]): $CancellablePromise<$models.BulkResultDTO> {
+    return $Call.ByID(1884254860, ids).then(($result: any) => {
+        return $$createType74($result);
+    });
+}
+
+/**
+ * UndoScriptRun reverses the mail changes a run made, newest first. Sends
+ * are never undone. A run can be undone once.
+ */
+export function UndoScriptRun(runID: number): $CancellablePromise<void> {
+    return $Call.ByID(3182596448, runID);
+}
+
+/**
+ * UnlockMailVault opens a vault with its passphrase. Wrong attempts past the
+ * first few wait longer each time, also across restarts.
+ */
+export function UnlockMailVault(id: number, passphrase: string): $CancellablePromise<$models.MailVaultAuthDTO> {
+    return $Call.ByID(3577615179, id, passphrase).then(($result: any) => {
+        return $$createType32($result);
+    });
 }
 
 /**
@@ -2614,10 +5513,37 @@ export function UnlockPGPKey(fingerprint: string, passphrase: string, remember: 
 }
 
 /**
+ * UnlockWithPassphrase unlocks when passphrase matches. Wrong attempts past
+ * the first few wait longer each time, also across restarts.
+ */
+export function UnlockWithPassphrase(passphrase: string): $CancellablePromise<$models.LockAuthResultDTO> {
+    return $Call.ByID(3686841786, passphrase).then(($result: any) => {
+        return $$createType31($result);
+    });
+}
+
+/**
+ * UnlockWithSystem shows the system prompt and unlocks when it passes. reason
+ * is the line the prompt shows under its title.
+ */
+export function UnlockWithSystem(reason: string): $CancellablePromise<$models.LockAuthResultDTO> {
+    return $Call.ByID(2165074391, reason).then(($result: any) => {
+        return $$createType31($result);
+    });
+}
+
+/**
  * UnmarkSenderVIP removes a message's sender from the VIP list.
  */
 export function UnmarkSenderVIP(messageID: number): $CancellablePromise<void> {
     return $Call.ByID(2118406220, messageID);
+}
+
+/**
+ * UnquietPromiseSender undoes QuietPromiseSender.
+ */
+export function UnquietPromiseSender(email: string, ids: number[]): $CancellablePromise<void> {
+    return $Call.ByID(2060770469, email, ids);
 }
 
 /**
@@ -2627,7 +5553,7 @@ export function UnmarkSenderVIP(messageID: number): $CancellablePromise<void> {
  */
 export function UnsealDraft(id: number, passphrase: string): $CancellablePromise<$models.DraftDTO> {
     return $Call.ByID(945085147, id, passphrase).then(($result: any) => {
-        return $$createType66($result);
+        return $$createType150($result);
     });
 }
 
@@ -2656,7 +5582,7 @@ export function Unsubscribe(id: number): $CancellablePromise<void> {
  */
 export function UpdateAccount(req: $models.UpdateAccountRequest): $CancellablePromise<$models.AccountDTO> {
     return $Call.ByID(3129241362, req).then(($result: any) => {
-        return $$createType2($result);
+        return $$createType9($result);
     });
 }
 
@@ -2666,7 +5592,7 @@ export function UpdateAccount(req: $models.UpdateAccountRequest): $CancellablePr
  */
 export function UpdateAddressBook(req: $models.AddressBookRequest): $CancellablePromise<$models.AddressBookDTO> {
     return $Call.ByID(2852278360, req).then(($result: any) => {
-        return $$createType5($result);
+        return $$createType12($result);
     });
 }
 
@@ -2676,7 +5602,7 @@ export function UpdateAddressBook(req: $models.AddressBookRequest): $Cancellable
  */
 export function UpdateCalendarAccount(req: $models.CalendarAccountRequest): $CancellablePromise<$models.CalendarAccountDTO> {
     return $Call.ByID(719960028, req).then(($result: any) => {
-        return $$createType6($result);
+        return $$createType13($result);
     });
 }
 
@@ -2688,8 +5614,24 @@ export function UpdateCalendarAccount(req: $models.CalendarAccountRequest): $Can
  */
 export function UpdateEvent(req: $models.EventRequest): $CancellablePromise<$models.EventSaveResultDTO> {
     return $Call.ByID(3072704821, req).then(($result: any) => {
-        return $$createType23($result);
+        return $$createType59($result);
     });
+}
+
+/**
+ * UpdateFeed saves what the user set on a feed.
+ */
+export function UpdateFeed(s: $models.FeedSettingsDTO): $CancellablePromise<void> {
+    return $Call.ByID(2138256163, s);
+}
+
+/**
+ * UpdateMailVaultSettings stores a vault's name, auto-lock time,
+ * notification mode, sidebar visibility and the scripts, MCP and command line
+ * switches.
+ */
+export function UpdateMailVaultSettings(s: $models.MailVaultSettingsDTO): $CancellablePromise<void> {
+    return $Call.ByID(3293789241, s);
 }
 
 /**
@@ -2700,7 +5642,78 @@ export function UpdateEvent(req: $models.EventRequest): $CancellablePromise<$mod
  */
 export function UpdateProfile(req: $models.ProfileRequest): $CancellablePromise<$models.ProfileDTO> {
     return $Call.ByID(2684729608, req).then(($result: any) => {
-        return $$createType4($result);
+        return $$createType11($result);
+    });
+}
+
+/**
+ * UpdateProject saves a project's name, look, description, dates and task
+ * list. A new name is written into the front matter of the project's notes
+ * in the background.
+ */
+export function UpdateProject(req: $models.ProjectRequest): $CancellablePromise<$models.ProjectDTO> {
+    return $Call.ByID(3855724100, req).then(($result: any) => {
+        return $$createType65($result);
+    });
+}
+
+/**
+ * UpdateProjectColumn renames a column and sets its WIP limit, 0 for none.
+ */
+export function UpdateProjectColumn(id: number, name: string, wipLimit: number): $CancellablePromise<void> {
+    return $Call.ByID(1699653462, id, name, wipLimit);
+}
+
+/**
+ * UpdateProjectNote saves a note's title and body.
+ */
+export function UpdateProjectNote(id: number, title: string, body: string): $CancellablePromise<$models.ProjectNoteDTO> {
+    return $Call.ByID(2780270736, id, title, body).then(($result: any) => {
+        return $$createType66($result);
+    });
+}
+
+/**
+ * UpdateScript saves a script's content. A newly declared permission
+ * switches it off until approved.
+ */
+export function UpdateScript(id: number, $in: $models.ScriptInput): $CancellablePromise<$models.ScriptDTO> {
+    return $Call.ByID(2268465552, id, $in).then(($result: any) => {
+        return $$createType6($result);
+    });
+}
+
+/**
+ * UpdateScriptLibrary saves a library. Renaming it breaks the scripts that
+ * require the old name. A change to its code or name switches off the
+ * scripts that load it, which it lists.
+ */
+export function UpdateScriptLibrary(id: number, $in: $models.ScriptLibraryInput): $CancellablePromise<$models.ScriptLibrarySavedDTO> {
+    return $Call.ByID(496575659, id, $in).then(($result: any) => {
+        return $$createType68($result);
+    });
+}
+
+/**
+ * UpdateTask saves an edit. A different ListID moves the task, with its
+ * subtasks, to that list. Completing a repeating task moves it on to its
+ * next occurrence.
+ */
+export function UpdateTask(req: $models.TaskRequest): $CancellablePromise<$models.TaskSaveResultDTO> {
+    return $Call.ByID(3561727934, req).then(($result: any) => {
+        return $$createType69($result);
+    });
+}
+
+/**
+ * UpdateTimeBlock changes a block's title, times, done state and calendar.
+ * A block written to a calendar takes the change to its event; one moved to
+ * another calendar leaves the old event and is written to the new one, and one
+ * taken off its calendar deletes its event there.
+ */
+export function UpdateTimeBlock(req: $models.TimeBlockRequest): $CancellablePromise<$models.TimeBlockDTO> {
+    return $Call.ByID(1122149827, req).then(($result: any) => {
+        return $$createType25($result);
     });
 }
 
@@ -2714,6 +5727,203 @@ export function UpdateProfile(req: $models.ProfileRequest): $CancellablePromise<
  */
 export function UploadDraft(id: number): $CancellablePromise<string> {
     return $Call.ByID(929478990, id);
+}
+
+/**
+ * UseScriptTemplate stores a copy of a gallery template as a new script,
+ * switched off, and returns it.
+ */
+export function UseScriptTemplate(id: string): $CancellablePromise<$models.ScriptDTO> {
+    return $Call.ByID(275275384, id).then(($result: any) => {
+        return $$createType6($result);
+    });
+}
+
+/**
+ * VaultBacklinks lists the lines in other notes that link to a note.
+ */
+export function VaultBacklinks(rel: string): $CancellablePromise<$models.VaultMentionDTO[]> {
+    return $Call.ByID(4068549330, rel).then(($result: any) => {
+        return $$createType257($result);
+    });
+}
+
+/**
+ * VaultChooseFolder asks for a notes folder, stores it as the setting and
+ * opens it. An empty folder means the user cancelled and nothing changed.
+ */
+export function VaultChooseFolder(): $CancellablePromise<$models.VaultInfoDTO> {
+    return $Call.ByID(1120436343).then(($result: any) => {
+        return $$createType258($result);
+    });
+}
+
+/**
+ * VaultCreate writes a new note and returns its path. It fails when the
+ * name is taken; VaultUniquePath finds a free one.
+ */
+export function VaultCreate(rel: string, content: string): $CancellablePromise<string> {
+    return $Call.ByID(3164923094, rel, content);
+}
+
+/**
+ * VaultCreateFolder makes a folder in the notes folder.
+ */
+export function VaultCreateFolder(rel: string): $CancellablePromise<string> {
+    return $Call.ByID(1802184166, rel);
+}
+
+/**
+ * VaultDelete moves a note, file or folder to the trash folder of the vault.
+ */
+export function VaultDelete(rel: string): $CancellablePromise<$models.VaultOpDTO> {
+    return $Call.ByID(3444939485, rel).then(($result: any) => {
+        return $$createType255($result);
+    });
+}
+
+/**
+ * VaultFileData returns a file of the vault, such as an image a note
+ * embeds, as a data: URL. Large files are refused.
+ */
+export function VaultFileData(rel: string): $CancellablePromise<string> {
+    return $Call.ByID(228393356, rel);
+}
+
+/**
+ * VaultImportFile copies a file the user dropped from the system onto a note
+ * into the attachments folder of the vault, under a free name, and returns
+ * its vault path. The original is left where it was.
+ */
+export function VaultImportFile(src: string): $CancellablePromise<string> {
+    return $Call.ByID(4225390801, src);
+}
+
+/**
+ * VaultLinkMention turns an unlinked mention into a link to target.
+ */
+export function VaultLinkMention(source: string, line: number, match: string, target: string): $CancellablePromise<void> {
+    return $Call.ByID(569519108, source, line, match, target);
+}
+
+/**
+ * VaultMove renames or moves a note, file or folder and updates the links
+ * to it in every other note and on project cards. VaultUndo with the
+ * returned id takes it back.
+ */
+export function VaultMove($from: string, to: string): $CancellablePromise<$models.VaultOpDTO> {
+    return $Call.ByID(2983040191, $from, to).then(($result: any) => {
+        return $$createType255($result);
+    });
+}
+
+/**
+ * VaultOpen opens the notes folder in the settings, creating the default
+ * one in the data directory the first time the notes space is used. A
+ * folder the user chose is never created: when it is gone, the error says so.
+ */
+export function VaultOpen(): $CancellablePromise<$models.VaultInfoDTO> {
+    return $Call.ByID(1596692746).then(($result: any) => {
+        return $$createType258($result);
+    });
+}
+
+/**
+ * VaultRead returns a note's text and the hash a save must pass back.
+ */
+export function VaultRead(rel: string): $CancellablePromise<$models.VaultFileDTO> {
+    return $Call.ByID(344669642, rel).then(($result: any) => {
+        return $$createType259($result);
+    });
+}
+
+/**
+ * VaultRescan checks the open folder for changes made by other apps now,
+ * rather than at the next scan. The frontend calls it when the window gets
+ * focus back.
+ */
+export function VaultRescan(): $CancellablePromise<void> {
+    return $Call.ByID(2461422294);
+}
+
+/**
+ * VaultSave writes a note. baseHash is the hash of the version the text was
+ * edited from; when the file changed on disk since, nothing is written and
+ * the result carries the text on disk, unless force is set.
+ */
+export function VaultSave(rel: string, content: string, baseHash: string, force: boolean): $CancellablePromise<$models.VaultSaveDTO> {
+    return $Call.ByID(4197725615, rel, content, baseHash, force).then(($result: any) => {
+        return $$createType260($result);
+    });
+}
+
+/**
+ * VaultSaveAttachment stores a pasted or dropped file in the attachments
+ * folder of the vault under a free name and returns its path. data is
+ * base64.
+ */
+export function VaultSaveAttachment(name: string, data: string): $CancellablePromise<string> {
+    return $Call.ByID(112877162, name, data);
+}
+
+/**
+ * VaultSearch finds notes by their text, name, aliases, headings and tags.
+ */
+export function VaultSearch(query: string): $CancellablePromise<$models.VaultHitDTO[]> {
+    return $Call.ByID(93598346, query).then(($result: any) => {
+        return $$createType262($result);
+    });
+}
+
+/**
+ * VaultSnapshot returns every note, folder and other file of the open folder.
+ * With no folder open it is empty, with an empty Folder; nothing is created.
+ */
+export function VaultSnapshot(): $CancellablePromise<$models.VaultSnapshotDTO> {
+    return $Call.ByID(3840242766).then(($result: any) => {
+        return $$createType263($result);
+    });
+}
+
+/**
+ * VaultUndo takes back a rename, move or delete.
+ */
+export function VaultUndo(id: string): $CancellablePromise<void> {
+    return $Call.ByID(2947753776, id);
+}
+
+/**
+ * VaultUniquePath returns rel, or rel with a number added when it is taken.
+ */
+export function VaultUniquePath(rel: string): $CancellablePromise<string> {
+    return $Call.ByID(1837263086, rel);
+}
+
+/**
+ * VaultUnlinkedMentions lists the lines in other notes that write a note's
+ * name or alias without linking to it.
+ */
+export function VaultUnlinkedMentions(rel: string): $CancellablePromise<$models.VaultMentionDTO[]> {
+    return $Call.ByID(691679119, rel).then(($result: any) => {
+        return $$createType257($result);
+    });
+}
+
+/**
+ * VaultUseDefaultFolder goes back to the Notes folder in the data directory.
+ */
+export function VaultUseDefaultFolder(): $CancellablePromise<$models.VaultInfoDTO> {
+    return $Call.ByID(1213391166).then(($result: any) => {
+        return $$createType258($result);
+    });
+}
+
+/**
+ * VerifyContactKey records that the user compared addr's fingerprint with
+ * the person and it matched.
+ */
+export function VerifyContactKey(addr: string, fingerprint: string): $CancellablePromise<void> {
+    return $Call.ByID(1453848944, addr, fingerprint);
 }
 
 /**
@@ -2735,109 +5945,267 @@ export function WindowMaterialActive(): $CancellablePromise<boolean> {
 }
 
 // Private type creation functions
-const $$createType0 = $models.AccountSyncStateDTO.createFrom;
+const $$createType0 = $models.AIKindDTO.createFrom;
 const $$createType1 = $Create.Array($$createType0);
-const $$createType2 = $models.AccountDTO.createFrom;
+const $$createType2 = $models.AIProviderDTO.createFrom;
 const $$createType3 = $Create.Array($$createType2);
-const $$createType4 = $models.ProfileDTO.createFrom;
-const $$createType5 = $models.AddressBookDTO.createFrom;
-const $$createType6 = $models.CalendarAccountDTO.createFrom;
-const $$createType7 = $models.AgentActionDTO.createFrom;
+const $$createType4 = $models.AIScriptOptionsDTO.createFrom;
+const $$createType5 = $models.PromiseDTO.createFrom;
+const $$createType6 = $models.ScriptDTO.createFrom;
+const $$createType7 = $models.AccountSyncStateDTO.createFrom;
 const $$createType8 = $Create.Array($$createType7);
-const $$createType9 = $models.AgentProposalDTO.createFrom;
+const $$createType9 = $models.AccountDTO.createFrom;
 const $$createType10 = $Create.Array($$createType9);
-const $$createType11 = $models.InviteAnswerResultDTO.createFrom;
-const $$createType12 = $models.ArchiveUndoDTO.createFrom;
-const $$createType13 = $models.PasswordCheckDTO.createFrom;
-const $$createType14 = $models.UpdateCheckResult.createFrom;
-const $$createType15 = $models.SMIMERevocationDTO.createFrom;
-const $$createType16 = $models.CAFileDTO.createFrom;
-const $$createType17 = $Create.Array($Create.Any);
-const $$createType18 = $models.ThunderbirdProfileDTO.createFrom;
-const $$createType19 = $Create.Array($$createType18);
-const $$createType20 = $models.ProtectionStatusDTO.createFrom;
-const $$createType21 = $models.ThemeInfoDTO.createFrom;
-const $$createType22 = $models.PendingMailtoDTO.createFrom;
-const $$createType23 = $models.EventSaveResultDTO.createFrom;
-const $$createType24 = $models.EventRequest.createFrom;
-const $$createType25 = $models.FolderDTO.createFrom;
-const $$createType26 = $models.CalendarDTO.createFrom;
-const $$createType27 = $models.EventLinkResultDTO.createFrom;
-const $$createType28 = $models.DefaultMailStatusDTO.createFrom;
-const $$createType29 = $models.ContactConflictDTO.createFrom;
-const $$createType30 = $models.DevActivityDTO.createFrom;
-const $$createType31 = $models.DevProcessDTO.createFrom;
-const $$createType32 = $models.DiscoveredBookDTO.createFrom;
-const $$createType33 = $Create.Array($$createType32);
-const $$createType34 = $models.CalendarDiscoveryDTO.createFrom;
-const $$createType35 = $models.DiscoveredDTO.createFrom;
-const $$createType36 = $models.OutboxEditDTO.createFrom;
-const $$createType37 = $models.EmlExportDTO.createFrom;
-const $$createType38 = $models.AttachmentEntryDTO.createFrom;
-const $$createType39 = $models.FetchOlderResult.createFrom;
-const $$createType40 = $models.MessageRefDTO.createFrom;
-const $$createType41 = $models.AccountSignaturesDTO.createFrom;
-const $$createType42 = $models.CalendarSettingsDTO.createFrom;
-const $$createType43 = $models.EventDTO.createFrom;
-const $$createType44 = $models.LogStatusDTO.createFrom;
-const $$createType45 = $models.MCPConfigDTO.createFrom;
-const $$createType46 = $models.MessageDetailDTO.createFrom;
-const $$createType47 = $models.ProxyConfigDTO.createFrom;
-const $$createType48 = $models.SettingResult.createFrom;
-const $$createType49 = $models.ThemeApplyDTO.createFrom;
-const $$createType50 = $models.ThemeDraftDTO.createFrom;
-const $$createType51 = $models.ThreadDTO.createFrom;
-const $$createType52 = $models.UIPrefsDTO.createFrom;
-const $$createType53 = $models.UserLocaleApplyDTO.createFrom;
-const $$createType54 = $models.VirusTotalConfigDTO.createFrom;
-const $$createType55 = $models.ICSImportResultDTO.createFrom;
-const $$createType56 = $models.PGPKeyDTO.createFrom;
-const $$createType57 = $Create.Array($$createType56);
-const $$createType58 = $models.BackupInfoDTO.createFrom;
-const $$createType59 = $Create.Array($$createType5);
-const $$createType60 = $models.AddressBookEntryDTO.createFrom;
-const $$createType61 = $Create.Array($$createType60);
-const $$createType62 = $Create.Array($$createType6);
-const $$createType63 = $Create.Array($$createType26);
-const $$createType64 = $models.ContactDTO.createFrom;
-const $$createType65 = $Create.Array($$createType64);
-const $$createType66 = $models.DraftDTO.createFrom;
-const $$createType67 = $Create.Array($$createType66);
-const $$createType68 = $Create.Array($$createType25);
-const $$createType69 = $models.ImageAllowEntryDTO.createFrom;
-const $$createType70 = $Create.Array($$createType69);
-const $$createType71 = $models.MessageListDTO.createFrom;
-const $$createType72 = $Create.Map($Create.Any, $Create.Any);
-const $$createType73 = $models.OccurrenceDTO.createFrom;
-const $$createType74 = $Create.Array($$createType73);
-const $$createType75 = $models.OutboxRowDTO.createFrom;
+const $$createType11 = $models.ProfileDTO.createFrom;
+const $$createType12 = $models.AddressBookDTO.createFrom;
+const $$createType13 = $models.CalendarAccountDTO.createFrom;
+const $$createType14 = $models.FeedDTO.createFrom;
+const $$createType15 = $models.ProjectColumnDTO.createFrom;
+const $$createType16 = $models.ProjectCardDTO.createFrom;
+const $$createType17 = $models.AgentActionDTO.createFrom;
+const $$createType18 = $Create.Array($$createType17);
+const $$createType19 = $models.AgentProposalDTO.createFrom;
+const $$createType20 = $Create.Array($$createType19);
+const $$createType21 = $models.InviteAnswerResultDTO.createFrom;
+const $$createType22 = $models.ArchiveUndoDTO.createFrom;
+const $$createType23 = $models.BulkArchiveDTO.createFrom;
+const $$createType24 = $models.AutoEncryptStatusDTO.createFrom;
+const $$createType25 = $models.TimeBlockDTO.createFrom;
+const $$createType26 = $Create.Array($$createType25);
+const $$createType27 = $models.CLIInstallDTO.createFrom;
+const $$createType28 = $models.CLILogEntryDTO.createFrom;
+const $$createType29 = $Create.Array($$createType28);
+const $$createType30 = $models.OutboxCancelDTO.createFrom;
+const $$createType31 = $models.LockAuthResultDTO.createFrom;
+const $$createType32 = $models.MailVaultAuthDTO.createFrom;
+const $$createType33 = chat$0.Device.createFrom;
+const $$createType34 = $Create.Array($$createType33);
+const $$createType35 = chat$0.Server.createFrom;
+const $$createType36 = chat$0.Profile.createFrom;
+const $$createType37 = chat$0.MediaContent.createFrom;
+const $$createType38 = chat$0.Member.createFrom;
+const $$createType39 = $Create.Array($$createType38);
+const $$createType40 = $Create.Array($Create.Any);
+const $$createType41 = chat$0.Room.createFrom;
+const $$createType42 = $Create.Array($$createType41);
+const $$createType43 = chat$0.SetupResult.createFrom;
+const $$createType44 = chat$0.Status.createFrom;
+const $$createType45 = chat$0.TimelinePage.createFrom;
+const $$createType46 = chat$0.Verification.createFrom;
+const $$createType47 = $Create.Array($$createType46);
+const $$createType48 = $models.PasswordCheckDTO.createFrom;
+const $$createType49 = $models.UpdateCheckResult.createFrom;
+const $$createType50 = $models.SMIMERevocationDTO.createFrom;
+const $$createType51 = $models.SieveSaveDTO.createFrom;
+const $$createType52 = $models.CAFileDTO.createFrom;
+const $$createType53 = $models.ThunderbirdProfileDTO.createFrom;
+const $$createType54 = $Create.Array($$createType53);
+const $$createType55 = scripting$0.CompileResult.createFrom;
+const $$createType56 = $models.ProtectionStatusDTO.createFrom;
+const $$createType57 = $models.ThemeInfoDTO.createFrom;
+const $$createType58 = $models.PendingMailtoDTO.createFrom;
+const $$createType59 = $models.EventSaveResultDTO.createFrom;
+const $$createType60 = $models.EventRequest.createFrom;
+const $$createType61 = $models.FeedFolderDTO.createFrom;
+const $$createType62 = $models.FolderDTO.createFrom;
+const $$createType63 = $models.CalendarDTO.createFrom;
+const $$createType64 = $models.MailVaultCreatedDTO.createFrom;
+const $$createType65 = $models.ProjectDTO.createFrom;
+const $$createType66 = $models.ProjectNoteDTO.createFrom;
+const $$createType67 = $models.ProjectVaultNoteDTO.createFrom;
+const $$createType68 = $models.ScriptLibrarySavedDTO.createFrom;
+const $$createType69 = $models.TaskSaveResultDTO.createFrom;
+const $$createType70 = $models.TaskListDTO.createFrom;
+const $$createType71 = $models.EventLinkResultDTO.createFrom;
+const $$createType72 = $models.DefaultMailStatusDTO.createFrom;
+const $$createType73 = $models.ContactConflictDTO.createFrom;
+const $$createType74 = $models.BulkResultDTO.createFrom;
+const $$createType75 = $models.ScriptRefDTO.createFrom;
 const $$createType76 = $Create.Array($$createType75);
-const $$createType77 = $Create.Array($$createType4);
-const $$createType78 = $models.SignatureDTO.createFrom;
-const $$createType79 = $Create.Array($$createType78);
-const $$createType80 = $Create.Array($$createType21);
-const $$createType81 = $models.ThreadListDTO.createFrom;
-const $$createType82 = $models.UnifiedViewDTO.createFrom;
-const $$createType83 = $Create.Array($$createType82);
-const $$createType84 = $models.UserLocaleDTO.createFrom;
+const $$createType77 = $models.TaskDeleteResultDTO.createFrom;
+const $$createType78 = $models.DevActivityDTO.createFrom;
+const $$createType79 = $models.DevProcessDTO.createFrom;
+const $$createType80 = $models.DiscoveredBookDTO.createFrom;
+const $$createType81 = $Create.Array($$createType80);
+const $$createType82 = $models.CalendarDiscoveryDTO.createFrom;
+const $$createType83 = $models.DiscoveredDTO.createFrom;
+const $$createType84 = $models.FeedCandidateDTO.createFrom;
 const $$createType85 = $Create.Array($$createType84);
-const $$createType86 = $models.ViewDTO.createFrom;
-const $$createType87 = $Create.Array($$createType86);
-const $$createType88 = $models.MCPPermissionDTO.createFrom;
-const $$createType89 = $Create.Array($$createType88);
-const $$createType90 = $models.MailEventSourceDTO.createFrom;
-const $$createType91 = $models.MessageIDsDTO.createFrom;
-const $$createType92 = $models.ICSFileDTO.createFrom;
-const $$createType93 = $models.InviteDTO.createFrom;
-const $$createType94 = $models.ThemeImportPreviewDTO.createFrom;
-const $$createType95 = $models.UntrustedCertDTO.createFrom;
-const $$createType96 = $Create.Array($$createType95);
-const $$createType97 = $models.AttachmentPageDTO.createFrom;
-const $$createType98 = $models.AttachmentContentDTO.createFrom;
-const $$createType99 = $Create.Array($$createType92);
-const $$createType100 = $models.VerdictDTO.createFrom;
-const $$createType101 = $models.MessageScanDTO.createFrom;
-const $$createType102 = $models.SearchResultDTO.createFrom;
-const $$createType103 = $models.SenderOverviewDTO.createFrom;
-const $$createType104 = $models.ConnectionTestDTO.createFrom;
-const $$createType105 = $models.TrafficLightsDTO.createFrom;
+const $$createType86 = $models.OutboxEditDTO.createFrom;
+const $$createType87 = $models.ImportEstimateDTO.createFrom;
+const $$createType88 = $models.EmlExportDTO.createFrom;
+const $$createType89 = $models.AttachmentEntryDTO.createFrom;
+const $$createType90 = $models.FetchOlderResult.createFrom;
+const $$createType91 = $models.DuplicatesDTO.createFrom;
+const $$createType92 = $models.EventRefDTO.createFrom;
+const $$createType93 = $models.SlotDTO.createFrom;
+const $$createType94 = $Create.Array($$createType93);
+const $$createType95 = $models.MessageRefDTO.createFrom;
+const $$createType96 = $Create.Array($$createType5);
+const $$createType97 = $models.AccountSignaturesDTO.createFrom;
+const $$createType98 = $models.AutoEncryptSettingsDTO.createFrom;
+const $$createType99 = $models.CLIConfigDTO.createFrom;
+const $$createType100 = $models.CalendarSettingsDTO.createFrom;
+const $$createType101 = $models.EventDTO.createFrom;
+const $$createType102 = $models.FeedEntryDetailDTO.createFrom;
+const $$createType103 = $models.FocusDTO.createFrom;
+const $$createType104 = $models.FocusScheduleDTO.createFrom;
+const $$createType105 = $models.LockStateDTO.createFrom;
+const $$createType106 = $models.LogStatusDTO.createFrom;
+const $$createType107 = $models.MCPConfigDTO.createFrom;
+const $$createType108 = $models.MessageDetailDTO.createFrom;
+const $$createType109 = $models.NoteDTO.createFrom;
+const $$createType110 = $models.ShieldDTO.createFrom;
+const $$createType111 = $models.ProjectBoardDTO.createFrom;
+const $$createType112 = $models.PromiseSettingsDTO.createFrom;
+const $$createType113 = $models.ProxyConfigDTO.createFrom;
+const $$createType114 = $models.QuickComposeStatusDTO.createFrom;
+const $$createType115 = $models.PassportDTO.createFrom;
+const $$createType116 = $models.SettingResult.createFrom;
+const $$createType117 = $models.TaskDTO.createFrom;
+const $$createType118 = $models.TaskSettingsDTO.createFrom;
+const $$createType119 = $models.ThemeApplyDTO.createFrom;
+const $$createType120 = $models.ThemeDraftDTO.createFrom;
+const $$createType121 = $models.ThreadDTO.createFrom;
+const $$createType122 = $models.TimeBlockSettingsDTO.createFrom;
+const $$createType123 = $models.UIPrefsDTO.createFrom;
+const $$createType124 = $models.UserLocaleApplyDTO.createFrom;
+const $$createType125 = $models.VirusTotalConfigDTO.createFrom;
+const $$createType126 = $models.ICSImportResultDTO.createFrom;
+const $$createType127 = $models.ImportJobDTO.createFrom;
+const $$createType128 = $Create.Array($$createType127);
+const $$createType129 = $models.FeedImportDTO.createFrom;
+const $$createType130 = $models.PGPKeyDTO.createFrom;
+const $$createType131 = $Create.Array($$createType130);
+const $$createType132 = $models.ImportTargetDTO.createFrom;
+const $$createType133 = $Create.Array($$createType132);
+const $$createType134 = $models.InsightsPeopleDTO.createFrom;
+const $$createType135 = $models.InsightsStorageDTO.createFrom;
+const $$createType136 = $models.InsightsVolumeDTO.createFrom;
+const $$createType137 = $models.BackupInfoDTO.createFrom;
+const $$createType138 = $models.CLIInstallResultDTO.createFrom;
+const $$createType139 = $Create.Array($$createType12);
+const $$createType140 = $models.AddressBookEntryDTO.createFrom;
+const $$createType141 = $Create.Array($$createType140);
+const $$createType142 = $Create.Array($$createType13);
+const $$createType143 = $Create.Array($$createType63);
+const $$createType144 = $models.ProjectLinkDTO.createFrom;
+const $$createType145 = $Create.Array($$createType144);
+const $$createType146 = $models.ContactKeyDTO.createFrom;
+const $$createType147 = $Create.Array($$createType146);
+const $$createType148 = $models.ContactDTO.createFrom;
+const $$createType149 = $Create.Array($$createType148);
+const $$createType150 = $models.DraftDTO.createFrom;
+const $$createType151 = $Create.Array($$createType150);
+const $$createType152 = $models.FeedEntryDTO.createFrom;
+const $$createType153 = $Create.Array($$createType152);
+const $$createType154 = $models.FeedSidebarDTO.createFrom;
+const $$createType155 = $Create.Array($$createType62);
+const $$createType156 = $models.FollowUpDTO.createFrom;
+const $$createType157 = $Create.Array($$createType156);
+const $$createType158 = $models.ImageAllowEntryDTO.createFrom;
+const $$createType159 = $Create.Array($$createType158);
+const $$createType160 = $models.KeyLookupLogDTO.createFrom;
+const $$createType161 = $Create.Array($$createType160);
+const $$createType162 = $models.MailVaultDTO.createFrom;
+const $$createType163 = $Create.Array($$createType162);
+const $$createType164 = $models.MessageListDTO.createFrom;
+const $$createType165 = $models.MessageSummaryDTO.createFrom;
+const $$createType166 = $Create.Array($$createType165);
+const $$createType167 = $models.NewsletterSenderDTO.createFrom;
+const $$createType168 = $Create.Array($$createType167);
+const $$createType169 = $Create.Map($Create.Any, $Create.Any);
+const $$createType170 = $models.OccurrenceDTO.createFrom;
+const $$createType171 = $Create.Array($$createType170);
+const $$createType172 = $models.OutboxRowDTO.createFrom;
+const $$createType173 = $Create.Array($$createType172);
+const $$createType174 = $Create.Array($$createType11);
+const $$createType175 = $Create.Array($Create.Any);
+const $$createType176 = $models.ProjectEventDTO.createFrom;
+const $$createType177 = $Create.Array($$createType176);
+const $$createType178 = $models.ProjectMailMarkDTO.createFrom;
+const $$createType179 = $Create.Array($$createType178);
+const $$createType180 = $Create.Array($$createType66);
+const $$createType181 = $models.ThreadSummaryDTO.createFrom;
+const $$createType182 = $Create.Array($$createType181);
+const $$createType183 = $models.ProjectVaultNotesDTO.createFrom;
+const $$createType184 = $Create.Array($$createType65);
+const $$createType185 = $models.ScriptLibraryDTO.createFrom;
+const $$createType186 = $Create.Array($$createType185);
+const $$createType187 = $Create.Array($$createType6);
+const $$createType188 = $models.SenderReadingDTO.createFrom;
+const $$createType189 = $Create.Array($$createType188);
+const $$createType190 = $models.SignatureDTO.createFrom;
+const $$createType191 = $Create.Array($$createType190);
+const $$createType192 = $models.SnippetDTO.createFrom;
+const $$createType193 = $Create.Array($$createType192);
+const $$createType194 = $Create.Array($$createType70);
+const $$createType195 = $models.TaskMailMarkDTO.createFrom;
+const $$createType196 = $Create.Array($$createType195);
+const $$createType197 = $models.TaskPlanDTO.createFrom;
+const $$createType198 = $Create.Array($$createType197);
+const $$createType199 = $Create.Array($$createType117);
+const $$createType200 = $Create.Array($$createType57);
+const $$createType201 = $models.ThreadListDTO.createFrom;
+const $$createType202 = $models.UnifiedViewDTO.createFrom;
+const $$createType203 = $Create.Array($$createType202);
+const $$createType204 = $models.UserLocaleDTO.createFrom;
+const $$createType205 = $Create.Array($$createType204);
+const $$createType206 = $models.ViewDTO.createFrom;
+const $$createType207 = $Create.Array($$createType206);
+const $$createType208 = $models.FreeBusyDTO.createFrom;
+const $$createType209 = $models.MCPPermissionDTO.createFrom;
+const $$createType210 = $Create.Array($$createType209);
+const $$createType211 = $models.MailEventSourceDTO.createFrom;
+const $$createType212 = $models.MergeResultDTO.createFrom;
+const $$createType213 = $models.MessageIDsDTO.createFrom;
+const $$createType214 = $models.ProjectMoveResultDTO.createFrom;
+const $$createType215 = $models.ICSFileDTO.createFrom;
+const $$createType216 = $models.InviteDTO.createFrom;
+const $$createType217 = $models.ScriptCatchUpDTO.createFrom;
+const $$createType218 = $Create.Array($$createType217);
+const $$createType219 = $models.DayPlanDTO.createFrom;
+const $$createType220 = $models.MeetingPrepDTO.createFrom;
+const $$createType221 = $models.ThemeImportPreviewDTO.createFrom;
+const $$createType222 = $models.PrivacyReportDTO.createFrom;
+const $$createType223 = $models.UntrustedCertDTO.createFrom;
+const $$createType224 = $Create.Array($$createType223);
+const $$createType225 = $models.AttachmentPageDTO.createFrom;
+const $$createType226 = $models.AttachmentContentDTO.createFrom;
+const $$createType227 = $Create.Array($$createType215);
+const $$createType228 = $models.OutboxLogEntryDTO.createFrom;
+const $$createType229 = $Create.Array($$createType228);
+const $$createType230 = $models.ScriptFileDTO.createFrom;
+const $$createType231 = $models.SieveStateDTO.createFrom;
+const $$createType232 = $models.ScriptRunDTO.createFrom;
+const $$createType233 = $models.VerdictDTO.createFrom;
+const $$createType234 = $models.ImportInventoryDTO.createFrom;
+const $$createType235 = $models.MessageScanDTO.createFrom;
+const $$createType236 = $models.ScriptLibraryNoteDTO.createFrom;
+const $$createType237 = scripting$0.LiveRun.createFrom;
+const $$createType238 = $Create.Array($$createType237);
+const $$createType239 = $models.PlacedScriptDTO.createFrom;
+const $$createType240 = $Create.Array($$createType239);
+const $$createType241 = $Create.Map($Create.Any, $$createType240);
+const $$createType242 = $models.ScriptProposalDTO.createFrom;
+const $$createType243 = scripting$0.Catalog.createFrom;
+const $$createType244 = $Create.Array($$createType232);
+const $$createType245 = $Create.Map($Create.Any, $Create.Any);
+const $$createType246 = $models.SearchResultDTO.createFrom;
+const $$createType247 = $models.SenderOverviewDTO.createFrom;
+const $$createType248 = $models.SplitTabDTO.createFrom;
+const $$createType249 = $Create.Array($$createType248);
+const $$createType250 = $models.AITestDTO.createFrom;
+const $$createType251 = $models.ConnectionTestDTO.createFrom;
+const $$createType252 = scripting$0.MatchReport.createFrom;
+const $$createType253 = $Create.Nullable($$createType252);
+const $$createType254 = $models.TrafficLightsDTO.createFrom;
+const $$createType255 = $models.VaultOpDTO.createFrom;
+const $$createType256 = $models.VaultMentionDTO.createFrom;
+const $$createType257 = $Create.Array($$createType256);
+const $$createType258 = $models.VaultInfoDTO.createFrom;
+const $$createType259 = $models.VaultFileDTO.createFrom;
+const $$createType260 = $models.VaultSaveDTO.createFrom;
+const $$createType261 = $models.VaultHitDTO.createFrom;
+const $$createType262 = $Create.Array($$createType261);
+const $$createType263 = $models.VaultSnapshotDTO.createFrom;

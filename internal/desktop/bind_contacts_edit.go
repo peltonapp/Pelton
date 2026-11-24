@@ -29,6 +29,8 @@ type ContactRequest struct {
 	Note         string            `json:"note"`
 	Emails       []ContactValueDTO `json:"emails"`
 	Phones       []ContactValueDTO `json:"phones"`
+	// MatrixID is the person's Matrix user id; empty removes it.
+	MatrixID string `json:"matrixId"`
 	// Force resolves a conflict the user has already been shown: write anyway,
 	// over whatever the server now holds. It is only ever set by the "keep
 	// mine" button on the conflict dialog.
@@ -39,6 +41,14 @@ type ContactRequest struct {
 // refused write returns Conflict with both versions and changes nothing, local
 // or remote, so the user decides which one survives.
 func (a *App) SaveContact(req ContactRequest) (ContactConflictDTO, error) {
+	res, err := a.saveContact(req)
+	if err == nil && req.ID == 0 && res.Saved.ID != 0 {
+		a.scriptContactAdded(a.ctx, res.Saved.ID)
+	}
+	return res, err
+}
+
+func (a *App) saveContact(req ContactRequest) (ContactConflictDTO, error) {
 	if err := a.ready(); err != nil {
 		return ContactConflictDTO{}, err
 	}
@@ -58,6 +68,9 @@ func (a *App) SaveContact(req ContactRequest) (ContactConflictDTO, error) {
 	}
 
 	contact := a.contactFromRequest(req, existing)
+	if book.Local() {
+		return a.saveLocalContact(book.ID, contact)
+	}
 	client, err := a.addressBookClient(a.ctx, *book)
 	if err != nil {
 		return ContactConflictDTO{}, err
@@ -92,6 +105,20 @@ func (a *App) SaveContact(req ContactRequest) (ContactConflictDTO, error) {
 	return ContactConflictDTO{Saved: saved}, nil
 }
 
+// saveLocalContact stores a contact of a book that lives only here, such as
+// an imported one: there is no server to write to first.
+func (a *App) saveLocalContact(bookID int64, contact pcarddav.Contact) (ContactConflictDTO, error) {
+	contact.Card = contact.ToCard()
+	if err := a.storeContact(a.ctx, bookID, contact); err != nil {
+		return ContactConflictDTO{}, err
+	}
+	saved, err := a.contactByPath(bookID, contact.Path)
+	if err != nil {
+		return ContactConflictDTO{}, err
+	}
+	return ContactConflictDTO{Saved: saved}, nil
+}
+
 // DeleteContact removes a contact here and on the server. Like a save it is
 // conditional, so a contact edited elsewhere since the last sync reports a
 // conflict rather than disappearing.
@@ -109,6 +136,9 @@ func (a *App) DeleteContact(id int64, force bool) (ContactConflictDTO, error) {
 	}
 	if book.ReadOnly {
 		return ContactConflictDTO{}, errBookReadOnly
+	}
+	if book.Local() {
+		return ContactConflictDTO{}, a.store.DeleteContact(a.ctx, id)
 	}
 
 	client, err := a.addressBookClient(a.ctx, *book)
@@ -167,6 +197,7 @@ func (a *App) contactFromRequest(req ContactRequest, existing *storage.Contact) 
 		Note:         strings.TrimSpace(req.Note),
 		Emails:       fromDTOValues(req.Emails),
 		Phones:       fromDTOValues(req.Phones),
+		MatrixID:     strings.TrimSpace(req.MatrixID),
 	}
 	if existing != nil {
 		contact.Path = existing.Path

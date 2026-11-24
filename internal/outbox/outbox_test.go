@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/peltonapp/Pelton/internal/storage"
+	"github.com/peltonapp/Pelton/internal/storage/storagetest"
 )
 
 // newTestQueue opens a real migrated store in a temp dir and seeds one account,
@@ -16,7 +17,7 @@ func newTestQueue(t *testing.T) (*Queue, int64) {
 	t.Helper()
 	ctx := context.Background()
 
-	db, err := storage.Open(filepath.Join(t.TempDir(), "test.db"))
+	db, err := storagetest.Open(filepath.Join(t.TempDir(), "test.db"))
 	if err != nil {
 		t.Fatalf("open store: %v", err)
 	}
@@ -127,10 +128,11 @@ func TestMessageFailsAfterMaxAttempts(t *testing.T) {
 	// drive attempts directly so we do not have to wait out the backoff windows.
 	for i := range MaxAttempts {
 		m := findByID(t, q, id)
-		retry, err := q.markAttemptFailed(ctx, m, "boom")
+		next, err := q.markAttemptFailed(ctx, m, "boom")
 		if err != nil {
 			t.Fatalf("mark attempt failed: %v", err)
 		}
+		retry := !next.IsZero()
 		if i < MaxAttempts-1 && !retry {
 			t.Fatalf("attempt %d should still retry", i+1)
 		}

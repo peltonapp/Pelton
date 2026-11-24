@@ -2,7 +2,7 @@
   // asks which occurrences of a repeating event a change is for: this one,
   // this one and the ones after it, or the whole series.
   import { createEventDispatcher } from 'svelte'
-  import './controls.css'
+  import '../../theme/controls.css'
   import Modal from '../common/Modal.svelte'
   import { t } from '../../lib/i18n'
   import type { EventScope } from '../../lib/types'

@@ -3,6 +3,7 @@
   // open, else the selected contact, else a hint to pick one.
   import { createEventDispatcher } from 'svelte'
   import Ph from '../common/Ph.svelte'
+  import EmptyState from '../common/EmptyState.svelte'
   import ContactDetail from './ContactDetail.svelte'
   import ContactForm from './ContactForm.svelte'
   import bookIcon from '@phosphor-icons/core/assets/duotone/address-book-duotone.svg?raw'
@@ -50,10 +51,7 @@
       on:openMail={(e) => dispatch('openMail', e.detail)}
     />
   {:else}
-    <div class="empty">
-      <Ph svg={bookIcon} size={32} />
-      <p>{$t('contacts.pickOne')}</p>
-    </div>
+    <EmptyState icon={bookIcon} title={$t('contacts.noneOpen')} detail={$t('contacts.pickOneDetail')} />
   {/if}
 </div>
 
@@ -95,19 +93,4 @@
     color: var(--text-primary);
   }
 
-  .empty {
-    display: flex;
-    flex: 1;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    gap: var(--space-3);
-    padding: var(--space-5);
-    color: var(--text-tertiary);
-    font-size: var(--fz-body);
-  }
-
-  .empty p {
-    margin: 0;
-  }
 </style>

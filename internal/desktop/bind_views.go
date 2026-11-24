@@ -307,6 +307,8 @@ func (a *App) listSavedView(ctx context.Context, viewID int64, limit, offset int
 	if err != nil {
 		return MessageListDTO{}, err
 	}
+	// pinned mail leads, each side keeping its order.
+	sort.SliceStable(matches, func(i, j int) bool { return matches[i].Pinned && !matches[j].Pinned })
 
 	total := len(matches)
 	if offset > total {
@@ -371,7 +373,7 @@ const addrSep = "\n"
 // splitAddrs turns a stored newline list into trimmed, non-empty entries.
 func splitAddrs(s string) []string {
 	out := []string{}
-	for _, line := range strings.Split(s, addrSep) {
+	for line := range strings.SplitSeq(s, addrSep) {
 		if t := strings.TrimSpace(line); t != "" {
 			out = append(out, t)
 		}

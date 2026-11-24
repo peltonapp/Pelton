@@ -6,6 +6,9 @@
 import { writable, get } from 'svelte/store'
 import type { Address, ComposeRequest, Draft, EditorMode, MessageDetail, ComposeAttachment } from '../lib/types'
 import { getSetting, setSetting } from '../lib/api'
+import { noteAction } from '../lib/coach'
+import { guarded, replyCheck } from './trust'
+import { sidebar } from './accounts'
 import { formatAddress, formatAddressList, parseAddressList, renderBody } from '../lib/mailcompose'
 import { formatFullDate } from '../lib/format'
 import { escapeHtml, textToHtml } from '../lib/richtext'
@@ -86,6 +89,19 @@ export interface ComposeSession {
   // placement is where the new design shows this session in the main window,
   // unset until it has been placed.
   placement?: ComposePlacement
+  // followUpAt is when to be reminded if nobody has replied, as an ISO time,
+  // unset for no reminder.
+  followUpAt?: string
+  // projectId files the message and its replies under a project once it is
+  // sent, unset for none.
+  projectId?: number
+  // autoEncrypt is set by the new composer while automatic encryption is on;
+  // encrypt is the user's choice for this message, unset to follow the
+  // recommendation; plaintextConfirmed lets a reply to encrypted mail go out
+  // unencrypted.
+  autoEncrypt?: boolean
+  encrypt?: 'on' | 'off'
+  plaintextConfirmed?: boolean
 }
 
 /** The three reply types a reply can be switched between. */
@@ -173,6 +189,7 @@ function blankSession(accountId: number, mode: EditorMode): ComposeSession {
 
 // openCompose starts a new empty compose session and returns its id.
 export function openCompose(accountId: number, mode: EditorMode): number {
+  noteAction('compose')
   const session = blankSession(accountId, mode)
   composeSessions.update((list) => [...list, session])
   return session.id
@@ -207,6 +224,13 @@ export function openComposeWith(accountId: number, mode: EditorMode, prefill: Ma
   return session.id
 }
 
+// inSentFolder reports whether the folder is the account's Sent folder. The
+// role carries the user's override and the server's \Sent attribute, so no
+// folder name is matched. Folders not loaded yet count as not Sent.
+function inSentFolder(accountId: number, folderId: number): boolean {
+  return get(sidebar).data?.foldersByAccount[accountId]?.find((f) => f.id === folderId)?.role === 'sent'
+}
+
 /** The recipients a reply or reply all is addressed to. */
 export interface ReplyRecipients {
   to: string
@@ -216,12 +240,19 @@ export interface ReplyRecipients {
 /**
  * replyRecipients addresses a reply to the sender. Reply all adds the original
  * To and Cc recipients, leaving out the account's own address and anyone
- * already listed.
+ * already listed. Reply all to a message in Sent (fromSent) writes to the
+ * people it went to, not back to yourself (#485).
  */
-export function replyRecipients(source: Pick<MessageDetail, 'fromName' | 'fromAddress' | 'toAddresses' | 'ccAddresses' | 'accountEmail'>, replyAll: boolean): ReplyRecipients {
+export function replyRecipients(source: Pick<MessageDetail, 'fromName' | 'fromAddress' | 'toAddresses' | 'ccAddresses' | 'accountEmail'>, replyAll: boolean, fromSent = false): ReplyRecipients {
   const sender: Address = { name: source.fromName, email: source.fromAddress }
   if (!replyAll) {
     return { to: formatAddress(sender), cc: '' }
+  }
+  if (fromSent) {
+    const recipients = parseAddressList(source.toAddresses ?? '')
+    if (recipients.length > 0) {
+      return { to: formatAddressList(recipients), cc: formatAddressList(parseAddressList(source.ccAddresses ?? '')) }
+    }
   }
   const seen = new Set<string>()
   const own = (source.accountEmail ?? '').trim().toLowerCase()
@@ -277,8 +308,16 @@ export function replySession(detail: MessageDetail, mode: EditorMode, kind: Repl
 /**
  * openReplyWith opens a reply, reply all or forward in the composer, with
  * typed (plain text) already written above the original, and returns its id.
+ * A reply to a message with a strong sender warning waits for the user to
+ * confirm where it goes instead, and returns -1.
  */
 export function openReplyWith(detail: MessageDetail, mode: EditorMode, kind: ReplyKind, typed: string): number {
+  const warned = kind !== 'forward' && document.documentElement.dataset.design === 'new' ? guarded(detail.id) : null
+  if (warned) {
+    replyCheck.set({ detail, mode, kind: kind === 'replyAll' ? 'replyAll' : 'reply', typed, to: warned.replyGoesTo })
+    return -1
+  }
+  noteAction(kind === 'replyAll' ? 'reply-all' : kind === 'forward' ? 'forward' : 'reply')
   const session = replySession(detail, mode, kind, typed)
   composeSessions.update((list) => [...list, session])
   return session.id
@@ -329,7 +368,7 @@ function replyFields(origin: ComposeOrigin, mode: EditorMode, typed: string): Pa
       references: [],
     }
   }
-  const recipients = replyRecipients(origin, origin.kind === 'replyAll')
+  const recipients = replyRecipients(origin, origin.kind === 'replyAll', inSentFolder(origin.accountId, origin.folderId))
   const full = quoteBody(origin, mode)
   const quote = full.replace(/^(\n|<p><\/p>)+/, '')
   return {
@@ -430,6 +469,8 @@ function requestSession(accountId: number, req: ComposeRequest): ComposeSession 
     protection: req.protection,
     draftMessageId: req.draftMessageId ?? '',
     signaturesApplied: true,
+    followUpAt: req.followUpAt || undefined,
+    projectId: req.projectId || undefined,
   })
   return session
 }
@@ -490,6 +531,14 @@ export const closeRequest = writable<number | null>(null)
 export function requestComposeClose(id: number): void {
   closeRequest.set(id)
 }
+
+// availabilityRequest names a session whose composer should open its share
+// availability panel, set from the command palette.
+export const availabilityRequest = writable<number | null>(null)
+
+// insertRequest asks a session's composer to put text in at the caret, e.g. a
+// script's result.
+export const insertRequest = writable<{ session: number; text: string } | null>(null)
 
 // getSession reads the current state of one session.
 export function getSession(id: number): ComposeSession | undefined {

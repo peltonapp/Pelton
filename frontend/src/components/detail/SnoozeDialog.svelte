@@ -5,18 +5,20 @@
   // message reappears marked unread when the time comes.
   import { formatWeekdayTime, type TimeFormat } from '../../lib/format'
   import { prefs } from '../../stores/prefs'
-  import { fade, scale } from 'svelte/transition'
   import {
     IconClock,
     IconSunset2,
     IconSun,
     IconCalendarWeek,
     IconArrowRight,
-    IconX,
   } from '@tabler/icons-svelte'
+  import Modal from '../common/Modal.svelte'
+  import '../../theme/controls.css'
   import { snoozeTarget, closeSnooze } from '../../stores/snooze'
   import { snoozeMessage } from '../../lib/api'
-  import { patchInList, removeFromList } from '../../stores/messages'
+  import { get } from 'svelte/store'
+  import { messageList, patchInList, removeFromList } from '../../stores/messages'
+  import { recordSnooze } from '../../lib/organize'
   import { toastError, toastInfo, errorMessage } from '../../stores/toast'
   import { t } from '../../lib/i18n'
   import DateTimePicker from '../common/DateTimePicker.svelte'
@@ -101,9 +103,12 @@
     // and the whole selection from a bulk one. A failure on one message is
     // reported and does not hold back the rest.
     let failure = ''
+    const snoozed: number[] = []
+    const rows = new Map((get(messageList).data?.items ?? []).filter((m) => target.ids.includes(m.id)).map((m) => [m.id, m]))
     for (const id of target.ids) {
       try {
         await snoozeMessage(id, when.toISOString(), hideNow)
+        snoozed.push(id)
         if (hideNow) {
           removeFromList(id)
         } else {
@@ -114,6 +119,9 @@
       }
     }
     busy = false
+    if (snoozed.length > 0) {
+      recordSnooze(snoozed, rows, target.subject, when.toISOString(), hideNow)
+    }
     if (failure !== '') {
       toastError(failure)
       return
@@ -139,33 +147,19 @@
     closeSnooze()
   }
 
-  function onKeydown(event: KeyboardEvent): void {
-    if (event.key === 'Escape') {
-      done()
-    }
-  }
 </script>
 
-<svelte:window on:keydown={$snoozeTarget ? onKeydown : undefined} />
-
 {#if $snoozeTarget}
-  <!-- svelte-ignore a11y-click-events-have-key-events a11y-no-static-element-interactions -->
-  <div class="backdrop" transition:fade={{ duration: 120 }} on:click={done}></div>
-  <div class="dialog" role="dialog" aria-modal="true" aria-label={$t('detail.snooze.dialogLabel')} transition:scale={{ duration: 150, start: 0.94 }}>
-    <header>
-      <div class="titles">
-        <h2>{$t('detail.snooze.title')}</h2>
-        <p class="subject">
-          {$snoozeTarget.ids.length > 1
-            ? $t('messageList.bulk.messagesCount').replace('{n}', String($snoozeTarget.ids.length))
-            : $snoozeTarget.subject || $t('detail.noSubject')}
-        </p>
-      </div>
-      <button type="button" class="close" aria-label={$t('detail.attachments.close')} on:click={done}>
-        <IconX size={16} stroke={1.8} />
-      </button>
-    </header>
-
+  <Modal
+    title={$t('detail.snooze.title')}
+    hint={$snoozeTarget.ids.length > 1
+      ? $t('messageList.bulk.messagesCount').replace('{n}', String($snoozeTarget.ids.length))
+      : $snoozeTarget.subject || $t('detail.noSubject')}
+    size="small"
+    dirty={!!customValue}
+    on:close={done}
+  >
+  <div class="body">
     <div class="presets">
       {#each formattedPresets as p}
         <button type="button" class="preset" disabled={busy} on:click={() => confirm(p.when)}>
@@ -182,7 +176,7 @@
         <div class="custom-picker">
           <DateTimePicker id="snooze-custom" mode="datetime" bind:value={customValue} />
         </div>
-        <button type="button" class="go" disabled={!customValue || busy} on:click={confirmCustom}>
+        <button type="button" class="cal-btn primary" disabled={!customValue || busy} on:click={confirmCustom}>
           {$t('detail.snooze.title')}
         </button>
       </div>
@@ -193,69 +187,14 @@
       <span>{$t('detail.snooze.hideFromInbox')}</span>
     </label>
   </div>
+  </Modal>
 {/if}
 
 <style>
-  .backdrop {
-    position: fixed;
-    inset: 0;
-    z-index: 300;
-    background: var(--scrim, rgba(0, 0, 0, 0.4));
-    backdrop-filter: blur(2px);
-  }
-
-  .dialog {
-    position: fixed;
-    z-index: 301;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
-    width: min(440px, calc(100vw - 2 * var(--space-5)));
-    padding: var(--space-4);
-    border: var(--hairline) solid var(--border-default);
-    border-radius: var(--radius-card);
-    background: var(--surface-overlay);
-    box-shadow: var(--shadow-overlay);
+  .body {
     display: flex;
     flex-direction: column;
     gap: var(--space-4);
-  }
-
-  header {
-    display: flex;
-    align-items: flex-start;
-    justify-content: space-between;
-    gap: var(--space-3);
-  }
-
-  h2 {
-    margin: 0;
-    font-size: var(--fz-title);
-    font-weight: var(--fw-semibold);
-    color: var(--text-primary);
-  }
-
-  .subject {
-    margin: 2px 0 0;
-    font-size: var(--fz-meta);
-    color: var(--text-tertiary);
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-    max-width: 320px;
-  }
-
-  .close {
-    border: none;
-    background: transparent;
-    color: var(--text-tertiary);
-    cursor: var(--cursor-action);
-    padding: var(--space-1);
-    border-radius: var(--radius-control);
-  }
-  .close:hover {
-    background: var(--surface-hover);
-    color: var(--text-primary);
   }
 
   .presets {
@@ -275,7 +214,9 @@
     color: var(--text-primary);
     cursor: var(--cursor-action);
     text-align: start;
-    transition: border-color 0.1s ease, background 0.1s ease;
+    transition:
+      border-color var(--motion-fast) var(--ease-out),
+      background var(--motion-fast) var(--ease-out);
   }
   .preset:hover {
     border-color: var(--accent);
@@ -317,20 +258,6 @@
     flex: 1;
     min-width: 0;
   }
-  .go {
-    padding: var(--space-2) var(--space-4);
-    border: none;
-    border-radius: var(--radius-control);
-    background: var(--accent);
-    color: #fff;
-    cursor: var(--cursor-action);
-    font-weight: var(--fw-medium);
-  }
-  .go:disabled {
-    opacity: 0.5;
-    cursor: default;
-  }
-
   .hide-now {
     display: flex;
     align-items: center;

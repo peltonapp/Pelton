@@ -18,6 +18,7 @@ vi.mock('../../lib/browser', () => ({
 }))
 
 import AddMailboxWizard from './AddMailboxWizard.svelte'
+import { prefs } from '../../stores/prefs'
 
 function discovered(over: Partial<Discovered>): Discovered {
   return {
@@ -38,6 +39,8 @@ beforeEach(() => {
   api.discoverConfig.mockReset()
   api.testConnection.mockReset()
   api.discoverConfig.mockResolvedValue(discovered({}))
+  // the user allowed lookups before; asking first is covered on its own.
+  prefs.update((p) => ({ ...p, autoconfigLookup: 'allow' }))
 })
 
 describe('the address step', () => {

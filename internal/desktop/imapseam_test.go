@@ -3,7 +3,11 @@ package desktop
 import (
 	"context"
 	"errors"
+	"fmt"
 	"os"
+	"slices"
+	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -13,14 +17,19 @@ import (
 	"github.com/peltonapp/Pelton/internal/credentials"
 	pimap "github.com/peltonapp/Pelton/internal/imap"
 	"github.com/peltonapp/Pelton/internal/storage"
+	"github.com/peltonapp/Pelton/internal/storage/storagetest"
+	psync "github.com/peltonapp/Pelton/internal/sync"
 )
 
 // TestMain swaps go-keyring for its in-memory mock before any test in this
 // package runs, so a test that resolves an account's credentials never reads or
-// writes the machine's real credential store.
+// writes the machine's real credential store. storagetest.Main removes the
+// migrated database the test stores are copied from.
 func TestMain(m *testing.M) {
 	keyring.MockInit()
-	os.Exit(m.Run())
+	code := storagetest.Main(m)
+	removeBenchData()
+	os.Exit(code)
 }
 
 // fakeIMAP records the commands a binding sends and answers them from canned
@@ -30,8 +39,11 @@ func TestMain(m *testing.M) {
 type fakeIMAP struct {
 	// selected is every mailbox SELECT was called on, in order.
 	selected []string
-	// moved records each Move as the uid it was given and the destination.
-	moved []movedMessage
+	// moved records each Move as the uid it was given and the destination, and
+	// moveCalls counts the MoveMessages commands.
+	moved     []movedMessage
+	copied    []movedMessage
+	moveCalls int
 	// searchResult is what SearchByMessageID returns.
 	searchResult []imap.UID
 	// created, renamed and deleted record the mailbox management commands.
@@ -41,7 +53,9 @@ type fakeIMAP struct {
 	// loggedOut reports whether the binding closed its session cleanly, which
 	// is otherwise invisible: a leaked session only shows up as a server
 	// refusing the next login.
-	loggedOut bool
+	// It is atomic: tests share one fake across sessions, which close on
+	// goroutines of their own.
+	loggedOut atomic.Bool
 
 	// appended is every message handed to AppendToSent, in order, and
 	// failAppend makes the append fail so a test can check a send still
@@ -56,9 +70,15 @@ type fakeIMAP struct {
 	// alone when the server says no.
 	failMove error
 
+	// since is what SearchSince returns, and messages what FetchMessages serves
+	// by uid; a uid missing from messages is skipped like one the server lost.
+	since    []imap.UID
+	messages map[imap.UID]*pimap.Message
 	// folders is what LIST answers, and failList makes it fail instead.
 	folders  []pimap.Folder
 	failList error
+	// failNoop makes NOOP fail, as on a connection the server dropped.
+	failNoop error
 	// failSelect makes SELECT of the named mailboxes fail.
 	failSelect map[string]error
 	// permanentFlags is the PERMANENTFLAGS every SELECT reports.
@@ -68,6 +88,7 @@ type fakeIMAP struct {
 	// message is what FetchMessage answers, and fetchedUIDs records each call.
 	message     *pimap.Message
 	fetchedUIDs []imap.UID
+	appends     []appendCall
 }
 
 type draftCall struct {
@@ -77,6 +98,18 @@ type draftCall struct {
 
 func (f *fakeIMAP) ReplaceDraft(mailbox string, raw []byte, messageID string) error {
 	f.drafts = append(f.drafts, draftCall{mailbox, messageID, raw})
+	return nil
+}
+
+type appendCall struct {
+	mailbox string
+	raw     []byte
+	flags   []imap.Flag
+	date    time.Time
+}
+
+func (f *fakeIMAP) AppendMessage(mailbox string, raw []byte, flags []imap.Flag, date time.Time) error {
+	f.appends = append(f.appends, appendCall{mailbox, raw, flags, date})
 	return nil
 }
 
@@ -99,8 +132,9 @@ func (f *fakeIMAP) AppendToSent(raw []byte) (string, error) {
 }
 
 func (f *fakeIMAP) Login() error  { return nil }
-func (f *fakeIMAP) Logout() error { f.loggedOut = true; return nil }
+func (f *fakeIMAP) Logout() error { f.loggedOut.Store(true); return nil }
 func (f *fakeIMAP) Close() error  { return nil }
+func (f *fakeIMAP) Noop() error   { return f.failNoop }
 func (f *fakeIMAP) Addr() string  { return "fake:993" }
 
 func (f *fakeIMAP) Select(mailbox string) (*pimap.Mailbox, error) {
@@ -110,6 +144,9 @@ func (f *fakeIMAP) Select(mailbox string) (*pimap.Mailbox, error) {
 	}
 	return &pimap.Mailbox{Name: mailbox, PermanentFlags: f.permanentFlags}, nil
 }
+
+// SelectedMailbox reports none, so every command selects its mailbox.
+func (f *fakeIMAP) SelectedMailbox() *pimap.Mailbox { return nil }
 
 func (f *fakeIMAP) ListFolders() ([]pimap.Folder, error) { return f.folders, f.failList }
 func (f *fakeIMAP) CreateFolder(path string) error {
@@ -127,18 +164,34 @@ func (f *fakeIMAP) DeleteFolder(path string) error {
 	return nil
 }
 
-func (f *fakeIMAP) FetchMessage(uid imap.UID) (*pimap.Message, error) {
-	f.fetchedUIDs = append(f.fetchedUIDs, uid)
-	if f.message != nil {
-		return f.message, nil
+func (f *fakeIMAP) FetchMessages(uids []imap.UID, fn func(imap.UID, *pimap.Message, error) error) error {
+	for _, uid := range uids {
+		f.fetchedUIDs = append(f.fetchedUIDs, uid)
+		msg, ok := f.messages[uid]
+		if !ok {
+			if f.message == nil {
+				continue
+			}
+			msg = f.message
+		}
+		if err := fn(uid, msg, nil); err != nil {
+			return err
+		}
 	}
-	return &pimap.Message{}, nil
-}
-func (f *fakeIMAP) FetchMessages([]imap.UID, func(imap.UID, *pimap.Message, error) error) error {
 	return nil
+}
+func (f *fakeIMAP) FetchPartial(uid imap.UID, _, _ int64) (*pimap.Message, error) {
+	return nil, fmt.Errorf("uid %d: %w", uid, pimap.ErrNoMessage)
 }
 func (f *fakeIMAP) FetchRawMessage(imap.UID) ([]byte, error)      { return nil, nil }
 func (f *fakeIMAP) FetchAllFlags() ([]pimap.MessageHeader, error) { return nil, nil }
+func (f *fakeIMAP) FetchFlagsChangedSince(uint64) ([]pimap.MessageHeader, error) {
+	return nil, nil
+}
+func (f *fakeIMAP) SearchAllUIDs() ([]imap.UID, error) { return nil, nil }
+func (f *fakeIMAP) FetchHeaders([]imap.UID, *imap.FetchOptions) ([]pimap.MessageHeader, error) {
+	return nil, nil
+}
 
 func (f *fakeIMAP) AddFlags(_ imap.UID, flags ...imap.Flag) error {
 	for _, fl := range flags {
@@ -162,12 +215,29 @@ func (f *fakeIMAP) Move(uid imap.UID, mailbox string) error {
 	return nil
 }
 
-func (f *fakeIMAP) MoveMessages([]imap.UID, string) error { return nil }
-func (f *fakeIMAP) DeleteMessages(...imap.UID) error      { return nil }
+func (f *fakeIMAP) MoveMessages(uids []imap.UID, mailbox string) error {
+	if f.failMove != nil {
+		return f.failMove
+	}
+	for _, uid := range uids {
+		f.moved = append(f.moved, movedMessage{uid: uid, dest: mailbox})
+	}
+	f.moveCalls++
+	return nil
+}
+
+func (f *fakeIMAP) CopyMessages(uids []imap.UID, mailbox string) error {
+	for _, uid := range uids {
+		f.copied = append(f.copied, movedMessage{uid: uid, dest: mailbox})
+	}
+	return nil
+}
+
+func (f *fakeIMAP) DeleteMessages(...imap.UID) error { return nil }
 
 func (f *fakeIMAP) SearchByMessageID(string) ([]imap.UID, error) { return f.searchResult, nil }
 
-func (f *fakeIMAP) SearchSince(time.Time) ([]imap.UID, error) { return nil, nil }
+func (f *fakeIMAP) SearchSince(time.Time) ([]imap.UID, error) { return f.since, nil }
 
 func (f *fakeIMAP) SupportsIdle() bool                      { return false }
 func (f *fakeIMAP) IdleUntil(context.Context) (bool, error) { return false, nil }
@@ -210,11 +280,17 @@ func TestArchiveMessageMovesOnTheServerAndDropsTheRow(t *testing.T) {
 	if client.moved[0].dest != archive.IMAPPath {
 		t.Errorf("moved to %q, want %q", client.moved[0].dest, archive.IMAPPath)
 	}
-	if !client.loggedOut {
-		t.Error("the imap session was left open")
+	// The session stays in the account's pool; stopping the runtime logs it out.
+	a.stopAccountScheduler(inbox.AccountID, false)
+	a.accountSessionsFor(inbox.AccountID, 0).sessions.WaitClosed(context.Background()) // closes run in the background
+	if !client.loggedOut.Load() {
+		t.Error("the pooled imap session was left open after the runtime stopped")
 	}
 	if undo.OriginalFolderID != inbox.ID {
 		t.Errorf("undo points at folder %d, want the inbox %d", undo.OriginalFolderID, inbox.ID)
+	}
+	if undo.DestFolderID != archive.ID {
+		t.Errorf("undo DestFolderID = %d, want the archive %d", undo.DestFolderID, archive.ID)
 	}
 	if _, err := db.GetMessage(ctx, messageID); err == nil {
 		t.Error("the local row survived a successful archive")
@@ -270,6 +346,52 @@ func TestRestoreMessageFailsWhenTheServerHasNoMatch(t *testing.T) {
 	}
 	if len(client.moved) != 0 {
 		t.Errorf("moved %+v though there was nothing to restore", client.moved)
+	}
+}
+
+// Undoing a move to an ordinary folder must search that folder, not Archive:
+// the message is not in Archive, so the old lookup could never find it. An
+// account with no Archive folder can still move mail elsewhere, so it must be
+// able to undo that move too.
+func TestUndoMoveSearchesTheDestinationFolder(t *testing.T) {
+	for _, tc := range []struct {
+		name        string
+		withArchive bool
+		uid         imap.UID
+	}{
+		{"with archive", true, 7},
+		{"without archive", false, 3},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			a, db, ctx := moveTestApp(t)
+			accountID, err := db.CreateAccount(ctx, &storage.Account{Email: "me@example.com"})
+			if err != nil {
+				t.Fatal(err)
+			}
+			names := []string{"INBOX", "Projects"}
+			if tc.withArchive {
+				names = append(names, "Archive")
+			}
+			folders := map[string]*storage.Folder{}
+			for _, name := range names {
+				folders[name] = &storage.Folder{AccountID: accountID, Name: name, IMAPPath: name}
+				if _, err := db.CreateFolder(ctx, folders[name]); err != nil {
+					t.Fatal(err)
+				}
+			}
+			client := &fakeIMAP{searchResult: []imap.UID{tc.uid}}
+			useFake(t, a, accountID, client)
+
+			if err := a.RestoreMessage("<one@example.com>", folders["Projects"].ID, folders["INBOX"].ID); err != nil {
+				t.Fatalf("RestoreMessage: %v", err)
+			}
+			if len(client.selected) != 1 || client.selected[0] != "Projects" {
+				t.Errorf("selected %v, want just Projects", client.selected)
+			}
+			if len(client.moved) != 1 || client.moved[0].uid != tc.uid || client.moved[0].dest != "INBOX" {
+				t.Errorf("moved %+v, want uid %d to INBOX", client.moved, tc.uid)
+			}
+		})
 	}
 }
 
@@ -422,5 +544,251 @@ func TestDeleteFolderRemovesTheDeepestMailboxFirst(t *testing.T) {
 		if f.Name == "Projects" || f.Name == "Pelton" {
 			t.Errorf("folder %q survived the delete locally", f.Name)
 		}
+	}
+}
+
+// Undo moves the copy out of the folder the action put it in. When a sync
+// had stored that copy already, its row leaves too, and both folders'
+// lists are told.
+func TestUndoMoveDropsTheMovedCopy(t *testing.T) {
+	a, db, ctx := moveTestApp(t)
+	inbox, archive, _ := moveTestAccount(t, db, ctx, false)
+	copyID, err := db.InsertMessage(ctx, &storage.Message{
+		AccountID: inbox.AccountID, FolderID: archive.ID, UID: 7, MessageID: "<one@example.com>", Date: time.Now(),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	useFake(t, a, inbox.AccountID, &fakeIMAP{searchResult: []imap.UID{7}})
+	var told []int64
+	a.emitForTest = func(name string, payload any) {
+		if e, ok := payload.(MailNewEvent); ok && name == EventMailNew {
+			told = append(told, e.FolderID)
+		}
+	}
+
+	if err := a.RestoreMessage("<one@example.com>", archive.ID, inbox.ID); err != nil {
+		t.Fatalf("RestoreMessage: %v", err)
+	}
+	if _, err := db.GetMessage(ctx, copyID); err == nil {
+		t.Error("the moved copy is still listed in the archive")
+	}
+	for _, id := range []int64{archive.ID, inbox.ID} {
+		if !slices.Contains(told, id) {
+			t.Errorf("mail:new for folders %v, want %d among them", told, id)
+		}
+	}
+}
+
+// validityIMAP reports UIDVALIDITY validity for every mailbox and, with
+// copyUID set, answers MOVE with COPYUID (UIDPLUS): the moved message's UID
+// in the destination.
+type validityIMAP struct {
+	fakeIMAP
+	validity uint32
+	copyUID  imap.UID
+	// gone are UIDs another client expunged: a MOVE of one is an OK that
+	// moves nothing and names no COPYUID.
+	gone []imap.UID
+}
+
+func (c *validityIMAP) Select(mailbox string) (*pimap.Mailbox, error) {
+	box, err := c.fakeIMAP.Select(mailbox)
+	if box != nil {
+		box.UIDValidity = c.validity
+	}
+	return box, err
+}
+
+func (c *validityIMAP) MoveUID(uid imap.UID, mailbox string) (imap.UID, uint32, error) {
+	if slices.Contains(c.gone, uid) {
+		return 0, 0, nil
+	}
+	if err := c.fakeIMAP.Move(uid, mailbox); err != nil {
+		return 0, 0, err
+	}
+	return c.copyUID, c.validity, nil
+}
+
+// undoRig is an account whose message <one@example.com> was archived; the
+// archive holds a synced copy of it at each of uids, all with that
+// Message-ID (one is the moved copy, the rest are other copies).
+func undoRig(t *testing.T, uids ...uint32) (*App, *storage.DB, storage.Folder, storage.Folder, map[uint32]int64) {
+	t.Helper()
+	a, db, ctx := moveTestApp(t)
+	inbox, archive, _ := moveTestAccount(t, db, ctx, false)
+	if err := db.SetFolderUIDValidity(ctx, archive.ID, 5); err != nil {
+		t.Fatal(err)
+	}
+	archive.UIDValidity = 5
+	rows := make(map[uint32]int64)
+	for _, uid := range uids {
+		id, err := db.InsertMessageWithAttachments(ctx, &storage.Message{
+			AccountID: inbox.AccountID, FolderID: archive.ID, UID: uid, RemoteID: fmt.Sprint(uid),
+			MessageID: "<one@example.com>", Date: time.Now(),
+		}, []storage.IncomingAttachment{{Filename: "a.txt", ContentType: "text/plain", Content: strings.NewReader("x")}})
+		if err != nil {
+			t.Fatal(err)
+		}
+		rows[uid] = id
+	}
+	return a, db, inbox, archive, rows
+}
+
+// Undo moves back the very copy the archive made, by the UID COPYUID named
+// at move time, and drops only that copy's row: another copy with the same
+// Message-ID stays, and so do its attachment files.
+func TestUndoMovesTheCopyCOPYUIDNamed(t *testing.T) {
+	a, db, inbox, archive, rows := undoRig(t, 7, 9)
+	client := &validityIMAP{validity: 5, copyUID: 7}
+	client.searchResult = []imap.UID{7, 9}
+	useFake(t, a, inbox.AccountID, &client.fakeIMAP)
+	a.newIMAPClient = func(pimap.Config) (mailClient, error) { return client, nil }
+	moved, err := db.InsertMessage(a.ctx, &storage.Message{
+		AccountID: inbox.AccountID, FolderID: inbox.ID, UID: 3, MessageID: "<one@example.com>", Date: time.Now(),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := a.ArchiveMessage(moved); err != nil {
+		t.Fatalf("ArchiveMessage: %v", err)
+	}
+	atts, err := db.ListAttachments(a.ctx, rows[7])
+	if err != nil || len(atts) != 1 {
+		t.Fatalf("attachments of the moved copy: %v %v", atts, err)
+	}
+	if err := a.RestoreMessage("<one@example.com>", archive.ID, inbox.ID); err != nil {
+		t.Fatalf("RestoreMessage: %v", err)
+	}
+	if got := client.moved[len(client.moved)-1].uid; got != 7 {
+		t.Fatalf("undo moved uid %d, want 7 from COPYUID", got)
+	}
+	if _, err := db.GetMessage(a.ctx, rows[7]); err == nil {
+		t.Error("the moved copy is still listed in the archive")
+	}
+	if _, err := a.store.OpenAttachment(a.ctx, atts[0]); err == nil {
+		t.Error("the moved copy's attachment files are still on disk")
+	}
+	if _, err := db.GetMessage(a.ctx, rows[9]); err != nil {
+		t.Errorf("another copy with the same Message-ID was dropped: %v", err)
+	}
+}
+
+// When the copy COPYUID named was expunged since (by another client), the
+// MOVE back is an OK that moves nothing. Undo must say it restored nothing,
+// not move another copy with the same Message-ID, and leave the cache alone.
+func TestUndoReportsACOPYUIDCopyThatIsGone(t *testing.T) {
+	a, db, inbox, archive, rows := undoRig(t, 7, 9)
+	client := &validityIMAP{validity: 5, copyUID: 7, gone: []imap.UID{7}}
+	client.searchResult = []imap.UID{9}
+	useFake(t, a, inbox.AccountID, &client.fakeIMAP)
+	a.newIMAPClient = func(pimap.Config) (mailClient, error) { return client, nil }
+	moved, err := db.InsertMessage(a.ctx, &storage.Message{
+		AccountID: inbox.AccountID, FolderID: inbox.ID, UID: 3, MessageID: "<one@example.com>", Date: time.Now(),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := a.ArchiveMessage(moved); err != nil {
+		t.Fatalf("ArchiveMessage: %v", err)
+	}
+	if err := a.RestoreMessage("<one@example.com>", archive.ID, inbox.ID); err == nil {
+		t.Fatal("RestoreMessage reported success though nothing moved")
+	}
+	if len(client.moved) != 1 || client.moved[0].uid != 3 {
+		t.Errorf("moved %+v, want only the archive of uid 3", client.moved)
+	}
+	for _, uid := range []uint32{7, 9} {
+		if _, err := db.GetMessage(a.ctx, rows[uid]); err != nil {
+			t.Errorf("row of uid %d was dropped: %v", uid, err)
+		}
+	}
+}
+
+// Without COPYUID undo falls back to the highest UID with the Message-ID.
+// When the archive holds no row for it yet (no sync stored the copy), there
+// is nothing to drop and the undo still works.
+func TestUndoWithoutCOPYUIDAndNoStoredCopy(t *testing.T) {
+	a, db, inbox, archive, _ := undoRig(t)
+	client := &fakeIMAP{searchResult: []imap.UID{4, 8}}
+	useFake(t, a, inbox.AccountID, client)
+	if err := a.RestoreMessage("<one@example.com>", archive.ID, inbox.ID); err != nil {
+		t.Fatalf("RestoreMessage: %v", err)
+	}
+	if len(client.moved) != 1 || client.moved[0].uid != 8 || client.moved[0].dest != inbox.IMAPPath {
+		t.Fatalf("moved %+v, want uid 8 back to %s", client.moved, inbox.IMAPPath)
+	}
+	if msgs, err := db.ListMessages(a.ctx, archive.ID, 0); err != nil || len(msgs) != 0 {
+		t.Fatalf("archive rows %d (%v), want none", len(msgs), err)
+	}
+}
+
+// After the server reset the archive's UIDVALIDITY, a stored row with the
+// moved UID may be another message: undo leaves the cache alone, and the
+// next sync of the folder resets it.
+func TestUndoKeepsRowsOfAnotherUIDValidity(t *testing.T) {
+	a, db, inbox, archive, rows := undoRig(t, 7)
+	client := &validityIMAP{validity: 6}
+	client.searchResult = []imap.UID{7}
+	useFake(t, a, inbox.AccountID, &client.fakeIMAP)
+	a.newIMAPClient = func(pimap.Config) (mailClient, error) { return client, nil }
+	if err := a.RestoreMessage("<one@example.com>", archive.ID, inbox.ID); err != nil {
+		t.Fatalf("RestoreMessage: %v", err)
+	}
+	if _, err := db.GetMessage(a.ctx, rows[7]); err != nil {
+		t.Fatalf("a row of the old UIDVALIDITY was dropped: %v", err)
+	}
+}
+
+// Undo never moves a message between accounts: the two folders must belong
+// to the same one, and the server is not asked.
+func TestUndoRefusesAMoveAcrossAccounts(t *testing.T) {
+	a, db, ctx := moveTestApp(t)
+	inbox, _, _ := moveTestAccount(t, db, ctx, false)
+	other, err := db.CreateAccount(ctx, &storage.Account{Email: "other@example.com"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	foreign := &storage.Folder{AccountID: other, Name: "Archive", IMAPPath: "Archive"}
+	if _, err := db.CreateFolder(ctx, foreign); err != nil {
+		t.Fatal(err)
+	}
+	client := &fakeIMAP{searchResult: []imap.UID{7}}
+	useFake(t, a, inbox.AccountID, client)
+	if err := a.RestoreMessage("<one@example.com>", foreign.ID, inbox.ID); err == nil {
+		t.Fatal("RestoreMessage moved a message from another account's folder")
+	}
+	if len(client.selected) != 0 || len(client.moved) != 0 {
+		t.Fatalf("the server was asked (selected %v, moved %v), want nothing", client.selected, client.moved)
+	}
+}
+
+// openBoxIMAP has INBOX selected already and counts SELECTs.
+type openBoxIMAP struct {
+	fakeIMAP
+	selects int
+}
+
+func (c *openBoxIMAP) Select(mailbox string) (*pimap.Mailbox, error) {
+	c.selects++
+	return c.fakeIMAP.Select(mailbox)
+}
+
+func (*openBoxIMAP) SelectedMailbox() *pimap.Mailbox {
+	return &pimap.Mailbox{Name: "INBOX", UIDValidity: 1}
+}
+
+// The adapter skips the SELECT of a mailbox the session has open. Pooled
+// sessions reach it wrapped in pooledIMAP, which must pass the selected
+// mailbox through or every fetch selects again.
+func TestPooledSessionReportsItsSelectedMailbox(t *testing.T) {
+	client := &openBoxIMAP{}
+	ad := pimap.NewAdapter(&pooledIMAP{mailClient: client, untrack: func() {}})
+	ctx := psync.WithGeneration(context.Background(), "INBOX", "1")
+	if _, err := ad.Fetch(ctx, "INBOX", []string{"1"}); err != nil {
+		t.Fatal(err)
+	}
+	if client.selects != 0 {
+		t.Fatalf("%d SELECTs of the open mailbox, want none", client.selects)
 	}
 }

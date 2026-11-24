@@ -30,7 +30,7 @@ func (a *App) MessageIDs(req ListMessagesRequest) (MessageIDsDTO, error) {
 	if err != nil {
 		return MessageIDsDTO{}, err
 	}
-	ids, err := a.store.QueryMessageIDs(a.ctx, q)
+	ids, err := a.store.QueryMessageIDs(a.mailCtx(), q)
 	if err != nil {
 		return MessageIDsDTO{}, err
 	}
@@ -74,6 +74,9 @@ func (a *App) SearchMessageIDs(req SearchRequestDTO) (MessageIDsDTO, error) {
 	if !ok {
 		return MessageIDsDTO{IDs: []int64{}}, nil
 	}
+	if err := a.restrictToNotes(&q, req); err != nil {
+		return MessageIDsDTO{}, err
+	}
 
 	res, err := a.index.Search(q)
 	if err != nil {
@@ -86,7 +89,7 @@ func (a *App) SearchMessageIDs(req SearchRequestDTO) (MessageIDsDTO, error) {
 		// hit whose message is gone is skipped, which also covers stale index
 		// entries.
 		if req.hasStoredFilter() {
-			m, err := a.store.GetMessage(a.ctx, h.ID)
+			m, err := a.store.GetMessage(a.mailCtx(), h.ID)
 			if err != nil || !req.keeps(m) {
 				continue
 			}

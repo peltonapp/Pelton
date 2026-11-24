@@ -1,13 +1,15 @@
 // searchquery.ts is the chip model shared by the search fields: typed operator
-// tokens (from:, to:, subject:, in:, has:, is:, before:, after:) become chips,
+// tokens (from:, to:, subject:, in:, has:, is:, before:, after:, note:) become chips,
 // and the chips become the structured SearchFilter the backend runs. Free text
 // travels beside them as the query.
 
+import { dayKey } from './caldate'
+
 /** A field a chip constrains. account only comes from the results filters. */
-export type ChipField = 'from' | 'to' | 'subject' | 'in' | 'has' | 'is' | 'before' | 'after' | 'account'
+export type ChipField = 'from' | 'to' | 'subject' | 'in' | 'has' | 'is' | 'before' | 'after' | 'note' | 'account'
 
 /** The operators that can be typed, in the order suggestions list them. */
-export const operatorKeys = ['from', 'to', 'subject', 'in', 'has', 'is', 'before', 'after'] as const
+export const operatorKeys = ['from', 'to', 'subject', 'in', 'has', 'is', 'before', 'after', 'note'] as const
 
 /** One typeable operator. */
 export type OperatorKey = (typeof operatorKeys)[number]
@@ -23,11 +25,12 @@ const aliases: Record<string, ChipField> = {
   is: 'is',
   before: 'before',
   after: 'after',
+  note: 'note',
 }
 
 /**
  * One committed constraint. value is what the filter uses: an address or text
- * for from/to/subject, 'attachment' for has, 'unread' or 'flagged' for is, a
+ * for from/to/subject/note, 'attachment' or 'note' for has, 'unread' or 'flagged' for is, a
  * YYYY-MM-DD date for before/after, and a name for in/account, whose id carries
  * the folder or account id. label overrides what the chip shows.
  */
@@ -54,6 +57,9 @@ export interface SearchFilter {
   flaggedOnly: boolean
   accountId: number
   folderId: number
+  // note matches the text of private notes; hasNote keeps messages with one.
+  note: string
+  hasNote: boolean
 }
 
 /** A filter that constrains nothing. */
@@ -68,6 +74,8 @@ export const emptyFilter: SearchFilter = {
   flaggedOnly: false,
   accountId: 0,
   folderId: 0,
+  note: '',
+  hasNote: false,
 }
 
 /** Reports whether any constraint in the filter is set. */
@@ -82,7 +90,9 @@ export function filterActive(f: SearchFilter): boolean {
     f.unreadOnly ||
     f.flaggedOnly ||
     f.accountId > 0 ||
-    f.folderId > 0
+    f.folderId > 0 ||
+    f.note !== '' ||
+    f.hasNote
   )
 }
 
@@ -92,13 +102,19 @@ export function filterActive(f: SearchFilter): boolean {
  */
 export function chipLabel(chip: SearchChip, t: (key: string) => string): string {
   if (chip.field === 'has') {
-    return t('messageList.search.chip.hasAttachment')
+    return chip.value === 'note' ? t('search.chip.hasNote') : t('messageList.search.chip.hasAttachment')
   }
   if (chip.field === 'is') {
     return chip.value === 'flagged' ? t('sidebar.view.flagged') : t('messageList.search.chip.isUnread')
   }
   const field =
-    chip.field === 'in' ? t('search.chip.in') : chip.field === 'account' ? t('search.chip.account') : t(`messageList.search.chip.${chip.field}`)
+    chip.field === 'in'
+      ? t('search.chip.in')
+      : chip.field === 'account'
+        ? t('search.chip.account')
+        : chip.field === 'note'
+          ? t('search.chip.note')
+          : t(`messageList.search.chip.${chip.field}`)
   return `${field}: ${chip.label ?? chip.value}`
 }
 
@@ -141,12 +157,6 @@ export function toggleChip(chips: SearchChip[], chip: SearchChip): SearchChip[] 
 /** Looks a folder up by the name typed after in:. */
 export type FolderResolver = (name: string) => { id: number; label: string } | null
 
-/** Formats a date as YYYY-MM-DD in local time. */
-export function isoDate(d: Date): string {
-  const pad = (n: number): string => String(n).padStart(2, '0')
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
-}
-
 /** The date shortcuts offered for before: and after:. */
 export const dateShortcuts = ['today', 'yesterday', 'thisWeek', 'lastMonth'] as const
 
@@ -167,7 +177,7 @@ export function shortcutDate(shortcut: DateShortcut, now: Date = new Date()): st
     d.setDate(1)
     d.setMonth(d.getMonth() - 1)
   }
-  return isoDate(d)
+  return dayKey(d)
 }
 
 function parseDateValue(raw: string, now: Date): string | null {
@@ -195,6 +205,9 @@ export function parseToken(token: string, resolveFolder?: FolderResolver, now: D
   const lower = raw.toLowerCase()
   switch (field) {
     case 'has':
+      if (lower.startsWith('note')) {
+        return { field, value: 'note' }
+      }
       return lower.startsWith('attach') ? { field, value: 'attachment' } : null
     case 'is':
       if (lower.startsWith('unread')) {
@@ -304,7 +317,14 @@ export function buildFilter(chips: SearchChip[]): SearchFilter {
         f.subject = c.value
         break
       case 'has':
-        f.hasAttachment = true
+        if (c.value === 'note') {
+          f.hasNote = true
+        } else {
+          f.hasAttachment = true
+        }
+        break
+      case 'note':
+        f.note = c.value
         break
       case 'is':
         if (c.value === 'flagged') {

@@ -132,6 +132,7 @@ func (a *App) syncAllCalendars(ctx context.Context) error {
 func (a *App) syncCalendarAccount(ctx context.Context, acct storage.CalendarAccount, report func(storage.Calendar)) ([]int64, error) {
 	ctx, cancel := context.WithTimeout(ctx, calendarAccountBudget)
 	defer cancel()
+	ctx = withScriptBudget(ctx)
 	client, err := a.calendarClient(acct)
 	if err != nil {
 		return nil, a.recordAccountFailure(ctx, acct, err)
@@ -159,6 +160,7 @@ func (a *App) syncCalendarAccount(ctx context.Context, acct storage.CalendarAcco
 			cal = storage.Calendar{AccountID: acct.ID, Path: rc.Path, Visible: true, Position: i}
 		}
 		cal.Name, cal.Description, cal.ReadOnly = rc.Name, rc.Description, rc.ReadOnly
+		cal.Components = rc.Components()
 		if !cal.ColorSet {
 			cal.Color = rc.Color
 		}
@@ -301,11 +303,20 @@ func (a *App) pullBySyncToken(ctx context.Context, client *caldav.Client, cal st
 }
 
 // pullByETag compares the server's etags with the local ones and fetches only
-// what differs.
+// what differs. A calendar holding events and tasks is listed once for each.
 func (a *App) pullByETag(ctx context.Context, client *caldav.Client, cal storage.Calendar) (bool, error) {
-	etags, err := client.List(ctx, cal.Path)
-	if err != nil {
-		return false, err
+	etags := map[string]string{}
+	for _, kind := range []string{storage.KindEvent, storage.KindTask} {
+		if (kind == storage.KindEvent && !cal.HoldsEvents()) || (kind == storage.KindTask && !cal.HoldsTasks()) {
+			continue
+		}
+		listed, err := client.List(ctx, cal.Path, kind)
+		if err != nil {
+			return false, err
+		}
+		for p, etag := range listed {
+			etags[p] = etag
+		}
 	}
 	local, err := a.store.ListCalendarEvents(ctx, cal.ID)
 	if err != nil {
@@ -364,14 +375,30 @@ func (a *App) dropMissing(ctx context.Context, cal storage.Calendar, present map
 // the etag it started from, and a conflict is reported then. It returns
 // whether anything was stored.
 func (a *App) storeResource(ctx context.Context, cal storage.Calendar, res caldav.Resource) (bool, error) {
-	obj, err := ical.ParseObject(res.Data, time.Local)
-	if err != nil {
-		a.log.Warn("unreadable calendar resource", "path", res.Path, "err", err)
-		return false, nil
+	var (
+		uid  string
+		fill func(*storage.CalendarEvent)
+	)
+	if ical.HasTodo(res.Data) {
+		obj, err := ical.ParseTodoObject(res.Data, time.Local)
+		if err != nil {
+			a.log.Warn("unreadable task resource", "path", res.Path, "err", err)
+			return false, nil
+		}
+		uid = obj.Todo.UID
+		fill = func(row *storage.CalendarEvent) { fillTaskRow(row, obj) }
+	} else {
+		obj, err := ical.ParseObject(res.Data, time.Local)
+		if err != nil {
+			a.log.Warn("unreadable calendar resource", "path", res.Path, "err", err)
+			return false, nil
+		}
+		uid = obj.UID()
+		fill = func(row *storage.CalendarEvent) { fillEventRow(row, obj) }
 	}
 	row, err := a.store.GetCalendarEventByPath(ctx, cal.ID, res.Path)
 	if errors.Is(err, storage.ErrCalendarEventNotFound) {
-		row, err = a.store.GetCalendarEventByUID(ctx, cal.ID, obj.UID())
+		row, err = a.store.GetCalendarEventByUID(ctx, cal.ID, uid)
 	}
 	switch {
 	case errors.Is(err, storage.ErrCalendarEventNotFound):
@@ -383,11 +410,19 @@ func (a *App) storeResource(ctx context.Context, cal storage.Calendar, res calda
 	case row.ETag == res.ETag && res.ETag != "":
 		return false, nil
 	}
-	fillEventRow(row, obj)
+	created, wasDone := row.ID == 0, row.TaskCompleted != ""
+	fill(row)
 	row.Data = string(res.Data)
 	row.Path, row.ETag = res.Path, res.ETag
 	row.Pending, row.Conflict, row.SyncError = "", false, ""
-	return true, a.store.SaveCalendarEvent(ctx, row)
+	if err := a.store.SaveCalendarEvent(ctx, row); err != nil {
+		return false, err
+	}
+	a.scriptResourceStored(ctx, cal, *row, created, wasDone)
+	if row.IsTask() {
+		a.blocksFollowTask(ctx, row.UID, wasDone, row.TaskCompleted != "")
+	}
+	return true, nil
 }
 
 // pushEvent writes one event's pending change to the server under the etag it
@@ -528,31 +563,53 @@ func (a *App) commitEvent(ctx context.Context, cal storage.Calendar, row storage
 // it; a conflict fills in the server's version. Only a failure that is
 // neither is returned, with the change still queued.
 func (a *App) pushNow(ctx context.Context, cal storage.Calendar, row *storage.CalendarEvent, force bool, result *EventSaveResultDTO) error {
-	client, err := a.calendarClientFor(ctx, cal)
+	out, err := a.pushRowNow(ctx, cal, row, force)
 	if err != nil {
 		return err
+	}
+	result.Queued, result.Conflict = out.queued, out.conflict
+	if out.server != nil {
+		if obj, err := ical.ParseObject(out.server.Data, time.Local); err == nil {
+			shown := *row
+			shown.Data, shown.ETag = string(out.server.Data), out.server.ETag
+			result.Server, _ = occurrenceDTO(shown, cal, obj, time.Time{})
+		}
+	}
+	return nil
+}
+
+// pushOutcome is what writing one change straight away came to: queued for
+// the next sync, or refused as a conflict with the server's copy when it could
+// be read.
+type pushOutcome struct {
+	queued   bool
+	conflict bool
+	server   *caldav.Resource
+}
+
+// pushRowNow writes an event's or a task's change straight away, the way
+// pushNow describes, and reports the outcome without building a DTO.
+func (a *App) pushRowNow(ctx context.Context, cal storage.Calendar, row *storage.CalendarEvent, force bool) (pushOutcome, error) {
+	client, err := a.calendarClientFor(ctx, cal)
+	if err != nil {
+		return pushOutcome{}, err
 	}
 	pushCtx, cancel := context.WithTimeout(ctx, calendarTimeout)
 	defer cancel()
 	err = a.pushEvent(pushCtx, client, cal, row, force)
 	switch {
 	case err == nil:
-		return nil
+		return pushOutcome{}, nil
 	case errors.Is(err, caldav.ErrConflict):
-		result.Conflict = true
+		out := pushOutcome{conflict: true}
 		if server, err := client.Get(pushCtx, row.Path); err == nil {
-			if obj, err := ical.ParseObject(server.Data, time.Local); err == nil {
-				shown := *row
-				shown.Data, shown.ETag = string(server.Data), server.ETag
-				result.Server, _ = occurrenceDTO(shown, cal, obj, time.Time{})
-			}
+			out.server = &server
 		}
-		return nil
+		return out, nil
 	case isNetworkError(err), errors.Is(err, context.DeadlineExceeded):
-		result.Queued = true
-		return nil
+		return pushOutcome{queued: true}, nil
 	}
-	return err
+	return pushOutcome{}, err
 }
 
 // deleteEventRow deletes an event here and on the server.

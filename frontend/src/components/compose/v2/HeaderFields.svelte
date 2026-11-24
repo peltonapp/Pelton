@@ -3,23 +3,37 @@
   // split by hairlines. From is a compact account picker shown only with more
   // than one account; Cc and Bcc are revealed from small buttons at the end of
   // the To row; Subject is the larger last line. Every edit goes straight to
-  // the session store.
+  // the session store. A recipient chip can be dragged to another field, and
+  // while one is dragged the hidden fields open to take it.
   import { slide } from 'svelte/transition'
   import ChipInput from '../ChipInput.svelte'
   import Select from '../../common/Select.svelte'
   import { updateCompose, type ComposeSession } from '../../../stores/compose'
   import { sidebar } from '../../../stores/accounts'
   import { prefs } from '../../../stores/prefs'
+  import { moveRecipient, type RecipientField } from '../../../lib/recipientmoves'
   import { t } from '../../../lib/i18n'
 
   /** The session the fields edit. */
   export let session: ComposeSession
 
+  let dragging = false
+
   $: accounts = $sidebar.data?.accounts ?? []
   $: motion = $prefs.reduceMotion ? 0 : 170
+  $: showCc = session.showCc || dragging
+  $: showBcc = session.showBcc || dragging
 
   function accountLabel(acc: { email: string; displayName?: string }): string {
     return acc.displayName ? `${acc.displayName} <${acc.email}>` : acc.email
+  }
+
+  // drop moves a chip dragged from another field into this one.
+  function drop(to: RecipientField, detail: { value: string; from: string }): void {
+    const from = detail.from as RecipientField
+    const moved = moveRecipient({ to: session.to, cc: session.cc, bcc: session.bcc }, detail.value, from, to)
+    dragging = false
+    updateCompose(session.id, { ...moved, showCc: session.showCc || to === 'cc', showBcc: session.showBcc || to === 'bcc' })
   }
 </script>
 
@@ -44,24 +58,28 @@
         id={`to-${session.id}`}
         label={$t('compose.field.to')}
         value={session.to}
+        field="to"
+        movable
         chipsEnabled={$prefs.composeChips}
         autocompleteEnabled={$prefs.composeAutocomplete}
         on:change={(e) => updateCompose(session.id, { to: e.detail })}
+        on:dropchip={(e) => drop('to', e.detail)}
+        on:dragchip={(e) => (dragging = e.detail)}
       />
     </div>
-    {#if !session.showCc || !session.showBcc}
+    {#if !showCc || !showBcc}
       <div class="reveal">
-        {#if !session.showCc}
+        {#if !showCc}
           <button type="button" on:click={() => updateCompose(session.id, { showCc: true })}>{$t('compose.field.cc')}</button>
         {/if}
-        {#if !session.showBcc}
+        {#if !showBcc}
           <button type="button" on:click={() => updateCompose(session.id, { showBcc: true })}>{$t('compose.field.bcc')}</button>
         {/if}
       </div>
     {/if}
   </div>
 
-  {#if session.showCc}
+  {#if showCc}
     <div class="row" transition:slide={{ duration: motion }}>
       <label for={`cc-${session.id}`}>{$t('compose.field.cc')}</label>
       <div class="value">
@@ -69,15 +87,19 @@
           id={`cc-${session.id}`}
           label={$t('compose.field.cc')}
           value={session.cc}
+          field="cc"
+          movable
           chipsEnabled={$prefs.composeChips}
           autocompleteEnabled={$prefs.composeAutocomplete}
           on:change={(e) => updateCompose(session.id, { cc: e.detail })}
+          on:dropchip={(e) => drop('cc', e.detail)}
+          on:dragchip={(e) => (dragging = e.detail)}
         />
       </div>
     </div>
   {/if}
 
-  {#if session.showBcc}
+  {#if showBcc}
     <div class="row" transition:slide={{ duration: motion }}>
       <label for={`bcc-${session.id}`}>{$t('compose.field.bcc')}</label>
       <div class="value">
@@ -85,9 +107,13 @@
           id={`bcc-${session.id}`}
           label={$t('compose.field.bcc')}
           value={session.bcc}
+          field="bcc"
+          movable
           chipsEnabled={$prefs.composeChips}
           autocompleteEnabled={$prefs.composeAutocomplete}
           on:change={(e) => updateCompose(session.id, { bcc: e.detail })}
+          on:dropchip={(e) => drop('bcc', e.detail)}
+          on:dragchip={(e) => (dragging = e.detail)}
         />
       </div>
     </div>

@@ -18,12 +18,38 @@ var WriteTools = []string{
 	ToolDeleteMessage, ToolSendMessage,
 }
 
+// Script tool names. None of them reads mail, and none can switch a script
+// on, approve its permissions, run it for real or delete it.
+const (
+	ToolScriptReference   = "get_script_reference"
+	ToolListScripts       = "list_scripts"
+	ToolGetScript         = "get_script"
+	ToolValidateScript    = "validate_script"
+	ToolCreateScript      = "create_script"
+	ToolUpdateScript      = "update_script"
+	ToolTestScript        = "test_script"
+	ToolListTemplates     = "list_script_templates"
+	ToolGetScriptTemplate = "get_script_template"
+)
+
+// ScriptTools is every script tool a server with scripts carries, in the
+// order the settings ui lists them.
+var ScriptTools = []string{
+	ToolScriptReference, ToolListScripts, ToolGetScript, ToolValidateScript,
+	ToolCreateScript, ToolUpdateScript, ToolTestScript,
+}
+
+// ScriptTemplateTools are the script tools that need a template source as
+// well; a server carries them only when its Scripts provides templates.
+var ScriptTemplateTools = []string{ToolListTemplates, ToolGetScriptTemplate}
+
 // Group names. A group is a convenience in the ui, not a second layer of
 // enforcement: only the per-tool permission is ever checked.
 const (
 	GroupOrganise = "organise"
 	GroupDelete   = "delete"
 	GroupSend     = "send"
+	GroupScripts  = "scripts"
 )
 
 // ToolGroup says which group a write tool belongs to. Organise actions are all
@@ -36,6 +62,16 @@ var ToolGroup = map[string]string{
 	ToolSetFlagColor:  GroupOrganise,
 	ToolDeleteMessage: GroupDelete,
 	ToolSendMessage:   GroupSend,
+
+	ToolScriptReference:   GroupScripts,
+	ToolListScripts:       GroupScripts,
+	ToolGetScript:         GroupScripts,
+	ToolValidateScript:    GroupScripts,
+	ToolCreateScript:      GroupScripts,
+	ToolUpdateScript:      GroupScripts,
+	ToolTestScript:        GroupScripts,
+	ToolListTemplates:     GroupScripts,
+	ToolGetScriptTemplate: GroupScripts,
 }
 
 // Permissions says which write tools an agent may use. The zero value allows
@@ -46,14 +82,4 @@ type Permissions map[string]bool
 // Allows reports whether a tool may run.
 func (p Permissions) Allows(tool string) bool {
 	return p[tool]
-}
-
-// Any reports whether any write tool is permitted at all.
-func (p Permissions) Any() bool {
-	for _, tool := range WriteTools {
-		if p[tool] {
-			return true
-		}
-	}
-	return false
 }

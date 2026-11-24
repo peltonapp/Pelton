@@ -19,7 +19,7 @@ type MessageRef struct {
 func (d *DB) FindMessageByHeaderID(ctx context.Context, headerID string) (*MessageRef, error) {
 	const query = `
 SELECT id, account_id, folder_id FROM messages
-WHERE message_id IN (?, ?)
+WHERE message_id IN (?, ?) AND ` + notVaulted + `
 ORDER BY id LIMIT 1`
 	var ref MessageRef
 	err := d.sql.QueryRowContext(ctx, query, headerID, "<"+headerID+">").Scan(&ref.ID, &ref.AccountID, &ref.FolderID)

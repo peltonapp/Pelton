@@ -10,7 +10,12 @@
   import Toasts from './components/common/Toasts.svelte'
   import ContextMenu from './components/common/ContextMenu.svelte'
   import ConfirmDialog from './components/common/ConfirmDialog.svelte'
+  import CommandPalette from './components/common/CommandPalette.svelte'
   import { initPrefs, prefs } from './stores/prefs'
+  import { bindings, initShortcuts, recording } from './stores/shortcuts'
+  import { initPalette, paletteOpen, togglePalette } from './stores/palette'
+  import { extraPaletteCommands } from './lib/palettesources'
+  import { comboMatches } from './lib/shortcuts'
   import {
     initComposePrefs,
     composeSessions,
@@ -20,6 +25,7 @@
     type ComposeSession,
   } from './stores/compose'
   import { loadSignatures } from './stores/signatures'
+  import { loadSnippets } from './stores/snippets'
   import { loadSidebar } from './stores/accounts'
   import { applyTrafficLights, closeCurrentWindow, setWindowTitle, takeComposeSession, titleBarDoubleClick } from './lib/api'
   import { onComposeCloseRequest } from './lib/events'
@@ -52,7 +58,10 @@
       void applyTrafficLights(token, true)
     }
     await initComposePrefs()
+    await initShortcuts()
+    void initPalette()
     void loadSignatures()
+    void loadSnippets()
     // the account picker and the From line read the accounts from here.
     await loadSidebar()
     const session = await takeComposeSession<ComposeSession>(token).catch(() => null)
@@ -72,7 +81,20 @@
   $: if (ready) {
     setWindowTitle($composeSessions[0]?.subject || $t('compose.title.untitled'))
   }
+
+  // the palette here holds what a compose window can do: the composer's own
+  // actions, registered by the composer.
+  function onKeydown(event: KeyboardEvent): void {
+    const combo = $bindings['command-palette']
+    if (classic || $recording || !combo || !comboMatches(event, combo)) {
+      return
+    }
+    event.preventDefault()
+    togglePalette()
+  }
 </script>
+
+<svelte:window on:keydown={onKeydown} />
 
 <!-- the new composer's toolbar is the title bar of its window, so only the
      classic pane needs the strip. -->
@@ -97,6 +119,9 @@
 <Toasts />
 <ContextMenu />
 <ConfirmDialog />
+{#if !classic}
+  <CommandPalette commands={$paletteOpen ? extraPaletteCommands($t) : []} />
+{/if}
 
 <style>
   .titlebar-drag {

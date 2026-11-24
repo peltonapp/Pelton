@@ -183,6 +183,8 @@ function visible(el: HTMLElement, spot: Spot): boolean {
 }
 
 function hide(): void {
+  // a blink still waiting to start would bring the caret back where it was.
+  clearTimeout(idle)
   caret?.classList.remove('shown', 'blink')
   target = null
   shown = null
