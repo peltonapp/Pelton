@@ -717,7 +717,7 @@ func lineDiff(a, b []string) []ScriptDiffLineDTO {
 		suf++
 	}
 	ma, mb := a[pre:len(a)-suf], b[pre:len(b)-suf]
-	if len(ma) == 0 || len(mb) == 0 || len(ma) > maxDiffCells/len(mb) {
+	if len(ma) == 0 || len(mb) == 0 || len(ma) > maxDiffCells || len(mb) > maxDiffCells || len(ma) > maxDiffCells/len(mb) {
 		for _, l := range ma {
 			out = append(out, ScriptDiffLineDTO{Op: "-", Text: l})
 		}
