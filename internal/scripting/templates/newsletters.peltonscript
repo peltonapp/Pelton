@@ -1,0 +1,32 @@
+{
+  "format": 1,
+  "name": "File newsletters",
+  "description": "Moves mail sent through a mailing list, which carries a List-Id header, into a folder of its own.",
+  "kind": "blocks",
+  "trigger": { "type": "mail.arrived", "params": { "folder": "inbox" } },
+  "permissions": ["mail.read", "mail.modify"],
+  "settings": [
+    { "name": "folder", "type": "folder", "labelKey": "", "label": "Folder for newsletters", "default": "Newsletters" }
+  ],
+  "blocks": {
+    "version": 1,
+    "blocks": [
+      {
+        "id": "list",
+        "kind": "if",
+        "branches": [
+          {
+            "when": {
+              "kind": "condition",
+              "type": "mail.header",
+              "args": { "name": { "value": "List-Id" }, "op": { "value": "matches" }, "value": { "value": "\\S" } }
+            },
+            "body": [
+              { "id": "file", "kind": "action", "type": "mail.move", "args": { "folder": { "ref": "setting:folder" } } }
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}

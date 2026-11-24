@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { render, screen, waitFor } from '@testing-library/svelte'
 import userEvent from '@testing-library/user-event'
 import type { ChatMessage, ChatRoom } from '../../lib/types'
+import { expectAxeClean } from '../../test/axe'
 
 const api = vi.hoisted(() => ({
   chatSend: vi.fn(),
@@ -183,6 +184,7 @@ describe('Composer', () => {
     api.chatSend.mockResolvedValue('$new')
     render(Composer, { props: { room: room('!r', { name: 'Garden' }), replyTo: msg() } })
     expect(screen.getByText(/Replying to Bob/)).toBeInTheDocument()
+    await expectAxeClean()
     const box = screen.getByRole('textbox', { name: 'Message to Garden' })
     await userEvent.type(box, 'great :tada:{Enter}')
     await waitFor(() => expect(api.chatSend).toHaveBeenCalled())

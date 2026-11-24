@@ -180,6 +180,7 @@ func (a *App) stopChat() {
 
 // chatSettingChanged reacts to the chat switch in settings.
 func (a *App) chatSettingChanged(value string) {
+	a.scriptChatAvailability()
 	if value == "true" {
 		goSafe("starting chat", a.startChatIfEnabled)
 		return
@@ -687,6 +688,7 @@ func (a *App) notifyChat(list []chat.Notification) {
 	if a.store == nil || a.ctx == nil {
 		return
 	}
+	a.scriptChatMessages(list)
 	mode := a.stringSetting(settingChatNotify, "mentions")
 	if mode == "off" || a.focusQuiet() {
 		return

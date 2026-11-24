@@ -5,9 +5,11 @@ import (
 	"fmt"
 	"io"
 	"reflect"
+	"strconv"
 	"testing"
 
 	"github.com/emersion/go-imap/v2"
+	"github.com/peltonapp/Pelton/internal/desktop/syncsched"
 	pimap "github.com/peltonapp/Pelton/internal/imap"
 	"github.com/peltonapp/Pelton/internal/rfc822"
 	"github.com/peltonapp/Pelton/internal/storage"
@@ -63,14 +65,40 @@ func (c *threadingClient) FetchMessage(uid imap.UID) (*pimap.Message, error) {
 	}, nil
 }
 
+func (c *threadingClient) FetchMessages(uids []imap.UID, fn func(imap.UID, *pimap.Message, error) error) error {
+	for _, uid := range uids {
+		msg, err := c.FetchMessage(uid)
+		if err := fn(uid, msg, err); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// fetchAndPin runs the offline download of one uid with no row through the
+// download's own fetch and store path.
+func fetchAndPin(app *App, client mailClient, folder storage.Folder, uid uint32, includeAttachments bool) error {
+	account, err := app.store.GetAccount(app.ctx, folder.AccountID)
+	if err != nil {
+		return err
+	}
+	ft := &folderTasks{folder: folder, fresh: []string{strconv.FormatUint(uint64(uid), 10)}}
+	_, _, _, err = app.offlineFresh(app.ctx, client, *account, folder, ft, &syncsched.Claims{}, 25, includeAttachments)
+	return err
+}
+
 func TestFetchAndPinPreservesThreadingMetadata(t *testing.T) {
 	for _, includeAttachments := range []bool{false, true} {
 		for _, tt := range threadingCases() {
 			t.Run(fmt.Sprintf("attachments=%t/%s", includeAttachments, tt.name), func(t *testing.T) {
 				app, db, accountID := pgpTestApp(t, nil, nil)
 				folder := addFolder(t, app, accountID, "INBOX")
+				// below the sync window, where the attachment choice holds.
+				if err := db.SetFolderSyncFloorUID(app.ctx, folder.ID, 100); err != nil {
+					t.Fatal(err)
+				}
 				client := &threadingClient{raw: []byte(tt.headers + threadingBody)}
-				if err := app.fetchAndPin(client, dlTask{folder: *folder, uid: 73}, includeAttachments); err != nil {
+				if err := fetchAndPin(app, client, *folder, 73, includeAttachments); err != nil {
 					t.Fatalf("fetchAndPin: %v", err)
 				}
 				messages, err := db.ListMessages(app.ctx, folder.ID, 0)
@@ -103,7 +131,7 @@ func TestFetchAndPinPreservesThreadingMetadata(t *testing.T) {
 					if atts[0].Filename != "note.txt" {
 						t.Fatalf("attachment filename = %q", atts[0].Filename)
 					}
-					r, err := db.OpenAttachment(atts[0].DiskPath)
+					r, err := db.OpenAttachment(app.ctx, atts[0])
 					if err != nil {
 						t.Fatal(err)
 					}
@@ -127,7 +155,7 @@ func TestGetMessageThreadingFromMIMEAndLegacyNull(t *testing.T) {
 			threadingBody,
 	)}
 	// The client parses raw MIME into the IMAP model; fetchAndPin uses the production storage writer.
-	if err := app.fetchAndPin(client, dlTask{folder: *folder, uid: 73}, false); err != nil {
+	if err := fetchAndPin(app, client, *folder, 73, false); err != nil {
 		t.Fatalf("fetchAndPin: %v", err)
 	}
 	messages, err := db.ListMessages(app.ctx, folder.ID, 0)
@@ -146,7 +174,7 @@ func TestGetMessageThreadingFromMIMEAndLegacyNull(t *testing.T) {
 
 	legacyID, err := db.InsertMessage(app.ctx, &storage.Message{
 		AccountID: accountID, FolderID: folder.ID, UID: 74,
-		MessageID: "legacy@example.com", BodyPlain: "legacy body",
+		MessageID: "legacy@example.com", BodyPlain: "legacy body", BodyComplete: true,
 	})
 	if err != nil {
 		t.Fatalf("insert legacy message: %v", err)

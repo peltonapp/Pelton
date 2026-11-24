@@ -152,7 +152,7 @@ func (d *DB) NoteMessageIDs(ctx context.Context, text string) ([]int64, error) {
 	// read from the notes outward: there are few of them, and each reaches its
 	// messages through the Message-ID, row id or thread index.
 	query := `
-SELECT id FROM messages WHERE pending_delete = 0 AND id IN (
+SELECT id FROM messages WHERE pending_delete = 0 AND ` + notVaulted + ` AND id IN (
     SELECT m.id FROM notes n JOIN messages m
       ON m.account_id = n.account_id AND m.message_id = n.message_key
     WHERE n.message_key != '' AND n.message_key NOT LIKE '#%' AND ` + cond + `

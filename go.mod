@@ -22,12 +22,14 @@ require (
 	github.com/smallstep/pkcs7 v0.2.3
 	github.com/wailsapp/wails/v3 v3.1.0
 	github.com/yuin/goldmark v1.8.7
+	github.com/yuin/gopher-lua v1.1.2
 	github.com/zalando/go-keyring v0.2.8
 	go.mau.fi/util v0.11.1
 	golang.org/x/crypto v0.59.0
 	golang.org/x/image v0.48.0
 	golang.org/x/net v0.62.0
 	golang.org/x/oauth2 v0.38.0
+	golang.org/x/sys v0.50.0
 	golang.org/x/text v0.44.0
 	maunium.net/go/mautrix v0.33.0
 	modernc.org/sqlite v1.62.0
@@ -85,7 +87,6 @@ require (
 	go.etcd.io/bbolt v1.4.0 // indirect
 	golang.org/x/exp v0.0.0-20261113113407-e3970619a1a4 // indirect
 	golang.org/x/sync v0.25.0 // indirect
-	golang.org/x/sys v0.50.0 // indirect
 	golang.org/x/term v0.48.0 // indirect
 	golang.org/x/time v0.15.0 // indirect
 	google.golang.org/protobuf v1.36.12 // indirect

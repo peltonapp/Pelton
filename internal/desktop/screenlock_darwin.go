@@ -30,4 +30,5 @@ func peltonScreenLocked() {
 	}
 	// off the main thread: locking hides windows, which waits on it.
 	go a.lock.Lock()
+	go a.lockMailVaults()
 }

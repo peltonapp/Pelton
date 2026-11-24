@@ -14,8 +14,9 @@
   import xIcon from '@phosphor-icons/core/assets/regular/x.svg?raw'
   import lightningIcon from '@phosphor-icons/core/assets/duotone/lightning-duotone.svg?raw'
   import plusIcon from '@phosphor-icons/core/assets/duotone/plus-circle-duotone.svg?raw'
-  import '../calendar/controls.css'
+  import '../../theme/controls.css'
   import Ph from '../common/Ph.svelte'
+  import EmptyState from '../common/EmptyState.svelte'
   import Segmented from '../settings2/ui/Segmented.svelte'
   import TimeGrid from '../calendar/TimeGrid.svelte'
   import TaskCheck from '../tasks/TaskCheck.svelte'
@@ -324,7 +325,7 @@
   <section class="tasks" aria-label={$t('myday.tasks')} use:maildrop={taskDrop}>
     <h3>{$t('myday.tasks')}</h3>
     {#if dayTasks.length === 0}
-      <p class="empty">{$t(which === 'today' ? 'myday.noTasksToday' : 'myday.noTasksTomorrow')}</p>
+      <EmptyState size="compact" title={$t(which === 'today' ? 'myday.noTasksToday' : 'myday.noTasksTomorrow')} />
     {:else}
       <ul>
         {#each dayTasks as { task, overdue } (task.id)}
@@ -456,10 +457,6 @@
     transition: background-color var(--motion-fast) var(--ease-out);
   }
 
-  .tasks:global(.maildrop-over) {
-    background: var(--selection-bg);
-  }
-
   h3 {
     margin: 0 0 var(--space-1);
     color: var(--text-secondary);
@@ -518,12 +515,6 @@
 
   .due.overdue {
     color: var(--danger);
-  }
-
-  .empty {
-    margin: 0;
-    color: var(--text-tertiary);
-    font-size: var(--fz-meta);
   }
 
   footer {

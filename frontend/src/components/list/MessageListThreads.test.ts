@@ -191,6 +191,10 @@ describe('the threaded message list', () => {
     // down onto a reply, then left climbs back to the conversation.
     await user.keyboard('{ArrowDown}')
     expect(list.getAttribute('aria-activedescendant')).toBe('msg-3')
+    const active = document.getElementById('msg-3')
+    expect(active?.getAttribute('role')).toBe('option')
+    expect(active?.getAttribute('aria-posinset')).toBe('2')
+    expect(active?.getAttribute('aria-setsize')).toBe(String(screen.getAllByRole('option').length))
     await user.keyboard('{ArrowLeft}')
     expect(list.getAttribute('aria-activedescendant')).toBe('msg-4')
     await user.keyboard('{ArrowLeft}')

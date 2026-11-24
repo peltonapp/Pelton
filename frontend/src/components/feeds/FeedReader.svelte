@@ -141,9 +141,7 @@
 
 <section class="reader" aria-label={$t('feeds.reader')}>
   {#if !row}
-    <EmptyState title={$t('feeds.reader.empty')} detail={$t('feeds.reader.emptyDetail')}>
-      <Ph svg={bookIcon} size={32} />
-    </EmptyState>
+    <EmptyState icon={bookIcon} title={$t('feeds.reader.empty')} detail={$t('feeds.reader.emptyDetail')} />
   {:else}
     <div class="scroll selectable" tabindex="-1" data-feed-reader>
       <div class="column" data-width={$prefs.readerWidth}>

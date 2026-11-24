@@ -175,6 +175,9 @@ func (a *App) ReadOutboxLog() []OutboxLogEntryDTO {
 // emitActivity pushes a new activity log entry to the ui.
 func (a *App) emitActivity(e outbox.Entry) {
 	a.emit(EventOutboxLog, toLogEntryDTO(e))
+	if e.Step == outbox.StepSent {
+		a.scriptAfterSend(e.MessageID)
+	}
 }
 
 func toLogEntryDTO(e outbox.Entry) OutboxLogEntryDTO {

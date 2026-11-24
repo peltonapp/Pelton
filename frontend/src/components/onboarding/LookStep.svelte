@@ -21,7 +21,7 @@
     setPaneStyle,
     setUIScale,
   } from '../../stores/prefs'
-  import { ACCENT_PRESETS, normalizeHex } from '../../theme/accent'
+  import { accentPresets, accentTone, canonicalAccent, darkScheme, normalizeHex } from '../../theme/accent'
   import { t } from '../../lib/i18n'
   import type { DensityPref, PaneStyle, ThemePref } from '../../lib/types'
 
@@ -57,8 +57,9 @@
   const densityGaps: Record<string, string> = { compact: 'var(--space-1)', medium: 'var(--space-2)', luxe: 'var(--space-3)' }
 
   let pickerOpen = false
-  $: current = normalizeHex($prefs.accent)
-  $: isPreset = ACCENT_PRESETS.some((c) => normalizeHex(c) === current)
+  $: presets = accentPresets($prefs.design)
+  $: current = canonicalAccent($prefs.accent, $prefs.design)
+  $: isPreset = presets.some((c) => normalizeHex(c) === current)
 
   function onSwatchKey(event: KeyboardEvent, index: number): void {
     const forward = event.key === 'ArrowRight' || event.key === 'ArrowDown'
@@ -67,7 +68,7 @@
       return
     }
     event.preventDefault()
-    const next = ACCENT_PRESETS[(index + (forward ? 1 : -1) + ACCENT_PRESETS.length) % ACCENT_PRESETS.length]
+    const next = presets[(index + (forward ? 1 : -1) + presets.length) % presets.length]
     setAccent(next)
     const group = (event.currentTarget as HTMLElement).parentElement
     group?.querySelector<HTMLElement>(`[data-hex="${next}"]`)?.focus()
@@ -124,14 +125,14 @@
 <section class="group">
   <h3 class="label">{$t('settingsPanel.accentLabel')}</h3>
   <div class="swatches" role="radiogroup" aria-label={$t('settingsPanel.accentPresets')}>
-    {#each ACCENT_PRESETS as hex, index (hex)}
+    {#each presets as hex, index (hex)}
       {@const on = normalizeHex(hex) === current}
       <button
         type="button"
         role="radio"
         class="swatch"
         class:on
-        style={`--sw:${hex}`}
+        style={`--sw:${accentTone(hex, $prefs.design, $darkScheme)}`}
         aria-checked={on}
         aria-label={`${$t('settingsPanel.accentLabel')} ${hex}`}
         tabindex={on || (!isPreset && index === 0) ? 0 : -1}
@@ -323,13 +324,17 @@
 
   .swatch path {
     fill: none;
-    stroke: var(--text-inverse);
+    stroke: var(--accent-fg);
     stroke-width: 1.8;
     stroke-linecap: round;
     stroke-linejoin: round;
     stroke-dasharray: 12;
     stroke-dashoffset: 12;
     transition: stroke-dashoffset var(--motion-base) var(--ease-out);
+  }
+
+  :global(:root[data-design='classic']) .swatch path {
+    stroke: var(--text-inverse);
   }
 
   .swatch.on path {

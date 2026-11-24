@@ -1,0 +1,11 @@
+[
+  {
+    "id": 1,
+    "calendarId": 2,
+    "summary": "Standup",
+    "location": "",
+    "start": "2026-03-10T09:00:00Z",
+    "end": "2026-03-10T09:15:00Z",
+    "allDay": false
+  }
+]

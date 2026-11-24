@@ -1,0 +1,41 @@
+{
+  "format": 1,
+  "name": "Sort incoming mail with AI",
+  "description": "Asks a language model whether new mail is work, personal, a newsletter or a receipt, and gives it the colour label of that category.",
+  "kind": "blocks",
+  "trigger": { "type": "mail.arrived", "params": { "folder": "inbox" } },
+  "permissions": ["mail.read", "mail.modify"],
+  "blocks": {
+    "version": 1,
+    "blocks": [
+      {
+        "id": "sort",
+        "kind": "action",
+        "type": "ai.classify",
+        "args": { "categories": { "value": ["Work", "Personal", "Newsletter", "Receipt"] } }
+      },
+      {
+        "id": "label",
+        "kind": "if",
+        "branches": [
+          {
+            "when": { "kind": "condition", "type": "text.value", "args": { "text": { "ref": "step:sort.label" }, "op": { "value": "equals" }, "value": { "value": "Work" } } },
+            "body": [{ "id": "work", "kind": "action", "type": "mail.color", "args": { "color": { "value": 6 } } }]
+          },
+          {
+            "when": { "kind": "condition", "type": "text.value", "args": { "text": { "ref": "step:sort.label" }, "op": { "value": "equals" }, "value": { "value": "Personal" } } },
+            "body": [{ "id": "personal", "kind": "action", "type": "mail.color", "args": { "color": { "value": 4 } } }]
+          },
+          {
+            "when": { "kind": "condition", "type": "text.value", "args": { "text": { "ref": "step:sort.label" }, "op": { "value": "equals" }, "value": { "value": "Newsletter" } } },
+            "body": [{ "id": "news", "kind": "action", "type": "mail.color", "args": { "color": { "value": 7 } } }]
+          },
+          {
+            "when": { "kind": "condition", "type": "text.value", "args": { "text": { "ref": "step:sort.label" }, "op": { "value": "equals" }, "value": { "value": "Receipt" } } },
+            "body": [{ "id": "receipt", "kind": "action", "type": "mail.color", "args": { "color": { "value": 3 } } }]
+          }
+        ]
+      }
+    ]
+  }
+}

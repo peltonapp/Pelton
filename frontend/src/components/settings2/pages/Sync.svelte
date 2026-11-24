@@ -15,6 +15,8 @@
     setAutoSyncInterval,
     setVerboseSync,
     setSyncMessageLimit,
+    setSyncMaxParallel,
+    setSyncFullReconcileDays,
     setSyncAutoBackfill,
     setFlagColorSync,
     setDownloadIncludeAttachments,
@@ -27,6 +29,7 @@
   import { downloadProgress } from '../../../stores/progress'
   import { toastInfo, toastError, errorMessage } from '../../../stores/toast'
   import { t } from '../../../lib/i18n'
+  import { clampSyncParallel, syncParallelOptions } from '../../../lib/syncparallel'
   import { formatBytes } from '../../../lib/format'
   import type { LogLevel, LogStatus } from '../../../lib/types'
   import '../../../theme/settings2-sections-system.css'
@@ -52,6 +55,16 @@
     { key: '500', label: '500' },
     { key: '1000', label: '1000' },
     { key: '0', label: $t('settingsPanel.syncLimit.all') },
+  ]
+
+  // how many days a folder may go without a full check; 0 leaves it to Sync.
+  $: syncFullReconcileOptions = [
+    { key: '1', label: '1' },
+    { key: '3', label: '3' },
+    { key: '7', label: '7' },
+    { key: '14', label: '14' },
+    { key: '30', label: '30' },
+    { key: '0', label: $t('settingsPanel.syncFullReconcile.manual') },
   ]
 
   // offline range download state. the start date defaults to one year ago.
@@ -161,6 +174,26 @@
         value={String($prefs.syncMessageLimit)}
         options={syncLimitOptions}
         on:change={(e) => setSyncMessageLimit(Number(e.detail))}
+      />
+    </div>
+  </Row>
+  <Row id="sync-max-parallel" label={$t('settingsPanel.label.syncMaxParallel')} hint={$t('settingsPanel.hint.syncMaxParallel')} stacked>
+    <div class="s2-slider">
+      <StepSlider
+        label={$t('settingsPanel.label.syncMaxParallel')}
+        value={String(clampSyncParallel($prefs.syncMaxParallel))}
+        options={syncParallelOptions}
+        on:change={(e) => setSyncMaxParallel(Number(e.detail))}
+      />
+    </div>
+  </Row>
+  <Row id="sync-full-reconcile" label={$t('settingsPanel.label.syncFullReconcileDays')} hint={$t('settingsPanel.hint.syncFullReconcileDays')} stacked>
+    <div class="s2-slider">
+      <StepSlider
+        label={$t('settingsPanel.label.syncFullReconcileDays')}
+        value={String($prefs.syncFullReconcileDays)}
+        options={syncFullReconcileOptions}
+        on:change={(e) => setSyncFullReconcileDays(Number(e.detail))}
       />
     </div>
   </Row>

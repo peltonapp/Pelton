@@ -21,6 +21,12 @@ const (
 	// cached with an encoding nothing could read, conversations were regrouped,
 	// or messages became answered or forwarded.
 	EventMailRepaired = "mail:repaired"
+	// EventMailUpdated fires when a message row changes in place, such as a stub
+	// gaining its full body after a background fetch.
+	EventMailUpdated = "mail:updated"
+	// EventMailBodyFailed fires when the body of a message opened in the reading
+	// pane could not be fetched, after every retry, so the pane stops waiting.
+	EventMailBodyFailed = "mail:bodyFailed"
 	// EventSyncProgress fires as folders are synced so the ui can show progress.
 	EventSyncProgress = "sync:progress"
 	// EventSyncState fires when background sync starts or stops, with any error.
@@ -65,6 +71,9 @@ const (
 	// EventImportProgress fires while mail is being imported from files, and
 	// once more with Running false when the job ends.
 	EventImportProgress = "import:progress"
+	// EventGuidedImport fires while a guided import runs, and once more when
+	// it pauses, is cancelled, fails or finishes. The payload is the job.
+	EventGuidedImport = "import:job"
 	// EventFilesDropped fires when files from the system are dropped onto an
 	// element of the page marked as a drop target. The payload says which.
 	EventFilesDropped = "files:dropped"
@@ -100,6 +109,9 @@ const (
 	// EventFollowUpsChanged fires when a follow-up reminder is set, comes due,
 	// is answered or is cancelled, so the reminder lists reload.
 	EventFollowUpsChanged = "followups:changed"
+	// EventTimeBlocksChanged fires when a time block was made, moved, changed
+	// or deleted, or followed its calendar event. Subscribers refetch.
+	EventTimeBlocksChanged = "timeblocks:changed"
 	// EventFocusChanged fires when focus mode starts, ends or changes its end
 	// time, with the FocusDTO as payload.
 	EventFocusChanged = "focus:changed"
@@ -272,6 +284,20 @@ type SyncProgressEvent struct {
 	// the "mailbox 3 of 12" part of the line.
 	FoldersDone  int `json:"foldersDone"`
 	FoldersTotal int `json:"foldersTotal"`
+	// Phase is "stubs" while the named folder is listed, "bodies" while bodies
+	// are fetched, and "verify" on the background folder check's own line.
+	Phase string `json:"phase"`
+}
+
+// MailUpdatedEvent is the payload for EventMailUpdated. The reading pane reloads
+// when the open message gains a body that was fetched in the background.
+type MailUpdatedEvent struct {
+	MessageID int64 `json:"messageId"`
+}
+
+// MailBodyFailedEvent is the payload for EventMailBodyFailed.
+type MailBodyFailedEvent struct {
+	MessageID int64 `json:"messageId"`
 }
 
 // SyncStateEvent is the payload for EventSyncState. Error is empty on success.
@@ -290,6 +316,9 @@ type AccountSyncStateEvent struct {
 // call sites stay terse and an emit before startup (or in a test) is a safe
 // no-op.
 func (a *App) emit(name string, payload any) {
+	if a.emitForTest != nil {
+		a.emitForTest(name, payload)
+	}
 	if a.wapp == nil || !a.runtimeReady.Load() {
 		return
 	}

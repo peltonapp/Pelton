@@ -538,7 +538,7 @@ func (d *DB) MessageIDsByHeader(ctx context.Context, headerIDs []string) (map[st
 			args = append(args, id, "<"+id+">")
 		}
 		rows, err := d.sql.QueryContext(ctx, `SELECT id, message_id FROM messages WHERE message_id IN (`+
-			strings.TrimSuffix(strings.Repeat("?,", len(args)), ",")+`)`, args...)
+			strings.TrimSuffix(strings.Repeat("?,", len(args)), ",")+`) AND `+notVaulted, args...)
 		if err != nil {
 			return nil, fmt.Errorf("storage: messages by header id: %w", err)
 		}

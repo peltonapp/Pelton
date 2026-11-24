@@ -27,6 +27,7 @@ import {
   demoThread,
 } from './demo'
 import { noteAction } from './coach'
+import type { AIKind, AIProvider, AIProviderInput, AITestResult, AIScriptOptions } from './ai'
 import type {
   Account,
   AccountProxy,
@@ -44,6 +45,9 @@ import type {
   ComposeRequest,
   Draft,
   FollowUp,
+  MailPromise,
+  PromiseEdit,
+  PromiseSettings,
   Snippet,
   OutboxRow,
   OutboxEdit,
@@ -102,6 +106,12 @@ import type {
   RemovedTask,
   TaskMailMark,
   TaskSettings,
+  TaskPlan,
+  TimeBlock,
+  TimeBlockRequest,
+  TimeBlockSettings,
+  FreeSlot,
+  DayPlan,
   Feed,
   FeedCandidate,
   FeedEntry,
@@ -116,6 +126,9 @@ import type {
   AttachmentPage,
   AttachmentQuery,
   SenderOverview,
+  Passport,
+  Shield,
+  PrivacyReport,
   ThemeInfo,
   ThemeApply,
   ThemeImportPreview,
@@ -180,8 +193,44 @@ import type {
   ChatProfile,
   ChatVerification,
   ChatDevice,
+  AutoEncryptMode,
+  AutoEncryptSettings,
+  AutoEncryptStatus,
+  ContactEncryptPref,
+  ContactKey,
+  KeyLookupLogEntry,
+  KeySources,
 } from './types'
 import { normalizeState } from './sieve'
+import type {
+  CompileResult,
+  LiveRun,
+  MatchReport,
+  MatchRequest,
+  PlacedItem,
+  PlacedScript,
+  PlacementConfig,
+  Script,
+  ScriptCatalog,
+  ScriptCatchUp,
+  ScriptFile,
+  ScriptInput,
+  ScriptLibrary,
+  ScriptLibraryInput,
+  ScriptLibraryNote,
+  ScriptLibrarySaved,
+  ScriptRef,
+  ScriptRun,
+} from './scripting'
+import type { ScriptProposal } from './assistantScripts'
+import type {
+  ImportEstimate,
+  ImportInventory,
+  ImportJob,
+  ImportPlan,
+  ImportSourceKind,
+  ImportTarget,
+} from './guidedimport'
 
 // isDemoMode reports whether the app launched in the cosmetic --potatoes-are-nice
 // screenshot mode; the frontend reads it once to switch the data layer to samples.
@@ -200,6 +249,28 @@ export function isDevMode(): Promise<boolean> {
 // material (Liquid Glass, Mica), so the ui can let it show through.
 export function windowMaterialActive(): Promise<boolean> {
   return App.WindowMaterialActive()
+}
+
+// the tesseract language files the user added, by code (bind_ocr.go).
+export async function listOCRLanguages(): Promise<string[]> {
+  return (await App.ListOCRLanguages()) ?? []
+}
+
+export function addOCRLanguage(): Promise<string> {
+  return App.AddOCRLanguage()
+}
+
+export function removeOCRLanguage(code: string): Promise<void> {
+  return App.RemoveOCRLanguage(code)
+}
+
+// readOCRLanguage returns a user-added language file as base64.
+export function readOCRLanguage(code: string): Promise<string> {
+  return App.ReadOCRLanguage(code)
+}
+
+export function openOCRFolder(): Promise<void> {
+  return App.OpenOCRFolder()
 }
 
 // isNightly reports whether this is an automated nightly build cut from the dev
@@ -257,6 +328,9 @@ export function updateAccount(req: {
   exportSubfolders: string
   exportNameTemplate: string
   pgpDefault: string
+  // null follows the global setting and clears a stored override, so it is
+  // required: leaving it out would reset the account to the default.
+  syncMaxParallel: number | null
   proxy: AccountProxy
 }): Promise<Account> {
   return App.UpdateAccount(new desktop.UpdateAccountRequest(req))
@@ -605,6 +679,55 @@ export function unsubscribeMessage(id: number): Promise<void> {
     return Promise.resolve()
   }
   return App.Unsubscribe(id)
+}
+
+/** Records that the user opened a message's unsubscribe web page, for the still-sending watch. */
+export function noteUnsubscribeLink(id: number): Promise<void> {
+  return isDemoActive() ? Promise.resolve() : App.NoteUnsubscribeLink(id)
+}
+
+// the demo's sample ids can be real messages of the install behind it, so the
+// passport and the shield say nothing in demo mode rather than read those.
+const demoNone = (): Promise<never> => Promise.reject(new Error('demo'))
+
+/** The sender passport of a message. */
+export function senderPassport(id: number): Promise<Passport> {
+  return isDemoActive() ? demoNone() : (App.GetSenderPassport(id) as unknown as Promise<Passport>)
+}
+
+/** Records "known" or "impostor" for a sender, or forgets either with ''. */
+export function setSenderMark(address: string, mark: '' | 'known' | 'impostor'): Promise<void> {
+  return isDemoActive() ? Promise.resolve() : App.SetSenderMark(address, mark)
+}
+
+/** What a message tried to learn about its reader, counted for the report. */
+export function privacyShield(id: number): Promise<Shield> {
+  return isDemoActive() ? demoNone() : (App.GetPrivacyShield(id) as unknown as Promise<Shield>)
+}
+
+/** A message's html with remote images loaded and tracking pixels left out. */
+export function getMessageHtmlBlockingTrackers(id: number): Promise<string> {
+  return isDemoActive() ? Promise.resolve(demoHtml()) : App.GetMessageHTMLBlockingTrackers(id)
+}
+
+/** The tracking report over the last days days, 0 for all of it. */
+export function privacyReport(days: number): Promise<PrivacyReport> {
+  return App.PrivacyReport(days).then((r) => ({ ...r, rows: r.rows ?? [] }) as unknown as PrivacyReport)
+}
+
+/** Forgets every tracking counter. */
+export function clearPrivacyHistory(): Promise<void> {
+  return App.ClearPrivacyHistory()
+}
+
+/** Stops the still-sending notice for a sender until more mail comes. */
+export function dismissStillSending(sender: string): Promise<void> {
+  return App.DismissStillSending(sender)
+}
+
+/** Moves new mail from an unsubscribed sender to junk or trash, or stops with ''. */
+export function blockUnsubscribedSender(sender: string, where: '' | 'junk' | 'trash'): Promise<void> {
+  return App.BlockUnsubscribedSender(sender, where)
 }
 
 // getMessageSource fetches a message's raw RFC 822 source on demand over imap.
@@ -1135,6 +1258,59 @@ export function cancelFollowUp(id: number): Promise<void> {
   return App.CancelFollowUp(id)
 }
 
+/** The promises that are suggested, accepted or closed. */
+export function listPromises(): Promise<MailPromise[]> {
+  if (isDemoActive()) {
+    return Promise.resolve([])
+  }
+  return App.ListPromises().then((list) => (list ?? []) as MailPromise[])
+}
+
+/** Reads one message for promises now and returns what it holds. */
+export function findPromises(messageId: number): Promise<MailPromise[]> {
+  return App.FindPromises(messageId).then((list) => (list ?? []) as MailPromise[])
+}
+
+/** Makes a task of a suggested promise, with the user's edits. */
+export function acceptPromise(edit: PromiseEdit): Promise<MailPromise> {
+  return App.AcceptPromise(new desktop.PromiseEditDTO(edit)) as Promise<MailPromise>
+}
+
+/** Sets a suggestion aside for good. */
+export function dismissPromise(id: number): Promise<void> {
+  return App.DismissPromise(id)
+}
+
+/** Brings a dismissed suggestion back. */
+export function restorePromise(id: number): Promise<void> {
+  return App.RestorePromise(id)
+}
+
+/** Stops reading a sender's mail for promises; returns the suggestions it dismissed. */
+export function quietPromiseSender(email: string): Promise<number[]> {
+  return App.QuietPromiseSender(email).then((ids) => ids ?? [])
+}
+
+/** Undoes quietPromiseSender. */
+export function unquietPromiseSender(email: string, ids: number[]): Promise<void> {
+  return App.UnquietPromiseSender(email, ids)
+}
+
+/** Opens a promise a reply closed, or turns down the offer to complete one. */
+export function reopenPromise(id: number): Promise<void> {
+  return App.ReopenPromise(id)
+}
+
+/** The promise preferences. */
+export function getPromiseSettings(): Promise<PromiseSettings> {
+  return App.GetPromiseSettings().then((s) => ({ ...s, accounts: s.accounts ?? [] }) as PromiseSettings)
+}
+
+/** Saves the promise preferences. */
+export function setPromiseSettings(s: PromiseSettings): Promise<void> {
+  return App.SetPromiseSettings(new desktop.PromiseSettingsDTO(s))
+}
+
 // clearSentOutbox prunes rows already marked sent after the ui has shown the
 // brief sent confirmation.
 export function clearSentOutbox(): Promise<void> {
@@ -1258,6 +1434,45 @@ export function removeImageAllow(kind: 'sender' | 'domain', value: string): Prom
   return App.RemoveImageAllow(kind, value)
 }
 
+/** How the reader shows one sender's mail; empty colors and 0 follow the global settings. */
+export interface SenderReading {
+  address: string
+  colors: '' | 'adapt' | 'original'
+  fontSize: number
+}
+
+/** listSenderReading returns every sender with a remembered reading choice. */
+export async function listSenderReading(): Promise<SenderReading[]> {
+  if (isDemoActive()) {
+    return []
+  }
+  return (await App.ListSenderReading()).map((r) => ({ address: r.address, colors: r.colors as SenderReading['colors'], fontSize: r.fontSize }))
+}
+
+/** setSenderColors remembers how html mail from a sender is coloured; '' forgets it. */
+export function setSenderColors(address: string, colors: SenderReading['colors']): Promise<void> {
+  if (isDemoActive()) {
+    return Promise.resolve()
+  }
+  return App.SetSenderColors(address, colors)
+}
+
+/** setSenderFontSize remembers the reader text size for a sender in px; 0 forgets it. */
+export function setSenderFontSize(address: string, size: number): Promise<void> {
+  if (isDemoActive()) {
+    return Promise.resolve()
+  }
+  return App.SetSenderFontSize(address, size)
+}
+
+/** resetSenderReading forgets every remembered sender choice and says how many there were. */
+export function resetSenderReading(): Promise<number> {
+  if (isDemoActive()) {
+    return Promise.resolve(0)
+  }
+  return App.ResetSenderReading()
+}
+
 // listVIPSenders returns the addresses the user has marked as VIP (#126).
 export function listVIPSenders(): Promise<string[]> {
   return App.ListVIPSenders()
@@ -1307,7 +1522,7 @@ export function exportMessagePrintView(id: number): Promise<void> {
   if (isDemoActive()) {
     return Promise.resolve()
   }
-  return App.ExportMessagePrintView(id)
+  return withVaultTempConsent(() => App.ExportMessagePrintView(id))
 }
 
 // exportMessageEml asks where to save one message and writes it as an .eml
@@ -1592,7 +1807,7 @@ export function openAttachmentFile(messageId: number, attachmentId: number): Pro
   if (isDemoActive()) {
     return Promise.resolve()
   }
-  return App.OpenAttachmentFile(messageId, attachmentId)
+  return withVaultTempConsent(() => App.OpenAttachmentFile(messageId, attachmentId))
 }
 
 /**
@@ -1695,6 +1910,55 @@ export function importMailFiles(paths: string[]): Promise<void> {
 // keeping their names. Like importMailFiles it runs in the background.
 export function importThunderbirdFolders(paths: string[]): Promise<void> {
   return App.ImportThunderbirdFolders(paths)
+}
+
+// chooseImportSource opens the picker that fits a guided import source. An
+// empty list means it was cancelled.
+export function chooseImportSource(kind: ImportSourceKind): Promise<string[]> {
+  return App.ChooseImportSource(kind).then((paths) => paths ?? [])
+}
+
+// scanImportSource reads what a source holds, changing nothing in it.
+export function scanImportSource(kind: ImportSourceKind, paths: string[]): Promise<ImportInventory> {
+  return App.ScanImportSource(kind, paths) as unknown as Promise<ImportInventory>
+}
+
+// estimateImport says how many messages a plan brings over and their size.
+export function estimateImport(plan: ImportPlan): Promise<ImportEstimate> {
+  return App.EstimateImport(plan as BoundPlan) as unknown as Promise<ImportEstimate>
+}
+
+// importTargets lists the accounts mail can be uploaded into, with their folders.
+export function importTargets(): Promise<ImportTarget[]> {
+  return App.ImportTargets().then((list) => (list ?? []) as unknown as ImportTarget[])
+}
+
+// startImportJob starts a guided import and returns its id; watch onGuidedImport.
+export function startImportJob(plan: ImportPlan): Promise<number> {
+  return App.StartImportJob(plan as BoundPlan)
+}
+
+// BoundPlan is the generated binding's plan type; a plain plan has its shape.
+type BoundPlan = Parameters<typeof App.StartImportJob>[0]
+
+// pauseImportJob stops a running import so it can be resumed later.
+export function pauseImportJob(id: number): Promise<void> {
+  return App.PauseImportJob(id)
+}
+
+// resumeImportJob carries on with a paused import.
+export function resumeImportJob(id: number): Promise<void> {
+  return App.ResumeImportJob(id)
+}
+
+// cancelImportJob stops an import for good; what it imported stays.
+export function cancelImportJob(id: number): Promise<void> {
+  return App.CancelImportJob(id)
+}
+
+// importJobs returns the most recent guided imports, newest first.
+export function importJobs(): Promise<ImportJob[]> {
+  return App.ImportJobs().then((list) => (list ?? []) as unknown as ImportJob[])
 }
 
 // systemColorScheme returns the OS dark/light preference ("dark" | "light"), or
@@ -1860,6 +2124,32 @@ export function changeLockPassphrase(current: string, next: string): Promise<Loc
   return App.ChangeLockPassphrase(current, next) as unknown as Promise<LockAuthResult>
 }
 
+// --- mail vaults: the rest is in mailvaultapi.ts, which loads on first use ---
+
+let askVaultTempConsent: (() => Promise<boolean>) | null = null
+
+/** Sets what asks the user, once, before a vault file is written to a temporary folder. */
+export function setVaultTempConsent(ask: () => Promise<boolean>): void {
+  askVaultTempConsent = ask
+}
+
+// withVaultTempConsent runs an action that may write a vault file for
+// opening. The first time, the backend refuses until the user has been told;
+// after a yes it is recorded and the action runs again.
+async function withVaultTempConsent(run: () => Promise<void>): Promise<void> {
+  try {
+    await run()
+  } catch (err) {
+    if (!String(err).includes('vault-temp-consent') || !askVaultTempConsent) {
+      throw err
+    }
+    if (await askVaultTempConsent()) {
+      await App.ConsentMailVaultTempFiles()
+      await run()
+    }
+  }
+}
+
 // --- quick compose ---
 
 /** The quick compose setting and whether its shortcut is registered. */
@@ -1970,9 +2260,16 @@ export const SettingKeys = {
   coachHold: 'coach_hold',
   // the shortcut coach's counters: hints shown and keys used, per action.
   coachCounters: 'shortcut_coach',
+  showTips: 'show_tips',
+  // the one-time tips already shown, as a json list of tip ids.
+  tipsSeen: 'tips_seen',
+  // the what's new entries last looked at, as a release line and content hash.
+  lastSeenVersion: 'last_seen_version',
   harvestAddresses: 'harvest_addresses',
   accountEmail: 'show_account_email',
   onboarded: 'onboarding_complete',
+  // where a setup run stopped, so the next launch resumes at that step.
+  onboardingProgress: 'onboarding_progress',
   alwaysLoadImages: 'remote_images_always',
   avatarSource: 'avatar_source',
   avatarStyle: 'avatar_style',
@@ -2001,6 +2298,13 @@ export const SettingKeys = {
   swipeEnabled: 'swipe_enabled',
   swipeLeftAction: 'swipe_left_action',
   swipeRightAction: 'swipe_right_action',
+  swipeLeftShort: 'swipe_left_short',
+  swipeLeftLong: 'swipe_left_long',
+  swipeRightShort: 'swipe_right_short',
+  swipeRightLong: 'swipe_right_long',
+  rowActions: 'row_actions',
+  rowActionList: 'row_action_list',
+  htmlColors: 'html_colors',
   composeVimMode: 'compose_vim_mode',
   downloadIncludeAttachments: 'download_include_attachments',
   appVimMode: 'app_vim_mode',
@@ -2021,6 +2325,8 @@ export const SettingKeys = {
   navStyle: 'nav_style',
   railSide: 'rail_side',
   railPins: 'rail_pins',
+  spaceOrder: 'space_order',
+  hiddenSpaces: 'hidden_spaces',
   paneStyle: 'pane_style',
   avatarPlacement: 'avatar_placement',
   contactsView: 'contacts_view',
@@ -2053,6 +2359,7 @@ export const SettingKeys = {
   menuBarInApp: 'menu_bar_in_app',
   menuBarNativeMinimal: 'menu_bar_native_minimal',
   windowMaterial: 'window_material',
+  ocrLanguages: 'ocr_languages',
   menuBarIcons: 'menu_bar_icons',
   menuBarLayout: 'menu_bar_layout',
   paletteUsage: 'palette_usage',
@@ -2073,11 +2380,15 @@ export const SettingKeys = {
   notifyActionMarkRead: 'notify_action_mark_read',
   notifyActionReply: 'notify_action_reply',
   cleanLinks: 'clean_links',
+  privacyCounters: 'privacy_counters',
+  unsubscribeGraceDays: 'unsubscribe_grace_days',
+  autoconfigLookup: 'autoconfig_lookup',
   verboseSync: 'verbose_sync',
   syncProgressBar: 'sync_progress_bar',
   statusClock: 'status_clock',
   statusUnread: 'status_unread',
   chatEnabled: 'chat_enabled',
+  autoEncrypt: 'auto_encrypt',
   chatSendReceipts: 'chat_send_receipts',
   chatSendTyping: 'chat_send_typing',
   chatNotify: 'chat_notify',
@@ -2092,6 +2403,8 @@ export const SettingKeys = {
   appLockHideNotifications: 'app_lock_hide_notifications',
   syncMessageLimit: 'sync_message_limit',
   syncAutoBackfill: 'sync_auto_backfill',
+  syncMaxParallel: 'sync_max_parallel',
+  syncFullReconcileDays: 'sync_full_reconcile_days',
   startupSelection: 'startup_selection',
   lastSelection: 'last_selection',
   liabilityAccepted: 'liability_accepted',
@@ -2857,6 +3170,77 @@ export function getTaskSettings(): Promise<TaskSettings> {
 /** setTaskSettings saves the task preferences. */
 export function setTaskSettings(settings: TaskSettings): Promise<void> {
   return App.SetTaskSettings(new desktop.TaskSettingsDTO(settings))
+}
+
+/** listTimeBlocks returns the time blocks overlapping [from, to), both rfc3339, by start. */
+export function listTimeBlocks(from: string, to: string): Promise<TimeBlock[]> {
+  if (isDemoActive()) {
+    return Promise.resolve([])
+  }
+  return App.ListTimeBlocks(from, to).then((list) => (list ?? []) as unknown as TimeBlock[])
+}
+
+/** createTimeBlocks makes blocks, writing each to its calendar when it names one. */
+export function createTimeBlocks(reqs: TimeBlockRequest[]): Promise<TimeBlock[]> {
+  return App.CreateTimeBlocks(reqs.map((r) => new desktop.TimeBlockRequest(r))).then((list) => (list ?? []) as unknown as TimeBlock[])
+}
+
+/** updateTimeBlock changes a block's title, times, done state and calendar. */
+export function updateTimeBlock(req: TimeBlockRequest): Promise<TimeBlock> {
+  return App.UpdateTimeBlock(new desktop.TimeBlockRequest(req)) as unknown as Promise<TimeBlock>
+}
+
+/** deleteTimeBlocks deletes blocks, and their calendar events. */
+export function deleteTimeBlocks(ids: number[]): Promise<void> {
+  return App.DeleteTimeBlocks(ids)
+}
+
+/** settleTimeBlockLink settles a block out of step with its event: follow, rewrite or forget. */
+export function settleTimeBlockLink(id: number, action: 'follow' | 'rewrite' | 'forget'): Promise<TimeBlock> {
+  return App.SettleTimeBlockLink(id, action) as unknown as Promise<TimeBlock>
+}
+
+/** listTaskPlans returns how much time each task with blocks has planned. */
+export function listTaskPlans(): Promise<TaskPlan[]> {
+  if (isDemoActive()) {
+    return Promise.resolve([])
+  }
+  return App.ListTaskPlans().then((list) => (list ?? []) as unknown as TaskPlan[])
+}
+
+/** releaseTaskTimeBlocks keeps or deletes the future blocks of a task about to be deleted. */
+export function releaseTaskTimeBlocks(uid: string, deleteFuture: boolean): Promise<void> {
+  return App.ReleaseTaskTimeBlocks(uid, deleteFuture)
+}
+
+/** findFreeSlots proposes times for a block, for a task or a length in minutes. */
+export function findFreeSlots(taskId: number, minutes: number, from = ''): Promise<FreeSlot[]> {
+  return App.FindFreeSlots(new desktop.SlotRequest({ taskId, minutes, from })).then((list) => (list ?? []) as unknown as FreeSlot[])
+}
+
+/** blockTimeForTask blocks the first free time for a task. */
+export function blockTimeForTask(taskId: number, minutes: number): Promise<TimeBlock> {
+  return App.BlockTimeForTask(taskId, minutes) as unknown as Promise<TimeBlock>
+}
+
+/** blockTimeForMessages makes a block for each mail: from at (rfc3339) on, or in the next free time. */
+export function blockTimeForMessages(ids: number[], at = ''): Promise<TimeBlock[]> {
+  return App.BlockTimeForMessages(ids, at).then((list) => (list ?? []) as unknown as TimeBlock[])
+}
+
+/** planDay lays the tasks due on day (2006-01-02, empty for today) into its free time as proposals. */
+export function planDay(day = ''): Promise<DayPlan> {
+  return App.PlanDay(day) as unknown as Promise<DayPlan>
+}
+
+/** getTimeBlockSettings returns the time blocking preferences. */
+export function getTimeBlockSettings(): Promise<TimeBlockSettings> {
+  return App.GetTimeBlockSettings() as unknown as Promise<TimeBlockSettings>
+}
+
+/** setTimeBlockSettings saves the time blocking preferences. */
+export function setTimeBlockSettings(settings: TimeBlockSettings): Promise<void> {
+  return App.SetTimeBlockSettings(new desktop.TimeBlockSettingsDTO(settings))
 }
 
 /** listProjects returns every project in its manual order, with its tile counts. */
@@ -3695,4 +4079,467 @@ export function chatSetViewing(roomId: string): Promise<void> {
     return Promise.resolve()
   }
   return App.ChatSetViewing(roomId)
+}
+
+// automations. The generated models type enums and maps their own way, so the
+// values cross this boundary as the shapes lib/scripting.ts declares.
+
+function asScript(s: desktop.ScriptDTO): Script {
+  return s as unknown as Script
+}
+
+function asRun(r: desktop.ScriptRunDTO): ScriptRun {
+  return r as unknown as ScriptRun
+}
+
+function toDTO(input: ScriptInput): desktop.ScriptInput {
+  return input as unknown as desktop.ScriptInput
+}
+
+/** Everything scripts can use, as data. */
+export function scriptRegistry(): Promise<ScriptCatalog> {
+  return App.ScriptRegistry().then((c) => c as unknown as ScriptCatalog)
+}
+
+/** Every script, by name. */
+export function listScripts(): Promise<Script[]> {
+  if (isDemoActive()) {
+    return Promise.resolve([])
+  }
+  return App.ListScripts().then((list) => (list ?? []).map(asScript))
+}
+
+/** Stores a new script, switched off. */
+export function createScript(input: ScriptInput): Promise<Script> {
+  return App.CreateScript(toDTO(input)).then(asScript)
+}
+
+/** Saves a script's content; a new permission switches it off until approved. */
+export function updateScript(id: number, input: ScriptInput): Promise<Script> {
+  return App.UpdateScript(id, toDTO(input)).then(asScript)
+}
+
+/** Removes a script with its log and storage. */
+export function deleteScript(id: number): Promise<void> {
+  return App.DeleteScript(id)
+}
+
+/** Switches a script on, approving the given permissions, or off. */
+export function setScriptEnabled(id: number, enabled: boolean, approve: string[]): Promise<Script> {
+  return App.SetScriptEnabled(id, enabled, approve).then(asScript)
+}
+
+/** Lets a script make a risky call, e.g. "mail.send", without asking, or takes that back. */
+export function setScriptAllowUnasked(id: number, fn: string, allow: boolean): Promise<Script> {
+  return App.SetScriptAllowUnasked(id, fn, allow).then(asScript)
+}
+
+/** Stores the values of a script's settings. */
+export function setScriptSettings(id: number, values: Record<string, unknown>): Promise<Script> {
+  return App.SetScriptSettings(id, values).then(asScript)
+}
+
+/** Sets what a mail script does with mail that arrived while Pelton was closed. */
+export function setScriptCatchUp(id: number, mode: string, cap: number): Promise<Script> {
+  return App.SetScriptCatchUp(id, mode, cap).then(asScript)
+}
+
+/** Compiles a block tree (JSON) to Lua for a trigger, with every problem found. */
+export function compileScriptBlocks(blocks: string, trigger: string): Promise<CompileResult> {
+  return App.CompileScriptBlocks(blocks, trigger).then((r) => r as unknown as CompileResult)
+}
+
+/** A syntax error in Lua, or '' when it parses. */
+export function checkScriptLua(source: string): Promise<string> {
+  return App.CheckScriptLua(source)
+}
+
+/** Turns a block script into a Lua script for good. */
+export function convertScriptToLua(id: number): Promise<Script> {
+  return App.ConvertScriptToLua(id).then(asScript)
+}
+
+/** Runs an enabled script now, on a message when it takes one (0 for none). */
+export function runScript(id: number, messageId: number): Promise<ScriptRun> {
+  return App.RunScript(id, messageId).then(asRun)
+}
+
+/** Answers a running script's question; cancelled ends the run. */
+export function answerScriptAsk(id: string, value: unknown, cancelled: boolean): Promise<void> {
+  return App.AnswerScriptAsk(id, value, cancelled)
+}
+
+/** Cancels a run in progress by the id its progress reports carry. */
+export function cancelScriptRun(liveId: number): Promise<void> {
+  return App.CancelScriptRun(liveId)
+}
+
+/** The runs in progress. */
+export function scriptLiveRuns(): Promise<LiveRun[]> {
+  if (isDemoActive()) {
+    return Promise.resolve([])
+  }
+  return App.ScriptLiveRuns().then((list) => (list ?? []) as unknown as LiveRun[])
+}
+
+/** The scripts offered at each placement, by placement id. */
+export function scriptPlacements(): Promise<Record<string, PlacedScript[]>> {
+  if (isDemoActive()) {
+    return Promise.resolve({})
+  }
+  return App.ScriptPlacements().then((m) => (m ?? {}) as unknown as Record<string, PlacedScript[]>)
+}
+
+/** Sets where in the app a script is offered. */
+export function setScriptPlacements(id: number, placements: PlacementConfig[]): Promise<Script> {
+  return App.SetScriptPlacements(id, placements as unknown as Parameters<typeof App.SetScriptPlacements>[1]).then(asScript)
+}
+
+/** Runs a script from a placement on the items it was used on. */
+export function runPlacedScript(id: number, placement: string, items: PlacedItem[]): Promise<ScriptRun> {
+  return App.RunPlacedScript(id, placement, items as unknown as Parameters<typeof App.RunPlacedScript>[2]).then(asRun)
+}
+
+/** Carries out a result action the backend handles; returns what to tell the user. */
+export function runScriptResultAction(resultId: string, action: string): Promise<string> {
+  return App.RunScriptResultAction(resultId, action)
+}
+
+/** An item as scripts see it, e.g. a message by its id. */
+export function scriptValue(valueType: string, id: string): Promise<Record<string, unknown>> {
+  return App.ScriptValue(valueType, id).then((m) => (m ?? {}) as Record<string, unknown>)
+}
+
+/** Dry runs a script as written, against a message (0 for the sample). Nothing changes. */
+export function testScript(input: ScriptInput, messageId: number): Promise<ScriptRun> {
+  return App.TestScript(toDTO(input), messageId).then(asRun)
+}
+
+/** The latest runs of a script, or of every script for 0, newest first. */
+export function scriptRuns(scriptId: number, limit: number): Promise<ScriptRun[]> {
+  if (isDemoActive()) {
+    return Promise.resolve([])
+  }
+  return App.ScriptRuns(scriptId, limit).then((list) => (list ?? []).map(asRun))
+}
+
+/** Empties the log of a script, or every log for 0. */
+export function clearScriptRuns(scriptId: number): Promise<void> {
+  return App.ClearScriptRuns(scriptId)
+}
+
+/** How many days the run log keeps. */
+export function scriptLogDays(): Promise<number> {
+  return App.ScriptLogDays()
+}
+
+/** Sets how many days the run log keeps, 1 to 365. */
+export function setScriptLogDays(days: number): Promise<void> {
+  return App.SetScriptLogDays(days)
+}
+
+/** How long a question of a script nobody started, and a before-send recipient confirmation, wait, in seconds. */
+export function scriptAskSeconds(): Promise<number> {
+  return App.ScriptAskSeconds()
+}
+
+/** Sets how long such a question waits, 10 seconds to an hour. */
+export function setScriptAskSeconds(seconds: number): Promise<void> {
+  return App.SetScriptAskSeconds(seconds)
+}
+
+/** Reverses the mail changes of a run. */
+export function undoScriptRun(runId: number): Promise<void> {
+  return App.UndoScriptRun(runId)
+}
+
+/** Answers a confirmation a script asked for. */
+export function answerScriptConfirm(id: string, allow: boolean, always: boolean): Promise<void> {
+  return App.AnswerScriptConfirm(id, allow, always)
+}
+
+/** Answers whether a script runs over mail that arrived while Pelton was closed. */
+export function resolveScriptCatchUp(scriptId: number, run: boolean): Promise<void> {
+  return App.ResolveScriptCatchUp(scriptId, run)
+}
+
+/** The catch-up questions still open. */
+export function pendingScriptCatchUps(): Promise<ScriptCatchUp[]> {
+  if (isDemoActive()) {
+    return Promise.resolve([])
+  }
+  return App.PendingScriptCatchUps().then((list) => (list ?? []) as ScriptCatchUp[])
+}
+
+/** Writes a script to a file the user picks; resolves to the path, '' when cancelled. */
+export function exportScript(id: number): Promise<string> {
+  return App.ExportScript(id)
+}
+
+/** The folder a script may read and write files in, '' when it has none. */
+export function scriptFolder(id: number): Promise<string> {
+  if (isDemoActive()) {
+    return Promise.resolve('')
+  }
+  return App.ScriptFolder(id)
+}
+
+/** Asks for a folder and grants it to a script; resolves to it, '' when cancelled. */
+export function pickScriptFolder(id: number): Promise<string> {
+  return App.PickScriptFolder(id)
+}
+
+/** Takes back a script's folder. */
+export function clearScriptFolder(id: number): Promise<void> {
+  return App.ClearScriptFolder(id)
+}
+
+/** Asks for a script file; resolves to its path, '' when cancelled. */
+export function pickScriptFile(): Promise<string> {
+  return App.PickScriptFile()
+}
+
+/** Reads a script or library file for the import dialog, storing and running nothing. */
+export function readScriptFile(path: string): Promise<ScriptFile> {
+  return App.ReadScriptFile(path).then((f) => ({
+    script: asScript(f.script),
+    library: (f.library ?? null) as ScriptLibrary | null,
+    kind: f.kind,
+    text: f.text,
+    missingLibraries: f.missingLibraries ?? [],
+  }))
+}
+
+/** Stores the script in a file's text, switched off and marked as imported. */
+export function importScript(text: string): Promise<Script> {
+  return App.ImportScript(text).then(asScript)
+}
+
+/** Every shared library, by name. */
+export function listScriptLibraries(): Promise<ScriptLibrary[]> {
+  if (isDemoActive()) {
+    return Promise.resolve([])
+  }
+  return App.ListScriptLibraries().then((list) => (list ?? []) as ScriptLibrary[])
+}
+
+function asLibrarySaved(s: { library: unknown; switchedOff: unknown[] | null }): ScriptLibrarySaved {
+  return { library: s.library as ScriptLibrary, switchedOff: (s.switchedOff ?? []) as ScriptRef[] }
+}
+
+/** Stores a new shared library; its name must be free. Scripts that already required the name are switched off and listed. */
+export function createScriptLibrary(input: ScriptLibraryInput): Promise<ScriptLibrarySaved> {
+  return App.CreateScriptLibrary(input).then(asLibrarySaved)
+}
+
+/** Saves a shared library and lists the scripts that load it, which a change to its code or name switches off. */
+export function updateScriptLibrary(id: number, input: ScriptLibraryInput): Promise<ScriptLibrarySaved> {
+  return App.UpdateScriptLibrary(id, input).then(asLibrarySaved)
+}
+
+/** Removes a shared library and lists the scripts that load it, which are switched off. */
+export function deleteScriptLibrary(id: number): Promise<ScriptRef[]> {
+  return App.DeleteScriptLibrary(id).then((list) => (list ?? []) as ScriptRef[])
+}
+
+/** The scripts saving a library under name would switch off; id is 0 for a new library. */
+export function scriptLibraryImpact(id: number, name: string): Promise<ScriptRef[]> {
+  return App.ScriptLibraryImpact(id, name).then((list) => (list ?? []) as ScriptRef[])
+}
+
+/** Why a script was switched off by a library change, with what changed; exists is false when it was not. */
+export function scriptLibraryNote(scriptId: number): Promise<ScriptLibraryNote> {
+  if (isDemoActive()) {
+    return Promise.resolve({ scriptId, exists: false, library: '', when: '', deleted: false, diff: [] })
+  }
+  return App.ScriptLibraryNote(scriptId).then((n) => ({ ...n, diff: n.diff ?? [] }) as ScriptLibraryNote)
+}
+
+/** Writes a library to a file the user picks; resolves to the path, '' when cancelled. */
+export function exportScriptLibrary(id: number): Promise<string> {
+  return App.ExportScriptLibrary(id)
+}
+
+/** Stores the library in a file's text; one of the same name is not replaced. Scripts that already required the name are switched off and listed. */
+export function importScriptLibrary(text: string): Promise<ScriptLibrarySaved> {
+  return App.ImportScriptLibrary(text).then(asLibrarySaved)
+}
+
+/** Stores a copy of a gallery template as a new script, switched off. */
+export function useScriptTemplate(id: string): Promise<Script> {
+  return App.UseScriptTemplate(id).then(asScript)
+}
+
+/** Tries a pattern or a condition on the newest messages of a folder. Changes nothing. */
+export function testScriptMatch(req: MatchRequest): Promise<MatchReport> {
+  return App.TestScriptMatch(req as unknown as Parameters<typeof App.TestScriptMatch>[0]).then((r) => {
+    const report = (r ?? { scanned: 0, matched: 0, matches: [], timedOut: false }) as unknown as MatchReport
+    return { ...report, matches: (report.matches ?? []).map((m) => ({ ...m, spans: m.spans ?? [] })) }
+  })
+}
+
+/** The scripting reference as one English markdown document, the one an assistant reads over MCP. */
+export function scriptReference(): Promise<string> {
+  return App.ScriptReference()
+}
+
+/** The kinds of AI provider that can be added. */
+export function aiProviderKinds(): Promise<AIKind[]> {
+  return App.AIProviderKinds().then((list) => (list ?? []) as AIKind[])
+}
+
+/** The AI providers the user set up. Contacts nothing. */
+export function aiProviders(): Promise<AIProvider[]> {
+  if (isDemoActive()) {
+    return Promise.resolve([])
+  }
+  return App.AIProviders().then((list) => (list ?? []).map((p) => ({ ...p, models: p.models ?? [] })) as AIProvider[])
+}
+
+/** Adds an AI provider, or changes the one with the input's id. */
+export function saveAIProvider(input: AIProviderInput): Promise<AIProvider> {
+  return App.SaveAIProvider(new desktop.AIProviderInput(input)).then((p) => ({ ...p, models: p.models ?? [] }) as AIProvider)
+}
+
+/** Removes an AI provider and its key. */
+export function deleteAIProvider(id: string): Promise<void> {
+  return App.DeleteAIProvider(id)
+}
+
+/** Makes an AI provider the default. */
+export function setDefaultAIProvider(id: string): Promise<void> {
+  return App.SetDefaultAIProvider(id)
+}
+
+/** Sends one tiny request to a provider, saved or not. */
+export function testAIProvider(input: AIProviderInput): Promise<AITestResult> {
+  return App.TestAIProvider(new desktop.AIProviderInput(input)) as Promise<AITestResult>
+}
+
+/** Asks a provider for its models; a saved provider keeps the list. */
+export function fetchAIModels(input: AIProviderInput): Promise<string[]> {
+  return App.FetchAIModels(new desktop.AIProviderInput(input)).then((list) => list ?? [])
+}
+
+/** A script's AI switches. */
+export function aiScriptOptions(scriptId: number): Promise<AIScriptOptions> {
+  if (isDemoActive()) {
+    return Promise.resolve({ logText: false })
+  }
+  return App.AIScriptOptions(scriptId) as Promise<AIScriptOptions>
+}
+
+/** Test runs a script as testScript does, with its AI steps really asking a model the user approved for the saved script scriptId; changes stay planned. */
+export function testScriptAskingAI(scriptId: number, input: ScriptInput, messageId: number): Promise<ScriptRun> {
+  return App.TestScriptAskingAI(scriptId, toDTO(input), messageId).then(asRun)
+}
+
+/** Changes a script's AI switches. */
+export function setAIScriptOptions(scriptId: number, options: AIScriptOptions): Promise<void> {
+  return App.SetAIScriptOptions(scriptId, new desktop.AIScriptOptionsDTO(options))
+}
+
+/** The change an assistant proposed to a script, with a diff; exists is false when none waits. */
+export function scriptProposal(scriptId: number): Promise<ScriptProposal> {
+  if (isDemoActive()) {
+    return Promise.resolve({ scriptId, exists: false, when: '', diff: [], addedPermissions: [], removedPermissions: [], resetsApproval: false, resetReasons: [], problem: '' })
+  }
+  return App.ScriptProposal(scriptId).then((p) => ({ ...p, resetReasons: p.resetReasons ?? [] }) as ScriptProposal)
+}
+
+/** Applies a proposed change; one that changes code, trigger, permissions or placements switches the script off for approval. */
+export function acceptScriptProposal(scriptId: number): Promise<Script> {
+  return App.AcceptScriptProposal(scriptId).then(asScript)
+}
+
+/** Throws a proposed change away. */
+export function rejectScriptProposal(scriptId: number): Promise<void> {
+  return App.RejectScriptProposal(scriptId)
+}
+
+// --- automatic encryption ---
+
+/** The state of automatic encryption, its sources and each mailbox's key. */
+export function getAutoEncryptSettings(): Promise<AutoEncryptSettings> {
+  return App.GetAutoEncryptSettings() as unknown as Promise<AutoEncryptSettings>
+}
+
+/** Switches automatic encryption on with the sources the user allowed; keys are made in the background. */
+export function enableAutoEncrypt(sources: KeySources): Promise<void> {
+  return App.EnableAutoEncrypt(new desktop.KeySourcesDTO(sources))
+}
+
+/** Changes which places keys may be found in. */
+export function setKeySources(sources: KeySources): Promise<void> {
+  return App.SetKeySources(new desktop.KeySourcesDTO(sources))
+}
+
+/** Chooses whether encrypted mail hides its subject. */
+export function setProtectSubject(on: boolean): Promise<void> {
+  return App.SetProtectSubject(on)
+}
+
+/** Sets a mailbox to turn encryption on by itself (auto) or never (manual). */
+export function setAutoEncryptAccountMode(accountId: number, mode: AutoEncryptMode): Promise<void> {
+  return App.SetAutoEncryptAccountMode(accountId, mode)
+}
+
+/** What would happen to a message from one mailbox to these recipients; never asks the network. */
+export function autoEncryptStatus(query: { accountId: number; to: string[]; cc: string[]; bcc: string[]; inReplyTo: string }): Promise<AutoEncryptStatus> {
+  return App.AutoEncryptStatus(new desktop.AutoEncryptQuery(query)) as unknown as Promise<AutoEncryptStatus>
+}
+
+/** Asks the allowed sources for keys of recipients without one; resolves whether any was found. */
+export function lookupRecipientKeys(accountId: number, emails: string[]): Promise<boolean> {
+  return App.LookupRecipientKeys(accountId, emails)
+}
+
+/** Makes the key found for addr after a change the one to send with. */
+export function acceptContactKey(email: string, fingerprint: string): Promise<void> {
+  return App.AcceptContactKey(email, fingerprint)
+}
+
+/** Records that the user compared a contact's fingerprint and it matched. */
+export function verifyContactKey(email: string, fingerprint: string): Promise<void> {
+  return App.VerifyContactKey(email, fingerprint)
+}
+
+/** Sets a contact's encryption preference. */
+export function setContactEncryption(email: string, pref: ContactEncryptPref): Promise<void> {
+  return App.SetContactEncryption(email, pref)
+}
+
+/** Forgets every key learned for a contact. */
+export function forgetContactKey(email: string): Promise<void> {
+  return App.ForgetContactKey(email)
+}
+
+/** Every correspondent Pelton learned a key for. */
+export function listContactKeys(): Promise<ContactKey[]> {
+  return App.ListContactKeys().then((list) => (list ?? []) as unknown as ContactKey[])
+}
+
+/** The most recent key lookups, newest first. */
+export function listKeyLookupLog(): Promise<KeyLookupLogEntry[]> {
+  return App.ListKeyLookupLog().then((list) => (list ?? []) as unknown as KeyLookupLogEntry[])
+}
+
+/** Empties the key lookup log. */
+export function clearKeyLookupLog(): Promise<void> {
+  return App.ClearKeyLookupLog()
+}
+
+/** Writes a passphrase protected backup of a mailbox's key; resolves the path, '' when cancelled. */
+export function backupOwnKey(accountId: number, passphrase: string): Promise<string> {
+  return App.BackupOwnKey(accountId, passphrase)
+}
+
+/** Mails the key to the user's own address for another device; resolves the setup code. */
+export function sendKeyToOtherDevice(accountId: number): Promise<string> {
+  return App.SendKeyToOtherDevice(accountId)
+}
+
+/** Opens a key transfer from another device with its setup code. */
+export function importKeyFromSetupMessage(messageId: number, code: string): Promise<void> {
+  return App.ImportKeyFromSetupMessage(messageId, code)
 }

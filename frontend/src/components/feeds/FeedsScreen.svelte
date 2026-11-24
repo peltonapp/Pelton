@@ -12,7 +12,7 @@
   // spaces, it loads when first opened.
   import { createEventDispatcher, onDestroy, onMount, tick } from 'svelte'
   import { fade, fly } from 'svelte/transition'
-  import '../calendar/controls.css'
+  import '../../theme/controls.css'
   import FeedSidebar from './FeedSidebar.svelte'
   import FeedEntryList from './FeedEntryList.svelte'
   import FeedReader from './FeedReader.svelte'
@@ -215,7 +215,7 @@
         { label: $t('feeds.share'), action: () => share(row) },
       )
     }
-    openContextMenu(x, y, entries)
+    openContextMenu(x, y, entries, row.mail ? undefined : { place: 'feeds.item', items: [{ id: String(row.id) }] })
   }
 
   async function runImport(): Promise<void> {

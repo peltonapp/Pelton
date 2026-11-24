@@ -38,7 +38,7 @@ func TestGeneratedDraftMessageIDRoundTrip(t *testing.T) {
 			req := ComposeRequest{AccountID: accountID, Subject: "first", Text: "body", Bcc: addr("hidden@example.com")}
 			id := saveDraft(t, app, 0, req)
 			uploaded, err := app.UploadDraft(id)
-			settle(t)
+			settle(t, app)
 			if err != nil {
 				t.Fatalf("UploadDraft: %v", err)
 			}
@@ -111,7 +111,7 @@ func TestLegacyStoredDraftMessageIDs(t *testing.T) {
 						t.Fatalf("stored = %+v, want sealed draft retaining legacy ID %q", stored, messageID)
 					}
 				}
-				settle(t)
+				settle(t, app)
 				if operation != "resave and reopen" && !slices.Equal(client.removedDrafts, []string{messageID}) {
 					t.Fatalf("removed = %q, want exactly one removal of %q", client.removedDrafts, messageID)
 				}

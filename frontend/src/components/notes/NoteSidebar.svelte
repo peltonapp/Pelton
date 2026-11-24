@@ -21,6 +21,7 @@
   import templateIcon from '@phosphor-icons/core/assets/duotone/files-duotone.svg?raw'
   import kanbanIcon from '@phosphor-icons/core/assets/duotone/kanban-duotone.svg?raw'
   import Ph from '../common/Ph.svelte'
+  import EmptyState from '../common/EmptyState.svelte'
   import MiniMonth from '../calendar/MiniMonth.svelte'
   import { folderCounts, folderRows, type NoteScope } from '../../lib/notelist'
   import { noteTitle } from '../../lib/notemd'
@@ -106,6 +107,20 @@
       next.add(path)
     }
     expanded = next
+  }
+
+  // right opens a folder and left closes it, as in a tree.
+  function onFolderKey(event: KeyboardEvent, path: string, hasChildren: boolean): void {
+    if (!hasChildren) {
+      return
+    }
+    const rtl = getComputedStyle(document.documentElement).direction === 'rtl'
+    const open = rtl ? 'ArrowLeft' : 'ArrowRight'
+    const close = rtl ? 'ArrowRight' : 'ArrowLeft'
+    if ((event.key === open && !expanded.has(path)) || (event.key === close && expanded.has(path))) {
+      event.preventDefault()
+      toggle(path)
+    }
   }
 
   // a folder opens in the tree when the list shows it, so it can be found.
@@ -261,9 +276,9 @@
         on:dragleave={() => (dragOver = null)}
         on:drop={(e) => onDrop(e, '')}
       >
-        <ul class="tree" role="tree" aria-label={$t('notes.folders')}>
+        <ul class="tree" aria-label={$t('notes.folders')}>
           {#each rows as row (row.path)}
-            <li role="treeitem" aria-selected={currentFolder === row.path} aria-expanded={row.hasChildren ? expanded.has(row.path) : undefined}>
+            <li>
               <div
                 class="row folder"
                 class:selected={scope.kind === 'folder' && scope.path === row.path}
@@ -281,6 +296,9 @@
                   type="button"
                   class="folder-btn"
                   draggable="true"
+                  aria-current={currentFolder === row.path ? 'true' : undefined}
+                  aria-expanded={row.hasChildren ? expanded.has(row.path) : undefined}
+                  on:keydown={(e) => onFolderKey(e, row.path, row.hasChildren)}
                   on:dragstart={(e) => onDragStart(e, row.path)}
                   on:click={() => dispatch('scope', { kind: 'folder', path: row.path })}
                   on:dblclick={() => toggle(row.path)}
@@ -295,7 +313,12 @@
           {/each}
         </ul>
         {#if rows.length === 0}
-          <p class="empty">{$t('notes.noFolders')}</p>
+          <EmptyState
+            size="compact"
+            title={$t('notes.noFolders')}
+            actionLabel={$t('notes.newFolder')}
+            onAction={() => dispatch('newFolder', '')}
+          />
         {/if}
       </div>
     </section>
@@ -583,11 +606,5 @@
 
   .drop-root.over {
     outline: var(--hairline) dashed var(--accent);
-  }
-
-  .empty {
-    margin: var(--space-2);
-    font-size: var(--fz-label);
-    color: var(--text-tertiary);
   }
 </style>

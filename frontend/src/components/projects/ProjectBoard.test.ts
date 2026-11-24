@@ -39,6 +39,7 @@ vi.stubGlobal(
 
 import ProjectBoard from './ProjectBoard.svelte'
 import { board, openProjectId } from '../../stores/projects'
+import { expectAxeClean } from '../../test/axe'
 
 const now = new Date(2026, 10, 16, 10, 0)
 
@@ -68,6 +69,7 @@ function task(uid: string, over: Partial<Task> = {}): Task {
     contacts: [],
     eventUids: [],
     sortOrder: 0,
+    estimate: 0,
     created: '',
     readOnly: false,
     pending: false,
@@ -131,6 +133,11 @@ beforeEach(() => {
 })
 
 describe('the board', () => {
+  it('passes axe', async () => {
+    renderBoard()
+    await expectAxeClean()
+  })
+
   it('shows the columns with their cards and counts', () => {
     renderBoard()
     const todo = screen.getByRole('list', { name: 'To do' })

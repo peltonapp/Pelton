@@ -32,8 +32,8 @@ import { recordArchived, archivedEntry, recordArchivedBatch, type ArchivedMessag
 import { askConfirm } from '../stores/confirm'
 import { isVIPAddress, addVIP, removeVIP } from '../stores/vip'
 import { messageDetail } from '../stores/message'
-import { recordHistory, stateKey, subjectDetail, type HistoryKind } from '../stores/undohistory'
-import { errorMessage, toastError, toastInfo, toastSuccess, withBusyToast } from '../stores/toast'
+import { recordHistory, stateKey, subjectDetail, undoEntry, undoToastTTL, type HistoryKind } from '../stores/undohistory'
+import { errorMessage, pushAction, toastError, toastInfo, toastSuccess, withBusyToast } from '../stores/toast'
 import { sidebar } from '../stores/accounts'
 import { t } from './i18n'
 import { get } from 'svelte/store'
@@ -162,6 +162,7 @@ export async function toggleSenderVIP(item: MessageSummary): Promise<void> {
 
 /** Downloads a message for offline reading, or drops the offline copy. */
 export async function setOffline(item: MessageSummary, offline: boolean): Promise<void> {
+  const previous = item.offline
   patchInList(item.id, { offline })
   try {
     if (offline) {
@@ -171,6 +172,8 @@ export async function setOffline(item: MessageSummary, offline: boolean): Promis
       await removeOffline(item.id)
     }
   } catch (err) {
+    // the optimistic flag would otherwise keep claiming a download that failed
+    patchInList(item.id, { offline: previous })
     toastError(errorMessage(err))
   }
 }
@@ -274,16 +277,20 @@ export async function moveToFolder(items: MessageSummary[], folder: Folder): Pro
     }
   }
   const say = get(t)
-  recordArchivedBatch(undone, { kind: 'move', label: say('history.kind.move').replace('{folder}', folder.name) })
+  const entry = recordArchivedBatch(undone, { kind: 'move', label: say('history.kind.move').replace('{folder}', folder.name) })
   if (failure !== '') {
     toastError(failure)
     return
   }
-  toastInfo(
+  const message =
     targets.length === 1
       ? say('detail.moveDialog.moved').replace('{folder}', folder.name)
-      : say('detail.moveDialog.movedCount').replace('{n}', String(targets.length)).replace('{folder}', folder.name),
-  )
+      : say('detail.moveDialog.movedCount').replace('{n}', String(targets.length)).replace('{folder}', folder.name)
+  if (entry === null) {
+    toastInfo(message)
+    return
+  }
+  pushAction('info', message, { label: say('menu.undo'), run: () => void undoEntry(entry) }, undoToastTTL)
 }
 
 /** Archives one message, recording it for undo and moving the reader on if it was open. */

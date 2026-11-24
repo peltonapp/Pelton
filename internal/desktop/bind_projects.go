@@ -581,6 +581,14 @@ func (a *App) DeleteProjectColumn(id, moveTo int64) error {
 // CreateProjectCard makes a task in the project's list and puts it on the
 // board. In the done column it is made completed.
 func (a *App) CreateProjectCard(req ProjectCardRequest) (ProjectCardDTO, error) {
+	card, err := a.createProjectCard(req)
+	if err == nil {
+		a.scriptCardCreated(a.ctx, card)
+	}
+	return card, err
+}
+
+func (a *App) createProjectCard(req ProjectCardRequest) (ProjectCardDTO, error) {
 	if err := a.ready(); err != nil {
 		return ProjectCardDTO{}, err
 	}
@@ -607,7 +615,7 @@ func (a *App) CreateProjectCard(req ProjectCardRequest) (ProjectCardDTO, error) 
 	if col.Done {
 		task.Status = ical.TodoCompleted
 	}
-	saved, err := a.CreateTask(task)
+	saved, err := a.createTask(task)
 	if err != nil {
 		return ProjectCardDTO{}, err
 	}
@@ -674,6 +682,15 @@ func (a *App) AddTaskToProject(projectID int64, taskUID string, columnID int64) 
 // repeating task completed this way moves on to its next occurrence and the
 // card stays where it was, which the result says with Advanced.
 func (a *App) MoveProjectCard(taskUID string, columnID int64, index int) (ProjectMoveResultDTO, error) {
+	before, _ := a.cardOf(taskUID)
+	res, err := a.moveProjectCard(taskUID, columnID, index)
+	if err == nil {
+		a.scriptCardMoved(a.ctx, before, res)
+	}
+	return res, err
+}
+
+func (a *App) moveProjectCard(taskUID string, columnID int64, index int) (ProjectMoveResultDTO, error) {
 	if err := a.ready(); err != nil {
 		return ProjectMoveResultDTO{}, err
 	}
@@ -703,7 +720,7 @@ func (a *App) MoveProjectCard(taskUID string, columnID int64, index int) (Projec
 	prev := int64(0)
 	switch {
 	case to.Done && !task.Done:
-		result, err := a.SetTaskDone(task.ID, true)
+		result, err := a.setTaskDone(task.ID, true)
 		if err != nil {
 			return ProjectMoveResultDTO{}, err
 		}
@@ -719,7 +736,7 @@ func (a *App) MoveProjectCard(taskUID string, columnID int64, index int) (Projec
 			prev = from.ID
 		}
 	case from.Done && task.Done:
-		if _, err := a.SetTaskDone(task.ID, false); err != nil {
+		if _, err := a.setTaskDone(task.ID, false); err != nil {
 			return ProjectMoveResultDTO{}, err
 		}
 	}

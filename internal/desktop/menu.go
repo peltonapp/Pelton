@@ -43,6 +43,9 @@ func (a *App) buildMenu() *application.Menu {
 	appMenu.Add(s.lockApp).OnClick(func(*application.Context) {
 		a.lockFromMenu()
 	})
+	appMenu.Add(s.lockVaults).OnClick(func(*application.Context) {
+		go a.lockMailVaults()
+	})
 	appMenu.AddSeparator()
 	appMenu.Add(s.hide).SetAccelerator("CmdOrCtrl+H").OnClick(func(*application.Context) {
 		a.hideApp()

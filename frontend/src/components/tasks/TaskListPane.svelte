@@ -13,8 +13,11 @@
   import usersIcon from '@phosphor-icons/core/assets/duotone/users-duotone.svg?raw'
   import flagIcon from '@phosphor-icons/core/assets/duotone/flag-duotone.svg?raw'
   import bellIcon from '@phosphor-icons/core/assets/duotone/bell-duotone.svg?raw'
-  import '../calendar/controls.css'
+  import '../../theme/controls.css'
   import Ph from '../common/Ph.svelte'
+  import EmptyState from '../common/EmptyState.svelte'
+  import searchIcon from '@phosphor-icons/core/assets/duotone/magnifying-glass-duotone.svg?raw'
+  import checksIcon from '@phosphor-icons/core/assets/duotone/checks-duotone.svg?raw'
   import TaskCheck from './TaskCheck.svelte'
   import { calendarColor } from '../../lib/calformat'
   import { isOverdue, type TaskRow } from '../../lib/tasklogic'
@@ -36,8 +39,8 @@
   export let canAdd: boolean = true
   export let timeFormat: TimeFormat = 'auto'
   export let now: Date
-  /** What the empty list says. */
-  export let emptyText: string
+  /** What the empty list says, and whether a filter emptied it. */
+  export let empty: { title: string; detail: string; filtered: boolean }
   /** Placeholder of the quick entry line. */
   export let entryPlaceholder: string
   /** Describes what the line being typed will make, under it. */
@@ -52,6 +55,7 @@
     reorder: number[]
     drop: { task: Task; target: string }
     menu: { task: Task; x: number; y: number }
+    clearFilter: void
   }>()
 
   let entry = ''
@@ -168,8 +172,24 @@
     document.querySelector<HTMLElement>(`[data-task-row="${id}"]`)?.focus()
   }
 
+  // what a keyboard move did, read out politely.
+  let moveStatus = ''
+
   function onRowKey(event: KeyboardEvent, index: number): void {
     const step = event.key === 'ArrowDown' ? 1 : event.key === 'ArrowUp' ? -1 : 0
+    if (step !== 0 && event.altKey && !event.metaKey && !event.ctrlKey && !event.shiftKey) {
+      event.preventDefault()
+      const target = index + step
+      if (!canReorder || target < 0 || target >= rows.length) {
+        return
+      }
+      const ids = rows.map((r) => r.task.id)
+      ;[ids[index], ids[target]] = [ids[target], ids[index]]
+      dispatch('reorder', ids)
+      moveStatus = $t('a11y.movedTo').replace('{n}', String(target + 1)).replace('{total}', String(ids.length))
+      void focusRow(ids[target])
+      return
+    }
     if (step !== 0) {
       event.preventDefault()
       const next = rows[Math.max(0, Math.min(rows.length - 1, index + step))]
@@ -194,6 +214,7 @@
 </script>
 
 <div class="pane">
+  <div class="sr-only" role="status">{moveStatus}</div>
   {#if canAdd}
     <form class="entry" on:submit|preventDefault={submitEntry}>
       <Ph svg={plusIcon} size={14} />
@@ -212,7 +233,24 @@
   {/if}
 
   {#if rows.length === 0}
-    <p class="empty">{emptyText}</p>
+    {#if empty.filtered}
+      <EmptyState
+        kind="filtered"
+        icon={searchIcon}
+        title={empty.title}
+        detail={empty.detail}
+        actionLabel={$t('common.clearFilter')}
+        onAction={() => dispatch('clearFilter')}
+      />
+    {:else}
+      <EmptyState
+        icon={checksIcon}
+        title={empty.title}
+        detail={empty.detail}
+        actionLabel={canAdd ? $t('tasks.newTask') : ''}
+        onAction={canAdd ? focusEntry : null}
+      />
+    {/if}
   {:else}
     <ul class="rows" role="listbox" aria-label={$t('tasks.listLabel')}>
       {#each rows as row, i (row.task.id)}
@@ -228,6 +266,7 @@
           style={`--depth:${row.depth};--cal:${calendarColor(listById.get(task.listId) ?? { id: task.listId, color: task.listColor })}`}
           role="option"
           aria-selected={selectedId === task.id}
+          aria-keyshortcuts={canReorder ? 'Alt+ArrowUp Alt+ArrowDown' : undefined}
           tabindex={selectedId === task.id || (selectedId === null && i === 0) ? 0 : -1}
           data-task-row={task.id}
           animate:flip={{ duration: dur(motion.base) }}
@@ -342,13 +381,6 @@
     padding-inline: var(--space-3);
     font-size: var(--fz-label);
     color: var(--text-secondary);
-  }
-
-  .empty {
-    margin: var(--space-6) var(--space-4);
-    font-size: var(--fz-list);
-    color: var(--text-tertiary);
-    text-align: center;
   }
 
   .rows {

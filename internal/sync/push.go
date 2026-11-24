@@ -2,96 +2,116 @@ package sync
 
 import (
 	"context"
+	"errors"
 	"fmt"
-
-	"github.com/emersion/go-imap/v2"
 
 	"github.com/peltonapp/Pelton/internal/storage"
 )
 
-// pushFlags stores the merged flags locally, adds them on the server, removes
-// the cleared ones and clears the pending marker.
-//
-// the server push is STORE +FLAGS and -FLAGS, never a full replace, so flags we
-// do not model (\Draft, other keywords) are left untouched. Keywords go in a
-// store of their own whose failure is only logged: a server that takes no
-// keywords must not keep \Seen from ever reaching it.
-func (e *Engine) pushFlags(ctx context.Context, state storage.MessageState, flags, remove storage.Flag) error {
-	if err := e.store.SetMessageFlags(ctx, state.ID, flags); err != nil {
-		return fmt.Errorf("sync: store merged flags for uid %d: %w", state.UID, err)
+// pushRejected marks the server refusing a push (ErrRefused from the adapter),
+// as opposed to the local writes around it or a broken connection. The row
+// keeps its pending marker and the next sync asks the server for it again, so
+// a rejection does not hold the folder's cursor back.
+type pushRejected struct{ err error }
+
+// pushError wraps an adapter push error. Only a server refusal is soft; a
+// transport failure or ErrGenerationChanged stays hard, so a dead session is
+// not reported as a healthy one.
+func pushError(err error) error {
+	if errors.Is(err, ErrRefused) && !errors.Is(err, ErrGenerationChanged) {
+		return pushRejected{err}
 	}
-	if imapFlags := storageFlagsToImap(flags); len(imapFlags) > 0 {
-		if err := e.client.AddFlags(imap.UID(state.UID), imapFlags...); err != nil {
-			return fmt.Errorf("sync: push flags for uid %d: %w", state.UID, err)
-		}
-	}
-	if imapFlags := storageFlagsToImap(remove); len(imapFlags) > 0 {
-		if err := e.client.RemoveFlags(imap.UID(state.UID), imapFlags...); err != nil {
-			return fmt.Errorf("sync: clear flags for uid %d: %w", state.UID, err)
-		}
-	}
-	if keywords := storageKeywordsToImap(flags); len(keywords) > 0 {
-		if err := e.client.AddFlags(imap.UID(state.UID), keywords...); err != nil {
-			e.log.Warn("server refused keywords", "uid", state.UID, "err", err)
-		}
-	}
-	if keywords := storageKeywordsToImap(remove); len(keywords) > 0 {
-		if err := e.client.RemoveFlags(imap.UID(state.UID), keywords...); err != nil {
-			e.log.Warn("server refused keywords", "uid", state.UID, "err", err)
-		}
-	}
-	if err := e.store.ClearFlagsPending(ctx, state.ID); err != nil {
-		return fmt.Errorf("sync: clear pending flags for uid %d: %w", state.UID, err)
-	}
-	return nil
+	return err
 }
 
-// clearPending stores the merged flags locally and clears the marker, for the
-// case where the server already had everything the local change wanted.
-func (e *Engine) clearPending(ctx context.Context, state storage.MessageState, flags storage.Flag) error {
-	if err := e.store.SetMessageFlags(ctx, state.ID, flags); err != nil {
-		return fmt.Errorf("sync: store merged flags for uid %d: %w", state.UID, err)
+func (p pushRejected) Error() string { return p.err.Error() }
+func (p pushRejected) Unwrap() error { return p.err }
+
+// IsSoftError reports an error after which the folder's sync otherwise went
+// through: some messages could not be read (MessageError; they stay stubs)
+// or the server refused a flag or delete push (the change stays pending for
+// the next sync). The result returned with it is valid and should be used:
+// log the error, announce what was stored, and do not fail the folder.
+// SyncFolder and SyncFolderStubs return a soft error only when nothing hard
+// went wrong.
+func IsSoftError(err error) bool {
+	return err != nil && (isMessageError(err) || isPushRejected(err))
+}
+
+// firstHard returns the first error that is not soft, else the first error.
+func firstHard(errs ...error) error {
+	var soft error
+	for _, err := range errs {
+		switch {
+		case err == nil:
+		case !IsSoftError(err):
+			return err
+		case soft == nil:
+			soft = err
+		}
 	}
-	if err := e.store.ClearFlagsPending(ctx, state.ID); err != nil {
-		return fmt.Errorf("sync: clear pending flags for uid %d: %w", state.UID, err)
+	return soft
+}
+
+// isPushRejected reports whether err is the server refusing a push.
+func isPushRejected(err error) bool {
+	var p pushRejected
+	return errors.As(err, &p)
+}
+
+// pushFlags adds the merged flags on the server, removes the cleared ones,
+// then stores them and clears the pending marker. remove holds only bits the
+// local change cleared (see reconcile.go); every other bit of flags is the
+// server's own, so nothing another client set is taken away. A local change
+// made after the sync read state is kept and stays pending; the next sync
+// pushes it.
+func (e *Engine) pushFlags(ctx context.Context, folder storage.Folder, state storage.MessageState, flags, remove storage.Flag) error {
+	fctx := folderContext(ctx, folder)
+	if err := e.adapter.SetFlags(fctx, folder.RemoteID, state.RemoteID, flags); err != nil {
+		return pushError(fmt.Errorf("sync: push flags for %q: %w", state.RemoteID, err))
+	}
+	if remove != 0 {
+		if err := e.adapter.RemoveFlags(fctx, folder.RemoteID, state.RemoteID, remove); err != nil {
+			return pushError(fmt.Errorf("sync: clear flags for %q: %w", state.RemoteID, err))
+		}
+	}
+	return e.resolvePending(ctx, state, flags)
+}
+
+// resolvePending stores the merged flags and clears the pending marker,
+// unless the row changed since the sync read state. pushFlags calls it after
+// the push; the sync calls it alone when the server already had everything
+// the local change wanted.
+func (e *Engine) resolvePending(ctx context.Context, state storage.MessageState, flags storage.Flag) error {
+	if _, err := e.store.ResolvePendingFlags(ctx, state.ID, state.Flags, flags); err != nil {
+		return fmt.Errorf("sync: resolve pending flags for %q: %w", state.RemoteID, err)
 	}
 	return nil
 }
 
 // pushDeletes applies the user's deletions on the server, then removes them
-// from the cache. the whole batch goes in one call, so a folder with many local
-// deletions costs a couple of round trips rather than a couple per message.
+// from the cache. The whole batch goes in one call.
 //
-// deleting a message moves it to the account's trash. that is what people mean
-// by delete, it is recoverable, and on gmail it is the only thing that deletes
-// at all: \Deleted plus EXPUNGE inside an ordinary label only removes the
-// label there.
-//
-// the permanent delete is \Deleted plus a scoped expunge, and it happens in
-// exactly two cases: the message is already in the trash (emptying it, or
-// deleting from inside it), or the account has no trash folder to move to.
+// Deleting a message moves it to the account's trash when TrashRemoteID is set
+// and the folder is not the trash itself; otherwise it is a permanent delete.
 func (e *Engine) pushDeletes(ctx context.Context, folder storage.Folder, states []storage.MessageState) error {
 	if len(states) == 0 {
 		return nil
 	}
 
-	uids := make([]imap.UID, 0, len(states))
+	ids := make([]string, 0, len(states))
 	for _, s := range states {
-		uids = append(uids, imap.UID(s.UID))
+		ids = append(ids, s.RemoteID)
 	}
 
-	// both paths are scoped to exactly these uids by the imap layer, which will
-	// not issue an expunge that could take a message another client merely
-	// flagged.
 	if e.trashable(folder) {
-		if err := e.client.MoveMessages(uids, e.TrashPath); err != nil {
-			return fmt.Errorf("sync: move to trash %q on server: %w", e.TrashPath, err)
+		if err := e.adapter.Move(ctx, folder.RemoteID, ids, e.TrashRemoteID); err != nil {
+			return pushError(fmt.Errorf("sync: move to trash %q on server: %w", e.TrashRemoteID, err))
 		}
-	} else if err := e.client.DeleteMessages(uids...); err != nil {
-		return fmt.Errorf("sync: delete on server: %w", err)
+	} else if err := e.adapter.Delete(ctx, folder.RemoteID, ids); err != nil {
+		return pushError(fmt.Errorf("sync: delete on server: %w", err))
 	}
 
-	// server delete succeeded, now drop the local rows and their files.
 	for _, s := range states {
 		if err := e.deleteLocal(ctx, folder, s); err != nil {
 			return err
@@ -101,11 +121,11 @@ func (e *Engine) pushDeletes(ctx context.Context, folder storage.Folder, states 
 }
 
 // trashable reports whether deletions from this folder should move to the trash
-// rather than be expunged. Comparing the id as well as the path keeps a folder
-// merely named like the trash from being mistaken for it.
+// rather than be permanently deleted. Comparing the id as well as the remote id
+// keeps a folder merely named like the trash from being mistaken for it.
 func (e *Engine) trashable(folder storage.Folder) bool {
-	if e.TrashPath == "" {
+	if e.TrashRemoteID == "" {
 		return false
 	}
-	return folder.ID != e.TrashFolderID && folder.IMAPPath != e.TrashPath
+	return folder.ID != e.TrashFolderID && folder.RemoteID != e.TrashRemoteID
 }

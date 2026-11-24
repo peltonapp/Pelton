@@ -24,7 +24,7 @@ func (d *DB) SenderMessages(ctx context.Context, address string, folderIDs []int
 	query := selectMessageColumns + `
 FROM messages INDEXED BY idx_messages_sender
 WHERE ` + senderMatch + `
-AND pending_delete = 0 AND snooze_hidden = 0 AND folder_id IN (` + folders + `)
+AND pending_delete = 0 AND snooze_hidden = 0 AND folder_id IN (` + folders + `) AND ` + notVaulted + `
 ORDER BY date DESC, id DESC
 LIMIT ?`
 	rows, err := d.sql.QueryContext(ctx, query, args...)
@@ -62,7 +62,7 @@ func (d *DB) SenderStatsFor(ctx context.Context, address string, folderIDs []int
 	folders, args := inClause(folderIDs)
 	args = append([]any{normalizeAddress(address)}, args...)
 	query := `SELECT COUNT(*), COALESCE(MIN(date), ''), COALESCE(MAX(date), '') FROM messages INDEXED BY idx_messages_sender
-WHERE ` + senderMatch + ` AND pending_delete = 0 AND folder_id IN (` + folders + `)`
+WHERE ` + senderMatch + ` AND pending_delete = 0 AND folder_id IN (` + folders + `) AND ` + notVaulted
 	var (
 		s           SenderStats
 		first, last string

@@ -28,12 +28,17 @@
   import { prefs } from '../../stores/prefs'
   import { toastError, toastSuccess } from '../../stores/toast'
   import { t } from '../../lib/i18n'
+  import { openScriptMenu } from '../../lib/scriptmenu'
   import type { ChatMessage } from '../../lib/types'
 
   /** The message shown. */
   export let message: ChatMessage
   /** The room it belongs to. */
   export let roomId: string
+  /** The name of the room, handed to scripts. */
+  export let roomName: string = ''
+  /** The room is a direct chat, handed to scripts. */
+  export let direct: boolean = false
   /** True when it continues the group above, so it draws without avatar and name. */
   export let continued: boolean = false
   /** True when the keyboard cursor rests on it. */
@@ -194,6 +199,21 @@
 
   $: readers = message.readBy.slice(0, 3)
   $: moreReaders = message.readBy.length - readers.length
+
+  function onScriptMenu(event: MouseEvent): void {
+    openScriptMenu(event, 'chat.message', {
+      id: message.id,
+      fields: {
+        room_id: roomId,
+        room: roomName,
+        id: message.id,
+        sender: message.sender,
+        body: message.body,
+        direct,
+        mention: message.mentioned,
+      },
+    })
+  }
 </script>
 
 {#if message.kind === 'state'}
@@ -209,6 +229,7 @@
     data-message-id={message.id}
     role="article"
     aria-label={`${message.senderName}, ${fullTime}`}
+    on:contextmenu={onScriptMenu}
   >
     <div class="gutter">
       {#if continued}

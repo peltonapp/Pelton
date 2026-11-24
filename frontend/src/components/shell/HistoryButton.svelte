@@ -16,6 +16,10 @@
   import muteIcon from '@phosphor-icons/core/assets/duotone/bell-slash-duotone.svg?raw'
   import snoozeIcon from '@phosphor-icons/core/assets/duotone/clock-duotone.svg?raw'
   import sendIcon from '@phosphor-icons/core/assets/duotone/paper-plane-tilt-duotone.svg?raw'
+  import projectIcon from '@phosphor-icons/core/assets/duotone/kanban-duotone.svg?raw'
+  import taskIcon from '@phosphor-icons/core/assets/duotone/check-square-duotone.svg?raw'
+  import eventIcon from '@phosphor-icons/core/assets/duotone/calendar-blank-duotone.svg?raw'
+  import scriptIcon from '@phosphor-icons/core/assets/duotone/lightning-duotone.svg?raw'
   import undoIcon from '@phosphor-icons/core/assets/duotone/arrow-u-up-left-duotone.svg?raw'
   import redoIcon from '@phosphor-icons/core/assets/duotone/arrow-u-up-right-duotone.svg?raw'
   import xIcon from '@phosphor-icons/core/assets/regular/x.svg?raw'
@@ -43,6 +47,10 @@
     mute: muteIcon,
     snooze: snoozeIcon,
     send: sendIcon,
+    project: projectIcon,
+    task: taskIcon,
+    event: eventIcon,
+    script: scriptIcon,
   }
 
   // a slow tick keeps the relative times honest while the list is open.
@@ -69,6 +77,7 @@
 <button
   type="button"
   class="history"
+  data-tip-anchor="history"
   class:open={$historyOpen}
   bind:this={button}
   aria-haspopup="dialog"

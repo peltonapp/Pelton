@@ -13,11 +13,13 @@
   import { IconPhoto, IconUserCheck, IconWorldCheck, IconMailCheck, IconShieldSearch, IconChevronDown, IconEyeOff, IconCopy, IconExternalLink } from '@tabler/icons-svelte'
   import { resolveLink } from '../../lib/linkclean'
   import { prefs } from '../../stores/prefs'
-  import { getMessageHtml, trustSenderImages, allowDomainImages, allowRemoteForMessage, scanUrl } from '../../lib/api'
+  import { getMessageHtml, getMessageHtmlBlockingTrackers, trustSenderImages, allowDomainImages, allowRemoteForMessage, scanUrl } from '../../lib/api'
+  import { guarded, imageRequest, linkCheck, noteLoaded, trackedLink } from '../../stores/trust'
   import { setBodyHtml } from '../../stores/message'
   import { openContextMenu, type MenuItem } from '../../stores/contextmenu'
   import { virusTotal, linkVerdicts, putLinkVerdict, scanEnabled } from '../../stores/virustotal'
   import VerdictBadge from '../common/VerdictBadge.svelte'
+  import Spinner from '../common/Spinner.svelte'
   import { errorMessage, toastError, toastSuccess } from '../../stores/toast'
   import { displayName, linkifySegments } from '../../lib/format'
   import { bodyFontStack } from '../../lib/fonts'
@@ -26,12 +28,13 @@
   import type { BodyDetail, RemoteSource, Verdict } from '../../lib/types'
   import { markClass, markDocument } from '../../lib/highlight'
   import { highlightTerms, searchOpenedId } from '../../stores/search'
+  import { highlightTerms as promiseTerms, promiseHighlight } from '../../stores/promises'
   import Highlight from '../common/Highlight.svelte'
   import Ph from '../common/Ph.svelte'
   import dotsIcon from '@phosphor-icons/core/assets/duotone/dots-three-duotone.svg?raw'
   import calendarIcon from '@phosphor-icons/core/assets/duotone/calendar-blank-duotone.svg?raw'
   import { splitHtmlQuote, splitPlainQuote } from '../../lib/quotes'
-  import DatePeek from './DatePeek.svelte'
+  import { loadDatePeek } from '../../lib/lazyload'
   import { scanDates } from '../../lib/datescan'
   import { collectText, dateAttr, markRanges, unmarkDates, dateClass } from '../../lib/datemarks'
   import { formatWhen } from '../../lib/calformat'
@@ -39,6 +42,10 @@
   import { locale } from '../../lib/i18n'
   import type { DateMention } from '../../lib/eventphrase'
   import type { TimeFormat } from '../../lib/format'
+  import { adaptHtml, colorMode, defaultMode, mailStyle, type ColorMode, type MailStyle } from '../../lib/mailcolors'
+  import { choiceFor, darkTheme, messageColors, rememberColors, senderReading, setMessageColors } from '../../stores/senderreading'
+  import { noteTipContext } from '../../stores/firsttips'
+  import paletteIcon from '@phosphor-icons/core/assets/duotone/circle-half-duotone.svg?raw'
 
   export let detail: BodyDetail
   /** Folds the quoted original at the end of a reply behind a toggle. */
@@ -50,6 +57,16 @@
    * sender. Dates in the body are not marked for such a body.
    */
   export let remote: RemoteSource | null = null
+  /**
+   * Lets html mail follow a dark theme (lib/mailcolors.ts decides how), with
+   * a toggle for the message and a choice remembered for the sender. Off,
+   * html mail always renders as sent on a light page.
+   */
+  export let adaptive: boolean = false
+  /** The text size in px, or 0 for the reader's global size. */
+  export let fontSize: number = 0
+  /** Sets the text with the reading view's roomier line height. */
+  export let roomy: boolean = false
 
   // html tells a holder of its own copy of the message, such as the Feeds
   // reader, that the body was rendered again with remote content.
@@ -83,7 +100,9 @@
   // because the sender/domain is trusted (or the global override is on).
   let remoteLoaded = detail.remoteAllowed
 
-  // reset the remote-loaded affordance when a different message opens.
+  // reset the remote-loaded affordance when a different message opens. Each
+  // message also gets its own frame (see the {#key} below), which stays hidden
+  // until its document has loaded.
   let lastId = -1
   $: if (detail.id !== lastId) {
     lastId = detail.id
@@ -92,6 +111,12 @@
     pixelsBlocked = false
     pixelMenu = null
     pixelDetails = false
+    startFrameLoad()
+  }
+  // the same message can refresh in place with remote content now allowed: a
+  // stub whose sender only matches the trust list once the full body is stored.
+  $: if (detail.remoteAllowed) {
+    remoteLoaded = true
   }
 
   $: senderLabel = displayName(detail.fromName, detail.fromAddress)
@@ -138,7 +163,7 @@
   // click handler that runs natively inside the iframe's own document, using
   // postMessage to hand the url back to the parent, has no such dependency on
   // cross-frame event delivery.
-  function buildSrcdoc(html: string, allowRemote: boolean, fontSize: number, bodyFont: string, nonce: string, offerMenu: boolean, still: boolean): string {
+  function buildSrcdoc(html: string, allowRemote: boolean, fontSize: number, bodyFont: string, nonce: string, offerMenu: boolean, still: boolean, theme: FramePalette | null, leading: string): string {
     // the reader font preference sets the base font-family, so it applies to
     // mail that declares none. Mail that declares its own overrides it, unless
     // the sender-fonts setting is off, in which case the sanitizer has already
@@ -148,27 +173,30 @@
     // the .pelton-vt colors are the light-theme semantic token values written
     // out literally, for the same reason the page colors above are: this
     // document always renders on a fixed white background, so a badge that
-    // followed the dark theme would be a dark-mode green on white.
+    // followed the dark theme would be a dark-mode green on white. Mail
+    // adapted to a dark theme renders on the theme's own colours instead, and
+    // takes the theme's tokens for everything here.
+    const c = theme ?? lightPage
     const css = `
-  html,body{margin:0;background:#ffffff;color:#1a1a1a;font-family:${font};font-size:${fontSize}px;line-height:1.5;}
+  html,body{margin:0;background:${c.page};color:${c.text};font-family:${font};font-size:${fontSize}px;line-height:${leading};}
   body{padding:4px 2px;word-wrap:break-word;overflow-wrap:break-word;}
-  a{color:#1a56db;}
+  a{color:${c.link};}
   img{max-width:100%;height:auto;}
   video{max-width:100%;height:auto;}
-  blockquote{margin:0;margin-inline-start:8px;padding-inline-start:10px;border-inline-start:2px solid #94a3b8;color:#55606c;}
+  blockquote{margin:0;margin-inline-start:8px;padding-inline-start:10px;border-inline-start:2px solid ${c.rule};color:${c.quote};}
   table{max-width:100%;}
   pre{white-space:pre-wrap;}
   .pelton-vt{display:inline-block;margin-inline-start:3px;font-family:${readVar('--font-mono') || 'monospace'};font-weight:700;font-size:0.85em;cursor:default;}
-  .pelton-vt-clean{color:#1a7f4b;}
-  .pelton-vt-flagged{color:#c0392b;}
-  .pelton-vt-unknown{color:#6b7280;}
-  .pelton-vt-error{color:#9a6700;}
-  .pelton-phish{display:inline-block;margin-inline-start:3px;font-weight:700;font-size:0.85em;color:#c0392b;cursor:default;}
-  .${markClass}{background:color-mix(in srgb, ${accent} 32%, #ffffff);color:inherit;border-radius:2px;}
+  .pelton-vt-clean{color:${c.success};}
+  .pelton-vt-flagged{color:${c.danger};}
+  .pelton-vt-unknown{color:${c.quote};}
+  .pelton-vt-error{color:${c.warning};}
+  .pelton-phish{display:inline-block;margin-inline-start:3px;font-weight:700;font-size:0.85em;color:${c.danger};cursor:default;}
+  .${markClass}{background:color-mix(in srgb, ${accent} 32%, ${c.page});color:inherit;border-radius:2px;}
   .${dateClass}{position:relative;border-radius:3px;cursor:pointer;outline:none;${still ? '' : 'transition:background-color 120ms ease-out,box-shadow 120ms ease-out;'}}
-  .${dateClass}.pelton-date-on{background:color-mix(in srgb, ${accent} 14%, #ffffff);box-shadow:0 0 0 2px color-mix(in srgb, ${accent} 14%, #ffffff);}
+  .${dateClass}.pelton-date-on{background:color-mix(in srgb, ${accent} 14%, ${c.page});box-shadow:0 0 0 2px color-mix(in srgb, ${accent} 14%, ${c.page});}
   .${dateClass}:focus-visible{box-shadow:0 0 0 2px ${accent};}
-  .${dateClass}.pelton-date-on[tabindex]::before{content:"";position:absolute;inset-inline-start:-0.3em;top:-0.95em;width:0.95em;height:0.95em;border-radius:3px;background:#ffffff url("${calendarGlyph(accent)}") center/78% no-repeat;box-shadow:0 0 0 1px color-mix(in srgb, ${accent} 40%, #ffffff),0 1px 3px rgba(0,0,0,0.16);pointer-events:none;}`
+  .${dateClass}.pelton-date-on[tabindex]::before{content:"";position:absolute;inset-inline-start:-0.3em;top:-0.95em;width:0.95em;height:0.95em;border-radius:3px;background:${c.page} url("${calendarGlyph(accent)}") center/78% no-repeat;box-shadow:0 0 0 1px color-mix(in srgb, ${accent} 40%, ${c.page}),0 1px 3px rgba(0,0,0,0.16);pointer-events:none;}`
     const imgSrc = allowRemote ? 'data: https: http:' : 'data:'
     // media rides on the same choice as images: a message that embeds a video
     // can only reach out once the reader has allowed remote content for it.
@@ -239,23 +267,144 @@
     return `data:image/svg+xml,${encodeURIComponent(calendarIcon.replace('fill="currentColor"', `fill="${accent}"`))}`
   }
 
-  // nonce is regenerated per message so a stale nonce from a previous render
-  // can never be replayed against a new one.
+  // the nonce is regenerated whenever the document it guards changes: another
+  // message, a new body (remote images loaded, the full body replacing a stub)
+  // or remote content switching on. A stale nonce is then never reused against
+  // different content. It stays the same while none of those change, so a
+  // refresh with the same body (marking it read) builds the same srcdoc and
+  // does not reload the frame.
   function makeNonce(): string {
     return crypto.randomUUID().replace(/-/g, '')
   }
 
-  // one nonce per message: drawing a fresh one on every update made the
-  // document a new string each time, and the frame reloaded when a flag was
-  // toggled or the pane re-rendered for any other reason.
-  let nonce = makeNonce()
-  let nonceFor = -1
-  $: if (detail.id !== nonceFor) {
-    nonceFor = detail.id
-    nonce = makeNonce()
+  // the nonce changes only with the message, its body or its remote state, so
+  // toggling a flag or another re-render does not reload the frame.
+  let lastNonce = ''
+  let nonceFor: { id: number; body: string; remote: boolean } | null = null
+  function nonceOf(id: number, body: string, remote: boolean): string {
+    if (!nonceFor || nonceFor.id !== id || nonceFor.body !== body || nonceFor.remote !== remote) {
+      nonceFor = { id, body, remote }
+      lastNonce = makeNonce()
+    }
+    return lastNonce
+  }
+  $: currentNonce = nonceOf(detail.id, detail.bodyHtmlSafe, remoteLoaded)
+
+  // frameLoaded is false from the moment another message opens until its
+  // frame's document has loaded; the frame is hidden meanwhile, so the pane
+  // never shows the previous message's body under the new header. A spinner
+  // appears once the load takes long enough to notice, and the frame is shown
+  // anyway after frameLoadGiveUpMs in case the load is never reported.
+  const frameSpinnerDelayMs = 150
+  const frameLoadGiveUpMs = 3000
+  let frameLoaded = false
+  let frameSlow = false
+  let frameSpinnerTimer: ReturnType<typeof setTimeout> | undefined
+  let frameGiveUpTimer: ReturnType<typeof setTimeout> | undefined
+
+  function startFrameLoad(): void {
+    clearTimeout(frameSpinnerTimer)
+    clearTimeout(frameGiveUpTimer)
+    frameLoaded = false
+    frameSlow = false
+    frameSpinnerTimer = setTimeout(() => (frameSlow = true), frameSpinnerDelayMs)
+    frameGiveUpTimer = setTimeout(frameDidLoad, frameLoadGiveUpMs)
   }
 
-  $: srcdoc = buildSrcdoc(shownHtml, remoteLoaded, $prefs.messageFontSize, $prefs.bodyFont, nonce, offerMenu, $prefs.reduceMotion)
+  // --- colours in a dark theme -------------------------------------------------
+
+  /** The colours the frame's own document is drawn in. */
+  interface FramePalette {
+    page: string
+    text: string
+    link: string
+    rule: string
+    quote: string
+    success: string
+    danger: string
+    warning: string
+  }
+
+  // the fixed light page html mail is written for.
+  const lightPage: FramePalette = {
+    page: '#ffffff',
+    text: '#1a1a1a',
+    link: '#1a56db',
+    rule: '#94a3b8',
+    quote: '#55606c',
+    success: '#1a7f4b',
+    danger: '#c0392b',
+    warning: '#9a6700',
+  }
+
+  // the theme's own colours, read again whenever the theme or accent changes.
+  function themePalette(_dark: boolean, _themeId: string, _accent: string): FramePalette {
+    return {
+      page: readVar('--surface-raised'),
+      text: readVar('--text-primary'),
+      link: readVar('--link'),
+      rule: readVar('--border-strong'),
+      quote: readVar('--text-secondary'),
+      success: readVar('--success'),
+      danger: readVar('--danger'),
+      warning: readVar('--warning'),
+    }
+  }
+
+  let htmlStyle: MailStyle = 'plain'
+  let senderColors: '' | ColorMode = ''
+  let messageColor: '' | ColorMode = ''
+  $: htmlStyle = adaptive && detail.isHtml ? mailStyle(detail.bodyHtmlSafe) : 'plain'
+  $: senderColors = adaptive ? choiceFor($senderReading, detail.fromAddress).colors : ''
+  $: messageColor = adaptive ? ($messageColors.get(detail.id) ?? '') : ''
+  $: colorBase = { dark: $darkTheme, style: htmlStyle, pref: $prefs.htmlColors }
+  $: mode = adaptive && detail.isHtml ? colorMode({ ...colorBase, sender: senderColors, message: messageColor }) : 'original'
+  $: adapted = mode === 'adapt'
+  // a dark theme showing mail as sent puts it on a light sheet of its own.
+  $: sheet = adaptive && detail.isHtml && $darkTheme && !adapted
+  $: frameHtml = adapted ? adaptHtml(shownHtml) : shownHtml
+  $: framePalette = adapted ? themePalette($darkTheme, $prefs.themeId, $prefs.accent) : null
+  $: textSize = fontSize || $prefs.messageFontSize
+  $: leading = roomy ? readVar('--reading-leading') || '1.7' : '1.5'
+
+  // the toggle flips this message; a flip that differs from what the sender
+  // would get otherwise can then be kept for the sender, and a kept choice
+  // forgotten again.
+  $: senderOrDefault = senderColors || defaultMode(colorBase)
+  $: canKeep = messageColor !== '' && messageColor !== senderOrDefault
+  $: canForget = !canKeep && messageColor === '' && senderColors !== ''
+
+  // a long html mail in a dark theme is where the colors button matters most.
+  const longMail = 6000
+  $: if (adaptive && detail.isHtml && $darkTheme && detail.bodyHtmlSafe.length > longMail) {
+    void tick().then(() => noteTipContext('dark-mail'))
+  }
+
+  function flipColors(): void {
+    setMessageColors(detail.id, adapted ? 'original' : 'adapt')
+  }
+
+  function keepForSender(): void {
+    const keep = messageColor
+    if (keep === '') {
+      return
+    }
+    void rememberColors(detail.fromAddress, keep === defaultMode(colorBase) ? '' : keep)
+    setMessageColors(detail.id, '')
+  }
+
+  function forgetForSender(): void {
+    void rememberColors(detail.fromAddress, '')
+  }
+
+  $: srcdoc = buildSrcdoc(frameHtml, remoteLoaded, textSize, $prefs.bodyFont, currentNonce, offerMenu, $prefs.reduceMotion, framePalette, leading)
+
+  function frameDidLoad(): void {
+    clearTimeout(frameSpinnerTimer)
+    clearTimeout(frameGiveUpTimer)
+    frameLoaded = true
+    frameSlow = false
+  }
 
   // plain-text bodies render in a <pre>, not the sandboxed iframe, so bare
   // urls need their own linkification: nothing upstream turns them into real
@@ -319,6 +468,8 @@
     if (!body) {
       return
     }
+    // our own document is in place, whether or not 'load' was reported.
+    frameDidLoad()
     measure()
     resizeObserver = new ResizeObserver(() => measure())
     resizeObserver.observe(body)
@@ -585,7 +736,10 @@
   }
 
   // the words of the search this message was opened from, marked in the body.
-  $: markTerms = $searchOpenedId === detail.id ? $highlightTerms : []
+  $: markTerms = [
+    ...($searchOpenedId === detail.id ? $highlightTerms : []),
+    ...($promiseHighlight?.messageId === detail.id ? promiseTerms($promiseHighlight.quote) : []),
+  ]
 
   // markMatches wraps the search words in mark elements inside the iframe's
   // own document, the same way decorateLinks adds its badges: built with
@@ -606,6 +760,7 @@
   // in case 'load' fires before contentDocument.body is actually populated
   // (observed to be unreliable timing on some webview engines).
   function onFrameLoad(): void {
+    frameDidLoad()
     hoverUrl = ''
     attachInteractivity()
   }
@@ -637,10 +792,25 @@
 
   let hoverUrl = ''
   let hoverCleaned = false
+  let hoverVia = ''
 
-  // openLink opens a link in the system browser, cleaned when that is on.
+  // the sender passport and the shield reach a mail's links in the new design
+  // only, and never a feed entry's.
+  $: trustLinks = $prefs.design === 'new' && !remote
+  $: if (trustLinks && $imageRequest === detail.id) {
+    imageRequest.set(null)
+    void loadRemote(false, true)
+  }
+
+  // openLink opens a link in the system browser, cleaned when that is on. A
+  // mail with a strong sender warning shows where the link goes first.
   function openLink(href: string): void {
-    openURL(resolveLink(href, cleanOn).url)
+    const url = resolveLink(href, cleanOn).url
+    if (trustLinks && /^https?:/i.test(href) && guarded(detail.id)) {
+      linkCheck.set({ messageId: detail.id, url, item: trackedLink(detail.id, href) })
+      return
+    }
+    openURL(url)
   }
 
   // showHover updates the status overlay with the address a hovered link goes
@@ -649,11 +819,16 @@
   // is anchored to the message pane, outside its scroll area.
   function showHover(href: string): void {
     const link = /^https?:/i.test(href) ? resolveLink(href, cleanOn) : null
-    const shown = /^mailto:/i.test(href) ? href.slice(7).split('?')[0] : (link?.url ?? '')
+    // a tracking redirect whose destination is in its own url shows where it
+    // really goes, and through whom.
+    const tracked = trustLinks && link && !link.unwrapped ? trackedLink(detail.id, href) : null
+    const via = tracked?.destination ? tracked.host : ''
+    const shown = /^mailto:/i.test(href) ? href.slice(7).split('?')[0] : via ? (tracked?.destination ?? '') : (link?.url ?? '')
     const cleaned = link?.changed ?? false
-    if (shown === hoverUrl && cleaned === hoverCleaned) return
+    if (shown === hoverUrl && cleaned === hoverCleaned && via === hoverVia) return
     hoverUrl = shown
     hoverCleaned = cleaned
+    hoverVia = via
     hoverSlide = 0
     if (shown) void measureHover()
   }
@@ -746,6 +921,11 @@
       items.push({ label: $t('links.copy'), icon: IconCopy, action: () => void copyLink(link.url) })
       if (link.changed) {
         items.push({ label: $t('links.openOriginal'), icon: IconExternalLink, action: () => openURL(url) })
+      }
+      const tracked = trustLinks && !link.unwrapped ? trackedLink(detail.id, url) : null
+      if (tracked?.destination) {
+        const destination = tracked.destination
+        items.push({ label: $t('trust.link.direct'), icon: IconExternalLink, action: () => openURL(destination) })
       }
     }
     if (canScan) {
@@ -853,6 +1033,8 @@
     clearTimeout(showTimer)
     clearTimeout(hideTimer)
     dateRun += 1
+    clearTimeout(frameSpinnerTimer)
+    clearTimeout(frameGiveUpTimer)
     resizeObserver?.disconnect()
     cancelAnimationFrame(readyPollHandle)
     window.removeEventListener('message', onWindowMessage)
@@ -882,22 +1064,27 @@
     return text === key ? reason : text
   }
 
-  async function loadRemote(includeTrackers = false): Promise<void> {
+  // keepTrackers is the shield's "load images, keep trackers blocked": the
+  // pixels stay out whatever the block-tracking-pixels setting says.
+  async function loadRemote(includeTrackers = false, keepTrackers = false): Promise<void> {
+    const id = detail.id
     try {
-      const id = detail.id
       if (remote) {
         await remote.load(includeTrackers)
       } else {
-        const html = await getMessageHtml(id, true, includeTrackers)
+        const html = keepTrackers ? await getMessageHtmlBlockingTrackers(id) : await getMessageHtml(id, true, includeTrackers)
         setBodyHtml(id, html)
         dispatch('html', { id, html })
       }
-      // the reader may have moved on while the html was fetched
+      // another message opened while this loaded: its remote state is its own.
       if (detail.id !== id) {
         return
       }
       remoteLoaded = true
       pixelsBlocked = !includeTrackers && trackers.length > 0
+      if (trustLinks) {
+        noteLoaded(id, !includeTrackers && (keepTrackers || $prefs.blockTrackingPixels) ? 'images' : 'all')
+      }
       pixelMenu = null
     } catch (err) {
       toastError(errorMessage(err))
@@ -1083,16 +1270,44 @@
   </div>
 {/if}
 
+{#if adaptive && detail.isHtml && $darkTheme}
+  <div class="colors-bar">
+    <button type="button" class="colors-btn" data-tip-anchor="mail-colors" on:click={flipColors}>
+      <Ph svg={paletteIcon} size={13} />
+      {adapted ? $t('reader.colors.original') : $t('reader.colors.adapt')}
+    </button>
+    {#if canKeep}
+      <button type="button" class="colors-link" on:click={keepForSender}>
+        {$t('reader.colors.keep').replace('{who}', senderLabel)}
+      </button>
+    {:else if canForget}
+      <button type="button" class="colors-link" on:click={forgetForSender}>
+        {$t('reader.colors.forget').replace('{who}', senderLabel)}
+      </button>
+    {/if}
+  </div>
+{/if}
+
 {#if detail.isHtml}
-  <iframe
-    class="body-frame"
-    title={$t('detail.mailBody.iframeTitle')}
-    sandbox="allow-same-origin allow-scripts allow-popups allow-top-navigation-by-user-activation"
-    bind:this={frame}
-    on:load={onFrameLoad}
-    style={`height:${frameHeight}px`}
-    {srcdoc}
-  ></iframe>
+  {#if !frameLoaded && frameSlow}
+    <Spinner inline label={$t('detail.loadingMessage')} />
+  {/if}
+  <!-- a new frame per message: swapping one frame's srcdoc could leave WebKit
+       painting the previous message's document under the new header. -->
+  {#key detail.id}
+    <iframe
+      class="body-frame"
+      class:adapted
+      class:sheet
+      class:loading={!frameLoaded}
+      title={$t('detail.mailBody.iframeTitle')}
+      sandbox="allow-same-origin allow-scripts allow-popups allow-top-navigation-by-user-activation"
+      bind:this={frame}
+      on:load={onFrameLoad}
+      style={`height:${frameHeight}px`}
+      {srcdoc}
+    ></iframe>
+  {/key}
 {:else}
   <!-- dir="auto" for the same reason as the html document above: a plain-text
        message written right to left reads that way, whatever the interface is
@@ -1100,7 +1315,7 @@
   <!-- the date marks are spans around the text they hold, so what the body
        says is the same with or without them. -->
   <!-- svelte-ignore a11y-no-static-element-interactions a11y-mouse-events-have-key-events -->
-  <pre dir="auto" class="body-plain mono selectable" style={`font-size:${$prefs.messageFontSize}px;--date-glyph:url("${calendarGlyph('currentColor')}")`} bind:this={plainBox}>{#each plainSegments as segment, si}{#if segment.href}<a
+  <pre dir="auto" class="body-plain mono selectable" class:roomy style={`font-size:${textSize}px;--date-glyph:url("${calendarGlyph('currentColor')}")`} bind:this={plainBox}>{#each plainSegments as segment, si}{#if segment.href}<a
         class="plain-link"
         href={segment.href}
         on:click|preventDefault={() => openLink(segment.href ?? '')}
@@ -1144,15 +1359,18 @@
 {/if}
 
 {#if peek && peekMention}
-  <DatePeek
-    slot={{ start: peekMention.start, end: peekMention.end, allDay: peekMention.allDay }}
-    anchor={peek.anchor}
-    pinned={peek.pinned}
-    messageId={detail.id}
-    on:hold={holdPeek}
-    on:release={releasePeek}
-    on:close={(e) => closePeek(e.detail)}
-  />
+  {#await loadDatePeek() then m}
+    <svelte:component
+      this={m.default}
+      slot={{ start: peekMention.start, end: peekMention.end, allDay: peekMention.allDay }}
+      anchor={peek.anchor}
+      pinned={peek.pinned}
+      messageId={detail.id}
+      on:hold={holdPeek}
+      on:release={releasePeek}
+      on:close={(e) => closePeek(e.detail)}
+    />
+  {/await}
 {/if}
 
 {#if hoverUrl}
@@ -1165,6 +1383,9 @@
     >
     {#if hoverCleaned}
       <span class="link-hover-tag">{$t('links.cleaned')}</span>
+    {/if}
+    {#if hoverVia}
+      <span class="link-hover-tag">{$t('trust.link.viaHover').replace('{host}', hoverVia)}</span>
     {/if}
   </div>
 {/if}
@@ -1466,6 +1687,73 @@
        around/before the html mail content in dark mode. */
     background: #ffffff;
     zoom: calc(1 / var(--ui-scale, 1));
+  }
+
+  /* adapted mail is drawn on the theme's own surface. */
+  .body-frame.adapted {
+    background: var(--surface-raised);
+  }
+
+  /* designed mail in a dark theme keeps its colours on a light sheet. */
+  .body-frame.sheet {
+    border-radius: var(--radius-control);
+  }
+
+  .body-plain.roomy {
+    line-height: var(--reading-leading);
+  }
+
+  .colors-bar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: flex-end;
+    gap: var(--space-2);
+    margin-bottom: var(--space-2);
+  }
+
+  .colors-btn,
+  .colors-link {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-1);
+    height: var(--chip-height);
+    padding: 0 var(--space-2);
+    border-radius: var(--radius-control);
+    font: inherit;
+    font-size: var(--fz-meta);
+    cursor: var(--cursor-action);
+    transition:
+      background-color var(--motion-fast) var(--ease-out),
+      color var(--motion-fast) var(--ease-out);
+  }
+
+  .colors-btn {
+    border: var(--hairline) solid var(--border-default);
+    background: transparent;
+    color: var(--text-secondary);
+  }
+
+  .colors-btn:hover {
+    background: var(--surface-hover);
+    color: var(--text-primary);
+  }
+
+  .colors-link {
+    border: none;
+    background: transparent;
+    color: var(--text-tertiary);
+    text-decoration: underline;
+    text-underline-offset: 2px;
+  }
+
+  .colors-link:hover {
+    color: var(--text-primary);
+  }
+
+  /* the frame's document is still loading: keep the space, show nothing. */
+  .body-frame.loading {
+    visibility: hidden;
   }
 
   .body-plain {

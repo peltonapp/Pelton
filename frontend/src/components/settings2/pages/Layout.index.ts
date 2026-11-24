@@ -5,6 +5,8 @@ const entries: SettingsIndexEntry[] = [
   { page: 'layout', id: 'layout', labelKey: 'layout.label', keywords: 'three column stacked panes vertical horizontal reading pane' },
   { page: 'layout', id: 'nav', labelKey: 'nav.label', keywords: 'rail sidebar footer tabs switcher mail contacts calendar hide' },
   { page: 'layout', id: 'rail-side', labelKey: 'nav.side.label', keywords: 'rail left right' },
+  { page: 'layout', id: 'spaces', labelKey: 'spaces.settings.title', keywords: 'spaces navigation order reorder hide show rail tabs mail calendar tasks projects contacts notes feeds chat' },
+  { page: 'layout', id: 'spaces-reset', labelKey: 'spaces.settings.reset', keywords: 'spaces navigation order default reset' },
   { page: 'layout', id: 'pane-lock', labelKey: 'settings.lockPanes', keywords: 'resize width lock' },
   { page: 'layout', id: 'native-titlebar', labelKey: 'layout.nativeTitlebar', keywords: 'title bar window frame native system' },
   ...(isMac

@@ -260,7 +260,7 @@ func TestThreadMigrationLeavesLegacyRowsForBackfill(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, m := range migrations {
-		if m.version < 43 {
+		if m.version < 46 {
 			if err := db.applyMigration(ctx, m); err != nil {
 				t.Fatal(err)
 			}
@@ -269,8 +269,8 @@ func TestThreadMigrationLeavesLegacyRowsForBackfill(t *testing.T) {
 	for _, query := range []string{
 		`INSERT INTO accounts (id, email, imap_host, imap_port, created_at) VALUES (1, 'legacy@example.com', 'imap.example.com', 993, '')`,
 		`INSERT INTO folders (id, account_id, name, imap_path) VALUES (1, 1, 'INBOX', 'INBOX')`,
-		`INSERT INTO messages (id, account_id, folder_id, uid, message_id, subject, date) VALUES (1, 1, 1, 1, 'p@x', 'x', '2026-01-01T00:00:00Z')`,
-		`INSERT INTO messages (id, account_id, folder_id, uid, message_id, subject, date, in_reply_to) VALUES (2, 1, 1, 2, 'c@x', 'Re: x', '2026-01-02T00:00:00Z', '["p@x"]')`,
+		`INSERT INTO messages (id, account_id, folder_id, uid, remote_id, message_id, subject, date) VALUES (1, 1, 1, 1, '1', 'p@x', 'x', '2026-01-01T00:00:00Z')`,
+		`INSERT INTO messages (id, account_id, folder_id, uid, remote_id, message_id, subject, date, in_reply_to) VALUES (2, 1, 1, 2, '2', 'c@x', 'Re: x', '2026-01-02T00:00:00Z', '["p@x"]')`,
 	} {
 		if _, err := db.sql.ExecContext(ctx, query); err != nil {
 			t.Fatal(err)

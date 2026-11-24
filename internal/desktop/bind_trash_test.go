@@ -7,12 +7,13 @@ import (
 	"testing"
 
 	"github.com/peltonapp/Pelton/internal/storage"
+	"github.com/peltonapp/Pelton/internal/storage/storagetest"
 )
 
 func trashTestApp(t *testing.T) (*App, *storage.DB, context.Context) {
 	t.Helper()
 	ctx, stopBackground := testContext(t)
-	db, err := storage.Open(filepath.Join(t.TempDir(), "test.db"))
+	db, err := storagetest.Open(filepath.Join(t.TempDir(), "test.db"))
 	if err != nil {
 		t.Fatalf("open: %v", err)
 	}
@@ -42,8 +43,8 @@ func TestSyncEngineKnowsWhereTheTrashIs(t *testing.T) {
 	}
 
 	engine := a.newSyncEngine(nil, accountID)
-	if engine.TrashPath != "Trash" {
-		t.Errorf("TrashPath = %q, want %q", engine.TrashPath, "Trash")
+	if engine.TrashRemoteID != "Trash" {
+		t.Errorf("TrashRemoteID = %q, want %q", engine.TrashRemoteID, "Trash")
 	}
 	if engine.TrashFolderID != trash.ID {
 		t.Errorf("TrashFolderID = %d, want %d", engine.TrashFolderID, trash.ID)
@@ -64,8 +65,8 @@ func TestSyncEngineWithNoTrashFolder(t *testing.T) {
 	}
 
 	engine := a.newSyncEngine(nil, accountID)
-	if engine.TrashPath != "" {
-		t.Errorf("TrashPath = %q, want it empty", engine.TrashPath)
+	if engine.TrashRemoteID != "" {
+		t.Errorf("TrashRemoteID = %q, want it empty", engine.TrashRemoteID)
 	}
 }
 

@@ -9,6 +9,7 @@
   import arrowDownIcon from '@phosphor-icons/core/assets/duotone/arrow-down-duotone.svg?raw'
   import Ph from '../common/Ph.svelte'
   import PieProgress from '../common/PieProgress.svelte'
+  import EmptyState from '../common/EmptyState.svelte'
   import MessageRow from './MessageRow.svelte'
   import {
     timelines,
@@ -264,6 +265,8 @@
         <MessageRow
           message={item.message}
           roomId={room.id}
+          roomName={room.name}
+          direct={room.kind === 'direct'}
           continued={item.continued}
           selected={messageIds[cursor] === item.key}
           on:reply={(e) => dispatch('reply', e.detail)}
@@ -303,7 +306,13 @@
     </button>
   {/if}
   {#if room.lastTs && messages.length === 0 && tl && !tl.loading && !tl.hasMore}
-    <p class="empty">{$t('chat.timeline.empty').replace('{date}', formatListDate(new Date(room.lastTs).toISOString(), $prefs.timeFormat as TimeFormat))}</p>
+    <div class="empty">
+      <EmptyState
+        size="compact"
+        title={$t('chat.timeline.emptyTitle')}
+        detail={$t('chat.timeline.emptyDetail').replace('{date}', formatListDate(new Date(room.lastTs).toISOString(), $prefs.timeFormat as TimeFormat))}
+      />
+    </div>
   {/if}
 </div>
 
@@ -336,10 +345,9 @@
 
   .error,
   .empty {
+    display: flex;
+    justify-content: center;
     margin: var(--space-4) var(--pane-pad);
-    color: var(--text-tertiary);
-    font-size: var(--fz-meta);
-    text-align: center;
   }
 
   .day,

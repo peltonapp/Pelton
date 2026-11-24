@@ -12,6 +12,7 @@
   import { prefs } from '../../stores/prefs'
   import { popupIsOpen } from '../../lib/popups'
   import { t } from '../../lib/i18n'
+  import { calm } from '../../lib/motion'
 
   /** Heading, also the dialog's accessible name. */
   export let title: string
@@ -39,7 +40,7 @@
   let confirming = false
   let restoreTo: HTMLElement | null = null
 
-  $: motion = $prefs.reduceMotion ? 0 : 1
+  $: motion = $prefs.reduceMotion || calm(1) === 0 ? 0 : 1
   // 300 is where the app's overlay band starts. Four apart leaves room for the
   // backdrop and dialog of each level without running into the popups at 320.
   $: layer = 300 + depth * 4
@@ -70,11 +71,16 @@
     return [...found].filter((el) => el.offsetParent !== null)
   }
 
-  // the dialog itself takes focus unless a field asked for it. Focusing the
-  // first control instead would put the ring on whatever happens to come first,
-  // and anything that reacts to focus (a tooltip, a picker) would fire on open.
+  // a field that asked for focus gets it, else the first plain text field, else
+  // the dialog itself. buttons, pickers and comboboxes are skipped: anything
+  // that reacts to focus (a tooltip, a list) would fire on open. the classic
+  // design skips the text field step.
   function focusFirst(): void {
-    const wanted = dialog?.querySelector<HTMLElement>('[autofocus]')
+    const wanted =
+      dialog?.querySelector<HTMLElement>('[autofocus]') ??
+      ($prefs.design === 'classic' ? null : dialog?.querySelector<HTMLElement>(
+        '.body input:is([type="text"], [type="search"], [type="email"], [type="url"], :not([type])):not([disabled]):not([readonly]):not([role="combobox"]), .body textarea:not([disabled]):not([readonly])',
+      ))
     if (wanted) {
       wanted.focus()
       return

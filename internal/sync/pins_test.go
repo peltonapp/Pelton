@@ -2,13 +2,30 @@ package sync
 
 import (
 	"context"
-	"slices"
 	"testing"
-
-	"github.com/emersion/go-imap/v2"
 
 	"github.com/peltonapp/Pelton/internal/storage"
 )
+
+// pinAdapter keeps pins as the server would, as a keyword per message.
+type pinAdapter struct {
+	fakeAdapter
+	keeps  bool
+	pinned map[string]bool
+}
+
+func (a *pinAdapter) Pins(string) (map[string]bool, bool) {
+	out := make(map[string]bool, len(a.ids))
+	for _, id := range a.ids {
+		out[id] = a.pinned[id]
+	}
+	return out, a.keeps
+}
+
+func (a *pinAdapter) SetPin(_ context.Context, _, remoteID string, pinned bool) error {
+	a.pinned[remoteID] = pinned
+	return nil
+}
 
 func pinnedUIDs(t *testing.T, db *storage.DB, folder storage.Folder) map[uint32]storage.PinState {
 	t.Helper()
@@ -19,18 +36,22 @@ func pinnedUIDs(t *testing.T, db *storage.DB, folder storage.Folder) map[uint32]
 	return pins
 }
 
+func syncAndComplete(t *testing.T, engine *Engine, folder storage.Folder) {
+	t.Helper()
+	if _, err := engine.SyncFolder(context.Background(), folder); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := engine.CompleteFolder(context.Background(), folder); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func TestSyncPinsAsKeyword(t *testing.T) {
 	ctx := context.Background()
 	db, folder := newSyncTestFolder(t)
-	client := &fakeClient{
-		uids:           []uint32{1, 2, 3},
-		permanentFlags: []imap.Flag{imap.FlagSeen, imap.FlagWildcard},
-		flags:          map[uint32][]imap.Flag{2: {pinKeyword}},
-	}
-	engine := NewEngine(client, db, nil)
-	if _, err := engine.SyncFolder(ctx, folder); err != nil {
-		t.Fatal(err)
-	}
+	adapter := &pinAdapter{fakeAdapter: fakeAdapter{ids: fakeIDs(1, 2, 3)}, keeps: true, pinned: map[string]bool{"2": true}}
+	engine := NewEngine(adapter, db, nil)
+	syncAndComplete(t, engine, folder)
 	// a pin set elsewhere, or before a reinstall, comes down.
 	pins := pinnedUIDs(t, db, folder)
 	if len(pins) != 1 || !pins[2].Pinned || pins[2].Pending {
@@ -49,11 +70,9 @@ func TestSyncPinsAsKeyword(t *testing.T) {
 	if err := db.SetPinned(ctx, byUID[2], false); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := engine.SyncFolder(ctx, folder); err != nil {
-		t.Fatal(err)
-	}
-	if !slices.Contains(client.flags[3], pinKeyword) || slices.Contains(client.flags[2], pinKeyword) {
-		t.Errorf("server flags = %v, want $Pinned on 3 only", client.flags)
+	syncAndComplete(t, engine, folder)
+	if !adapter.pinned["3"] || adapter.pinned["2"] {
+		t.Errorf("server pins = %v, want 3 only", adapter.pinned)
 	}
 	pins = pinnedUIDs(t, db, folder)
 	if len(pins) != 1 || !pins[3].Pinned || pins[3].Pending {
@@ -61,10 +80,8 @@ func TestSyncPinsAsKeyword(t *testing.T) {
 	}
 
 	// another client unpinning wins once nothing is pending here.
-	client.flags[3] = nil
-	if _, err := engine.SyncFolder(ctx, folder); err != nil {
-		t.Fatal(err)
-	}
+	adapter.pinned["3"] = false
+	syncAndComplete(t, engine, folder)
 	if pins = pinnedUIDs(t, db, folder); len(pins) != 0 {
 		t.Errorf("after remote unpin pins = %+v, want none", pins)
 	}
@@ -73,20 +90,16 @@ func TestSyncPinsAsKeyword(t *testing.T) {
 func TestSyncPinsStayLocalWithoutKeywords(t *testing.T) {
 	ctx := context.Background()
 	db, folder := newSyncTestFolder(t)
-	client := &fakeClient{uids: []uint32{1}, permanentFlags: []imap.Flag{imap.FlagSeen, imap.FlagFlagged}}
-	engine := NewEngine(client, db, nil)
-	if _, err := engine.SyncFolder(ctx, folder); err != nil {
-		t.Fatal(err)
-	}
+	adapter := &pinAdapter{fakeAdapter: fakeAdapter{ids: fakeIDs(1)}, pinned: map[string]bool{}}
+	engine := NewEngine(adapter, db, nil)
+	syncAndComplete(t, engine, folder)
 	states, _ := db.ListMessageStates(ctx, folder.ID)
 	if err := db.SetPinned(ctx, states[0].ID, true); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := engine.SyncFolder(ctx, folder); err != nil {
-		t.Fatal(err)
-	}
-	if len(client.flags[1]) != 0 {
-		t.Errorf("server flags = %v, want nothing stored", client.flags[1])
+	syncAndComplete(t, engine, folder)
+	if adapter.pinned["1"] {
+		t.Error("the pin went to a mailbox that cannot keep it")
 	}
 	pins := pinnedUIDs(t, db, folder)
 	if !pins[1].Pinned || pins[1].Pending {

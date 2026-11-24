@@ -11,7 +11,7 @@
   import userIcon from '@phosphor-icons/core/assets/duotone/user-circle-duotone.svg?raw'
   import warningIcon from '@phosphor-icons/core/assets/duotone/warning-duotone.svg?raw'
   import checkIcon from '@phosphor-icons/core/assets/regular/check.svg?raw'
-  import '../calendar/controls.css'
+  import '../../theme/controls.css'
   import Ph from '../common/Ph.svelte'
   import Select from '../common/Select.svelte'
   import PieProgress from '../common/PieProgress.svelte'

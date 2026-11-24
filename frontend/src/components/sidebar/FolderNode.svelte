@@ -25,7 +25,7 @@
     IconRefreshOff,
   } from '@tabler/icons-svelte'
   import SidebarRow from './SidebarRow.svelte'
-  import { maildrop } from '../../stores/maildrag'
+  import { maildrop, maildragSpring } from '../../stores/maildrag'
   import { moveToFolder } from '../../lib/messageactions'
   import type { MessageSummary } from '../../lib/types'
   import Self from './FolderNode.svelte'
@@ -47,6 +47,9 @@
   import { reorderFolders, setFolderPinned, setFolderSyncExcluded } from '../../lib/api'
   import { toastError, errorMessage } from '../../stores/toast'
   import { t } from '../../lib/i18n'
+  import { openVaultUnlock } from '../../stores/vaultdialog'
+  import Ph from '../common/Ph.svelte'
+  import lockIcon from '@phosphor-icons/core/assets/duotone/lock-simple-duotone.svg?raw'
 
   export let folder: Folder
   export let folders: Folder[]
@@ -64,6 +67,18 @@
   // emptying is only offered on the trash, and only when there is something in
   // it, so the menu never carries an action that would do nothing.
   $: emptiable = folder.role === 'trash' && folder.totalCount > 0
+
+  // a folder of a locked vault: the classic design leaves it out, and so does
+  // the new one when the vault asks to be hidden; otherwise it is a locked
+  // entry without counts that opens the unlock dialog.
+  $: locked = folder.vaultLocked
+  $: hiddenLocked = locked && ($prefs.design === 'classic' || folder.vaultHidden)
+
+  function protect(): void {
+    import('../../stores/mailvault')
+      .then((m) => m.protectWithVault({ accountId: folder.accountId, folderId: folder.id }))
+      .catch((err) => toastError(errorMessage(err)))
+  }
 
   async function onReorder(event: CustomEvent<ReorderDetail>): Promise<void> {
     try {
@@ -153,6 +168,10 @@
         action: () => openDeleteFolder(folder),
       })
     }
+    if ($prefs.design === 'new' && !folder.vaultId) {
+      entries.push('separator')
+      entries.push({ label: $t('mailvault.protect'), icon: IconFolder, action: protect })
+    }
     openContextMenu(event.clientX, event.clientY, entries)
   }
 
@@ -180,11 +199,35 @@
     accepts: (items: MessageSummary[]) =>
       items.every((m) => m.accountId === folder.accountId) && items.some((m) => m.folderId !== folder.id),
     onDrop: (items: MessageSummary[]) => void moveToFolder(items, folder),
+    hint: () => $t('folders.drop.move').replace('{folder}', folder.name),
+  }
+
+  // mail held over a closed folder opens it, so a subfolder can take the drop.
+  function springOpen(): void {
+    if (children.length > 0) {
+      expanded = true
+    }
   }
 </script>
 
 <div class="node" data-reorder-id={folder.id}>
-  <div use:maildrop={mailDrop}>
+  {#if locked}
+    {#if !hiddenLocked}
+      <SidebarRow
+        label={folder.name}
+        title={$t('mailvault.lockedFolder')}
+        {depth}
+        expandable={children.length > 0}
+        {expanded}
+        on:select={() => openVaultUnlock(folder.vaultId ?? 0)}
+        on:toggle={() => (expanded = !expanded)}
+        on:contextmenu={(e) => openContextMenu(e.detail.clientX, e.detail.clientY, [{ label: $t('mailvault.unlock'), action: () => openVaultUnlock(folder.vaultId ?? 0) }])}
+      >
+        <Ph svg={lockIcon} size={15} />
+      </SidebarRow>
+    {/if}
+  {:else}
+  <div use:maildrop={mailDrop} use:maildragSpring={springOpen}>
   <SidebarRow
     label={folder.name}
     title={unsynced ? $t('folders.notSyncing') : ''}
@@ -206,6 +249,7 @@
     </span>
   </SidebarRow>
   </div>
+  {/if}
 
   {#if expanded && children.length > 0}
     <div

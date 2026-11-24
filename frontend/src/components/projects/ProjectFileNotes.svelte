@@ -16,7 +16,7 @@
   import linkIcon from '@phosphor-icons/core/assets/duotone/link-simple-duotone.svg?raw'
   import unlinkIcon from '@phosphor-icons/core/assets/duotone/link-simple-break-duotone.svg?raw'
   import noteIcon from '@phosphor-icons/core/assets/duotone/note-pencil-duotone.svg?raw'
-  import '../calendar/controls.css'
+  import '../../theme/controls.css'
   import Ph from '../common/Ph.svelte'
   import PieProgress from '../common/PieProgress.svelte'
   import EmptyState from '../common/EmptyState.svelte'
@@ -320,9 +320,15 @@
       {#if !loaded}
         <div class="loading"><PieProgress label={$t('projects.loading')} /></div>
       {:else if sections.length === 0}
-        <EmptyState title={$t('projects.notes.emptyTitle')} detail={$t('projects.notes.filesEmpty')}>
-          <Ph svg={noteIcon} size={26} />
-        </EmptyState>
+        <EmptyState
+          icon={noteIcon}
+          title={$t('projects.notes.emptyTitle')}
+          detail={$t('projects.notes.filesEmpty')}
+          actionLabel={$t('projects.notes.new')}
+          onAction={() => void startCreate()}
+          secondaryLabel={$t('projects.notes.add')}
+          onSecondary={() => (picking = true)}
+        />
       {:else}
         <div class="scroll">
           {#each sections as section (section.key)}

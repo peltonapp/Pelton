@@ -22,6 +22,7 @@ import {
   moveProjectCard,
   removeProjectCard,
   removeProjectPerson,
+  removeProjectThread,
   reorderProjects,
   setProjectStatus,
   updateProject,
@@ -31,6 +32,8 @@ import { cardPlace, moveCard } from '../lib/projectlogic'
 import { t } from '../lib/i18n'
 import { openSpace } from './space'
 import { errorMessage, pushActions, toastError, toastInfo } from './toast'
+import { recordHistory, subjectDetail, undoEntry, undoToastTTL } from './undohistory'
+import { messageList } from './messages'
 import type { Project, ProjectBoard, ProjectCard, ProjectCardDraft, ProjectDraft } from '../lib/types'
 
 /** The tabs of an open project. */
@@ -66,6 +69,9 @@ export const board = writable<ProjectBoard | null>(null)
 /** A card to open once its board shows, by task UID. */
 export const cardFocus = writable<string | null>(null)
 
+/** The uid of the card open on the board on screen, for back and forward. */
+export const openCardUid = writable<string | null>(null)
+
 /** Asks the Projects space to open the new-project dialog when it shows. */
 export const newProjectRequest = writable<boolean>(false)
 
@@ -83,6 +89,47 @@ export async function loadProjects(): Promise<void> {
   } catch (err) {
     toastError(errorMessage(err))
   }
+}
+
+// threadsOf is the conversations filed under a project, as the marks know them.
+function threadsOf(projectId: number): Set<number> {
+  const out = new Set<number>()
+  for (const [threadId, ids] of get(projectMailMarks)) {
+    if (ids.includes(projectId)) {
+      out.add(threadId)
+    }
+  }
+  return out
+}
+
+// recordFiling puts mail just filed under a project in the undo history. Undo
+// takes out the conversations the filing brought in, and only those; redo
+// files the same messages again.
+function recordFiling(projectId: number, name: string, messageIds: number[], taskUid: string, threads: number[]): number {
+  const apply = async (step: () => Promise<void>): Promise<void> => {
+    try {
+      await step()
+    } finally {
+      await loadProjectMarks()
+    }
+  }
+  return recordHistory({
+    kind: 'project',
+    label: get(t)('history.kind.project').replace('{name}', name),
+    detail: subjectDetail(messageIds.map((id) => get(messageList).data?.items.find((m) => m.id === id)?.subject ?? '')),
+    count: messageIds.length,
+    touches: threads.map((id) => `project:${projectId}:${id}`),
+    undo: () =>
+      apply(async () => {
+        for (const threadId of threads) {
+          await removeProjectThread(projectId, threadId)
+        }
+      }),
+    redo: () =>
+      apply(async () => {
+        await addMailToProject(projectId, messageIds, taskUid)
+      }),
+  })
 }
 
 /** Loads which conversations belong to which projects. */
@@ -319,16 +366,22 @@ export async function fileMail(projectId: number, messageIds: number[], taskUid 
     return 0
   }
   try {
+    const before = threadsOf(projectId)
     const added = await addMailToProject(projectId, messageIds, taskUid)
+    await loadProjectMarks()
     const tr = get(t)
     const name = projectById(projectId)?.name ?? ''
+    const fresh = [...threadsOf(projectId)].filter((id) => !before.has(id))
+    const entry = fresh.length > 0 ? recordFiling(projectId, name, messageIds, taskUid, fresh) : null
     pushActions(
       'success',
       (added === 1 ? tr('projects.mail.addedOne') : tr('projects.mail.addedMany').replace('{n}', String(added))).replace('{name}', name),
-      [{ label: tr('projects.open'), run: () => openProject(projectId, taskUid ? 'board' : 'mail') }],
-      6000,
+      [
+        { label: tr('projects.open'), run: () => openProject(projectId, taskUid ? 'board' : 'mail') },
+        ...(entry === null ? [] : [{ label: tr('menu.undo'), run: () => void undoEntry(entry) }]),
+      ],
+      undoToastTTL,
     )
-    void loadProjectMarks()
     return added
   } catch (err) {
     toastError(errorMessage(err))
