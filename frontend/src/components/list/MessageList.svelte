@@ -304,11 +304,22 @@
   // resetScroll puts the list back at the top. the container outlives the rows
   // it holds, so without this a change of content keeps the old offset and a
   // short result set renders far above the viewport, looking like no results.
+  // Every caller goes on to load the new rows.
   function resetScroll(): void {
     scrollTop = 0
     if (listEl) {
       listEl.scrollTop = 0
     }
+    replacing = true
+  }
+
+  // set from a resetScroll until the load after it settles. The outgoing rows
+  // stay rendered meanwhile, and following the cursor into them would undo the
+  // reset. Paging also loads, but never sets this, so the cursor is followed
+  // while a page is fetched.
+  let replacing = false
+  $: if ($messageList.status !== 'loading') {
+    replacing = false
   }
 
   // the new design searches from the top bar; classic keeps its own bar here.
@@ -594,14 +605,20 @@
     }
   }
 
-  // a range cursor is moved from App.svelte, which cannot scroll this list.
-  $: void followRangeCursor($rangeCursor)
-  async function followRangeCursor(id: number | null): Promise<void> {
+  // the vim motions in App.svelte move the cursor without being able to scroll
+  // this list. Each statement depends only on its store, so a new items array
+  // never scrolls, and a range cursor dropped by clearSelection is a null that
+  // leaves the scroll alone.
+  $: void followCursor($openMessageId)
+  $: void followCursor($rangeCursor)
+  async function followCursor(id: number | null): Promise<void> {
     if (id === null) {
       return
     }
     await tick()
-    await scrollActiveIntoView()
+    if (!replacing) {
+      await scrollActiveIntoView()
+    }
   }
 
   // search handling. the list shows ranked results when there is a query or an

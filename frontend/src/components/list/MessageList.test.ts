@@ -18,9 +18,9 @@ vi.mock('../../lib/api', async (importOriginal) => ({
 }))
 
 import MessageList from './MessageList.svelte'
-import { messageList } from '../../stores/messages'
+import { messageList, patchInList } from '../../stores/messages'
 import { openMessageId, searchQuery, selection } from '../../stores/selection'
-import { clearSelection, selectedIds } from '../../stores/listselect'
+import { clearSelection, rangeCursor, selectedIds } from '../../stores/listselect'
 import { bindings } from '../../stores/shortcuts'
 import { prefs } from '../../stores/prefs'
 import { idle, ready } from '../../lib/async'
@@ -182,6 +182,110 @@ describe('MessageList keyboard selection', () => {
     const user = await focusList()
     await user.keyboard('{ArrowDown} {Shift>}{ArrowDown}{/Shift}')
     expect(selected()).toEqual([])
+  })
+})
+
+describe('MessageList cursor follow', () => {
+  // rows builds count messages numbered from first.
+  function rows(first: number, count: number): MessageSummary[] {
+    return Array.from({ length: count }, (_, i) => summary(first + i, `Message ${first + i}`))
+  }
+
+  // longList renders forty rows, more than the virtualized window holds, in a
+  // list 200px tall. jsdom has no layout, so the height is stubbed.
+  async function longList(total = 40): Promise<HTMLElement> {
+    api.listViewMessages.mockResolvedValue({ messages: rows(1, 40), total, hasOlder: false })
+    render(MessageList)
+    await screen.findByText('Message 1')
+    const list = screen.getByRole('listbox')
+    Object.defineProperty(list, 'clientHeight', { configurable: true, value: 200 })
+    return list
+  }
+
+  // settle lets any pending reactive work, including a scroll queued behind a
+  // tick, run before asserting that nothing moved.
+  function settle(): Promise<void> {
+    return new Promise((resolve) => setTimeout(resolve, 0))
+  }
+
+  // pendingLoad holds every later list load open until the returned function
+  // finishes the latest one.
+  function pendingLoad(): (value: MessageListData) => void {
+    let finish!: (value: MessageListData) => void
+    api.listViewMessages.mockImplementation(
+      () =>
+        new Promise<MessageListData>((resolve) => {
+          finish = resolve
+        }),
+    )
+    return (value) => finish(value)
+  }
+
+  it('scrolls to a message opened from outside the list', async () => {
+    const list = await longList()
+    expect(screen.queryByText('Message 35')).toBeNull()
+
+    openMessageId.set(35)
+
+    await waitFor(() => expect(list.scrollTop).toBeGreaterThan(0))
+    const row = (await screen.findByText('Message 35')).closest('[role="option"]')
+    expect(row).toHaveAttribute('aria-selected', 'true')
+  })
+
+  it('stays where the user scrolled when the rows are replaced', async () => {
+    const list = await longList()
+    openMessageId.set(35)
+    await waitFor(() => expect(list.scrollTop).toBeGreaterThan(0))
+
+    list.scrollTop = 0
+    list.dispatchEvent(new Event('scroll'))
+    // a colour, not read state, so no sidebar count refresh outlives the test.
+    patchInList(35, { flagColor: 2 })
+    await settle()
+
+    expect(list.scrollTop).toBe(0)
+  })
+
+  it('starts the next list at the top while a range cursor is out', async () => {
+    const list = await longList()
+    openMessageId.set(35)
+    await waitFor(() => expect(list.scrollTop).toBeGreaterThan(0))
+    rangeCursor.set(1)
+    await waitFor(() => expect(list.scrollTop).toBe(0))
+
+    selection.set({ kind: 'view', view: 'flagged', label: 'Flagged' })
+    await waitFor(() => expect(api.listViewMessages).toHaveBeenCalledTimes(2))
+    await settle()
+
+    expect(list.scrollTop).toBe(0)
+  })
+
+  it('starts the next list at the top when a list change and an open arrive together', async () => {
+    const list = await longList()
+    const finish = pendingLoad()
+
+    // what revealMessage does for a clicked new-mail notification.
+    selection.set({ kind: 'view', view: 'flagged', label: 'Flagged' })
+    openMessageId.set(35)
+    await settle()
+    expect(list.scrollTop).toBe(0)
+
+    finish(page(rows(31, 10)))
+    await screen.findByText('Message 31')
+    await settle()
+    expect(list.scrollTop).toBe(0)
+  })
+
+  it('follows the cursor while the next page loads', async () => {
+    const list = await longList(100)
+    pendingLoad()
+    // jsdom reports no scroll height, so any scroll counts as near the bottom.
+    list.dispatchEvent(new Event('scroll'))
+    await waitFor(() => expect(get(messageList).status).toBe('loading'))
+
+    openMessageId.set(35)
+
+    await waitFor(() => expect(list.scrollTop).toBeGreaterThan(0))
   })
 })
 
