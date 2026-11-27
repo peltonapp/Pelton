@@ -344,7 +344,18 @@ func TestAStuckAccountDoesNotHoldUpTheOthers(t *testing.T) {
 
 	tx := &blockingTransmitter{hang: slowAccount, release: make(chan struct{}), sent: make(chan int64, 3)}
 	worker := NewWorker(q, tx, WithInterval(20*time.Millisecond))
-	go func() { _ = worker.Run(ctx) }()
+	stopped := make(chan struct{})
+	go func() {
+		defer close(stopped)
+		_ = worker.Run(ctx)
+	}()
+	// the worker and its sends write to the database, which lives in the
+	// test's temp dir.
+	defer func() {
+		cancel()
+		<-stopped
+		worker.inflight.Wait()
+	}()
 
 	select {
 	case id := <-tx.sent:
