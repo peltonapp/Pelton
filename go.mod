@@ -97,7 +97,8 @@ require (
 
 // replace github.com/wailsapp/wails/v2 v2.10.1 => /Users/arnekock/go/pkg/mod
 
-// go-imap v2.0.0-beta.8 plus one commit that accepts "]" in a flag keyword,
-// which Gmail allows and lists for every folder (#474). Drop this once the
-// fix is in an upstream release.
-replace github.com/emersion/go-imap/v2 => github.com/peltonapp/go-imap/v2 v2.0.0-20260929135741-184813ecc596
+// go-imap v2.0.0-beta.8 plus two commits: one accepts "]" in a flag keyword,
+// which Gmail allows and lists for every folder (#474); the other keeps
+// folder names in modified UTF-7 until the server has UTF-8 enabled (#581).
+// Drop this once both fixes are in an upstream release.
+replace github.com/emersion/go-imap/v2 => github.com/peltonapp/go-imap/v2 v2.0.0-20261127203219-49cae16df70e
