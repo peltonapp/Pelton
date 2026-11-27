@@ -479,6 +479,10 @@ func (a *App) searchMessages(ctx context.Context, req SearchRequestDTO) ([]stora
 	if err != nil {
 		return nil, 0, err
 	}
+	scope, err := a.searchScope(a.ctx)
+	if err != nil {
+		return nil, 0, err
+	}
 	kept := make([]storage.Message, 0, len(ids))
 	for _, id := range ids {
 		m, ok := byID[id]
@@ -491,15 +495,47 @@ func (a *App) searchMessages(ctx context.Context, req SearchRequestDTO) ([]stora
 			}
 			continue
 		}
-		if req.keeps(&m) {
+		if req.keeps(&m) && scope.has(m.AccountID) {
 			kept = append(kept, m)
 		}
 	}
 	total := int(res.Total)
 	if req.Offset == 0 {
-		vault := a.searchMailVaults(ctx, req, max(req.Limit, 1))
-		kept = append(kept, vault...)
-		total += len(vault)
+		for _, m := range a.searchMailVaults(ctx, req, max(req.Limit, 1)) {
+			if scope.has(m.AccountID) {
+				kept = append(kept, m)
+				total++
+			}
+		}
 	}
 	return kept, total, nil
+}
+
+// searchScope is the accounts a search may return mail from: the ones the
+// active profile shows. The index covers every profile's mail, so results are
+// narrowed here. all is set when the profile shows every account, which
+// spares a lookup per hit.
+type searchScope struct {
+	all      bool
+	accounts map[int64]bool
+}
+
+func (s searchScope) has(accountID int64) bool {
+	return s.all || s.accounts[accountID]
+}
+
+func (a *App) searchScope(ctx context.Context) (searchScope, error) {
+	shown, err := a.store.ListAccounts(ctx)
+	if err != nil {
+		return searchScope{}, err
+	}
+	every, err := a.store.ListAllAccounts(ctx)
+	if err != nil {
+		return searchScope{}, err
+	}
+	scope := searchScope{all: len(shown) == len(every), accounts: make(map[int64]bool, len(shown))}
+	for _, acc := range shown {
+		scope.accounts[acc.ID] = true
+	}
+	return scope, nil
 }
