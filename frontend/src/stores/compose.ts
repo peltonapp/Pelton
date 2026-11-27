@@ -4,8 +4,10 @@
 // turns the references into the actual threading headers.
 
 import { writable, get } from 'svelte/store'
-import type { Address, ComposeRequest, Draft, EditorMode, MessageDetail, ComposeAttachment } from '../lib/types'
-import { getSetting, setSetting } from '../lib/api'
+import type { Address, Attachment, AttachmentContent, ComposeRequest, Draft, EditorMode, MessageDetail, ComposeAttachment } from '../lib/types'
+import { getSetting, readAttachment, setSetting } from '../lib/api'
+import { t } from '../lib/i18n'
+import { errorMessage, toastError } from './toast'
 import { noteAction } from '../lib/coach'
 import { guarded, replyCheck } from './trust'
 import { sidebar } from './accounts'
@@ -131,6 +133,8 @@ export interface ComposeOrigin {
   /** The original's Message-ID and the references a reply threads with. */
   messageId: string
   references: string[]
+  /** The original's attached files, which a forward takes along. */
+  attachments: Attachment[]
 }
 
 export const composeSessions = writable<ComposeSession[]>([])
@@ -320,6 +324,9 @@ export function openReplyWith(detail: MessageDetail, mode: EditorMode, kind: Rep
   noteAction(kind === 'replyAll' ? 'reply-all' : kind === 'forward' ? 'forward' : 'reply')
   const session = replySession(detail, mode, kind, typed)
   composeSessions.update((list) => [...list, session])
+  if (kind === 'forward') {
+    void carryAttachments(session.id)
+  }
   return session.id
 }
 
@@ -340,7 +347,63 @@ function originOf(detail: MessageDetail, kind: ReplyKind): ComposeOrigin {
     bodyQuote: detail.bodyQuote,
     messageId: messageIdRef(detail),
     references: buildReferences(detail),
+    attachments: (detail.attachments ?? []).filter((att) => !att.inline),
   }
+}
+
+// carried holds, per session, the attachments a forward took from the
+// original, so switching to a reply can take them out again.
+const carried = new Map<number, ComposeAttachment[]>()
+
+/**
+ * carryAttachments adds the original's files to a forward. Each file is read
+ * on its own, so the composer is usable while they arrive; a file too large to
+ * read here is named in a toast and left out.
+ */
+async function carryAttachments(id: number): Promise<void> {
+  const origin = getSession(id)?.origin
+  if (!origin || origin.kind !== 'forward' || carried.has(id)) {
+    return
+  }
+  const mine: ComposeAttachment[] = []
+  carried.set(id, mine)
+  for (const att of origin.attachments) {
+    let content: AttachmentContent
+    try {
+      content = await readAttachment(origin.id, att.id)
+    } catch (err) {
+      toastError(errorMessage(err))
+      continue
+    }
+    const session = getSession(id)
+    if (!session || carried.get(id) !== mine) {
+      return
+    }
+    if (content.tooLarge) {
+      toastError(get(t)('compose.attach.tooLarge').replace('{name}', att.filename))
+      continue
+    }
+    const file: ComposeAttachment = {
+      filename: att.filename,
+      contentType: att.contentType,
+      contentBase64: content.data,
+      inline: false,
+      contentId: '',
+    }
+    mine.push(file)
+    updateCompose(id, { attachments: [...session.attachments, file] })
+  }
+}
+
+// dropCarried takes a forward's files out again, leaving what the user added.
+function dropCarried(id: number): void {
+  const mine = carried.get(id)
+  carried.delete(id)
+  const session = getSession(id)
+  if (!mine || !session) {
+    return
+  }
+  updateCompose(id, { attachments: session.attachments.filter((att) => !mine.includes(att)) })
 }
 
 // blankLead is the empty line a reply opens with above the quote.
@@ -415,6 +478,11 @@ export function switchReplyKind(id: number, kind: ReplyKind): void {
     delete after.subject
   }
   updateCompose(id, after)
+  if (kind === 'forward') {
+    void carryAttachments(id)
+  } else {
+    dropCarried(id)
+  }
 }
 
 // openDraftSession opens a saved local draft for editing. The editor mode is not
@@ -519,6 +587,7 @@ export function updateCompose(id: number, patch: Partial<ComposeSession>): void 
 // closeCompose removes a session. It drops whatever is in the pane, so callers
 // outside the pane itself should go through requestComposeClose instead.
 export function closeCompose(id: number): void {
+  carried.delete(id)
   composeSessions.update((list) => list.filter((s) => s.id !== id))
 }
 
