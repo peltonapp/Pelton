@@ -7,7 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
-	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/peltonapp/Pelton/internal/logging"
@@ -53,17 +53,20 @@ func debugForced(args []string) bool {
 // takes the whole process down whether it is handled or not; the difference is
 // whether anything is left to read afterwards.
 func goSafe(activity string, fn func()) {
-	backgroundWork.Go(func() {
+	backgroundWork.Add(1)
+	go func() {
+		defer backgroundWork.Add(-1)
 		defer logging.Guard(activity)
 		fn()
-	})
+	}()
 }
 
 // backgroundWork counts the goroutines goSafe has running. Several of them
 // outlive the call that started them and keep reading and writing the store, so
 // there has to be a way to tell when they are finished before it closes under
-// them.
-var backgroundWork sync.WaitGroup
+// them. A plain counter rather than a sync.WaitGroup: work keeps starting
+// while something waits, which a WaitGroup does not allow.
+var backgroundWork atomic.Int64
 
 // waitForBackgroundWork waits for every goroutine goSafe started to return,
 // giving up after timeout and reporting whether they all finished.
@@ -72,17 +75,14 @@ var backgroundWork sync.WaitGroup
 // return when their context is cancelled, so cancel it first or this waits out
 // the whole timeout.
 func waitForBackgroundWork(timeout time.Duration) bool {
-	done := make(chan struct{})
-	go func() {
-		backgroundWork.Wait()
-		close(done)
-	}()
-	select {
-	case <-done:
-		return true
-	case <-time.After(timeout):
-		return false
+	deadline := time.Now().Add(timeout)
+	for backgroundWork.Load() > 0 {
+		if time.Now().After(deadline) {
+			return false
+		}
+		time.Sleep(time.Millisecond)
 	}
+	return true
 }
 
 // logDir is the directory logs and crash reports are written to.
