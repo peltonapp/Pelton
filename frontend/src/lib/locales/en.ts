@@ -471,6 +471,7 @@ const en: Record<string, string> = {
   'compose.field.from': 'From',
   'compose.attach.button': 'Attach',
   'compose.attach.remove': 'Remove',
+  'compose.attach.tooLarge': '{name} is too large to add here. Save it and attach it as a file.',
   'compose.chipInput.placeholder': 'name@example.com, …',
   'compose.chipInput.placeholderMulti': 'name@example.com, name2@example.com, …',
   'compose.dialog.ariaLabel': 'Compose message',
