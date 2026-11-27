@@ -82,15 +82,19 @@ func (a *App) SearchMessageIDs(req SearchRequestDTO) (MessageIDsDTO, error) {
 	if err != nil {
 		return MessageIDsDTO{}, err
 	}
+	scope, err := a.searchScope(a.ctx)
+	if err != nil {
+		return MessageIDsDTO{}, err
+	}
 	ids := make([]int64, 0, len(res.Hits))
 	for _, h := range res.Hits {
 		// the stored-field filters are message fields rather than indexed ones,
-		// so they are applied here exactly as the result list applies them. A
-		// hit whose message is gone is skipped, which also covers stale index
-		// entries.
-		if req.hasStoredFilter() {
+		// so they are applied here exactly as the result list applies them, and
+		// so is the profile's set of accounts. A hit whose message is gone is
+		// skipped, which also covers stale index entries.
+		if req.hasStoredFilter() || !scope.all {
 			m, err := a.store.GetMessage(a.mailCtx(), h.ID)
-			if err != nil || !req.keeps(m) {
+			if err != nil || !req.keeps(m) || !scope.has(m.AccountID) {
 				continue
 			}
 		}

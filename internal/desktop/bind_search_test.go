@@ -141,3 +141,77 @@ func TestSearchFiltersByFolderAccountAndFlag(t *testing.T) {
 		t.Errorf("SearchMessageIDs ids = %v, want [%d]", sel.IDs, inInbox)
 	}
 }
+
+// The index holds every profile's mail, so a search has to stay inside the
+// accounts of the profile the app is in (#668).
+func TestSearchStaysInsideTheActiveProfile(t *testing.T) {
+	a := newTrashTestApp(t)
+	idx, err := search.Open(filepath.Join(t.TempDir(), "search.bleve"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = idx.Close() })
+	a.index = idx
+
+	personal := seedAccount(t, a)
+	main, err := a.store.MainProfile(a.ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	work := &storage.Profile{Name: "Work"}
+	if _, err := a.store.CreateProfile(a.ctx, work); err != nil {
+		t.Fatal(err)
+	}
+	a.store.UseProfile(*work, main.ID)
+	office, err := a.store.CreateAccount(a.ctx, &storage.Account{Email: "office@example.test"})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	insert := func(account int64, uid uint32) int64 {
+		t.Helper()
+		folder := seedFolder(t, a, account, "INBOX", "INBOX", nil, 0)
+		id, err := a.store.InsertMessage(a.ctx, &storage.Message{
+			AccountID: account, FolderID: folder.ID, UID: uid,
+			Subject: "potato harvest", Date: time.Now().UTC(),
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return id
+	}
+	atHome := insert(personal, 1)
+	atWork := insert(office, 2)
+	if err := a.indexNewMessages(); err != nil {
+		t.Fatal(err)
+	}
+
+	found := func() ([]int64, []int64) {
+		t.Helper()
+		req := SearchRequestDTO{Query: "harvest", Limit: 50}
+		res, err := a.Search(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		listed := make([]int64, 0, len(res.Messages))
+		for _, m := range res.Messages {
+			listed = append(listed, m.ID)
+		}
+		sel, err := a.SearchMessageIDs(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return listed, sel.IDs
+	}
+
+	listed, selected := found()
+	if !slices.Equal(listed, []int64{atWork}) || !slices.Equal(selected, []int64{atWork}) {
+		t.Errorf("in Work: listed %v, selected %v, want [%d] for both", listed, selected, atWork)
+	}
+
+	a.store.UseProfile(*main, main.ID)
+	listed, selected = found()
+	if !slices.Equal(listed, []int64{atHome}) || !slices.Equal(selected, []int64{atHome}) {
+		t.Errorf("in main: listed %v, selected %v, want [%d] for both", listed, selected, atHome)
+	}
+}
