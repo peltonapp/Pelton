@@ -79,7 +79,7 @@ func (a *App) saveContact(req ContactRequest) (ContactConflictDTO, error) {
 	defer cancel()
 
 	pre, etagHeader := precondition(req.Force, existing != nil, contact.ETag)
-	etag, err := client.Put(ctx, contact.Path, contact.ToCard(), pre, etagHeader)
+	etag, err := client.Put(ctx, contact.Path, contact.Card, pre, etagHeader)
 	if errors.Is(err, pcarddav.ErrConflict) {
 		return a.contactConflict(ctx, client, *book, contact)
 	}
@@ -108,7 +108,6 @@ func (a *App) saveContact(req ContactRequest) (ContactConflictDTO, error) {
 // saveLocalContact stores a contact of a book that lives only here, such as
 // an imported one: there is no server to write to first.
 func (a *App) saveLocalContact(bookID int64, contact pcarddav.Contact) (ContactConflictDTO, error) {
-	contact.Card = contact.ToCard()
 	if err := a.storeContact(a.ctx, bookID, contact); err != nil {
 		return ContactConflictDTO{}, err
 	}
@@ -206,6 +205,7 @@ func (a *App) contactFromRequest(req ContactRequest, existing *storage.Contact) 
 		if parsed, err := pcarddav.ParseCard(existing.Card); err == nil {
 			contact.Card = parsed.Card
 		}
+		contact.Card = contact.ToCard()
 		return contact
 	}
 	book, err := a.store.GetAddressBook(a.ctx, req.BookID)
@@ -215,6 +215,7 @@ func (a *App) contactFromRequest(req ContactRequest, existing *storage.Contact) 
 	}
 	contact.UID = newContactUID()
 	contact.Path = contactPath(collection, contact.UID)
+	contact.Card = contact.ToCard()
 	return contact
 }
 
