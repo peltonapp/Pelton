@@ -10,9 +10,9 @@ require (
 	github.com/emersion/go-imap/v2 v2.0.0-beta.8
 	github.com/emersion/go-message v0.18.2
 	github.com/emersion/go-sasl v0.0.0-20241020182733-b788ff22d5a6
-	github.com/emersion/go-smtp v0.25.1
+	github.com/emersion/go-smtp v0.26.0
 	github.com/emersion/go-vcard v0.1.0
-	github.com/emersion/go-webdav v0.7.0
+	github.com/emersion/go-webdav v0.8.0
 	github.com/godbus/dbus/v5 v5.2.4
 	github.com/gogs/chardet v0.0.0-20211120154057-b7413eaefb8f
 	github.com/google/uuid v1.6.0
@@ -27,12 +27,12 @@ require (
 	go.mau.fi/util v0.11.1
 	golang.org/x/crypto v0.59.0
 	golang.org/x/image v0.48.0
-	golang.org/x/net v0.62.0
+	golang.org/x/net v0.63.0
 	golang.org/x/oauth2 v0.38.0
 	golang.org/x/sys v0.50.0
 	golang.org/x/text v0.44.0
 	maunium.net/go/mautrix v0.33.0
-	modernc.org/sqlite v1.62.0
+	modernc.org/sqlite v1.63.0
 )
 
 require (
